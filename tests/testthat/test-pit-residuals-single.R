@@ -1,9 +1,9 @@
-# gcol33/tulpaObs#222: pit_residuals() on single-season occu() used to pin every
-# detected site's PIT at 1 and every all-zero site's PIT at its CDF value plus a
-# tiny 1/n_draws jitter, so test_uniformity() rejected on a correctly specified
-# model. A single fixture's KS p-value is not evidence of calibration -- that is
-# what let the degeneracy survive -- so this asserts the KS p-values THEMSELVES
-# look roughly uniform across many independent fits on self-generated data.
+# pit_residuals() on single-season occu() used to pin every detected site's
+# PIT at 1 and every all-zero site's PIT at its CDF value plus a tiny 1/n_draws
+# jitter, so test_uniformity() rejected on a correctly specified model. A single
+# fixture's KS p-value is not evidence of calibration -- that is what let the
+# degeneracy survive -- so this asserts the KS p-values THEMSELVES look roughly
+# uniform across many independent fits on self-generated data.
 
 test_that("pit_residuals() on occu() is not degenerate at 1 for detected sites", {
   sim <- simulate_occu(N = 300, J = 6, n_occ_covs = 1, n_det_covs = 1,

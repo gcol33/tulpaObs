@@ -1,7 +1,7 @@
 # =============================================================================
 # test-dyn-int-occu-areal-recovery.R - shared areal ICAR field on the first-
 # season occupancy (psi1) arm of the multi-season integrated occupancy model
-# (spOccupancy stIntPGOcc; gcol33/tulpaObs#122).
+# (spOccupancy stIntPGOcc).
 #
 # psi1 sets only the initial mixing weight of each site's HMM, so the per-site
 # field gradient is the Fisher-identity score w1 - psi1 (the smoothed season-1

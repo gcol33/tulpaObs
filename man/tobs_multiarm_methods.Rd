@@ -55,7 +55,7 @@ supported (use the family's \verb{simulate_*()} function).}
 \code{vcov()} the block-diagonal covariance; \code{confint()} a two-column matrix;
 \code{logLik()} a \code{logLik} object; \code{glance()}/\code{tidy()} a data frame. On a joint
 nested-Laplace fit \code{glance()} also carries \code{outer_grid_placement} and
-\code{outer_grid_recenter_declined} (gcol33/tulpaObs#187).
+\code{outer_grid_recenter_declined}.
 }
 \description{
 Coefficient, covariance, and summary accessors for fits that store

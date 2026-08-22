@@ -27,7 +27,7 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
     Rcpp::NumericVector eta_b,      // [S] (hazard shape; 0 otherwise)
     Rcpp::NumericVector r_vec,      // [S] (Inf for Poisson)
     int n_threads,
-    int headroom = -1               // gcol33/tulpaObs#168: per-site K_hi cap
+    int headroom = -1               // per-site K_hi cap
 ) {
   const int S = eta_lambda.nrow();
   const int n_sites = eta_lambda.ncol();
@@ -54,10 +54,10 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
   const double* prv = r_vec.begin();
   double* pll = ll.begin();
 
-  // Shared, read-only: the K_max-indexed combinatorial table (gcol33/tulpaObs#167)
-  // is the SAME for every (site, draw), so it is built once and reused across
-  // the whole S x n_sites sweep instead of every one of those calls repeating
-  // its own O(K_max) run of R::lgammafn().
+  // Shared, read-only: the K_max-indexed combinatorial table is the SAME for every
+  // (site, draw), so it is built once and reused across the whole S x n_sites
+  // sweep instead of every one of those calls repeating its own O(K_max) run of
+  // R::lgammafn().
   const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
 
 #ifdef _OPENMP
@@ -70,8 +70,8 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
       for (int s = 0; s < n_sites; ++s) {
         std::size_t off = (std::size_t) s * S + d;
         // Only log_lik is read below, so value_only=true skips the detection-arm
-        // gradient/Fisher block and its five per-bin derivative vectors entirely
-        // (gcol33/tulpaObs#164) -- this call previously computed and discarded them.
+        // gradient/Fisher block and its five per-bin derivative vectors entirely --
+        // this call previously computed and discarded them.
         double val = tulpaObs::compute_distance_site(
           y_by_site[s].data(), n_bins, pel[off], pes[off], eb, key, quad,
           K_max, r, /*value_only=*/true, &comb_table, &scratch,

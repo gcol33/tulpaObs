@@ -136,7 +136,7 @@
 #'   few species, taking the `mu_log_r` interval with it: at 8 and 36 species with
 #'   a simulated `sigma_logr = 0.5`, `n_quad = 3` and `n_quad_scalar = 3`, fits
 #'   recovering `sigma_log_r >= 0.30` covered `mu_log_r` 33/34 while those below
-#'   covered 2/5 (gcol33/tulpaObs#235).
+#'   covered 2/5.
 #'
 #'   What the penalty reaches on this block appears to be the boundary rather
 #'   than the calibration. Measured on 20 seeds of that fixture at 8 species with
@@ -496,14 +496,14 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     b_lambda     = fit$blup[[1L]],
     b_p          = fit$blup[[2L]],
     # Per-species FULL joint posterior covariance/cross-Hessian across the
-    # lambda + p RE terms (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g,
-    # gcol33/tulpa#398 pt. 2) -- needed by sbc()'s posterior tier to draw a
-    # species' (b_lambda_s, b_p_s) jointly with the community mean instead of
-    # independently (gcol33/tulpaObs#226 one level deeper: the lambda/p
-    # identifiability ridge means a species' abundance and detection
-    # deviations are themselves correlated). NULL when the community fit ran
-    # via the n_quad = 1 Laplace-EM path (cpp_nmix_community_em(), a
-    # different engine that does not expose this) rather than tulpa_re_aghq().
+    # lambda + p RE terms (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g
+    # pt. 2) -- needed by sbc()'s posterior tier to draw a species'
+    # (b_lambda_s, b_p_s) jointly with the community mean instead of
+    # independently ( one level deeper: the lambda/p identifiability ridge
+    # means a species' abundance and detection deviations are themselves
+    # correlated). NULL when the community fit ran via the n_quad = 1
+    # Laplace-EM path (cpp_nmix_community_em(), a different engine that does
+    # not expose this) rather than tulpa_re_aghq().
     blup_cov_g   = fit$blup_cov_g,
     blup_cross_g = fit$blup_cross_g,
     log_lik      = fit$log_marginal,

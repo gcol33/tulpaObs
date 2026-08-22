@@ -1,5 +1,5 @@
 # Community / multispecies N-mixture with a PER-SPECIES negative-binomial
-# dispersion random effect (tulpaObs#14):
+# dispersion random effect:
 #
 #   log_r_s ~ N(mu_log_r, sigma_log_r)   (r_s ~ LogNormal)
 #
@@ -11,14 +11,14 @@
 test_that("ms_abun(negbin) floors the log_r block at the converged AGHQ order", {
   skip_on_cran()
   skip_if_fast()
-  # gcol33/tulpaObs#234. Two Gauss-Hermite nodes leave no freedom to represent
-  # curvature, so where the 1-D log_r posterior is not near-Gaussian the marginal
-  # can come out arbitrarily sharp -- a 17x collapse of fit$sds[["log_r"]] with
-  # the fit converged, mu_log_r ordinary and nothing warned. The rule is
-  # converged at three nodes, so the scalar order is a floor and a request for
-  # two does not get two. Asserted on the per-block grid the fit reports rather
-  # than on an SE, because the collapse is data-dependent: it needs a fixture
-  # whose realised dispersion spread is wide, and only some seeds are.
+  # . Two Gauss-Hermite nodes leave no freedom to represent curvature, so where
+  # the 1-D log_r posterior is not near-Gaussian the marginal can come out
+  # arbitrarily sharp -- a 17x collapse of fit$sds[["log_r"]] with the fit
+  # converged, mu_log_r ordinary and nothing warned. The rule is converged at
+  # three nodes, so the scalar order is a floor and a request for two does not
+  # get two. Asserted on the per-block grid the fit reports rather than on an SE,
+  # because the collapse is data-dependent: it needs a fixture whose realised
+  # dispersion spread is wide, and only some seeds are.
   sim <- simulate_ms_abun(n_species = 3, N = 12, J = 2,
                           n_abund_covs = 1, n_det_covs = 1,
                           mu_lambda = c(log(3), 0.2), mu_p = c(0.5, -0.2),
@@ -138,7 +138,7 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   # What this assertion should be instead needs a decision about what the family
   # claims, and the conditional form needs sigma_log_r recorded at S = 18, which
   # this fixture's earlier runs did not keep. Left as-is deliberately rather than
-  # retuned to pass. See gcol33/tulpaObs#250 and NOTES_measurements.md.
+  # retuned to pass. See and NOTES_measurements.md.
   expect_gt(mean(covered), 0.8)
 })
 

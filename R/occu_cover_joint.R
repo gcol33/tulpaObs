@@ -33,10 +33,10 @@
     stop("occu_cover() joint engine supports positive = ",
          "\"lognormal\", \"beta\", or \"gaussian\".", call. = FALSE)
   }
-  # Cover-arm granularity. "mean" / "median" (tulpaObs#33) route through the
-  # `_agg` spec (one log f_pos at the per-unit mean / median); "latent" routes
-  # through the stateful `_latent` spec (a per-unit cover RE integrated out, one
-  # marginal per unit); "none" is the per-visit spec.
+  # Cover-arm granularity. "mean" / "median" route through the `_agg` spec (one
+  # log f_pos at the per-unit mean / median); "latent" routes through the
+  # stateful `_latent` spec (a per-unit cover RE integrated out, one marginal
+  # per unit); "none" is the per-visit spec.
   cover_aggregate <- model$cover_aggregate %||% "none"
   is_latent  <- identical(cover_aggregate, "latent")
   if (is_latent && is_gauss) {
@@ -68,25 +68,24 @@
 
   dots <- list(...)
 
-  # Per-group random intercepts (gcol33/tulpaObs#56, #102). The occupancy-arm RE
-  # (`re_spec`, one code per site) and the observation-arm REs (model$re_det /
-  # model$re_pos, one code per detection / positive-cover row) each join the fit
-  # as an `iid` prior block whose per-group latent rides ONE arm. Any RE block
-  # forces the multi-block driver (the field amplitude becomes an explicit copy
-  # spec). Not composed with the cover-latent RE (the latent spec carries its own
-  # per-unit cover RE) nor with the batched fused path (one species at a time).
+  # Per-group random intercepts. The occupancy-arm RE (`re_spec`, one code per
+  # site) and the observation-arm REs (model$re_det / model$re_pos, one code per
+  # detection / positive-cover row) each join the fit as an `iid` prior block
+  # whose per-group latent rides ONE arm. Any RE block forces the multi-block
+  # driver (the field amplitude becomes an explicit copy spec). Not composed with
+  # the cover-latent RE (the latent spec carries its own per-unit cover RE) nor
+  # with the batched fused path (one species at a time).
   has_re     <- !is.null(re_spec)            # occupancy (psi) arm
   has_re_det <- !is.null(model$re_det)       # detection (p) arm
   has_re_pos <- !is.null(model$re_pos)       # positive-cover arm
   has_any_re <- has_re || has_re_det || has_re_pos
-  # Arm-specific cover field (gcol33/tulpaObs#110): an independent, non-copied
-  # ICAR block on the cover (pos) arm alone, composed with the shared occupancy
-  # field. Forces the multi-block driver (like a trend field / RE block). Not
-  # composed with the latent cover RE, the correlated MCAR (gated at parse), or
-  # the batched fused path (one species at a time, no extra block).
-  # Arm-specific fields carry the detection (p) arm as well as the cover (pos) arm
-  # (each an independent, non-copied ICAR block on that arm alone). Both force the
-  # multi-block driver.
+  # Arm-specific cover field: an independent, non-copied ICAR block on the cover
+  # (pos) arm alone, composed with the shared occupancy field. Forces the
+  # multi-block driver (like a trend field / RE block). Not composed with the
+  # latent cover RE, the correlated MCAR (gated at parse), or the batched fused
+  # path (one species at a time, no extra block). Arm-specific fields carry the
+  # detection (p) arm as well as the cover (pos) arm (each an independent,
+  # non-copied ICAR block on that arm alone). Both force the multi-block driver.
   has_pos_armspec <- !is.null(pos_armspec)
   has_det_armspec <- !is.null(det_armspec)
   has_armspec     <- has_pos_armspec || has_det_armspec
@@ -108,10 +107,10 @@
          "field.", call. = FALSE)
   }
 
-  # Correlated (`|`) free-Sigma MCAR field (gcol33/tulpaObs#63): one coupled
-  # block over the bar's intercept + coefficient fields, copied onto the cover
-  # arm with one amplitude alpha. Scoped to the standard (non-latent, unbatched)
-  # path; the latent cover RE and the fused batch driver are not composed with it.
+  # Correlated (`|`) free-Sigma MCAR field: one coupled block over the bar's
+  # intercept + coefficient fields, copied onto the cover arm with one amplitude
+  # alpha. Scoped to the standard (non-latent, unbatched) path; the latent cover
+  # RE and the fused batch driver are not composed with it.
   if (correlated) {
     if (is_latent) {
       stop("occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) does ",
@@ -193,8 +192,8 @@
         10
       }
     } else if (is_gauss) {
-      # Identity-Gaussian arm (gcol33/tulpaObs#112): sigma_pos is the SD of the
-      # raw response (which may be negative), not of log(y_pos).
+      # Identity-Gaussian arm: sigma_pos is the SD of the raw response (which
+      # may be negative), not of log(y_pos).
       if (length(pos_vals) > 0L) max(stats::sd(pos_vals), 0.05) + 0.05 else 0.4
     } else {
       if (length(pos_vals) > 0L) {
@@ -206,9 +205,9 @@
     sigma_pos_init <- phi_pos_init  # passed through as pos-arm phi
   }
 
-  # A defaulted axis arrives already marked from the helper (gcol33/tulpaObs#186)
-  # and reaches its block unsorted, so the mark survives; the pos-arm amplitude
-  # below re-derives through `sort()` and is marked again there.
+  # A defaulted axis arrives already marked from the helper and reaches its block
+  # unsorted, so the mark survives; the pos-arm amplitude below re-derives
+  # through `sort()` and is marked again there.
   alpha_grid <- dots$alpha.grid %||% .tobs_default_alpha_grid()
   sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
 
@@ -287,19 +286,19 @@
       ), extra)
   }
 
-  # Per-group RE blocks (gcol33/tulpaObs#56, #102, #103). Each random-intercept
-  # term (one per arm for #56/#102; several per arm for crossed / nested #103)
-  # contributes one `iid` prior block whose per-group latent rides THAT arm only:
-  # obs_idx is the 3-element (psi, p, pos) list of per-row group codes, with the
-  # targeted arm carrying the codes and the other two zeroed (0 = no RE for that
-  # row, the engine's scatter skip). Each block's SD integrates on the outer grid
-  # over its `sigma_grid`. They trail the field block(s), so the field copy
-  # indices stay valid; the blocks carry no copy (each rides its own arm).
-  # `re_descs` records each block's arm + grouping metadata in prior order so the
-  # postprocess maps each block back to its `b<k>.sigma` axis and BLUP columns.
-  # Each per-group RE block's SD axis. Declared as ours whenever the matching
-  # `control$re.sigma.grid*` is unset, so the engine may recentre it
-  # (gcol33/tulpaObs#186); `re_auto()` pairs each call site with its own knob.
+  # Per-group RE blocks. Each random-intercept term (one per arm for #56/#102;
+  # several per arm for crossed / nested #103) contributes one `iid` prior block
+  # whose per-group latent rides THAT arm only: obs_idx is the 3-element (psi, p,
+  # pos) list of per-row group codes, with the targeted arm carrying the codes
+  # and the other two zeroed (0 = no RE for that row, the engine's scatter skip).
+  # Each block's SD integrates on the outer grid over its `sigma_grid`. They
+  # trail the field block(s), so the field copy indices stay valid; the blocks
+  # carry no copy (each rides its own arm). `re_descs` records each block's arm +
+  # grouping metadata in prior order so the postprocess maps each block back to
+  # its `b<k>.sigma` axis and BLUP columns. Each per-group RE block's SD axis.
+  # Declared as ours whenever the matching `control$re.sigma.grid*` is unset, so
+  # the engine may recentre it; `re_auto()` pairs each call site with its own
+  # knob.
   re_grid_default <- exp(seq(log(0.05), log(2), length.out = 6L))
   re_auto <- function(user) .tobs_mark_auto(user %||% re_grid_default,
                                             is.null(user))
@@ -323,13 +322,13 @@
     base
   }
   # Emit the prior block(s) for one RE term and record ONE descriptor spanning
-  # them (gcol33/tulpaObs#102, #103):
+  # them:
   #   * intercept (n_coefs == 1, !correlated): one scalar `iid` block.
   #   * uncorrelated slope (!correlated, Z present): one weighted `iid` block per
   #     coefficient -- svc_weight = that coefficient's design column (the
-  #     intercept column is all-ones, so its block is the scalar iid; tulpa#114).
+  # intercept column is all-ones, so its block is the scalar iid).
   #   * correlated slope: one multivariate `miid` block over a free cross-coef
-  #     Sigma -- field_weight = the design columns (tulpa#114).
+  # Sigma -- field_weight = the design columns.
   # The descriptor records the [block_start, n_blocks] run, in emission order, so
   # the postprocess pulls the right latent columns; the blocks trail the field
   # block(s), so the field copy indices stay valid.
@@ -339,7 +338,7 @@
     obs_idx <- obs_for(arm, codes)
     b0 <- length(re_blocks)
     # `as.numeric()` drops the auto-grid marker the caller applied, so re-apply
-    # it to the vector that actually reaches the block (gcol33/tulpaObs#186).
+    # it to the vector that actually reaches the block.
     grid <- .tobs_num_auto(grid)
     if (!isTRUE(correlated)) {
       for (cc in seq_len(n_coefs)) {
@@ -355,7 +354,7 @@
                   n_fields = as.integer(n_coefs), obs_idx = obs_idx,
                   field_weight = field_weight)
       # A coarse free-Sigma grid (or the user's) so the block composes with the
-      # shared field + copy under the engine's outer-grid cap (gcol33/tulpa#114).
+      # shared field + copy under the engine's outer-grid cap.
       lc <- logchol_grid %||% .occu_cover_miid_logchol_grid(n_coefs)
       if (!is.null(lc)) blk$logchol_grid <- as.matrix(lc)
       re_blocks[[length(re_blocks) + 1L]] <<- blk
@@ -391,25 +390,24 @@
     }
   }
 
-  # Arm-specific cover field blocks (gcol33/tulpaObs#110). Each field column of the
-  # `to = "positive"` bar becomes ONE non-copied ICAR block scattering on the
-  # cover (pos) arm alone: the psi + detection rows carry the 0-sentinel node so
-  # they skip it (nested_laplace_joint_multi.h's `l_b > 0` guard), and it has no
-  # copy entry -- its amplitude is its OWN sigma (b<k>.sigma), decoupled from the
-  # occupancy field's alpha copy. A trend (non-intercept) column carries its
-  # per-cell weight on the pos rows. These trail the occupancy field blocks so the
-  # copy indices (which name occupancy blocks only) stay valid; the RE blocks
-  # trail them. `pos_field_specs` records each field block's arm + weight column so
-  # the postprocess and the draw substrate map the blocks back to (occ vs pos)
-  # amplitudes without re-deriving the layout.
-  # The non-copied ICAR block uses the single-arm precision parameterization
-  # (axis b<k>.tau, sigma = 1/sqrt(tau)), like the cover() arm-specific path -- the
-  # copy reparameterization (b<k>.sigma + b<k>.alpha) applies only to a copied
-  # field. So the amplitude grid is passed as tau = 1 / sigma^2.
-  # `sort()` / `as.numeric()` drop the auto-grid marker, so it is re-applied on
-  # the translated tau vector; the source vector's own marker is the provenance
-  # (gcol33/tulpaObs#186), which covers both the explicit pos-field grid and the
-  # shared sigma grid it falls back to.
+  # Arm-specific cover field blocks. Each field column of the `to = "positive"` bar
+  # becomes ONE non-copied ICAR block scattering on the cover (pos) arm alone: the
+  # psi + detection rows carry the 0-sentinel node so they skip it
+  # (nested_laplace_joint_multi.h's `l_b > 0` guard), and it has no copy entry --
+  # its amplitude is its OWN sigma (b<k>.sigma), decoupled from the occupancy
+  # field's alpha copy. A trend (non-intercept) column carries its per-cell weight
+  # on the pos rows. These trail the occupancy field blocks so the copy indices
+  # (which name occupancy blocks only) stay valid; the RE blocks trail them.
+  # `pos_field_specs` records each field block's arm + weight column so the
+  # postprocess and the draw substrate map the blocks back to (occ vs pos)
+  # amplitudes without re-deriving the layout. The non-copied ICAR block uses the
+  # single-arm precision parameterization (axis b<k>.tau, sigma = 1/sqrt(tau)),
+  # like the cover() arm-specific path -- the copy reparameterization (b<k>.sigma +
+  # b<k>.alpha) applies only to a copied field. So the amplitude grid is passed as
+  # tau = 1 / sigma^2. `sort()` / `as.numeric()` drop the auto-grid marker, so it
+  # is re-applied on the translated tau vector; the source vector's own marker is
+  # the provenance, which covers both the explicit pos-field grid and the shared
+  # sigma grid it falls back to.
   pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||% sigma_grid
   pos_armspec_tau_grid   <- .tobs_mark_auto(
     sort(1.0 / as.numeric(pos_armspec_sigma_grid)^2),
@@ -512,15 +510,15 @@
   }
 
   if (correlated) {
-    # Correlated free-Sigma MCAR (gcol33/tulpaObs#63): ONE coupled block over the
-    # bar's intercept + coefficient fields, sharing a free cross-covariance
-    # Sigma (x) Q^-1 on the occupancy arm (the within-arm relationship among the
-    # fields, integrated over the outer CCD in log-Cholesky coords), copied onto
-    # the cover arm with one amplitude alpha (the cross-arm transfer). The p
-    # (detection) arm carries no field: its 0-sentinel cell index skips the block
-    # (mcar_block_factory's `cell < 1 => skip`). Per (field, arm) weights mirror
-    # the trend path -- the intercept is all-ones, each coefficient its per-site
-    # design column, and the cover arm slices both by `pos_site`.
+    # Correlated free-Sigma MCAR: ONE coupled block over the bar's intercept +
+    # coefficient fields, sharing a free cross-covariance Sigma (x) Q^-1 on the
+    # occupancy arm (the within-arm relationship among the fields, integrated
+    # over the outer CCD in log-Cholesky coords), copied onto the cover arm with
+    # one amplitude alpha (the cross-arm transfer). The p (detection) arm carries
+    # no field: its 0-sentinel cell index skips the block (mcar_block_factory's
+    # `cell < 1 => skip`). Per (field, arm) weights mirror the trend path -- the
+    # intercept is all-ones, each coefficient its per-site design column, and the
+    # cover arm slices both by `pos_site`.
     field_weight_site <- c(
       list(rep(1.0, n_sites)),
       lapply(coupled_trends, function(tf) as.numeric(tf$weight))
@@ -559,10 +557,10 @@
     # and its SVC weight is w_psi[pos_site]. Under per-visit cover pos_site ==
     # site_of_visit, so this reduces to the previous cell_of_visit / w_visit.
     pos_field_node <- as.integer(site_cell[pos_site])
-    # When the detection arm carries its own non-copied block -- an RE
-    # (gcol33/tulpaObs#102) or an arm-specific field (gcol33/tulpa#140) -- its
-    # field_coef is 1 so that block scatters, so the shared field must be skipped
-    # on detection by the 0-node sentinel rather than by field_coef = 0.
+    # When the detection arm carries its own non-copied block -- an RE or an
+    # arm-specific field -- its field_coef is 1 so that block scatters, so the
+    # shared field must be skipped on detection by the 0-node sentinel rather
+    # than by field_coef = 0.
     det_field_node <- if (has_re_det || has_det_armspec) rep(0L, n_v)
                       else cell_of_visit
     spatial_idx_arms <- list(as.integer(site_cell), det_field_node, pos_field_node)
@@ -587,13 +585,13 @@
     )
     # The arm-specific cover fields (non-copied, pos arm only) trail the occupancy
     # field blocks, then the RE blocks; the copy indices above name occupancy
-    # blocks only, so they stay valid (gcol33/tulpaObs#110).
+    # blocks only, so they stay valid.
     prior_arg <- c(prior_arg, pos_armspec_blocks, re_blocks)
   } else if (has_any_re || has_armspec) {
     # Single shared occupancy field + per-group REs and/or arm-specific cover
     # fields: the multi-block driver with the occupancy field as block 1 (alpha
     # copy onto cover), then the non-copied arm-specific cover block(s), then the
-    # iid RE block(s) -- each rides its own arm with no copy (gcol33/tulpaObs#110).
+    # iid RE block(s) -- each rides its own arm with no copy.
     field_block <- icar_template(list(
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
     prior_arg <- c(list(field_block), pos_armspec_blocks, re_blocks)
@@ -623,30 +621,30 @@
       tol       = as.numeric(tol),
       n_threads = as.integer(dots$n.threads %||% 1L),
       store_Q   = TRUE,
-      # Inner-Newton curvature (gcol33/tulpa#46). The beta positive arm's
-      # observed mixture Hessian is indefinite away from the mode, so observed-
-      # curvature Newton steps stall and the inner Newton hits max.iter in every
-      # grid cell (non-convergence -- the dominant cost). Expected/Fisher
-      # information is PSD by construction, so the steps are well-conditioned and
-      # the inner Newton converges in ~12 steps instead. The reported SEs,
-      # log_det and grid weights are unchanged: the final mode-pass always
-      # re-factorizes with the observed Hessian; the curvature mode only steers
-      # the path to the mode. The lognormal arm is exactly quadratic (one inner
-      # step), so observed curvature is already optimal -> keep "lm".
+      # Inner-Newton curvature. The beta positive arm's observed mixture Hessian
+      # is indefinite away from the mode, so observed- curvature Newton steps
+      # stall and the inner Newton hits max.iter in every grid cell
+      # (non-convergence -- the dominant cost). Expected/Fisher information is
+      # PSD by construction, so the steps are well-conditioned and the inner
+      # Newton converges in ~12 steps instead. The reported SEs, log_det and grid
+      # weights are unchanged: the final mode-pass always re-factorizes with the
+      # observed Hessian; the curvature mode only steers the path to the mode.
+      # The lognormal arm is exactly quadratic (one inner step), so observed
+      # curvature is already optimal -> keep "lm".
       hessian   = dots$hessian %||% (if (is_beta) "fisher" else "lm"),
-      # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off
-      # for the grid fit. Reuse also makes the off-factor scatter `grad_only`
-      # (skipping the beta Hessian fill, the dominant per-iteration cost --
+      # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off for
+      # the grid fit. Reuse also makes the off-factor scatter `grad_only` (skipping
+      # the beta Hessian fill, the dominant per-iteration cost --
       # dev_notes/_profile_pareto_k.R), so it is NOT just a factorize saving; the
-      # tulpa#118 diagnostic re-solves enable it (refresh 4) because they need only
-      # the converged log-marginal. The grid fit keeps refresh 1 by default since
-      # its SEs/log-det use the true per-iteration curvature; raise via
+      # diagnostic re-solves enable it (refresh 4) because they need only the
+      # converged log-marginal. The grid fit keeps refresh 1 by default since its
+      # SEs/log-det use the true per-iteration curvature; raise via
       # `control$inner.refresh` if a grid fit is scatter-bound and SEs allow it.
       inner_refresh = as.integer(dots$inner.refresh %||% 1L),
-      # Outer-grid parallelism (gcol33/tulpa#46, lever 2). The cover hurdle's
-      # large spatial field takes the sparse inner-solve path, whose outer grid
-      # now runs across `n.threads.outer` threads (per-thread Hessian builder /
-      # scratch / specs). Defaults to serial; set it for the full-field fits.
+      # Outer-grid parallelism (lever 2). The cover hurdle's large spatial
+      # field takes the sparse inner-solve path, whose outer grid now runs
+      # across `n.threads.outer` threads (per-thread Hessian builder / scratch
+      # / specs). Defaults to serial; set it for the full-field fits.
       # `force.sparse` forces the sparse path on small fields (testing / the
       # parallel and factor-reuse paths live there).
       n_threads_outer = as.integer(dots$n.threads.outer %||% 1L),
@@ -664,65 +662,63 @@
       # path) refines a sharply peaked axis post-integration -- independent of
       # adaptive_grid. Exposed so a fit can request a genuinely fixed outer grid
       # (`adaptive.grid = FALSE` AND `var.of.means.consistency = FALSE`), which
-      # the fused batch driver requires for per-species bit-identity
-      # (gcol33/tulpa#69, gcol33/tulpaObs#58).
+      # the fused batch driver requires for per-species bit-identity.
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
       var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
-      # Outer Pareto-k-hat accuracy diagnostic defaults OFF (gcol33/tulpaObs#101).
-      # It draws `k_samples` extra hyperparameter points and re-solves the inner
-      # Laplace at each on the full areal field, so it dominates the runtime --
-      # ~200 re-solves vs the grid's ~30-70 (measured 84-98% of wall time across
-      # field sizes). Per-phase profiling (dev_notes/_profile_pareto_k.R) shows the
-      # binding per-solve cost is the per-Newton-iteration Hessian/gradient SCATTER
-      # (the beta arm's per-observation digamma/trigamma fill, 73-83%), NOT the
-      # sparse Cholesky factorize (a flat ~0.5 ms, 8-12%, not super-linear up to
-      # ~1100 cells). tulpa#118 cut the diagnostic 2-4x (Shamanskii reuse + loosened
-      # inner tol + near-neighbour batch order) with the k-hat byte-stable, but it
-      # stays OFF by default: it reports k-hat only -- it does not move the betas /
-      # SDs / field -- so it is an opt-in validation pass, matching the
-      # occu_joint path. Set control$diagnose.k = TRUE to compute it
-      # (control$diagnose.draws sizes the importance batch).
+      # Outer Pareto-k-hat accuracy diagnostic defaults OFF. It draws `k_samples`
+      # extra hyperparameter points and re-solves the inner Laplace at each on the
+      # full areal field, so it dominates the runtime -- ~200 re-solves vs the
+      # grid's ~30-70 (measured 84-98% of wall time across field sizes). Per-phase
+      # profiling (dev_notes/_profile_pareto_k.R) shows the binding per-solve cost
+      # is the per-Newton-iteration Hessian/gradient SCATTER (the beta arm's
+      # per-observation digamma/trigamma fill, 73-83%), NOT the sparse Cholesky
+      # factorize (a flat ~0.5 ms, 8-12%, not super-linear up to ~1100 cells). cut
+      # the diagnostic 2-4x (Shamanskii reuse + loosened inner tol + near-neighbour
+      # batch order) with the k-hat byte-stable, but it stays OFF by default: it
+      # reports k-hat only -- it does not move the betas / SDs / field -- so it is
+      # an opt-in validation pass, matching the occu_joint path. Set
+      # control$diagnose.k = TRUE to compute it (control$diagnose.draws sizes the
+      # importance batch).
       diagnose_k = dots$diagnose.k %||% FALSE,
       # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy
       # alias). The outer Pareto-k is scored ONCE over this many importance draws.
       k_samples = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
-      # Bootstrap outer Pareto-k uncertainty (gcol33/tulpa#127). The k-hat's
-      # sampling uncertainty is bootstrapped from its raw importance log-ratios
-      # (k.bootstrap replicates, NO new solves): reports the SE, 95% CI and the
-      # band_confident flag. A tighter k needs more actual tail ratios -- raise
-      # diagnose.draws, NOT k.bootstrap. k.tail.points (NULL = automatic PSIS rule)
-      # is an expert tail-threshold control; k.conf.bands the reliability-band
-      # boundaries.
+      # Bootstrap outer Pareto-k uncertainty. The k-hat's sampling uncertainty is
+      # bootstrapped from its raw importance log-ratios (k.bootstrap replicates, NO
+      # new solves): reports the SE, 95% CI and the band_confident flag. A tighter
+      # k needs more actual tail ratios -- raise diagnose.draws, NOT k.bootstrap.
+      # k.tail.points (NULL = automatic PSIS rule) is an expert tail-threshold
+      # control; k.conf.bands the reliability-band boundaries.
       k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
       k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
       k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),
-      # Diagnostic parallelism (gcol33/tulpa#117). When `diagnose.k = TRUE` the
-      # `k.samples` importance re-solves are independent and run after the grid
-      # (every core free), each solved single-threaded, so widening their outer
-      # pool is a bit-identical wall-clock speedup. NULL (default) follows the
-      # fit's own thread grant (`n.threads.outer` / inner `n.threads`); "auto"
-      # grabs the performance cores; an integer pins the width. Forwarded verbatim.
+      # Diagnostic parallelism. When `diagnose.k = TRUE` the `k.samples` importance
+      # re-solves are independent and run after the grid (every core free), each
+      # solved single-threaded, so widening their outer pool is a bit-identical
+      # wall-clock speedup. NULL (default) follows the fit's own thread grant
+      # (`n.threads.outer` / inner `n.threads`); "auto" grabs the performance
+      # cores; an integer pins the width. Forwarded verbatim.
       k_threads  = dots$k.threads,
-      # Grid-cell checkpoint/resume (gcol33/tulpa#50). An EVA-scale occu_cover
-      # fit runs for hours; `control$checkpoint = list(path =, resume =)` makes
-      # the outer grid append each completed cell to `path` and a resume run
-      # load the finished cells and solve only the rest, so a killed/rebooted
-      # fit resumes instead of restarting. Forwarded verbatim to the engine.
+      # Grid-cell checkpoint/resume. An EVA-scale occu_cover fit runs for
+      # hours; `control$checkpoint = list(path =, resume =)` makes the outer
+      # grid append each completed cell to `path` and a resume run load the
+      # finished cells and solve only the rest, so a killed/rebooted fit
+      # resumes instead of restarting. Forwarded verbatim to the engine.
       checkpoint = dots$checkpoint,
-      # Outer-grid node layout (gcol33/tulpa#61, tulpaObs#31). "ccd" places a
-      # central composite design over the >= 3 latent axes (intercept + trend
-      # sigma/alpha) and crosses the pos-arm phi tensor on top; "grid" forces
-      # the dense tensor. Forwarded so a two-field trend fit can request CCD
-      # from the consumer side; NULL falls through to the engine default.
+      # Outer-grid node layout. "ccd" places a central composite design over
+      # the >= 3 latent axes (intercept + trend sigma/alpha) and crosses the
+      # pos-arm phi tensor on top; "grid" forces the dense tensor. Forwarded
+      # so a two-field trend fit can request CCD from the consumer side; NULL
+      # falls through to the engine default.
       integration = dots$integration,
-      # Outer-grid progress + ETA (gcol33/tulpa#45, tulpaObs#43). Two channels,
-      # like the cover() hurdle, both ON by default: `progress` gates the Rcout
-      # console progress bar -- ON by default (NOT tied to `verbose`), set
-      # dots$progress = FALSE to silence it; `progress.file` writes the ETA to
-      # disk and is emitted whenever it is non-empty, independent of
-      # `progress`/`verbose` -- the channel that survives a detached
-      # Start-Process stdout buffer. An explicit dotted key overrides.
-      # `[[` (exact) not `$`: `dots$progress` prefix-matches `progress.file`.
+      # Outer-grid progress + ETA. Two channels, like the cover() hurdle, both
+      # ON by default: `progress` gates the Rcout console progress bar -- ON by
+      # default (NOT tied to `verbose`), set dots$progress = FALSE to silence
+      # it; `progress.file` writes the ETA to disk and is emitted whenever it
+      # is non-empty, independent of `progress`/`verbose` -- the channel that
+      # survives a detached Start-Process stdout buffer. An explicit dotted key
+      # overrides. `[[` (exact) not `$`: `dots$progress` prefix-matches
+      # `progress.file`.
       progress          = dots[["progress"]] %||% TRUE,
       progress.every    = dots$progress.every,
       progress.throttle = dots$progress.throttle,
@@ -752,26 +748,26 @@
               # Per-block RE descriptors in emitted (prior) order: each carries
               # the arm, grouping var + levels, group count, and coefficient
               # shape, so the postprocess maps each block back to its BLUP
-              # columns, sigma axis, and per-arm summary (gcol33/tulpaObs#103).
+              # columns, sigma axis, and per-arm summary.
               re_descs = re_descs,
               mcar = correlated,
               n_fields_mcar = if (correlated) 1L + n_trend else NULL,
-              # Arm-specific cover field (gcol33/tulpaObs#110): `field_specs` labels
-              # every field block (shared occupancy vs pos-arm), `n_occ_fields` is
-              # the occupancy field count (intercept + trends) so the postprocess
-              # partitions the trailing pos-arm blocks; `pos_field_specs` carries
-              # each pos block's weight column for reporting.
+              # Arm-specific cover field: `field_specs` labels every field block
+              # (shared occupancy vs pos-arm), `n_occ_fields` is the occupancy field
+              # count (intercept + trends) so the postprocess partitions the
+              # trailing pos-arm blocks; `pos_field_specs` carries each pos block's
+              # weight column for reporting.
               field_specs = field_specs,
               n_occ_fields = 1L + n_trend,
               has_pos_armspec = has_armspec,
               pos_field_specs = pos_field_specs,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
 
-  # Batched fused path (gcol33/tulpa#66): return the assembled call + context
-  # instead of fitting, so .tobs_fit_occu_cover_batch_fused can run B species
-  # through one fused multi-block solve and post-process each with the shared
-  # ctx. Eligibility (no pos-arm phi axis -> no latent / phi.grid.pos) is judged
-  # by the caller from `fit_call$phi_grid` + `is_latent`.
+  # Batched fused path: return the assembled call + context instead of fitting,
+  # so .tobs_fit_occu_cover_batch_fused can run B species through one fused
+  # multi-block solve and post-process each with the shared ctx. Eligibility (no
+  # pos-arm phi axis -> no latent / phi.grid.pos) is judged by the caller from
+  # `fit_call$phi_grid` + `is_latent`.
   if (isTRUE(.batch_collect)) {
     return(structure(
       list(fit_call = fit_call, ctx = ctx, sigma_pos_init = sigma_pos_init,

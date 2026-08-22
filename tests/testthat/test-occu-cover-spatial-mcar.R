@@ -1,13 +1,13 @@
-# Correlated (`|`) / separable-MCAR spatial coefficient fields on occu_cover()
-# (gcol33/tulpaObs#63). A single bar `~ 1 + x | cell` on the occupancy (psi)
-# formula declares the intercept field u_cell and the x-slope field s_cell as
-# CORRELATED Besag fields with a free 2x2 cross-covariance Sigma, copied onto the
-# cover arm with one amplitude alpha (the cross-arm transfer). The free Sigma is
-# integrated over the outer mode-centred CCD in log-Cholesky coordinates; the
-# reported Sigma SDs and cross-correlation are weighted-quantile summaries of the
-# marginalized posterior, never a plug-in of the modal cell. Unlike the cover
-# hurdle the field rides the coupled occupancy mixture, so it exercises the
-# coupled per-cell scatter's INDEXED_MULTI path (tulpa engine).
+# Correlated (`|`) / separable-MCAR spatial coefficient fields on occu_cover(). A
+# single bar `~ 1 + x | cell` on the occupancy (psi) formula declares the
+# intercept field u_cell and the x-slope field s_cell as CORRELATED Besag fields
+# with a free 2x2 cross-covariance Sigma, copied onto the cover arm with one
+# amplitude alpha (the cross-arm transfer). The free Sigma is integrated over the
+# outer mode-centred CCD in log-Cholesky coordinates; the reported Sigma SDs and
+# cross-correlation are weighted-quantile summaries of the marginalized
+# posterior, never a plug-in of the modal cell. Unlike the cover hurdle the field
+# rides the coupled occupancy mixture, so it exercises the coupled per-cell
+# scatter's INDEXED_MULTI path (tulpa engine).
 
 .mcar_grid_adj <- function(nx, ny) {
   n <- nx * ny; W <- matrix(0L, n, n); id <- function(i, j) (j - 1L) * nx + i
@@ -176,6 +176,6 @@ test_that("independent `||` occupancy bar carries no cross-correlation", {
   expect_identical(fit$spatial$type, "icar")
   expect_null(fit$spatial$rho_mcar)
   # It does fit the two independent fields (intercept + trend) with their own
-  # amplitudes -- the `||` deliverable (gcol33/tulpaObs#61).
+  # amplitudes -- the `||` deliverable.
   expect_false(is.null(fit$spatial$sigma_trend_mean))
 })

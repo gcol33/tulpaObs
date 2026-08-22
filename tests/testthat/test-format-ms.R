@@ -1,6 +1,6 @@
 # =============================================================================
-# test-format-ms.R - tobs_format_ms(), the multi-species data constructor
-# (gcol33/tulpaObs#179).
+# test-format-ms.R
+# - tobs_format_ms(), the multi-species data constructor.
 #
 # The contract the community binders rely on is that the two entry points --
 # a [sites x visits x species] array and a named list of [sites x visits]

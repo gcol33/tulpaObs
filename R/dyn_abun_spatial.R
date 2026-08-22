@@ -1,5 +1,6 @@
 # =============================================================================
-# dyn_abun_spatial.R - areal-spatial Dail-Madsen open N-mixture (tulpaObs#51)
+# dyn_abun_spatial.R
+# - areal-spatial Dail-Madsen open N-mixture
 #
 # An ICAR / proper-CAR / BYM2 field on the INITIAL-abundance arm (log lambda_1)
 # via the shared areal-BFGS nested-Laplace driver (R/areal_bfgs.R): the forward-
@@ -20,12 +21,12 @@
   temporal_only <- is.null(spatial) && !is.null(temporal)
   if (!is.null(spatial))
     .tobs_reject_weighted_spatial(spatial, "dyn_abun abundance spatial")
-  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
-  # carries shared = c(abundance, detection) = c(FALSE, TRUE). The dyn_abun
-  # detection design is per-site ([n_sites x p]), so a site-level detection field
-  # (a spatially-varying detection probability applied across every season's obs
-  # pmf) loads on eta_p directly and the marginal's per-site grad_eta_p scatters
-  # back with no aggregation. omega / gamma never carry a structured field.
+  # Detection-arm field: a field in the `detection=` formula carries shared =
+  # c(abundance, detection) = c(FALSE, TRUE). The dyn_abun detection design is
+  # per-site ([n_sites x p]), so a site-level detection field (a spatially-varying
+  # detection probability applied across every season's obs pmf) loads on eta_p
+  # directly and the marginal's per-site grad_eta_p scatters back with no
+  # aggregation. omega / gamma never carry a structured field.
   det_arm <- !is.null(spatial) && isTRUE(spatial$shared[2L]) &&
              !isTRUE(spatial$shared[1L])
   map <- seq_len(model$n_sites)
@@ -103,34 +104,34 @@
                              X_svc = X_lam, family = "dyn_abun")
 }
 
-# Areal-spatial Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#72): a FIXED-
-# HYPER non-centered PROPER-CAR field on the initial-abundance (log lambda_1) arm of
-# the forward-HMM marginal. The field precision (tau, rho) is fixed at the nested-
-# Laplace areal posterior mean (fit$spatial_hyper) and the whitened raw ~ N(0, I)
-# (z = Linv %*% raw) is sampled jointly with the four arms' coefficients via the
-# dyn_abun NUTS field block (cpp_dyn_abun_nuts over nuts_field_block.h). The areal
-# Laplace fit supplies warm coefficients + the field hyper. icar / car_proper /
-# bym2 -- the intrinsic icar / bym2 fields sample via the #71 sum-to-zero
-# reparameterisation (#113); Poisson or NB initial abundance.
+# Areal-spatial Dail-Madsen open N-mixture via NUTS: a FIXED- HYPER non-centered
+# PROPER-CAR field on the initial-abundance (log lambda_1) arm of the forward-HMM
+# marginal. The field precision (tau, rho) is fixed at the nested- Laplace areal
+# posterior mean (fit$spatial_hyper) and the whitened raw ~ N(0, I) (z = Linv %*%
+# raw) is sampled jointly with the four arms' coefficients via the dyn_abun NUTS
+# field block (cpp_dyn_abun_nuts over nuts_field_block.h). The areal Laplace fit
+# supplies warm coefficients + the field hyper. icar / car_proper / bym2 -- the
+# intrinsic icar / bym2 fields sample via the #71 sum-to-zero reparameterisation
+# (#113); Poisson or NB initial abundance.
 .tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
                                             K_max = NULL, sigma.beta = NULL,
                                             n.iter = NULL, n.warmup = NULL,
                                             n.chains = NULL, max.treedepth = NULL,
                                             adapt.delta = NULL, seed = NULL,
                                             verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
   if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
     stop(paste0("dyn_abun() NUTS carries the areal field on the initial-abundance ",
                 "arm; a detection-arm field (a spatially-varying detection logit) ",
-                "is wired under method = \"nested_laplace\". (tulpaObs#114)"),
+                "is wired under method = \"nested_laplace\"."),
          call. = FALSE)
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports icar() / ",
                         "car_proper() / bym2() on the initial-abundance arm; got ",
-                        "'%s'. (tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+                        "'%s'."), spatial$type), call. = FALSE)
   n_sites <- model$n_sites
   if (spatial$n_units != n_sites)
     stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
@@ -220,22 +221,21 @@
        log_r = ev$log_r, r = if (use_nb) exp(ev$log_r) else NA_real_)
 }
 
-# Temporal-field Dail-Madsen open N-mixture via NUTS (gcol33/tulpaObs#114): a
-# FIXED-HYPER non-centered ar1 / rw1 / rw2 / iid field on the initial-abundance
-# (log lambda_1) arm of the forward-HMM marginal. Structurally identical to the
-# areal NUTS path -- the temporal field is a GMRF whose whitened loading is fixed
-# at the nested-Laplace temporal-only posterior mean and whose per-site field_map
-# is the period index (many sites share a period), so it rides the SAME dyn_abun
-# NUTS field block (cpp_dyn_abun_nuts over nuts_field_block.h) with no engine
-# change. Poisson or NB initial abundance; temporal-only (no simultaneous areal
-# field on this path).
+# Temporal-field Dail-Madsen open N-mixture via NUTS: a FIXED-HYPER non-centered
+# ar1 / rw1 / rw2 / iid field on the initial-abundance (log lambda_1) arm of the
+# forward-HMM marginal. Structurally identical to the areal NUTS path -- the
+# temporal field is a GMRF whose whitened loading is fixed at the nested-Laplace
+# temporal-only posterior mean and whose per-site field_map is the period index
+# (many sites share a period), so it rides the SAME dyn_abun NUTS field block
+# (cpp_dyn_abun_nuts over nuts_field_block.h) with no engine change. Poisson or
+# NB initial abundance; temporal-only (no simultaneous areal field on this path).
 .tobs_fit_dyn_abun_nuts_temporal <- function(model, temporal, mixture = "poisson",
                                              K_max = NULL, sigma.beta = NULL,
                                              n.iter = NULL, n.warmup = NULL,
                                              n.chains = NULL, max.treedepth = NULL,
                                              adapt.delta = NULL, seed = NULL,
                                              verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   n_sites <- model$n_sites

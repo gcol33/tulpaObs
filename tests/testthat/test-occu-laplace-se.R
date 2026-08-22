@@ -1,4 +1,4 @@
-# Parameter-recovery + coverage tests for the psi-arm Laplace SE (tulpaObs#7).
+# Parameter-recovery + coverage tests for the psi-arm Laplace SE.
 #
 # Background. The single-season occu M-step encodes the soft-imputed
 # P(z = 1 | y) as a pseudo-binomial likelihood with n_trials = M (M = 1000

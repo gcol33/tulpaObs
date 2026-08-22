@@ -1,9 +1,9 @@
-# The shared preamble behind the count-marginal spatial fitters
-# (gcol33/tulpaObs#229). The areal N-mixture wrappers, the SPDE wrapper and the
-# removal wrappers used to inline the same coercions, dimension checks, beta
-# inits and truncation rule, and the copies had drifted on the outer-grid
-# defaults and on which range checks applied. These pin the settled values and
-# the shared doors, so a fifth count family cannot reopen the drift.
+# The shared preamble behind the count-marginal spatial fitters. The areal
+# N-mixture wrappers, the SPDE wrapper and the removal wrappers used to inline
+# the same coercions, dimension checks, beta inits and truncation rule, and the
+# copies had drifted on the outer-grid defaults and on which range checks
+# applied. These pin the settled values and the shared doors, so a fifth count
+# family cannot reopen the drift.
 
 cs_design <- function(n_sites = 6L, n_visits = 3L, seed = 1L) {
   set.seed(seed)

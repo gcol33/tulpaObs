@@ -1,6 +1,6 @@
 # =============================================================================
-# occu_categorical.R -- presence + nominal (unordered) K-class hurdle
-# (gcol33/tulpaObs#106).
+# occu_categorical.R
+# -- presence + nominal (unordered) K-class hurdle.
 #
 # Observed-state sub-model: each unit is either absent (y = 0) or present in one
 # of K nominal classes (y in 1..K). Presence is a Bernoulli arm; the class given

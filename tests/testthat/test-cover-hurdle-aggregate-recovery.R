@@ -1,10 +1,9 @@
 # =============================================================================
 # test-cover-hurdle-aggregate-recovery.R - parameter-recovery suite behind the
 # default-ON sufficient-statistic reductions of BOTH cover-hurdle arms:
-# aggregate.occ (binomial occurrence arm, tulpaObs#48) and aggregate.pos
-# (grouped-beta positive arm, tulpaObs#49). Both default ON, so a default-control
-# fit exercises both reductions at once; this suite is the recovery sign-off
-# behind that default.
+# aggregate.occ (binomial occurrence arm) and aggregate.pos (grouped-beta
+# positive arm). Both default ON, so a default-control fit exercises both
+# reductions at once; this suite is the recovery sign-off behind that default.
 #
 # Each reduction collapses observations sharing a design row AND every
 # per-observation latent component to one row: the occurrence arm to its exact
@@ -74,9 +73,9 @@
                alpha.grid.trend = c(0, 0.5, 1.0, 1.5),
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)
   if (!is.null(agg)) { ctrl$aggregate.occ <- agg; ctrl$aggregate.pos <- agg }
-  # The spatially-varying trend is a second weighted areal term in the formula
-  # (gcol33/tulpaObs#59): unweighted bym2() = shared intercept field, weighted
-  # bym2(..., weight = time) = the coupled trend field.
+  # The spatially-varying trend is a second weighted areal term in the
+  # formula: unweighted bym2() = shared intercept field, weighted bym2(...,
+  # weight = time) = the coupled trend field.
   suppressWarnings(tobs(
     formula = ~ x + bym2(graph = s$adj, group_var = "region") +
                 bym2(graph = s$adj, weight = time, group_var = "region"),
@@ -85,7 +84,7 @@
 }
 
 
-test_that("both arms default-ON recover truth (cover beta-trend hurdle, tulpaObs#48/#49)", {
+test_that("both arms default-ON recover truth (cover beta-trend hurdle/#49)", {
   skip_on_cran()
   skip_if_fast()
 
@@ -145,7 +144,7 @@ test_that("both arms default-ON recover truth (cover beta-trend hurdle, tulpaObs
 })
 
 
-test_that("both arms default-ON are byte-identical to the full per-plot fit (tulpaObs#48/#49)", {
+test_that("both arms default-ON are byte-identical to the full per-plot fit (/#49)", {
   skip_on_cran()
   skip_if_fast()
 

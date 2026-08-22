@@ -1,9 +1,10 @@
 // cell_coupling_occu_only.cpp
 // Registration of `OccuOnlyCoupling` against tulpa's CellCouplingSpec registry
 // via the `tulpa_register_cell_coupling` registered C callable, plus an
-// Rcpp-export'd direct evaluator used by tests/testthat/test-occu-only-coupling.R
-// to FD-check every closed-form derivative against numerical derivatives of the
-// cell log-density (gcol33/tulpaObs#81).
+// Rcpp-export'd direct evaluator used by
+// tests/testthat/test-occu-only-coupling.R
+// to FD-check every closed-form derivative against numerical derivatives
+// of the cell log-density.
 //
 // Registration is invoked from R via `.onLoad` (R/tulpaObs-package.R), the same
 // pattern the occu_cover specs use.

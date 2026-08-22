@@ -314,7 +314,7 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
       # Every species must be on the same sites x visits grid. Without this a
       # matrix whose length divides the first's is RECYCLED into the slice, so
       # a truncated or transposed species is silently accepted and the array
-      # looks well-formed (gcol33/tulpaObs#179).
+      # looks well-formed.
       if (!is.matrix(ys) || nrow(ys) != n_sites || ncol(ys) != max_visits)
         stop(sprintf(paste0("tobs_format_ms(): species %s is %s, but species 1 ",
                             "is %d x %d. Every species must share one ",
@@ -904,7 +904,7 @@ simulate_royle_nichols <- function(N = 200, J = 5,
 #' into an `[N x (n_seasons - 1)]` matrix column (`gamma_cov` / `eps_cov`) of the
 #' returned `data`, and the rate is `plogis(beta[1] + beta[2] * cov)`. Fit these
 #' with `colonization = ~ gamma_cov` / `extinction = ~ eps_cov` (the matrix
-#' column drives the interval-indexed rate, gcol33/tulpaObs#124).
+#' column drives the interval-indexed rate).
 #'
 #' @param N Number of sites (default 100).
 #' @param J Number of visits per season (default 4).

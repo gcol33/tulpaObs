@@ -1,10 +1,10 @@
 # =============================================================================
 # Closed-form marginal-likelihood refinement for integrated (multi-source)
-# occupancy (gcol33/tulpaObs#225).
+# occupancy.
 #
 # The latent occupancy z integrates out in closed form exactly as it does for
-# single-season occu() (gcol33/tulpaObs#7) -- one shared z per site, observed
-# through S independent detection sources:
+# single-season occu() -- one shared z per site, observed through S
+# independent detection sources:
 #
 #   site with ANY source detecting : L_i = psi_i * prod_s prod_{valid j} Bern(y_sij; p_sj)
 #   site with no detection anywhere: L_i = psi_i * prod_s prod_{valid j} (1 - p_sj) + (1 - psi_i)

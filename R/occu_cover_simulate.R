@@ -39,7 +39,7 @@
 #'   on the `nested_laplace` path, `fit$hyper_draws[, "field_sd"]` on `nuts`) --
 #'   never to the raw `sigma` a `nested_laplace` fit reports, which is the
 #'   amplitude against the unscaled intrinsic precision and differs by
-#'   `sqrt(scale_q)` (`gcol33/tulpaObs#221`).
+#'   `sqrt(scale_q)`.
 #' @param alpha Cover-arm scaling on the shared field (used only when `adj`
 #'   is supplied). 1.0 = arms see the field identically; positive = same sign,
 #'   negative = opposite.
@@ -57,7 +57,7 @@
 #' @param pos_field Logical; when `TRUE` (and `adj` is supplied) draw an
 #'   INDEPENDENT areal field on the cover (positive) arm only -- an intercept
 #'   field plus a time-weighted trend field, each unrelated to the occupancy
-#'   field and with no alpha copy (gcol33/tulpaObs#110). Adds a `time` column to
+#'   field and with no alpha copy. Adds a `time` column to
 #'   the returned `data` and reports `g0` / `g1` (the two fields) and their SDs in
 #'   `truth`. Fit by placing `spatial(~ 1 + time || cell, graph = adj)` in the
 #'   `positive` formula.
@@ -166,10 +166,10 @@ simulate_occu_cover <- function(N             = 200L,
   # field of geo-mean marginal SD sqrt(scale_q) -- a factor of 2.1 on a 30-node
   # chain, 3.0 on a 60-node one. Compare a spatial occu_cover fit against this
   # simulator on the FIELD (sd / cor of the recovered surface), not by reading
-  # `sigma` off both sides (gcol33/tulpaObs#213).
+  # `sigma` off both sides.
   f  <- numeric(N)
   f2 <- numeric(N)
-  g0 <- numeric(N)   # arm-specific cover intercept field (gcol33/tulpaObs#110)
+  g0 <- numeric(N)   # arm-specific cover intercept field
   g1 <- numeric(N)   # arm-specific cover trend field
   h0 <- numeric(N)   # arm-specific detection intercept field
   h1 <- numeric(N)   # arm-specific detection trend field
@@ -186,11 +186,11 @@ simulate_occu_cover <- function(N             = 200L,
       time_cov <- as.numeric(scale(stats::rnorm(N)))
     }
     if (isTRUE(trend)) f2 <- draw_field()
-    # Arm-specific cover field(s) (gcol33/tulpaObs#110): an INDEPENDENT cover-arm
-    # intercept field g0 and time-weighted trend field g1, each unrelated to the
-    # occupancy field f. They enter the cover linear predictor only (no psi
-    # contribution, no alpha copy), so delta_cover_cond carries a spatial
-    # structure the occupancy field's alpha copy cannot express.
+    # Arm-specific cover field(s): an INDEPENDENT cover-arm intercept field g0
+    # and time-weighted trend field g1, each unrelated to the occupancy field f.
+    # They enter the cover linear predictor only (no psi contribution, no alpha
+    # copy), so delta_cover_cond carries a spatial structure the occupancy
+    # field's alpha copy cannot express.
     if (isTRUE(pos_field)) {
       g0 <- draw_field()
       g1 <- draw_field()
@@ -229,18 +229,18 @@ simulate_occu_cover <- function(N             = 200L,
   eta_p   <- as.vector(X_p   %*% beta_p)
   eta_pos_base <- as.vector(X_pos %*% beta_pos)
 
-  # Optional per-visit detection random effects (gcol33/tulpaObs#102, #103). Each
-  # grouping is a categorical visit-level factor (e.g. an EUNIS habitat class)
-  # with a random intercept b_g ~ N(0, sigma^2) on the detection linear
-  # predictor; the factor rides `visit_data`, so a fit reads it via `visits` and
-  # `detection = ~ ... + (1 | <factor>)`. `re_det_groups` / `sigma_re_p` set the
-  # first ("habitat") grouping (back-compat); `re_det` is a named list of further
-  # groupings, each `list(K =, sigma =, prefix =, nested_in =)`, for CROSSED
-  # (`nested_in = NULL`) or NESTED (`nested_in = "<parent>"`, sub-codes nested
-  # within the parent factor's codes -- matching `(1 | parent/child)`) designs.
-  # BLUPs are centred so the detection intercept stays identified. Truth BLUPs are
-  # stored NAMED by the level label a fit reconstructs (the interaction label for
-  # a nested grouping), so recovery checks align by name, not factor sort order.
+  # Optional per-visit detection random effects. Each grouping is a categorical
+  # visit-level factor (e.g. an EUNIS habitat class) with a random intercept b_g ~
+  # N(0, sigma^2) on the detection linear predictor; the factor rides
+  # `visit_data`, so a fit reads it via `visits` and `detection = ~ ... + (1 |
+  # <factor>)`. `re_det_groups` / `sigma_re_p` set the first ("habitat") grouping
+  # (back-compat); `re_det` is a named list of further groupings, each `list(K =,
+  # sigma =, prefix =, nested_in =)`, for CROSSED (`nested_in = NULL`) or NESTED
+  # (`nested_in = "<parent>"`, sub-codes nested within the parent factor's codes
+  # -- matching `(1 | parent/child)`) designs. BLUPs are centred so the detection
+  # intercept stays identified. Truth BLUPs are stored NAMED by the level label a
+  # fit reconstructs (the interaction label for a nested grouping), so recovery
+  # checks align by name, not factor sort order.
   grp_specs <- list()
   if (!is.null(re_det_groups)) {
     grp_specs[["habitat"]] <- list(K = as.integer(re_det_groups),
@@ -322,14 +322,14 @@ simulate_occu_cover <- function(N             = 200L,
     }
   }
 
-  # Optional per-visit COVER-arm random intercept (gcol33/tulpaObs#102). A
-  # categorical visit-level grouping carries a random intercept on the positive-
-  # cover linear predictor, mirroring the detection-arm RE above; it rides
-  # `visit_data` so a fit reads it via `positive = ~ ... + (1 | habitat)` under
-  # cover_aggregate = "none". BLUPs are centred so the cover intercept stays
-  # identified. Kept separate from the detection block: a pos-arm recovery test
-  # sets re_pos_groups alone, so the `habitat` factor carries a genuine cover
-  # offset (the detection RE would otherwise put the offset on eta_p).
+  # Optional per-visit COVER-arm random intercept. A categorical visit-level
+  # grouping carries a random intercept on the positive- cover linear predictor,
+  # mirroring the detection-arm RE above; it rides `visit_data` so a fit reads
+  # it via `positive = ~ ... + (1 | habitat)` under cover_aggregate = "none".
+  # BLUPs are centred so the cover intercept stays identified. Kept separate
+  # from the detection block: a pos-arm recovery test sets re_pos_groups alone,
+  # so the `habitat` factor carries a genuine cover offset (the detection RE
+  # would otherwise put the offset on eta_p).
   b_pos_re <- NULL; re_pos_levels <- NULL
   if (!is.null(re_pos_groups)) {
     Kp <- as.integer(re_pos_groups)
@@ -372,8 +372,8 @@ simulate_occu_cover <- function(N             = 200L,
             mu <- stats::plogis(eta_pos_ij)
             y_pos[i, j] <- stats::rbeta(1L, mu * phi, (1 - mu) * phi)
           } else if (positive == "gaussian") {
-            # Identity-Gaussian arm (gcol33/tulpaObs#112): the cover magnitude is
-            # a plain Gaussian on the raw response (no log transform).
+            # Identity-Gaussian arm: the cover magnitude is a plain Gaussian on
+            # the raw response (no log transform).
             y_pos[i, j] <- stats::rnorm(1L, eta_pos_ij, sigma_pos)
           } else {
             y_pos[i, j] <- exp(stats::rnorm(1L, eta_pos_ij, sigma_pos))

@@ -1,11 +1,11 @@
 # =============================================================================
 # Family-level NUTS calibration: 20-seed 95% CI coverage on the coefficients the
-# family NUTS path exists to calibrate (gcol33/tulpaObs#139). The single-seed
-# recovery tests in each family's own test file prove the byte-exact C++<->R
-# oracle and point recovery; these prove the intervals cover at the nominal rate.
-# The estimand is the calibrated coefficient interval: NUTS samples the EXACT
-# closed-form marginal, so an unbiased posterior should contain truth ~95% of the
-# time even for weakly-identified coefficients (a wide but honest CI still covers).
+# family NUTS path exists to calibrate. The single-seed recovery tests in each
+# family's own test file prove the byte-exact C++<->R oracle and point recovery;
+# these prove the intervals cover at the nominal rate. The estimand is the
+# calibrated coefficient interval: NUTS samples the EXACT closed-form marginal, so
+# an unbiased posterior should contain truth ~95% of the time even for
+# weakly-identified coefficients (a wide but honest CI still covers).
 #
 # Pooled over all coefficients x 20 seeds, assert >= the 0.85 rubric floor (a
 # calibrated sampler measures ~0.93-0.95; the floor absorbs Monte-Carlo slack).
@@ -127,9 +127,9 @@ test_that("abun NUTS coefficient 95% CIs cover at the nominal rate", {
 
 # --- Single-season occupancy NUTS (cpp_occu_fit path) -----------------------
 # The capability table lists dyn_occu / int_occu NUTS as "Yes", but NUTS
-# appeared there only as a gated-error smoke check with no recovery test
-# (gcol33/tulpaObs#139). These score the calibrated occupancy/transition
-# intervals from the pooled draws (this path reports no per-parameter SD).
+# appeared there only as a gated-error smoke check with no recovery test.
+# These score the calibrated occupancy/transition intervals from the
+# pooled draws (this path reports no per-parameter SD).
 
 test_that("dyn_occu NUTS transition-parameter 95% CIs cover at the nominal rate", {
   skip_on_cran(); skip_if_fast()

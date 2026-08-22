@@ -1,4 +1,4 @@
-# One-inflated Beta cover family (gcol33/tulpaObs#108).
+# One-inflated Beta cover family.
 #
 # cover(response = "beta_oi") models plots recorded at exactly full cover
 # (y = 1) as a genuine point mass rather than clamping them to 1 - 1e-6. With a

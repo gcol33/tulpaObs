@@ -47,7 +47,7 @@ dominant cost when the per-species likelihood is expensive (an N-mixture /
 distance marginal sums over the latent count).}
 
 \item{re_aghq}{Debias \code{Sigma}/\code{Cinv} by adaptive Gauss-Hermite quadrature of
-the exact per-species RE posterior (gcol33/tulpaObs#226 part 2), gated to
+the exact per-species RE posterior, gated to
 \code{P <= re_aghq_maxdim} (tensor AGHQ over the joint b couples the arms).
 Defaults \code{FALSE} -- every existing caller is byte-identical unless it
 opts in. \code{n_quad} sets the per-dimension node count.}

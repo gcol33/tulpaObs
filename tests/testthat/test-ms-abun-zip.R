@@ -1,6 +1,6 @@
 # =============================================================================
 # test-ms-abun-zip.R - zero-inflated community N-mixture (ms_abun(mixture =
-# "zip" / "zinb"), gcol33/tulpaObs#116).
+# "zip" / "zinb")).
 #
 # Structural absence as a per-species random effect: logit_omega_s ~ N(mu_omega,
 # sigma_omega), a share omega_s of a species' sites is never occupied (N = 0).

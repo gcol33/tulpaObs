@@ -176,9 +176,9 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   theta0[idx$p10[1]] <- stats::qlogis(0.05)        # small false-positive rate
   theta0[idx$b[1]]   <- 0                          # b ~ 0.5
 
-  # Progress + ETA (gcol33/tulpaObs#43); ON by default. BFGS calls the gradient
-  # ~once per quasi-Newton iteration, so ticking there approximates iteration
-  # progress (maxit is the ETA denominator); finalised after optim returns.
+  # Progress + ETA; ON by default. BFGS calls the gradient ~once per
+  # quasi-Newton iteration, so ticking there approximates iteration progress
+  # (maxit is the ETA denominator); finalised after optim returns.
   .prog <- tulpa:::.tulpa_iter_progress("fp-occu-laplace", as.integer(max_iter), unit = "iter")
   neg_grad_p <- function(theta) { .prog$tick(); neg_grad(theta) }
   opt <- stats::optim(theta0, neg_ll, neg_grad_p, method = "BFGS",
@@ -211,7 +211,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
 
 
 # ---------------------------------------------------------------------------
-# Grouped random effect on the occupancy (psi) arm (gcol33/tulpaObs#51)
+# Grouped random effect on the occupancy (psi) arm
 # ---------------------------------------------------------------------------
 
 # AGHQ refinement of an fp_occu fit with a site-level grouped RE on the
@@ -426,9 +426,9 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
 
 # Fit an fp_occu model with a site-level grouped RE on the occupancy (psi) OR the
 # true-detection (p11) arm under the Laplace / AGHQ path (one grouping factor, RE
-# dim <= 3; tulpaObs#51). The false-positive (p10) and certain (b) arms never
-# carry structured terms (rejected upstream). A term shared across both arms, or
-# RE on both arms at once, is rejected (the AGHQ path integrates one arm).
+# dim <= 3). The false-positive (p10) and certain (b) arms never carry structured
+# terms (rejected upstream). A term shared across both arms, or RE on both arms
+# at once, is rejected (the AGHQ path integrates one arm).
 .tobs_fit_fp_occu_re <- function(model, re, max_iter = 200L, tol = 1e-8,
                                  verbose = TRUE, n_quad = 9L, lkj_eta = 1.5,
                                  sigma.beta = NULL) {
@@ -439,7 +439,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   if (length(arms$psi) && length(arms$p11)) {
     stop("Random effects on BOTH the occupancy (psi) and detection (p11) arms in ",
          "one fp_occu fit are not supported; the AGHQ path integrates one arm at ",
-         "a time. Put the RE on psi OR p11, not both. (tulpaObs#51)", call. = FALSE)
+         "a time. Put the RE on psi OR p11, not both.", call. = FALSE)
   }
   design <- if (length(arms$psi)) arms$psi else arms$p11
   if (!length(design)) {
@@ -509,11 +509,11 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
 
-  # Grouped random effect on the occupancy (psi) arm (gcol33/tulpaObs#51):
-  # append the variance components (sigma_g_*, cor_g_*_* for a correlated block)
-  # and per-group BLUPs after the fixed block, exactly as the count families do.
-  # The fixed block (n_fixed leading coords) still governs coef() / vcov() /
-  # confint(); ranef() / summary() read the trailing RE columns by name.
+  # Grouped random effect on the occupancy (psi) arm: append the variance
+  # components (sigma_g_*, cor_g_*_* for a correlated block) and per-group BLUPs
+  # after the fixed block, exactly as the count families do. The fixed block
+  # (n_fixed leading coords) still governs coef() / vcov() / confint(); ranef()
+  # / summary() read the trailing RE columns by name.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,

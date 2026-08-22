@@ -1,9 +1,9 @@
 # =============================================================================
 # test-abun-zip.R - zero-inflated N-mixture (ZIP / ZINB) for abun(mixture =).
 #
-# Structural-zero mixture over the Royle marginal (gcol33/tulpaObs#116): a share
-# `omega` of sites are structural zeros (N = 0 regardless of lambda), the rest
-# Pois/NB(lambda). A pure-R additive layer over the shared per-site Royle pieces
+# Structural-zero mixture over the Royle marginal: a share `omega` of sites are
+# structural zeros (N = 0 regardless of lambda), the rest Pois/NB(lambda). A
+# pure-R additive layer over the shared per-site Royle pieces
 # (nmix_site_marginal); intercept-only structural-zero probability, non-spatial
 # laplace. These check the constructor + gates, the S3 surface, and multi-seed
 # parameter recovery (betas + omega [+ r]) against simulated truth.

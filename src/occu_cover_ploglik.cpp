@@ -41,7 +41,7 @@ namespace {
 // pos_log_density (Beta/Lognormal/Gaussian::log_density; code 0/3/4). Routing
 // through it makes WAIC / LOO score the positive arm with the exact density the
 // model was fit with: log_safe at the cover boundary (cover exactly 0 or 1) so
-// the density is finite rather than -Inf, and no eta clamp (gcol33/tulpaObs#133).
+// the density is finite rather than -Inf, and no eta clamp.
 inline double pos_logdens(double y, double eta, double disp, int positive) {
   return tulpaObs::pos_log_density(positive, y, eta, disp);
 }

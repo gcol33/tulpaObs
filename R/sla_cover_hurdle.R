@@ -220,9 +220,9 @@
                                           n_pseudo = 1000L) {
   # Draw each arm from its full per-arm covariance (V_occ / V_pos) so the
   # coefficient correlation propagates to predicted cover; fall back to the
-  # diagonal of the reported SEs only when the covariance is unavailable
-  # (gcol33/tulpaObs#45). The subsequent .sla_replace_draws() preserves the
-  # joint rank-correlation while imposing the skew-normal marginals.
+  # diagonal of the reported SEs only when the covariance is unavailable.
+  # The subsequent .sla_replace_draws() preserves the joint
+  # rank-correlation while imposing the skew-normal marginals.
   draw_arm <- function(beta, se, V) {
     p <- length(beta)
     if (!is.null(V) && all(dim(as.matrix(V)) == p)) {

@@ -1,4 +1,4 @@
-# Shared community-mean recovery assertion (gcol33/tulpaObs#155).
+# Shared community-mean recovery assertion.
 #
 # A community simulator draws its per-species coefficients around a POPULATION
 # mean, so the mean a seed actually realizes sits `beta_sd / sqrt(S)` from that

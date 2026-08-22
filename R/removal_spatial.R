@@ -1,5 +1,6 @@
 # =============================================================================
-# removal_spatial.R - areal-spatial removal-sampling abundance (gcol33/tulpaObs#51)
+# removal_spatial.R
+# - areal-spatial removal-sampling abundance
 #
 # An ICAR or proper-CAR field on the abundance arm of the removal marginal, fit
 # by nested Laplace (outer grid over tau[, rho][, NB size r], inner Newton over
@@ -21,9 +22,9 @@
 }
 
 # Input validation for the removal areal wrappers. The count-marginal preamble
-# is shared with the N-mixture spatial wrappers (gcol33/tulpaObs#229); removal
-# supplies only its own truncation rule, since depleting passes at a site sum
-# and the latent N must clear that site's TOTAL removal.
+# is shared with the N-mixture spatial wrappers; removal supplies only its own
+# truncation rule, since depleting passes at a site sum and the latent N must
+# clear that site's TOTAL removal.
 .removal_spatial_prep <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                   adj_row_ptr, n_neighbors, n_spatial, mixture,
                                   beta_lambda_init, beta_p_init, K_max, r_grid,
@@ -183,14 +184,14 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                       mixture = "P", K_max = NULL,
                                       max_iter = 100L, tol = 1e-6, verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "removal abundance spatial")
-  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
-  # carries shared = c(abundance, detection) = c(FALSE, TRUE). It loads on the
-  # per-pass detection logit (a spatially-varying capture probability) instead of
-  # the abundance arm. The C++ nested-Laplace removal kernels carry the field on
-  # the abundance arm only, so a detection-arm field routes through the shared
-  # areal-BFGS driver (the removal marginal exposes the per-pass detection
-  # gradient cpp_removal_total_log_lik$grad_eta_p, summed to a per-site field
-  # gradient inside the fitter).
+  # Detection-arm field: a field in the `detection=` formula carries shared =
+  # c(abundance, detection) = c(FALSE, TRUE). It loads on the per-pass detection
+  # logit (a spatially-varying capture probability) instead of the abundance arm.
+  # The C++ nested-Laplace removal kernels carry the field on the abundance arm
+  # only, so a detection-arm field routes through the shared areal-BFGS driver
+  # (the removal marginal exposes the per-pass detection gradient
+  # cpp_removal_total_log_lik$grad_eta_p, summed to a per-site field gradient
+  # inside the fitter).
   det_arm <- isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L])
   if (det_arm)
     return(.tobs_fit_removal_spatial_bfgs(model, spatial, temporal, det_arm = TRUE,
@@ -200,7 +201,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   if (spatial$type %in% c("spde", "gp", "multiscale_gp")) {
     stop(sprintf(paste0("removal() areal spatial supports icar() / car_proper() / ",
                         "bym2() under method = \"nested_laplace\"; the '%s' field ",
-                        "is not yet wired for removal. (tulpaObs#51)"), spatial$type),
+                        "is not yet wired for removal."), spatial$type),
          call. = FALSE)
   }
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
@@ -217,8 +218,8 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   # through the shared areal-BFGS driver (a second latent block alongside the
   # field), reusing the removal marginal's analytic per-site / per-pass gradient
   # (cpp_removal_total_log_lik). The C++ count-spatial driver carries only the
-  # field, so the extra blocks live on the BFGS path (gcol33/tulpaObs#78, #144).
-  # Spatial-only fits keep the C++ driver.
+  # field, so the extra blocks live on the BFGS path. Spatial-only fits keep the
+  # C++ driver.
   if (!is.null(temporal) || !is.null(svc)) {
     return(.tobs_fit_removal_spatial_bfgs(model, spatial, temporal, svc = svc,
                                           mixture = mixture, K_max = K_max,
@@ -251,10 +252,10 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 }
 
 # Areal field + temporal block on the removal abundance arm via the shared areal-
-# BFGS driver (gcol33/tulpaObs#78). The removal marginal exposes an analytic
-# per-site abundance gradient + per-pass detection gradient + the NB dispersion
-# score (cpp_removal_total_log_lik), so the driver's eval() contract is met
-# directly: it runs BFGS over (beta_lambda, beta_p[, log_r], field_sp, field_tmp)
+# BFGS driver. The removal marginal exposes an analytic per-site abundance
+# gradient + per-pass detection gradient + the NB dispersion score
+# (cpp_removal_total_log_lik), so the driver's eval() contract is met directly:
+# it runs BFGS over (beta_lambda, beta_p[, log_r], field_sp, field_tmp)
 # + both block priors, integrated over the product of the two blocks'
 # hyperparameter grids. The field + temporal block both load onto eta_lambda.
 .tobs_fit_removal_spatial_bfgs <- function(model, spatial, temporal,
@@ -348,14 +349,14 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                              X_svc = X_lam, family = "removal")
 }
 
-# Areal-spatial removal sampling via NUTS (gcol33/tulpaObs#72): a FIXED-HYPER
-# non-centered PROPER-CAR field on the abundance arm of the removal marginal. The
-# field precision (tau, rho) is fixed at the nested-Laplace posterior mean and the
-# whitened raw ~ N(0, I) (z = Linv %*% raw) is sampled jointly with the
-# coefficients via the shared count-marginal NUTS field block (cpp_removal_nuts
-# over marginal_count_nuts.h / nuts_field_block.h, byte-identical to abun's). Same
-# car_proper-only restriction (the intrinsic ICAR's flat field-mean needs a
-# sum-to-zero reparameterisation, gcol33/tulpaObs#71). Poisson or NB.
+# Areal-spatial removal sampling via NUTS: a FIXED-HYPER non-centered PROPER-CAR
+# field on the abundance arm of the removal marginal. The field precision (tau,
+# rho) is fixed at the nested-Laplace posterior mean and the whitened raw ~ N(0,
+# I) (z = Linv %*% raw) is sampled jointly with the coefficients via the shared
+# count-marginal NUTS field block (cpp_removal_nuts over marginal_count_nuts.h /
+# nuts_field_block.h, byte-identical to abun's). Same car_proper-only restriction
+# (the intrinsic ICAR's flat field-mean needs a sum-to-zero reparameterisation).
+# Poisson or NB.
 .tobs_fit_removal_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                            mixture = "poisson",
                                            K_max = NULL, sigma.beta = NULL,
@@ -363,7 +364,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                            n.warmup = NULL, n.chains = NULL,
                                            max.treedepth = NULL, adapt.delta = NULL,
                                            seed = NULL, verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   # This fitter carries the FIXED-HYPER non-centered field on the abundance arm
@@ -378,11 +379,11 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
       stop(paste0("removal() NUTS carries the areal field on the abundance arm; a ",
                   "detection-arm field (a spatially-varying capture logit) is wired ",
-                  "under method = \"nested_laplace\". (tulpaObs#114)"), call. = FALSE)
+                  "under method = \"nested_laplace\"."), call. = FALSE)
     if (!spatial$type %in% c("icar", "car_proper", "bym2"))
       stop(sprintf(paste0("removal() NUTS + areal spatial supports icar() / ",
                           "car_proper() / bym2() on the abundance arm; got '%s'. ",
-                          "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+                          ""), spatial$type), call. = FALSE)
   }
   n_sites <- model$n_sites
   if (!temporal_only && spatial$n_units != n_sites)
@@ -426,7 +427,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
 
     # Fixed hyper + warm coefficients from the matching nested-Laplace areal fit,
     # and the whitened-field loading L (square for car_proper, sum-to-zero for
-    # icar / bym2, gcol33/tulpaObs#71/#113).
+    # icar / bym2/#113).
     common <- list(
       y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
       X_lambda = X_lambda, X_p = X_p, adj_row_ptr = csr$row_ptr,

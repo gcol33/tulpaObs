@@ -161,13 +161,13 @@
 # hyper, grid mixture, mixture of skew-normals) disagreed with the NUTS
 # posterior skewness in sign and/or magnitude, so applying one would be worse
 # than the Gaussian fallback. Retaining Gaussian marginals is by design, not a
-# stub (gcol33/tulpaObs#55).
+# stub.
 .sla_spatial_reason <- function(family) {
   paste0("Gaussian marginals retained for spatial Sigma by design (", family,
          "): the simplified-Laplace third-cumulant correction is valid for ",
          "hyperparameter-free fixed-effect marginals only; under a spatial ",
          "field the dominant skewness is hyperparameter-marginalisation, which ",
-         "it does not capture (validated against NUTS, gcol33/tulpaObs#55).")
+         "it does not capture (validated against NUTS).")
 }
 
 #' Generic finite-difference SLA gamma for non-diagonal families

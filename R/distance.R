@@ -162,12 +162,12 @@
 
 # Fit a binned distance-sampling model with a site-level grouped random effect on
 # the abundance arm under the Laplace / AGHQ path (one grouping factor, RE dim <=
-# 3; tulpaObs#51). Abundance-arm only -- a detection RE couples a site's distance
-# bins through the shared latent N, so it does not factorize into the per-site
-# scalar offset the AGHQ engine assumes, and is rejected here with a pointer.
-# Half-normal AND hazard-rate keys: the hazard shape is a global scalar not
-# expressible in the count-family theta layout, so it is PROFILED over the AGHQ
-# log-marginal in .tobs_distance_re_aghq rather than gated.
+# 3). Abundance-arm only -- a detection RE couples a site's distance bins through
+# the shared latent N, so it does not factorize into the per-site scalar offset
+# the AGHQ engine assumes, and is rejected here with a pointer. Half-normal AND
+# hazard-rate keys: the hazard shape is a global scalar not expressible in the
+# count-family theta layout, so it is PROFILED over the AGHQ log-marginal in
+# .tobs_distance_re_aghq rather than gated.
 .tobs_fit_distance_re <- function(model, re, mixture = "poisson", K_max = NULL,
                                   max_iter = 100L, tol = 1e-6, verbose = TRUE,
                                   n_quad = 1L, lkj_eta = 1.5,
@@ -181,7 +181,7 @@
     stop("distance() random effects are supported on the abundance arm only; a ",
          "detection (sigma) random effect couples a site's distance bins through ",
          "the shared latent abundance, so it does not factorize into the ",
-         "per-site offset the AGHQ engine integrates. (tulpaObs#51)", call. = FALSE)
+         "per-site offset the AGHQ engine integrates.", call. = FALSE)
   }
   mix_code <- switch(mixture, poisson = "P", negbin = "NB", P = "P", NB = "NB",
                      stop(sprintf("Unknown mixture '%s' (use \"poisson\" or \"negbin\").",

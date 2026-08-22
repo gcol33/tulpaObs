@@ -1,7 +1,7 @@
 # =============================================================================
 # test-occu-svc-joint-recovery.R - parameter recovery for the standalone occu()
 # varying-coefficient (SVC) spatial bar rerouted through the joint direct-grid
-# engine (gcol33/tulpaObs#81).
+# engine.
 #
 # The fixture is built to resemble the REAL EVA data that broke the EM
 # fixed-point path (.tobs_em_nested_laplace): a LARGE-amplitude intercept field

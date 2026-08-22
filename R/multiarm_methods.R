@@ -7,7 +7,7 @@
 # `tobs_fit` methods assume. Tagging them `tobs_multiarm_fit` (between the
 # concrete class and `tobs_fit`) routes the generic extractors through this one
 # arm-aware implementation instead of the flat-layout methods, which otherwise
-# error on the missing structure (gcol33/tulpaObs).
+# error on the missing structure.
 #
 # A new multi-arm family joins by (1) adding "tobs_multiarm_fit" to its class
 # vector and (2) providing an `.tobs_arm_blocks()` branch. Nothing else.
@@ -124,7 +124,7 @@
 #'   `vcov()` the block-diagonal covariance; `confint()` a two-column matrix;
 #'   `logLik()` a `logLik` object; `glance()`/`tidy()` a data frame. On a joint
 #'   nested-Laplace fit `glance()` also carries `outer_grid_placement` and
-#'   `outer_grid_recenter_declined` (gcol33/tulpaObs#187).
+#'   `outer_grid_recenter_declined`.
 #' @name tobs_multiarm_methods
 #' @export
 nobs.tobs_multiarm_fit <- function(object, ...) {
@@ -207,7 +207,7 @@ glance.tobs_multiarm_fit <- function(x, ...) {
     stringsAsFactors = FALSE
   )
   # This method is terminal for cover_fit, so the joint outer-grid placement
-  # (gcol33/tulpaObs#187) has to be added here as well as in glance.tobs_fit().
+  # has to be added here as well as in glance.tobs_fit().
   .tobs_glance_outer_grid(g, x)
 }
 

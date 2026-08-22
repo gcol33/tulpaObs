@@ -1,7 +1,7 @@
 # =============================================================================
 # ms_abun_latent.R - community N-mixture with a shared latent structure: latent
 # factors (the spAbundance lfMsNMix analogue), a shared field, or both (the
-# spatial-factor case). gcol33/tulpaObs#117. Poisson.
+# spatial-factor case).. Poisson.
 #
 #   N_{s,i}       ~ Poisson(lambda_{s,i})
 #   y_{s,i,j} | N ~ Binomial(N_{s,i}, p_{s,i,j})
@@ -38,7 +38,7 @@
 # grids are all the driver's; this file supplies the oracle and the wiring.
 #
 # The plain shared field with NO factors keeps its dedicated C++ path
-# (nmix_community_laplace_*, tulpaObs#12) -- that route is faster and already
+# (nmix_community_laplace_*) -- that route is faster and already
 # recovery-tested, and this driver does not replace it.
 # =============================================================================
 
@@ -87,13 +87,12 @@
       list(score = score, curv = curv)
     },
     # `idx` is accepted for the same site-subset backtracking contract every
-    # community-latent oracle implements (gcol33/tulpaObs#162 lever 2), but the
-    # per-visit detection design here (`eta_p_list[[s]]` indexed by visit row,
-    # not by site) means a site subset cannot cheaply restrict `marg[[s]]$eval`
-    # -- it would need to filter and re-index the long-form rows and rebuild the
-    # Royle marginal per call. Deferred: this oracle always evaluates every
-    # site and slices the result down to `idx`, which is correct but not yet
-    # faster.
+    # community-latent oracle implements, but the per-visit detection design
+    # here (`eta_p_list[[s]]` indexed by visit row, not by site) means a site
+    # subset cannot cheaply restrict `marg[[s]]$eval` -- it would need to filter
+    # and re-index the long-form rows and rebuild the Royle marginal per call.
+    # Deferred: this oracle always evaluates every site and slices the result
+    # down to `idx`, which is correct but not yet faster.
     ll_cell = function(eta, idx = NULL) {
       full <- vapply(eval_all(eta), function(ev) as.numeric(ev$log_lik_site), numeric(Ns))
       if (is.null(idx)) full else full[idx, , drop = FALSE]
@@ -116,7 +115,7 @@
   if (!identical(mixture, "poisson")) {
     stop("ms_abun() with latent() factors is Poisson-only: a negative-binomial ",
          "size is a second per-site dispersion and is not identified against a ",
-         "per-site latent structure (gcol33/tulpaObs#117). Use ",
+         "per-site latent structure. Use ",
          "mixture = \"poisson\", or drop latent() for the negbin community fit.",
          call. = FALSE)
   }

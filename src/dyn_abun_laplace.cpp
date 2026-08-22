@@ -129,14 +129,14 @@ Rcpp::List cpp_dyn_abun_dynamics_log_lik(
 }
 
 // Per-site conditional-likelihood weights c(n1) = P(all data | N_1 = n1) for the
-// grouped random-effect AGHQ path on the initial-abundance arm (tulpaObs#51).
-// `site` are 0-based site indices into `y`; eta_p is the (RE-fixed) detection
-// predictor aligned with `site` (length m). eta_omega / eta_gamma are the
-// survival / recruitment predictors: length m (constant rate per site) or
-// length m*(T-1) in row-major (site k, interval iv) order for season-varying
-// rates. Returns an m x (K+1) matrix of c-weights, one row per requested site.
-// The engine precomputes this ONCE per make_site call; the O(K) per-node log
-// marginal then comes from cpp_dyn_abun_init_loglik below.
+// grouped random-effect AGHQ path on the initial-abundance arm. `site` are
+// 0-based site indices into `y`; eta_p is the (RE-fixed) detection predictor
+// aligned with `site` (length m). eta_omega / eta_gamma are the survival /
+// recruitment predictors: length m (constant rate per site) or length m*(T-1) in
+// row-major (site k, interval iv) order for season-varying rates. Returns an m x
+// (K+1) matrix of c-weights, one row per requested site. The engine precomputes
+// this ONCE per make_site call; the O(K) per-node log marginal then comes from
+// cpp_dyn_abun_init_loglik below.
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(
     Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
@@ -230,17 +230,17 @@ Rcpp::List cpp_dyn_abun_init_loglik(
 }
 
 // Per-site detection-arm marginal for the grouped random-effect AGHQ path on the
-// detection (p) arm (tulpaObs#82). Returns the forward marginal logL(eta_p) and,
-// with `deriv`, its first and second derivatives in the site-level detection
-// offset eta_p, holding the initial-abundance / survival / recruitment predictors
-// and the dispersion fixed. Unlike the initial-abundance arm (cpp_dyn_abun_init_-
-// loglik, an O(K) dot over precomputed c-weights), the detection predictor enters
-// every season's observation pmf, so the full O(K^2 T) forward marginal is
-// re-evaluated per call (no across-node precompute) -- the make_site closes over
-// the fixed arms and supplies the varying eta_p per quadrature node / Newton step.
-// `site` are 0-based indices into `y`; eta_lambda / eta_p are aligned with `site`
-// (length m); eta_omega / eta_gamma are length m (constant rate per site) or
-// m*(T-1) in row-major (site k, interval iv) order for season-varying rates.
+// detection (p) arm. Returns the forward marginal logL(eta_p) and, with `deriv`,
+// its first and second derivatives in the site-level detection offset eta_p,
+// holding the initial-abundance / survival / recruitment predictors and the
+// dispersion fixed. Unlike the initial-abundance arm (cpp_dyn_abun_init_- loglik,
+// an O(K) dot over precomputed c-weights), the detection predictor enters every
+// season's observation pmf, so the full O(K^2 T) forward marginal is re-evaluated
+// per call (no across-node precompute) -- the make_site closes over the fixed arms
+// and supplies the varying eta_p per quadrature node / Newton step. `site` are
+// 0-based indices into `y`; eta_lambda / eta_p are aligned with `site` (length m);
+// eta_omega / eta_gamma are length m (constant rate per site) or m*(T-1) in
+// row-major (site k, interval iv) order for season-varying rates.
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_p_loglik(
     Rcpp::IntegerVector y, int n_sites, int T, int J, int K,

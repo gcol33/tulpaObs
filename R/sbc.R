@@ -1,12 +1,12 @@
 # =============================================================================
-# Simulation-based calibration for tobs families (gcol33/tulpaObs#207).
+# Simulation-based calibration for tobs families.
 #
 # tulpa owns the SBC machinery -- the predictive shapes, the within-atom PIT,
 # the CRPS closed forms, the exact simultaneous ECDF bands, and both drivers,
-# all behind `tulpa::sbc()` (gcol33/tulpa#380). This file owns the other side of
-# that contract: the callbacks that turn a fitted `tobs_fit` into the `model =`
-# list the POSTERIOR experiment reads, so calibration is measured on the model a
-# deliverable actually ships rather than on a toy fixture.
+# all behind `tulpa::sbc()`. This file owns the other side of that contract: the
+# callbacks that turn a fitted `tobs_fit` into the `model =` list the POSTERIOR
+# experiment reads, so calibration is measured on the model a deliverable
+# actually ships rather than on a toy fixture.
 #
 # WHY THE POSTERIOR EXPERIMENT AND NOT THE PRIOR-PREDICTIVE ONE. The nested door
 # puts no prior on the fixed effects, so they cannot be drawn from and the
@@ -366,8 +366,7 @@
 # the sampled-hyper NUTS route state their field in, so the replicate multiplies
 # that constant back in. Drawing the normalised field instead would generate at
 # `sigma` and refit under `sigma * sqrt(scale_q)`: both arm field SDs shift by
-# one common factor while `alpha`, their ratio, stays clean
-# (gcol33/tulpaObs#213).
+# one common factor while `alpha`, their ratio, stays clean.
 # ---------------------------------------------------------------------------
 
 # sqrt(scale_q) for a graph, cached on the last graph seen. The rank arm scores
@@ -644,7 +643,6 @@
 
 # ---------------------------------------------------------------------------
 # 6a-bis. The community group's shared draws / simulate / loglik_many
-# (gcol33/tulpaObs#230)
 #
 # Seven families rank a fixed species set to one design: theta carries one
 # block of length P per species, species-major, with theta_s = mu + b_s,
@@ -727,9 +725,9 @@
 }
 
 # The community posterior draw: each species' block is the community mean draw
-# plus that species' deviation, drawn JOINTLY with it
-# (gcol33/tulpaObs#226 -- see .tobs_sbc_community_b_draws), and each shared
-# block is copied straight off the same draw.
+# plus that species' deviation, drawn JOINTLY with it ( -- see
+# .tobs_sbc_community_b_draws), and each shared block is copied straight off
+# the same draw.
 .tobs_sbc_draws_community <- function(fit, n, nm) {
   m  <- fit$model
   S  <- m$n_species; P <- length(nm$par)
@@ -838,14 +836,14 @@
 
 
 # ---------------------------------------------------------------------------
-# 6b. dyn_occu() (gcol33/tulpaObs#220, multi-season group): pooling on the
-# SITE axis, leaving the season axis alone. `model$y` is a 3D
-# [n_sites x max_visits x n_seasons] array, so the shared simple-family
-# `data`/`pool` (2D `rbind`) cannot be reused; every other piece (draws off
-# `fit$draws`, the `dynamic` pointwise log-likelihood already dispatched by
-# `.tobs_pointwise_loglik`) is. Constant-rate only (season-varying detection /
-# colonization / extinction is a follow-up -- `.tobs_sbc_reject_visit_design`
-# alone does not see those designs, so they are refused explicitly).
+# 6b. dyn_occu() (multi-season group): pooling on the SITE axis, leaving the
+# season axis alone. `model$y` is a 3D [n_sites x max_visits x n_seasons]
+# array, so the shared simple-family `data`/`pool` (2D `rbind`) cannot be
+# reused; every other piece (draws off `fit$draws`, the `dynamic` pointwise
+# log-likelihood already dispatched by `.tobs_pointwise_loglik`) is.
+# Constant-rate only (season-varying detection / colonization / extinction is
+# a follow-up -- `.tobs_sbc_reject_visit_design` alone does not see those
+# designs, so they are refused explicitly).
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_reject_season_varying <- function(fit) {
@@ -952,15 +950,15 @@
 
 
 # ---------------------------------------------------------------------------
-# 6b2. dyn_abun() (gcol33/tulpaObs#220, multi-season group): the abundance
-# sibling of dyn_occu -- same 3D [n_sites x max_visits x n_seasons] response,
-# same site-axis pooling (`.tobs_sbc_data_3d_season` / `.tobs_sbc_pool_3d_season`
-# above, shared verbatim). UNLIKE dyn_occu it already has a working
-# `simulate()` handler (the Dail-Madsen forward is not a two-state HMM to hand
-# -write), so the replicate is the family's own kernel via the shared
-# `.tobs_sbc_sim_simple`, exactly the `occu()`-style pattern -- no bespoke
-# forward simulator needed. Constant-rate only (season-varying omega/gamma is
-# a follow-up, same reasoning as dyn_occu's colonization/extinction).
+# 6b2. dyn_abun() (multi-season group): the abundance sibling of dyn_occu -- same
+# 3D [n_sites x max_visits x n_seasons] response, same site-axis pooling
+# (`.tobs_sbc_data_3d_season` / `.tobs_sbc_pool_3d_season` above, shared
+# verbatim). UNLIKE dyn_occu it already has a working `simulate()` handler (the
+# Dail-Madsen forward is not a two-state HMM to hand -write), so the replicate is
+# the family's own kernel via the shared `.tobs_sbc_sim_simple`, exactly the
+# `occu()`-style pattern -- no bespoke forward simulator needed. Constant-rate
+# only (season-varying omega/gamma is a follow-up, same reasoning as dyn_occu's
+# colonization/extinction).
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_reject_dyn_abun_season_varying <- function(fit) {
@@ -1001,11 +999,11 @@
 
 
 # ---------------------------------------------------------------------------
-# 6c. int_occu() (gcol33/tulpaObs#220, multi-source group): pooling on the
-# SITE axis, leaving the per-source axis alone. `model$y_sources` is a list
-# of one detection matrix per source (`model$site_maps` the row -> site map),
-# so this is a second response shape the shared simple-family `data`/`pool`
-# cannot read. Full-overlap fits only (every source observes every site) --
+# 6c. int_occu() (multi-source group): pooling on the SITE axis, leaving the
+# per-source axis alone. `model$y_sources` is a list of one detection matrix
+# per source (`model$site_maps` the row -> site map), so this is a second
+# response shape the shared simple-family `data`/`pool` cannot read.
+# Full-overlap fits only (every source observes every site) --
 # `.tobs_ploglik_integrated`, which `loglik_many` reuses unchanged, is itself
 # only wired for that case.
 # ---------------------------------------------------------------------------
@@ -1102,13 +1100,13 @@
 
 
 # ---------------------------------------------------------------------------
-# 6d. gdistremoval() (gcol33/tulpaObs#220, multi-response group): a single
-# time-step family whose response is TWO matrices (yDist band counts, yRem
-# period counts) that must stay row-consistent, pooled together on the site
-# axis via the same `.tobs_sbc_pool_named_matrices` int_occu()'s per-source
-# matrices use. Already has a `simulate()` handler returning
-# `list(yDist=, yRem=)`, reused here as the replicate generator the way the
-# occu()-family entries reuse their own `simulate()` handler.
+# 6d. gdistremoval() (multi-response group): a single time-step family
+# whose response is TWO matrices (yDist band counts, yRem period counts)
+# that must stay row-consistent, pooled together on the site axis via the
+# same `.tobs_sbc_pool_named_matrices` int_occu()'s per-source matrices
+# use. Already has a `simulate()` handler returning `list(yDist=, yRem=)`,
+# reused here as the replicate generator the way the occu()-family entries
+# reuse their own `simulate()` handler.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_gdistremoval <- function(fit, fit.control) {
@@ -1158,17 +1156,17 @@
 
 
 # ---------------------------------------------------------------------------
-# 6e. occu_categorical() (gcol33/tulpaObs#220, multiarm-S3 group): presence +
-# nominal-class hurdle. A `tobs_multiarm_fit` with NO `fit$model` / `fit$draws`
-# -- the two arms are independent Laplace-Gaussian blocks (`beta_occ`/
-# `vcov_occ`, `beta_class`/`vcov_class`), fit as two separate GLMs, not a
-# joint MVN pseudo-draw matrix off a shared `tulpa_laplace()` postprocessor.
-# `draws()` therefore samples the two blocks independently (they ARE
-# independent by construction) and stacks them into one theta row;
-# `loglik_many()` scores the two-arm likelihood directly off the encoding,
-# since there is no `.tobs_pointwise_loglik` dispatch for this family to
-# reuse. Non-spatial by construction (no spatial/NUTS route exists yet) and
-# takes no `detection` formula, so neither `.tobs_sbc_reject_structure` nor
+# 6e. occu_categorical() (multiarm-S3 group): presence + nominal-class hurdle.
+# A `tobs_multiarm_fit` with NO `fit$model` / `fit$draws` -- the two arms are
+# independent Laplace-Gaussian blocks (`beta_occ`/ `vcov_occ`,
+# `beta_class`/`vcov_class`), fit as two separate GLMs, not a joint MVN
+# pseudo-draw matrix off a shared `tulpa_laplace()` postprocessor. `draws()`
+# therefore samples the two blocks independently (they ARE independent by
+# construction) and stacks them into one theta row; `loglik_many()` scores the
+# two-arm likelihood directly off the encoding, since there is no
+# `.tobs_pointwise_loglik` dispatch for this family to reuse. Non-spatial by
+# construction (no spatial/NUTS route exists yet) and takes no `detection`
+# formula, so neither `.tobs_sbc_reject_structure` nor
 # `.tobs_sbc_reject_visit_design` apply here.
 # ---------------------------------------------------------------------------
 
@@ -1291,17 +1289,17 @@
 
 
 # ---------------------------------------------------------------------------
-# 6f. distsamp_open() (gcol33/tulpaObs#220, multi-season group): the same 3D
-# [n_sites x n_bins x n_seasons] response shape and site-axis pooling as
-# dyn_abun (section 6b2) -- the "season" axis here is the open-population
-# primary period rather than a revisit season, but the shape and the pooling
-# rule (stack on sites, leave the season axis alone) are identical, so
+# 6f. distsamp_open() (multi-season group): the same 3D [n_sites x n_bins x
+# n_seasons] response shape and site-axis pooling as dyn_abun (section 6b2) --
+# the "season" axis here is the open-population primary period rather than a
+# revisit season, but the shape and the pooling rule (stack on sites, leave
+# the season axis alone) are identical, so
 # `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are reused unchanged.
 # `fit$means`/`fit$draws`/`fit$model` are the standard shape too
 # (`.tobs_bfgs_marginal_fit()`), and `.tobs_pointwise_loglik` already
-# dispatches for this model_type, so `draws`/`loglik_many` are also the
-# shared generic ones -- only `spec`/`refit` are custom, to route the
-# family's four arm formulas (`lambda`, `sigma`, `omega`, `gamma`) and rebuild
+# dispatches for this model_type, so `draws`/`loglik_many` are also the shared
+# generic ones -- only `spec`/`refit` are custom, to route the family's four
+# arm formulas (`lambda`, `sigma`, `omega`, `gamma`) and rebuild
 # `distsamp_open(cutpoints=, transect=)`. Constant-dynamics, Poisson only for
 # v1 (the alternative dynamics / negbin / zero-inflated layers are follow-ups,
 # same reasoning as dyn_abun's season-varying-rate exclusion).
@@ -1348,21 +1346,21 @@
 
 
 # ---------------------------------------------------------------------------
-# 6g. occu_multi() (gcol33/tulpaObs#220, multi-response group): `model$y` is a
-# list of S per-species detection matrices sharing one site axis -- the same
-# shape as int_occu()'s per-source list, so `.tobs_sbc_pool_named_matrices` is
-# reused unchanged for pooling (species names attached explicitly in `data()`,
-# since the binder does not always name `model$y`). `fit$means`/`fit$draws`
-# are the standard `.tobs_bfgs_marginal_fit()` shape and
-# `.tobs_pointwise_loglik` already dispatches for this model_type, so
-# `draws`/`loglik_many` are the shared generic ones. `simulate` is custom
-# (unlike int_occu, species are NOT independent given a shared z -- the joint
-# state is one draw from the log-linear multi-species model, then each
-# species is independently detected given its own z_k), wrapping the
-# family's own `.tobs_simulate_occu_multi()` handler exactly as
-# `.tobs_sbc_sim_gdistremoval()` wraps `simulate_gdistremoval()`'s handler --
-# `.tobs_sbc_sim_simple`'s cleaning step assumes a single matrix/array
-# response, not a list, so it cannot be reused here either.
+# 6g. occu_multi() (multi-response group): `model$y` is a list of S
+# per-species detection matrices sharing one site axis -- the same shape as
+# int_occu()'s per-source list, so `.tobs_sbc_pool_named_matrices` is reused
+# unchanged for pooling (species names attached explicitly in `data()`, since
+# the binder does not always name `model$y`). `fit$means`/`fit$draws` are the
+# standard `.tobs_bfgs_marginal_fit()` shape and `.tobs_pointwise_loglik`
+# already dispatches for this model_type, so `draws`/`loglik_many` are the
+# shared generic ones. `simulate` is custom (unlike int_occu, species are NOT
+# independent given a shared z -- the joint state is one draw from the
+# log-linear multi-species model, then each species is independently detected
+# given its own z_k), wrapping the family's own `.tobs_simulate_occu_multi()`
+# handler exactly as `.tobs_sbc_sim_gdistremoval()` wraps
+# `simulate_gdistremoval()`'s handler -- `.tobs_sbc_sim_simple`'s cleaning
+# step assumes a single matrix/array response, not a list, so it cannot be
+# reused here either.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_data_occu_multi <- function(fit) {
@@ -1407,22 +1405,22 @@
 
 
 # ---------------------------------------------------------------------------
-# 6h. dyn_int_occu() (gcol33/tulpaObs#220): the product of the multi-season
-# and multi-source shapes -- `model$y` is a NAMED list of S per-source 3D
-# [n_sites x max_visits_s x T] arrays sharing the site axis. Neither the
-# named-matrices pool (2D `rbind`, int_occu()/gdistremoval()) nor the
-# 3D-season pool (a single array, dyn_occu()/dyn_abun()/distsamp_open()) fits
-# alone, so a new generic `.tobs_sbc_pool_named_3d` composes both: site-axis
-# stack WITHIN each source's own 3D array. `simulate()` is custom, wrapping
-# the family's own `.tobs_simulate_dyn_int_occu()` handler -- which already
-# reproduces each source's own NA/missingness pattern, so partial season
-# overlap needs no special-casing here, it falls out of the family's own
-# simulate(). `fit$means`/`fit$draws` are the standard shape and
-# `.tobs_pointwise_loglik` already dispatches for this model_type, so
-# `draws`/`loglik_many` are the shared generic ones. The binder itself only
-# accepts full SITE overlap across sources (every source's array shares
-# `n_sites`), so no extra reject is needed there (unlike int_occu()); v1 has
-# no season-varying-rate option to reject either (the family's only mode).
+# 6h. dyn_int_occu(): the product of the multi-season and multi-source shapes
+# -- `model$y` is a NAMED list of S per-source 3D [n_sites x max_visits_s x
+# T] arrays sharing the site axis. Neither the named-matrices pool (2D
+# `rbind`, int_occu()/gdistremoval()) nor the 3D-season pool (a single array,
+# dyn_occu()/dyn_abun()/distsamp_open()) fits alone, so a new generic
+# `.tobs_sbc_pool_named_3d` composes both: site-axis stack WITHIN each
+# source's own 3D array. `simulate()` is custom, wrapping the family's own
+# `.tobs_simulate_dyn_int_occu()` handler -- which already reproduces each
+# source's own NA/missingness pattern, so partial season overlap needs no
+# special-casing here, it falls out of the family's own simulate().
+# `fit$means`/`fit$draws` are the standard shape and `.tobs_pointwise_loglik`
+# already dispatches for this model_type, so `draws`/`loglik_many` are the
+# shared generic ones. The binder itself only accepts full SITE overlap
+# across sources (every source's array shares `n_sites`), so no extra reject
+# is needed there (unlike int_occu()); v1 has no season-varying-rate option
+# to reject either (the family's only mode).
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_pool_named_3d <- function(obs, rep) {
@@ -1483,17 +1481,17 @@
 
 
 # ---------------------------------------------------------------------------
-# 6i. t_occu() (gcol33/tulpaObs#220): a Polya-Gamma Gibbs family, but
-# `.tobs_pg_finalize_fit()` already reports the pooled cross-chain draws as
-# `fit$draws` in the standard shape (real posterior samples, not a Gaussian
-# pseudo-draw matrix) -- so `.tobs_sbc_draws_fit` reads it unchanged, no
-# Gibbs-aware draws() needed. `model$y` is `[n_sites x n_seasons x
-# max_visits]` (season BEFORE visits -- the one family with this axis order),
-# but the 3D-season pool only ever stacks axis 1 and leaves the other two
-# alone, so `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are still
-# exactly right. What genuinely IS custom: the family has no `simulate()`
-# handler at all (`simulate_t_occu()` draws a FRESH truth, not a replicate at
-# a given theta) and no `.tobs_pointwise_loglik` dispatch, so `simulate` is
+# 6i. t_occu(): a Polya-Gamma Gibbs family, but `.tobs_pg_finalize_fit()`
+# already reports the pooled cross-chain draws as `fit$draws` in the standard
+# shape (real posterior samples, not a Gaussian pseudo-draw matrix) -- so
+# `.tobs_sbc_draws_fit` reads it unchanged, no Gibbs-aware draws() needed.
+# `model$y` is `[n_sites x n_seasons x max_visits]` (season BEFORE visits --
+# the one family with this axis order), but the 3D-season pool only ever
+# stacks axis 1 and leaves the other two alone, so
+# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are still exactly
+# right. What genuinely IS custom: the family has no `simulate()` handler at
+# all (`simulate_t_occu()` draws a FRESH truth, not a replicate at a given
+# theta) and no `.tobs_pointwise_loglik` dispatch, so `simulate` is
 # hand-written (drawing a fresh AR1 year-effect sequence at the theta's own
 # (sigma, rho) -- the same generative model `simulate_t_occu()` uses,
 # parameterized by theta instead of drawing its own truth). v1 is also
@@ -1630,11 +1628,11 @@
 
 
 # ---------------------------------------------------------------------------
-# 6j. ms_occu() (gcol33/tulpaObs#220, community group): the design decision
-# the issue asks to state rather than default -- rank a FIXED species set's
-# own coefficients (mu + b_s per species), not the community means with fresh
-# species drawn per replicate. theta is the per-species REALIZED coefficient
-# vector for every species (S x P, column names `<species>_psi_<coef>` /
+# 6j. ms_occu() (community group): the design decision the issue asks to
+# state rather than default -- rank a FIXED species set's own coefficients
+# (mu + b_s per species), not the community means with fresh species drawn
+# per replicate. theta is the per-species REALIZED coefficient vector for
+# every species (S x P, column names `<species>_psi_<coef>` /
 # `<species>_p_<coef>`), not the P-length community mean `fit$means` alone.
 #
 # `.tobs_community_em()` (R/community_em.R) computes `Cinv` (per-species
@@ -1687,17 +1685,17 @@
     method = spec$method, control = spec$control)))
 }
 
-# gcol33/tulpaObs#226: mu and b_s are NOT independent in the posterior --
-# conditional on a draw of mu, b_s's mean shifts by
-# -Cinv_s %*% t(Bf_s) %*% (mu_draw - mu_hat) (Bf_s the mu-b_s cross-Hessian
-# block from the community EM's own Newton solve, R/community_em.R), while
-# its covariance is UNCHANGED at Cinv_s. Derived by block-inverting the joint
-# (mu, b_s) arrowhead precision [Sf + Bf_s Cinv_s Bf_s', Bf_s; Bf_s',
-# Cinv_s^-1] and validated to machine precision against a direct construction
-# of that matrix on random SPD inputs (dev_notes probe, 2026-08-12). Drawing
-# mu and each b_s independently -- what every affected family did before this
-# -- is exactly the #226 bug: it under-covers on whichever species' deviation
-# most strongly trades off against the community mean.
+# mu and b_s are NOT independent in the posterior -- conditional on a draw
+# of mu, b_s's mean shifts by -Cinv_s %*% t(Bf_s) %*% (mu_draw - mu_hat)
+# (Bf_s the mu-b_s cross-Hessian block from the community EM's own Newton
+# solve, R/community_em.R), while its covariance is UNCHANGED at Cinv_s.
+# Derived by block-inverting the joint (mu, b_s) arrowhead precision [Sf +
+# Bf_s Cinv_s Bf_s', Bf_s; Bf_s', Cinv_s^-1] and validated to machine
+# precision against a direct construction of that matrix on random SPD inputs
+# (dev_notes probe, 2026-08-12). Drawing mu and each b_s independently --
+# what every affected family did before this -- is exactly the #226 bug: it
+# under-covers on whichever species' deviation most strongly trades off
+# against the community mean.
 .tobs_sbc_community_b_draws <- function(mu_draws, mu_hat, b_hat_s, Bf_s, Cinv_s, n) {
   eps <- .tobs_sbc_mvn_draws(rep(0, length(b_hat_s)), Cinv_s, n)
   delta <- sweep(mu_draws, 2L, mu_hat, "-")
@@ -1715,14 +1713,13 @@
 
 
 # ---------------------------------------------------------------------------
-# 6j-bis. ms_occu_cover() (gcol33/tulpaObs#220, community group): the
-# occ+p+pos analogue of ms_occu -- same "rank a fixed species set" design
-# (theta_s = mu_arm + b_s per species, one block per arm, species-major),
-# same joint mu/b_s draw (gcol33/tulpaObs#226 part 1, `.tobs_sbc_community_b_draws`),
-# now safe to attempt because `Cinv` is kept consistent with `Sigma` even
-# under AGHQ debiasing (#226 part 2 fix specific to this family, commit
-# `03b87ad` -- `ms_occu`/`ms_int_occu`/`ms_count` have no AGHQ path at all and
-# stay deferred).
+# 6j-bis. ms_occu_cover() (community group): the occ+p+pos analogue of ms_occu --
+# same "rank a fixed species set" design (theta_s = mu_arm + b_s per species, one
+# block per arm, species-major), same joint mu/b_s draw
+# (`.tobs_sbc_community_b_draws`), now safe to attempt because `Cinv` is kept
+# consistent with `Sigma` even under AGHQ debiasing (#226 part 2 fix specific to this
+# family, commit `03b87ad` -- `ms_occu`/`ms_int_occu`/`ms_count` have no AGHQ path at
+# all and stay deferred).
 #
 # `fit$means`/`vcov` carry ONE extra coordinate beyond the three arms' P
 # dimensions: the shared cover-arm dispersion (`log_sigma_pos` for lognormal,
@@ -1759,7 +1756,7 @@
   m <- fit$model
   if (!identical(m$positive, "lognormal")) {
     stop("SBC on ms_occu_cover() is registered for positive = \"lognormal\" ",
-         "only (gcol33/tulpaObs#220).", call. = FALSE)
+         "only.", call. = FALSE)
   }
   list(model   = m,
        fit_obs = fit,
@@ -1819,18 +1816,18 @@
 
 
 # ---------------------------------------------------------------------------
-# 6k. cover() (gcol33/tulpaObs#220, multiarm-S3 group): a `tobs_multiarm_fit`
-# with the same two-independent-Laplace-Gaussian-block shape as
-# occu_categorical (presence, positive), which is why `.tobs_sbc_data_vector`/
-# `.tobs_sbc_pool_vector` (renamed from the occu_categorical-only spelling,
-# section 6e) are reused unchanged here too. Two things this family did NOT
-# already carry, both now added (small, independently useful, kept regardless
-# of SBC): `encoding$data`/`encoding$y` (the raw fitting inputs, needed to
-# rebuild a refit call -- occu_categorical needed the identical addition) and
+# 6k. cover() (multiarm-S3 group): a `tobs_multiarm_fit` with the same
+# two-independent-Laplace-Gaussian-block shape as occu_categorical (presence,
+# positive), which is why `.tobs_sbc_data_vector`/ `.tobs_sbc_pool_vector`
+# (renamed from the occu_categorical-only spelling, section 6e) are reused
+# unchanged here too. Two things this family did NOT already carry, both now
+# added (small, independently useful, kept regardless of SBC):
+# `encoding$data`/`encoding$y` (the raw fitting inputs, needed to rebuild a
+# refit call -- occu_categorical needed the identical addition) and
 # `V_occ`/`V_pos` (the full per-arm coefficient covariance, previously only
 # the diagonal `se_occ`/`se_pos` was stored -- needed to draw a JOINT sample
-# of an arm's coefficients rather than assume independence across them,
-# which the ms_occu near-miss (#226) is a direct warning against).
+# of an arm's coefficients rather than assume independence across them, which
+# the ms_occu near-miss (#226) is a direct warning against).
 #
 # v1 scope: non-spatial `laplace`, `positive = "lognormal"` only
 # (`simulate_cover()`'s own generator only covers lognormal/gaussian, and
@@ -1843,10 +1840,10 @@
 # elsewhere in this codebase. `X_occ`/`X_pos` are rebuilt fresh via
 # `model.matrix()` from the arm formula + natural-scale data, NEVER read off
 # `encoding$occ_data$X`/`pos_data$X` -- those are autoscaled design matrices
-# (gcol33/tulpaObs#9) paired with SCALED coefficients internally, while
-# `beta_occ`/`beta_pos` on the fit are already unscaled to natural units
-# (`.unscale_beta_vec`); mixing the two would reproduce the exact class of
-# bug #225 found in `int_occu()`.
+# paired with SCALED coefficients internally, while `beta_occ`/`beta_pos` on
+# the fit are already unscaled to natural units (`.unscale_beta_vec`);
+# mixing the two would reproduce the exact class of bug #225 found in
+# `int_occu()`.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_spec_cover <- function(fit, fit.control) {
@@ -1924,12 +1921,12 @@
 
 
 # ---------------------------------------------------------------------------
-# 6l. ms_int_occu() (gcol33/tulpaObs#220, community group): REGISTERED --
-# the community analogue of int_occu(): `model$y` is a list of D per-source
-# 3D [n_sites x visits_d x n_species] arrays sharing the site axis
-# (`.tobs_sbc_pool_named_3d` from dyn_int_occu() reused unchanged), ranking
-# the fixed species set's own realized coefficients via the joint mu/b_s
-# draw `.tobs_sbc_community_b_draws` (#226 part 1). Originally found to share
+# 6l. ms_int_occu() (community group): REGISTERED -- the community analogue
+# of int_occu(): `model$y` is a list of D per-source 3D [n_sites x visits_d x
+# n_species] arrays sharing the site axis (`.tobs_sbc_pool_named_3d` from
+# dyn_int_occu() reused unchanged), ranking the fixed species set's own
+# realized coefficients via the joint mu/b_s draw
+# `.tobs_sbc_community_b_draws` (#226 part 1). Originally found to share
 # ms_occu's exact failure mode (a direct probe at three seeds found
 # `sp3_p2_(Intercept)` stuck at p_unif ~0.0029-0.0030, reproducible not
 # noise) -- and, like ms_occu, the actual cause turned out to be species
@@ -2006,10 +2003,10 @@
 
 
 # ---------------------------------------------------------------------------
-# 6m. occu_multiscale_cover() (gcol33/tulpaObs#220, multiarm-S3 group): a
-# THREE-level hurdle -- cell occupancy psi gates plot availability theta,
-# which gates per-visit detection p and the cover hurdle pos -- fit under
-# `method = "laplace"` (non-spatial: iid cells, field fixed at 0). Unlike
+# 6m. occu_multiscale_cover() (multiarm-S3 group): a THREE-level hurdle
+# -- cell occupancy psi gates plot availability theta, which gates
+# per-visit detection p and the cover hurdle pos -- fit under `method =
+# "laplace"` (non-spatial: iid cells, field fixed at 0). Unlike
 # `cover()`, this is the STANDARD single-block fit shape: `fit$means`/
 # `fit$draws` are a real joint MVN (dispersion `log_sigma_pos` optimized
 # jointly with the coefficients via BFGS + `optimHess`, so it carries a
@@ -2150,27 +2147,27 @@
 
 
 # ---------------------------------------------------------------------------
-# 6n. ms_count() (gcol33/tulpaObs#220, community group): community relative-
-# abundance GLMM, no detection/latent state (the abundance analogue of
-# ms_occu). `model$y` is a plain [n_sites x n_species] matrix (no visit
-# axis), so the SHARED generic `.tobs_sbc_pool` (2D `rbind`) applies
-# unchanged. Ranks the FIXED species set's own realized coefficients (mu +
-# b_s per species), the same design as ms_occu/ms_int_occu -- MULTI-SEED
-# tested (0, 1, 2) before registering, per the lesson #226 and the
-# ms_int_occu near-miss both taught: a single seed clearing the 1e-3 bar is
-# not evidence of calibration. `simulate()` is custom, overwriting
-# `ms_community$coef_mu` directly (`.tobs_simulate_ms_count()` reads that,
-# not `object$draws`, the same mechanism cover()/ms_occu()/ms_int_occu()
-# use for the identical reason). `loglik_many` sums each species' own exact
-# Poisson log-likelihood (`.ms_count_ll_pois`, the same kernel the fitter
-# optimizes) at that species' theta slice. `response = "poisson"` only for
-# v1 (negbin/gaussian/bernoulli/binomial carry an extra per-species
-# dispersion arm, a follow-up); `jsdm()` is `ms_count(response =
-# "bernoulli")` under the hood and is NOT covered by this registration --
-# a different response family with its own calibration to check. Originally
-# deferred on a small fixture's failure (matching ms_occu/ms_int_occu); like
-# both of those, the cause was species count, not a bug, and the registry
-# entry below uses a fixture at S=20 -- see gcol33/tulpaObs#226.
+# 6n. ms_count() (community group): community relative- abundance GLMM, no
+# detection/latent state (the abundance analogue of ms_occu). `model$y` is a
+# plain [n_sites x n_species] matrix (no visit axis), so the SHARED generic
+# `.tobs_sbc_pool` (2D `rbind`) applies unchanged. Ranks the FIXED species
+# set's own realized coefficients (mu + b_s per species), the same design as
+# ms_occu/ms_int_occu -- MULTI-SEED tested (0, 1, 2) before registering, per
+# the lesson #226 and the ms_int_occu near-miss both taught: a single seed
+# clearing the 1e-3 bar is not evidence of calibration. `simulate()` is
+# custom, overwriting `ms_community$coef_mu` directly
+# (`.tobs_simulate_ms_count()` reads that, not `object$draws`, the same
+# mechanism cover()/ms_occu()/ms_int_occu() use for the identical reason).
+# `loglik_many` sums each species' own exact Poisson log-likelihood
+# (`.ms_count_ll_pois`, the same kernel the fitter optimizes) at that
+# species' theta slice. `response = "poisson"` only for v1
+# (negbin/gaussian/bernoulli/binomial carry an extra per-species dispersion
+# arm, a follow-up); `jsdm()` is `ms_count(response = "bernoulli")` under
+# the hood and is NOT covered by this registration -- a different response
+# family with its own calibration to check. Originally deferred on a small
+# fixture's failure (matching ms_occu/ms_int_occu); like both of those, the
+# cause was species count, not a bug, and the registry entry below uses a
+# fixture at S=20.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_data_ms_count <- function(fit) {
@@ -2217,13 +2214,13 @@
 
 
 # ---------------------------------------------------------------------------
-# 6o. jsdm() (gcol33/tulpaObs#220, community group): `jsdm()` is
-# `ms_count(response = "bernoulli")` under the hood (`.dispatch_jsdm` calls
+# 6o. jsdm() (community group): `jsdm()` is `ms_count(response =
+# "bernoulli")` under the hood (`.dispatch_jsdm` calls
 # `.tobs_build_ms_count(..., response = "bernoulli")` and routes through the
-# same community Laplace-EM / latent driver / NUTS target as ms_count() --
-# gcol33/tulpaObs#121). The fit object shares ms_count()'s `fit$model`
-# shape byte for byte, so its registry row is ms_count()'s arm declaration
-# unchanged (`.tobs_sbc_data_ms_count` for the data, the shared community
+# same community Laplace-EM / latent driver / NUTS target as ms_count() --).
+# The fit object shares ms_count()'s `fit$model` shape byte for byte, so its
+# registry row is ms_count()'s arm declaration unchanged
+# (`.tobs_sbc_data_ms_count` for the data, the shared community
 # draws/simulate). `attr(fit, "tobs_family")` is "jsdm", not "ms_count",
 # though (the family ctor's own name), so the SBC dispatch needs its own
 # registry row regardless. Only `spec` (constructs `jsdm()`, not
@@ -2252,16 +2249,16 @@
 }
 
 # ---------------------------------------------------------------------------
-# 6p. ms_distance() (gcol33/tulpaObs#220, community group): community binned
-# distance sampling (the spAbundance msDS analogue), the two-arm
-# (lambda/sigma) sibling of ms_occu -- same "rank a fixed species set" design
-# (theta_s = mu_arm + b_s per species, species-major), same joint mu/b_s draw
+# 6p. ms_distance() (community group): community binned distance sampling
+# (the spAbundance msDS analogue), the two-arm (lambda/sigma) sibling of
+# ms_occu -- same "rank a fixed species set" design (theta_s = mu_arm + b_s
+# per species, species-major), same joint mu/b_s draw
 # (`.tobs_sbc_community_b_draws`, #226 part 1). `.tobs_community_em()`
 # already exposes `Cinv`/`Bf` on this family's fit (R/ms_distance.R,
 # `build_ms_distance_fit()` -- added alongside the #226 fix, not something
-# this registration needed to add). `model$y` is a plain 3D
-# `[n_sites x n_bins x n_species]` array, structurally identical to
-# ms_occu()'s `[n_sites x max_visits x n_species]` -- the generic
+# this registration needed to add). `model$y` is a plain 3D `[n_sites x
+# n_bins x n_species]` array, structurally identical to ms_occu()'s `[n_sites
+# x max_visits x n_species]` -- the generic
 # `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` pair (stacking axis 1
 # while leaving axes 2-3 alone) applies unchanged, species standing in for
 # season. `simulate()` reuses the family's own `.tobs_simulate_ms_distance()`
@@ -2286,7 +2283,7 @@
   if (!identical(m$key, "halfnorm") || !identical(m$mixture, "poisson")) {
     stop("SBC on ms_distance() is registered for key = \"halfnorm\", ",
          "mixture = \"poisson\" only (the hazard key's log-shape and negbin's ",
-         "dispersion are not carried by simulate(); gcol33/tulpaObs#227). Got ",
+         "dispersion are not carried by simulate()). Got ",
          "key = \"", m$key, "\", mixture = \"", m$mixture, "\".", call. = FALSE)
   }
 }
@@ -2333,10 +2330,10 @@
 
 
 # ---------------------------------------------------------------------------
-# 6q. ms_dyn_occu() (gcol33/tulpaObs#220, community group): community DYNAMIC
-# (multi-season) occupancy, the HMM-forward analogue of ms_occu. `model$y` is
-# a 4D `[n_sites x max_visits x n_seasons x n_species]` array -- ONE axis
-# past every existing pool helper, so this section adds the generic
+# 6q. ms_dyn_occu() (community group): community DYNAMIC (multi-season)
+# occupancy, the HMM-forward analogue of ms_occu. `model$y` is a 4D `[n_sites
+# x max_visits x n_seasons x n_species]` array -- ONE axis past every
+# existing pool helper, so this section adds the generic
 # `.tobs_sbc_data_4d_species`/`.tobs_sbc_pool_4d_species` pair (stack axis 1,
 # leave axes 2-4 alone; the same recipe as `_3d_season`, one more dimension).
 #
@@ -2437,12 +2434,12 @@
 
 
 # ---------------------------------------------------------------------------
-# 6r. ms_abun() (gcol33/tulpaObs#220, community group): community N-mixture
-# (spAbundance msNMix), the abundance-arm sibling of ms_distance/ms_occu --
-# same "rank a fixed species set" design (theta_s = mu_arm + b_s, species-
-# major), same joint mu/b_s draw (`.tobs_sbc_community_b_draws`, #226 part
-# 1). `model$y` is a plain 3D `[n_sites x max_visits x n_species]` array,
-# structurally identical to ms_occu()'s -- the generic
+# 6r. ms_abun() (community group): community N-mixture (spAbundance msNMix),
+# the abundance-arm sibling of ms_distance/ms_occu -- same "rank a fixed
+# species set" design (theta_s = mu_arm + b_s, species- major), same joint
+# mu/b_s draw (`.tobs_sbc_community_b_draws`, #226 part 1). `model$y` is a
+# plain 3D `[n_sites x max_visits x n_species]` array, structurally
+# identical to ms_occu()'s -- the generic
 # `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` pair applies
 # unchanged. `simulate()` reuses the family's own `.tobs_simulate_ms_nmix()`
 # S3 handler (drives `cpp_simulate_ms_nmix`, the SAME kernel `simulate()`
@@ -2453,17 +2450,17 @@
 #
 # UNLIKE every other `.tobs_community_em()`-based family here, this family's
 # engine is `tulpa::tulpa_re_aghq()` (a pure-R Newton solve never enters it),
-# and until gcol33/tulpa#398 that engine exposed only the per-term DIAGONAL
-# of a group's posterior covariance (`blup_var`) -- no cross-covariance
-# between a species' lambda (abundance) deviation and its p (detection)
-# deviation, which N-mixture's own lambda/p identifiability ridge makes
-# genuinely nonzero (the same ridge `tobs()`'s penalized-EM exists to break
-# for occupancy psi/p). #398's `blup_cross`/`blup_cov_g` additions expose
-# exactly that (verified against a closed-form joint-Hessian construction on
-# a toy model with deliberately collinear RE terms). Only reachable when the
-# fit ran the AGHQ/joint path (`control = list(optimizer = "joint_fd",
-# n.quad > 1)`) -- the DEFAULT `n.quad = 1` route (`cpp_nmix_community_em()`,
-# a different, faster engine entirely) does not expose Cinv/Bf at all, so
+# and until that engine exposed only the per-term DIAGONAL of a group's
+# posterior covariance (`blup_var`) -- no cross-covariance between a species'
+# lambda (abundance) deviation and its p (detection) deviation, which
+# N-mixture's own lambda/p identifiability ridge makes genuinely nonzero (the
+# same ridge `tobs()`'s penalized-EM exists to break for occupancy psi/p).
+# #398's `blup_cross`/`blup_cov_g` additions expose exactly that (verified
+# against a closed-form joint-Hessian construction on a toy model with
+# deliberately collinear RE terms). Only reachable when the fit ran the
+# AGHQ/joint path (`control = list(optimizer = "joint_fd", n.quad > 1)`) --
+# the DEFAULT `n.quad = 1` route (`cpp_nmix_community_em()`, a different,
+# faster engine entirely) does not expose Cinv/Bf at all, so
 # `.tobs_sbc_reject_ms_abun_scope()` requires it explicitly rather than
 # silently falling back to an independent (mu, b_s) draw (#226's exact bug).
 # Poisson only for v1 (negbin/zip/zinb add a further per-species RE arm
@@ -2481,8 +2478,8 @@
   if (is.null(fit$ms_community$Cinv) || is.null(fit$ms_community$Bf)) {
     stop("SBC on ms_abun() needs the joint AGHQ posterior covariance/cross-",
          "Hessian (fit$ms_community$Cinv/Bf), only available when the fit ",
-         "ran control = list(optimizer = \"joint_fd\", n.quad > 1) ",
-         "(gcol33/tulpa#398). The default n.quad = 1 Laplace-EM ",
+         "ran control = list(optimizer = \"joint_fd\", n.quad > 1). ",
+         "The default n.quad = 1 Laplace-EM ",
          "(cpp_nmix_community_em()) does not expose the abundance/detection ",
          "cross-covariance a joint (mu, b_s) draw needs -- refit with a ",
          "higher n.quad rather than drawing mu and b_s independently.",
@@ -2570,19 +2567,19 @@
     replicate = .tobs_sbc_replicate_count),
   # Independent-observer double_observer(): both p1/p2 read ONE `detection`
   # formula slot (`fit$model$formulas$p`), same shape as every other simple
-  # entry's site-level (state, det) pair (gcol33/tulpaObs#220). The dependent
-  # (`type = "dependent"`) protocol additionally carries a fixed per-site
-  # `primary` assignment the front door takes as `...`, which
+  # entry's site-level (state, det) pair. The dependent (`type =
+  # "dependent"`) protocol additionally carries a fixed per-site `primary`
+  # assignment the front door takes as `...`, which
   # `.tobs_sbc_refit_simple`'s `spec$extra` threads through unchanged.
   double_observer = .tobs_sbc_simple_entry(
     "lambda", "p",
     extra = function(m) if (!is.null(m$primary)) list(primary = m$primary)
                         else NULL),
-  # Multi-season group (gcol33/tulpaObs#220): pools on the site axis, leaves
-  # the season axis alone (custom `spec`/`data`/`pool`/`simulate`/`refit` --
-  # see section 6b -- `draws` and `loglik_many` are the shared simple-family
-  # ones, since `fit$draws` and `.tobs_pointwise_loglik` already work for a
-  # `dynamic` fit unchanged). Constant-rate only.
+  # Multi-season group: pools on the site axis, leaves the season axis alone
+  # (custom `spec`/`data`/`pool`/`simulate`/`refit` -- see section 6b --
+  # `draws` and `loglik_many` are the shared simple-family ones, since
+  # `fit$draws` and `.tobs_pointwise_loglik` already work for a `dynamic`
+  # fit unchanged). Constant-rate only.
   dyn_occu = list(
     spec        = .tobs_sbc_spec_dyn_occu,
     data        = .tobs_sbc_data_3d_season,
@@ -2591,10 +2588,10 @@
     simulate    = .tobs_sbc_sim_dyn_occu,
     refit       = .tobs_sbc_refit_dyn_occu,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # dyn_abun() (gcol33/tulpaObs#220): same 3D response + site-axis pooling as
-  # dyn_occu (section 6b2), but the replicate is the family's OWN simulate()
-  # kernel via the shared simple-family `simulate` (no hand-written forward
-  # needed -- the Dail-Madsen open N-mixture already has a working handler).
+  # dyn_abun(): same 3D response + site-axis pooling as dyn_occu (section
+  # 6b2), but the replicate is the family's OWN simulate() kernel via the
+  # shared simple-family `simulate` (no hand-written forward needed -- the
+  # Dail-Madsen open N-mixture already has a working handler).
   dyn_abun = list(
     spec        = .tobs_sbc_spec_dyn_abun,
     data        = .tobs_sbc_data_3d_season,
@@ -2603,9 +2600,9 @@
     simulate    = .tobs_sbc_sim_simple,
     refit       = .tobs_sbc_refit_dyn_abun,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # Multi-source group (gcol33/tulpaObs#220): pools on the site axis, leaves
-  # the per-source axis alone (custom `spec`/`data`/`pool`/`simulate`/`refit`
-  # -- see section 6c). Full-overlap only.
+  # Multi-source group: pools on the site axis, leaves the per-source axis
+  # alone (custom `spec`/`data`/`pool`/`simulate`/`refit` -- see section 6c).
+  # Full-overlap only.
   int_occu = list(
     spec        = .tobs_sbc_spec_int_occu,
     data        = .tobs_sbc_data_int_occu,
@@ -2614,10 +2611,10 @@
     simulate    = .tobs_sbc_sim_int_occu,
     refit       = .tobs_sbc_refit_int_occu,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # Multi-response group (gcol33/tulpaObs#220): y = (yDist, yRem), two
-  # response matrices that must stay row-consistent -- gdistremoval() already
-  # has a simulate() handler returning list(yDist=, yRem=), reused here as the
-  # replicate generator (see section 6d).
+  # Multi-response group: y = (yDist, yRem), two response matrices that must
+  # stay row-consistent -- gdistremoval() already has a simulate() handler
+  # returning list(yDist=, yRem=), reused here as the replicate generator (see
+  # section 6d).
   gdistremoval = list(
     spec        = .tobs_sbc_spec_gdistremoval,
     data        = .tobs_sbc_data_gdistremoval,
@@ -2626,11 +2623,11 @@
     simulate    = .tobs_sbc_sim_gdistremoval,
     refit       = .tobs_sbc_refit_gdistremoval,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # Multiarm-S3 group (gcol33/tulpaObs#220): a `tobs_multiarm_fit` with two
-  # independent Laplace-Gaussian blocks instead of a joint MVN draw matrix
-  # (see section 6e) -- custom draws()/loglik_many() unpack/repack the two
-  # blocks, everything else is a plain length-N vector response (no visits,
-  # no detection formula).
+  # Multiarm-S3 group: a `tobs_multiarm_fit` with two independent
+  # Laplace-Gaussian blocks instead of a joint MVN draw matrix (see section
+  # 6e) -- custom draws()/loglik_many() unpack/repack the two blocks,
+  # everything else is a plain length-N vector response (no visits, no
+  # detection formula).
   occu_categorical = list(
     spec        = .tobs_sbc_spec_occu_categorical,
     data        = .tobs_sbc_data_vector,
@@ -2639,8 +2636,8 @@
     simulate    = .tobs_sbc_sim_occu_categorical,
     refit       = .tobs_sbc_refit_occu_categorical,
     loglik_many = .tobs_sbc_loglik_many_occu_categorical),
-  # distsamp_open() (gcol33/tulpaObs#220): shares dyn_abun's 3D response and
-  # site-axis pooling (section 6f) -- constant-dynamics, Poisson only for v1.
+  # distsamp_open(): shares dyn_abun's 3D response and site-axis pooling
+  # (section 6f) -- constant-dynamics, Poisson only for v1.
   distsamp_open = list(
     spec        = .tobs_sbc_spec_distsamp_open,
     data        = .tobs_sbc_data_3d_season,
@@ -2649,10 +2646,10 @@
     simulate    = .tobs_sbc_sim_simple,
     refit       = .tobs_sbc_refit_distsamp_open,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # occu_multi() (gcol33/tulpaObs#220): a list-of-species response, same shape
-  # as int_occu()'s list-of-source one (section 6g) -- pooling is the shared
-  # named-matrices route; simulate() is custom (joint multi-species state,
-  # not independent per-source arms).
+  # occu_multi(): a list-of-species response, same shape as int_occu()'s
+  # list-of-source one (section 6g) -- pooling is the shared named-matrices
+  # route; simulate() is custom (joint multi-species state, not independent
+  # per-source arms).
   occu_multi = list(
     spec        = .tobs_sbc_spec_occu_multi,
     data        = .tobs_sbc_data_occu_multi,
@@ -2661,9 +2658,9 @@
     simulate    = .tobs_sbc_sim_occu_multi,
     refit       = .tobs_sbc_refit_occu_multi,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # dyn_int_occu() (gcol33/tulpaObs#220): the product shape (section 6h) --
-  # a named list of S per-source 3D arrays, pooled with the new
-  # `.tobs_sbc_pool_named_3d`; simulate() is custom (family's own handler).
+  # dyn_int_occu(): the product shape (section 6h) -- a named list of S
+  # per-source 3D arrays, pooled with the new `.tobs_sbc_pool_named_3d`;
+  # simulate() is custom (family's own handler).
   dyn_int_occu = list(
     spec        = .tobs_sbc_spec_dyn_int_occu,
     data        = .tobs_sbc_data_dyn_int_occu,
@@ -2672,11 +2669,11 @@
     simulate    = .tobs_sbc_sim_dyn_int_occu,
     refit       = .tobs_sbc_refit_dyn_int_occu,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # t_occu() (gcol33/tulpaObs#220, section 6i): a pg_gibbs family whose
-  # fit$draws is already the real pooled posterior sample (no Gibbs-aware
-  # draws() needed); shares the 3D-season pool despite its different axis
-  # order (season before visits). loglik_many is a Laplace approximation to
-  # the AR1 year effect's marginal (see section 6i).
+  # t_occu() (section 6i): a pg_gibbs family whose fit$draws is already the
+  # real pooled posterior sample (no Gibbs-aware draws() needed); shares
+  # the 3D-season pool despite its different axis order (season before
+  # visits). loglik_many is a Laplace approximation to the AR1 year
+  # effect's marginal (see section 6i).
   t_occu = list(
     spec        = .tobs_sbc_spec_t_occu,
     data        = .tobs_sbc_data_3d_season,
@@ -2685,8 +2682,8 @@
     simulate    = .tobs_sbc_sim_t_occu,
     refit       = .tobs_sbc_refit_t_occu,
     loglik_many = .tobs_sbc_loglik_many_t_occu),
-  # ms_occu() (gcol33/tulpaObs#220, community group, section 6j): the "rank a
-  # fixed species set" design (theta_s = mu + b_s), joint mu/b_s draw via
+  # ms_occu() (community group, section 6j): the "rank a fixed species set"
+  # design (theta_s = mu + b_s), joint mu/b_s draw via
   # `.tobs_sbc_community_b_draws` (#226 part 1: mu and b_s are NOT independent
   # in the posterior; Cov(mu, b_s) != 0, derivation validated to machine
   # precision by block-inverting the joint (mu, b_s) arrowhead precision).
@@ -2698,18 +2695,18 @@
   # against `method="nuts"`'s exact joint posterior (Rhat 1.011, ESS 523, 0
   # divergences -- a trustworthy reference) showed Laplace's Vf and Cinv were
   # 3-15x too narrow AND its point estimates measurably off at S=5, not a
-  # subtle attenuation but the Laplace-Gaussian approximation breaking down
-  # on a genuinely non-Gaussian posterior at that few species. At S=20 (a
-  # community size typical of real ecological data), the SAME plain
-  # Laplace-EM -- no debiasing at all -- calibrates cleanly: 5 seeds, every
-  # posterior min p_unif comfortably above 1e-3 (range 0.0017-0.032), 0
-  # quantities below 1e-3 out of 81 possible across all 5 runs, no
-  # reproducible failing coefficient. Registered on THAT evidence; the
-  # `.SBC_REG_FIXTURES$ms_occu` fixture below is deliberately S=20, not S=5 --
-  # do not shrink it without re-running this investigation. `ms_int_occu` and
-  # `ms_count` (same `.tobs_community_em()` engine, same original S=5-style
-  # failure) are likely fixable the identical way but each needs its OWN
-  # species-count check before registering, not an assumption this transfers.
+  # subtle attenuation but the Laplace-Gaussian approximation breaking down on
+  # a genuinely non-Gaussian posterior at that few species. At S=20 (a
+  # community size typical of real ecological data), the SAME plain Laplace-EM
+  # -- no debiasing at all -- calibrates cleanly: 5 seeds, every posterior min
+  # p_unif comfortably above 1e-3 (range 0.0017-0.032), 0 quantities below
+  # 1e-3 out of 81 possible across all 5 runs, no reproducible failing
+  # coefficient. Registered on THAT evidence; the `.SBC_REG_FIXTURES$ms_occu`
+  # fixture below is deliberately S=20, not S=5 -- do not shrink it without
+  # re-running this investigation. `ms_int_occu` and `ms_count` (same
+  # `.tobs_community_em()` engine, same original S=5-style failure) are likely
+  # fixable the identical way but each needs its OWN species-count check
+  # before registering, not an assumption this transfers.
   ms_occu = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("psi", "psi_", 1L),
                  .tobs_sbc_arm("p",   "p_",   2L)),
@@ -2719,12 +2716,12 @@
     pool  = .tobs_sbc_pool_3d_season,
     refit = .tobs_sbc_refit_ms_occu),
   #
-  # ms_occu_cover() (gcol33/tulpaObs#220, community group, section 6j-bis):
-  # the occ+p+pos analogue of ms_occu, safe to attempt because its Cinv is
-  # kept consistent with Sigma even under AGHQ debiasing (#226 part 2 fix
-  # specific to this family, commit `03b87ad`) -- CONTRACT-verified (refit on
-  # 0-pooled data reproduces means exactly, pool/draws/simulate/loglik_many
-  # all finite and correctly shaped); acceptance not yet run.
+  # ms_occu_cover() (community group, section 6j-bis): the occ+p+pos analogue
+  # of ms_occu, safe to attempt because its Cinv is kept consistent with
+  # Sigma even under AGHQ debiasing (#226 part 2 fix specific to this family,
+  # commit `03b87ad`) -- CONTRACT-verified (refit on 0-pooled data reproduces
+  # means exactly, pool/draws/simulate/loglik_many all finite and correctly
+  # shaped); acceptance not yet run.
   ms_occu_cover = .tobs_sbc_community_entry(
     arms    = list(.tobs_sbc_arm("occ", "psi_", 1L),
                    .tobs_sbc_arm("p",   "p_",   2L),
@@ -2738,10 +2735,10 @@
     pool    = .tobs_sbc_pool_ms_occu_cover,
     refit   = .tobs_sbc_refit_ms_occu_cover),
   #
-  # cover() (gcol33/tulpaObs#220, multiarm-S3 group, section 6k): the same
-  # two-independent-block shape as occu_categorical, reusing the generalized
-  # vector data/pool helpers; positive = "lognormal" only for v1, dispersion
-  # held fixed (no SE reported anywhere in the package for it).
+  # cover() (multiarm-S3 group, section 6k): the same two-independent-block
+  # shape as occu_categorical, reusing the generalized vector data/pool
+  # helpers; positive = "lognormal" only for v1, dispersion held fixed (no
+  # SE reported anywhere in the package for it).
   cover = list(
     spec        = .tobs_sbc_spec_cover,
     data        = .tobs_sbc_data_vector,
@@ -2750,16 +2747,16 @@
     simulate    = .tobs_sbc_sim_cover,
     refit       = .tobs_sbc_refit_cover,
     loglik_many = .tobs_sbc_loglik_many_cover),
-  # ms_int_occu() (gcol33/tulpaObs#220, community group, section 6l): shared
-  # ms_occu's exact failure mode -- both are `.tobs_community_em()` consumers
-  # hitting a genuinely non-Gaussian posterior at a small species count, not
-  # a fixable bug (verified for ms_occu against method="nuts"'s exact
-  # reference; see gcol33/tulpaObs#226). SPECIES-COUNT SCOPED the same way:
-  # at S=14 (matching this family's own existing recovery-test fixture, N=140,
-  # 2 sources), the plain Laplace-EM (no debiasing) calibrates cleanly -- 5
-  # seeds, min p_unif range 0.0013-0.052, 0 quantities below 1e-3 out of 43
-  # possible across all 5 runs, no reproducible failing coefficient. Do NOT
-  # shrink `.SBC_REG_FIXTURES$ms_int_occu`'s species count for speed.
+  # ms_int_occu() (community group, section 6l): shared ms_occu's exact
+  # failure mode -- both are `.tobs_community_em()` consumers hitting a
+  # genuinely non-Gaussian posterior at a small species count, not a fixable
+  # bug (verified for ms_occu against method="nuts"'s exact reference).
+  # SPECIES-COUNT SCOPED the same way: at S=14 (matching this family's own
+  # existing recovery-test fixture, N=140, 2 sources), the plain Laplace-EM
+  # (no debiasing) calibrates cleanly -- 5 seeds, min p_unif range
+  # 0.0013-0.052, 0 quantities below 1e-3 out of 43 possible across all 5
+  # runs, no reproducible failing coefficient. Do NOT shrink
+  # `.SBC_REG_FIXTURES$ms_int_occu`'s species count for speed.
   ms_int_occu = .tobs_sbc_community_entry(
     arms  = .tobs_sbc_arms_ms_int_occu,
     ll    = .tobs_sbc_ll_ms_int_occu,
@@ -2768,10 +2765,10 @@
     pool  = .tobs_sbc_pool_named_3d,
     refit = .tobs_sbc_refit_ms_int_occu),
   #
-  # occu_multiscale_cover() (gcol33/tulpaObs#220, multiarm-S3 group, section
-  # 6m): the standard single-block fit shape (unlike cover()), so
-  # draws/loglik_many are the shared generic ones; site is the per-plot CELL
-  # index (the exchangeable unit for this family), not a plot counter.
+  # occu_multiscale_cover() (multiarm-S3 group, section 6m): the standard
+  # single-block fit shape (unlike cover()), so draws/loglik_many are the
+  # shared generic ones; site is the per-plot CELL index (the exchangeable
+  # unit for this family), not a plot counter.
   occu_multiscale_cover = list(
     spec        = .tobs_sbc_spec_occu_mscale_cover,
     data        = .tobs_sbc_data_occu_mscale_cover,
@@ -2780,39 +2777,38 @@
     simulate    = .tobs_sbc_sim_occu_mscale_cover,
     refit       = .tobs_sbc_refit_occu_mscale_cover,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # ms_count() (gcol33/tulpaObs#220, community group, section 6n): shared
-  # ms_occu's exact failure mode and, like ms_occu/ms_int_occu, the actual
-  # cause was species count, not a bug (see gcol33/tulpaObs#226). Multi-seed
-  # (0, 1, 2) posterior SBC on a small fixture originally found
-  # `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7 every time (several
-  # other coefficients also suspiciously low, e.g. `sp3_mu_x` ~5e-6) -- worse
-  # than ms_occu/ms_int_occu's own small-fixture failures, plausibly because
-  # this family has no detection arm to dilute it. At S=20 (matching
-  # ms_occu's own resolved scale), the plain Laplace-EM calibrates cleanly:
-  # 5 seeds, min p_unif range 0.0016-0.086, 0 quantities below 1e-3 out of 41
-  # possible across all 5 runs, no reproducible failing coefficient. No
-  # explicit `pool` slot needed -- `y` is a plain 2D `[site x species]`
-  # matrix, so the generic default pooling applies unchanged.
+  # ms_count() (community group, section 6n): shared ms_occu's exact failure
+  # mode and, like ms_occu/ms_int_occu, the actual cause was species count,
+  # not a bug. Multi-seed (0, 1, 2) posterior SBC on a small fixture
+  # originally found `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7
+  # every time (several other coefficients also suspiciously low, e.g.
+  # `sp3_mu_x` ~5e-6) -- worse than ms_occu/ms_int_occu's own small-fixture
+  # failures, plausibly because this family has no detection arm to dilute
+  # it. At S=20 (matching ms_occu's own resolved scale), the plain Laplace-EM
+  # calibrates cleanly: 5 seeds, min p_unif range 0.0016-0.086, 0 quantities
+  # below 1e-3 out of 41 possible across all 5 runs, no reproducible failing
+  # coefficient. No explicit `pool` slot needed -- `y` is a plain 2D `[site x
+  # species]` matrix, so the generic default pooling applies unchanged.
   ms_count = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("mu", "mu_", 1L)),
     ll    = .tobs_sbc_ll_ms_count_pois,
     spec  = .tobs_sbc_spec_ms_count,
     data  = .tobs_sbc_data_ms_count,
     refit = .tobs_sbc_refit_ms_count),
-  # jsdm() (gcol33/tulpaObs#220, community group, section 6o): ms_count()'s
-  # generic data/draws/simulate helpers reused unchanged (see the section
-  # comment); only spec (family = jsdm()) and loglik_many (Bernoulli kernel)
-  # are jsdm-specific.
+  # jsdm() (community group, section 6o): ms_count()'s generic
+  # data/draws/simulate helpers reused unchanged (see the section comment);
+  # only spec (family = jsdm()) and loglik_many (Bernoulli kernel) are
+  # jsdm-specific.
   jsdm = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("mu", "mu_", 1L)),
     ll    = .tobs_sbc_ll_ms_count_bern,
     spec  = .tobs_sbc_spec_jsdm,
     data  = .tobs_sbc_data_ms_count,
     refit = .tobs_sbc_refit_jsdm),
-  # ms_distance() (gcol33/tulpaObs#220, community group, section 6p): the
-  # two-arm (lambda/sigma) sibling of ms_occu; `data`/`pool` reuse the
-  # generic 3D-season helpers unchanged (model$y is [site x bin x species],
-  # structurally identical to ms_occu's [site x visit x species]).
+  # ms_distance() (community group, section 6p): the two-arm (lambda/sigma)
+  # sibling of ms_occu; `data`/`pool` reuse the generic 3D-season helpers
+  # unchanged (model$y is [site x bin x species], structurally identical to
+  # ms_occu's [site x visit x species]).
   ms_distance = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("lambda", "lambda_", 1L),
                  .tobs_sbc_arm("sigma",  "sigma_",  2L)),
@@ -2822,10 +2818,10 @@
     data  = .tobs_sbc_data_3d_season,
     pool  = .tobs_sbc_pool_3d_season,
     refit = .tobs_sbc_refit_ms_distance),
-  # ms_dyn_occu() (gcol33/tulpaObs#220, community group, section 6q): the
-  # HMM-forward dynamic analogue of ms_occu, with two SHARED (non-species)
-  # transition globals (gamma, eps) alongside the two per-species RE arms
-  # (psi1, p). New 4D pool (model$y is [site x visit x season x species]).
+  # ms_dyn_occu() (community group, section 6q): the HMM-forward dynamic
+  # analogue of ms_occu, with two SHARED (non-species) transition globals
+  # (gamma, eps) alongside the two per-species RE arms (psi1, p). New 4D
+  # pool (model$y is [site x visit x season x species]).
   ms_dyn_occu = .tobs_sbc_community_entry(
     arms    = list(.tobs_sbc_arm("psi1", "psi1_", 1L),
                    .tobs_sbc_arm("p",    "p_",    2L)),
@@ -2837,13 +2833,12 @@
     data    = .tobs_sbc_data_4d_species,
     pool    = .tobs_sbc_pool_4d_species,
     refit   = .tobs_sbc_refit_ms_dyn_occu),
-  # ms_abun() (gcol33/tulpaObs#220, community group, section 6r): the
-  # abundance-arm sibling of ms_occu/ms_distance -- see section 6r for why
-  # this family needed a tulpa engine change (gcol33/tulpa#398) before it
-  # could register at all. Poisson only, and only reachable via the AGHQ
-  # engine (control = list(optimizer = "joint_fd", n.quad > 1)); the default
-  # n.quad = 1 Laplace-EM path errors with a pointer rather than drawing an
-  # independent (mu, b_s).
+  # ms_abun() (community group, section 6r): the abundance-arm sibling of
+  # ms_occu/ms_distance -- see section 6r for why this family needed a tulpa
+  # engine change before it could register at all. Poisson only, and only
+  # reachable via the AGHQ engine (control = list(optimizer = "joint_fd",
+  # n.quad > 1)); the default n.quad = 1 Laplace-EM path errors with a
+  # pointer rather than drawing an independent (mu, b_s).
   ms_abun = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("lambda", "lambda_", 1L),
                  .tobs_sbc_arm("p",      "p_",      2L)),
@@ -3069,8 +3064,8 @@
 #' `int_occu` (full source-site overlap only) pools on the SITE axis and
 #' leaves the per-source axis alone, since its response is a list of one
 #' detection matrix per source; the rank statistic is the shared machinery
-#' unchanged. Registering it surfaced a real bug (`gcol33/tulpaObs#225`,
-#' fixed): the detection intercept was silently left in standardized-covariate
+#' unchanged. Registering it surfaced a real bug (since fixed): the detection
+#' intercept was silently left in standardized-covariate
 #' units on every fit with an autoscaled detection covariate, independent of
 #' SBC.
 #'
@@ -3186,8 +3181,8 @@ sbc.tobs_fit <- function(object, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
   # name "posterior"/"prior_predictive"), not `experiment` -- a stale call
   # site name silently fell through to `...`, leaving `object` at its default
   # ("prior_predictive") and erroring there for every family, not just a
-  # newly registered one (gcol33/tulpaObs#220, found while adding
-  # double_observer to the registry).
+  # newly registered one (found while adding double_observer to the
+  # registry).
   res <- tulpa::sbc(object = "posterior", model = model,
                     n_sim = as.integer(n.sim), quantities = quantities,
                     level = level, seed = as.integer(seed), control = control)

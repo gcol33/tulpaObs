@@ -1,6 +1,6 @@
-# Parameter-recovery tests for the lme4 bar-syntax random-effect blocks added
-# in gcol33/tulpaObs#10: a correlated random intercept + 2 slopes (a 3x3
-# block), and a slope-only block (`(0 + x | g)`, no group intercept).
+# Parameter-recovery tests for the lme4 bar-syntax random-effect blocks: a
+# correlated random intercept + 2 slopes (a 3x3 block), and a
+# slope-only block (`(0 + x | g)`, no group intercept).
 #
 # Random slopes are fit by the NUTS engine (the EM-Laplace path does not carry
 # formula random effects; nested-Laplace rejects slopes). The NUTS parameter

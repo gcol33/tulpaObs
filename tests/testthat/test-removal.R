@@ -1,5 +1,5 @@
 # Removal-sampling abundance (sequential depletion), Poisson + negbin,
-# non-spatial Laplace + NUTS (gcol33/tulpaObs#39).
+# non-spatial Laplace + NUTS.
 #
 # Recovery-grade tests (per the "statistical code needs recovery tests" rule):
 # point recovery against simulated truth + 95% CI coverage across seeds, plus a
@@ -225,7 +225,7 @@ test_that("removal NUTS recovers truth and scores WAIC", {
 })
 
 
-# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+# --- NUTS + random effect ------------------------------------
 
 # Removal data with a per-site intercept RE on the abundance arm.
 sim_removal_lambda_re <- function(N, K, ngrp, beta_lambda, beta_p, sigma_b,
@@ -271,9 +271,9 @@ test_that("removal() Laplace AGHQ recovers a site-grouped intercept RE (sigma + 
   skip_on_cran()
   skip_if_fast()
   # Site-level intercept RE on the abundance arm, fit on the shared count-model
-  # AGHQ path (tulpaObs#51). n.quad > 1 debiases the small-cluster variance
-  # attenuation so sigma recovers; the per-site removal marginal feeds the same
-  # grouped-RE oracle the N-mixture uses.
+  # AGHQ path. n.quad > 1 debiases the small-cluster variance attenuation so
+  # sigma recovers; the per-site removal marginal feeds the same grouped-RE
+  # oracle the N-mixture uses.
   s <- sim_removal_lambda_re(N = 90, K = 5, ngrp = 10,
                              beta_lambda = c(log(6), 0.3), beta_p = qlogis(0.5),
                              sigma_b = 0.7, seed = 11)
@@ -301,7 +301,7 @@ test_that("removal() NUTS RE rejects slopes / both-arm", {
 })
 
 
-# --- areal spatial (ICAR / proper-CAR) on the abundance arm (tulpaObs#51) -----
+# --- areal spatial (ICAR / proper-CAR) on the abundance arm -----
 
 # Rook-adjacency on a side x side grid (one spatial unit per site).
 .rem_grid_adj <- function(side) {
@@ -463,8 +463,8 @@ test_that("removal() bym2 + proper-CAR recover the abundance field + slope (#131
 test_that("removal() temporal()-only field recovers the AR1 field + slope (#114)", {
   skip_on_cran()
   skip_if_fast()
-  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
-  # driver with a single temporal block on the abundance arm (gcol33/tulpaObs#114).
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS driver
+  # with a single temporal block on the abundance arm.
   Tt <- 8L; per_t <- 30L; N <- Tt * per_t
   fcor <- slope <- rep(NA_real_, 8L)
   for (s in seq_len(8L)) {

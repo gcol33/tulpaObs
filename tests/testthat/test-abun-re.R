@@ -1,7 +1,7 @@
-# Site-level random effects on the single-species N-mixture (gcol33/tulpaObs#13).
-# Recovery + 95% CI coverage on the abundance and detection arms, S3 surface,
-# capability gates. NB + RE shares the same AGHQ engine (log_r is the trailing
-# theta coordinate) and gets a separate recovery row.
+# Site-level random effects on the single-species N-mixture. Recovery + 95% CI
+# coverage on the abundance and detection arms, S3 surface, capability gates. NB
+# + RE shares the same AGHQ engine (log_r is the trailing theta coordinate) and
+# gets a separate recovery row.
 
 sim_abun_lambda_re <- function(N, J, ngrp, beta_lambda, beta_p, sigma_b,
                                mixture = "poisson", size = 4, seed = NULL) {
@@ -100,11 +100,11 @@ test_that("S3 surface (coef, vcov, ranef) carries the RE component", {
   re <- ranef(fit)
   expect_false(is.null(re))
 
-  # tulpaObs#19 (RE note): the variance-component pseudo-draw columns
-  # (sigma_*, cor_*) have no analytic joint covariance with the fixed effects
-  # under the marginal-Hessian AGHQ path, so they are NA (uncertainty
-  # explicitly unavailable) rather than a fabricated near-degenerate column.
-  # The per-group BLUP columns carry their real AGHQ marginal posterior SD, so
+  # (RE note): the variance-component pseudo-draw columns (sigma_*, cor_*)
+  # have no analytic joint covariance with the fixed effects under the
+  # marginal-Hessian AGHQ path, so they are NA (uncertainty explicitly
+  # unavailable) rather than a fabricated near-degenerate column. The
+  # per-group BLUP columns carry their real AGHQ marginal posterior SD, so
   # their draws are genuinely dispersed.
   dn <- colnames(fit$draws)
   sig_cols <- grep("^sigma_", dn)
@@ -255,7 +255,7 @@ test_that("sigma + BLUP recovery on the detection (p) arm (multi-seed)", {
 })
 
 
-# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+# --- NUTS + random effect ------------------------------------
 
 test_that("abun() NUTS samples a single intercept RE and recovers sigma + betas", {
   skip_on_cran()

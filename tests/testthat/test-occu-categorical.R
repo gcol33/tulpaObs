@@ -1,6 +1,5 @@
-# Tests for occu_categorical() -- presence + nominal K-class hurdle
-# (gcol33/tulpaObs#106). Bernoulli presence + baseline-category multinomial logit
-# on the class given present.
+# Tests for occu_categorical() -- presence + nominal K-class hurdle. Bernoulli
+# presence + baseline-category multinomial logit on the class given present.
 
 test_that("occu_categorical() constructs", {
   fam <- occu_categorical()

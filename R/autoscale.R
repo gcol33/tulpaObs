@@ -12,7 +12,7 @@
 # Fix: center+scale numeric columns inside the engine before optimization,
 # then transform betas / SEs / draws / Hessians back to the user-facing
 # natural scale before returning. Mirrors glmnet / lme4's internal
-# standardization and is invisible to the user. See gcol33/tulpaObs#9.
+# standardization and is invisible to the user.
 # =============================================================================
 
 

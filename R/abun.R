@@ -390,9 +390,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   # marginal-Hessian path does not surface; their SD is NA, so their draws are
   # left NA rather than a fabricated near-degenerate column that would read as
   # "known almost exactly" (NA-on-unavailable, the same rule as the NUTS-only
-  # sampler diagnostics, tulpaObs#17). ranef() / summary() read the point
-  # estimate and BLUP SE by name; no consumer of the fixed-effect draws touches
-  # these trailing columns.
+  # sampler diagnostics). ranef() / summary() read the point estimate and BLUP SE
+  # by name; no consumer of the fixed-effect draws touches these trailing
+  # columns.
   re_block <- NULL
   if (!is.null(re_post) && length(re_post$design)) {
     re_block <- .tobs_re_param_block(list(design = re_post$design,

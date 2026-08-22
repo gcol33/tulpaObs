@@ -28,16 +28,15 @@ struct DynNutsModel {
     // recruitment vary by transition interval. The flags pick the row stride and
     // whether the per-interval forward score is scattered over the interval rows.
     bool om_sv = false, gm_sv = false;
-    // Optional single intercept RE on the initial-abundance (lambda) arm
-    // (tulpaObs#51, arm 0) or the detection (p) arm (tulpaObs#82, arm 1); see
-    // nuts_re_block.h. The offset shifts eta_lambda or eta_p accordingly; both
-    // reuse the per-site grad the forward kernel already returns
-    // (grad_eta_lambda / grad_eta_p). The block follows the (optional) log r
-    // coord.
+    // Optional single intercept RE on the initial-abundance (lambda) arm (arm
+    // 0) or the detection (p) arm (arm 1); see nuts_re_block.h. The offset
+    // shifts eta_lambda or eta_p accordingly; both reuse the per-site grad the
+    // forward kernel already returns (grad_eta_lambda / grad_eta_p). The block
+    // follows the (optional) log r coord.
     int n_pre_re = 0;
     ReBlock re;
-    // Optional fixed-hyper areal field on the initial-abundance (lambda) arm
-    // (tulpaObs#72): the shared non-centered field z = Linv %*% raw added to
+    // Optional fixed-hyper areal field on the initial-abundance (lambda)
+    // arm: the shared non-centered field z = Linv %*% raw added to
     // eta_lambda (nuts_field_block.h). Field XOR RE (gated upstream).
     FieldBlock field;
 };

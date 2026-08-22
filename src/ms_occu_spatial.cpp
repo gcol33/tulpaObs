@@ -1,9 +1,8 @@
 // ms_occu_spatial.cpp
 // Areal-spatial community single-season occupancy (ms_occu() + shared field;
-// the occupancy analogue of sfMsNMix, tulpaObs#75). A per-species two-state
-// occupancy model with Gaussian community hyperpriors on the per-species
-// coefficients AND one shared ICAR / BYM2 / proper-CAR field on the OCCUPANCY
-// arm:
+// the occupancy analogue of sfMsNMix). A per-species two-state occupancy
+// model with Gaussian community hyperpriors on the per-species coefficients
+// AND one shared ICAR / BYM2 / proper-CAR field on the OCCUPANCY arm:
 //
 //   logit psi_{s,i} = X_psi_i . (mu_psi + b_psi_s) + f_{u(i)}
 //   logit p_{s,i}   = X_p_i   . (mu_p   + b_p_s)

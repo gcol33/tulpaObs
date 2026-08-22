@@ -1,4 +1,4 @@
-# Control threading on the community latent routes (gcol33/tulpaObs#158).
+# Control threading on the community latent routes.
 #
 # `.tobs_validate_control()` admits `max.outer` / `factor.starts` (the
 # `block_coordinate` group) and `n.quad` (`laplace_em`) on both Laplace routes for

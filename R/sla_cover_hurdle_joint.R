@@ -21,9 +21,9 @@
 # ---------------------------------------------------------------------------
 # Per-unit unit-variance field from the joint mode at grid point k.
 #
-# Under the (sigma_occ, sigma_pos) reparam (gcol33/tulpa#18) the stored
-# modes are unit-variance latent z. Each arm scales it by its own
-# `sigma_arm_k`. For BYM2 the z-field is
+# Under the (sigma_occ, sigma_pos) reparam the stored modes are
+# unit-variance latent z. Each arm scales it by its own `sigma_arm_k`.
+# For BYM2 the z-field is
 #     z[s] = sqrt(rho) * scale_factor * phi[s] + sqrt(1 - rho) * theta[s];
 # for ICAR / CAR_proper it is just `phi[s]`.
 #

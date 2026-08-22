@@ -1,6 +1,6 @@
 # =============================================================================
 # test-nuts-convergence-contract.R -- every family that advertises "nuts" must
-# return a per-parameter convergence record (gcol33/tulpaObs#174).
+# return a per-parameter convergence record.
 #
 # `n.chains` is a documented control on every NUTS path, so every NUTS path owes
 # the diagnostic that makes a chain count worth setting. The contract is the one
@@ -207,7 +207,7 @@ test_that("every family advertising nuts has a convergence-contract case", {
 })
 
 
-test_that("every NUTS family reports per-parameter Rhat / ESS (tulpaObs#174)", {
+test_that("every NUTS family reports per-parameter Rhat / ESS", {
   skip_on_cran()
   skip_if_fast()
   for (nm in names(.nconv_cases)) {

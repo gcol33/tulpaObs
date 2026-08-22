@@ -51,7 +51,7 @@ simulate_nmix_bym2 <- function(seed,
   # the fitter fits. This used to be the geometric mean of the EIGENVALUES,
   # matching what the fitter then used -- self-consistent, but at a
   # `sigma_true` / `rho_true` that did not mean the geometric-mean marginal SD
-  # and the structured variance share they are named for (gcol33/tulpaObs#232).
+  # and the structured variance share they are named for.
   scale_factor <- .bym2_scale_from_Q(Q)
 
   # Draw v from scaled ICAR (sum-to-zero), w from N(0, I).

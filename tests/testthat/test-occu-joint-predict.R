@@ -3,8 +3,8 @@
 # assemble (R/occu_cover_predict.R). One state builder serves the occu_cover() /
 # cover() arms and the occupancy-only occu() SVC route, so the arms a fit carries
 # drive which quantities are computed, and every arm's linear predictor picks up
-# that arm's RE BLUP offset (gcol33/tulpaObs#246): the occupancy arm reads the
-# fit's "psi" terms, the detection arm its "p" terms.
+# that arm's RE BLUP offset: the occupancy arm reads the fit's "psi" terms, the
+# detection arm its "p" terms.
 #
 # The bundle-level blocks drive the state builder directly from a hand-built draw
 # bundle, so they are engine-independent -- the same footing as the RE design

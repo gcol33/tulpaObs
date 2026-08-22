@@ -5,10 +5,10 @@
 # Gaussian community covariances (the spOccupancy msPGOcc model), fit by the
 # shared community Laplace-EM (R/community_em.R). Replaces the legacy generic-
 # engine community path, which fit a pooled GLM on the Laplace route and forced
-# one shared species intercept across psi and p on NUTS (gcol33/tulpaObs#30).
-# status = "working" but community-variance recovery for binary detection
-# carries the documented Laplace small-cluster attenuation, so per-species
-# detection recovery is checked loosely.
+# one shared species intercept across psi and p on NUTS. status = "working" but
+# community-variance recovery for binary detection carries the documented
+# Laplace small-cluster attenuation, so per-species detection recovery is
+# checked loosely.
 # =============================================================================
 
 
@@ -119,10 +119,10 @@ test_that("ms_occu() S3 methods work, incl. richness", {
 
 test_that("ms_occu() capability gates: laplace + nuts + nested_laplace", {
   sim <- simulate_ms_occu(N = 30, J = 3, n_species = 4, seed = 1)
-  # nuts is offered (independent per-arm community RE blocks in the sampler;
-  # gcol33/tulpaObs#69); nested_laplace is offered, but only with a shared areal
-  # field on the occupancy formula (gcol33/tulpaObs#75) -- it errors with a
-  # pointer when requested without a field.
+  # nuts is offered (independent per-arm community RE blocks in the sampler);
+  # nested_laplace is offered, but only with a shared areal field on the
+  # occupancy formula -- it errors with a pointer when requested without a
+  # field.
   expect_error(
     tobs(~ 1, data = sim$data, family = ms_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(4)),

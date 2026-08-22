@@ -93,7 +93,7 @@ Rcpp::List cpp_single_ppc(
 // (all-zero), with P(D=0) = psi*(1-p)^n_valid + (1-psi) posterior-averaged over
 // draws. This mirrors the cdf_lower/cdf_upper construction cpp_cover_pit_cdf /
 // cpp_occu_cover_cdf_limits already use; the randomization itself is left to
-// tulpa::tulpa_pit() in R (gcol33/tulpaObs#222), so no RNG runs here.
+// tulpa::tulpa_pit() in R, so no RNG runs here.
 // [[Rcpp::export]]
 Rcpp::List cpp_single_pit_cdf(
     Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det,

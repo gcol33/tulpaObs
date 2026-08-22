@@ -2,9 +2,9 @@
 #
 # The beta-precision phi on the positive arm rides its own outer-grid axis
 # (control$phi.grid). control$prior.phi forwards a regularizing hyperprior to
-# tulpa's prior_phi (gcol33/tulpa#139 + tulpaObs side), so the phi axis is
-# weighted by the chosen density instead of an implicit flat prior. A sharp
-# half-normal on the precision pulls the posterior phi_pos below the flat fit.
+# tulpa's prior_phi ( + tulpaObs side), so the phi axis is weighted by the
+# chosen density instead of an implicit flat prior. A sharp half-normal on the
+# precision pulls the posterior phi_pos below the flat fit.
 
 simulate_beta_cover_pp <- function(N = 240, n_s = 25, sigma = 0.5, rho = 0.7,
                                    phi = 30, beta_occ = c(-0.3, 0.7),

@@ -1,10 +1,10 @@
-# Soft guard for the cover()/occu_cover() bar-vs-spatial-field papercut
-# (gcol33/tulpaObs#62). A bare `| / ||` lme4 bar in a cover formula is a
-# legitimate random effect, NOT a spatial field. RE bars must keep fitting as REs
-# (behavior unchanged). The guard only INFORMS (message, not warning/error) in the
-# strong-signal confusion case: the bar's grouping factor is also an areal term's
-# graph-node group_var. These run at parse level (.encode_cover_terms /
-# .occu_cover_spatial_fields) -- no model fit, so they run always.
+# Soft guard for the cover()/occu_cover() bar-vs-spatial-field papercut. A bare `|
+# / ||` lme4 bar in a cover formula is a legitimate random effect, NOT a spatial
+# field. RE bars must keep fitting as REs (behavior unchanged). The guard only
+# INFORMS (message, not warning/error) in the strong-signal confusion case: the
+# bar's grouping factor is also an areal term's graph-node group_var. These run at
+# parse level (.encode_cover_terms / .occu_cover_spatial_fields) -- no model fit,
+# so they run always.
 
 # Small chain adjacency on `n` nodes (self-contained).
 .guard_chain_adj <- function(n) {

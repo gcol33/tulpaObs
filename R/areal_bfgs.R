@@ -1,6 +1,6 @@
 # =============================================================================
 # areal_bfgs.R - shared nested-Laplace driver for areal fields on a gradient-only
-# family marginal (gcol33/tulpaObs#51).
+# family marginal.
 #
 # Families whose marginal exposes an analytic gradient but NO analytic per-site
 # Hessian (the open N-mixture dyn_abun, the false-positive occupancy fp_occu)
@@ -24,13 +24,12 @@
 .areal_Q <- function(adj, rho) { deg <- rowSums(adj != 0); diag(deg) - rho * adj }
 
 # Inverse Cholesky of the FIXED field precision tau Q(rho) for the non-centered
-# areal-field NUTS path (gcol33/tulpaObs#72): z = Linv %*% raw, raw ~ N(0, I) has
-# covariance (tau Q(rho))^{-1}. A small ridge proper-ises an intrinsic ICAR
-# (proper-CAR is already full rank). Returns the n x n inverse-Cholesky matrix
-# (the field block passes it to the C++ sampler as field_Linv); errors if the
-# precision is not positive definite. Single source of truth shared by every
-# count / occupancy family's areal NUTS fitter (abun, removal, distance, fp_occu,
-# dyn_abun).
+# areal-field NUTS path: z = Linv %*% raw, raw ~ N(0, I) has covariance (tau
+# Q(rho))^{-1}. A small ridge proper-ises an intrinsic ICAR (proper-CAR is
+# already full rank). Returns the n x n inverse-Cholesky matrix (the field block
+# passes it to the C++ sampler as field_Linv); errors if the precision is not
+# positive definite. Single source of truth shared by every count / occupancy
+# family's areal NUTS fitter (abun, removal, distance, fp_occu, dyn_abun).
 .tobs_field_linv <- function(adj, tau, rho, n, ridge = 1e-4) {
   Q  <- .areal_Q(adj, rho)
   Qr <- tau * Q + diag(ridge * tau, n)
@@ -40,19 +39,18 @@
   backsolve(L, diag(n))                                # (L)^{-1}; z = Linv %*% raw
 }
 
-# Whitened-field loading L for the non-centered areal-field NUTS path
-# (gcol33/tulpaObs#71): z = L %*% raw, raw ~ N(0, I), Cov(z) = (tau Q(rho))^{+}.
-# `type` selects the field. A proper-CAR field is full rank -> the square inverse
-# Cholesky (n x n; z covers the whole space). An intrinsic icar / bym2 field has
-# the constant vector in the precision null space, so a square whitening leaves a
-# flat field-mean direction that maxes the NUTS tree depth; the sum-to-zero
-# reparameterisation drops that direction by keeping only the non-null eigenpairs
-# of tau Q -> L is n x (n - 1), z is automatically centred (sum z = 0). The
-# eigen-loading L = U_+ diag(1 / sqrt(tau lambda_+)) satisfies L L' = (tau Q)^{+}
-# restricted to the sum-to-zero subspace. bym2 (Riebler 2016) scales its
-# structured ICAR block by sigma sqrt(rho / scale_factor) and adds an
-# unstructured iid block sigma sqrt(1 - rho) (full-rank, square); the structured
-# block is the same eigen-loading.
+# Whitened-field loading L for the non-centered areal-field NUTS path: z = L %*%
+# raw, raw ~ N(0, I), Cov(z) = (tau Q(rho))^{+}. `type` selects the field. A
+# proper-CAR field is full rank -> the square inverse Cholesky (n x n; z covers
+# the whole space). An intrinsic icar / bym2 field has the constant vector in the
+# precision null space, so a square whitening leaves a flat field-mean direction
+# that maxes the NUTS tree depth; the sum-to-zero reparameterisation drops that
+# direction by keeping only the non-null eigenpairs of tau Q -> L is n x (n - 1),
+# z is automatically centred (sum z = 0). The eigen-loading L = U_+ diag(1 /
+# sqrt(tau lambda_+)) satisfies L L' = (tau Q)^{+} restricted to the sum-to-zero
+# subspace. bym2 (Riebler 2016) scales its structured ICAR block by sigma
+# sqrt(rho / scale_factor) and adds an unstructured iid block sigma sqrt(1 - rho)
+# (full-rank, square); the structured block is the same eigen-loading.
 .tobs_field_load <- function(adj, type, tau, rho, n, ridge = 1e-4, tol = 1e-8) {
   if (identical(type, "car_proper"))
     return(.tobs_field_linv(adj, tau, rho, n, ridge))
@@ -66,13 +64,13 @@
   U %*% diag(1 / sqrt(d), nrow = length(d))             # n x (n - 1)
 }
 
-# Whitened-field loading + fixed hyper for a non-centered areal-field NUTS path
-# (gcol33/tulpaObs#71, #113). Single source of truth shared by every observation-
-# family spatial NUTS fitter (abun / ms_abun / removal / distance / fp_occu /
-# dyn_abun), so the intrinsic icar / bym2 sum-to-zero reparameterisation is
-# derived once. The fixed precision (tau, rho) and, for bym2, the marginal SD
-# sigma are supplied by the caller from its own nested-Laplace warm-start (the
-# families carry them under different names). Returns:
+# Whitened-field loading + fixed hyper for a non-centered areal-field NUTS path.
+# Single source of truth shared by every observation- family spatial NUTS fitter
+# (abun / ms_abun / removal / distance / fp_occu / dyn_abun), so the intrinsic
+# icar / bym2 sum-to-zero reparameterisation is derived once. The fixed precision
+# (tau, rho) and, for bym2, the marginal SD sigma are supplied by the caller from
+# its own nested-Laplace warm-start (the families carry them under different
+# names). Returns:
 #   * field_load: the n x n_raw loading L (z = L %*% raw, raw ~ N(0, I_{n_raw}))
 #   * tau, rho:   the fixed precision hyperparameters (tau = NA for bym2, whose
 #                 amplitude rides sigma inside the two-block loading)
@@ -100,16 +98,16 @@
   list(field_load = L, tau = tau, rho = rho, n_raw = ncol(L))
 }
 
-# Whitened-field loading + fixed hyper for a non-centered TEMPORAL-field NUTS path
-# (gcol33/tulpaObs#114). The temporal analogue of `.tobs_nuts_field_loading`: the
-# fixed precision is tau Q(rho) with Q the ar1 / rw1 / rw2 / iid structure matrix
+# Whitened-field loading + fixed hyper for a non-centered TEMPORAL-field NUTS
+# path. The temporal analogue of `.tobs_nuts_field_loading`: the fixed precision
+# is tau Q(rho) with Q the ar1 / rw1 / rw2 / iid structure matrix
 # (`.tobs_temporal_Q`), and the whitened loading is the reduced eigen-loading over
-# the non-null eigenpairs of tau Q (z = L %*% raw, raw ~ N(0, I), Cov(z) =
-# (tau Q)^{+}). Full-rank ar1 / iid keep all T eigenpairs (square L, n_raw = T);
-# rank-deficient rw1 / rw2 drop the 1 / 2 null directions (sum-to-zero, n_raw =
-# T - 1 / T - 2) exactly like the intrinsic-icar areal case. Uniform across all
-# four types, so the C++ field block (which only sees an n_field_units x n_raw
-# loading + a per-site field_map) needs no temporal-specific branch.
+# the non-null eigenpairs of tau Q (z = L %*% raw, raw ~ N(0, I), Cov(z) = (tau
+# Q)^{+}). Full-rank ar1 / iid keep all T eigenpairs (square L, n_raw = T);
+# rank-deficient rw1 / rw2 drop the 1 / 2 null directions (sum-to-zero, n_raw = T
+# - 1 / T - 2) exactly like the intrinsic-icar areal case. Uniform across all four
+# types, so the C++ field block (which only sees an n_field_units x n_raw loading
+# + a per-site field_map) needs no temporal-specific branch.
 .tobs_nuts_temporal_loading <- function(type, T, tau = NA_real_, rho = NA_real_,
                                         tol = 1e-8) {
   tau <- max(tau, 1e-3)
@@ -168,7 +166,7 @@
     constrain = if (kind == "icar") rep(TRUE, n_sp) else rep(FALSE, n_sp),
     to_phi = function(fp, cell) fp,
     # Physical field hyperparameters per cell, for fixing the precision tau Q(rho)
-    # on the NUTS path (gcol33/tulpaObs#72). ICAR pins rho = 1.
+    # on the NUTS path. ICAR pins rho = 1.
     type = if (kind == "icar") "icar" else "car_proper",
     to_hyper = function(cell) c(tau = cell$tau, rho = cell$rho)
   )
@@ -233,24 +231,24 @@
 # field_K); a cell is a tuple of per-block cells; the outer grid is the Cartesian
 # product of the blocks' grids. A length-1 list is numerically identical to the
 # single-block kernel. CCD outer integration applies only to the single-block
-# case; multi-block uses the product grid.
-# Gate a temporal() term on a count family (removal / distance / fp_occu /
-# dyn_abun). A temporal AR1/RW1/RW2/iid field composes with the areal field on the
-# arm under method = "laplace" / "nested_laplace" via the shared areal-BFGS driver
-# (gcol33/tulpaObs#78). A temporal term WITHOUT a spatial field, or under NUTS, is
-# not wired; those raise a clear error here so the family dispatch can call the
-# spatial fitter unconditionally once the gate passes.
+# case; multi-block uses the product grid. Gate a temporal() term on a count
+# family (removal / distance / fp_occu / dyn_abun). A temporal AR1/RW1/RW2/iid
+# field composes with the areal field on the arm under method = "laplace" /
+# "nested_laplace" via the shared areal-BFGS driver. A temporal term WITHOUT a
+# spatial field, or under NUTS, is not wired; those raise a clear error here so
+# the family dispatch can call the spatial fitter unconditionally once the gate
+# passes.
 .tobs_check_count_temporal <- function(temporal, spatial, method, family, arm,
                                        allow_temporal_only = FALSE,
                                        allow_nuts_temporal = FALSE) {
   # NUTS + temporal is wired only where a fixed-hyper non-centered temporal field
-  # rides the family's NUTS field block (dyn_abun; gcol33/tulpaObs#114). It runs
-  # temporal-only (no simultaneous areal field) on that path.
+  # rides the family's NUTS field block (dyn_abun). It runs temporal-only (no
+  # simultaneous areal field) on that path.
   if (identical(method, "nuts") && isTRUE(allow_nuts_temporal)) {
     if (!is.null(spatial))
       stop(sprintf(paste0("%s() NUTS supports a temporal() field on its own (no ",
                           "simultaneous areal field); combine areal + temporal ",
-                          "under method = \"nested_laplace\". (tulpaObs#114)"),
+                          "under method = \"nested_laplace\"."),
                    family), call. = FALSE)
     return(invisible(TRUE))
   }
@@ -258,14 +256,14 @@
     stop(sprintf(paste0("%s() does not support a temporal() term under method = ",
                         "\"nuts\"; the temporal field composes with the areal ",
                         "field on the %s arm under method = \"nested_laplace\". ",
-                        "(tulpaObs#78)"), family, arm), call. = FALSE)
-  # A temporal-only field (no areal term) is wired on families whose spatial
-  # fitter builds the areal-BFGS block list from either term (gcol33/tulpaObs#114).
+                        ""), family, arm), call. = FALSE)
+  # A temporal-only field (no areal term) is wired on families whose spatial fitter
+  # builds the areal-BFGS block list from either term.
   if (is.null(spatial) && !isTRUE(allow_temporal_only))
     stop(sprintf(paste0("%s() supports a temporal() term composed WITH an areal ",
                         "field on the %s arm (e.g. icar()/car_proper()/bym2() + ",
                         "temporal()) under method = \"nested_laplace\"; a temporal ",
-                        "term on its own is not yet wired. (tulpaObs#78)"),
+                        "term on its own is not yet wired."),
                  family, arm), call. = FALSE)
   invisible(TRUE)
 }
@@ -379,7 +377,7 @@
   if (!is.null(temporal$group_idx))
     stop(sprintf(paste0("%s() temporal + areal spatial supports a single temporal ",
                         "field; grouped temporal( , group = ) is not wired on this ",
-                        "path. (tulpaObs#78)"), family), call. = FALSE)
+                        "path."), family), call. = FALSE)
   ti <- as.integer(temporal$time_idx)
   if (length(ti) != n_sites)
     stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
@@ -392,15 +390,15 @@
 }
 
 # Assemble the latent field block(s) an observation-family areal-BFGS fit passes to
-# the driver (gcol33/tulpaObs#136, #144). The shape is identical across the family
-# wrappers: the areal field is block 1 and any temporal term block 2, with any
-# continuous NNGP varying-coefficient surfaces (`svc`, one block per `indices`
-# entry) appended after them. A fit carrying only one of the three runs that block
-# alone. Returns a single block object (areal-only) or a list of blocks, matching
-# the driver's `if (!is.null(field$n_field)) list(field) else field` contract.
-# `family` labels the blocks for reporting; `map` is site -> field-node (identity by
-# default, group_var incidence otherwise); `X_svc` is the design matrix of the arm
-# the varying coefficients load on.
+# the driver. The shape is identical across the family wrappers: the areal field is
+# block 1 and any temporal term block 2, with any continuous NNGP
+# varying-coefficient surfaces (`svc`, one block per `indices` entry) appended after
+# them. A fit carrying only one of the three runs that block alone. Returns a single
+# block object (areal-only) or a list of blocks, matching the driver's `if
+# (!is.null(field$n_field)) list(field) else field` contract. `family` labels the
+# blocks for reporting; `map` is site -> field-node (identity by default, group_var
+# incidence otherwise); `X_svc` is the design matrix of the arm the varying
+# coefficients load on.
 .tobs_build_field_spec <- function(spatial, temporal, family, n_sites,
                                    map = seq_len(n_sites), svc = NULL,
                                    X_svc = NULL) {
@@ -414,14 +412,14 @@
   if (length(blocks) == 1L && !is.null(spatial)) blocks[[1L]] else blocks
 }
 
-# Attach the driver's marginalised field results to an observation-family fit
-# (gcol33/tulpaObs#136, #144). Byte-identical across the family wrappers apart from
-# the non-detection arm label (`arm`). The driver returns per-block posterior-mean
-# fields in block order, which `.tobs_build_field_spec()` fixes as areal, temporal,
-# then one block per continuous varying coefficient; each present block is reported
-# under its own slot (`spatial_field` loading on `arm`, or the detection arm when
-# `det_arm`; `temporal_field`; `svc_field` / `svc_hyper`, the last named as the NUTS
-# and single-season Laplace paths name them -- a bare vector for one varying
+# Attach the driver's marginalised field results to an observation-family fit.
+# Byte-identical across the family wrappers apart from the non-detection arm label
+# (`arm`). The driver returns per-block posterior-mean fields in block order, which
+# `.tobs_build_field_spec()` fixes as areal, temporal, then one block per continuous
+# varying coefficient; each present block is reported under its own slot
+# (`spatial_field` loading on `arm`, or the detection arm when `det_arm`;
+# `temporal_field`; `svc_field` / `svc_hyper`, the last named as the NUTS and
+# single-season Laplace paths name them -- a bare vector for one varying
 # coefficient, an n_sites x n_svc matrix otherwise). `pareto_k = FALSE` for the
 # wrapper (removal) that does not surface the diagnostic.
 .tobs_attach_field_results <- function(fit, res, det_arm, temporal, temporal_only,
@@ -450,8 +448,8 @@
     surf <- matrix(unlist(fields[b + seq_len(k)]), ncol = k)
     fit$svc <- svc
     # Resolved design-column positions, so a name-selected term reports the same
-    # slot a position-selected one does (gcol33/tulpaObs#146). `X_svc` is the arm
-    # design the blocks were built against, already validated by the builder.
+    # slot a position-selected one does. `X_svc` is the arm design the blocks
+    # were built against, already validated by the builder.
     fit$svc_indices <- if (is.null(X_svc)) as.integer(svc$indices)
                        else .tobs_svc_columns(svc, X_svc, family, arm)
     fit$svc_coefficients <- svc$coefficients
@@ -566,11 +564,11 @@
       V <- V + wk[j] * (res[[ik[j]]]$cov + outer(dk, dk))
     }
     logm <- vapply(ik, function(k) res[[k]]$logm, numeric(1))
-    # Posterior-mean field + field hyperparameters, per block (tau / rho or
-    # sigma / rho), for reporting and for fixing the field precision on the NUTS
-    # path (gcol33/tulpaObs#72). Block 1 is the spatial field (kept on the legacy
-    # scalar slots `field_mean` / `hyper`); a temporal block 2 is reported under
-    # `temporal_field` / `temporal_hyper`.
+    # Posterior-mean field + field hyperparameters, per block (tau / rho or sigma
+    # / rho), for reporting and for fixing the field precision on the NUTS path.
+    # Block 1 is the spatial field (kept on the legacy scalar slots `field_mean`
+    # / `hyper`); a temporal block 2 is reported under `temporal_field` /
+    # `temporal_hyper`.
     n_sp_b <- vapply(blocks, function(b) as.integer(b$n_sp), 0L)
     field_means <- lapply(seq_len(n_blk), function(b) {
       phis <- t(vapply(ik, function(k) res[[k]]$phi[[b]], numeric(n_sp_b[b])))
@@ -595,15 +593,15 @@
     }
     # Full per-block posterior-mean fields + hyperparameters, in block order, for
     # a multi-field consumer (an intercept field plus weighted SVC fields, e.g.
-    # svcTIntPGOcc; gcol33/tulpaObs#122). Block 1 stays the legacy scalar slots.
+    # svcTIntPGOcc). Block 1 stays the legacy scalar slots.
     out$field_means <- field_means
     out$hyper_means <- hyper_means
     out
   }
 
   # ---- outer integration: opt-in mode-centred CCD (single-block only,
-  # gcol33/tulpaObs#60), silently declining to the fixed tensor grid when the
-  # outer curvature is ill-conditioned. A multi-block fit uses the product grid.
+  # ), silently declining to the fixed tensor grid when the outer curvature is
+  # ill-conditioned. A multi-block fit uses the product grid.
   if (n_blk == 1L && identical(integration, "ccd") && !is.null(field$axes)) {
     eval_logm <- function(theta_phys) {
       r <- solve_cell(list(field$make_cell(theta_phys)))
@@ -668,7 +666,7 @@
   if (spatial$type %in% c("spde", "gp", "multiscale_gp"))
     stop(sprintf(paste0("%s() areal spatial supports icar() / car_proper() / bym2() ",
                         "under method = \"nested_laplace\"; the '%s' field is not yet ",
-                        "wired for %s. (tulpaObs#51)"), family, spatial$type, family),
+                        "wired for %s."), family, spatial$type, family),
          call. = FALSE)
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf("%s() areal spatial supports icar() / car_proper() / bym2(); got '%s'.",
@@ -690,11 +688,11 @@
 
 # Resolve a LIST of areal-BFGS field blocks from a spatial spec: one block for a
 # plain areal term, or an intercept block plus one weighted (varying-coefficient)
-# block per bar covariate for a `spatial(~ 1 + w || node, graph)` bar (svcTIntPGOcc,
-# gcol33/tulpaObs#122). The weighted blocks are icar-only in v1. Returns
-# `list(blocks, labels)`; `labels` is "intercept" or the covariate name per block,
-# in block order (intercept first). A plain term is byte-identical to the
-# single-block `.tobs_areal_field_spec()` path.
+# block per bar covariate for a `spatial(~ 1 + w || node, graph)` bar
+# (svcTIntPGOcc). The weighted blocks are icar-only in v1. Returns `list(blocks,
+# labels)`; `labels` is "intercept" or the covariate name per block, in block order
+# (intercept first). A plain term is byte-identical to the single-block
+# `.tobs_areal_field_spec()` path.
 .tobs_areal_field_blocks <- function(spatial, n_sites, family, data) {
   is_multi <- isTRUE(spatial$is_bar) || isTRUE(spatial$is_multifield)
   if (!is_multi) {
@@ -704,8 +702,8 @@
   }
   if (!identical(spatial$type, "icar"))
     stop(sprintf(paste0("%s() varying-coefficient (SVC) areal field supports icar() ",
-                        "only in v1 (car_proper / bym2 are follow-ups; ",
-                        "gcol33/tulpaObs#122)."), family), call. = FALSE)
+                        "only in v1 (car_proper / bym2 are follow-ups)."),
+                 family), call. = FALSE)
   # A collected multifield wrapping a single bar spec still needs expanding into
   # its intercept + weighted-trend terms; a plain list of areal terms is used as is.
   terms <- if (isTRUE(spatial$is_bar)) .tobs_expand_spatial_bar(spatial, data)

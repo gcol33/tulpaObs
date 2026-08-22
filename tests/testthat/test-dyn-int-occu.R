@@ -1,6 +1,6 @@
 # =============================================================================
 # test-dyn-int-occu.R - multi-season integrated occupancy (dyn_int_occu();
-# spOccupancy tIntPGOcc; gcol33/tulpaObs#122).
+# spOccupancy tIntPGOcc).
 #
 # The product of dynamic occupancy (a multi-season HMM: psi1, colonization gamma,
 # extinction eps) and integrated occupancy (a per-season emission pooling several

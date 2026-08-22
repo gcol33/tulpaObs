@@ -151,7 +151,7 @@ variance over species -- and settles near its lower boundary the same way at
 few species, taking the \code{mu_log_r} interval with it: at 8 and 36 species with
 a simulated \code{sigma_logr = 0.5}, \code{n_quad = 3} and \code{n_quad_scalar = 3}, fits
 recovering \code{sigma_log_r >= 0.30} covered \code{mu_log_r} 33/34 while those below
-covered 2/5 (gcol33/tulpaObs#235).
+covered 2/5.
 
 What the penalty reaches on this block appears to be the boundary rather
 than the calibration. Measured on 20 seeds of that fixture at 8 species with

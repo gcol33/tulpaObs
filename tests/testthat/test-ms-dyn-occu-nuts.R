@@ -1,6 +1,6 @@
 # =============================================================================
 # test-ms-dyn-occu-nuts.R - community (multispecies) DYNAMIC occupancy NUTS
-# (ms_dyn_occu(), method = "nuts"; tulpaObs#115).
+# (ms_dyn_occu(), method = "nuts").
 #
 # The sampler draws the EXACT joint posterior -- community means, per-species
 # first-season / detection deviations, the two INDEPENDENT per-arm community
@@ -127,8 +127,8 @@ test_that("ms_dyn_occu NUTS recovers community means", {
 })
 
 test_that("ms_dyn_occu NUTS community-mean 95% CIs cover at the nominal rate", {
-  # gcol33/tulpaObs#139: raise the single-seed / directional check to a 20-seed
-  # CI-coverage study on the community means + shared gamma/eps globals.
+  # raise the single-seed / directional check to a 20-seed CI-coverage study
+  # on the community means + shared gamma/eps globals.
   skip_on_cran()
   skip_if_fast()
   truth <- c("psi1_(Intercept)"  = 0.3,

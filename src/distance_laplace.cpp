@@ -41,11 +41,11 @@ using tulpaObs::compute_distance_site;
 constexpr double kMinNbSize = 1e-4;
 
 // One per-site kernel pass at the current (beta, r); fills `out` and returns the
-// total marginal log-likelihood. `comb_table` / `scratch` (gcol33/tulpaObs#167)
-// are built ONCE by the caller outside the Newton loop and threaded through
-// every sweep, so the per-N combinatorial lgamma table and the per-site
-// derivative-vector heap allocations are not repeated on every one of the
-// dozens of Newton / line-search sweeps a fit runs.
+// total marginal log-likelihood. `comb_table` / `scratch` are built ONCE by the
+// caller outside the Newton loop and threaded through every sweep, so the per-N
+// combinatorial lgamma table and the per-site derivative-vector heap allocations
+// are not repeated on every one of the dozens of Newton / line-search sweeps a
+// fit runs.
 inline double dist_sweep(const Rcpp::IntegerMatrix& y,
                          const Map<MatrixXd>& Xl, const Map<MatrixXd>& Xs,
                          const VectorXd& beta_lam, const VectorXd& beta_sig,
@@ -161,7 +161,7 @@ Rcpp::List cpp_distance_laplace_fixed(
     double eta_b_init,                   // log-shape init (hazard only)
     int K_max, int max_iter, double tol, bool verbose,
     bool nb, double log_r_init, double theta_max,
-    int headroom = -1                    // gcol33/tulpaObs#168: per-site K_hi cap
+    int headroom = -1                    // per-site K_hi cap
 ) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     const int p_lam = X_lambda_R.ncol(), p_sig = X_sigma_R.ncol();
@@ -188,10 +188,10 @@ Rcpp::List cpp_distance_laplace_fixed(
     double r = nb ? std::exp(theta) : std::numeric_limits<double>::infinity();
 
     std::vector<DistSiteResult> st(n_sites);
-    // Built once for the whole fit (gcol33/tulpaObs#167): K_max is fixed across
-    // every Newton / line-search sweep below, so the combinatorial table and the
-    // per-site derivative-vector scratch are shared rather than rebuilt on each
-    // of the dozens of sweeps a fit runs.
+    // Built once for the whole fit: K_max is fixed across every Newton /
+    // line-search sweep below, so the combinatorial table and the per-site
+    // derivative-vector scratch are shared rather than rebuilt on each of the
+    // dozens of sweeps a fit runs.
     const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
     tulpaObs::DistScratch scratch;
 
@@ -356,7 +356,7 @@ Rcpp::List cpp_distance_total_log_lik(
     double eta_b,
     SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
     int key, int K_max, double r,
-    int headroom = -1                    // gcol33/tulpaObs#168: per-site K_hi cap
+    int headroom = -1                    // per-site K_hi cap
 ) {
     const int n_sites = y.nrow(), n_bins = y.ncol();
     if ((int)eta_lambda.size() != n_sites) Rcpp::stop("length(eta_lambda) must equal nrow(y).");
@@ -405,18 +405,18 @@ Rcpp::List cpp_distance_total_log_lik(
 }
 
 
-// Per-site sweep for the areal-spatial distance fit (gcol33/tulpaObs#51): returns,
-// for each site, the abundance-arm marginal moments and the half-normal detection
-// arm's gradient / Fisher / N-coupling, all from compute_distance_site. The R
-// inner Newton assembles the joint (beta_lambda, beta_sigma, z) gradient and the
-// marginal observed-information Hessian (per-site eta-space block
-// diag(info_lam, info_sig) - var_N v v', v = (score_wt_lambda, vN_d), the form
-// distance_kernel.h documents) scattered through X_lambda / X_sigma + the field
-// loading, plus the CAR prior. `key` selects the detection key (0 half-normal,
-// 1 hazard-rate); under the hazard key the scalar log-shape `eta_b` is a global
-// coordinate and the sweep returns the summed shape score grad_eta_b (and its
-// summed Fisher information info_b) so the driver can fold it into the fixed
-// block. Poisson or NB (the NB size r is the outer-grid axis).
+// Per-site sweep for the areal-spatial distance fit: returns, for each site, the
+// abundance-arm marginal moments and the half-normal detection arm's gradient /
+// Fisher / N-coupling, all from compute_distance_site. The R inner Newton
+// assembles the joint (beta_lambda, beta_sigma, z) gradient and the marginal
+// observed-information Hessian (per-site eta-space block diag(info_lam, info_sig)
+// - var_N v v', v = (score_wt_lambda, vN_d), the form distance_kernel.h documents)
+// scattered through X_lambda / X_sigma + the field loading, plus the CAR prior.
+// `key` selects the detection key (0 half-normal, 1 hazard-rate); under the hazard
+// key the scalar log-shape `eta_b` is a global coordinate and the sweep returns
+// the summed shape score grad_eta_b (and its summed Fisher information info_b) so
+// the driver can fold it into the fixed block. Poisson or NB (the NB size r is the
+// outer-grid axis).
 // [[Rcpp::export]]
 Rcpp::List cpp_distance_site_sweep(
     Rcpp::IntegerMatrix y_bins,
@@ -424,7 +424,7 @@ Rcpp::List cpp_distance_site_sweep(
     SEXP quad_xptr,                      // per-fit quadrature (cpp_distance_build_quad)
     int K_max, bool nb, double r, int key = 0, double eta_b = 0.0,
     bool value_only = false,
-    int headroom = -1                    // gcol33/tulpaObs#168: per-site K_hi cap
+    int headroom = -1                    // per-site K_hi cap
 ) {
     const int n_sites = y_bins.nrow(), n_bins = y_bins.ncol();
     if (eta_lambda.size() != n_sites || eta_sigma.size() != n_sites)
@@ -439,16 +439,15 @@ Rcpp::List cpp_distance_site_sweep(
     Rcpp::NumericVector logL(n_sites);
     std::vector<int> yb(n_bins);
     int n_inadmissible = 0;
-    // Built once per sweep call (gcol33/tulpaObs#167), not once per site: the
-    // combinatorial table only depends on K_max, and the scratch vectors are
-    // resized (not reallocated) once they reach the widest site's n_bins/K_grid.
+    // Built once per sweep call, not once per site: the combinatorial table only
+    // depends on K_max, and the scratch vectors are resized (not reallocated)
+    // once they reach the widest site's n_bins/K_grid.
     const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
     tulpaObs::DistScratch scratch;
 
     // `value_only`: the mode-adaptation backtracking line search (ll_cell)
     // reads only log_lik, so skip building the other 10 per-site vectors and
-    // the compiled kernel's derivative computation behind them
-    // (gcol33/tulpaObs#164).
+    // the compiled kernel's derivative computation behind them.
     if (value_only) {
         for (int s = 0; s < n_sites; ++s) {
             for (int b = 0; b < n_bins; ++b) yb[b] = y_bins(s, b);

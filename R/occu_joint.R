@@ -1,6 +1,7 @@
 # =============================================================================
-# occu_joint.R - single-arm occupancy nested-Laplace path for the
-# standalone occu() varying-coefficient (SVC) spatial bar (gcol33/tulpaObs#81).
+# occu_joint.R
+# - single-arm occupancy nested-Laplace path for the standalone occu()
+# varying-coefficient (SVC) spatial bar.
 #
 # This is occu_cover()'s joint direct-grid engine (occu_cover_joint.R)
 # with the cover (positive) arm removed: the occupancy (psi) + detection (p)
@@ -206,7 +207,7 @@
   #
   # The `1 / sigma^2` translation drops the auto-grid marker, so it is re-applied
   # on the tau vector every block receives; the source vector's own marker is the
-  # provenance (gcol33/tulpaObs#186, #190).
+  # provenance.
   sigma_grid <- dots$sigma.grid %||% .tobs_default_occu_joint_sigma_grid()
   tau_grid   <- .tobs_mark_auto(1.0 / (as.numeric(sigma_grid)^2),
                                 tulpa::is_auto_grid(sigma_grid))
@@ -304,10 +305,10 @@
       # diagnose.draws is the precision knob (k.samples is the legacy alias); the
       # outer Pareto-k is scored ONCE over this many importance draws.
       k_samples = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
-      # Bootstrap outer Pareto-k uncertainty (gcol33/tulpa#127): SE / 95% CI /
-      # band_confident from resampling the raw log-ratios (NO new solves). Raise
-      # diagnose.draws, not k.bootstrap, for a tighter k. k.tail.points (NULL =
-      # automatic PSIS rule) is an expert control; k.conf.bands the band boundaries.
+      # Bootstrap outer Pareto-k uncertainty: SE / 95% CI / band_confident from
+      # resampling the raw log-ratios (NO new solves). Raise diagnose.draws, not
+      # k.bootstrap, for a tighter k. k.tail.points (NULL = automatic PSIS rule) is
+      # an expert control; k.conf.bands the band boundaries.
       k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
       k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
       k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),

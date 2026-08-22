@@ -70,7 +70,7 @@ Rcpp::List cpp_removal_total_log_lik(
         tulpaObs::count_group_by_site(site_idx, n_sites);
 
     // Field set, per-site scatter and returned list shared with the N-mixture
-    // sweep (nmix_kernel.h, gcol33/tulpaObs#173).
+    // sweep (nmix_kernel.h).
     tulpaObs::CountSweepAccum acc(n_sites, n_obs);
 
     for (int s = 0; s < n_sites; ++s) {

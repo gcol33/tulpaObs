@@ -1,7 +1,7 @@
 # =============================================================================
 # test-ms-count-pg-gibbs.R - Polya-Gamma Gibbs for the community Bernoulli /
 # binomial GLMM (jsdm() and ms_count(response="binomial") method = "pg_gibbs";
-# spOccupancy msPGOcc-family / community svcPGBinom; tulpaObs#126).
+# spOccupancy msPGOcc-family / community svcPGBinom).
 #
 # The community logistic GLMM has no latent state, so the PG sampler is the pure
 # per-species conjugate coefficient update + conjugate community mean +

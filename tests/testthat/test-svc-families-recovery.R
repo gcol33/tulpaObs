@@ -1,5 +1,5 @@
 # Continuous NNGP varying coefficients (svc()) on the observation families'
-# Laplace backends (gcol33/tulpaObs#144).
+# Laplace backends.
 #
 # svc() surfaces are latent field blocks on the state arm, so every family whose
 # marginal hands the shared areal-BFGS driver a per-site eta gradient carries them
@@ -10,10 +10,10 @@
 # The recovery target is the SURFACE (correlation against truth) plus the
 # coefficients, not the hyperparameters: the marginal SD and range sit on the GP
 # ridge and trade off against each other at these site counts (the same reason
-# gcol33/tulpaObs#119 asserts divergences / phi / sigma on the NUTS route rather
-# than surface correlation -- each backend asserts what its own bottleneck leaves
-# identified). Count families are far more informative per site than binary
-# occupancy ones, so their tolerances differ by design.
+# asserts divergences / phi / sigma on the NUTS route rather than surface
+# correlation -- each backend asserts what its own bottleneck leaves identified).
+# Count families are far more informative per site than binary occupancy ones, so
+# their tolerances differ by design.
 
 # One smooth coordinate surface, shared by every fit below.
 .svc_fam_truth <- function(n, seed) {

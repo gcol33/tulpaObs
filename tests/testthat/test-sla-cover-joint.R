@@ -296,7 +296,7 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
     expect_equal(length(fit_joint$skew_pos), length(fit_sep$skew_pos))
 
     # Two separate claims, measured separately over seeds 105-114 on the
-    # grid pinned above (gcol33/tulpaObs#196).
+    # grid pinned above.
     #
     # (a) Magnitude. Both paths' cover-arm skewness stays small: measured
     #     maxima 0.0757 (joint) and 0.0633 (separate) across the ten seeds,

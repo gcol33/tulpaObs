@@ -1,18 +1,17 @@
 # =============================================================================
 # test-occu-cover-nl-ic.R - the grid-integrated occu_cover() information criteria
-# score every random effect the fit carries (gcol33/tulpaObs#215).
+# score every random effect the fit carries.
 #
 # A `(1 | g)` on the detection / positive-cover formula rides the nested-Laplace
-# joint engine as an iid prior block (gcol33/tulpaObs#102, #103), and one on the
-# occurrence formula alongside the shared field does the same on the occupancy
-# arm (gcol33/tulpaObs#56). .tobs_joint_draws() samples every such latent from
-# the same outer-grid posterior as the coefficients, so they reach the criteria
-# as offsets by the pathway the sampled route already uses
-# (gcol33/tulpaObs#211): an observation-arm term enters the shared `Arms`
-# predictor view per visit, an occupancy-arm term joins the per-site occupancy
-# offset the shared field loads. The pointwise log-likelihood, the posterior
-# predictive check and the PIT / LOO-PIT all read both.
-# Tests:
+# joint engine as an iid prior block, and one on the occurrence formula
+# alongside the shared field does the same on the occupancy arm.
+# .tobs_joint_draws() samples every such latent from the same outer-grid
+# posterior as the coefficients, so they reach the criteria as offsets by the
+# pathway the sampled route already uses: an observation-arm term enters the
+# shared `Arms` predictor view per visit, an occupancy-arm term joins the
+# per-site occupancy offset the shared field loads. The pointwise
+# log-likelihood, the posterior predictive check and the PIT / LOO-PIT all read
+# both. Tests:
 #   - the components carry the per-visit offset on the arm that holds the term,
 #     and its per-group posterior mean agrees with the fit's own BLUPs
 #   - the criteria MOVE with the random effect on either observation arm, and a

@@ -81,9 +81,9 @@ test_that("community count Poisson NUTS recovers community means + agrees with L
 })
 
 test_that("ms_count NUTS community-mean 95% CIs cover at the nominal rate", {
-  # gcol33/tulpaObs#139: the single-seed recovery proves the byte-exact oracle;
-  # this proves the community-mean intervals cover at the nominal rate (the
-  # calibration NUTS exists to get right).
+  # the single-seed recovery proves the byte-exact oracle; this proves the
+  # community-mean intervals cover at the nominal rate (the calibration NUTS
+  # exists to get right).
   skip_if_fast()
   skip_on_cran()
   truth <- c(1, 0.5)

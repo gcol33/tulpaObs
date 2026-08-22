@@ -1,7 +1,6 @@
 # FD-checks for every closed-form derivative of the OccuOnlyCoupling
-# CellCouplingSpec (gcol33/tulpaObs#81): the single-arm occupancy mixture (psi/p
-# arms, no cover arm) the standalone occu() SVC bar fits through the joint
-# direct-grid engine.
+# CellCouplingSpec: the single-arm occupancy mixture (psi/p arms, no cover arm)
+# the standalone occu() SVC bar fits through the joint direct-grid engine.
 #
 # The spec lives in src/cell_coupling_occu_only.h; the direct evaluator
 # `cpp_eval_occu_only_cell` returns the cell log-density at given etas + every

@@ -85,9 +85,9 @@ simulate_cover <- function(N             = 200L,
   occur <- stats::rbinom(N, 1L, p)
 
   if (identical(response, "gaussian")) {
-    # Delta-normal hurdle (gcol33/tulpaObs#112): the positive magnitude is a plain
-    # Gaussian on the raw response (no log, no [0, 1] clamp); absence is the 0
-    # sentinel. mu on the response scale is eta_pos.
+    # Delta-normal hurdle: the positive magnitude is a plain Gaussian on the raw
+    # response (no log, no [0, 1] clamp); absence is the 0 sentinel. mu on the
+    # response scale is eta_pos.
     mag   <- stats::rnorm(N, eta_pos, sigma_pos)
     cover <- ifelse(occur == 1L, mag, 0)
     mu_truth <- eta_pos
@@ -243,7 +243,7 @@ simulate_cover_joint <- function(N               = 300L,
                               (1 - mu_pos[is_pos]) * phi)
     y <- pmin(pmax(y, 0), 1 - 1e-6)
   } else if (positive == "gaussian") {
-    # Identity-Gaussian arm (gcol33/tulpaObs#112): raw magnitude, no log, no clamp.
+    # Identity-Gaussian arm: raw magnitude, no log, no clamp.
     mag       <- stats::rnorm(N, eta_pos, sigma_pos_resid)
     y[is_pos] <- mag[is_pos]
   } else {

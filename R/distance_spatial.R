@@ -22,14 +22,14 @@
                                        max_iter = 200L, tol = 1e-6,
                                        verbose = TRUE, integration = "grid") {
   temporal_only <- is.null(spatial) && !is.null(temporal)
-  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
-  # carries shared = c(state, detection) = c(FALSE, TRUE). It loads on the per-site
-  # detection scale eta_sigma (a spatially-varying detection scale) instead of the
-  # abundance arm; the distance kernel exposes the per-site sigma gradient
-  # (sw$grad_sig), so the areal-BFGS driver needs only the arm-routed offset +
-  # gradient. Under the hazard-rate key the detection scale sigma still carries the
-  # field while the log-shape eta_b stays a single global coordinate (the eval
-  # threads both -- the field on eta_sigma, eta_b as a fixed parameter).
+  # Detection-arm field: a field in the `detection=` formula carries shared =
+  # c(state, detection) = c(FALSE, TRUE). It loads on the per-site detection scale
+  # eta_sigma (a spatially-varying detection scale) instead of the abundance arm;
+  # the distance kernel exposes the per-site sigma gradient (sw$grad_sig), so the
+  # areal-BFGS driver needs only the arm-routed offset + gradient. Under the
+  # hazard-rate key the detection scale sigma still carries the field while the
+  # log-shape eta_b stays a single global coordinate (the eval threads both -- the
+  # field on eta_sigma, eta_b as a fixed parameter).
   det_arm <- !is.null(spatial) && isTRUE(spatial$shared[2L]) &&
              !isTRUE(spatial$shared[1L])
   if (!is.null(spatial))
@@ -50,7 +50,7 @@
   quad_order <- as.integer(model$quad_order %||% 64L)
   # Built ONCE outside `eval()` -- the areal-BFGS driver calls `eval()` every
   # gradient evaluation, so rebuilding the quadrature there would pay the
-  # Newton-Raphson root-find on every BFGS step (gcol33/tulpaObs#165).
+  # Newton-Raphson root-find on every BFGS step.
   quad_xptr <- cpp_distance_build_quad(cutpoints, transect_code, quad_order)
   site_tot <- if (length(y)) rowSums(y) else integer(0)
   trunc    <- .dist_truncation(K_max, site_tot)
@@ -112,10 +112,10 @@
                               max_iter = max_iter, tol = tol, label = "distance-spatial",
                               integration = integration)
 
-  # Guard the per-site truncation at the BFGS mode (gcol33/tulpaObs#168): the
-  # same score-gap comparison distance_laplace() runs, but sandwiched at the
-  # field-adjusted eta the areal fit actually converged to (`res$eta_offset`,
-  # the SAME per-site offset eval()'s own `offset` argument carries).
+  # Guard the per-site truncation at the BFGS mode: the same score-gap
+  # comparison distance_laplace() runs, but sandwiched at the field-adjusted
+  # eta the areal fit actually converged to (`res$eta_offset`, the SAME
+  # per-site offset eval()'s own `offset` argument carries).
   if (headroom >= 0L) {
     gap <- tryCatch({
       means0 <- res$beta_mean
@@ -163,17 +163,16 @@
                              X_svc = X_lam, family = "distance")
 }
 
-# Areal-spatial binned distance sampling via NUTS (gcol33/tulpaObs#72): a FIXED-
-# HYPER non-centered PROPER-CAR field on the abundance arm (log lambda) of the
-# bin-multinomial distance marginal. The field precision (tau, rho) is fixed at the
-# nested-Laplace areal posterior mean (fit$spatial_hyper) and the whitened raw ~
-# N(0, I) (z = Linv %*% raw) is sampled jointly with the coefficients via the
-# distance NUTS field block (cpp_distance_nuts over nuts_field_block.h). The areal
-# Laplace fit supplies warm coefficients + the field hyper; NUTS then samples the
-# exact coefficient + whitened-field posterior. Half-normal key only (the spatial
-# Laplace path, gcol33/tulpaObs#79); icar / car_proper / bym2 -- the intrinsic
-# icar / bym2 fields sample via the #71 sum-to-zero reparameterisation (#113).
-# Poisson or NB.
+# Areal-spatial binned distance sampling via NUTS: a FIXED- HYPER non-centered
+# PROPER-CAR field on the abundance arm (log lambda) of the bin-multinomial
+# distance marginal. The field precision (tau, rho) is fixed at the nested-Laplace
+# areal posterior mean (fit$spatial_hyper) and the whitened raw ~ N(0, I) (z = Linv
+# %*% raw) is sampled jointly with the coefficients via the distance NUTS field
+# block (cpp_distance_nuts over nuts_field_block.h). The areal Laplace fit supplies
+# warm coefficients + the field hyper; NUTS then samples the exact coefficient +
+# whitened-field posterior. Half-normal key only (the spatial Laplace path); icar /
+# car_proper / bym2 -- the intrinsic icar / bym2 fields sample via the #71
+# sum-to-zero reparameterisation (#113). Poisson or NB.
 .tobs_fit_distance_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                             mixture = "poisson",
                                             K_max = NULL, sigma.beta = NULL,
@@ -182,7 +181,7 @@
                                             n.chains = NULL, max.treedepth = NULL,
                                             adapt.delta = NULL, seed = NULL,
                                             verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   # FIXED-HYPER non-centered field on the abundance (log lambda) arm from EITHER an
@@ -198,7 +197,7 @@
     if (!spatial$type %in% c("icar", "car_proper", "bym2"))
       stop(sprintf(paste0("distance() NUTS + areal spatial supports icar() / ",
                           "car_proper() / bym2() on the abundance arm; got '%s'. ",
-                          "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+                          ""), spatial$type), call. = FALSE)
   }
   n_sites <- model$n_sites
   if (!temporal_only && spatial$n_units != n_sites)

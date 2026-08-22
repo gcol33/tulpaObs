@@ -1,8 +1,8 @@
 // cell_coupling_occu_multiscale_cover.h
 // Stateful `CellCouplingSpec` implementing the per-cell log-density of the
-// three-level occupancy + cover hurdle (gcol33/tulpaObs#29): a cell-level
-// occupancy gate (psi), a plot-level availability gate (theta), a visit-level
-// detection (p) and the cover hurdle (pos) on detected visits.
+// three-level occupancy + cover hurdle: a cell-level occupancy gate (psi), a
+// plot-level availability gate (theta), a visit-level detection (p) and the
+// cover hurdle (pos) on detected visits.
 //
 //   z_c        ~ Bernoulli(psi_c)                  # cell occupancy
 //   a_cj | z=1 ~ Bernoulli(theta_cj)               # plot availability

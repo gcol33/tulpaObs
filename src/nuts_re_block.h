@@ -1,8 +1,8 @@
 // nuts_re_block.h
-// Shared single-grouping intercept random-effect block for the observation-family
-// NUTS targets (gcol33/tulpaObs#51, #82, #205). The effect is non-centered: one
-// whitened coordinate z_g ~ N(0, 1) per group plus one hyperparameter
-// log_sigma_re, and the per-row offset
+// Shared single-grouping intercept random-effect block for the
+// observation-family NUTS targets. The effect is non-centered: one whitened
+// coordinate z_g ~ N(0, 1) per group plus one hyperparameter log_sigma_re, and
+// the per-row offset
 //   eta_arm[row] += sigma_re * z[group[row]],   sigma_re = exp(log_sigma_re)
 // loads additively onto ONE arm's linear predictor. The GROUP SD IS SAMPLED: the
 // block owns the coordinate log_sigma_re under a N(0, sigma_lsd^2) prior, so the

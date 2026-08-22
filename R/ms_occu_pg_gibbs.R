@@ -1,7 +1,7 @@
 # ms_occu_pg_gibbs.R - Polya-Gamma Gibbs for COMMUNITY single-season occupancy
-# (spOccupancy msPGOcc; gcol33/tulpaObs#115, #126). The hierarchical extension of
-# the single-species PGOcc engine (R/occu_pg_gibbs.R): per-species occupancy /
-# detection coefficients with Gaussian community hyperpriors,
+# (spOccupancy msPGOcc). The hierarchical extension of the single-species PGOcc
+# engine (R/occu_pg_gibbs.R): per-species occupancy / detection coefficients with
+# Gaussian community hyperpriors,
 #
 #   logit psi_{s,i} = X_occ_i . beta_psi_s,   beta_psi_s ~ N(mu_psi, diag(tau_psi^2))
 #   logit p_{s,i}   = X_det_i . beta_p_s,      beta_p_s   ~ N(mu_p,   diag(tau_p^2))
@@ -23,7 +23,7 @@
                                        n.iter = NULL, n.warmup = NULL,
                                        n.chains = NULL, n.thin = NULL, seed = NULL,
                                        verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
   rpg    <- get("cpp_rpg", envir = asNamespace("tulpa"))

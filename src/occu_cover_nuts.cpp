@@ -68,25 +68,25 @@ struct OccuCoverNutsData {
     int p_occ = 0, p_det_site = 0, p_det_visit = 0, p_pos_site = 0, p_pos_visit = 0;
     int p_p = 0, p_pos = 0, total = 0;
 
-    // Optional coupled areal field(s) on the latent state z (the
-    // gcol33/tulpaObs#74 spatial NUTS path). Each non-centered field enters psi
-    // additively, weighted by its own per-site design column, and the cover arm
-    // scaled by its own copy amplitude alpha:
+    // Optional coupled areal field(s) on the latent state z (the spatial NUTS
+    // path). Each non-centered field enters psi additively, weighted by its own
+    // per-site design column, and the cover arm scaled by its own copy
+    // amplitude alpha:
     //   eta_psi_c  += sum_b w_b(c) z_b[cell(c)],
     //   eta_pos_cv += sum_b alpha_b w_b(c) z_b[cell(c)].
     // An unweighted block is the shared intercept field; a weighted one is a
-    // spatially-varying coefficient (gcol33/tulpaObs#214).
-    // nuts_field_hyper.h owns the field parameterisation: a fixed basis with the
-    // field SD sigma, the mixing / correlation rho and alpha either sampled as
-    // bounded coordinates (gcol33/tulpaObs#204) or pinned at a nested-Laplace
-    // estimate (the #74 / #113 fixed-hyper loading, which marshals as the pinned
-    // configuration and is byte-identical to it). An empty list leaves every
-    // field branch guarded, so the non-spatial sampler is unchanged.
+    // spatially-varying coefficient. nuts_field_hyper.h owns the field
+    // parameterisation: a fixed basis with the field SD sigma, the mixing /
+    // correlation rho and alpha either sampled as bounded coordinates or pinned
+    // at a nested-Laplace estimate (the #74 / #113 fixed-hyper loading, which
+    // marshals as the pinned configuration and is byte-identical to it). An
+    // empty list leaves every field branch guarded, so the non-spatial sampler
+    // is unchanged.
     std::vector<HyperFieldBlock> fb;
 
-    // Optional observation-arm random intercepts (gcol33/tulpaObs#205). Each
-    // grouping factor on the detection or positive-cover formula is one shared
-    // ReBlock (nuts_re_block.h), non-centered with its own SAMPLED log_sigma_re,
+    // Optional observation-arm random intercepts. Each grouping factor on the
+    // detection or positive-cover formula is one shared ReBlock
+    // (nuts_re_block.h), non-centered with its own SAMPLED log_sigma_re,
     // carrying ONE group code per observation ROW (site-major, row = i * J + v)
     // rather than per site -- the observation arms are per-visit. Crossed /
     // nested groupings are simply several blocks. `re_det` / `re_pos` index into

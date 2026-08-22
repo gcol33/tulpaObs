@@ -1,8 +1,8 @@
-# NUTS + areal car_proper field on the count / occupancy observation families
-# (gcol33/tulpaObs#72). Each family carries a FIXED-HYPER non-centered proper-CAR
-# field on its abundance / occupancy arm: the field precision (tau, rho) is fixed
-# at the nested-Laplace areal posterior mean and the whitened raw ~ N(0, I) is
-# sampled jointly with the coefficients via the shared field block
+# NUTS + areal car_proper field on the count / occupancy observation families.
+# Each family carries a FIXED-HYPER non-centered proper-CAR field on its
+# abundance / occupancy arm: the field precision (tau, rho) is fixed at the
+# nested-Laplace areal posterior mean and the whitened raw ~ N(0, I) is sampled
+# jointly with the coefficients via the shared field block
 # (src/nuts_field_block.h). The recovery invariant is that NUTS reproduces the
 # integrated nested-Laplace field (cor high), recovers the abundance / occupancy
 # slope, calibrates the coefficient SDs to the nested-Laplace SEs (fixed-hyper,
@@ -172,11 +172,11 @@ test_that("dyn_abun() NUTS + car_proper field reproduces the nested-Laplace fiel
 
 
 # ---------------------------------------------------------------------------
-# Intrinsic ICAR fields under NUTS (gcol33/tulpaObs#113). The #71 sum-to-zero
-# reparameterisation drops the constant precision null direction, so the icar
-# field's whitened raw ~ N(0, I_{n-1}) samples with the same well-conditioned
-# geometry as the full-rank proper-CAR field (0 divergences, reproduces the
-# nested-Laplace icar field). Same invariants as the car_proper tests above.
+# Intrinsic ICAR fields under NUTS. The #71 sum-to-zero reparameterisation
+# drops the constant precision null direction, so the icar field's whitened
+# raw ~ N(0, I_{n-1}) samples with the same well-conditioned geometry as the
+# full-rank proper-CAR field (0 divergences, reproduces the nested-Laplace
+# icar field). Same invariants as the car_proper tests above.
 # ---------------------------------------------------------------------------
 
 test_that("removal() NUTS + icar field recovers + reproduces the nested-Laplace field (#113)", {
@@ -283,11 +283,11 @@ test_that("dyn_abun() NUTS + icar field reproduces the nested-Laplace field, 0 d
 
 
 # ---------------------------------------------------------------------------
-# Intrinsic BYM2 fields under NUTS (gcol33/tulpaObs#113). BYM2 = a structured
-# ICAR component (sum-to-zero eigen-loading) PLUS an iid component; the whitened
-# raw ~ N(0, I_{2n-1}) stacks both, reconstructed as z = sqrt(rho) sf phi +
-# sqrt(1-rho) theta. The unit field is NOT sum-to-zero (the iid part), so these
-# assert on field-shape recovery + 0 divergences, not on centring.
+# Intrinsic BYM2 fields under NUTS. BYM2 = a structured ICAR component
+# (sum-to-zero eigen-loading) PLUS an iid component; the whitened raw ~ N(0,
+# I_{2n-1}) stacks both, reconstructed as z = sqrt(rho) sf phi + sqrt(1-rho)
+# theta. The unit field is NOT sum-to-zero (the iid part), so these assert on
+# field-shape recovery + 0 divergences, not on centring.
 # ---------------------------------------------------------------------------
 
 test_that("removal() NUTS + bym2 field recovers + reproduces the nested-Laplace field (#113)", {
@@ -391,10 +391,10 @@ test_that("dyn_abun() NUTS + bym2 field reproduces the nested-Laplace field, 0 d
 
 # ---------------------------------------------------------------------------
 # >= 20-seed fixed-effect 95%-interval coverage for the intrinsic icar field
-# under NUTS (gcol33/tulpaObs#113 Definition of Done). removal() is the cheapest
-# count-marginal family, so it carries the coverage evidence for the sum-to-zero
-# reparam; the field is fixed-hyper (warmed from nested-Laplace), so the
-# abundance-slope interval is the calibrated quantity.
+# under NUTS ( Definition of Done). removal() is the cheapest count-marginal
+# family, so it carries the coverage evidence for the sum-to-zero reparam; the
+# field is fixed-hyper (warmed from nested-Laplace), so the abundance-slope
+# interval is the calibrated quantity.
 # ---------------------------------------------------------------------------
 
 test_that("removal() NUTS + icar field: abundance-slope 95% coverage over 20 seeds (#113)", {
@@ -431,10 +431,10 @@ test_that("removal() NUTS + icar field: abundance-slope 95% coverage over 20 see
 
 
 # ---------------------------------------------------------------------------
-# Hazard-rate key distance() NUTS + areal field (gcol33/tulpaObs#114). The
-# hazard key adds a single global log-shape coordinate eta_b, orthogonal to the
-# fixed-hyper field block (the C++ target places it before the whitened field
-# raw). The fit recovers the abundance field AND the scalar shape.
+# Hazard-rate key distance() NUTS + areal field. The hazard key adds a single
+# global log-shape coordinate eta_b, orthogonal to the fixed-hyper field block
+# (the C++ target places it before the whitened field raw). The fit recovers
+# the abundance field AND the scalar shape.
 # ---------------------------------------------------------------------------
 
 test_that("distance() hazard-key NUTS + car_proper recovers field + shape (#114)", {

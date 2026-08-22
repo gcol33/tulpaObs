@@ -458,18 +458,18 @@ struct DynAbunPCurv {
 // Per-site log marginal L(eta_p) and its first / second derivatives in the
 // site-level detection offset eta_p, by a SECOND-ORDER forward-mode pass through
 // the same exact HMM forward recursion as compute_dyn_abun_site. eta_p is a single
-// scalar per site (the detection intercept shifts eta_p uniformly across the
-// site's visits), so a grouped detection random effect adds a scalar offset to it
-// -- exactly the per-row separability the AGHQ make_site contract needs. Unlike
-// the initial-abundance arm (where eta_lambda enters ONLY the season-1 initial
+// scalar per site (the detection intercept shifts eta_p uniformly across the site's
+// visits), so a grouped detection random effect adds a scalar offset to it --
+// exactly the per-row separability the AGHQ make_site contract needs. Unlike the
+// initial-abundance arm (where eta_lambda enters ONLY the season-1 initial
 // distribution, so the data-conditional weights c(n1) are eta-independent and
 // precomputed once), eta_p enters the observation pmf at EVERY season, so the full
-// O(K^2 T) forward marginal is re-evaluated per call (the per-node-cost obstacle of
-// tulpaObs#82). Detection enters only the observation operator obs_t(n); the
-// survival / recruitment transition and the initial distribution are p-independent,
-// so the forward-mode first and second derivatives propagate through the linear
-// transition unchanged and the only source terms are d obs / d eta_p and
-// d^2 obs / d eta_p^2, both closed form:
+// O(K^2 T) forward marginal is re-evaluated per call (the per-node-cost obstacle).
+// Detection enters only the observation operator obs_t(n); the survival /
+// recruitment transition and the initial distribution are p-independent, so the
+// forward-mode first and second derivatives propagate through the linear transition
+// unchanged and the only source terms are d obs / d eta_p and d^2 obs / d eta_p^2,
+// both closed form:
 //   obs_t(n) = prod_j Binom(y_tj | n, p),  p = invlogit(eta_p)
 //   d  log obs_t(n) / d eta_p = sum_j (y_tj - n p) =: g_t(n)
 //   d2 log obs_t(n) / d eta_p^2 = - (#visits) n p(1-p)
@@ -643,9 +643,9 @@ inline DynAbunPCurv compute_dyn_abun_p_curv(
 // Per-site conditional likelihood c(n1) = P(y_1, ..., y_T | N_1 = n1), the data
 // likelihood given the season-1 abundance, INDEPENDENT of the initial-abundance
 // predictor eta_lambda (it conditions on N_1). This is the workhorse of the
-// grouped random-effect AGHQ path on the initial-abundance arm (tulpaObs#51): a
-// site-level RE shifts only eta_lambda, which enters solely the season-1 initial
-// distribution pi_{n1}(eta_lambda), so the per-site marginal is
+// grouped random-effect AGHQ path on the initial-abundance arm: a site-level RE
+// shifts only eta_lambda, which enters solely the season-1 initial distribution
+// pi_{n1}(eta_lambda), so the per-site marginal is
 //   L(eta_lambda) = sum_{n1} pi_{n1}(eta_lambda) c(n1),
 // and its first / second eta_lambda derivatives are sum_{n1} pi'_{n1} c(n1) and
 // sum_{n1} pi''_{n1} c(n1) -- O(K) dot products once c is known. The expensive

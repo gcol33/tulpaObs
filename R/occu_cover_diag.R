@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Pointwise log-likelihood (WAIC / PSIS-LOO) -- gcol33/tulpaObs#26
+# Pointwise log-likelihood (WAIC / PSIS-LOO) --
 # ---------------------------------------------------------------------------
 
 # Integer code for the positive-arm policy: 0 = lognormal, 3 = beta,
@@ -101,13 +101,12 @@
 }
 
 # Per-draw coupled-field contributions for a fit that SAMPLED the field(s)
-# jointly with the coefficients (gcol33/tulpaObs#74, #204, #214): each block's
-# `z` draws hold its per-cell field and `hyper_draws` its copy amplitude, so the
-# occupancy arm reads the block's field at the site's cell -- scaled by that
-# block's per-site design weight, which is what makes a block a varying
-# coefficient -- and the cover arm the same loading scaled by that draw's alpha.
-# NULL when the fit sampled no field, which sends the caller on to the
-# marginal-table route.
+# jointly with the coefficients: each block's `z` draws hold its per-cell field
+# and `hyper_draws` its copy amplitude, so the occupancy arm reads the block's
+# field at the site's cell -- scaled by that block's per-site design weight,
+# which is what makes a block a varying coefficient -- and the cover arm the
+# same loading scaled by that draw's alpha. NULL when the fit sampled no field,
+# which sends the caller on to the marginal-table route.
 .tobs_occu_cover_sampled_field <- function(object, n_sites, S) {
   fd <- object$field_draws
   if (is.null(fd) || !is.matrix(fd)) return(NULL)
@@ -138,10 +137,10 @@
 }
 
 # Per-term random-effect draws on the natural coefficient scale for a SAMPLED
-# occu_cover fit (gcol33/tulpaObs#205): each block contributes its group
-# deviations b_g = sigma_re * z_g, read off the `re_draws` columns in the block
-# order the sampler laid them out (n_groups whitened deviations then the log
-# SD). NULL when the fit carries no sampled random effect.
+# occu_cover fit: each block contributes its group deviations b_g = sigma_re *
+# z_g, read off the `re_draws` columns in the block order the sampler laid them
+# out (n_groups whitened deviations then the log SD). NULL when the fit carries
+# no sampled random effect.
 .occu_cover_sampled_re_draws <- function(object, S) {
   rd <- object$re_draws
   if (is.null(rd) || !is.matrix(rd) || S < 1L) return(NULL)
@@ -159,20 +158,20 @@
 
 # The observation-arm (detection / positive-cover) entries of a per-term
 # random-effect draw list, which is what the per-visit offset builder consumes.
-# An occupancy-arm term (gcol33/tulpaObs#56) is per SITE, so it rides the
-# per-site offset builder instead.
+# An occupancy-arm term is per SITE, so it rides the per-site offset builder
+# instead.
 .occu_cover_obs_re_draws <- function(re_draws) {
   rd <- unname(re_draws %||% list())
   rd[vapply(rd, function(r) r$arm %in% c("p", "pos"), logical(1))]
 }
 
-# Per-site offset [n_sites x S] of the occupancy-arm random effect
-# (gcol33/tulpaObs#56), or NULL when the fit carries none. The grouping is one
-# code per occupancy unit (`model$re_psi$group_idx`, the codes the fit ran on),
-# so each site reads its own group's deviation from the per-term draws; a 0 code
-# carries no level and contributes nothing. The term rides the occupancy arm
-# alone -- no copy onto the cover arm -- so the offset joins `field_occ`, which
-# every kernel already adds to the occupancy predictor.
+# Per-site offset [n_sites x S] of the occupancy-arm random effect, or NULL when
+# the fit carries none. The grouping is one code per occupancy unit
+# (`model$re_psi$group_idx`, the codes the fit ran on), so each site reads its
+# own group's deviation from the per-term draws; a 0 code carries no level and
+# contributes nothing. The term rides the occupancy arm alone -- no copy onto
+# the cover arm -- so the offset joins `field_occ`, which every kernel already
+# adds to the occupancy predictor.
 .occu_cover_re_site_offset <- function(model, re_draws, n_sites, S) {
   terms <- Filter(function(r) identical(r$arm, "psi"), re_draws %||% list())
   if (!length(terms)) return(NULL)
@@ -413,15 +412,14 @@
 # reads the view rather than `model$y` / `model$valid` -- the pointwise
 # log-likelihood, the posterior predictive check, and the PIT / LOO-PIT CDF
 # limits -- so a compact fit has all three, and the dense and compact builds of
-# the same data feed one kernel byte-identical input (gcol33/tulpaObs#185).
-# The per-site detection summaries the PPC and the PIT need (`n_valid`, and
-# `any_det`, whether the site holds any detection) are derived here from the
-# visit rows, so there is one definition of each.
-# `flat_idx` positions the visit rows in the arm's own flat row order -- the
-# padded grid's valid cells for a dense model, 1..V for a compact one -- so any
-# per-(site, visit) quantity the model stores in that order (the observation-arm
-# random-effect group codes and slope designs, gathered on `$re`) is subset to
-# the visit rows the same way in both layouts.
+# the same data feed one kernel byte-identical input. The per-site detection
+# summaries the PPC and the PIT need (`n_valid`, and `any_det`, whether the site
+# holds any detection) are derived here from the visit rows, so there is one
+# definition of each. `flat_idx` positions the visit rows in the arm's own flat
+# row order -- the padded grid's valid cells for a dense model, 1..V for a
+# compact one -- so any per-(site, visit) quantity the model stores in that
+# order (the observation-arm random-effect group codes and slope designs,
+# gathered on `$re`) is subset to the visit rows the same way in both layouts.
 .occu_cover_visit_view <- function(model) {
   rg <- if (isTRUE(model$ragged)) {
     V <- length(model$site_of_visit)
@@ -576,9 +574,9 @@
   }
   .occu_cover_reject_offsets(off_det, off_pos, mode)
 
-  # Aggregated (mean / median / latent) paths stay in R, draw-chunked
-  # to bound the [n_plots x chunk] per-visit eta transient. Detected-unit cover
-  # values are draw-invariant, so resolve them once (gcol33/tulpaObs#34).
+  # Aggregated (mean / median / latent) paths stay in R, draw-chunked to bound
+  # the [n_plots x chunk] per-visit eta transient. Detected-unit cover values
+  # are draw-invariant, so resolve them once.
   units <- if (identical(mode, "none")) NULL else .occu_cover_unit_cover(model)
 
   n_plots <- max(
@@ -608,7 +606,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Posterior predictive check + PIT (gcol33/tulpaObs#27)
+# Posterior predictive check + PIT
 # ---------------------------------------------------------------------------
 
 # Posterior predictive check for an occu_cover() fit. Per draw, the latent
@@ -616,9 +614,9 @@
 # (the spOccupancy construction), detection replicates from Bernoulli(z p), and
 # the cover replicate is built at the granularity the fit used (per-visit for
 # cover_aggregate = "none", one aggregated cover per detected unit for "mean" /
-# "median", and the shared cover-RE marginal for "latent"; gcol33/tulpaObs#34).
-# The discrepancy is a Freeman-Tukey (or chi-squared) sum over the detection
-# cells plus the positive-part term, returning a Bayesian p-value.
+# "median", and the shared cover-RE marginal for "latent"). The discrepancy is
+# a Freeman-Tukey (or chi-squared) sum over the detection cells plus the
+# positive-part term, returning a Bayesian p-value.
 .tobs_ppc_occu_cover <- function(object,
                                  fit.stat = c("freeman-tukey", "chi-squared"),
                                  n.samples = 500) {
@@ -720,7 +718,7 @@
   c0    <- .tobs_occu_cover_components(object, n.samples)
   # The detection summary is read off the one-row-per-valid-visit view, so a
   # compact fit -- which stores no padded y / valid grid -- reaches the same
-  # kernel as a dense one (gcol33/tulpaObs#185).
+  # kernel as a dense one.
   vw    <- .occu_cover_visit_view(model)
   # The per-draw detection-summary CDF limits are deterministic; the former R
   # loop now runs in cpp_occu_cover_cdf_limits, parallel over draws.

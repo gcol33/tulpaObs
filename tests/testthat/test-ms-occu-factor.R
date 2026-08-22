@@ -1,11 +1,11 @@
 # Community latent-factor occupancy -- ms_occu() + latent() (the spOccupancy
-# lfMsPGOcc analogue; gcol33/tulpaObs#119). Residual species co-occurrence on the
-# occupancy arm via Q per-site latent factors + per-species loadings, fit by block
-# coordinate ascent (community occupancy EM with the factor offset <-> a two-state
-# marginal factor update; R/ms_occu_field.R over the shared driver in
-# R/community_latent.R). The loadings / factors are identified only up to
-# rotation, so recovery is judged on the residual species correlation matrix
-# (Sigma_res = lambda lambda'), which IS identified.
+# lfMsPGOcc analogue). Residual species co-occurrence on the occupancy arm via Q
+# per-site latent factors + per-species loadings, fit by block coordinate ascent
+# (community occupancy EM with the factor offset <-> a two-state marginal factor
+# update; R/ms_occu_field.R over the shared driver in R/community_latent.R). The
+# loadings / factors are identified only up to rotation, so recovery is judged on
+# the residual species correlation matrix (Sigma_res = lambda lambda'), which IS
+# identified.
 #
 # Thresholds are set from a measured 10-seed run at N=250, S=16, J=5
 # (dev_notes/probe_ms_occu_factor_seeds.R): median residual correlation 0.885,
@@ -34,7 +34,7 @@
   # `lam` and `beta_real` are the realized draws, not the population constants
   # the arguments name -- the loading MAGNITUDE is scored against
   # sqrt(sum(lam^2)) (see the magnitude test below) and the community mean
-  # against colMeans(b_psi) (gcol33/tulpaObs#155).
+  # against colMeans(b_psi).
   list(y = y, data = d, S = S, beta_psi = c(0, 0.8), lam = lam,
        beta_real = colMeans(b_psi),
        cor_res = stats::cov2cor(tcrossprod(lam) + diag(1e-8, S)))
@@ -70,7 +70,7 @@ test_that("ms_occu() + latent() gates unsupported combinations", {
 
 # Smoke coverage of the lfMsPGOcc path: dispatch, the factor block and the S3
 # surface on a small fixture, with nothing asserted against truth so there is no
-# calibrated threshold tied to the size (gcol33/tulpaObs#159).
+# calibrated threshold tied to the size.
 test_that("lfMsPGOcc wires the factor block and S3", {
   d   <- .msof_sim(N = 50L, S = 5L, Q = 1L, J = 3L, seed = 4L)
   fit <- tobs(~ x + latent(1), data = d$data, family = ms_occu(),
@@ -121,7 +121,7 @@ test_that("lfMsPGOcc recovers residual co-occurrence and wires S3", {
 })
 
 # The loading magnitude, which the residual correlation is blind to: it is
-# row-normalised, so a pure scale error leaves it unchanged (gcol33/tulpaObs#156).
+# row-normalised, so a pure scale error leaves it unchanged.
 # ||lambda||_F = sqrt(tr(Sigma_res)) is rotation-invariant, so it survives the
 # loading/factor indeterminacy, and is scored against the realized draw.
 # A detection history carries less information per (site, species) than a count,

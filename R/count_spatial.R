@@ -1,7 +1,7 @@
 # =============================================================================
-# count_spatial.R - areal-spatial count / relative-abundance GLMM
-# (count() + a plain areal field; gcol33/tulpaObs#117). The spAbundance spAbund
-# analogue.
+# count_spatial.R
+# - areal-spatial count / relative-abundance GLMM (count() + a plain areal
+# field). The spAbundance spAbund analogue.
 #
 # The count response is observed directly (no detection, no latent state), so a
 # count areal fit is one GLMM block plus a shared ICAR / proper-CAR field:
@@ -66,9 +66,9 @@
     stop("`.tobs_fit_count_spatial` expects a count model.", call. = FALSE)
   }
   # A continuous NNGP Gaussian-process field on the abundance arm (gcol33/
-  # tulpaObs#117 follow-up). tulpa's nested-Laplace hosts a single-block `nngp`
-  # kernel (its own cpp_fn, integrated over the GP marginal variance and range),
-  # so this routes around the multi-block areal builder to tulpa directly.
+  # follow-up). tulpa's nested-Laplace hosts a single-block `nngp` kernel (its
+  # own cpp_fn, integrated over the GP marginal variance and range), so this
+  # routes around the multi-block areal builder to tulpa directly.
   if (identical(spatial$type, "gp"))
     return(.tobs_fit_count_gp(model, spatial, max_iter = max_iter, tol = tol,
                               verbose = verbose))

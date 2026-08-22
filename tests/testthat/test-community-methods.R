@@ -44,10 +44,10 @@ test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
 
 test_that("fitted() / predict() / residuals() work on jsdm", {
   skip_on_cran()
-  # Since gcol33/tulpaObs#121 jsdm() IS the community GLMM with a logit link, so
-  # it shares the ms_count() post-fit surface: fitted()/predict() return the
-  # per-(site, species) mean on the response scale (a probability here) under
-  # `$mu`, and residuals() returns `$mu`.
+  # Since jsdm() IS the community GLMM with a logit link, so it shares the
+  # ms_count() post-fit surface: fitted()/predict() return the per-(site,
+  # species) mean on the response scale (a probability here) under `$mu`, and
+  # residuals() returns `$mu`.
   sim <- simulate_ms_occu(N = 40, J = 1, n_species = 5, seed = 4)
   yj  <- apply(sim$y, c(1, 3),
                function(v) as.integer(any(v[!is.na(v)] == 1)))

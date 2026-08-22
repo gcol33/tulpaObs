@@ -178,7 +178,7 @@ tulpa::ranef
 # Re-export tulpa's tidy() / glance() generics for the same reason: a tobs_fit
 # inherits tulpa_fit, so tulpa's tidy.tulpa_fit / glance.tulpa_fit handle it, but
 # the generics must be reachable after library(tulpaObs) for tidy(fit) /
-# glance(fit) to resolve (gcol33/tulpaObs#87).
+# glance(fit) to resolve.
 #' @importFrom tulpa tidy
 #' @export
 tulpa::tidy
@@ -192,9 +192,8 @@ tulpa::glance
 #' Extends the generic `tulpa_fit` glance with the joint nested-Laplace outer
 #' grid placement and the outer Pareto-k diagnostic when present. The
 #' joint-coupled families (`occu_cover()`, `cover()`, `occu()` spatial,
-#' `occu_multiscale_cover()`) carry both at the fit top level
-#' (gcol33/tulpaObs#104, gcol33/tulpaObs#187); every other family glances exactly
-#' as before.
+#' `occu_multiscale_cover()`) carry both at the fit top level; every other
+#' family glances exactly as before.
 #'
 #' @param x A fitted `tobs_fit`.
 #' @param ... Ignored.
@@ -209,7 +208,7 @@ tulpa::glance
 #'       `"auto_recenter_disabled"`. `NA` when the grid was recentered.}
 #'   }
 #'   A fit that also requested the Pareto-k diagnostic (`control$diagnose.k =
-#'   TRUE`, off by default per gcol33/tulpaObs#101) adds three more:
+#'   TRUE`, off by default) adds three more:
 #'   \describe{
 #'     \item{`pareto_k`}{The outer importance-sampling \eqn{\hat{k}} for the
 #'       hyperparameter Gaussian summary; `< 0.7` indicates a reliable summary,
@@ -217,8 +216,8 @@ tulpa::glance
 #'     \item{`pareto_k_is_ess`}{The importance-sampling effective sample size on
 #'       the PSIS-smoothed weights (numeric); `pareto_k_is_ess / control$k.samples`
 #'       is the relative IS efficiency.}
-#'     \item{`pareto_k_proposal_source`}{How the importance proposal was built
-#'       (gcol33/tulpa#116, #121): `"mode_hessian"` from the Laplace curvature at
+#'     \item{`pareto_k_proposal_source`}{How the importance proposal was
+#'       built: `"mode_hessian"` from the Laplace curvature at
 #'       the hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
 #'       trustworthy even when a sharp posterior collapses the integration grid to
 #'       ~1 cell; `"grid_moment"` from the grid-weighted covariance of the
@@ -229,8 +228,8 @@ tulpa::glance
 #' @export
 glance.tobs_fit <- function(x, ...) {
   g <- NextMethod()
-  # Prefer the promoted top-level fields; fall back to the nested joint object so
-  # a fit saved before the promotion (gcol33/tulpaObs#104) still glances its k-hat.
+  # Prefer the promoted top-level fields; fall back to the nested joint object so a
+  # fit saved before the promotion still glances its k-hat.
   g <- .tobs_glance_outer_grid(g, x)
   pk <-.tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
   if (is.null(pk)) return(g)
@@ -246,7 +245,7 @@ glance.tobs_fit <- function(x, ...) {
 #' every `tobs()` family. Each family stores its optimiser / EM / sampler verdict
 #' under `fit$convergence`, but historically the cover hurdle (`cover()`) put the
 #' flag at `fit$converged` instead, so a consumer that read one location got `NA`
-#' for the other family (gcol33/tulpaObs#88). These accessors normalise both
+#' for the other family. These accessors normalise both
 #' layouts: `convergence()` returns the full record (`converged`, `n_iter`, and
 #' `sla_status` when the simplified-Laplace marginals were used), and
 #' `converged()` returns the single logical.
@@ -309,11 +308,11 @@ ranef.tobs_fit <- function(object, ...) {
   fn <- .tobs_s3_handler("ranef", object$model$model_type)
   if (!is.null(fn)) return(fn(object))
   if (identical(object$model$model_type, "occu_cover") && !is.null(object$re)) {
-    # occu_cover() shared-field + per-group RE (gcol33/tulpaObs#56, #102, #103):
-    # `fit$re` is a flat list of random-intercept terms, one per arm for a lone
-    # term, several for crossed / nested groupings sharing an arm. Stack them into
-    # one table with `arm` + `var` (grouping variable) columns; every arm carries
-    # its grouping `level` labels.
+    # occu_cover() shared-field + per-group RE: `fit$re` is a flat list of
+    # random-intercept terms, one per arm for a lone term, several for crossed /
+    # nested groupings sharing an arm. Stack them into one table with `arm` +
+    # `var` (grouping variable) columns; every arm carries its grouping `level`
+    # labels.
     rows <- lapply(object$re, function(re) {
       bl <- re$blup; bsd <- re$blup_sd
       if (is.matrix(bl)) {
@@ -447,18 +446,18 @@ fitted.tobs_fit <- function(object, ...) {
   beta_occ <- means[seq_len(pi_list[[1]]$p)]
 
   # A fitted latent surface on the state arm (the continuous NNGP svc() field of
-  # a Laplace fit, gcol33/tulpaObs#143) is a per-site offset on the occupancy
-  # logit, so the in-sample psi / z read it. NULL on every other route, which
-  # leaves eta_occ exactly as it was.
+  # a Laplace fit) is a per-site offset on the occupancy logit, so the in-sample
+  # psi / z read it. NULL on every other route, which leaves eta_occ exactly as
+  # it was.
   eta_occ <- as.vector(X_occ %*% beta_occ) + (model$occ_eta_offset %||% 0)
   psi <- plogis(eta_occ)
 
-  # Detection-arm SPDE field offset (gcol33/tulpaObs#218): the site -> mesh
-  # projector is the SAME `A` the state-arm offset above would read, since one
-  # mesh is built from the site coordinates regardless of which formula's
-  # spde() term attached it -- only the field REALIZATION differs by arm
-  # (`spatial_field` vs `spatial_field_det`). NULL on every non-field fit,
-  # leaving eta_det exactly as it was.
+  # Detection-arm SPDE field offset: the site -> mesh projector is the SAME
+  # `A` the state-arm offset above would read, since one mesh is built from
+  # the site coordinates regardless of which formula's spde() term attached it
+  # -- only the field REALIZATION differs by arm (`spatial_field` vs
+  # `spatial_field_det`). NULL on every non-field fit, leaving eta_det exactly
+  # as it was.
   A <- object$spatial$tulpa_spec$A
   .det_field_offset <- function(fld) {
     if (is.null(fld) || is.null(A) || anyNA(fld)) return(0)
@@ -467,9 +466,9 @@ fitted.tobs_fit <- function(object, ...) {
 
   if (identical(model$model_type, "integrated")) {
     # One detection SOURCE per process_info entry beyond the occupancy arm; the
-    # field is a per-source named list (gcol33/tulpaObs#216), so `p` is too --
-    # unlike the site-level `psi`, a single pooled vector cannot carry S
-    # sources' distinct designs and fields at once.
+    # field is a per-source named list, so `p` is too -- unlike the site-level
+    # `psi`, a single pooled vector cannot carry S sources' distinct designs
+    # and fields at once.
     n_src   <- model$n_sources %||% (length(pi_list) - 1L)
     fld_det <- object$spatial_field_det %||% list()
     src_off <- pi_list[[1]]$p
@@ -512,10 +511,10 @@ fitted.tobs_fit <- function(object, ...) {
   } else if (identical(model$model_type, "dynamic")) {
     z <- .tobs_dynamic_smoothed_z(model, means, pi_list)
   } else if (identical(model$model_type, "integrated")) {
-    # Multi-source Bayes posterior P(z=1|y) (gcol33/tulpaObs#223): a site is
-    # occupied with certainty if ANY source detected it at ANY visit;
-    # otherwise every source's every visit contributes a non-detection factor
-    # to the same product the single-season branch above uses for one source.
+    # Multi-source Bayes posterior P(z=1|y): a site is occupied with
+    # certainty if ANY source detected it at ANY visit; otherwise every
+    # source's every visit contributes a non-detection factor to the same
+    # product the single-season branch above uses for one source.
     # `site_maps[[s]]` is 0-based row->site; a source that never surveyed a
     # site contributes no rows (and so no information) for it.
     z <- numeric(model$n_sites)
@@ -545,16 +544,16 @@ fitted.tobs_fit <- function(object, ...) {
   list(psi = psi, p = p, z = z)
 }
 
-# Forward-backward (HMM smoothing) state posterior P(z_{i,t} = 1 | y_{i,1:T})
-# for a dynamic (MacKenzie et al. 2003) occupancy fit. The forward filter is the
-# same recursion the likelihood evaluates (src/dyn_occ_likelihood.h); the
-# backward pass folds in the future detection history so each season's state is
-# conditioned on the whole series, not just the marginal occupancy probability.
-# Returns an [n_sites x n_seasons] matrix. Detection is indexed per (site, season)
-# and colonization / extinction per (site, interval), so a season-varying
-# detection covariate ([n_sites x T]) or an interval-varying transition covariate
-# ([n_sites x (T-1)]) is honoured (gcol33/tulpaObs#124); constant arms broadcast a
-# single value across the periods, matching the engine.
+# Forward-backward (HMM smoothing) state posterior P(z_{i,t} = 1 | y_{i,1:T}) for
+# a dynamic (MacKenzie et al. 2003) occupancy fit. The forward filter is the same
+# recursion the likelihood evaluates (src/dyn_occ_likelihood.h); the backward pass
+# folds in the future detection history so each season's state is conditioned on
+# the whole series, not just the marginal occupancy probability. Returns an
+# [n_sites x n_seasons] matrix. Detection is indexed per (site, season) and
+# colonization / extinction per (site, interval), so a season-varying detection
+# covariate ([n_sites x T]) or an interval-varying transition covariate ([n_sites
+# x (T-1)]) is honoured; constant arms broadcast a single value across the
+# periods, matching the engine.
 .tobs_dynamic_smoothed_z <- function(model, means, pi_list) {
   n_sites   <- model$n_sites
   T_seasons <- model$n_seasons
@@ -856,8 +855,8 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `"change"`. `"detection"` / `"both"` on a `single`/`int_occu()` fit needs
 #'   `X_det.0`.
 #' @param X_det.0 Optional detection design for out-of-sample `"detection"` /
-#'   `"both"` prediction on a `single`-season or [int_occu()] fit
-#'   (gcol33/tulpaObs#223): a plain design matrix for a single-season fit, or
+#'   `"both"` prediction on a `single`-season or [int_occu()] fit: a plain
+#'   design matrix for a single-season fit, or
 #'   a list of one design matrix per source (named by source, or in source
 #'   order) for an `int_occu()` fit -- matching `fitted()$p`'s per-source
 #'   shape. In-sample locations only: like the state-arm `svc()`/`spde()`
@@ -1013,12 +1012,11 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     fn <- .tobs_s3_handler("predict", object$model$model_type)
     return(fn(object, newdata = .tobs_resolve_newdata(newdata, X.0)))
   }
-  # Standalone occu() SVC fit rerouted through the joint direct-grid engine
-  # (gcol33/tulpaObs#81): the occupancy psi / detection p / per-cell change carry
-  # the shared areal field, so route field-aware prediction through the joint
-  # substrate (the occupancy-only twin of the occu_cover joint predict). `newdata`
-  # (or the positional `X.0` when a data.frame) carries the prediction units;
-  # `times` drives the change map.
+  # Standalone occu() SVC fit rerouted through the joint direct-grid engine: the
+  # occupancy psi / detection p / per-cell change carry the shared areal field, so
+  # route field-aware prediction through the joint substrate (the occupancy-only
+  # twin of the occu_cover joint predict). `newdata` (or the positional `X.0` when
+  # a data.frame) carries the prediction units; `times` drives the change map.
   if (isTRUE(object$occu_only_joint)) {
     oc_type <- if (missing(type) || length(type) > 1L) "occupancy" else type
     nd <- newdata
@@ -1079,14 +1077,14 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     occ_out <- .tobs_quantile_df(.tobs_psi_draws(draws, X.0, p_occ), quantiles)
   }
 
-  # Out-of-sample detection prediction (gcol33/tulpaObs#223): the design-matrix
-  # mode used to build occupancy draws only, regardless of `type` -- silently
-  # ignoring a "detection"/"both" request rather than answering it or erroring.
-  # `X_det.0` is per-source for an int_occu() fit (a list matching
-  # fitted()$p's per-source shape, gcol33/tulpaObs#218), a plain matrix
-  # otherwise. This is in-sample-location prediction only, same as the
-  # occupancy design matrix mode above -- no kriging to unseen field
-  # locations (the state-arm svc()/spde() limit already documented).
+  # Out-of-sample detection prediction: the design-matrix mode used to build
+  # occupancy draws only, regardless of `type` -- silently ignoring a
+  # "detection"/"both" request rather than answering it or erroring. `X_det.0`
+  # is per-source for an int_occu() fit (a list matching fitted()$p's
+  # per-source shape), a plain matrix otherwise. This is in-sample-location
+  # prediction only, same as the occupancy design matrix mode above -- no
+  # kriging to unseen field locations (the state-arm svc()/spde() limit already
+  # documented).
   det_out <- NULL
   if (want_det) {
     if (is.null(X_det.0)) {
@@ -1494,8 +1492,8 @@ tobs_check_id <- function(model, fit = NULL) {
 # from. Two sources, in order of preference:
 #
 #   "draws" -- the sampled field columns of `fit$draws`, which the samplers name
-#     `spatial_field[i]` on the areal path (gcol33/tulpaObs#142) and `gp_w[i]`
-#     on the continuous-GP path. These carry the field's posterior variance, so
+#     `spatial_field[i]` on the areal path and `gp_w[i]` on the continuous-GP
+#     path. These carry the field's posterior variance, so
 #     the predicted spread includes it.
 #   "point" -- `fit$spatial_field`, the posterior-mean surface the deterministic
 #     backends report. It is a point estimate: it shifts every draw by the same
@@ -1716,7 +1714,7 @@ tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
   # nearest nodes). Both the field values and the node coordinates are resolved
   # explicitly, and a field that cannot be placed is an error: silently
   # returning the fixed-effect-only prediction is indistinguishable from a fit
-  # whose field is flat (gcol33/tulpaObs#179).
+  # whose field is flat.
   fld <- .tobs_spatial_field_source(object)
   if (identical(fld$kind, "none"))
     stop("tobs_predict_spatial: the fit declares a spatial component but ",

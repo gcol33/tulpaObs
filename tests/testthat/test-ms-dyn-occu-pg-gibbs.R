@@ -1,6 +1,6 @@
 # =============================================================================
 # test-ms-dyn-occu-pg-gibbs.R - community dynamic occupancy Polya-Gamma Gibbs
-# (ms_dyn_occu() method = "pg_gibbs"; spOccupancy tMsPGOcc; tulpaObs#115, #126).
+# (ms_dyn_occu() method = "pg_gibbs"; spOccupancy tMsPGOcc).
 #
 # The community PG machinery (msPGOcc) + a 2-state HMM forward-filter
 # backward-sample latent step: per-species season-1 occupancy psi1 and detection

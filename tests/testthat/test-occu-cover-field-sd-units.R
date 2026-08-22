@@ -1,13 +1,13 @@
-# gcol33/tulpaObs#221: the joint nested_laplace occu_cover() path reported
-# `sigma` as the raw amplitude against the unscaled intrinsic ICAR precision
-# Q = D - W (tau = 1), while the #204 NUTS path reports `field_sd`, the
-# geo-mean marginal SD (Sorbye-Rue) -- the only field-scale summary comparable
-# across icar / bym2 / car_proper. The two differ by sqrt(scale_q), which is
-# ~2.13 for the N = 30 chain graph fixture below, so a fit compared against a
-# simulator (or against the NUTS path) by reading `sigma` off the joint path
-# was silently off by that factor. `field_sd` on the joint path should track
-# `sigma_joint * sqrt(scale_q)`, and both backends' `field_sd` should land in
-# the same convention on the same simulated field.
+# the joint nested_laplace occu_cover() path reported `sigma` as the raw
+# amplitude against the unscaled intrinsic ICAR precision Q = D - W (tau = 1),
+# while the #204 NUTS path reports `field_sd`, the geo-mean marginal SD
+# (Sorbye-Rue) -- the only field-scale summary comparable across icar / bym2 /
+# car_proper. The two differ by sqrt(scale_q), which is ~2.13 for the N = 30
+# chain graph fixture below, so a fit compared against a simulator (or against
+# the NUTS path) by reading `sigma` off the joint path was silently off by
+# that factor. `field_sd` on the joint path should track `sigma_joint *
+# sqrt(scale_q)`, and both backends' `field_sd` should land in the same
+# convention on the same simulated field.
 
 test_that("occu_cover() joint path exposes field_sd, not just the raw amplitude sigma", {
   N <- 30L; J <- 4L
@@ -95,9 +95,9 @@ test_that("joint and NUTS occu_cover() backends report field_sd in the same conv
   fsd_joint <- fit_joint$spatial$field_sd_mean
   fsd_nuts  <- mean(fit_nuts$hyper_draws[, "field_sd"])
 
-  # Same convention, not the same estimator -- allow generous small-N slack
-  # (gcol33/tulpaObs#213 measured sd ratio ~0.88 between these two engines on a
-  # comparable fixture), but a leftover sqrt(scale_q) =~ 2.13 unit mismatch
-  # would blow well past this.
+  # Same convention, not the same estimator -- allow generous small-N slack (
+  # measured sd ratio ~0.88 between these two engines on a comparable fixture),
+  # but a leftover sqrt(scale_q) =~ 2.13 unit mismatch would blow well past
+  # this.
   expect_lt(abs(log(fsd_joint / fsd_nuts)), log(2))
 })

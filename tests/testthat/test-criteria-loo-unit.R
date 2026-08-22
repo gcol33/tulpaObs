@@ -1,12 +1,12 @@
 # =============================================================================
 # test-criteria-loo-unit.R -- loo.unit = c("obs", "cell") on waic() / loo() /
-# cpo() (tulpaObs#105, #247). The convenience wrapper that auto-supplies the
-# fit's per-observation cell map as tulpa_criteria(group =) for leave-one-group-
-# out cross-validation (LOGO-CV), so cover() / occu_cover() report plot/site-level
-# (default) AND cell-level LOO without the caller hand-building the cell map.
-# waic() and cpo() reach the fold through tulpa_criteria(group =); loo() builds a
-# psis_loo through loo::loo(), which scores whatever columns it is handed, so it
-# applies the same fold to the pointwise matrix first (.tobs_loglik_fold_group).
+# cpo(). The convenience wrapper that auto-supplies the fit's per-observation cell
+# map as tulpa_criteria(group =) for leave-one-group- out cross-validation
+# (LOGO-CV), so cover() / occu_cover() report plot/site-level (default) AND
+# cell-level LOO without the caller hand-building the cell map. waic() and cpo()
+# reach the fold through tulpa_criteria(group =); loo() builds a psis_loo through
+# loo::loo(), which scores whatever columns it is handed, so it applies the same
+# fold to the pointwise matrix first (.tobs_loglik_fold_group).
 #
 # The first half is structural / dispatch unit tests on the family cell-map
 # plumbing (.tobs_loo_cell_map), the front-door group resolution

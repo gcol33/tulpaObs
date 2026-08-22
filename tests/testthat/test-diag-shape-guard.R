@@ -1,5 +1,5 @@
-# Argument-shape guards on the diagnostic / pointwise-likelihood kernels
-# (gcol33/tulpaObs#237).
+# Argument-shape guards on the diagnostic / pointwise-likelihood
+# kernels.
 #
 # These kernels read their arguments through .begin() pointers and through
 # Rcpp's operator(), neither of which bounds-checks, so a mis-shaped argument

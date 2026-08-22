@@ -66,7 +66,7 @@ csr_to_adjacency <- function(csr, n) {
 #
 # This is the constant `INLA::inla.scale.model()` applies: it returns s * Q, the
 # precision whose generalised inverse has geometric-mean diagonal 1. Verified
-# against it directly on square lattices (gcol33/tulpaObs#232) --
+# against it directly on square lattices --
 #
 #   lattice     inla.scale.model     .bym2_scale()
 #   5x5              0.516386             0.516386
@@ -135,7 +135,7 @@ csr_to_adjacency <- function(csr, n) {
     csr_to_adjacency(list(row_ptr = row_ptr, col_idx = col_idx), n))
 }
 
-# The BYM2 loading, in the two spellings that are live (gcol33/tulpaObs#232).
+# The BYM2 loading, in the two spellings that are live.
 #
 # The structured block is always built from the UNSCALED ICAR precision, so its
 # realization v has covariance Q^+ and geometric-mean marginal variance s. To
@@ -190,9 +190,9 @@ csr_to_adjacency <- function(csr, n) {
 #
 # Every step reads whatever coordinate dimension it is handed. The neighbour
 # SELECTION here and the neighbour COVARIANCE the kernels build from it have to
-# be computed under the same metric, and the kernels read every column
-# (gcol33/tulpa#389), so a selection pinned to two columns would order by a
-# projection of the domain the covariance does not use.
+# be computed under the same metric, and the kernels read every column, so a
+# selection pinned to two columns would order by a projection of the domain the
+# covariance does not use.
 compute_nngp_neighbors <- function(coords, k) {
   N <- nrow(coords)
   d <- ncol(coords)

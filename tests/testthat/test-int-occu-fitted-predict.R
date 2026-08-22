@@ -1,5 +1,5 @@
-# gcol33/tulpaObs#223: two pre-existing gaps in fitted()/predict() found while
-# fixing #218 (detection-arm spatial field). Neither is a spatial-field issue:
+# two pre-existing gaps in fitted()/predict() found while fixing #218
+# (detection-arm spatial field). Neither is a spatial-field issue:
 #
 #   1. fitted(fit)$z on an int_occu() fit reported the prior marginal (psi),
 #      never conditioning on any source's detection history.

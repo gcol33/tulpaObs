@@ -33,8 +33,8 @@
 # the per-species kernel (single source of truth). The community SPATIAL model --
 # a shared latent field coupled across the occupancy and cover arms with
 # per-species RE on all three arms -- is the reduced-rank spatial-factor fit
-# reached by a front-door icar()/car_proper()/bym2() term (gcol33/tulpa#67,
-# R/ms_occu_cover_spatial.R): per-species loadings on the shared field via
+# reached by a front-door icar()/car_proper()/bym2() term
+# (R/ms_occu_cover_spatial.R): per-species loadings on the shared field via
 # Laplace-EM / NUTS, with per-species community covariances on top. The free
 # per-species loading form generalises a single common field amplitude, so it
 # subsumes the common-amplitude coupling of occu_cover()'s joint-coupled engine.
@@ -43,8 +43,8 @@
 # integrates every variance component on its grid, so per-arm community RE
 # variances plus the field hyperparameters exceed the grid cap -- the closed-form
 # covariance M-step of the Laplace-EM is the scaling route for community variance
-# components (gcol33/tulpaObs#56). The non-spatial dispatcher below rejects a
-# residual structured term with a pointer rather than silently dropping it.
+# components. The non-spatial dispatcher below rejects a residual structured term
+# with a pointer rather than silently dropping it.
 # =============================================================================
 
 
@@ -264,8 +264,8 @@
                     mu * log(yp_safe) + (1 - mu) * log(1 - yp_safe))
       g_ld <- sum(dld[pos_mask])
     } else if (identical(m$positive, "gaussian")) {
-      # Identity-Gaussian arm (gcol33/tulpaObs#127): mu = eta, residual on the
-      # raw response, no log Jacobian.
+      # Identity-Gaussian arm: mu = eta, residual on the raw response, no log
+      # Jacobian.
       sigma <- exp(log_disp)
       r   <- (yp_safe - ep_mat) / sigma
       gpe <- r / sigma                            # (c - eta) / sigma^2
@@ -334,13 +334,13 @@
   list(x = e$values[ord], w = (sqrt(pi) * e$vectors[1L, ]^2)[ord])
 }
 
-# AGHQ debias of the community covariance (tulpaObs#56, the single-arm #47 fix
-# generalised to the joint community RE) now lives in R/community_em.R as the
-# shared `.tobs_cem_aghq_sigma()`/`.tobs_cem_reproject_cinv()` (generalized
-# from this file's own bespoke implementation, gcol33/tulpaObs#226 part 2) --
-# every `.tobs_community_em()` consumer reads the same fix. `arm_idx` here is
-# `list(occ=, p=, pos=)`, so the shared function's arm-agnostic `lapply()`
-# returns exactly the `list(occ=, p=, pos=)` this family's callers expect.
+# AGHQ debias of the community covariance (the single-arm #47 fix generalised
+# to the joint community RE) now lives in R/community_em.R as the shared
+# `.tobs_cem_aghq_sigma()`/`.tobs_cem_reproject_cinv()` (generalized from this
+# file's own bespoke implementation) -- every `.tobs_community_em()` consumer
+# reads the same fix. `arm_idx` here is `list(occ=, p=, pos=)`, so the shared
+# function's arm-agnostic `lapply()` returns exactly the `list(occ=, p=,
+# pos=)` this family's callers expect.
 
 # Fit the community joint occupancy-cover model. `model` is the bound
 # ms_occu_cover model. Returns a `tobs_fit` (via build_ms_occu_cover_fit).
@@ -536,9 +536,9 @@
   }
 
   converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
-  # Progress + ETA for the community joint EM iterations (gcol33/tulpaObs#43);
-  # ON by default, reusing tulpa's shared reporter. ETA is the upper bound to
-  # em.max, finalised on convergence.
+  # Progress + ETA for the community joint EM iterations; ON by default,
+  # reusing tulpa's shared reporter. ETA is the upper bound to em.max,
+  # finalised on convergence.
   .prog <- tulpa:::.tulpa_iter_progress("ms-occu-cover-em", em.max, unit = "iter")
   for (em in seq_len(em.max)) {
     n_iter <- em
@@ -585,13 +585,13 @@
   Vf <- (Vf + t(Vf)) / 2
   logML <- compute_logML(mu, ld, b_list, res$Cinv, Sigma, Sinv)
 
-  # AGHQ variance-component debias (tulpaObs#56). The community means and their
-  # covariance (mu, Vf) are unbiased; only the variance components Sigma carry
-  # the Laplace small-cluster attenuation, so debias Sigma by adaptive
-  # Gauss-Hermite quadrature of the exact per-species RE posterior. Gated to a
-  # small total RE dim (tensor AGHQ over the joint b couples the arms) and ON by
-  # default there; disable with control$re.aghq = FALSE, set nodes with
-  # control$n.quad. Larger RE dims keep the EM covariance + the attenuation flag.
+  # AGHQ variance-component debias. The community means and their covariance (mu,
+  # Vf) are unbiased; only the variance components Sigma carry the Laplace
+  # small-cluster attenuation, so debias Sigma by adaptive Gauss-Hermite
+  # quadrature of the exact per-species RE posterior. Gated to a small total RE
+  # dim (tensor AGHQ over the joint b couples the arms) and ON by default there;
+  # disable with control$re.aghq = FALSE, set nodes with control$n.quad. Larger
+  # RE dims keep the EM covariance + the attenuation flag.
   re_aghq   <- !isFALSE(dots$re.aghq)
   aghq_nq   <- as.integer(dots$n.quad %||% .tobs_n_quad("ms_occu_cover"))
   aghq_cap  <- as.integer(dots$re.aghq.maxdim %||% 4L)
@@ -600,9 +600,9 @@
   if (re_aghq && P <= aghq_cap) {
     Sinv_old <- Sinv
     aghq_out <- tryCatch({
-      # Shared with every .tobs_community_em() consumer (R/community_em.R,
-      # gcol33/tulpaObs#226 part 2): Cov(b_s|y) rides Sigma through Sinv
-      # (C_s = Htt_s + Sinv), so AGHQ-debiasing Sigma alone leaves Cinv
+      # Shared with every .tobs_community_em() consumer
+      # (R/community_em.R): Cov(b_s|y) rides Sigma through Sinv (C_s =
+      # Htt_s + Sinv), so AGHQ-debiasing Sigma alone leaves Cinv
       # inconsistent unless that per-species block is reprojected too.
       Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, ld, b_list, res$Cinv, Sinv,
                                  arm_idx, P, n_quad = aghq_nq)
@@ -619,11 +619,11 @@
     if (aghq_out$ok) {
       # Vf was computed under the PRE-debias Sinv; reprojecting Cinv without
       # also updating Vf leaves Vf/Bf/Cinv mutually inconsistent (the joint
-      # (u, b_s) draw formula assumes all three come from the SAME Sigma --
-      # gcol33/tulpaObs#226 part 2, same fix as R/community_em.R's shared
-      # engine). A_uu = Sf_old + sum_s Bf_s Cinv_s_old Bf_s' (Bf_s is pure
-      # likelihood curvature, unaffected by a Sigma change), so
-      # Sf_new = Sf_old + sum_s Bf_s (Cinv_s_old - Cinv_s_new) Bf_s' -- exact.
+      # (u, b_s) draw formula assumes all three come from the SAME Sigma --,
+      # same fix as R/community_em.R's shared engine). A_uu = Sf_old + sum_s
+      # Bf_s Cinv_s_old Bf_s' (Bf_s is pure likelihood curvature, unaffected
+      # by a Sigma change), so Sf_new = Sf_old + sum_s Bf_s (Cinv_s_old -
+      # Cinv_s_new) Bf_s' -- exact.
       Sf_new <- res$Sf
       for (s in seq_len(S)) {
         dC <- res$Cinv[[s]] - Cinv_out[[s]]
@@ -722,20 +722,20 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       # community mean) -- what a per-species-coefficient consumer (SBC's
       # "rank a fixed species set" design, a calibrated per-species CI) needs
       # beyond the point BLUP; not previously exposed on the fit object.
-      # Covers the full b_s vector across all three arms (occ + p + pos).
-      # Bf = the (mu,log_disp)-b_s cross-Hessian block from the same Newton
-      # solve (gcol33/tulpaObs#226): mu/log_disp and b_s are NOT independent
-      # in the posterior, and Bf is what lets a consumer draw them jointly
-      # instead -- see .tobs_sbc_community_b_draws (R/sbc.R). NULL on a NUTS
-      # fit (no Newton solve to read it from).
+      # Covers the full b_s vector across all three arms (occ + p + pos). Bf
+      # = the (mu,log_disp)-b_s cross-Hessian block from the same Newton
+      # solve: mu/log_disp and b_s are NOT independent in the posterior, and
+      # Bf is what lets a consumer draw them jointly instead -- see
+      # .tobs_sbc_community_b_draws (R/sbc.R). NULL on a NUTS fit (no Newton
+      # solve to read it from).
       Cinv = Cinv_list, Bf = Bf_list,
       # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
       # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
       # sd_*) carry Laplace small-cluster attenuation at small per-species n.
       # When `debias_method == "aghq"` they have been debiased by adaptive
       # Gauss-Hermite quadrature of the exact per-species RE posterior
-      # (tulpaObs#56, generalising the single-arm #47 fix); otherwise (large RE
-      # dim / re.aghq = FALSE) they remain the attenuated EM lower bound.
+      # (generalising the single-arm #47 fix); otherwise (large RE dim /
+      # re.aghq = FALSE) they remain the attenuated EM lower bound.
       var_attenuation = if (identical(debias_method, "aghq")) list(
         affects = character(0),
         means_affected = FALSE,
@@ -743,7 +743,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
         debias = "aghq",
         note = paste0(
           "Community variance components debiased by adaptive Gauss-Hermite ",
-          "quadrature of the exact per-species RE posterior (tulpaObs#56); ",
+          "quadrature of the exact per-species RE posterior; ",
           "community means are unaffected.")
       ) else list(
         affects = c("Sigma_occ", "Sigma_p", "Sigma_pos",
@@ -754,7 +754,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
         note = paste0(
           "Community variance components carry Laplace small-cluster ",
           "attenuation (reported as a lower bound); community means are ",
-          "unaffected. AGHQ debias applies for small RE dim (tulpaObs#56); ",
+          "unaffected. AGHQ debias applies for small RE dim; ",
           "this fit kept the EM variance (re.aghq = FALSE or RE dim too large).")
       )
     ),

@@ -1,9 +1,9 @@
 // ms_occu_kernel.h
 // Per-species occupancy two-state marginal for the community single-season
-// occupancy NUTS target (ms_occu(), method = "nuts"; tulpaObs#69). Site-level
-// detection: one detection probability per (species, site), constant across that
-// site's visits, summarised by (n_valid, n_det) per site. The latent presence z
-// is integrated out exactly per site:
+// occupancy NUTS target (ms_occu(), method = "nuts"). Site-level detection: one
+// detection probability per (species, site), constant across that site's visits,
+// summarised by (n_valid, n_det) per site. The latent presence z is integrated
+// out exactly per site:
 //
 //   psi_i = sigmoid(eta_psi_i),  p_i = sigmoid(eta_p_i)
 //   any-detection site i (n_det_i > 0):

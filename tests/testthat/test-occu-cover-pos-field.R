@@ -1,6 +1,6 @@
 # =============================================================================
 # test-occu-cover-pos-field.R - arm-specific spatial field on the cover
-# (positive) arm of occu_cover() (gcol33/tulpaObs#110).
+# (positive) arm of occu_cover().
 #
 # `spatial(~ 1 + w || cell, graph = adj)` placed in the positive formula adds an
 # INDEPENDENT, non-copied areal field on the cover arm alone -- decoupled from the
@@ -87,7 +87,7 @@ test_that("detection-arm field recovers once the substrate scatters onto p", {
   # The parse -> block -> per-arm-sigma plumbing is arm-generic; the detection arm
   # carries the non-copied field block with field_coef = 1 (the shared field is
   # kept off detection by the spatial_idx = 0 sentinel), the same mechanism the
-  # detection RE uses (gcol33/tulpa#140, gcol33/tulpaObs#102).
+  # detection RE uses.
   skip_if_fast()
   skip_on_cran()
   adj <- .pf_grid_adj(8L); N <- nrow(adj); truth <- 0.7

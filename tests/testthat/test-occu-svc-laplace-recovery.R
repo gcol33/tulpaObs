@@ -1,6 +1,6 @@
 # =============================================================================
 # test-occu-svc-laplace-recovery.R - the continuous NNGP svc() surface on the
-# DETERMINISTIC backends of single-season occupancy (gcol33/tulpaObs#143).
+# DETERMINISTIC backends of single-season occupancy.
 #
 # svc() used to be sampler-only: under method = "laplace" / "nested_laplace" the
 # guard in .tobs_fit_model() refused the term, so the package's default backend

@@ -1,8 +1,8 @@
 # test-ms-ocs-theta-length.R - the ms_ocs C++ entry points hand theta's buffer to
 # kernels that index it by a layout derived from the spec, so a vector of any
-# other length is read past its end (gcol33/tulpaObs#236). Each entry point is
-# pinned against the R mirror of that layout (.ms_ocs_npar_inner for the packed
-# inner latent, .ms_ocs_nuts_layout for the full NUTS coordinate vector).
+# other length is read past its end. Each entry point is pinned against the R
+# mirror of that layout (.ms_ocs_npar_inner for the packed inner latent,
+# .ms_ocs_nuts_layout for the full NUTS coordinate vector).
 
 .ocs_len_grid_adj <- function(nr, nc) {
   N <- nr * nc

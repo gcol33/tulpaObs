@@ -45,13 +45,13 @@ struct CountNutsData {
     Rcpp::NumericMatrix X_p;
     std::vector<std::vector<int>> obs_by_site;
     int total = 0;
-    // Optional single-grouping intercept random effect (tulpaObs#51), arm 0 =
-    // abundance (lambda), 1 = detection (p). The offset is per SITE (uniform
-    // over a site's visits); see nuts_re_block.h. The flat vector grows to
+    // Optional single-grouping intercept random effect, arm 0 = abundance
+    // (lambda), 1 = detection (p). The offset is per SITE (uniform over a
+    // site's visits); see nuts_re_block.h. The flat vector grows to
     // [beta_lambda, beta_p, (log_r), z_1..z_G, log_sigma_re].
     ReBlock re;
-    // Optional fixed-hyper areal field on the abundance arm (tulpaObs#51/#72): the
-    // shared non-centered Gaussian field z = Linv %*% raw added to eta_lambda
+    // Optional fixed-hyper areal field on the abundance arm: the shared
+    // non-centered Gaussian field z = Linv %*% raw added to eta_lambda
     // (nuts_field_block.h). The field covariance is fixed at the nested-Laplace
     // estimate; NUTS samples only the whitened raw and the betas. Field XOR RE
     // (gated upstream).

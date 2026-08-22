@@ -82,10 +82,10 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
   )
 }
 
-# gcol33/tulpaObs#199. A posterior-weighted mean over a pinned axis is a convex
-# combination of that axis's nodes, so a band drawn at or outside the node span
-# holds by construction. Five of this test's bands were drawn that way, two of
-# them exactly at the pin. What replaces them is a paired fit: one grid, two
+# . A posterior-weighted mean over a pinned axis is a convex combination of
+# that axis's nodes, so a band drawn at or outside the node span holds by
+# construction. Five of this test's bands were drawn that way, two of them
+# exactly at the pin. What replaces them is a paired fit: one grid, two
 # simulated truths, and one ordering per block, so each assertion fails when
 # that block's own truth stops moving.
 #
@@ -199,12 +199,12 @@ test_that("cover(): each multi-block hyperparameter follows its own truth", {
 })
 
 
-# gcol33/tulpaObs#192. The multi-block copy spec used to carry the copy axis on
-# `sigma_pos_grid`, a field tulpa's copy resolver does not read, so the axis
-# integrated was the engine's own default whatever the caller asked for -- two
-# grids an order of magnitude apart gave a bit-identical `log_marginal`. The
-# assertion is therefore that the knob CHANGES the fit: a band the default also
-# satisfies is what let this survive.
+# . The multi-block copy spec used to carry the copy axis on `sigma_pos_grid`,
+# a field tulpa's copy resolver does not read, so the axis integrated was the
+# engine's own default whatever the caller asked for -- two grids an order of
+# magnitude apart gave a bit-identical `log_marginal`. The assertion is
+# therefore that the knob CHANGES the fit: a band the default also satisfies is
+# what let this survive.
 test_that("cover(): control$alpha.grid places the multi-block copy axis", {
   skip_if_fast()
   sim <- simulate_cover_multi_block(N = 300, seed = 7005)

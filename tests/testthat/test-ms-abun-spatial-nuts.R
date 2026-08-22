@@ -1,16 +1,15 @@
 # Community / multispecies N-mixture NUTS + a shared areal field on the abundance
-# arm (ms_abun() + icar/bym2/car_proper under method = "nuts"; gcol33/tulpaObs#73,
-# #113). The #73 sampler carries a FIXED-HYPER non-centered shared field: the
-# field precision (tau, rho) is fixed at the sfMsNMix nested-Laplace estimate and
-# the whitened raw ~ N(0, I) is sampled jointly with the community means, per-
-# species deviations, and community covariances. car_proper uses a square inverse-
-# Cholesky loading; the intrinsic icar / bym2 fields use the #71 sum-to-zero
-# eigen-loading that drops the constant precision null direction (n_raw < n_units),
-# so they sample with the same well-conditioned geometry (0 divergences) rather
-# than routing to nested_laplace. This path is wired at R/tobs_dispatch.R but was
-# previously untested; the recovery invariant is that NUTS reproduces the
-# integrated shared field (cor high), recovers the community abundance slope, and
-# samples cleanly.
+# arm (ms_abun() + icar/bym2/car_proper under method = "nuts"). The #73 sampler
+# carries a FIXED-HYPER non-centered shared field: the field precision (tau, rho)
+# is fixed at the sfMsNMix nested-Laplace estimate and the whitened raw ~ N(0, I)
+# is sampled jointly with the community means, per- species deviations, and
+# community covariances. car_proper uses a square inverse- Cholesky loading; the
+# intrinsic icar / bym2 fields use the #71 sum-to-zero eigen-loading that drops the
+# constant precision null direction (n_raw < n_units), so they sample with the same
+# well-conditioned geometry (0 divergences) rather than routing to nested_laplace.
+# This path is wired at R/tobs_dispatch.R but was previously untested; the recovery
+# invariant is that NUTS reproduces the integrated shared field (cor high),
+# recovers the community abundance slope, and samples cleanly.
 #
 # Each fit warm-starts from the sfMsNMix nested Laplace-EM (S species x an EM x an
 # outer grid) then runs the sampler, so every block is skip_on_cran() + skip_if_fast().

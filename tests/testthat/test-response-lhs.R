@@ -1,11 +1,10 @@
-## Response on the top formula LHS (gcol33/tulpaObs#66).
-##
-## A single-vector-response family (the cover hurdle) may carry its response on
-## the formula left-hand side and drop `y =`; the LHS form must produce the same
-## fit as the equivalent `y =` call. Matrix / array / list response families
-## keep `y =`, and a two-sided formula for those errors. The validation paths
-## (response given twice; matrix family with a two-sided formula) run always; the
-## equality-of-fits check is a real fit and is gated for fast iteration.
+# # Response on the top formula LHS. # # A single-vector-response family (the
+# cover hurdle) may carry its response on # the formula left-hand side and drop
+# `y =`; the LHS form must produce the same # fit as the equivalent `y =` call.
+# Matrix / array / list response families # keep `y =`, and a two-sided formula
+# for those errors. The validation paths # (response given twice; matrix family
+# with a two-sided formula) run always; the # equality-of-fits check is a real
+# fit and is gated for fast iteration.
 
 simulate_lhs_cover <- function(N = 600, beta_occ = c(-0.4, 0.8),
                                beta_pos = c(0.5, -1.2), phi = 30, seed = 7) {

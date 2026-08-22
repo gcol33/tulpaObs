@@ -12,27 +12,26 @@
 #   community    wired                   stop()
 #   dynamic      wired (psi1 only)       stop()
 #
-# The state field on jsdm / community broadcasts the site-indexed mesh
-# projection A onto the N = n_sites * n_species state rows (one shared
-# site-level field across the species at a site, via .tobs_spde_broadcast_spec
-# and .tobs_state_block_dims). The dynamic state field enters season-1 psi1
-# only; the colonization / extinction transition predictors are separate latent
-# processes whose own mesh fields are not wired (a state-arm spde() term maps to
-# psi1). The integrated detection cell is reached by writing the spde() term on
-# the `detection` formula (a term's arm membership is the formula it is written
-# in). That arm is S source blocks reading one shared latent occupancy state, so
-# each source fits its own realization of the field at its own sites and
-# `spatial_field_det` is a per-source named list; .tobs_validate_integrated_terms()
-# (R/occu.R) gates what the arm accepts, since the areal kinds and the
-# temporal / re / svc / latent classes are built into the multi-block latent
-# prior the nested-Laplace path attaches to the STATE block.
-# A single field shared across both arms at once (shared = c(TRUE, TRUE))
-# is a stop() everywhere: the single-Laplace block fitter fits one field
-# realization per submodel block, so a genuinely shared realization needs the
-# copy() path, not two independent blocks. The areal path (icar/bym2/car_proper
-# via nested_laplace) is wider; this matrix is the continuous-mesh SPDE path
-# only. The continuous gp()/spde() fields on the N-mixture arms (abun /
-# em_nested / ms_abun) are tracked separately (gcol33/tulpaObs#21).
+# The state field on jsdm / community broadcasts the site-indexed mesh projection A
+# onto the N = n_sites * n_species state rows (one shared site-level field across
+# the species at a site, via .tobs_spde_broadcast_spec and .tobs_state_block_dims).
+# The dynamic state field enters season-1 psi1 only; the colonization / extinction
+# transition predictors are separate latent processes whose own mesh fields are not
+# wired (a state-arm spde() term maps to psi1). The integrated detection cell is
+# reached by writing the spde() term on the `detection` formula (a term's arm
+# membership is the formula it is written in). That arm is S source blocks reading
+# one shared latent occupancy state, so each source fits its own realization of the
+# field at its own sites and `spatial_field_det` is a per-source named list;
+# .tobs_validate_integrated_terms() (R/occu.R) gates what the arm accepts, since
+# the areal kinds and the temporal / re / svc / latent classes are built into the
+# multi-block latent prior the nested-Laplace path attaches to the STATE block. A
+# single field shared across both arms at once (shared = c(TRUE, TRUE)) is a stop()
+# everywhere: the single-Laplace block fitter fits one field realization per
+# submodel block, so a genuinely shared realization needs the copy() path, not two
+# independent blocks. The areal path (icar/bym2/car_proper via nested_laplace) is
+# wider; this matrix is the continuous-mesh SPDE path only. The continuous
+# gp()/spde() fields on the N-mixture arms (abun / em_nested / ms_abun) are tracked
+# separately.
 
 # Validate that `spatial` (a `tobs_spatial` or NULL) can be consumed by the
 # Laplace path. Wired by arm and model type:
@@ -79,12 +78,12 @@
 # it cannot fit -- non-single families, RE + spatial, RE + visit-level
 # detection, a single RE shared across both predictors -- error here with a
 # pointer to `method = "nuts"` (which fits every RE form) rather than being
-# silently dropped (gcol33/tulpaObs#11). The raw EM variance components (sigma,
-# correlation) carry the Laplace small-cluster bias for binary data (the glmer
-# nAGQ=1 regime, not Breslow-Clayton PQL); the default re.aghq = TRUE refines
-# them on the exact-marginal adaptive Gauss-Hermite likelihood (R/re_aghq.R),
-# removing the attenuation, with a default LKJ(re.lkj = 1.5) penalty
-# regularizing a weakly-identified RE correlation off the +-1 boundary.
+# silently dropped. The raw EM variance components (sigma, correlation) carry
+# the Laplace small-cluster bias for binary data (the glmer nAGQ=1 regime, not
+# Breslow-Clayton PQL); the default re.aghq = TRUE refines them on the
+# exact-marginal adaptive Gauss-Hermite likelihood (R/re_aghq.R), removing the
+# attenuation, with a default LKJ(re.lkj = 1.5) penalty regularizing a
+# weakly-identified RE correlation off the +-1 boundary.
 .validate_re_laplace <- function(re, model, spatial, approx) {
   re_list <- if (inherits(re, "tobs_re")) list(re) else re
 
@@ -331,7 +330,7 @@ extract_beta <- function(sub, p) {
 }
 
 # Louis-corrected observed Fisher info for the occupancy fixed-effect block
-# of a single-season occu fit (tulpaObs#7).
+# of a single-season occu fit.
 #
 # Why this is needed. The inner M-step encodes the soft-imputed P(z_i = 1 | y_i)
 # as a pseudo-binomial likelihood with n_trials = M (M = 1000 non-spatial,
@@ -396,14 +395,14 @@ extract_beta <- function(sub, p) {
 }
 
 # Marginal Louis observed Fisher info for the SITE-LEVEL detection block of a
-# single-season fit (tulpaObs#7, detection arm). The detection M-step fits a
-# weighted binomial whose returned H_beta = X_det' diag(w n_valid p(1-p)) X_det
-# is the *complete-data* info: it treats the soft occupancy weight
-# w_i = P(z_i = 1 | y) as known and so under-states the SE (the M-step Hessian
-# is the wrong object for SEs, exactly as on the psi arm). The occupancy and
-# detection estimating equations both depend on the latent z, so the detection
-# SE must come from the JOINT (psi, det) Louis observed info, marginalized over
-# psi -- the diagonal det block alone fixes the intercept but leaves the slope
+# single-season fit (detection arm). The detection M-step fits a weighted
+# binomial whose returned H_beta = X_det' diag(w n_valid p(1-p)) X_det is the
+# *complete-data* info: it treats the soft occupancy weight w_i = P(z_i = 1 |
+# y) as known and so under-states the SE (the M-step Hessian is the wrong
+# object for SEs, exactly as on the psi arm). The occupancy and detection
+# estimating equations both depend on the latent z, so the detection SE must
+# come from the JOINT (psi, det) Louis observed info, marginalized over psi --
+# the diagonal det block alone fixes the intercept but leaves the slope
 # under-dispersed.
 #
 # Complete-data scores: s_psi,i = x_psi,i (z_i - psi_i),
@@ -488,8 +487,8 @@ extract_beta <- function(sub, p) {
 # matrix the SEs were derived from (cov = solve(prec)); NULL or a non-invertible
 # `prec` yields the diagonal block diag(sds^2), i.e. the previous behaviour. This
 # keeps the marginal SEs byte-identical while restoring the joint correlation the
-# diagonal pseudo-draws used to discard (gcol33/tulpaObs#44). NA / non-finite SEs
-# map to a zero-variance coordinate (drawn as a point mass downstream).
+# diagonal pseudo-draws used to discard. NA / non-finite SEs map to a
+# zero-variance coordinate (drawn as a point mass downstream).
 .cor_scaled_cov <- function(prec, sds) {
   p <- length(sds)
   s <- ifelse(is.finite(sds), sds, 0)
@@ -569,8 +568,8 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # Collect betas from correction (if available) or EM fits. Each arm also
   # contributes its within-arm covariance block (`prec_k` = the precision the
   # arm's SEs came from), so the pseudo-draws carry the joint correlation rather
-  # than a diagonal stand-in (gcol33/tulpaObs#44). Cross-arm covariance stays
-  # zero, matching the EM's separate-arm M-step factorization.
+  # than a diagonal stand-in. Cross-arm covariance stays zero, matching the EM's
+  # separate-arm M-step factorization.
   means <- numeric()
   sds <- numeric()
   nms <- character()
@@ -597,22 +596,23 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
       means <- c(means, beta)
 
       # Louis-corrected SE on the psi block of a single-season fit. The inner
-      # M-step Hessian is M * I_complete + P_prior (pseudo-binomial trick);
-      # I_obs = X' diag(psi(1-psi) - w(1-w)) X + P_prior is the right object
-      # for SEs. See `.louis_info_psi_single` and tulpaObs#7.
-      # Louis-corrected occupancy SE applies to the fixed-effect-only fit. When
-      # random effects are present the occupancy block's fixed-effect SE comes
-      # from the GLMM marginal precision (`H_beta`, Schur over the RE block)
-      # that tulpa_laplace returns, so skip Louis on the RE path.
-      # The Louis identity for the state arm is not single-season-specific. The
-      # arm's complete-data score is x_i (z_i - psi_i) in every one of these
-      # families, so I_obs = X' diag(psi(1-psi) - w(1-w)) X with w = E[z_i | y].
-      # For a dynamic fit the state arm is psi1 and its latent is z_1, whose
-      # smoothed posterior mean is the first season's weight column; integrated
-      # shares one psi across sources and carries a single weight per site.
-      # A state arm left out of this list falls through to
-      # .se_from_laplace_fit(), which finds no H_beta on a nested-Laplace fit and
-      # returns NA, so that family reports no state SEs and no intervals.
+      # M-step Hessian is M * I_complete + P_prior (pseudo-binomial trick); I_obs
+      # = X' diag(psi(1-psi) - w(1-w)) X + P_prior is the right object for SEs.
+      # See `.louis_info_psi_single`. The Louis-corrected occupancy SE applies
+      # to the
+      # fixed-effect-only fit. When random effects are present the occupancy
+      # block's fixed-effect SE comes from the GLMM marginal precision (`H_beta`,
+      # Schur over the RE block) that tulpa_laplace returns, so skip Louis on the
+      # RE path. The Louis identity for the state arm is not
+      # single-season-specific. The arm's complete-data score is x_i (z_i -
+      # psi_i) in every one of these families, so I_obs = X' diag(psi(1-psi) -
+      # w(1-w)) X with w = E[z_i | y]. For a dynamic fit the state arm is psi1
+      # and its latent is z_1, whose smoothed posterior mean is the first
+      # season's weight column; integrated shares one psi across sources and
+      # carries a single weight per site. A state arm left out of this list falls
+      # through to .se_from_laplace_fit(), which finds no H_beta on a
+      # nested-Laplace fit and returns NA, so that family reports no state SEs
+      # and no intervals.
       use_louis <- model$model_type %in% c("single", "dynamic", "integrated") &&
                    identical(sub_name, "occ") &&
                    !is.null(em_result$weights) &&
@@ -648,7 +648,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
                  !is.null(em_result$weights) &&
                  nrow(model$X_processes[[2]]) == length(em_result$weights)) {
         # Site-level detection SE via the marginal Louis observed info
-        # (tulpaObs#7, detection arm). The detection M-step's H_beta is the
+        # (detection arm). The detection M-step's H_beta is the
         # complete-data info (soft occupancy weight treated as known), which
         # under-states the SE the same way the psi arm did; recompute the
         # observed info, marginalizing over the coupled occupancy block.
@@ -728,7 +728,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
 
   # Append the deterministic random-effect block (sigma hyperparameters +
   # per-group BLUPs) so the public output matches the NUTS column layout and
-  # ranef() / summary() can name them (gcol33/tulpaObs#11).
+  # ranef() / summary() can name them.
   if (!is.null(re_block)) {
     means <- c(means, re_block$means)
     sds   <- c(sds, re_block$sds)
@@ -744,7 +744,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # fixed-effect arm (so derived quantities like predicted psi = plogis(X beta)
   # propagate the coefficient correlation), zero across arms. Coordinates with
   # an unavailable SE (NA) floor to a near-constant point mass, the same as the
-  # previous per-coefficient draw (gcol33/tulpaObs#44).
+  # previous per-coefficient draw.
   n_pseudo <- 1000L
   V_draw <- .assemble_block_diag(cov_blocks, n_params)
   dimnames(V_draw) <- list(nms, nms)
@@ -822,11 +822,11 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   }
 
   # Marginal log-likelihood at the fixed-effect mode, so logLik() / AIC() /
-  # BIC() / glance() surface a finite value (gcol33/tulpaObs#87). The EM tracks
-  # parameter deltas, not the marginal, so evaluate it here through the shared
-  # family pointwise kernel -- the same marginal the WAIC / LOO scoring uses.
-  # The single-season exact-marginal refine (.tobs_occu_marginal_refine) moves
-  # the mode afterwards and refreshes log_lik / log_prob from the refined means.
+  # BIC() / glance() surface a finite value. The EM tracks parameter deltas, not
+  # the marginal, so evaluate it here through the shared family pointwise kernel
+  # -- the same marginal the WAIC / LOO scoring uses. The single-season
+  # exact-marginal refine (.tobs_occu_marginal_refine) moves the mode afterwards
+  # and refreshes log_lik / log_prob from the refined means.
   marg_ll <- .tobs_laplace_marginal_loglik(model, means)
   # Free-parameter count for the AIC / BIC penalty (logLik()'s `df`): the fixed
   # coefficients (the process betas plus any visit-level detection betas), which

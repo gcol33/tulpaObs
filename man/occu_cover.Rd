@@ -86,7 +86,7 @@ NOT in \code{fit$means} / \code{fit$vcov} -- folding it in there would make the
 joint parameter vcov exactly singular. Do not compare fits, or a fit
 against \code{\link[=simulate_occu_cover]{simulate_occu_cover()}}'s \code{sigma}, by reading the raw \code{sigma} on
 this path: it is the field's amplitude against the unscaled intrinsic ICAR
-precision \code{Q = D - W} (\code{gcol33/tulpaObs#221}), which differs from \code{field_sd}
+precision \code{Q = D - W}, which differs from \code{field_sd}
 by \code{sqrt(scale_q)}, a graph-size-dependent factor (about 2.1 for a 30-node
 chain graph). \code{field_sd} is the number comparable across fits and to a
 simulation truth; \code{sigma} is the raw amplitude the engine's grid axis is
@@ -226,7 +226,7 @@ a scalar multiple of the occupancy field, \code{alpha} collapses toward 0 and th
 cover arm inherits no field, so per-cell conditional cover (and its change over
 time, \code{delta_cover_cond}) comes out flat. A \code{spatial()} bar placed in the
 \code{positive} formula adds an INDEPENDENT, non-copied areal field on the cover arm
-alone (gcol33/tulpaObs#110):
+alone:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
      detection  = ~ 1,
@@ -312,8 +312,8 @@ Under \code{method = "nested_laplace"} (shared-field spatial) and \code{method =
 intercepts may be written on the \strong{detection} or \strong{positive-cover} formula
 with the usual \code{lme4} bar or \code{re()} spelling, e.g.
 \code{detection = ~ effort + (1 | habitat)}. The grouping is per visit -- one code
-per \verb{(site, visit)} entry, distinct from the per-site occupancy-arm grouping
-(gcol33/tulpaObs#56) -- so a many-level categorical visit covariate (an EUNIS
+per \verb{(site, visit)} entry, distinct from the per-site occupancy-arm
+grouping -- so a many-level categorical visit covariate (an EUNIS
 habitat class, an observer) enters as a partially pooled random intercept.
 \strong{Crossed} (\code{(1 | habitat) + (1 | observer)}) and \strong{nested}
 (\code{(1 | region/site)}, which expands to \code{re(region) + re(region:site)})

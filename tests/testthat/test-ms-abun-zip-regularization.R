@@ -1,7 +1,6 @@
 # =============================================================================
 # test-ms-abun-zip-regularization.R - regularization + robustness of the
-# community zero-inflated N-mixture (ms_abun(mixture = "zip" / "zinb"),
-# gcol33/tulpaObs#116).
+# community zero-inflated N-mixture (ms_abun(mixture = "zip" / "zinb")).
 #
 # Two guards on the joint AGHQ ZI fit:
 #   * K_max floor. The marginal sums the latent N to K_max, so a count above

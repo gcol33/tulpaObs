@@ -38,7 +38,7 @@ at few species it can settle near its lower boundary, which shifts
 \code{mu_log_r} and narrows its SE at the same time.
 
 Measured on simulated data (39 \code{laplace} fits at 8 and 36 species,
-\code{sigma_logr = 0.5}, gcol33/tulpaObs#235): where \code{sigma_log_r} came back at
+\code{sigma_logr = 0.5}): where \code{sigma_log_r} came back at
 least 0.30, the nominal 95\% interval covered 33 of 34 with a
 \code{sqrt(mean(z^2))} of 0.88; where it came back below, it covered 2 of 5, the
 point estimate was 2.2x further from the truth and the SE 28\% narrower. So

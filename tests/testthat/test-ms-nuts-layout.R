@@ -1,5 +1,5 @@
-# The block-offset walk shared by the community NUTS layouts
-# (gcol33/tulpaObs#231). All six pack to one recipe --
+# The block-offset walk shared by the community NUTS layouts. All six
+# pack to one recipe --
 #
 #   mu [P] | {z_s} species-major [S*P] | per-arm chol blocks | trailing blocks
 #

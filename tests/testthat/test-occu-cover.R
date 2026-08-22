@@ -6,8 +6,8 @@
 #   - family constructor + tobs() smoke
 #   - input shape validation
 #   - point recovery and 95% Wald CI coverage. The family is now
-#     `status = "working"` (gcol33/tulpaObs#96), so the gate is the working-family
-#     standard per the recovery rubric in tulpaObs CLAUDE.md "Statistical Code
+#     `status = "working"`, so the gate is the working-family standard per
+#     the recovery rubric in tulpaObs CLAUDE.md "Statistical Code
 #     Needs Recovery Tests": pooled coverage (every coefficient x seed cell) at
 #     the 0.85 finite-sample floor for a nominal-95% interval, plus a 0.80
 #     per-coordinate floor for Monte-Carlo slack. Measured pooled coverage across
@@ -179,9 +179,9 @@ test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
   expect_lt(abs(mean(est$pos_x[conv])   - beta_pos_truth[2L]), 0.20)
   expect_lt(abs(mean(est$sigma[conv])   - sigma_pos_truth),    0.10)
 
-  # 95% Wald CI coverage (working-family gate, gcol33/tulpaObs#96): pooled over
-  # every coefficient x seed cell at the 0.85 floor, with a 0.80 per-coordinate
-  # floor for Monte-Carlo slack. Measured pooled coverage ~0.95 at 30 seeds.
+  # 95% Wald CI coverage (working-family gate): pooled over every coefficient x
+  # seed cell at the 0.85 floor, with a 0.80 per-coordinate floor for
+  # Monte-Carlo slack. Measured pooled coverage ~0.95 at 30 seeds.
   cov_cells <- list(
     psi_int = abs(est$psi_int[conv] - beta_occ_truth[1L]) < 1.96 * se$psi_int[conv],
     psi_x   = abs(est$psi_x[conv]   - beta_occ_truth[2L]) < 1.96 * se$psi_x[conv],
@@ -255,8 +255,8 @@ test_that("occu_cover() recovers parameters (beta positive, 20 seeds)", {
   expect_true(all(abs(bias) < 0.30))
   expect_gt(mean(phi_est, na.rm = TRUE), 10)   # well above the 1 / 0 boundary
 
-  # 95% Wald CI coverage (working-family gate, gcol33/tulpaObs#96): pooled at the
-  # 0.85 floor, 0.80 per-coordinate floor. Measured pooled ~0.95 at 30 seeds.
+  # 95% Wald CI coverage (working-family gate): pooled at the 0.85 floor, 0.80
+  # per-coordinate floor. Measured pooled ~0.95 at 30 seeds.
   cov_cells <- abs(est[ok, , drop = FALSE] -
                    matrix(truth, sum(ok), 6L, byrow = TRUE)) <
                1.96 * se[ok, , drop = FALSE]

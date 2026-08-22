@@ -7,9 +7,8 @@
 # `.attach_priors_to_blocks()` below) that tulpa::tulpa_laplace() adds to the
 # negative-log-posterior as `sum((beta_j - mu_j)^2 / (2 * sd_j^2))`. The same
 # prior flows through tulpa's MI / Gibbs correction refits, so the penalised
-# estimate and the stochastic-correction draws regularise identically
-# (gcol33/tulpa#27). `sd_j = Inf` sets that coefficient's precision to 0
-# (no penalty).
+# estimate and the stochastic-correction draws regularise identically. `sd_j
+# = Inf` sets that coefficient's precision to 0 (no penalty).
 #
 # Defaults (2026-05-15):
 #   * `p_(Intercept)`          ~ Normal(0, 1.5)
@@ -276,13 +275,13 @@ print.occu_priors <- function(x, ...) {
 # (.fit_block_via_laplace) reads `block$beta_prior` and threads it through
 # tulpa_laplace() in every phase (EM iterations and the MI/Gibbs correction
 # refits), so the penalised estimate and the corrected draws regularise the
-# same way (gcol33/tulpa#27).
+# same way.
 #
 # The encoded blocks know their submodel name via `names(blocks)` (set by the
 # callbacks: c("occ", "det"), c("occ", "det", "col", "ext"), ...); we map those
 # to the user-facing prior buckets via .prior_for_submodel(). Spatial blocks
 # are skipped: tulpa_laplace() rejects beta_prior on the SPDE/NNGP path (which
-# carries its own fixed-effect prior), so they stay unpenalised (tulpaObs#5).
+# carries its own fixed-effect prior), so they stay unpenalised.
 .attach_priors_to_blocks <- function(blocks, model, prior_spec) {
   if (is.null(prior_spec)) return(blocks)
   pi_list <- model$process_info

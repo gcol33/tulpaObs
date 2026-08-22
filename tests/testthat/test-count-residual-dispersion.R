@@ -1,6 +1,6 @@
 # =============================================================================
 # test-count-residual-dispersion.R -- residuals() scores a count fit at the
-# variance its own mixture implies (gcol33/tulpaObs#260).
+# variance its own mixture implies.
 #
 # abun(), removal() and distance() all observe a thinned latent abundance, and
 # the negative binomial is closed under binomial thinning with the SAME size, so

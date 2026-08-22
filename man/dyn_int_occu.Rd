@@ -11,7 +11,7 @@ A \code{tobs_family} object for \code{\link[=tobs]{tobs()}}.
 }
 \description{
 Dynamic (multi-season) occupancy observed by several detection sources
-(spOccupancy \code{tIntPGOcc}; gcol33/tulpaObs#122): the product of a dynamic
+(spOccupancy \code{tIntPGOcc}): the product of a dynamic
 occupancy HMM (season-1 occupancy \code{psi1}, colonization \code{gamma}, extinction
 \code{eps}) and integrated occupancy (a per-season emission that pools multiple
 detection sources). Pooling sources across seasons is how colonization /

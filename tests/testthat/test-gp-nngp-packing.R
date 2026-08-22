@@ -1,11 +1,11 @@
 # The NNGP neighbour-pair distance array crosses into the compiled kernels as a
-# flat vector, and the two sides disagreed about its ordering
-# (gcol33/tulpaObs#152). `compute_nngp_neighbors()` returns [i, j1, j2]; the
-# hmc_gp kernels read it row-major at i * k * k + j1 * k + j2, while the term
-# packed it with `as.vector()`, which is column-major. Both orderings have
-# N * k * k elements, so the kernel's bounds guard passed and nothing surfaced:
-# the neighbour covariance went near-singular and the GP prior stopped
-# constraining the field at all.
+# flat vector, and the two sides disagreed about its ordering.
+# `compute_nngp_neighbors()` returns [i, j1, j2]; the hmc_gp kernels read it
+# row-major at i * k * k + j1 * k + j2, while the term packed it with
+# `as.vector()`, which is column-major. Both orderings have N * k * k elements,
+# so the kernel's bounds guard passed and nothing surfaced: the neighbour
+# covariance went near-singular and the GP prior stopped constraining the field
+# at all.
 #
 # `nn_order` / `nn_idx` are NOT part of this: they stay 1-based in the term and
 # `populate_helpers.h` rebases them for the engine (which is why the twin below

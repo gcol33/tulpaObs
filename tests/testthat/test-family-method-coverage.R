@@ -20,7 +20,7 @@ test_that(".tobs_validate_family_method accepts every supported method", {
 test_that(".tobs_validate_family_method rejects an unsupported method", {
   # nested_laplace is wired across the areal families but NOT the non-spatial
   # community joint cover hurdle (the per-species RE layered on the shared
-  # coupled field needs upstream tulpa support; gcol33/tulpaObs#47).
+  # coupled field needs upstream tulpa support).
   expect_error(.tobs_validate_family_method("nested_laplace", ms_occu_cover()),
                "not available for ms_occu_cover")
   # nested_laplace_sla (skew on the nested path) is occu + cover only.
@@ -32,17 +32,17 @@ test_that(".tobs_validate_family_method rejects an unsupported method", {
 })
 
 test_that(".tobs_validate_family_method now accepts nested_laplace for the multi-block families", {
-  # gcol33/tulpaObs: nested-Laplace generalised beyond single-season occupancy.
+  # Nested-Laplace generalised beyond single-season occupancy.
   expect_silent(.tobs_validate_family_method("nested_laplace", int_occu()))
   expect_silent(.tobs_validate_family_method("nested_laplace", dyn_occu()))
-  # The shared areal field on the JSDM latent occupancy (gcol33/tulpaObs#76).
+  # The shared areal field on the JSDM latent occupancy.
   expect_silent(.tobs_validate_family_method("nested_laplace", jsdm()))
 })
 
 test_that("ms_occu / ms_int_occu support laplace + pg_gibbs + nuts, not areal", {
-  # ms_occu gained a community NUTS sampler (gcol33/tulpaObs#69) and a shared
-  # areal field (gcol33/tulpaObs#75); ms_int_occu gained the multi-source
-  # community NUTS sampler (gcol33/tulpaObs#115) but has no areal path.
+  # ms_occu gained a community NUTS sampler and a shared areal field;
+  # ms_int_occu gained the multi-source community NUTS sampler but has no
+  # areal path.
   for (m in c("laplace", "nuts", "nested_laplace"))
     expect_silent(.tobs_validate_family_method(m, ms_occu()))
   for (m in c("laplace", "pg_gibbs", "nuts"))
@@ -53,8 +53,8 @@ test_that("ms_occu / ms_int_occu support laplace + pg_gibbs + nuts, not areal", 
 
 test_that("ms_dyn_occu supports laplace + nested_laplace + nuts", {
   # A shared areal field on the first-season occupancy arm added the
-  # nested_laplace route (gcol33/tulpaObs#123); the community HMM-forward NUTS
-  # sampler added the nuts route (gcol33/tulpaObs#115, 0.0.158).
+  # nested_laplace route; the community HMM-forward NUTS sampler added the
+  # nuts route (0.0.158).
   for (m in c("laplace", "nested_laplace", "nuts"))
     expect_silent(.tobs_validate_family_method(m, ms_dyn_occu()))
 })
@@ -86,7 +86,7 @@ test_that("the #116 laplace-only families give the friendly registry error", {
   # distsamp_open are laplace-only. Each is in `.tobs_family_methods`, so an
   # unsupported method= is rejected by the central registry with a "Supported:"
   # pointer BEFORE dispatch, rather than falling through to a per-dispatcher
-  # `.map_engine` internal-error (gcol33/tulpaObs#141).
+  # `.map_engine` internal-error.
   laplace_only <- c("royle_nichols", "occu_ttd", "occu_multi",
                     "double_observer", "gdistremoval", "distsamp_open")
   for (fam_name in laplace_only) {
@@ -140,8 +140,7 @@ test_that("tobs() rejects gibbs/mi for the cover hurdle (no EM correction engine
 
 test_that("every family's default_engine resolves under method = 'auto'", {
   # The "auto" branch had no `pg_gibbs` case, so `t_occu()` -- the one family
-  # declaring it -- could not be fitted at the documented default at all
-  # (gcol33/tulpaObs#253).
+  # declaring it -- could not be fitted at the documented default at all.
   ctors <- list(occu = occu, dyn_occu = dyn_occu, int_occu = int_occu,
                 abun = abun, cover = cover, occu_cover = occu_cover,
                 t_occu = t_occu, count = count, jsdm = jsdm)

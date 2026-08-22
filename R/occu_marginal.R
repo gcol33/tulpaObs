@@ -1,6 +1,6 @@
 # =============================================================================
-# Closed-form marginal-likelihood refinement for single-season occupancy
-# (gcol33/tulpaObs#7).
+# Closed-form marginal-likelihood refinement for single-season
+# occupancy.
 #
 # For a single-season occupancy model the latent occupancy z integrates out in
 # closed form, so the marginal likelihood is exact and cheap:
@@ -60,13 +60,13 @@
 # of the packed parameter vector, optimise from the EM mode, read calibrated SEs
 # from the Hessian, and overwrite the fit's fixed-effect estimates, SEs, and the
 # matching pseudo-draws (drawn from the full joint covariance so derived
-# quantities carry the coefficient correlation; gcol33/tulpaObs#44). The
-# marginal log-likelihood logLik() reports is refreshed from the refined means
-# through the same family pointwise kernel WAIC / LOO use (gcol33/tulpaObs#87).
-# `refresh`, when supplied, is called as refresh(fit, par, V) to recompute any
-# family-specific stored quantities (e.g. the per-site occupancy weights) at the
-# refined mode. Falls back to the unmodified fit on any failure -- the refined
-# fit is never worse than the EM result.
+# quantities carry the coefficient correlation). The marginal log-likelihood
+# logLik() reports is refreshed from the refined means through the same family
+# pointwise kernel WAIC / LOO use. `refresh`, when supplied, is called as
+# refresh(fit, par, V) to recompute any family-specific stored quantities (e.g.
+# the per-site occupancy weights) at the refined mode. Falls back to the
+# unmodified fit on any failure -- the refined fit is never worse than the EM
+# result.
 .tobs_marginal_refine_apply <- function(fit, model, all_nm, nlp, refresh = NULL) {
   tryCatch({
     if (!all(all_nm %in% names(fit$means))) return(fit)
@@ -76,10 +76,10 @@
     # A tighter reltol than optim()'s default (relative to the function
     # VALUE, ~1e-8) matters when the starting point is farther from the
     # optimum along a shallow direction -- the default can pass a point whose
-    # NLP value has stopped moving while a coordinate is still ~0.01 off
-    # (gcol33/tulpaObs#225: int_occu()'s un-refined EM mode is farther from
-    # the exact-marginal optimum than occu()'s own, and needed this to reach
-    # the same point occu() already reached under the looser default).
+    # NLP value has stopped moving while a coordinate is still ~0.01 off:
+    # int_occu()'s un-refined EM mode is farther from the exact-marginal
+    # optimum than occu()'s own, and needed this to reach the same point
+    # occu() already reached under the looser default.
     opt <- optim(start, nlp, method = "BFGS", hessian = TRUE,
                 control = list(reltol = 1e-12, maxit = 500L))
     V <- tryCatch(solve(opt$hessian), error = function(e) NULL)

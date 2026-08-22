@@ -128,11 +128,11 @@ test_that("occu_cover group_var runs with more sites than field nodes", {
 
 
 # Build an UNEQUAL sites-per-cell design (1..max_per sites per field node) with
-# high true occupancy. This is the regime that triggered gcol33/tulpa#52: the
-# coupled psi-arm intercept was unconstrained by the per-arm beta prior and the
-# inner Newton drifted to the psi->1 boundary (intercept ~28, field collapsing
-# to 0). A regular (equal sites/cell) design recovers either way, so the test
-# must use an irregular one.
+# high true occupancy. This is the regime that triggered: the coupled psi-arm
+# intercept was unconstrained by the per-arm beta prior and the inner Newton
+# drifted to the psi->1 boundary (intercept ~28, field collapsing to 0). A
+# regular (equal sites/cell) design recovers either way, so the test must use
+# an irregular one.
 .gv_sim_unequal <- function(n_cells, adj, seed, max_per = 8L, J = 10L,
                             psi_int = 1.0, sigma = 0.9, alpha = 1.0,
                             b_p = c(stats::qlogis(0.5), 0.4),
@@ -167,7 +167,7 @@ test_that("occu_cover group_var runs with more sites than field nodes", {
        n_sites = n_sites, n_cells = n_cells)
 }
 
-test_that("occu_cover group_var: unequal design keeps the psi intercept anchored (tulpa#52)", {
+test_that("occu_cover group_var: unequal design keeps the psi intercept anchored", {
   skip_on_cran()
   skip_if_fast()
   n_cells <- 16L
@@ -190,12 +190,12 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
   sig_hat <- unname(fit$means[["sigma"]])
   # On a CORRECTLY built Y the engine anchors the occupancy intercept at an
   # interior value with a live field on an unequal-sites-per-cell design. The
-  # ~28 / psi==1 drift originally reported for gcol33/tulpa#52 was a probe
-  # data-construction bug (a row-major `Y[slot]` index into a column-major
-  # matrix scrambled Y; same bug as tulpa#57), not a missing prior -- verified
-  # that the anchoring is independent of the per-arm beta prior (priors = "none"
-  # gives the same interior intercept). This test guards that the engine stays
-  # interior on correctly built data.
+  # ~28 / psi==1 drift originally reported was a probe data-construction bug
+  # (a row-major `Y[slot]` index into a column-major matrix scrambled Y), not
+  # a missing prior -- verified that the anchoring is
+  # independent of the per-arm beta prior (priors = "none" gives the same
+  # interior intercept). This test guards that the engine stays interior on
+  # correctly built data.
   expect_true(is.finite(psi_int))
   expect_lt(abs(psi_int), 5)                # interior, not the ~28 boundary value
   expect_gt(sig_hat, 0.1)                   # field amplitude did NOT collapse

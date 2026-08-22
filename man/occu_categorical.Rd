@@ -45,7 +45,7 @@ FD-validated tulpa kernel (\code{multinomial_logit.h}); the non-spatial fit is t
 vectorised R Newton over the same closed forms. Spatial fields / NUTS (the
 native multi-process likelihood) and the latent-class \emph{misclassification}
 variant (the K-class generalisation of \code{\link[=fp_occu]{fp_occu()}}, a confusion matrix on the
-observed label) are documented follow-ups (gcol33/tulpaObs#106).
+observed label) are documented follow-ups.
 }
 
 \seealso{

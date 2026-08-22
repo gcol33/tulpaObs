@@ -1,6 +1,5 @@
 # =============================================================================
-# Exact-marginal refinement for dynamic (multi-season HMM) occupancy
-# (gcol33/tulpaObs#86).
+# Exact-marginal refinement for dynamic (multi-season HMM) occupancy.
 #
 # Like the single-season occupancy marginal (R/occu_marginal.R), the dynamic
 # occupancy marginal is exact and cheap: the latent occupancy sequence
@@ -64,14 +63,14 @@
 
 
 # Exact HMM-forward marginal log-likelihood for dynamic occupancy with
-# SEASON-VARYING colonization / extinction (gcol33/tulpaObs#124). The compiled
-# cpp_occu_dynamic_ploglik reads one gamma / epsilon per site, so the
-# interval-indexed refine needs its own forward pass. Per site the latent
-# occupancy sequence integrates out by the 2-state forward recursion whose
-# transition at interval t uses interval-t rates; the emission is the per-season
-# detection likelihood (occupied: prod p^y (1-p)^(1-y); empty: 1 if no detection,
-# 0 otherwise). Returns the total penalised negative log-posterior. `par` is the
-# packed c(beta_psi1, beta_p, beta_gamma, beta_epsilon).
+# SEASON-VARYING colonization / extinction. The compiled cpp_occu_dynamic_ploglik
+# reads one gamma / epsilon per site, so the interval-indexed refine needs its
+# own forward pass. Per site the latent occupancy sequence integrates out by the
+# 2-state forward recursion whose transition at interval t uses interval-t rates;
+# the emission is the per-season detection likelihood (occupied: prod p^y
+# (1-p)^(1-y); empty: 1 if no detection, 0 otherwise). Returns the total
+# penalised negative log-posterior. `par` is the packed c(beta_psi1, beta_p,
+# beta_gamma, beta_epsilon).
 .tobs_dyn_occu_marginal_nlp_sv <- function(par, model, pmean, pprec, p_sizes) {
   n_sites <- model$n_sites; T_s <- model$n_seasons; n_int <- T_s - 1L
   o <- 0L

@@ -20,9 +20,9 @@
   temporal_only <- is.null(spatial) && !is.null(temporal)
   if (!is.null(spatial))
     .tobs_reject_weighted_spatial(spatial, "fp_occu occupancy spatial")
-  # Detection-arm field (gcol33/tulpaObs#114): a field in the `detection=` formula
-  # carries shared = c(occupancy, detection) = c(FALSE, TRUE). It loads on the
-  # per-visit true-positive detection logit eta_p11 (a spatially-varying detection
+  # Detection-arm field: a field in the `detection=` formula carries shared =
+  # c(occupancy, detection) = c(FALSE, TRUE). It loads on the per-visit
+  # true-positive detection logit eta_p11 (a spatially-varying detection
   # probability) instead of the psi arm; the marginal exposes the per-visit p11
   # gradient (cpp_fp_occu_total_log_lik$grad_eta_p11), summed to a per-site field
   # gradient. The false-positive arms (p10, b) never carry a structured field.
@@ -109,15 +109,15 @@
                              X_svc = X_psi, family = "fp_occu")
 }
 
-# Areal-spatial multistate false-positive occupancy via NUTS (gcol33/tulpaObs#72):
-# a FIXED-HYPER non-centered PROPER-CAR field on the occupancy (psi) arm of the
-# two-state false-positive marginal. The field precision (tau, rho) is fixed at the
+# Areal-spatial multistate false-positive occupancy via NUTS: a FIXED-HYPER
+# non-centered PROPER-CAR field on the occupancy (psi) arm of the two-state
+# false-positive marginal. The field precision (tau, rho) is fixed at the
 # nested-Laplace areal posterior mean (fit$spatial_hyper) and the whitened raw ~
 # N(0, I) (z = Linv %*% raw) is sampled jointly with the four logit arms' fixed
 # effects via the fp_occu NUTS field block (cpp_fp_occu_nuts over
 # nuts_field_block.h). The areal Laplace fit supplies warm coefficients + the field
-# hyper. The false-positive arms (p11 / p10 / b) carry fixed effects only;
-# icar / car_proper / bym2 -- the intrinsic icar / bym2 fields sample via the #71
+# hyper. The false-positive arms (p11 / p10 / b) carry fixed effects only; icar /
+# car_proper / bym2 -- the intrinsic icar / bym2 fields sample via the #71
 # sum-to-zero reparameterisation (#113). Occupancy fields are more weakly
 # identified than count fields (one binary site per node).
 .tobs_fit_fp_occu_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
@@ -126,7 +126,7 @@
                                            n.chains = NULL, max.treedepth = NULL,
                                            adapt.delta = NULL, seed = NULL,
                                            verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   # FIXED-HYPER non-centered field on the occupancy (psi) arm from EITHER an areal
@@ -138,12 +138,12 @@
     if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
       stop(paste0("fp_occu() NUTS carries the areal field on the occupancy (psi) ",
                   "arm; a detection-arm field (a spatially-varying p11 logit) is ",
-                  "wired under method = \"nested_laplace\". (tulpaObs#114)"),
+                  "wired under method = \"nested_laplace\"."),
            call. = FALSE)
     if (!spatial$type %in% c("icar", "car_proper", "bym2"))
       stop(sprintf(paste0("fp_occu() NUTS + areal spatial supports icar() / ",
                           "car_proper() / bym2() on the psi arm; got '%s'. ",
-                          "(tulpaObs#72, #113)"), spatial$type), call. = FALSE)
+                          ""), spatial$type), call. = FALSE)
   }
   n_sites <- model$n_sites
   if (!temporal_only && spatial$n_units != n_sites)

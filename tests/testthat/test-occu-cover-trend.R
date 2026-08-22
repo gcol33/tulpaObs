@@ -1,9 +1,9 @@
 # =============================================================================
-# test-occu-cover-trend.R - the joint engine with a SECOND coupled
-# field: a spatially-varying temporal trend weighted by a per-cell covariate
-# (gcol33/tulpaObs#15). The intercept field PLUS the trend field both couple
-# onto the cover arm, each with its own scale (alpha, alpha_trend), via the
-# multi-block nested-Laplace copy path.
+# test-occu-cover-trend.R
+# - the joint engine with a SECOND coupled field: a spatially-varying
+# temporal trend weighted by a per-cell covariate. The intercept field PLUS
+# the trend field both couple onto the cover arm, each with its own scale
+# (alpha, alpha_trend), via the multi-block nested-Laplace copy path.
 #
 # Requested with control = list(trend = list(weight = "time")), naming a
 # per-cell numeric covariate in the cell data.
@@ -168,8 +168,8 @@ test_that("a weighted areal term fits standalone occu() on the nested-Laplace pa
   od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
                    det.covs = "w")
   # An intercept field plus a weighted (varying-coefficient) areal field on a
-  # standalone occu() nested-Laplace fit (gcol33/tulpaObs#67): the occupancy-only
-  # analogue of the occu_cover() coupled trend, with no cover arm.
+  # standalone occu() nested-Laplace fit: the occupancy-only analogue of the
+  # occu_cover() coupled trend, with no cover arm.
   fit <- suppressWarnings(tobs(
     formula = ~ icar(graph = adj, group_var = "site_id") +
                 icar(graph = adj, weight = x, group_var = "site_id"),
@@ -192,7 +192,7 @@ test_that("a weighted areal term fits standalone occu() on the nested-Laplace pa
     "spatially-varying coefficient")
 })
 
-test_that("predict propagates a positive-arm covariate from newdata (gcol33/tulpaObs#95)", {
+test_that("predict propagates a positive-arm covariate from newdata", {
   skip_if_fast()
   N <- 30L; J <- 4L
   adj <- .trend_chain_adj(N)

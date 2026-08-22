@@ -2,7 +2,7 @@
 // Shared base for single-species count-model grouped-RE oracles (the native
 // REGroupOracle that drives tulpa::tulpa_re_aghq for abun / removal / ... with
 // a site-level grouped random effect on EITHER the abundance arm or the
-// detection arm; gcol33/tulpaObs#13, #51).
+// detection arm).
 //
 // Every such oracle has the SAME shape: a per-group RE vector b (dim d) enters
 // ONE arm through a site-level design row Z_i, so the per-site eta-space block

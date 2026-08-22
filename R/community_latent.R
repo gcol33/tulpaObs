@@ -51,21 +51,20 @@
 # this section follows from taking that seriously, and the estimator arrived at
 # it in two steps.
 #
-# The factor update holds the factors at their joint mode and treats
-# zeta t(lambda) as a known offset. That penalised objective is UNBOUNDED in the
+# The factor update holds the factors at their joint mode and treats zeta
+# t(lambda) as a known offset. That penalised objective is UNBOUNDED in the
 # magnitude direction -- lambda is free to rescale, so sending zeta -> 0 and
 # lambda -> Inf at fixed product drives the N(0, I) prior cost to zero (measured
 # on lfJSDM with the unit-variance anchor removed: loadings to 48x truth). The
 # anchor masks that rather than fixing it, leaving the magnitude at pure maximum
 # likelihood, which over-fits and inflates the community coefficients to
-# compensate (gcol33/tulpaObs#153).
+# compensate.
 #
 # Setting the magnitude from the joint site marginal fixed the worst of it, but
 # not the rest: the DIRECTION handed to that search is itself a joint-mode
 # estimate over Ns * Q incidental parameters, so it carries the factors'
-# estimation error and no single scalar can take that back out
-# (gcol33/tulpaObs#156). Integrating the factors out of the loadings entirely is
-# what actually closes it.
+# estimation error and no single scalar can take that back out. Integrating the
+# factors out of the loadings entirely is what actually closes it.
 #
 # So the pieces below are, in the order the fit uses them: the shared quadrature
 # grid, the 1-D magnitude search (now an INITIALISER only), the marginal-
@@ -111,7 +110,7 @@
 # cancel in the argmax: measured on the clean fixture (true eta, known loadings
 # handed in inflated), the implied magnitude wanders 0.69-0.93 across node counts
 # 5-35 on a Poisson oracle while sitting stable to under 0.4% on a Bernoulli one.
-# That is the ~25% low magnitude on the count routes in gcol33/tulpaObs#154.
+# That is the ~25% low magnitude on the count routes.
 #
 # Non-adaptive is the zhat = 0, A = I special case of what follows, so there is
 # one path here rather than two: when the mode-find cannot proceed (a non-finite
@@ -150,9 +149,8 @@
     # makes the quadrature worse than not adapting at all. Backtrack per site:
     # halve only the sites whose step did not improve, keep the ones that did.
     # The pass itself is site-separable, so only the still-pending sites are
-    # re-evaluated each round (gcol33/tulpaObs#162 lever 2) -- the accepted
-    # iterates are identical, only the discarded work on already-moved /
-    # zero-step sites goes.
+    # re-evaluated each round -- the accepted iterates are identical, only the
+    # discarded work on already-moved / zero-step sites goes.
     ok <- TRUE
     h0 <- hval(zhat)
     if (any(!is.finite(h0))) ok <- FALSE
@@ -224,8 +222,8 @@
   # The per-node data log-likelihood, kept rather than folded away. The M-step's
   # starting objective is this same quantity at this same lambda and these same
   # nodes, so returning it is what stops the caller re-running the oracle over
-  # every node to recover it (gcol33/tulpaObs#162); at Q=2, n.quad=5 that was 25
-  # of the E-step's 86 ll_cell calls.
+  # every node to recover it; at Q=2, n.quad=5 that was 25 of the E-step's 86
+  # ll_cell calls.
   D <- vector("list", nrow(nd))
   for (k in seq_len(nrow(nd))) {
     Zk <- zhat
@@ -292,10 +290,10 @@
   # lambda had drifted far from the marginal's answer reported a plausible number
   # instead of a saturated one -- and because the reported loadings feed the next
   # EM offset, a saturated scale and a regrowing update ratchet against each
-  # other (gcol33/tulpaObs#154, seed 305: c pinned at the 0.2 floor while the
-  # loadings ran to 10.7x truth). Expanding makes the scale an actual argmax; the
-  # attribute below reports the cases where even the widened bracket did not
-  # close, so saturation is visible rather than silent.
+  # other (seed 305: c pinned at the 0.2 floor while the loadings ran to 10.7x
+  # truth). Expanding makes the scale an actual argmax; the attribute below
+  # reports the cases where even the widened bracket did not close, so saturation
+  # is visible rather than silent.
   lo <- 0.2; hi <- 1.5
   grid <- exp(seq(log(lo), log(hi), length.out = 14L))
   prof <- vapply(grid, prof_at, numeric(1))
@@ -436,9 +434,9 @@
     # ---- M-step: weighted Newton on lambda_s, species by species ----
     # `lambda` and `g$Z` are exactly what the E-step just built the grid from, so
     # its per-node data log-likelihood IS this objective and the oracle does not
-    # need re-running over the nodes to recover it (gcol33/tulpaObs#162).
-    # Accumulated in the same order qobj() uses, so the value is identical to the
-    # last floating-point bit and no backtracking comparison can tip on it.
+    # need re-running over the nodes to recover it. Accumulated in the same order
+    # qobj() uses, so the value is identical to the last floating-point bit and
+    # no backtracking comparison can tip on it.
     q0 <- 0
     for (k in seq_along(W)) q0 <- q0 + sum(W[[k]] * g$ll[[k]])
     if (!is.finite(q0)) q0 <- -Inf
@@ -487,11 +485,11 @@
     if (isTRUE(center)) lambda <- sweep(lambda, 2L, colMeans(lambda), "-")
   }
 
-  # The achieved joint marginal at the returned loadings (gcol33/tulpaObs#157):
-  # `best$ll` is not necessarily the last E-step's `ll` (the carried-best rule
-  # above), so it is surfaced here rather than recomputed, and lets a caller
-  # compare two fits (e.g. two directions, or a fit against one reference-
-  # started at known truth) on the objective the estimator actually ascends.
+  # The achieved joint marginal at the returned loadings: `best$ll` is not
+  # necessarily the last E-step's `ll` (the carried-best rule above), so it is
+  # surfaced here rather than recomputed, and lets a caller compare two fits
+  # (e.g. two directions, or a fit against one reference- started at known
+  # truth) on the objective the estimator actually ascends.
   list(lambda = best$lambda, zeta = best$zeta, converged = converged,
        offset = .tobs_latent_factor_offset(oracle, eta_base, best$lambda, gh),
        loglik = best$ll)
@@ -1001,11 +999,11 @@
   list(n_factors = Qk, zeta = zeta, lambda = matrix(0.1, S, Qk))
 }
 
-# A second candidate DIRECTION for the outer==1 search (gcol33/tulpaObs#157):
-# the top-Q eigenvectors of the coefficient-only working-residual covariance
-# across species. This is the classical "principal factor" starting value for
-# factor analysis (Lawley & Maxwell 1971) and the residual-correlation-eigen
-# start used to initialise latent-factor JSDMs in practice (e.g. the
+# A second candidate DIRECTION for the outer==1 search: the top-Q
+# eigenvectors of the coefficient-only working-residual covariance across
+# species. This is the classical "principal factor" starting value for factor
+# analysis (Lawley & Maxwell 1971) and the residual-correlation-eigen start
+# used to initialise latent-factor JSDMs in practice (e.g. the
 # per-species-GLM-residual start behind Warton et al. 2015's factor-analytic
 # approach, and HMSC's PCA start) -- not a new estimator, a better place to
 # hand the existing joint-mode ascent off from.
@@ -1064,16 +1062,16 @@
   list(zeta = zeta, lambda = lambda)
 }
 
-# K pseudo-random restart DIRECTIONS for the outer==1 candidate search
-# (gcol33/tulpaObs#157). A single "smarter" deterministic direction is not
-# reliable -- the principal-factor start above helps on some data and is
-# measured WORSE than the plain cosine start on others -- so several i.i.d.
-# candidates are tried and the honest selector (the converged loading-EM
-# marginal, at the call site) picks whichever direction the ascent actually
-# reaches a better mode from. Verified against an EM started at the literal
-# simulated truth on the fixture that motivated this (ms_count seed 215): one
-# of these restarts reached the truth-quality basin (1.28x vs the truth
-# start's 1.03x) where the cosine start alone settled at 1.65x.
+# K pseudo-random restart DIRECTIONS for the outer==1 candidate search. A
+# single "smarter" deterministic direction is not reliable -- the
+# principal-factor start above helps on some data and is measured WORSE than
+# the plain cosine start on others -- so several i.i.d. candidates are tried
+# and the honest selector (the converged loading-EM marginal, at the call
+# site) picks whichever direction the ascent actually reaches a better mode
+# from. Verified against an EM started at the literal simulated truth on the
+# fixture that motivated this (ms_count seed 215): one of these restarts
+# reached the truth-quality basin (1.28x vs the truth start's 1.03x) where
+# the cosine start alone settled at 1.65x.
 #
 # The seed is FIXED, not random or data-derived, so the set of candidates --
 # and so the fit -- stays exactly reproducible run to run. The caller's own
@@ -1167,12 +1165,12 @@
   if (is.null(factor.starts)) factor.starts <- 8L
   factor.starts <- max(1L, as.integer(factor.starts))
 
-  # Nodes for the Gauss-Hermite rule the joint site marginal integrates the
-  # factor scores on. 5 is enough for what the estimator reads off that integral:
-  # the magnitude argmax is stable to under 0.4% against 21 nodes and the
+  # Nodes for the Gauss-Hermite rule the joint site marginal integrates the factor
+  # scores on. 5 is enough for what the estimator reads off that integral: the
+  # magnitude argmax is stable to under 0.4% against 21 nodes and the
   # score-matched offset agrees to 8e-4 (test-community-latent-quad.R). Exposed as
   # `control$n.quad` all the same, since the default being adequate is a
-  # measurement and not a reason to swallow the argument (gcol33/tulpaObs#158).
+  # measurement and not a reason to swallow the argument.
   if (is.null(n.quad)) n.quad <- 5L
   n.quad <- max(1L, as.integer(n.quad))
 
@@ -1204,9 +1202,9 @@
       # `bym_rho_grid` below: the block-coordinate ascent profiles the field
       # hyperparameters itself and never hands a prior block to the engine, so
       # neither the outer-grid registry nor the `auto_grid()` provenance marker
-      # applies to them (gcol33/tulpaObs#209). The CAR nodes coincide with the
-      # engine's `joint_car_rho` because both place a correlation axis where an
-      # areal likelihood turns, not because either reads the other.
+      # applies to them. The CAR nodes coincide with the engine's
+      # `joint_car_rho` because both place a correlation axis where an areal
+      # likelihood turns, not because either reads the other.
       rho_grid <- if (is_car) c(0.5, 0.8, 0.95, 0.99) else NA_real_
       rho <- if (is_car) 0.95 else NA_real_
       # The areal field is sum-to-zero (it captures spatial DEVIATIONS; the
@@ -1299,10 +1297,10 @@
         # 1-D scale search puts its magnitude in the right basin with a global
         # bracket the local EM has no way to perform.
         #
-        # gcol33/tulpaObs#157: that ascent is a LOCAL search and inherits
-        # whatever basin its starting DIRECTION falls into -- measured, 1 seed
-        # in 16 on the ms_count fixture (seed 215) settled 31 nats below what
-        # the same ascent reaches from a better direction, with the residual
+        # that ascent is a LOCAL search and inherits whatever basin its
+        # starting DIRECTION falls into -- measured, 1 seed in 16 on the
+        # ms_count fixture (seed 215) settled 31 nats below what the same
+        # ascent reaches from a better direction, with the residual
         # correlation reading 0.90 throughout (row-normalised, blind to it).
         # Rescaling the magnitude of a bad direction does not escape it
         # (measured: 0.001 movement at 3x cost). Escaping needs a different
@@ -1462,15 +1460,15 @@
   }
 
   list(em = em, geom = geom,
-       # The settings the fit actually RAN under, not the ones it was called
-       # with. `max.outer` resolves against the family's `factor.outer` when a
-       # factor block is present, and each family sets `factor.starts` /
-       # `factor.outer` from its own measurement, so the effective values are not
-       # knowable from the call site (gcol33/tulpaObs#158). Reported on the fit so
-       # a caller can confirm a control took effect rather than inferring it.
-       # The factor knobs read NA on a field-only fit: there is no factor block
-       # for them to act on, and reporting the number they would have taken would
-       # claim an effect the fit does not carry.
+       # The settings the fit actually RAN under, not the ones it was called with.
+       # `max.outer` resolves against the family's `factor.outer` when a factor
+       # block is present, and each family sets `factor.starts` / `factor.outer`
+       # from its own measurement, so the effective values are not knowable from
+       # the call site. Reported on the fit so a caller can confirm a control took
+       # effect rather than inferring it. The factor knobs read NA on a field-only
+       # fit: there is no factor block for them to act on, and reporting the
+       # number they would have taken would claim an effect the fit does not
+       # carry.
        settings = list(
          max.outer = max.outer, tol = tol,
          factor.outer  = if (has_factor) as.integer(factor.outer) else NA_integer_,
@@ -1495,10 +1493,10 @@
          # running out of iterations.
          loading_em_converged = fac_em_converged,
          # The joint marginal at (lambda_hat, zeta_hat) from the last factor
-         # pass (gcol33/tulpaObs#157): lets a caller compare two fits (e.g. two
-         # starting directions) on the objective the estimator ascends, which
-         # is otherwise invisible -- the residual correlation is row-normalised
-         # and a magnitude regression does not move it.
+         # pass: lets a caller compare two fits (e.g. two starting directions)
+         # on the objective the estimator ascends, which is otherwise invisible
+         # -- the residual correlation is row-normalised and a magnitude
+         # regression does not move it.
          marginal_loglik = fac_loglik))
 }
 
@@ -1509,7 +1507,7 @@
 
 # Record the block-coordinate settings the driver resolved. Idempotent, and
 # called from both attach paths so a field-only, factor-only or spatial-factor
-# fit all carry it (gcol33/tulpaObs#158).
+# fit all carry it.
 .tobs_latent_attach_settings <- function(fit, res) {
   if (!is.null(res$settings)) fit$latent_control <- res$settings
   fit

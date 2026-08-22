@@ -1,4 +1,4 @@
-# The continuous NNGP svc() surface: exposure + recovery (gcol33/tulpaObs#118).
+# The continuous NNGP svc() surface: exposure + recovery.
 #
 # svc(lon, lat, indices=) was smoke-tested only: the fit ran and had the right
 # shape, but the estimated surface was unnamed in the draws, so nothing could
@@ -10,19 +10,18 @@
 # over seeds), so the eta-assembly and the NNGP gradient were broadly right --
 # but the sampler was not healthy. ~75% of post-warmup draws diverged and the
 # NNGP range phi landed at ~4 against a truth of 0.25. The calibration
-# assertions were skip()ped against gcol33/tulpa#144 rather than loosened until
-# they passed, because a threshold tuned to a diverging sampler records the bug
-# as the expected behaviour.
+# assertions were skip()ped rather than loosened until they passed,
+# because a threshold tuned to a diverging sampler records the bug as the
+# expected behaviour.
 #
-# Both causes are now fixed upstream and measured here (gcol33/tulpaObs#119):
-# the range prior (tulpa#144, a Uniform behind a hard -INFINITY rejection, which
-# gives NUTS no gradient to recover from) and the marginal-SD prior (the SVC
-# half-Cauchy was improper on the coordinate it is sampled on, so nothing
-# bounded sigma from above). Over seeds 1/2/3/11 at these settings:
-# divergences 72-83% -> 0%, phi ~4 -> 0.14-0.23 against a truth of 0.25.
-# Surface correlation did NOT move (0.73 mean, vs 0.66 before) -- it is bounded
-# by the information in the data, not by sampler health, which is why the
-# calibration test no longer asserts on it.
+# Both causes are now fixed upstream and measured here: the range prior (a
+# Uniform behind a hard -INFINITY rejection, which gives NUTS no gradient to
+# recover from) and the marginal-SD prior (the SVC half-Cauchy was improper on
+# the coordinate it is sampled on, so nothing bounded sigma from above). Over
+# seeds 1/2/3/11 at these settings: divergences 72-83% -> 0%, phi ~4 ->
+# 0.14-0.23 against a truth of 0.25. Surface correlation did NOT move (0.73
+# mean, vs 0.66 before) -- it is bounded by the information in the data, not by
+# sampler health, which is why the calibration test no longer asserts on it.
 #
 # svc() now requires prior_range = c(r0, alpha): tulpa ships the PC range
 # anchors unset and refuses rather than inventing a default.
@@ -134,7 +133,7 @@ test_that("occu() + svc() is calibrated and identifies its NNGP hyperparameters"
   fit <- .svc_fit(sim, seed = 11L)
 
   # Divergences are now rare rather than the norm: 0 of 300 post-warmup draws
-  # on every seed measured (1, 2, 3, 11), against 72-83% before tulpa#144.
+  # on every seed measured (1, 2, 3, 11), against 72-83% before.
   expect_lt(mean(fit$divergent), 0.05)
 
   # The range finds its truth instead of the old Uniform prior's mean.

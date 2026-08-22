@@ -98,9 +98,9 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
     int n_iter = 0;
     std::vector<MatrixXd> fisher_s(S, MatrixXd::Zero(d, d));   // last-inner per-species Fisher
 
-    // Progress + ETA for the community-EM iterations (gcol33/tulpaObs#43); ON by
-    // default, reading the scoped option. ETA is the upper bound to max_iter and
-    // is finalised by finish() on convergence.
+    // Progress + ETA for the community-EM iterations; ON by default, reading the
+    // scoped option. ETA is the upper bound to max_iter and is finalised by
+    // finish() on convergence.
     auto prog = tulpaObs::make_grid_progress_from_option("ms-nmix-em", max_iter);
 
     for (int it = 0; it < max_iter; ++it) {

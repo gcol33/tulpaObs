@@ -1,30 +1,29 @@
 // distance_re_oracle.h
 // Native compiled REGroupOracle for the binned distance-sampling abundance
-// model with a site-level grouped random effect on the ABUNDANCE (lambda) arm
-// (gcol33/tulpaObs#51). Shares the entire Z-sandwich + group-loop +
-// REGroupOracle plumbing with the N-mixture / removal grouped oracles via
-// CountGroupedOracle; the only distance-specific pieces are the per-site
-// binned-multinomial marginal (distance_kernel.h, integrated by the per-fit
-// Gauss-Legendre quadrature) and the per-site bin counts.
+// model with a site-level grouped random effect on the ABUNDANCE (lambda)
+// arm. Shares the entire Z-sandwich + group-loop + REGroupOracle plumbing
+// with the N-mixture / removal grouped oracles via CountGroupedOracle; the
+// only distance-specific pieces are the per-site binned-multinomial marginal
+// (distance_kernel.h, integrated by the per-fit Gauss-Legendre quadrature)
+// and the per-site bin counts.
 //
 // The detection arm is the per-site log-scale predictor `eta_sigma` -- ONE row
 // per site -- so the half-normal key's theta vector is exactly the count-family
-// layout [beta_lambda | beta_sigma | log_r?]: the lone detection row at each
-// site carries the sigma gradient as grad_eta_p[0], and the abundance-arm RE
-// never touches the detection-curvature path. The hazard-rate key adds a global
-// scalar shape coordinate that is not a per-site design column, so it is not
-// expressible in this base; the R wrapper gates it (half-normal key only). The
-// areal-spatial path DOES carry the hazard shape -- it folds the scalar log-shape
-// into the areal-BFGS fixed block (tulpaObs#79) rather than this per-site
-// grouped-RE theta layout.
+// layout [beta_lambda | beta_sigma | log_r?]: the lone detection row at each site
+// carries the sigma gradient as grad_eta_p[0], and the abundance-arm RE never
+// touches the detection-curvature path. The hazard-rate key adds a global scalar
+// shape coordinate that is not a per-site design column, so it is not expressible
+// in this base; the R wrapper gates it (half-normal key only). The areal-spatial
+// path DOES carry the hazard shape -- it folds the scalar log-shape into the
+// areal-BFGS fixed block rather than this per-site grouped-RE theta layout.
 //
-// The hazard-rate key is supported by PROFILING (gcol33/tulpaObs#114): the scalar
-// log-shape eta_b is held FIXED at a value the R wrapper supplies and the AGHQ
-// fit runs over the count-family theta layout unchanged; the R wrapper optimises
-// eta_b in an outer loop over the profile log-marginal (so the single global
-// theta slot stays the NB dispersion log_r, no second global coordinate is
-// needed). key_code selects DIST_HALFNORMAL / DIST_HAZARD and eta_b is the fixed
-// hazard shape (0 for the half-normal key).
+// The hazard-rate key is supported by PROFILING: the scalar log-shape eta_b is
+// held FIXED at a value the R wrapper supplies and the AGHQ fit runs over the
+// count-family theta layout unchanged; the R wrapper optimises eta_b in an outer
+// loop over the profile log-marginal (so the single global theta slot stays the
+// NB dispersion log_r, no second global coordinate is needed). key_code selects
+// DIST_HALFNORMAL / DIST_HAZARD and eta_b is the fixed hazard shape (0 for the
+// half-normal key).
 //
 // Detection-arm RE is likewise out of scope here: the latent N couples a site's
 // bins, so a detection RE would not factorize into the per-site scalar offset
@@ -49,16 +48,16 @@ struct DistanceGroupedOracle : CountGroupedOracle {
     int key_code = DIST_HALFNORMAL;             // half-normal / hazard detection key
     double eta_b = 0.0;                         // fixed hazard log-shape (profiled in R)
     DistQuad quad;                              // per-fit detection quadrature
-    // Per-site K_hi cap (gcol33/tulpaObs#168), verified by the R wrapper against
-    // the shared K_max ceiling before the AGHQ integration runs; -1 disables it
-    // (every group evaluates at the shared K_max, the historical behaviour).
+    // Per-site K_hi cap, verified by the R wrapper against the shared K_max
+    // ceiling before the AGHQ integration runs; -1 disables it (every group
+    // evaluates at the shared K_max, the historical behaviour).
     int headroom = -1;
-    // Built once in the constructor, read-only thereafter (gcol33/tulpaObs#167):
-    // safe to share read-only across an eval_site() that may be called from a
-    // parallel group loop the same way the quadrature above already is. No
-    // DistScratch here -- eval_site() is const and its caller's threading is
-    // not visible from this file, and scratch reuse needs per-call mutation
-    // that a shared oracle object cannot safely give it without knowing that.
+    // Built once in the constructor, read-only thereafter: safe to share
+    // read-only across an eval_site() that may be called from a parallel group
+    // loop the same way the quadrature above already is. No DistScratch here --
+    // eval_site() is const and its caller's threading is not visible from this
+    // file, and scratch reuse needs per-call mutation that a shared oracle
+    // object cannot safely give it without knowing that.
     std::vector<double> comb_table;
 
     DistanceGroupedOracle(int arm_,

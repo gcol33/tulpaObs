@@ -1,6 +1,6 @@
 # Community binned distance sampling -- ms_distance() (the spAbundance msDS
-# analogue), with latent() factors (lfMsDS) and a shared field (sfMsDS).
-# gcol33/tulpaObs#117. Poisson.
+# analogue), with latent() factors (lfMsDS) and a shared field (sfMsDS)..
+# Poisson.
 #
 #   N_{s,i} ~ Poisson(lambda_{s,i})
 #   y_{s,i,.} | N ~ Multinomial(N_{s,i}; pi_{s,i,1..B}, 1 - p_det)
@@ -73,9 +73,9 @@ test_that("ms_distance() gates unsupported combinations", {
     "nuts|method")
 })
 
-# Cheap plumbing companion (gcol33/tulpaObs#159): a small design with no truth
-# thresholds to re-calibrate, so it stays ungated and keeps this path exercised
-# on every push while the recovery block below moves to the recovery tier.
+# Cheap plumbing companion: a small design with no truth thresholds to
+# re-calibrate, so it stays ungated and keeps this path exercised on every push
+# while the recovery block below moves to the recovery tier.
 test_that("a small msDS fit wires the community S3 surface", {
   d <- simulate_ms_distance(n_species = 3, N = 25, cutpoints = .msds_cut,
                             seed = 4)

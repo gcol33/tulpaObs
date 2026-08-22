@@ -1,10 +1,10 @@
 # Community latent-factor count -- ms_count() + latent() (the spAbundance
-# lfMsAbund analogue, Poisson; gcol33/tulpaObs#117). Residual species
-# co-occurrence via Q per-site latent factors + per-species loadings, fit by
-# block coordinate ascent (community EM with the factor offset <-> a Poisson
-# factor update; R/ms_count_factor.R). The loadings / factors are identified
-# only up to rotation, so recovery is judged on the residual species correlation
-# matrix (Sigma_res = lambda lambda'), which IS identified.
+# lfMsAbund analogue, Poisson). Residual species co-occurrence via Q per-site
+# latent factors + per-species loadings, fit by block coordinate ascent
+# (community EM with the factor offset <-> a Poisson factor update;
+# R/ms_count_factor.R). The loadings / factors are identified only up to
+# rotation, so recovery is judged on the residual species correlation matrix
+# (Sigma_res = lambda lambda'), which IS identified.
 
 # log mu_{s,i} = X_i (mu + b_s) + sum_q lambda_{s,q} eta_{q,i}.
 .mscf_sim <- function(N = 160L, S = 14L, Q = 2L, load_sd = 0.6, seed = 1L) {
@@ -20,8 +20,9 @@
   cor_res <- stats::cov2cor(tcrossprod(lam) + diag(1e-8, S))
   # `lam` and `beta_real` are the realized draws, not the population constants
   # the arguments name. The loading MAGNITUDE is scored against sqrt(sum(lam^2))
-  # and the community mean against colMeans(bs) -- see the magnitude test below
-  # and gcol33/tulpaObs#155 for why the constant is the wrong estimand.
+  # and the community mean against colMeans(bs), the seed's own realized mean --
+  # see the magnitude test below for why the nominal constant is the wrong
+  # estimand.
   list(y = y, data = d, cor_res = cor_res, beta = c(1, 0.5), S = S, N = N,
        lam = lam, beta_real = colMeans(bs))
 }
@@ -46,8 +47,8 @@ test_that("ms_count() + latent() gates unsupported combinations", {
 
 # Smoke coverage of the lfMsAbund path: a small fit that exercises dispatch, the
 # factor block and the S3 surface, with no threshold against truth to keep
-# calibrated (gcol33/tulpaObs#159). The recovery assertions live in the gated block
-# below, at the size their thresholds were measured on.
+# calibrated. The recovery assertions live in the gated block below, at the size
+# their thresholds were measured on.
 test_that("a latent-factor count fit wires the factor block and S3", {
   d <- .mscf_sim(N = 50L, S = 5L, Q = 1L, seed = 4L)
   fit <- tobs(~ x + latent(1), data = d$data, family = ms_count(), y = d$y,
@@ -98,10 +99,10 @@ test_that("a latent-factor count fit recovers residual co-occurrence + S3", {
 # `residual_cor` is row-normalised, so a pure scale error leaves it untouched:
 # the seed that carried the worst magnitude over-fit on the joint-mode estimator
 # (1.53x truth) still reported a residual correlation of 0.93. That is how
-# gcol33/tulpaObs#153 reached CI, and #156 is the same defect at lower amplitude.
-# Score sqrt(tr(Sigma_res)) = ||lambda||_F instead, which is rotation-invariant
-# (so it survives the loading/factor indeterminacy) and IS the quantity that
-# regressed, against the seed's own realized loading draw.
+# reached CI, and #156 is the same defect at lower amplitude. Score
+# sqrt(tr(Sigma_res)) = ||lambda||_F instead, which is rotation-invariant (so it
+# survives the loading/factor indeterminacy) and IS the quantity that regressed,
+# against the seed's own realized loading draw.
 test_that("latent-factor count recovers the loading magnitude + mean over seeds", {
   skip_if_fast()
   skip_on_cran()
@@ -138,18 +139,18 @@ test_that("latent-factor count recovers the loading magnitude + mean over seeds"
   expect_lt(abs(mean(dev[, 2L])), 0.04)
 })
 
-# gcol33/tulpaObs#157 regression guard: seed 215's loading EM settled in a bad
-# DIRECTION basin (1.654x truth, a marginal 31 nats below what the same EM
-# reaches from a better direction -- verified against an EM started at the
-# literal simulated truth, which reaches 1.03x). The fix
-# (.tobs_latent_factor_random_starts() in R/community_latent.R) tries several
-# fixed-seed pseudo-random restarts alongside the deterministic cosine one at
-# the first outer pass, through the SAME ascent + magnitude search, and keeps
-# whichever the loading EM converges to the higher marginal from -- the
-# "multi-start over directions, selected on the marginal" #157 asked for.
-# Measured on this seed: 1.654x -> 1.28x, and the achieved marginal (701212)
-# now sits ABOVE the truth-started reference (701211), i.e. this reaches the
-# same basin truth does, not merely a smaller one.
+# regression guard: seed 215's loading EM settled in a bad DIRECTION basin
+# (1.654x truth, a marginal 31 nats below what the same EM reaches from a
+# better direction -- verified against an EM started at the literal simulated
+# truth, which reaches 1.03x). The fix (.tobs_latent_factor_random_starts() in
+# R/community_latent.R) tries several fixed-seed pseudo-random restarts
+# alongside the deterministic cosine one at the first outer pass, through the
+# SAME ascent + magnitude search, and keeps whichever the loading EM converges
+# to the higher marginal from -- the "multi-start over directions, selected on
+# the marginal" #157 asked for. Measured on this seed: 1.654x -> 1.28x, and
+# the achieved marginal (701212) now sits ABOVE the truth-started reference
+# (701211), i.e. this reaches the same basin truth does, not merely a smaller
+# one.
 test_that("latent-factor count escapes the #157 direction basin on seed 215", {
   skip_if_fast()
   skip_on_cran()

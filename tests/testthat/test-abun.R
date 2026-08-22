@@ -308,7 +308,7 @@ test_that("spatial-slope 95% CI covers truth across seeds (calibration)", {
 
 test_that("spatial N-mixture carries cross-arm (lambda,p) covariance", {
   skip_if_fast()
-  # tulpaObs#19: under the spatial path the coefficient covariance must NOT be
+  # under the spatial path the coefficient covariance must NOT be
   # block-diagonal across the abundance and detection arms -- the cross-arm
   # (lambda, p) block, folded through the shared field, has to be non-zero so
   # derived quantities combining the two arms propagate the correlation.
@@ -331,9 +331,9 @@ test_that("spatial N-mixture expected-count (lambda*p) CI is calibrated", {
   skip_on_cran()
   skip_if_fast()
   # The derived expected count mu = lambda * p combines BOTH arms, so its CI is
-  # only calibrated if the posterior draws carry the cross-arm covariance
-  # (tulpaObs#19). We evaluate mu per draw at a fixed design point and check
-  # 95% quantile-CI coverage vs the simulated truth across seeds.
+  # only calibrated if the posterior draws carry the cross-arm covariance. We
+  # evaluate mu per draw at a fixed design point and check 95% quantile-CI
+  # coverage vs the simulated truth across seeds.
   adj <- .grid_adj(6L)
   b_lambda <- c(log(5), 0.5); b_p <- c(0.3, 0.4)
   x_lam <- c(1, 0.4); x_p <- c(1, -0.3)               # fixed evaluation point
@@ -356,7 +356,7 @@ test_that("spatial N-mixture expected-count (lambda*p) CI is calibrated", {
 })
 
 
-# --- NUTS (gcol33/tulpaObs#41) ----------------------------------------------
+# --- NUTS ----------------------------------------------
 # The non-spatial N-mixture sampler: the in-tree C++ FullGradFn (src/abun_nuts.cpp)
 # over the closed-form marginal, driving tulpa's NUTS engine. The R target
 # .tobs_abun_nuts_logpost (R/abun_nuts.R) is the oracle; the FAST test
@@ -459,7 +459,7 @@ test_that("tobs(abun(mixture='negbin'), method='nuts') recovers dispersion", {
 })
 
 
-# --- NUTS + areal proper-CAR field on the abundance arm (tulpaObs#51) ----------
+# --- NUTS + areal proper-CAR field on the abundance arm ----------
 
 test_that("abun() NUTS + proper-CAR areal field recovers + calibrates to nested-Laplace", {
   skip_on_cran()

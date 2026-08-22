@@ -1,6 +1,6 @@
 # =============================================================================
 # test-jsdm-spatial.R - areal-spatial joint species distribution model
-# (jsdm() + a shared field; gcol33/tulpaObs#76, #121).
+# (jsdm() + a shared field).
 #
 # jsdm() observes presence/absence directly (no detection process). Since #121 it
 # is the COMMUNITY GLMM -- per-species coefficients under a Gaussian community
@@ -77,12 +77,11 @@ test_that("jsdm + icar() recovers community means + the shared field", {
   expect_true(all(cors > 0.70))
   # Community means against the seed's REALIZED mean (colMeans(sim$bs)), not the
   # nominal c(-0.2, 0.9): this loop already averaged over seeds before comparing
-  # to the nominal, so gcol33/tulpaObs#155 calls it statistically valid as it
-  # stood; retargeting is a power improvement here, not a bug fix. Budget is 5x
-  # the SE of a 4-seed mean, from a fresh 16-seed measurement of this exact
-  # fixture (dev0/dev1 = fit$means[1:2] - colMeans(sim$bs), seeds 1-16):
-  # intercept sd 0.054 -> SE_4 0.027 -> budget 0.135; slope sd 0.052 -> SE_4
-  # 0.026 -> budget 0.130.
+  # to the nominal, so calls it statistically valid as it stood; retargeting is
+  # a power improvement here, not a bug fix. Budget is 5x the SE of a 4-seed
+  # mean, from a fresh 16-seed measurement of this exact fixture (dev0/dev1 =
+  # fit$means[1:2] - colMeans(sim$bs), seeds 1-16): intercept sd 0.054 -> SE_4
+  # 0.027 -> budget 0.135; slope sd 0.052 -> SE_4 0.026 -> budget 0.130.
   #
   # The slope carries a real, one-sided finite-sample bias, not just draw
   # noise: over the 16-seed measurement the mean deviation is -0.076 (se 0.013,

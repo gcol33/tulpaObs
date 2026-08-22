@@ -450,7 +450,7 @@ print.nmix_spatial_fit <- function(x, ...) {
 }
 
 # ---------------------------------------------------------------------------
-# Shared preamble for the count-marginal spatial fitters (gcol33/tulpaObs#229)
+# Shared preamble for the count-marginal spatial fitters
 #
 # The areal N-mixture wrappers (icar / car_proper / bym2), the SPDE mesh wrapper
 # and the removal wrappers fit the same count marginal over the same designs,

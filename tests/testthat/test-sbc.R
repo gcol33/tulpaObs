@@ -1,7 +1,7 @@
 # =============================================================================
-# test-sbc.R -- posterior simulation-based calibration on tobs families
-# (gcol33/tulpaObs#207), through the engine's `tulpa::sbc()` front door
-# (gcol33/tulpa#380).
+# test-sbc.R
+# -- posterior simulation-based calibration on tobs families, through
+# the engine's `tulpa::sbc()` front door.
 #
 # Three tiers, deliberately:
 #
@@ -44,16 +44,16 @@
 # BOTH AXES ARE RESOLVED, NOT MERELY PINNED: 21 sigma nodes and 17 phi_pos ones,
 # where the fixture used to carry 9 and 7. An outer-grid axis IS the whole
 # support of the quantity it carries, so its resolution is the resolution of the
-# predictive the truth is ranked against, and a rank read against a
-# continuous uniform scores a coarse axis as a departure whatever the fit does:
-# at 9 sigma nodes 1000 draws hold 6 distinct values and the rank ECDF is a
-# 6-step function. Measured on the SAME generator and the same seed, n.sim = 100,
-# `sigma` p_unif 4.9e-04 -> 0.056 -> 0.714 and `disp` 8.7e-09 -> 1.9e-14 -> 0.819
-# across (9, 7) -> (21, 7) -> (21, 17) nodes, with every mean PIT already within
-# noise of 0.5 at the coarse grids -- a step-function ECDF, not a location shift.
-# That is what lets the acceptance set below gate every scored quantity. The cost
-# is a 13-minute acceptance run instead of a 3.6-minute one, and the whole point
-# of the run is the read (gcol33/tulpaObs#213).
+# predictive the truth is ranked against, and a rank read against a continuous
+# uniform scores a coarse axis as a departure whatever the fit does: at 9 sigma
+# nodes 1000 draws hold 6 distinct values and the rank ECDF is a 6-step function.
+# Measured on the SAME generator and the same seed, n.sim = 100, `sigma` p_unif
+# 4.9e-04 -> 0.056 -> 0.714 and `disp` 8.7e-09 -> 1.9e-14 -> 0.819 across (9, 7)
+# -> (21, 7) -> (21, 17) nodes, with every mean PIT already within noise of 0.5
+# at the coarse grids -- a step-function ECDF, not a location shift. That is what
+# lets the acceptance set below gate every scored quantity. The cost is a
+# 13-minute acceptance run instead of a 3.6-minute one, and the whole point of
+# the run is the read.
 .SBC_SIGMA_GRID <- exp(seq(log(0.15), log(2.0), length.out = 21L))
 
 # A small coupled occu_cover fixture: shared ICAR field on the occurrence arm,
@@ -104,11 +104,10 @@
 test_that("sbc() refuses a non-fit and an unregistered family", {
   expect_error(sbc(list()), "No sbc method is registered")
 
-  # double_observer() graduated to registered (gcol33/tulpaObs#220); a
-  # synthetic fake family keeps this test's premise -- a fit whose family is
-  # genuinely absent from the registry -- true regardless of what graduates
-  # next, matching test-sbc-registry.R's own "roster names what is
-  # registered" test.
+  # double_observer() graduated to registered; a synthetic fake family keeps
+  # this test's premise -- a fit whose family is genuinely absent from the
+  # registry -- true regardless of what graduates next, matching
+  # test-sbc-registry.R's own "roster names what is registered" test.
   fake <- structure(list(model = list()), class = "tobs_fit",
                     tobs_family = list(name = "not_a_family"))
   expect_error(sbc(fake), "not registered for family")
@@ -268,15 +267,15 @@ test_that("the field enters the replicate at the scale the engine's block carrie
                 fit.control = .sbc_fit_control(fx))
   spec <- environment(m$simulate)$spec
 
-  # The joint engine's ICAR block is the RAW graph precision Q = D - W at
-  # tau = 1 with the amplitude in the arm scale, so the field `sigma`
-  # multiplies is x ~ N(0, Q^+): geo-mean marginal variance scale_q, NOT 1.
+  # The joint engine's ICAR block is the RAW graph precision Q = D - W at tau
+  # = 1 with the amplitude in the arm scale, so the field `sigma` multiplies
+  # is x ~ N(0, Q^+): geo-mean marginal variance scale_q, NOT 1.
   # `.occu_cover_draw_icar_field()` returns the Sorbye-Rue NORMALISED draw --
   # the convention `simulate_occu_cover()` states its `sigma` in -- so the
   # generator carries the constant that maps one to the other. Generating at
   # the normalised scale instead refits every replicate under a field
   # sqrt(scale_q) wider and piles both arm SDs at the top of their rank
-  # support (gcol33/tulpaObs#213).
+  # support.
   #
   # scale_q is recomputed here from the graph, independently of the package
   # helper the generator uses, so the two cannot agree by sharing a bug.
@@ -340,8 +339,7 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
   # engine's ICAR block is the raw Q = D - W, so its `sigma` multiplies a field
   # of geo-mean marginal SD sqrt(scale_q), not 1. Held at THIS grid with the
   # generator's constant put back to 1, they return to 42/100 and 52/100 in the
-  # top decile, so what moved them is the generator and not the resolution
-  # (gcol33/tulpaObs#213).
+  # top decile, so what moved them is the generator and not the resolution.
   qs <- c("psi_(Intercept)", "psi_occ_cov1", "p_(Intercept)", "p_det_cov1",
           "pos_(Intercept)", "pos_pos_cov1", "alpha", "sigma",
           "sigma_pos_field", "disp")

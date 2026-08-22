@@ -1,11 +1,10 @@
 # Parameter-recovery + reproducibility tests for the stochastic Laplace
 # correction routes (method = "laplace_gibbs" / "laplace_mi"). These run a
-# post-EM Rubin-pooled correction on top of tulpa's EM+Laplace. Since
-# gcol33/tulpa#27, the weakly-informative fixed-effect prior threads into the
-# correction refits, so these routes apply the same default prior as
-# method = "laplace" (pass priors = FALSE to recover the unpenalised
-# correction). tobs() seeds the R-side hard-z draws so the pooled estimate
-# reproduces.
+# post-EM Rubin-pooled correction on top of tulpa's EM+Laplace. Since, the
+# weakly-informative fixed-effect prior threads into the correction refits,
+# so these routes apply the same default prior as method = "laplace" (pass
+# priors = FALSE to recover the unpenalised correction). tobs() seeds the
+# R-side hard-z draws so the pooled estimate reproduces.
 
 sim_occu_fixed <- function(seed = 41, N = 400L, J = 5L,
                            beta_occ = c(0.4, -0.8), beta_det = c(0.0, 0.4)) {
@@ -22,7 +21,7 @@ test_that("method = 'laplace_gibbs' recovers occupancy/detection fixed effects",
 
   expect_identical(fit$method, "laplace_gibbs")
   # The Gibbs route now carries the default weakly-informative prior, threaded
-  # through the correction refits (gcol33/tulpa#27).
+  # through the correction refits.
   expect_s3_class(fit$priors, "occu_priors")
   # The seed used for the stochastic correction is recorded for reproducibility.
   expect_identical(fit$seed, 123L)

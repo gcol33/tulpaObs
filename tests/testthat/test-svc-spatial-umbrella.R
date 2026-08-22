@@ -1,8 +1,8 @@
-# The two ways of asking for a spatially-varying coefficient go through one verb
-# (gcol33/tulpaObs#146): the areal flavour is the weighted bar
-# `spatial(~ 1 + w || node, graph)`, the continuous flavour is
-# `spatial(lon, lat, model = "svc", coefficients = )`. `svc()` stays as the
-# direct constructor, the way `icar()` does alongside `spatial(model = "icar")`.
+# The two ways of asking for a spatially-varying coefficient go through one
+# verb: the areal flavour is the weighted bar `spatial(~ 1 + w || node, graph)`,
+# the continuous flavour is `spatial(lon, lat, model = "svc", coefficients = )`.
+# `svc()` stays as the direct constructor, the way `icar()` does alongside
+# `spatial(model = "icar")`.
 #
 # The continuous form also selects its coefficients BY NAME, matched against the
 # design of the arm the surfaces load on; `indices = ` (column positions) is the

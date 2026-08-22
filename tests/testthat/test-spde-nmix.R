@@ -1,11 +1,11 @@
-# Recovery tests for the continuous-mesh (SPDE) field on the N-mixture fitters
-# (gcol33/tulpaObs#21). A KNOWN smooth Matern-like field is simulated on the
-# abundance arm and recovered through the spde() path; the gate asserts (a)
-# abundance fixed-effect recovery and (b) field-shape recovery
-# cor(A u_hat, u_truth) > 0.6 at the sites.
+# Recovery tests for the continuous-mesh (SPDE) field on the N-mixture
+# fitters. A KNOWN smooth Matern-like field is simulated on the abundance arm
+# and recovered through the spde() path; the gate asserts (a) abundance
+# fixed-effect recovery and (b) field-shape recovery cor(A u_hat, u_truth) >
+# 0.6 at the sites.
 #
 # The triangulation collapses to zero triangles for some (max_edge, cutoff)
-# settings at larger point counts (upstream gcol33/tulpaMesh#3); `cutoff = 0`
+# settings at larger point counts (an upstream tulpaMesh limitation); `cutoff = 0`
 # with the default max_edge triangulates reliably across seeds and N, so the
 # tests build the mesh that way.
 

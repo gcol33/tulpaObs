@@ -1,7 +1,7 @@
 # =============================================================================
 # test-count-ploglik-dispersion.R -- the count families' pointwise
-# log-likelihood reads its trailing coordinates by name (gcol33/tulpaObs#251)
-# and scores the mixture the fit maximised (gcol33/tulpaObs#252).
+# log-likelihood reads its trailing coordinates by name and scores the
+# mixture the fit maximised.
 #
 # build_nmix_fit() appends up to three blocks after the (lambda, p) coefficients
 # -- the structural-zero logit, the random-effect variance / BLUP block, and

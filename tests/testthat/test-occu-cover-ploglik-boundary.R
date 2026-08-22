@@ -1,8 +1,8 @@
-# Regression for gcol33/tulpaObs#133: the occu_cover WAIC / LOO pointwise density
-# must equal the fit kernel (src/occu_coupling_shared.h::pos_log_density) at the
-# cover boundary (cover exactly 0 or 1) and at extreme eta -- log_safe instead of
-# a bare log(0) -> -Inf, and no eta clamp -- rather than diverging from the
-# likelihood the model was fit with.
+# Regression: the occu_cover WAIC / LOO pointwise density must equal the fit
+# kernel (src/occu_coupling_shared.h::pos_log_density) at the cover boundary
+# (cover exactly 0 or 1) and at extreme eta -- log_safe instead of a bare log(0)
+# -> -Inf, and no eta clamp -- rather than diverging from the likelihood the
+# model was fit with.
 
 test_that(".occu_cover_pos_logdens is finite at the beta cover boundary", {
   # Beta cover in [0, 1]: exactly 0 and 1 must give a finite log-density via

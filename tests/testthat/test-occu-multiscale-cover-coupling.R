@@ -1,6 +1,6 @@
 # FD-checks for every closed-form derivative of the
 # OccuMultiscaleCover{Lognormal,Beta,Gaussian}Coupling CellCouplingSpec
-# (three-level occupancy + cover hurdle, gcol33/tulpaObs#29).
+# (three-level occupancy + cover hurdle).
 #
 # The spec lives in src/cell_coupling_occu_multiscale_cover.h; the direct
 # evaluators `cpp_eval_occu_multiscale_cover_{lognormal,beta,gaussian}_cell`

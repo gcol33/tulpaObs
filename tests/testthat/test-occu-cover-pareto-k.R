@@ -1,9 +1,9 @@
-# Fast outer Pareto-k diagnostic on occu_cover (gcol33/tulpa#118 consumer side).
+# Fast outer Pareto-k diagnostic on occu_cover ( consumer side).
 #
-# The diagnostic re-solves dominate a spatial occu_cover fit; tulpa#118 sped them
-# up (Shamanskii reuse + loosened inner tol + near-neighbour batch order) with
-# the k-hat byte-stable. These tests pin (1) the fast default reports the SAME
-# k-hat as the byte-for-byte exact diagnostic, and (2) that k-hat agrees with the
+# The diagnostic re-solves dominate a spatial occu_cover fit sped them up
+# (Shamanskii reuse + loosened inner tol + near-neighbour batch order) with the
+# k-hat byte-stable. These tests pin (1) the fast default reports the SAME k-hat
+# as the byte-for-byte exact diagnostic, and (2) that k-hat agrees with the
 # reference loo::psis on the diagnostic's actual importance ratios.
 
 grid_adj_sq <- function(side) {

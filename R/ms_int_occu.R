@@ -450,11 +450,10 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   # mean) -- what a per-species-coefficient consumer (SBC's "rank a fixed
   # species set" design, a calibrated per-species CI) needs beyond the point
   # BLUP; not previously exposed on the fit object. Covers the FULL b_s
-  # vector across every arm (psi + all D detection sources), matching
-  # `B <- do.call(rbind, fit$b_list)` above. Bf = the mu-b_s cross-Hessian
-  # block from the same Newton solve (gcol33/tulpaObs#226): mu and b_s are
-  # NOT independent in the posterior, and Bf is what lets a consumer draw
-  # them jointly instead.
+  # vector across every arm (psi + all D detection sources), matching `B <-
+  # do.call(rbind, fit$b_list)` above. Bf = the mu-b_s cross-Hessian block
+  # from the same Newton solve: mu and b_s are NOT independent in the
+  # posterior, and Bf is what lets a consumer draw them jointly instead.
   ms_community <- c(Sigma_list, sd_list, coef_list, blup_list,
                     list(Cinv = fit$Cinv, Bf = fit$Bf))
 

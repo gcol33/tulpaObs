@@ -1,9 +1,9 @@
 # Community-spatial count -- ms_count() + a shared areal field icar() (the
-# spAbundance sfMsAbund analogue, Poisson; gcol33/tulpaObs#117). Fit by block
-# coordinate ascent: the community Laplace-EM (shared field as a per-site offset)
-# alternated with a self-contained Poisson-ICAR field update (R/ms_count_spatial.R),
-# no C++. The shared field is well identified (informed by every species at each
-# site), so it recovers cleanly alongside the community means.
+# spAbundance sfMsAbund analogue, Poisson). Fit by block coordinate ascent: the
+# community Laplace-EM (shared field as a per-site offset) alternated with a
+# self-contained Poisson-ICAR field update (R/ms_count_spatial.R), no C++. The
+# shared field is well identified (informed by every species at each site), so it
+# recovers cleanly alongside the community means.
 
 .msc_grid_graph <- function(side) {
   N <- side * side
@@ -32,8 +32,8 @@
   y <- matrix(NA_real_, Ns, S, dimnames = list(NULL, paste0("sp", seq_len(S))))
   for (s in seq_len(S)) y[, s] <- stats::rpois(Ns, exp(as.numeric(X %*% bs[s, ]) + f))
   # `bs` is the REALIZED per-species draw, not the population constant `beta`:
-  # the community mean a fit should track is colMeans(bs), which sits
-  # beta_sd / sqrt(S) from `beta` (gcol33/tulpaObs#155).
+  # the community mean a fit should track is colMeans(bs), which sits beta_sd
+  # / sqrt(S) from `beta`.
   list(y = y, data = d, graph = A, field = f, beta = beta, bs = bs, Ns = Ns, S = S)
 }
 

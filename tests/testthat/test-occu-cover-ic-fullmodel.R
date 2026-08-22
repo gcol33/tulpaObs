@@ -1,5 +1,5 @@
-# Full-model (field-folded) information criteria for occu_cover() joint fits
-# (gcol33/tulpaObs IC fidelity). The occupancy spatial field is sampled with the
+# Full-model (field-folded) information criteria for occu_cover() joint fits.
+# The occupancy spatial field is sampled with the
 # arm coefficients (grid-integrated, via the joint nested-Laplace object) and
 # added to the per-cell occupancy predictor, so WAIC / DIC / LOO / CPO are
 # full-model (latent field included) and comparable with the INLA / spOccupancy
@@ -192,7 +192,7 @@ test_that("occu_cover() LOO-PIT is returned, calibrated, with good Pareto-k", {
   expect_gt(mean(cpo$pareto_k < 0.7), 0.8)
 })
 
-test_that("occu_cover(): loo.unit = 'cell' routes through the site_cell map (tulpaObs#105)", {
+test_that("occu_cover(): loo.unit = 'cell' routes through the site_cell map", {
   skip_on_cran()
   skip_if_fast()
   o   <- .icfm_sim_and_fit(seed = 4501L)

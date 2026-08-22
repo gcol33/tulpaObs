@@ -77,7 +77,7 @@
   # intercept, uncorrelated slopes, and correlated slopes on the occupancy
   # predictor of a single-season model) are fit via the variance-component EM
   # in R/em_laplace_re.R; everything else errors with a pointer to NUTS rather
-  # than being silently dropped (gcol33/tulpaObs#11).
+  # than being silently dropped.
   if (!is.null(re)) {
     .validate_re_laplace(re, model, spatial, approx)
     em_result <- .tobs_em_laplace_re(model, re, priors = priors,
@@ -108,11 +108,10 @@
   # Single engine for every Laplace fit: tulpa's generic EM+Laplace. The
   # fixed-effect prior is attached per M-step block as a `beta_prior` (see
   # .attach_priors_to_blocks); tulpa's block fitter applies it in every phase,
-  # so a prior-aware MI/Gibbs correction comes for free (gcol33/tulpa#27).
-  # Spatial fits are left unpenalised here -- the SPDE/NNGP solver carries its
-  # own fixed-effect prior and tulpa_laplace() rejects `beta_prior` on the
-  # spatial path (tulpaObs#5) -- so the prior is attached only when there is no
-  # spatial term.
+  # so a prior-aware MI/Gibbs correction comes for free. Spatial fits are left
+  # unpenalised here -- the SPDE/NNGP solver carries its own fixed-effect prior
+  # and tulpa_laplace() rejects `beta_prior` on the spatial path -- so the
+  # prior is attached only when there is no spatial term.
   m_step_encode <- if (is.null(spatial)) {
     function(weights, ...) {
       .attach_priors_to_blocks(callbacks$m_step_encode(weights, ...),
@@ -154,13 +153,13 @@
   fit$priors <- prior_spec
 
   # Debias step: the occupancy marginal is exact (single-season closed-form
-  # two-state mixture, gcol33/tulpaObs#7; dynamic HMM forward, gcol33/tulpaObs#86),
-  # so refine the EM mode with an exact-marginal Newton step and read calibrated
-  # SEs from its Hessian. The EM's pseudo-binomial Laplace M-steps leave a small
-  # discretisation residual below the marginal MLE and mis-scale the block SEs;
-  # the refinement restores unbiased, near-nominal-coverage fixed effects
-  # (matching unmarked::occu / colext). Spatial (nested-Laplace) fits carry a
-  # latent field, not a closed-form coefficient marginal, and keep the EM result.
+  # two-state mixture; dynamic HMM forward), so refine the EM mode with an
+  # exact-marginal Newton step and read calibrated SEs from its Hessian. The EM's
+  # pseudo-binomial Laplace M-steps leave a small discretisation residual below the
+  # marginal MLE and mis-scale the block SEs; the refinement restores unbiased,
+  # near-nominal-coverage fixed effects (matching unmarked::occu / colext). Spatial
+  # (nested-Laplace) fits carry a latent field, not a closed-form coefficient
+  # marginal, and keep the EM result.
   if (is.null(spatial) && identical(approx, "gaussian_laplace") &&
       correction %in% c("auto", "none")) {
     if (identical(model$model_type, "single")) {
@@ -357,8 +356,7 @@
     # the block's own `scale_factor`, which is the ENGINE's spelling of the
     # loading (1 / sqrt(s)) because the engine is what produced these modes --
     # reconstructing with a different spelling than the block was loaded with
-    # rescales the structured component against the unstructured one
-    # (gcol33/tulpaObs#232).
+    # rescales the structured component against the unstructured one.
     if (is_bym2) {
       rho_col <- match(sprintf("b%d.rho", b), tg_names)
       if (is.na(rho_col)) rho_col <- match("rho", tg_names)

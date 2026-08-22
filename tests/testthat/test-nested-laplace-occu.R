@@ -121,7 +121,7 @@ test_that(".map_engine routes nested_laplace for the multi-block families, error
   # dispatch, so reaching .map_engine is an internal mis-wire (not a silent
   # downgrade to single-Laplace). jsdm has no nested driver; ms_occu is
   # Laplace-only (community nested-Laplace needs upstream per-arm RE + shared
-  # field support, tulpaObs#30).
+  # field support).
   for (fam in c("jsdm", "ms_occu")) {
     expect_error(
       .map_engine("nested_laplace", family = fam),

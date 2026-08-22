@@ -1,15 +1,15 @@
 # NUTS + a temporal() field on the observation families (removal / distance /
-# fp_occu; gcol33/tulpaObs#114). A temporal() term on its own (no simultaneous
-# areal field) is carried under NUTS by a FIXED-HYPER non-centered temporal field:
-# the field precision (tau, rho) is fixed at the temporal-only nested-Laplace
-# areal-BFGS estimate and the whitened raw ~ N(0, I) rides the SAME family NUTS
-# field block the areal path uses (only the loading L and the per-site field map
-# differ -- L is the eigen-loading of tau Q_temporal, the map is the period index).
-# This is the dyn_abun NUTS+temporal recipe (already shipped) ported to the three
-# remaining observation families. The recovery invariant: NUTS reproduces the
-# integrated temporal field (cor high), recovers the abundance / occupancy slope,
-# and samples without divergences. areal + temporal simultaneously under NUTS stays
-# gated (combine them under nested_laplace); that gate is asserted too.
+# fp_occu). A temporal() term on its own (no simultaneous areal field) is carried
+# under NUTS by a FIXED-HYPER non-centered temporal field: the field precision
+# (tau, rho) is fixed at the temporal-only nested-Laplace areal-BFGS estimate and
+# the whitened raw ~ N(0, I) rides the SAME family NUTS field block the areal path
+# uses (only the loading L and the per-site field map differ -- L is the
+# eigen-loading of tau Q_temporal, the map is the period index). This is the
+# dyn_abun NUTS+temporal recipe (already shipped) ported to the three remaining
+# observation families. The recovery invariant: NUTS reproduces the integrated
+# temporal field (cor high), recovers the abundance / occupancy slope, and samples
+# without divergences. areal + temporal simultaneously under NUTS stays gated
+# (combine them under nested_laplace); that gate is asserted too.
 
 # One AR1 temporal field over Tt periods, per_t sites per period (demeaned).
 .ont_ar1_field <- function(Tt, rho = 0.7, sig = 0.5, seed = 1L) {

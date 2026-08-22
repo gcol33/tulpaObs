@@ -45,9 +45,8 @@
 # both binders share this.
 #
 # Beta requires the open unit interval and lognormal a positive value; the
-# identity-Gaussian arm (gcol33/tulpaObs#112) lives on an unbounded real scale,
-# where every finite value is admissible and the is.finite gate is the whole
-# check.
+# identity-Gaussian arm lives on an unbounded real scale, where every finite
+# value is admissible and the is.finite gate is the whole check.
 .occu_cover_validate_pos_values <- function(y_pos_num, pos_mask, positive) {
   cover_obs <- pos_mask & is.finite(y_pos_num)
   if (identical(positive, "beta")) {
@@ -287,18 +286,18 @@
 }
 
 # Parse an observation-arm (detection / positive-cover) formula for random
-# effects (gcol33/tulpaObs#102, #103). lme4 bars are desugared to re() first, so
-# `(1 | g)`, `(x | g)`, `(x || g)`, `(0 + x | g)`, crossed `(1 | g) + (1 | h)`,
-# and nested `(1 | g/h)` (-> re(g) + re(g:h)) all arrive as a list of re() terms.
-# Returns NULL when the arm carries no random effect (the formula is then used
-# unchanged downstream); otherwise a list with the fixed-effects formula (every
-# re() term stripped, for the design build), the parsed term specs (one per re()
-# term, in formula order), and `has_slope` (TRUE if any term is a random slope --
-# the joint-engine slope blocks are gated on gcol33/tulpa#114). Each spec keeps
-# its grouping expression, slope covariate, and intercept / correlated flags;
-# group codes and the per-row design are resolved later against `data` / `visits`
-# once the model's `valid` mask is built. Other structured terms (icar(), gp(),
-# temporal(), ...) error; copy() is stripped separately.
+# effects. lme4 bars are desugared to re() first, so `(1 | g)`, `(x | g)`, `(x ||
+# g)`, `(0 + x | g)`, crossed `(1 | g) + (1 | h)`, and nested `(1 | g/h)` (->
+# re(g) + re(g:h)) all arrive as a list of re() terms. Returns NULL when the arm
+# carries no random effect (the formula is then used unchanged downstream);
+# otherwise a list with the fixed-effects formula (every re() term stripped, for
+# the design build), the parsed term specs (one per re() term, in formula order),
+# and `has_slope` (TRUE if any term is a random slope -- the joint-engine slope
+# blocks require it). Each spec keeps its grouping expression, slope covariate,
+# and intercept / correlated flags; group codes and the per-row design are
+# resolved later against `data` / `visits` once the model's `valid` mask is
+# built. Other structured terms (icar(), gp(), temporal(), ...) error; copy() is
+# stripped separately.
 .occu_cover_obs_re_term_spec <- function(label) {
   e    <- str2lang(label)
   args <- as.list(e)[-1L]
@@ -333,8 +332,8 @@
     } else if (!is.na(head) && head %in% reg) {
       stop(sprintf(paste0(
         "occu_cover(): structured term `%s()` is not supported on the %s arm; ",
-        "random effects (`(1 | g)`, `(x | g)`, crossed / nested) are ",
-        "(gcol33/tulpaObs#102, #103)."), head, arm), call. = FALSE)
+        "random effects (`(1 | g)`, `(x | g)`, crossed / nested) are."),
+        head, arm), call. = FALSE)
     }
   }
   if (length(re_labels) == 0L) return(NULL)
@@ -627,8 +626,8 @@
 # covers they hold", shared by the joint-coupled arm builder (which collapses
 # these to one aggregated / latent pos-arm row per unit) and the pointwise
 # log-likelihood (which must score the cover term at the same granularity the
-# fitter optimised, gcol33/tulpaObs#34). `pos_site` indexes the occupancy units
-# with at least one detection; `vals[[k]]` is that unit's detected covers.
+# fitter optimised). `pos_site` indexes the occupancy units with at least one
+# detection; `vals[[k]]` is that unit's detected covers.
 .occu_cover_unit_cover <- function(model) {
   # Cover-observed visits (detected AND finite cover); a detected visit with a
   # missing cover (NA) contributes no cover term. A unit enters `pos_site` only
@@ -644,7 +643,7 @@
 # does not clamp -- at |eta| <= the converged mode the +-30 clamp never bit, and
 # dropping it makes the WAIC / LOO pointwise density the number the model was fit
 # with) and .tobs_log_safe on every log so the density is finite at the cover
-# boundary (cover exactly 0 or 1) instead of -Inf (gcol33/tulpaObs#133).
+# boundary (cover exactly 0 or 1) instead of -Inf.
 .occu_cover_pos_logdens <- function(y, eta, disp, positive) {
   if (identical(positive, "beta")) {
     mu <- stats::plogis(eta)
@@ -653,8 +652,8 @@
     lgamma(disp) - lgamma(a) - lgamma(b) +
       (a - 1) * .tobs_log_safe(y) + (b - 1) * .tobs_log_safe(1 - y)
   } else if (identical(positive, "gaussian")) {
-    # Identity-Gaussian arm (gcol33/tulpaObs#112): residual on the raw response,
-    # no change-of-variable Jacobian. mu = eta.
+    # Identity-Gaussian arm: residual on the raw response, no change-of-variable
+    # Jacobian. mu = eta.
     -.tobs_log_safe(disp) - 0.5 * log(2 * pi) -
       0.5 * ((y - eta) / disp)^2
   } else {
@@ -783,9 +782,9 @@
   log_1mp <- ifelse(valid, log(1 - p_mat), 0)
 
   # Detection mixture under z = 1, then the cover term at the granularity the
-  # fitter optimised (per-visit / aggregated / latent, gcol33/tulpaObs#34). The
-  # cover term is non-zero only for units with a detection, matching the
-  # any-detection branch below.
+  # fitter optimised (per-visit / aggregated / latent). The cover term is
+  # non-zero only for units with a detection, matching the any-detection branch
+  # below.
   log_h_det  <- ifelse(valid, ifelse(y == 1L, log_p, log_1mp), 0)
   cover_term <- .occu_cover_cover_term(model, ep_mat, log_disp, units)
 
@@ -848,8 +847,8 @@
       start[p_occ + p_p + 1L] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))
       start[n_par]            <- log(10)   # phi ~ 10 = moderate beta concentration
     } else if (identical(model$positive, "gaussian")) {
-      # Identity-Gaussian arm (gcol33/tulpaObs#112): the response is raw (may be
-      # negative), so seed the intercept / sigma on the natural scale, not log.
+      # Identity-Gaussian arm: the response is raw (may be negative), so seed
+      # the intercept / sigma on the natural scale, not log.
       start[p_occ + p_p + 1L] <- mean(pos_vals)
       start[n_par]            <- log(stats::sd(pos_vals) + 0.1)
     } else {

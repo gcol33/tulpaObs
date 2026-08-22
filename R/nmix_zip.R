@@ -11,10 +11,9 @@
 # structural-zero probability (logit). Mode found by BFGS on the exact ZIP
 # marginal; vcov = inverse of the numeric Hessian at the mode.
 #
-# Scope (v1, gcol33/tulpaObs#116): non-spatial laplace only, intercept-only
-# omega. A zero-inflation covariate design, an areal field, and a NUTS path are
-# follow-ups (the marginal + its gradient are already the additive layer they
-# would share).
+# Scope (v1): non-spatial laplace only, intercept-only omega. A zero-inflation
+# covariate design, an areal field, and a NUTS path are follow-ups (the
+# marginal + its gradient are already the additive layer they would share).
 
 .tobs_fit_nmix_zip <- function(model, mixture = "zip", K_max = NULL,
                                max_iter = 300L, verbose = TRUE, ...) {

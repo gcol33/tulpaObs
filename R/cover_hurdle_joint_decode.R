@@ -125,14 +125,14 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   if (identical(approx, "simplified_laplace") && isTRUE(fits$mcar)) {
     # The simplified-Laplace marginal skew correction over a correlated MCAR
     # field is not wired (the per-arm field gather assumes a single-field copy).
-    # Record the no-op status rather than mis-applying the single-field path
-    # (gcol33/tulpaObs#64); the Gaussian-Laplace MCAR fit stands on its own.
+    # Record the no-op status rather than mis-applying the single-field path;
+    # the Gaussian-Laplace MCAR fit stands on its own.
     sla_status <- "mcar_unsupported"
   } else if (identical(approx, "simplified_laplace") && isTRUE(fits$armspecific)) {
     # The simplified-Laplace marginal skew correction over arm-specific separate
     # latents is not wired (the per-arm field gather assumes a single shared
-    # copied field). Record the no-op; the Gaussian-Laplace fit stands on its own
-    # (gcol33/tulpaObs#65).
+    # copied field). Record the no-op; the Gaussian-Laplace fit stands on its
+    # own.
     sla_status <- "armspecific_unsupported"
   } else if (identical(approx, "simplified_laplace") &&
              identical(fits$positive, "ordinal")) {
@@ -171,9 +171,9 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 
   out <- structure(
     c(
-    # Where the outer grid ended up, and why a "fixed" placement stayed fixed
-    # (gcol33/tulpaObs#187). Spliced rather than named so a fit from an engine
-    # that carries no placement record simply has no such fields.
+    # Where the outer grid ended up, and why a "fixed" placement stayed fixed.
+    # Spliced rather than named so a fit from an engine that carries no
+    # placement record simply has no such fields.
     .tobs_promote_outer_grid(fits$joint),
     list(
       occ          = fits$m_occ,
@@ -196,9 +196,9 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       n_total      = enc$N,
       n_positive   = enc$oi$n_positive %||% length(enc$idx_pos),
       converged    = TRUE,
-      # Unified convergence record (gcol33/tulpaObs#88); see the non-spatial
-      # assembly above. The joint nested-Laplace outer grid has no iteration
-      # count, so n_iter is NA, matching the other joint paths.
+      # Unified convergence record; see the non-spatial assembly above. The
+      # joint nested-Laplace outer grid has no iteration count, so n_iter is
+      # NA, matching the other joint paths.
       convergence  = list(converged = TRUE, n_iter = NA_integer_,
                           sla_status = sla_status),
       log_marginal = c(joint = max(fits$joint$log_marginal)),
@@ -281,7 +281,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   # The copy coefficient rides `alpha_grid`, the one field tulpa's
   # `.resolve_one_copy_spec()` reads a grid off; the cover arm's field
   # amplitude is `alpha * sigma`, with `sigma` the spatial block's own
-  # `sigma_grid` above (gcol33/tulpaObs#192).
+  # `sigma_grid` above.
   list(
     prior = blocks,
     copy  = list(block = 1L, arm = "pos",
@@ -513,27 +513,25 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   out
 }
 
-# Per-grid constrained covariance block for the selected latent
-# coordinates. Same conditioning-by-kriging constraint correction as
-# `.joint_inner_var()` on the BYM2/ICAR/CAR_proper spatial blocks, returning
-# the full `length(beta_idx) x length(beta_idx)` sub-block per grid cell. Used
-# by the joint-engine autoscale unscaling so the intercept SE carries the
-# correct cross-covariance contribution from the centered+scaled slopes
-# (gcol33/tulpaObs#9).
+# Per-grid constrained covariance block for the selected latent coordinates.
+# Same conditioning-by-kriging constraint correction as `.joint_inner_var()`
+# on the BYM2/ICAR/CAR_proper spatial blocks, returning the full
+# `length(beta_idx) x length(beta_idx)` sub-block per grid cell. Used by the
+# joint-engine autoscale unscaling so the intercept SE carries the correct
+# cross-covariance contribution from the centered+scaled slopes.
 #
 # `beta_idx` stacks `n_dense` leading fixed-effect (betas) coordinates followed
 # by the latent field coordinates. With a field present (`n_dense <
 # length(beta_idx)`) the per-cell extraction takes the cheap selected-inversion
-# recipe (gcol33/tulpa#113): the dense betas block and the betas x field cross
-# are exact, the field marginal variances come from one Takahashi pass, and the
-# field x field off-diagonal -- never read by the SD summary (it consumes the
-# betas block + the diagonal) nor by predict (which draws each cell directly
-# from `Q_k`) -- is left at zero. The cells run concurrently in the engine over
-# `n_threads` (gcol33/tulpaObs#93). When `beta_idx` is betas-only
-# (`n_dense == length(beta_idx)`, the cover()-only callers) the full block is
-# formed. The whole loop is the single C++ source
-# `tulpa:::cpp_joint_inner_vcov_blocks`, replacing the former serial R
-# `solve(Qk, E)` over ~`length(beta_idx)` right-hand sides per cell.
+# recipe: the dense betas block and the betas x field cross are exact, the
+# field marginal variances come from one Takahashi pass, and the field x field
+# off-diagonal -- never read by the SD summary (it consumes the betas block +
+# the diagonal) nor by predict (which draws each cell directly from `Q_k`) --
+# is left at zero. The cells run concurrently in the engine over `n_threads`.
+# When `beta_idx` is betas-only (`n_dense == length(beta_idx)`, the
+# cover()-only callers) the full block is formed. The whole loop is the single
+# C++ source `tulpa:::cpp_joint_inner_vcov_blocks`, replacing the former serial
+# R `solve(Qk, E)` over ~`length(beta_idx)` right-hand sides per cell.
 #
 # Returns a list of length n_grid, each element either NULL (when the per-cell
 # sparse Cholesky failed or the cell stored no Q) or a dense `p x p` matrix.

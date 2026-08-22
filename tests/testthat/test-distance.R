@@ -1,5 +1,5 @@
 # Binned distance sampling (half-normal / hazard-rate key, line / point
-# transect), Poisson + negbin, non-spatial Laplace + NUTS (gcol33/tulpaObs#38).
+# transect), Poisson + negbin, non-spatial Laplace + NUTS.
 #
 # Recovery-grade tests (per the "statistical code needs recovery tests" rule):
 # point recovery against simulated truth + 95% CI coverage across seeds, plus a
@@ -349,7 +349,7 @@ test_that("distance NUTS recovers truth and scores WAIC", {
 })
 
 
-# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+# --- NUTS + random effect ------------------------------------
 
 # Line-transect half-normal distance data with a per-site intercept RE on the
 # abundance arm. lambda_i = exp(b0 + b1 x_i + b[group_i]); each individual is
@@ -491,7 +491,7 @@ test_that("distance() Laplace AGHQ recovers a hazard-key grouped RE + shape (#11
 })
 
 
-# --- areal spatial (ICAR / proper-CAR) on the abundance arm (tulpaObs#51) -----
+# --- areal spatial (ICAR / proper-CAR) on the abundance arm -----
 
 .dist_grid_adj <- function(side) {
   ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
@@ -503,7 +503,7 @@ test_that("distance() Laplace AGHQ recovers a hazard-key grouped RE + shape (#11
 
 # Binned distance data with a smoothed ICAR-like field on log lambda. `key` /
 # `shape` select the half-normal or hazard-rate detection function (the hazard
-# scalar log-shape is recovered by the spatial path, gcol33/tulpaObs#79).
+# scalar log-shape is recovered by the spatial path).
 .sim_dist_spatial <- function(adj, cuts, b_lambda, b_sigma, sd_phi = 0.5,
                               key = "halfnorm", shape = 3, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
@@ -647,8 +647,8 @@ test_that("distance() hazard-rate key under areal spatial recovers slope, shape 
 test_that("distance() temporal()-only field recovers the AR1 field + slope (#114)", {
   skip_on_cran()
   skip_if_fast()
-  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
-  # driver with a single temporal block on the abundance arm (gcol33/tulpaObs#114).
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS driver
+  # with a single temporal block on the abundance arm.
   cut <- c(0, 10, 20, 30, 40)
   pi_b <- tulpaObs:::.distance_pi(18, cut, "halfnorm", "line")
   Tt <- 8L; per_t <- 20L; N <- Tt * per_t
@@ -692,7 +692,7 @@ test_that("distance() DETECTION-arm areal field recovers the log-sigma field (#1
   # A field in the detection= formula loads on the per-site detection scale
   # (log sigma) instead of the abundance arm; the distance kernel exposes the
   # per-site sigma gradient (sw$grad_sig), so the areal-BFGS driver recovers a
-  # spatially-varying detection scale. Half-normal key (tulpaObs#114).
+  # spatially-varying detection scale. Half-normal key.
   gadj <- function(side) {
     ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
     a <- matrix(0L, ng, ng)

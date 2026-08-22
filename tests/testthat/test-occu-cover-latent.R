@@ -182,7 +182,7 @@ test_that("beta latent marginal + eta-derivatives match brute force / FD", {
     stats::integrate(post, -Inf, Inf, rel.tol = 1e-9)$value
 }
 
-test_that("beta latent Expected curvature is the PSD Fisher marginal info (tulpaObs#35)", {
+test_that("beta latent Expected curvature is the PSD Fisher marginal info", {
   set.seed(303)
   saw_indefinite_observed <- FALSE
   for (trial in 1:8) {

@@ -1,9 +1,9 @@
 # Reference-implementation equivalence + a CI recovery gate for the abundance
-# families the audit flagged as unevenly validated (gcol33/tulpaObs#83). The
-# N-mixture family already gates head-to-head against unmarked::pcount
-# (test-nmix-laplace.R); this adds the analogous removal check against
-# unmarked::multinomPois and a CI-runnable recovery gate for the multispecies
-# ms_abun family (whose only existing cross-check is an offline spAbundance probe).
+# families the audit flagged as unevenly validated. The N-mixture family already
+# gates head-to-head against unmarked::pcount (test-nmix-laplace.R); this adds the
+# analogous removal check against unmarked::multinomPois and a CI-runnable recovery
+# gate for the multispecies ms_abun family (whose only existing cross-check is an
+# offline spAbundance probe).
 
 # --------------------------------------------------------------------------- #
 # removal: head-to-head against unmarked::multinomPois (removalPiFun).          #

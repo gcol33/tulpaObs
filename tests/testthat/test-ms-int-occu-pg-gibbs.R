@@ -1,6 +1,6 @@
 # =============================================================================
 # test-ms-int-occu-pg-gibbs.R - Polya-Gamma Gibbs for COMMUNITY multi-source
-# integrated occupancy (method = "pg_gibbs"; gcol33/tulpaObs#115, #126).
+# integrated occupancy (method = "pg_gibbs").
 #
 # A real Gibbs chain over the exact posterior via PG data augmentation: per
 # species one latent occupancy state observed by D detection sources, per-species

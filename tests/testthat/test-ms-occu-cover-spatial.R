@@ -1,6 +1,6 @@
 # test-ms-occu-cover-spatial.R - Stage-1 reduced-rank spatial-factor community
-# occu_cover (gcol33/tulpa#67). Currently exercises the ground-truth simulator;
-# the fitter recovery tests are added with the fitter increments.
+# occu_cover. Currently exercises the ground-truth simulator; the fitter
+# recovery tests are added with the fitter increments.
 
 .mscs_grid_adj <- function(nr, nc) {
   N <- nr * nc
@@ -478,8 +478,8 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
          species = sim$species, method = "nuts",
          control = list(n.factors = "auto")),
     "explicit n.factors")
-  # The non-spatial path is now the community NUTS route (gcol33/tulpaObs#115 B7):
-  # a plain occupancy formula with method = "nuts" fits rather than erroring.
+  # The non-spatial path is now the community NUTS route ( B7): a plain occupancy
+  # formula with method = "nuts" fits rather than erroring.
   fit_ns <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
                  detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
                  y_pos = sim$y_pos, species = sim$species, method = "nuts",
@@ -992,7 +992,7 @@ test_that("tobs() front door recovers a shared factor on the cover arm", {
   # field loads on occupancy through Locc and on cover through a free Lpos. Both
   # spatial contributions -- F = W Locc' (occupancy) and Fpos = W Lpos' (cover) --
   # must be recovered, with the cover loadings carried in the same canonical sign
-  # as the field (so Fpos has the right sign, gcol33/tulpa#67 Stage 3).
+  # as the field (so Fpos has the right sign).
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 14L
   sim <- simulate_ms_occu_cover_spatial(
     adj, n_species = S, J = 6L, cover_factor = TRUE,
@@ -1024,7 +1024,7 @@ test_that("tobs() front door recovers a shared factor on the cover arm", {
 })
 
 # ---------------------------------------------------------------------------
-# Richer fields: proper-CAR factors (gcol33/tulpa#67 Stage 3)
+# Richer fields: proper-CAR factors
 # ---------------------------------------------------------------------------
 
 test_that("penalised gradient matches FD on the proper-CAR field path", {
@@ -1123,8 +1123,7 @@ test_that("tobs() front door recovers a proper-CAR field and its correlation", {
   skip_if_fast()
   # car_proper() on the occupancy arm routes to the spatial fit with a proper CAR
   # field: the per-factor correlation rho is estimated by EM alongside tau, and
-  # the field shape + spatial contribution F = W L' are recovered (gcol33/tulpa#67
-  # Stage 3, richer fields).
+  # the field shape + spatial contribution F = W L' are recovered (richer fields).
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 14L
   rho_true <- 0.9
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
@@ -1185,7 +1184,7 @@ test_that("auto-K rank selection composes with a proper-CAR field", {
 })
 
 # ---------------------------------------------------------------------------
-# Richer fields: BYM2 factors (gcol33/tulpa#67 Stage 3)
+# Richer fields: BYM2 factors
 # ---------------------------------------------------------------------------
 
 test_that("penalised gradient matches FD on the BYM2 field path", {

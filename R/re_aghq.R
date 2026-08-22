@@ -1,6 +1,6 @@
 # =============================================================================
 # Adaptive Gauss-Hermite quadrature (AGHQ) debias for occupancy random-effect
-# variance components (gcol33/tulpaObs#11 follow-up).
+# variance components ( follow-up).
 #
 # The variance-component EM in R/em_laplace_re.R integrates the random-effect
 # block b by Laplace (Gaussian curvature at the mode). For binary occupancy that

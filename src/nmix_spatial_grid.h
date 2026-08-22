@@ -111,7 +111,7 @@ inline Rcpp::List run_nmix_spatial_grid(
     Rcpp::NumericMatrix modes(n_grid, n_x);
     Rcpp::List cov_blocks(n_grid);   // per-grid marginal coef covariance
 
-    // outer-grid progress (tulpa#45)
+    // outer-grid progress
     auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
                                            progress_every, progress_throttle, progress_file);
     for (int k = 0; k < n_grid; ++k) {

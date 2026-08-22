@@ -1,6 +1,5 @@
-# The BYM2 Riebler scale factor (gcol33/tulpaObs#228, #232). One
-# implementation, reached through a dense door, a Q door, a CSR door, and the
-# fitter-argument resolver.
+# The BYM2 Riebler scale factor. One implementation, reached through a dense
+# door, a Q door, a CSR door, and the fitter-argument resolver.
 #
 # #228 unified three implementations of one constant. #232 established that the
 # constant they had unified on was the WRONG one -- the geometric mean of the
@@ -75,7 +74,7 @@ test_that("it matches tulpa's implementation through the engine spelling", {
   # engine multiplies the structured block by it, where tulpaObs's own kernels
   # divide by sqrt(s). Two spellings of one loading, so the conversion has to
   # land exactly on the upstream value. This is the external cross-check on the
-  # constant (gcol33/tulpaObs#232). Internal upstream, hence the triple colon.
+  # constant. Internal upstream, hence the triple colon.
   ref <- getFromNamespace("compute_bym2_scale", "tulpa")
   for (dim in list(c(4, 4), c(5, 5), c(10, 10), c(3, 12))) {
     adj <- lattice_adj(dim[1], dim[2])
@@ -179,7 +178,7 @@ test_that("both areal count fitters treat a missing scale_factor the same way", 
 test_that("the term carries s and the engine boundary converts it", {
   # `bym2()` puts the Riebler constant on the term, because tulpaObs's own
   # kernels read it directly. Only the sites that hand it to the tulpa engine
-  # convert (gcol33/tulpaObs#232).
+  # convert.
   adj <- lattice_adj(4, 4)
   tm  <- .tobs_term_bym2(adj)
   expect_equal(tm$scale_factor, .bym2_scale(adj))

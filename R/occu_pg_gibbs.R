@@ -1,11 +1,10 @@
 # occu_pg_gibbs.R - Polya-Gamma Gibbs sampler for single-season occupancy
-# (spOccupancy PGOcc; gcol33/tulpaObs#126). This is a REAL Gibbs chain over the
-# exact posterior -- distinct from `method = "laplace_gibbs"`, which is a
-# stochastic-EM variance correction (Rubin-pooled mode-finds, no PG augmentation,
-# stationary distribution not the posterior). Conditional on the Polya-Gamma
-# auxiliary variables omega, both the occupancy and detection logistic
-# coefficient updates are exactly conjugate Gaussian (Polson, Scott & Windle
-# 2013), so each sweep is:
+# (spOccupancy PGOcc). This is a REAL Gibbs chain over the exact posterior --
+# distinct from `method = "laplace_gibbs"`, which is a stochastic-EM variance
+# correction (Rubin-pooled mode-finds, no PG augmentation, stationary
+# distribution not the posterior). Conditional on the Polya-Gamma auxiliary
+# variables omega, both the occupancy and detection logistic coefficient updates
+# are exactly conjugate Gaussian (Polson, Scott & Windle 2013), so each sweep is:
 #
 #   1. z_i | .      : occupied at any detection; else Bernoulli with weight
 #                     psi_i (1 - p_i)^{n_i} / (psi_i (1 - p_i)^{n_i} + (1 - psi_i))
@@ -24,7 +23,7 @@
                                     n.iter = NULL, n.warmup = NULL,
                                     n.chains = NULL, n.thin = NULL, seed = NULL,
                                     verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs", single_species = TRUE)
 
   if (!is.null(model$X_det_visit))
@@ -89,19 +88,19 @@
 
 
 # Spatial PG Gibbs for single-season occupancy with an intrinsic areal (ICAR)
-# field on the occupancy logit (spOccupancy spPGOcc; gcol33/tulpaObs#126). The
-# field f (one node per site) enters psi linearly: logit psi_i = X_i beta + f_i,
-# f ~ ICAR(tau). Conditional on the Polya-Gamma auxiliaries the joint (beta, f)
-# update is a Gaussian Markov random field draw -- the coefficient prior on beta
-# and the intrinsic tau Q prior on f -- and tau has a conjugate Gamma full
-# conditional. The field is centred (sum-to-zero) each sweep for identifiability
-# against the intercept. icar only (bym2 adds the iid block; a follow-up).
+# field on the occupancy logit (spOccupancy spPGOcc). The field f (one node per
+# site) enters psi linearly: logit psi_i = X_i beta + f_i, f ~ ICAR(tau).
+# Conditional on the Polya-Gamma auxiliaries the joint (beta, f) update is a
+# Gaussian Markov random field draw -- the coefficient prior on beta and the
+# intrinsic tau Q prior on f -- and tau has a conjugate Gamma full conditional.
+# The field is centred (sum-to-zero) each sweep for identifiability against the
+# intercept. icar only (bym2 adds the iid block; a follow-up).
 .tobs_fit_occu_pg_gibbs_spatial <- function(model, spatial, priors = NULL,
                                             sigma.beta = NULL,
                                             n.iter = NULL, n.warmup = NULL,
                                             n.chains = NULL, n.thin = NULL, seed = NULL,
                                             verbose = FALSE) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs", single_species = TRUE)
 
   if (!identical(spatial$type, "icar"))

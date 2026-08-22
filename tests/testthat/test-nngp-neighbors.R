@@ -8,7 +8,7 @@
 #
 # The neighbour SELECTION and the neighbour COVARIANCE the compiled kernels
 # build from it have to be computed under the same metric, and the kernels read
-# every coordinate column (gcol33/tulpa#389).
+# every coordinate column.
 
 test_that("compute_nngp_neighbors() builds the empty graph at N == 1", {
   one <- matrix(c(0.3, 0.7), nrow = 1L)

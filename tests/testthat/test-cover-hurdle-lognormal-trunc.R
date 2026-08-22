@@ -1,6 +1,6 @@
 # Tests for cover(response = "lognormal_trunc") -- the upper-truncated lognormal
-# (Gaussian on log-cover truncated at log(1) = 0, so cover <= 1) positive arm on
-# the joint nested-Laplace path (tulpa truncated_gaussian family, gcol33/tulpa#122).
+# (Gaussian on log-cover truncated at log(1) = 0, so cover <= 1) positive arm on the
+# joint nested-Laplace path (tulpa truncated_gaussian family).
 
 test_that("cover(response = 'lognormal_trunc') constructs", {
   fam <- cover(response = "lognormal_trunc")

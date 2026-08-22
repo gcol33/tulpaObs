@@ -1,4 +1,4 @@
-# Batched multi-response occu_cover (gcol33/tulpa#66).
+# Batched multi-response occu_cover.
 #
 # Fitting occu_cover per species at EVA scale re-pays a cost that is identical
 # across species: the site x visit structure (cells, sites, visits, detection
@@ -97,15 +97,15 @@
 
   # Backend selection. The looped backend (B independent single-species fits) is
   # the DEFAULT: it is correct by construction and as fast as possible. The fused
-  # block-diagonal backend (gcol33/tulpa#66) is correct (bit-identical per
-  # species, gated by test-occu-cover-batch.R) but delivers no measured speed
-  # benefit for occu_cover -- the per-species sparse factorization dominates and
-  # is not amortizable, so it is at best parity and slower than looped at large
-  # fields (dev_notes/_probe_batch_bsweep.R). It is reachable via
-  # control$batch.backend = "fused" for experimentation; the sparse-native
-  # variant that would be needed to make it competitive is tracked as an open
-  # issue (gcol33/tulpa#69). `.tobs_fit_occu_cover_batch_fused` returns NULL when
-  # the configuration is not fused-eligible, falling through to the looped path.
+  # block-diagonal backend is correct (bit-identical per species, gated by
+  # test-occu-cover-batch.R) but delivers no measured speed benefit for
+  # occu_cover -- the per-species sparse factorization dominates and is not
+  # amortizable, so it is at best parity and slower than looped at large fields
+  # (dev_notes/_probe_batch_bsweep.R). It is reachable via control$batch.backend
+  # = "fused" for experimentation; the sparse-native variant that would be needed
+  # to make it competitive is tracked as an open issue.
+  # `.tobs_fit_occu_cover_batch_fused` returns NULL when the configuration is not
+  # fused-eligible, falling through to the looped path.
   backend <- tobs_args$control[["batch.backend"]] %||% "looped"
   if (identical(backend, "fused")) {
     fused <- .tobs_fit_occu_cover_batch_fused(tobs_args, y, y_pos, B, labels)
@@ -158,13 +158,13 @@
 }
 
 
-# Fused block-diagonal backend (gcol33/tulpa#66). Runs B species through ONE
-# multi-block nested-Laplace solve: the species share the design + sparsity
-# pattern, their latent systems are block-diagonal, and the fused cell-coupling
-# scatter loads each design row once and loops species inner. Per-species
-# trajectory is bit-identical to an independent single-species fit (the fused
-# path only reorganises the work), so each species post-processes to the same
-# tobs_fit a looped fit produces.
+# Fused block-diagonal backend. Runs B species through ONE multi-block
+# nested-Laplace solve: the species share the design + sparsity pattern, their
+# latent systems are block-diagonal, and the fused cell-coupling scatter loads
+# each design row once and loops species inner. Per-species trajectory is
+# bit-identical to an independent single-species fit (the fused path only
+# reorganises the work), so each species post-processes to the same tobs_fit a
+# looped fit produces.
 #
 # Returns a `tobs_batch` (backend = "fused"), or NULL when the configuration is
 # not fused-eligible -- the caller then falls back to the looped path. Eligible:

@@ -1,5 +1,5 @@
 # Single-species spatially-varying-coefficient count -- count() + a weighted areal
-# bar (the spAbundance svcAbund analogue; gcol33/tulpaObs#120).
+# bar (the spAbundance svcAbund analogue).
 #
 #   log mu_i = X_i beta + f0_{cell(i)} + w_i * f1_{cell(i)}
 #

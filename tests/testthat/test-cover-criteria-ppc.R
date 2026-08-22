@@ -1,5 +1,5 @@
 # DIC / CPO / LPML via the engine criteria layer, and family-specific PIT + PPC
-# for the cover hurdle and occu_cover (gcol33/tulpa#47, gcol33/tulpaObs#27).
+# for the cover hurdle and occu_cover.
 
 .cc_chain_adj <- function(n) {
   adj <- matrix(0L, n, n)

@@ -1,12 +1,12 @@
-# Regression tests for the internal design-matrix autoscaling
-# (gcol33/tulpaObs#9). The MAP / Laplace path on a design matrix with a
-# numeric column on a large additive scale (e.g. raw calendar year ~ 2000)
-# used to converge to a numerically nonsensical (large intercept, tiny slope)
-# stationary point because the natural-scale Hessian is near-singular along
-# the (intercept, mean(column)) direction. The engine now centers and scales
-# numeric design columns internally; coefficients are transformed back to
-# natural scale before being returned, so user-facing predictions are
-# unchanged but the optimizer reaches the true MAP reliably.
+# Regression tests for the internal design-matrix autoscaling. The MAP /
+# Laplace path on a design matrix with a numeric column on a large additive
+# scale (e.g. raw calendar year ~ 2000) used to converge to a numerically
+# nonsensical (large intercept, tiny slope) stationary point because the
+# natural-scale Hessian is near-singular along the (intercept, mean(column))
+# direction. The engine now centers and scales numeric design columns
+# internally; coefficients are transformed back to natural scale before being
+# returned, so user-facing predictions are unchanged but the optimizer
+# reaches the true MAP reliably.
 
 test_that(".autoscale_pickcols skips intercept, binaries, and zero-sd columns", {
   X <- cbind(

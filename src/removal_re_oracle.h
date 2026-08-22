@@ -1,11 +1,11 @@
 // removal_re_oracle.h
 // Native compiled REGroupOracle for the single-species removal-sampling
 // (sequential-depletion) abundance model with a site-level grouped random
-// effect on EITHER the abundance (lambda) or detection (p) arm
-// (gcol33/tulpaObs#51). Shares the entire Z-sandwich + group-loop + REGroupOracle
-// plumbing with the N-mixture grouped oracle via CountGroupedOracle; the only
-// removal-specific pieces are the per-site marginal (removal_kernel.h, which
-// depletes the available count per pass) and the per-site pass data.
+// effect on EITHER the abundance (lambda) or detection (p) arm. Shares the
+// entire Z-sandwich + group-loop + REGroupOracle plumbing with the N-mixture
+// grouped oracle via CountGroupedOracle; the only removal-specific pieces are
+// the per-site marginal (removal_kernel.h, which depletes the available count
+// per pass) and the per-site pass data.
 //
 // The detection design rows MUST be in pass order per site (depletion
 // accumulates earlier passes); the long-form row order is preserved by

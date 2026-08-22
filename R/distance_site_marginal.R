@@ -1,9 +1,8 @@
 # Latent-N truncation policy for the binned distance-sampling family, the
-# per-site headroom cap ported from R/nmix_site_marginal.R (gcol33/tulpaObs#168).
-# The tolerances and the widening step are family-agnostic (.NMIX_SCORE_TOL,
-# .NMIX_BOUNDARY_TOL, .nmix_widen_headroom(), R/nmix_site_marginal.R) and are
-# reused here rather than re-declared, so distance and the N-mixture stay on
-# ONE guard policy.
+# per-site headroom cap ported from R/nmix_site_marginal.R. The tolerances and
+# the widening step are family-agnostic (.NMIX_SCORE_TOL, .NMIX_BOUNDARY_TOL,
+# .nmix_widen_headroom(), R/nmix_site_marginal.R) and are reused here rather than
+# re-declared, so distance and the N-mixture stay on ONE guard policy.
 #
 # Distance differs from the N-mixture in two ways a shared helper has to
 # absorb:

@@ -1,8 +1,8 @@
 # =============================================================================
 # ms_count_spatial.R - community relative-abundance GLMM with a shared latent
 # structure: a shared areal field (the spAbundance sfMsAbund / svcMsAbund
-# analogues), latent factors (lfMsAbund), or BOTH (the spatial-factor case).
-# gcol33/tulpaObs#117, #118. Poisson.
+# analogues), latent factors (lfMsAbund), or BOTH (the spatial-factor case)..
+# Poisson.
 #
 #   log mu_{s,i} = X_i . (mu_beta + b_s) + sum_k W[i,k] F[u(i),k]
 #                                        + sum_q lambda_{s,q} zeta_{q,i}
@@ -26,7 +26,7 @@
   # `idx` (a subset of site rows) lets the mode-adaptation backtracking line
   # search (R/community_latent.R) skip already-settled sites; both branches
   # subset `eta` and the closed-over `y_mat` to the same rows up front, so the
-  # elementwise math below is unchanged (gcol33/tulpaObs#162 lever 2).
+  # elementwise math below is unchanged.
   if (identical(link, "logit")) {
     ll_cell <- function(eta, idx = NULL) {
       e  <- if (is.null(idx)) eta   else eta[idx, , drop = FALSE]
@@ -76,7 +76,7 @@
       "A shared field / latent() factors on a community GLMM support the ",
       "Poisson (ms_count) and Bernoulli (jsdm) responses; got \"%s\". The ",
       "negbin size / Gaussian residual variance is not identified against a ",
-      "per-site latent structure (gcol33/tulpaObs#117)."), response),
+      "per-site latent structure."), response),
       call. = FALSE)
   }
   what <- if (identical(response, "bernoulli")) "jsdm()" else "ms_count()"
@@ -84,7 +84,7 @@
   su <- model$summaries
   if (any(!model$valid)) {
     stop(what, " shared field / latent factors need a complete y (no NA ",
-         "species-site cells) (gcol33/tulpaObs#117).", call. = FALSE)
+         "species-site cells).", call. = FALSE)
   }
   y_mat  <- matrix(as.numeric(model$y), Ns, S)
   link   <- model$link %||% "log"
@@ -131,18 +131,18 @@
     make_oracle = function(em) oracle, em_fit = em_fit, offset_of = offset_of,
     allow = c("icar", "car_proper", "bym2", "spde"),
     # Measured on this family: the community intercept's truncation bias runs
-    # +0.0613 / +0.0237 / +0.0001 / -0.0038 at 25 / 60 / 150 / 400 outer passes
-    # (gcol33/tulpaObs#156), so 150 is where it closes.
+    # +0.0613 / +0.0237 / +0.0001 / -0.0038 at 25 / 60 / 150 / 400 outer
+    # passes, so 150 is where it closes.
     tol = tol, max.outer = max.outer, factor.outer = 150L,
-    # NOT measured down from the driver default of 8 (gcol33/tulpaObs#164):
-    # a random 10-seed screen at N=100/S=10/Q=2 found no seed where the extra
-    # starts reliably helped, but test-ms-count-factor.R's OWN suite already
-    # carries a documented adversarial case this family needs multiple starts
-    # for -- seed 215 (gcol33/tulpaObs#157) regresses to mag_ratio 1.65 (the
-    # pre-#157-fix value) at factor.starts = 1, vs < 1.40 at the driver
-    # default. A screen against random seeds cannot stand in for a family's
-    # own known-hard cases; this family is split into gcol33/tulpaObs#166
-    # alongside ms_distance for a measurement that checks known seeds first.
+    # NOT measured down from the driver default of 8: a random 10-seed screen
+    # at N=100/S=10/Q=2 found no seed where the extra starts reliably helped,
+    # but test-ms-count-factor.R's OWN suite already carries a documented
+    # adversarial case this family needs multiple starts for -- seed 215
+    # regresses to mag_ratio 1.65 (the pre-#157-fix value) at factor.starts =
+    # 1, vs < 1.40 at the driver default. A screen against random seeds
+    # cannot stand in for a family's own known-hard cases; this family is
+    # split into alongside ms_distance for a measurement that checks known
+    # seeds first.
     factor.starts = factor.starts,
     n.quad = n.quad, verbose = verbose)
 

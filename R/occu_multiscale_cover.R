@@ -1,6 +1,6 @@
 # =============================================================================
-# occu_multiscale_cover.R - three-level occupancy + cover hurdle
-# (gcol33/tulpaObs#29).
+# occu_multiscale_cover.R
+# - three-level occupancy + cover hurdle.
 #
 # Cell-level occupancy (psi) gates plot-level availability (theta), which gates
 # per-visit detection (p) and the cover hurdle (pos). The cell is the areal
@@ -490,11 +490,11 @@
          "values used only where y == 1).", call. = FALSE)
   }
 
-  # Identifiability surfaced (gcol33/tulpaObs#97). The availability (theta) and
-  # detection (p) levels separate only with replicate visits WITHIN a plot. With
-  # at most one observed visit per plot (single releves) the fit identifies cell
-  # occupancy (psi) and the product theta * p, reducing to occu_cover(). Flag the
-  # reduction so the per-level theta / p coefficients are not over-interpreted.
+  # Identifiability surfaced. The availability (theta) and detection (p) levels
+  # separate only with replicate visits WITHIN a plot. With at most one observed
+  # visit per plot (single releves) the fit identifies cell occupancy (psi) and
+  # the product theta * p, reducing to occu_cover(). Flag the reduction so the
+  # per-level theta / p coefficients are not over-interpreted.
   if (is.matrix(y) && max(rowSums(!is.na(y)), 0L) < 2L) {
     message("occu_multiscale_cover(): the data carry no within-plot ",
             "replication (at most one visit per plot), so availability (theta) ",

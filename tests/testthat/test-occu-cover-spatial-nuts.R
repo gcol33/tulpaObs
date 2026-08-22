@@ -1,7 +1,7 @@
 # =============================================================================
 # test-occu-cover-spatial-nuts.R - spatial NUTS sampler for the joint
 # occupancy-detection + cover hurdle (occu_cover(), method = "nuts" + a
-# car_proper() shared field; gcol33/tulpaObs#74).
+# car_proper() shared field).
 #
 # The sampler draws the exact two-state coefficient marginal JOINTLY with a
 # FIXED-HYPER non-centered coupled proper-CAR field (psi linearly + cover scaled
@@ -15,7 +15,7 @@
 #
 # A weighted (spatially-varying-coefficient) field beside the intercept field is
 # a SECOND sampled block; its target, validation and recovery are in
-# test-occu-cover-nuts-svc.R (gcol33/tulpaObs#214).
+# test-occu-cover-nuts-svc.R.
 # =============================================================================
 
 
@@ -75,8 +75,8 @@
 
 # The occurrence field carried onto the cover arm, which is what the simulator's
 # `alpha` puts there: a bare areal term loads on occurrence alone under both
-# engines (gcol33/tulpaObs#217), so a fixture simulated with alpha > 0 is fitted
-# with the copy declared.
+# engines, so a fixture simulated with alpha > 0 is fitted with the copy
+# declared.
 .ocsn_fit_coupled <- function(inp, method = "nuts", control = list(),
                               field = "car_proper") {
   .ocsn_fit(inp, method, spatial = TRUE, control = control, field = field,
@@ -290,7 +290,7 @@ test_that("occu_cover NUTS samples icar; rejects an RE term; advertises nuts", {
 
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 5L)
   # Intrinsic icar() on the psi formula now samples via the coupled sum-to-zero
-  # field (gcol33/tulpaObs#113); confirm the path runs and centres the field.
+  # field; confirm the path runs and centres the field.
   fit_icar <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = inp$adj), data = inp$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,
@@ -301,8 +301,8 @@ test_that("occu_cover NUTS samples icar; rejects an RE term; advertises nuts", {
   expect_false(is.null(fit_icar$spatial_field))
   expect_lt(abs(mean(fit_icar$spatial_field)), 1e-6)   # sum-to-zero centred
   # A weighted (SVC) field beside the intercept field samples as a second block
-  # (gcol33/tulpaObs#214, covered in test-occu-cover-nuts-svc.R); a per-group
-  # random effect on the occupancy arm is still a grid-integrated structure.
+  # (covered in test-occu-cover-nuts-svc.R); a per-group random effect on the
+  # occupancy arm is still a grid-integrated structure.
   expect_error(
     suppressWarnings(tobs(
       formula = ~ occ_cov1 + car_proper(graph = inp$adj) + re(site_id),
@@ -370,10 +370,10 @@ test_that("occu_cover NUTS samples a two-field bar, one block each (#203, #214)"
     control = list(verbose = FALSE, n.iter = 50L, n.warmup = 50L)))
 
   # An intercept + SVC bar declares two fields, and the sampler now carries one
-  # block per field (gcol33/tulpaObs#214): the intercept surface plus a
-  # varying-coefficient surface named by its weight column, each with its own
-  # hyperparameters. The two-field target and its validation live in
-  # test-occu-cover-nuts-svc.R; here the point is that the bar reaches it.
+  # block per field: the intercept surface plus a varying-coefficient surface
+  # named by its weight column, each with its own hyperparameters. The
+  # two-field target and its validation live in test-occu-cover-nuts-svc.R;
+  # here the point is that the bar reaches it.
   fit2 <- run(~ occ_cov1 + spatial(~ 1 + occ_cov1 || cell_idx, graph = adj))
   expect_identical(fit2$nuts$n_fields, 2L)
   expect_named(fit2$trend_fields, "occ_cov1")
@@ -676,7 +676,7 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
 
 
 # --------------------------------------------------------------------------- #
-# copy() on the positive arm reaches the sampler (gcol33/tulpaObs#210)          #
+# copy() on the positive arm reaches the sampler #
 # --------------------------------------------------------------------------- #
 
 # Same fixture as .ocsn_fit, with a copy() term on the positive formula.
@@ -713,7 +713,7 @@ test_that("occu_cover spatial NUTS honours a copy()'s amplitude grid (#210)", {
   # amplitude: the warm nested-Laplace fit lays the axis, and its span is the
   # support of the flat prior the sampler draws alpha under
   # (.occu_cover_nuts_hyper_bounds). So the knob reaches the sampler even though
-  # alpha is no longer pinned at the warm estimate (gcol33/tulpaObs#204).
+  # alpha is no longer pinned at the warm estimate.
   #
   # The band is deliberately BELOW the simulation truth (alpha = 1), so the
   # posterior pushes against its upper bound: a dropped copy() would fall back
@@ -754,7 +754,7 @@ test_that("occu_cover spatial NUTS refuses a copy() it cannot resolve (#210)", {
 
 
 # --------------------------------------------------------------------------- #
-# A bare areal term is occurrence-only on BOTH engines (gcol33/tulpaObs#217)    #
+# A bare areal term is occurrence-only on BOTH engines #
 # --------------------------------------------------------------------------- #
 
 # The grid-integrated route on the same input, for the two-backend comparison.

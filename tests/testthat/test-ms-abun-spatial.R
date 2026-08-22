@@ -1,8 +1,8 @@
 # Spatial community / multispecies N-mixture (ms_abun() + a shared areal field on
-# the abundance arm; the spAbundance sfMsNMix analogue, gcol33/tulpaObs#12). The
-# fit is the in-tree nested Laplace-EM: per-species coefficient RE with Gaussian
-# community covariances PLUS one shared ICAR / BYM2 / proper-CAR field on
-# log lambda, integrated over the field-hyperparameter (and NB size) grid.
+# the abundance arm; the spAbundance sfMsNMix analogue). The fit is the in-tree
+# nested Laplace-EM: per-species coefficient RE with Gaussian community
+# covariances PLUS one shared ICAR / BYM2 / proper-CAR field on log lambda,
+# integrated over the field-hyperparameter (and NB size) grid.
 #
 # These fits loop S species x an EM x an outer grid, so each is ~1-3 min: every
 # block here is skip_on_cran(), and the multi-seed / extra-engine blocks add

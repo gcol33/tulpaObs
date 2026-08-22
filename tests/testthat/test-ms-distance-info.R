@@ -1,8 +1,8 @@
-# The assembled per-species marginal observed information for ms_distance()
-# (gcol33/tulpaObs#161). The community EM's fallback central-differences this
-# matrix at 2U sweeps per species per Newton step, and every distance sweep sums
-# over the latent N, which made this family the most expensive file in the
-# recovery tier. The kernel already returns every piece of the Louis (1982) block
+# The assembled per-species marginal observed information for ms_distance(). The
+# community EM's fallback central-differences this matrix at 2U sweeps per
+# species per Newton step, and every distance sweep sums over the latent N, which
+# made this family the most expensive file in the recovery tier. The kernel
+# already returns every piece of the Louis (1982) block
 #
 #   B_i = diag(info_lam_i, info_sig_i) - Var(N_i|y) v_i v_i',
 #         v_i = (-swl_i, -vN_sig_i)

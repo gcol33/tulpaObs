@@ -1,17 +1,16 @@
 # svc() (the continuous NNGP spatially-varying coefficient) is wired for
 # single-season occupancy: sampled by the NUTS path, and fit on the Laplace
-# backends through the shared areal-BFGS nested-Laplace driver
-# (gcol33/tulpaObs#143, R/occu_svc.R). On every other family it used to be
-# extracted and silently dropped (gcol33/tulpaObs#118) -- the model fit with no
-# spatially-varying coefficient, no error. Those must still error with a pointer
-# to the recovery-tested areal-bar route. These are fast error paths (the guard
-# fires before any fit), so they run in every tier.
+# backends through the shared areal-BFGS nested-Laplace driver (R/occu_svc.R).
+# On every other family it used to be extracted and silently dropped -- the
+# model fit with no spatially-varying coefficient, no error. Those must still
+# error with a pointer to the recovery-tested areal-bar route. These are fast
+# error paths (the guard fires before any fit), so they run in every tier.
 #
 # `prior_range` is supplied even though these calls are expected to fail: without
 # it svc() errors in its own constructor, and that message also matches the regex
 # below -- the tests would pass while never reaching the family guard.
 
-test_that("svc() on abun() errors instead of silently dropping (tulpaObs#118)", {
+test_that("svc() on abun() errors instead of silently dropping", {
   set.seed(1)
   y  <- matrix(stats::rpois(30 * 3, 3), 30, 3)
   df <- data.frame(lon = stats::runif(30), lat = stats::runif(30))
@@ -66,7 +65,7 @@ test_that("svc() alongside another structured term errors on the Laplace route",
     "svc|spatial|not wired")
 })
 
-test_that("svc() on single-season occu() FITS under laplace (tulpaObs#143)", {
+test_that("svc() on single-season occu() FITS under laplace", {
   set.seed(2)
   n <- 40L
   df <- data.frame(lon = stats::runif(n), lat = stats::runif(n))

@@ -224,8 +224,8 @@
 
 
 # Map the positive arm's copy() spec(s) onto the sampled field's coupling
-# amplitude on the NUTS spatial path (gcol33/tulpaObs#210), including the
-# no-copy case, which pins the amplitude at 0 (gcol33/tulpaObs#217).
+# amplitude on the NUTS spatial path, including the no-copy case, which
+# pins the amplitude at 0.
 #
 # A bare areal term on the psi formula loads on the OCCURRENCE arm alone under
 # both engines: a term's process is the formula it sits in, and copy() is how a
@@ -233,8 +233,8 @@
 # is what makes that true here -- with no copy() the shared translation pins
 # alpha at 0, exactly as the grid-integrated route already did, instead of
 # leaving the default amplitude axis in place for the warm fit to estimate and
-# the sampler to then integrate over (gcol33/tulpaObs#204 made that axis visible
-# work rather than a silent default).
+# the sampler to then integrate over ( made that axis visible work rather than a
+# silent default).
 #
 # `control$alpha.grid` is a live knob here, not a deterministic-backend-only
 # one: the sampler's warm nested-Laplace fit integrates that axis, and the axis
@@ -251,9 +251,9 @@
 # path resolves that roster itself (`.occu_cover_spatial_fields()` cannot supply
 # it: it resolves the grid-integrated path's fields and rejects `car_proper()`,
 # the sampled field's primary kind), so the roster here is the intercept field
-# plus one entry per varying-coefficient field (gcol33/tulpaObs#214), and a
-# per-component `copy(spatial(), terms = list(...))` addresses them by the same
-# names it does under nested_laplace.
+# plus one entry per varying-coefficient field, and a per-component
+# `copy(spatial(), terms = list(...))` addresses them by the same names it does
+# under nested_laplace.
 .occu_cover_nuts_copy_control <- function(copies, nuts_sp, control) {
   field_view <- list(
     fields    = c(list(list(component = "intercept")),
@@ -325,15 +325,15 @@
 
   if (is.null(pos_formula)) pos_formula <- detection
 
-  # Observation-arm random intercept (gcol33/tulpaObs#102, #205): a `(1 | g)` /
-  # `re(g)` on the detection or positive-cover formula adds a random effect on
-  # that arm -- an iid latent block on the joint nested-Laplace fit, a
-  # non-centered block with its own sampled SD under method = "nuts". Parse it
-  # off FIRST -- before the copy() extraction and every design build -- so each
-  # downstream consumer sees a clean fixed-effects formula; the grouping is
-  # resolved to per-visit codes once the model (and its `valid` mask) is built.
-  # The plain `laplace` route is a coefficient-marginal fit with no latent block
-  # at all, so it errors rather than silently dropping the RE.
+  # Observation-arm random intercept: a `(1 | g)` / `re(g)` on the detection or
+  # positive-cover formula adds a random effect on that arm -- an iid latent
+  # block on the joint nested-Laplace fit, a non-centered block with its own
+  # sampled SD under method = "nuts". Parse it off FIRST -- before the copy()
+  # extraction and every design build -- so each downstream consumer sees a
+  # clean fixed-effects formula; the grouping is resolved to per-visit codes
+  # once the model (and its `valid` mask) is built. The plain `laplace` route is
+  # a coefficient-marginal fit with no latent block at all, so it errors rather
+  # than silently dropping the RE.
   det_re_parse <- .occu_cover_obs_re_parse(detection,   "detection")
   pos_re_parse <- .occu_cover_obs_re_parse(pos_formula, "positive cover")
   has_obs_re   <- !is.null(det_re_parse) || !is.null(pos_re_parse)
@@ -351,11 +351,10 @@
          call. = FALSE)
   }
   # Random intercepts (crossed, nested) AND random slopes are supported on the
-  # detection / positive-cover arms (gcol33/tulpaObs#103): an intercept rides one
-  # `iid` block per term, an uncorrelated slope one weighted `iid` block per
-  # coefficient, a correlated slope one multivariate free-Sigma `miid` block.
-  # The slope blocks need tulpa's joint engine >= 0.0.39 (gcol33/tulpa#114), which
-  # the DESCRIPTION Imports floor enforces.
+  # detection / positive-cover arms: an intercept rides one `iid` block per term,
+  # an uncorrelated slope one weighted `iid` block per coefficient, a correlated
+  # slope one multivariate free-Sigma `miid` block. The slope blocks need tulpa's
+  # joint engine >= 0.0.39, which the DESCRIPTION Imports floor enforces.
   if (!is.null(det_re_parse)) detection   <- det_re_parse$fe
   if (!is.null(pos_re_parse)) pos_formula <- pos_re_parse$fe
 
@@ -369,13 +368,13 @@
   pos_copies <- pos_copy$copies
   pos_formula <- pos_copy$formula
 
-  # Spatial NUTS path (gcol33/tulpaObs#74, #204): a single areal term on the psi
-  # formula -- icar() / bym2() / car_proper(), or the equivalent single-column bar
-  # spatial(~ 1 || cell, graph = adj) -- under method = "nuts" samples a
-  # non-centered coupled field, and its hyperparameters, jointly with the
-  # coefficient marginal (rather than grid-integrating them, as nested_laplace
-  # does). Detected separately from the grid-integrated fields below, because the
-  # sampled field is a NUTS-only structure.
+  # Spatial NUTS path: a single areal term on the psi formula -- icar() / bym2() /
+  # car_proper(), or the equivalent single-column bar spatial(~ 1 || cell, graph =
+  # adj) -- under method = "nuts" samples a non-centered coupled field, and its
+  # hyperparameters, jointly with the coefficient marginal (rather than
+  # grid-integrating them, as nested_laplace does). Detected separately from the
+  # grid-integrated fields below, because the sampled field is a NUTS-only
+  # structure.
   if (identical(engine, "nuts")) {
     nuts_sp <- .occu_cover_nuts_spatial_term(formula, data)
     if (!is.null(nuts_sp)) {
@@ -383,15 +382,15 @@
         stop("occu_cover(): method = \"nuts\" samples an observation-arm random ",
              "effect on the NON-SPATIAL target; composed with the coupled areal ",
              "field it needs the grid-integrated method = \"nested_laplace\" ",
-             "(which carries both as latent blocks). (gcol33/tulpaObs#205)",
+             "(which carries both as latent blocks).",
              call. = FALSE)
       }
       .occu_cover_reject_structured(detection,   "detection")
       .occu_cover_reject_structured(pos_formula, "positive cover")
       # The copy() specs were stripped off the positive formula above, so they
       # have to be translated here rather than at the shared call below this
-      # branch (gcol33/tulpaObs#210). Ahead of the design build, so a copy() the
-      # field cannot satisfy is refused before any fitting work.
+      # branch. Ahead of the design build, so a copy() the field cannot satisfy
+      # is refused before any fitting work.
       control <- .occu_cover_nuts_copy_control(pos_copies, nuts_sp, control)
       vd_det  <- .normalize_visits(visits, detection,
                                    n_sites = nrow(y), max_visits = ncol(y))
@@ -459,13 +458,13 @@
   }
   control <- .occu_cover_apply_copy_coupling(pos_copies, spatial_info, control)
 
-  # Resolve cover aggregation (tulpaObs#33). NULL (unset) -> "mean" on the
-  # shared-field spatial path (so the cover arm contributes at the cell scale and
-  # does not outweigh occupancy on the shared field), "none" (per-visit) on the
-  # non-spatial path (no shared field to over-weight). `agg_explicit` records
-  # whether the user set it: an explicit mean / median on an unsupported
-  # configuration errors, whereas the bare default quietly falls back to
-  # per-visit cover so a plain visit-level fit keeps working.
+  # Resolve cover aggregation. NULL (unset) -> "mean" on the shared-field spatial
+  # path (so the cover arm contributes at the cell scale and does not outweigh
+  # occupancy on the shared field), "none" (per-visit) on the non-spatial path
+  # (no shared field to over-weight). `agg_explicit` records whether the user set
+  # it: an explicit mean / median on an unsupported configuration errors, whereas
+  # the bare default quietly falls back to per-visit cover so a plain visit-level
+  # fit keeps working.
   #
   # Aggregated cover is a per-cell observation, so its positive design must be
   # cell-level (resolved from the cell `data`). A `positive` formula that
@@ -501,9 +500,9 @@
     }
     cover_aggregate <- "none"
   }
-  # An arm-specific cover field (gcol33/tulpaObs#110) is scored per detected visit
-  # (its node/weight index the pos-arm visit rows), so it needs per-visit cover;
-  # an explicit aggregation errors, the bare default falls back to per-visit.
+  # An arm-specific cover field is scored per detected visit (its node/weight
+  # index the pos-arm visit rows), so it needs per-visit cover; an explicit
+  # aggregation errors, the bare default falls back to per-visit.
   if (has_spatial && !is.null(spatial_info$pos_armspec) &&
       cover_aggregate != "none") {
     if (agg_explicit) {
@@ -531,7 +530,7 @@
          "has a flat field-mean direction needing a sum-to-zero reparameterisation ",
          "for NUTS -- use method = \"nested_laplace\" (the shared coupled field is ",
          "grid-integrated), car_proper() for the NUTS shared field, or ",
-         "ms_occu_cover() + icar() for a sampled shared field. (gcol33/tulpaObs#74)",
+         "ms_occu_cover() + icar() for a sampled shared field.",
          call. = FALSE)
   }
   if (!has_spatial && engine == "nested_laplace") {
@@ -618,12 +617,12 @@
 
   model$cover_aggregate <- cover_aggregate
 
-  # Observation-arm random effects (gcol33/tulpaObs#102, #103, #205): resolve each
-  # detection / positive-cover RE term to its per-(site, visit) design (group
-  # codes + slope weights) now that the model carries its `valid` mask. Both
-  # hosting engines read model$re_det / model$re_pos from here -- the joint
-  # nested-Laplace builder subsets each term's codes by the same `keep` it uses
-  # for the arm rows, the sampler scatters them on the padded grid.
+  # Observation-arm random effects: resolve each detection / positive-cover RE
+  # term to its per-(site, visit) design (group codes + slope weights) now that
+  # the model carries its `valid` mask. Both hosting engines read model$re_det /
+  # model$re_pos from here -- the joint nested-Laplace builder subsets each term's
+  # codes by the same `keep` it uses for the arm rows, the sampler scatters them
+  # on the padded grid.
   model <- .occu_cover_attach_obs_re(model, det_re_parse, pos_re_parse, data,
                                      vd_det$visits, vd_pos$visits)
 
@@ -664,11 +663,11 @@
     model$n_cells   <- n_cells_field
 
     # Optional per-group random intercept on the occupancy arm, layered on the
-    # shared field (gcol33/tulpaObs#56). The grouping is per occupancy unit (one
-    # code per site / data row); validate its length and carry it to the fitter.
-    # It also lands on the model, so the per-site offset the criteria add to the
-    # occupancy predictor is built from the same codes the fit ran on -- the
-    # occupancy counterpart of model$re_det / model$re_pos (gcol33/tulpaObs#215).
+    # shared field. The grouping is per occupancy unit (one code per site / data
+    # row); validate its length and carry it to the fitter. It also lands on the
+    # model, so the per-site offset the criteria add to the occupancy predictor
+    # is built from the same codes the fit ran on -- the occupancy counterpart of
+    # model$re_det / model$re_pos.
     re_spec <- spatial_info$re
     if (!is.null(re_spec)) {
       if (length(re_spec$group_idx) != model$n_sites) {

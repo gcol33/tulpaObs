@@ -167,7 +167,7 @@ supplied grid, \code{copy(spatial(), alpha = 0.5)} fixes it.
 
 \emph{One arm only (free / separate).} A field written in one arm's formula is
 a separate latent on that arm alone, with its own precision and no cross-arm
-coupling (gcol33/tulpaObs#65). A field in each arm's formula gives two
+coupling. A field in each arm's formula gives two
 independent latents:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(presence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
@@ -187,9 +187,8 @@ The \code{||} and \code{|} axis is separate from shared / free: \code{||} makes 
 and slope fields independent, while a single \code{|} makes them correlated (a free
 cross-covariance, MCAR). A correlated \code{|} bar shared across both arms (in the
 shared \code{formula}, or on \code{presence} with \code{copy()} on \code{positive}) is copied with
-one estimated amplitude (gcol33/tulpaObs#64); placed on one arm's formula it is
-a free-Sigma correlated field on that arm alone, no cross-arm copy
-(gcol33/tulpaObs#109).
+one estimated amplitude; placed on one arm's formula it is a free-Sigma
+correlated field on that arm alone, no cross-arm copy.
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{field in the shared formula (or copy())   one shared / copied latent (presence anchor, coupling estimated)
 a field in each arm's formula             separate / free latents, no coupling

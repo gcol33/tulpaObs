@@ -42,9 +42,9 @@
 // site's latent-N sum that many states above its own max(y) (< 0 = no cap).
 // `K_site` states each site's ceiling directly (length n_sites, NULL = none) and
 // takes precedence over `headroom`: a caller holding a fitted lambda_i resolves
-// the ceiling from the abundance scale rather than from max(y_i).
-// (Comments stay OUT of the parameter list -- the attribute parser folds one
-// into the signature it generates, see gcol33/tulpaObs#233.)
+// the ceiling from the abundance scale rather than from max(y_i). (Comments stay
+// OUT of the parameter list -- the attribute parser folds one into the
+// signature it generates.)
 // [[Rcpp::export]]
 Rcpp::List cpp_nmix_total_log_lik(
     Rcpp::IntegerVector y,
@@ -85,8 +85,8 @@ Rcpp::List cpp_nmix_total_log_lik(
         tulpaObs::count_group_by_site(site_idx, n_sites);
 
     // The output field set, the per-site scatter and the returned list are
-    // shared with the removal sweep (nmix_kernel.h, gcol33/tulpaObs#173), so a
-    // field added here reaches every count family.
+    // shared with the removal sweep (nmix_kernel.h), so a field added here
+    // reaches every count family.
     tulpaObs::CountSweepAccum acc(n_sites, n_obs);
 
     for (int s = 0; s < n_sites; ++s) {

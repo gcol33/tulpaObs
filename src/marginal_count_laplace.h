@@ -362,10 +362,10 @@ Rcpp::List marginal_count_laplace_fixed(
     int outer_iter = 0;
     const int outer_max = nb ? max_iter : 1;
 
-    // Progress + ETA (gcol33/tulpaObs#43); ON by default, reading the scoped
-    // option. Poisson is a single inner Newton -> tick its iterations; NB wraps
-    // the Newton in an outer dispersion loop -> tick that. ETA is the upper
-    // bound to max_iter, finalised by finish().
+    // Progress + ETA; ON by default, reading the scoped option. Poisson is a
+    // single inner Newton -> tick its iterations; NB wraps the Newton in an
+    // outer dispersion loop -> tick that. ETA is the upper bound to max_iter,
+    // finalised by finish().
     auto prog = tulpaObs::make_grid_progress_from_option("count-laplace", max_iter);
 
     for (outer_iter = 0; outer_iter < outer_max; ++outer_iter) {

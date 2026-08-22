@@ -30,10 +30,10 @@
   # model as msAbund -- per-species coefficients with a Gaussian community
   # covariance, no detection, no latent state -- with a logit link, so it shares
   # this binder, the community EM, the latent driver, and every S3 method rather
-  # than carrying a parallel implementation (gcol33/tulpaObs#121). "binomial" is
-  # the k-of-n generalization (community svcPGBinom, gcol33/tulpaObs#125): the
-  # same logit-link path with a per-(site, species) trial count; "bernoulli" is
-  # its trials = 1 special case (and stays the jsdm() alias).
+  # than carrying a parallel implementation. "binomial" is the k-of-n
+  # generalization (community svcPGBinom): the same logit-link path with a
+  # per-(site, species) trial count; "bernoulli" is its trials = 1 special case
+  # (and stays the jsdm() alias).
   response <- match.arg(response,
                         c("poisson", "negbin", "gaussian", "bernoulli",
                           "binomial"))
@@ -412,10 +412,10 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
       # community EM's own Newton solve, conditional on the converged
       # community mean) -- what a per-species-coefficient consumer (SBC's
       # "rank a fixed species set" design, a calibrated per-species CI) needs
-      # beyond the point BLUP; not previously exposed on the fit object.
-      # Bf = the mu-b_s cross-Hessian block from the same Newton solve
-      # (gcol33/tulpaObs#226): mu and b_s are NOT independent in the
-      # posterior, and Bf is what lets a consumer draw them jointly instead.
+      # beyond the point BLUP; not previously exposed on the fit object. Bf =
+      # the mu-b_s cross-Hessian block from the same Newton solve: mu and b_s
+      # are NOT independent in the posterior, and Bf is what lets a consumer
+      # draw them jointly instead.
       Cinv = fit$Cinv, Bf = fit$Bf
     ),
     ms_dispersion = disp,

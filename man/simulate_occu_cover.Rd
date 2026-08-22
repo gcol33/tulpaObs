@@ -65,7 +65,7 @@ is directly comparable to a fitted \code{field_sd} (\code{fit$spatial$field_sd_m
 on the \code{nested_laplace} path, \code{fit$hyper_draws[, "field_sd"]} on \code{nuts}) --
 never to the raw \code{sigma} a \code{nested_laplace} fit reports, which is the
 amplitude against the unscaled intrinsic precision and differs by
-\code{sqrt(scale_q)} (\code{gcol33/tulpaObs#221}).}
+\code{sqrt(scale_q)}.}
 
 \item{alpha}{Cover-arm scaling on the shared field (used only when \code{adj}
 is supplied). 1.0 = arms see the field identically; positive = same sign,
@@ -88,7 +88,7 @@ to every visit of that cell.}
 \item{pos_field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
 INDEPENDENT areal field on the cover (positive) arm only -- an intercept
 field plus a time-weighted trend field, each unrelated to the occupancy
-field and with no alpha copy (gcol33/tulpaObs#110). Adds a \code{time} column to
+field and with no alpha copy. Adds a \code{time} column to
 the returned \code{data} and reports \code{g0} / \code{g1} (the two fields) and their SDs in
 \code{truth}. Fit by placing \code{spatial(~ 1 + time || cell, graph = adj)} in the
 \code{positive} formula.}

@@ -1,4 +1,4 @@
-# Arm-specific separate spatial latents in cover() (gcol33/tulpaObs#65).
+# Arm-specific separate spatial latents in cover().
 #
 # An INDEPENDENT (`||`) spatial bar placed in ONE arm's formula puts an areal
 # field on that arm only, with its own precision and NO cross-arm copy. A field in
@@ -367,7 +367,7 @@ test_that("a presence-only single-arm bar is accepted and fits", {
 })
 
 
-# ---- (e) BYM2 arm-specific field on the cover arm (gcol33/tulpaObs#107) ------
+# ---- (e) BYM2 arm-specific field on the cover arm ------
 
 test_that("a positive-only BYM2 single-arm field recovers the rho-mixed field", {
   skip_if_fast()

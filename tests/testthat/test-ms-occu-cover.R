@@ -14,12 +14,12 @@
 #   - the S3 method surface
 #   - a beta-arm recovery smoke
 #
-# The family is status = "working" (gcol33/tulpaObs#98): the community-MEAN 95%
-# CIs are gated at the 0.85 working floor of the recovery rubric (measured pooled
-# coverage ~0.92 at 24 seeds). The community MEANS are at the natural scale and
-# unbiased; the binary-detection community VARIANCE component carries the
-# documented Laplace small-cluster attenuation -- a lower bound debiased by AGHQ
-# up to the re.aghq.maxdim cap, and explicitly tested as a lower bound above it.
+# The family is status = "working": the community-MEAN 95% CIs are gated at the
+# 0.85 working floor of the recovery rubric (measured pooled coverage ~0.92 at 24
+# seeds). The community MEANS are at the natural scale and unbiased; the
+# binary-detection community VARIANCE component carries the documented Laplace
+# small-cluster attenuation -- a lower bound debiased by AGHQ up to the
+# re.aghq.maxdim cap, and explicitly tested as a lower bound above it.
 # =============================================================================
 
 
@@ -77,7 +77,7 @@ test_that("ms_occu_cover() enforces its capability gates", {
     "not available"
   )
   # A structured term on the detection arm is rejected: shared fields are
-  # supported on the occupancy and cover arms only (gcol33/tulpa#67).
+  # supported on the occupancy and cover arms only.
   adj <- matrix(0L, 30, 30)
   for (i in seq_len(29)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
   expect_error(
@@ -162,8 +162,8 @@ test_that("ms_occu_cover() community-mean 95% CIs cover near the nominal rate", 
     truth <- c(sim$truth$mu_occ, sim$truth$mu_p, sim$truth$mu_pos)
     covered <- c(covered, abs(bm - truth) < 1.96 * bsd)
   }
-  # Working-family gate (gcol33/tulpaObs#98): pooled over the six community-mean
-  # coefficients x 20 seeds at the 0.85 floor. Measured pooled coverage ~0.92.
+  # Working-family gate: pooled over the six community-mean coefficients x 20
+  # seeds at the 0.85 floor. Measured pooled coverage ~0.92.
   expect_gt(mean(covered), 0.85)
 })
 
@@ -216,7 +216,7 @@ test_that("ms_occu_cover() S3 methods work", {
 })
 
 
-test_that("ms_occu_cover() flags community-variance Laplace attenuation (tulpaObs#47)", {
+test_that("ms_occu_cover() flags community-variance Laplace attenuation", {
   skip_on_cran()
   skip_if_fast()
   set.seed(5)
@@ -275,14 +275,14 @@ test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   # Community-mean slopes against the seed's REALIZED mean (colMeans of
   # truth$beta_occ / beta_p / beta_pos), not the nominal 0.6 / -0.4 / 0.3
   # (#155): this loop already averaged over seeds before comparing to the
-  # nominal, so gcol33/tulpaObs#155 calls it statistically valid as it stood;
-  # retargeting is a power improvement, not a bug fix. Budget is 5x the SE of
-  # an 8-seed mean, from a fresh 16-seed measurement of this exact fixture
-  # (occ sd 0.092 -> SE_8 0.033 -> budget 0.17; p sd 0.061 -> SE_8 0.021 ->
-  # budget 0.11; pos sd 0.015 -> SE_8 0.0053 -> budget 0.03), all well below
-  # the old flat 0.25. The occupancy and detection arms carry real per-seed
-  # outliers (occ deviation -0.208 on one seed, p deviation +0.161 on another,
-  # of 16 measured) consistent with this family's documented binary-data RE
+  # nominal, so calls it statistically valid as it stood; retargeting is a
+  # power improvement, not a bug fix. Budget is 5x the SE of an 8-seed mean,
+  # from a fresh 16-seed measurement of this exact fixture (occ sd 0.092 ->
+  # SE_8 0.033 -> budget 0.17; p sd 0.061 -> SE_8 0.021 -> budget 0.11; pos sd
+  # 0.015 -> SE_8 0.0053 -> budget 0.03), all well below the old flat 0.25.
+  # The occupancy and detection arms carry real per-seed outliers (occ
+  # deviation -0.208 on one seed, p deviation +0.161 on another, of 16
+  # measured) consistent with this family's documented binary-data RE
   # attenuation; none of the three means is significantly biased over the 16
   # seeds (largest |mean| / se is occ at 0.66), so the budget is not absorbing
   # a known one-sided shift.

@@ -1,7 +1,7 @@
 # =============================================================================
 # test-occu-cover-checkpoint.R - grid-cell checkpoint/resume forwarded from
-# occu_cover() (and the cover hurdle) into tulpa_nested_laplace_joint()
-# (gcol33/tulpa#50 consumer wiring).
+# occu_cover() (and the cover hurdle) into tulpa_nested_laplace_joint() (
+# consumer wiring).
 #
 # control$checkpoint = list(path =, resume =) is passed verbatim to the joint
 # engine, whose outer grid appends each completed cell to `path`. A checkpointed

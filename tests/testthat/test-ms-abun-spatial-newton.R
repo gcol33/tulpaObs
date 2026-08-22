@@ -1,12 +1,12 @@
-# Opt-in exact-Newton inner solver for the areal shared-field community
-# N-mixture (control$inner_solver = "newton"; gcol33/tulpaObs#12). Same model as
-# the default Laplace-EM path -- the field hyperparameter is outer-grid
-# integrated either way -- but the inner step alternates a tulpa AGHQ community
-# solve with an exact-Newton shared-field solve. The two solvers must produce the
-# same fit (community means, shared field, fit shape); only the numbers differ to
-# solver tolerance. The Newton path runs an FD-gradient AGHQ profile loop per grid
-# node, so it is much slower than EM: the equivalence block is skip_if_fast() and
-# drives the internal driver with a coarse grid to stay affordable in CI.
+# Opt-in exact-Newton inner solver for the areal shared-field community N-mixture
+# (control$inner_solver = "newton"). Same model as the default Laplace-EM path --
+# the field hyperparameter is outer-grid integrated either way -- but the inner
+# step alternates a tulpa AGHQ community solve with an exact-Newton shared-field
+# solve. The two solvers must produce the same fit (community means, shared field,
+# fit shape); only the numbers differ to solver tolerance. The Newton path runs an
+# FD-gradient AGHQ profile loop per grid node, so it is much slower than EM: the
+# equivalence block is skip_if_fast() and drives the internal driver with a coarse
+# grid to stay affordable in CI.
 
 rook_adj <- function(g) {
   n <- g * g; A <- matrix(0L, n, n)

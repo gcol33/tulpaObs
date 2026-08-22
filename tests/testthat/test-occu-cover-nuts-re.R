@@ -1,6 +1,6 @@
 # =============================================================================
 # test-occu-cover-nuts-re.R - observation-arm random intercepts under
-# occu_cover(method = "nuts") (gcol33/tulpaObs#205).
+# occu_cover(method = "nuts").
 #
 # A `(1 | g)` on the detection or positive-cover formula becomes one shared
 # non-centered ReBlock (src/nuts_re_block.h) in the occu_cover NUTS target, with

@@ -57,5 +57,5 @@ corresponding rate SEASON-VARYING: a per-\verb{(site, interval)} covariate is dr
 into an \verb{[N x (n_seasons - 1)]} matrix column (\code{gamma_cov} / \code{eps_cov}) of the
 returned \code{data}, and the rate is \code{plogis(beta[1] + beta[2] * cov)}. Fit these
 with \code{colonization = ~ gamma_cov} / \code{extinction = ~ eps_cov} (the matrix
-column drives the interval-indexed rate, gcol33/tulpaObs#124).
+column drives the interval-indexed rate).
 }

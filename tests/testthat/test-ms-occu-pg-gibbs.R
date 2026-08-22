@@ -1,6 +1,7 @@
 # =============================================================================
-# test-ms-occu-pg-gibbs.R - community occupancy Polya-Gamma Gibbs
-# (ms_occu() method = "pg_gibbs"; spOccupancy msPGOcc; gcol33/tulpaObs#115, #126).
+# test-ms-occu-pg-gibbs.R
+# - community occupancy Polya-Gamma Gibbs (ms_occu() method = "pg_gibbs";
+# spOccupancy msPGOcc).
 #
 # The hierarchical PG-Gibbs: per-species PG-augmented conjugate coefficient
 # updates + conjugate community means + Inverse-Gamma community variances. Unlike

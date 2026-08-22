@@ -151,20 +151,20 @@
     list(psi1 = occ_formula, p = det_formula,
          gamma = col_formula, epsilon = ext_formula), data)
   X_occ <- model.matrix(bind$fe$psi1, data)
-  # Detection may vary by primary season (gcol33/tulpaObs#124): a covariate
-  # supplied as a [n_sites x T] matrix column of `data` drives per-season
-  # detection, unrolled long-form over (site, season); a plain per-site covariate
-  # keeps the site-level design (byte-identical to the constant-detection path).
+  # Detection may vary by primary season: a covariate supplied as a [n_sites x T]
+  # matrix column of `data` drives per-season detection, unrolled long-form over
+  # (site, season); a plain per-site covariate keeps the site-level design
+  # (byte-identical to the constant-detection path).
   det_ad <- .tobs_season_arm_design(bind$fe$p, data, n_sites, n_seasons,
                                     "detection", fam = "dyn_occu")
   X_det <- det_ad$X
 
   # Colonization (gamma) and extinction (epsilon) span the T-1 transition
   # intervals. A rate that varies by interval is supplied as a [n_sites x (T-1)]
-  # matrix column of `data`; the arm design is then long-form over
-  # (site, interval), otherwise it is the site-level design and the fit is
-  # byte-identical to the constant-rate path (gcol33/tulpaObs#124, the dyn_abun
-  # #80 recipe). One transition interval per pair of adjacent seasons.
+  # matrix column of `data`; the arm design is then long-form over (site,
+  # interval), otherwise it is the site-level design and the fit is
+  # byte-identical to the constant-rate path (the dyn_abun #80 recipe). One
+  # transition interval per pair of adjacent seasons.
   n_intervals <- n_seasons - 1L
   col_ad <- .tobs_interval_arm_design(bind$fe$gamma, data, n_sites, n_intervals,
                                       "colonization", fam = "dyn_occu")

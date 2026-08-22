@@ -1,5 +1,6 @@
 # =============================================================================
-# test-sbc-registry.R -- the SBC family registry (gcol33/tulpaObs#207)
+# test-sbc-registry.R
+# -- the SBC family registry
 #
 # `test-sbc.R` measures the coupled `occu_cover` route. This file covers the
 # OTHER half of the registry: the families whose site marginals multiply, and
@@ -172,12 +173,12 @@
                           detection = ~ 1, y = sim$y,
                           method = "pg_gibbs", control = .sbc_reg_ctl))
   },
-  # ms_occu: S=20, not a smaller/faster count -- see gcol33/tulpaObs#226
-  # (R/sbc.R section 6j). At S=5 this family's Laplace-EM posterior is
-  # measurably non-Gaussian (validated against method="nuts", the exact
-  # reference: Vf/Cinv 3-15x too narrow) and posterior SBC fails hard; at
-  # S=20 the same plain Laplace-EM calibrates cleanly. Shrinking N/S here
-  # for fixture speed would silently resurrect that failure.
+  # ms_occu: S=20, not a smaller/faster count (R/sbc.R section 6j).
+  # At S=5 this family's Laplace-EM posterior is measurably
+  # non-Gaussian (validated against method="nuts", the exact reference:
+  # Vf/Cinv 3-15x too narrow) and posterior SBC fails hard; at S=20 the
+  # same plain Laplace-EM calibrates cleanly. Shrinking N/S here for
+  # fixture speed would silently resurrect that failure.
   ms_occu = function(N = 80L, n_species = 20L) {
     sim <- simulate_ms_occu(N = N, J = 4L, n_species = n_species,
                             beta_comm_mean = c(0.2, 0.5), beta_comm_sd = c(0.6, 0.3),
@@ -189,9 +190,9 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   # ms_int_occu: S=14 (matching this family's own recovery-test fixture),
-  # not a smaller/faster count -- see gcol33/tulpaObs#226 (R/sbc.R section
-  # 6l). Shares ms_occu's species-count-dependent non-Gaussianity; a smaller
-  # fixture silently resurrects the original S~3 failure.
+  # not a smaller/faster count (R/sbc.R section 6l). Shares ms_occu's
+  # species-count-dependent non-Gaussianity; a smaller fixture silently
+  # resurrects the original S~3 failure.
   ms_int_occu = function(N = 140L, n_species = 14L) {
     sim <- simulate_ms_int_occu(N = N, J = c(3, 4), n_species = n_species,
                                 n_data = 2, seed = 0L)
@@ -218,8 +219,8 @@
     suppressWarnings(tobs(~ x, data = sim$data, family = cover("lognormal"),
                           y = sim$y, method = "laplace", control = .sbc_reg_ctl))
   },
-  # ms_int_occu: not registered -- see gcol33/tulpaObs#226 (R/sbc.R section 6l).
-  # Confirmed (not just suspected) to share ms_occu's failure mode.
+  # ms_int_occu: not registered (R/sbc.R section 6l). Confirmed (not just
+  # suspected) to share ms_occu's failure mode.
   occu_multiscale_cover = function(n_cells = 40L) {
     sim <- simulate_occu_multiscale_cover(
       n_cells = n_cells, plots_per_cell = 4L, visits_per_plot = 2L,
@@ -234,8 +235,7 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   # ms_count: S=20 (matching ms_occu's resolved scale), not a smaller/faster
-  # count -- see gcol33/tulpaObs#226 (R/sbc.R section 6n). Multi-seed (0, 1,
-  # 2) originally confirmed the same Cov(mu, b_s)-adjacent bias, worse than
+  # count (R/sbc.R section 6n). Multi-seed (0, 1, 2) originally confirmed the same Cov(mu, b_s)-adjacent bias, worse than
   # ms_occu/ms_int_occu on a small fixture; resolved the same species-count
   # way. A smaller fixture silently resurrects that failure.
   ms_count = function(N = 150L, n_species = 20L) {
@@ -245,8 +245,8 @@
                           y = sim$y, species = paste0("sp", seq_len(n_species)),
                           method = "laplace", control = .sbc_reg_ctl))
   },
-  # jsdm() shares ms_count()'s exact community Laplace-EM (gcol33/tulpaObs#121)
-  # -- same S=20 scale for the same reason (gcol33/tulpaObs#226).
+  # jsdm() shares ms_count()'s exact community Laplace-EM -- same S=20 scale
+  # for the same reason.
   jsdm = function(N = 150L, n_species = 20L) {
     sim <- simulate_jsdm(N = N, n_species = n_species, seed = 0L)
     suppressWarnings(tobs(~ x, data = sim$data, family = jsdm(),
@@ -273,8 +273,8 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   # ms_abun() needs the AGHQ/joint_fd engine (n.quad > 1) for Cinv/Bf to be
-  # available at all (gcol33/tulpa#398) -- the default optimizer = "em"
-  # (n.quad = 1) uses a different engine that does not expose them.
+  # available at all -- the default optimizer = "em" (n.quad = 1) uses a
+  # different engine that does not expose them.
   ms_abun = function(N = 150L, n_species = 20L, J = 3L) {
     sim <- simulate_ms_abun(n_species = n_species, N = N, J = J, seed = 0L)
     suppressWarnings(tobs(~ 1, data = sim$data,
@@ -574,9 +574,9 @@ test_that("double_observer posterior SBC: correct fit uniform, mis-scaled is not
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220. bad.factor = 1.5, the same tuning occu() needed: 100
-  # simulations on six coefficients do not resolve the default 20% mis-scale
-  # cleanly. Measured (seed = 0): posterior min p_unif 0.057, narrow 1.3e-8.
+  # . bad.factor = 1.5, the same tuning occu() needed: 100 simulations on six
+  # coefficients do not resolve the default 20% mis-scale cleanly. Measured
+  # (seed = 0): posterior min p_unif 0.057, narrow 1.3e-8.
   fit <- .SBC_REG_FIXTURES$double_observer()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.5, seed = 0L)
@@ -603,10 +603,10 @@ test_that("dyn_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multi-season group). bad.factor = 1.75 -- the extra
-  # tick past double_observer's 1.5 that epsilon's weak identification at 5
-  # seasons needs to clear 1e-3 cleanly. Measured (seed = 0): posterior min
-  # p_unif 0.090 (epsilon), narrow max 1.5e-4 (epsilon).
+  # (multi-season group). bad.factor = 1.75 -- the extra tick past
+  # double_observer's 1.5 that epsilon's weak identification at 5 seasons
+  # needs to clear 1e-3 cleanly. Measured (seed = 0): posterior min p_unif
+  # 0.090 (epsilon), narrow max 1.5e-4 (epsilon).
   fit <- .SBC_REG_FIXTURES$dyn_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -633,16 +633,16 @@ test_that("int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#225 (via #220). Root-caused to two compounding bugs, not
-  # an SBC adapter issue: (1) int_occu()'s per-source detection design
-  # matrix lost its column names when padded to full-site width
-  # (R/occu.R), so the autoscale unscale step couldn't find the intercept
-  # column and left the detection intercept in standardized-covariate units
-  # while correctly unscaling the slope; (2) model_type == "integrated"
-  # never got the exact-marginal Newton debiasing single-season occu() and
-  # dyn_occu() already have (R/int_occu_marginal.R). Verified: int_occu()
-  # with one source now matches occu() on the same data to full optim
-  # precision (all four coefficients and both SDs bit-identical). bad.factor
+  # (via #220). Root-caused to two compounding bugs, not an SBC adapter
+  # issue: (1) int_occu()'s per-source detection design matrix lost its
+  # column names when padded to full-site width (R/occu.R), so the autoscale
+  # unscale step couldn't find the intercept column and left the detection
+  # intercept in standardized-covariate units while correctly unscaling the
+  # slope; (2) model_type == "integrated" never got the exact-marginal
+  # Newton debiasing single-season occu() and dyn_occu() already have
+  # (R/int_occu_marginal.R). Verified: int_occu() with one source now
+  # matches occu() on the same data to full optim precision (all four
+  # coefficients and both SDs bit-identical). bad.factor
   # = 1.75, the same tuning dyn_occu() needed. Measured (seed = 0): posterior
   # min p_unif 0.171, narrow max 1.0e-5.
   fit <- .SBC_REG_FIXTURES$int_occu()
@@ -671,11 +671,10 @@ test_that("dyn_abun posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multi-season group). dyn_abun shares dyn_occu's 3D
-  # response and site-axis pooling but has its own working simulate(), so the
-  # replicate is the shared simple-family route, not a bespoke forward
-  # simulator. Measured (seed = 0): posterior min p_unif 0.087, narrow max
-  # 1.6e-7.
+  # (multi-season group). dyn_abun shares dyn_occu's 3D response and
+  # site-axis pooling but has its own working simulate(), so the replicate is
+  # the shared simple-family route, not a bespoke forward simulator. Measured
+  # (seed = 0): posterior min p_unif 0.087, narrow max 1.6e-7.
   fit <- .SBC_REG_FIXTURES$dyn_abun()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -702,10 +701,10 @@ test_that("gdistremoval posterior SBC: correct fit uniform, mis-scaled is not", 
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multi-response group). bad.factor = 2.0 -- the
-  # single time-step, two-response-matrix shape needed a bigger tick than
-  # the other registered families to clear 1e-3 on both arms cleanly.
-  # Measured (seed = 0): posterior min p_unif 0.449, narrow max 2.0e-9.
+  # (multi-response group). bad.factor = 2.0 -- the single time-step,
+  # two-response-matrix shape needed a bigger tick than the other
+  # registered families to clear 1e-3 on both arms cleanly. Measured
+  # (seed = 0): posterior min p_unif 0.449, narrow max 2.0e-9.
   fit <- .SBC_REG_FIXTURES$gdistremoval()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 2.0, seed = 0L)
@@ -732,9 +731,8 @@ test_that("distsamp_open posterior SBC: correct fit uniform, mis-scaled is not",
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multi-season group). Constant-dynamics, Poisson only
-  # for v1 -- shares dyn_abun's 3D response/pooling and fit$means/fit$draws
-  # shape.
+  # (multi-season group). Constant-dynamics, Poisson only for v1 -- shares
+  # dyn_abun's 3D response/pooling and fit$means/fit$draws shape.
   #
   # n.sim = 15, not the standard 100 every sibling family uses: a single
   # refit on this fixture measured ~100-130s, and the full posterior-SBC
@@ -775,13 +773,12 @@ test_that("jsdm posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6o). jsdm() shares
-  # ms_count()'s exact community Laplace-EM (gcol33/tulpaObs#121), so the
-  # same S=20 fixture that resolved ms_count's #226 failure mode applies
-  # directly -- 3 seeds (0, 1, 2) during development, min p_unif range
-  # 0.0093-0.0108, 0 quantities below 1e-3 out of 40 possible across all 3
-  # runs, no reproducible failing coefficient. Do NOT shrink the fixture's
-  # N/species count for speed.
+  # (community group, section 6o). jsdm() shares ms_count()'s exact
+  # community Laplace-EM, so the same S=20 fixture that resolved
+  # ms_count's #226 failure mode applies directly -- 3 seeds (0, 1, 2)
+  # during development, min p_unif range 0.0093-0.0108, 0 quantities below
+  # 1e-3 out of 40 possible across all 3 runs, no reproducible failing
+  # coefficient. Do NOT shrink the fixture's N/species count for speed.
   #
   # bad.factor = 3.0, not the 1.75 every sibling community family uses: a
   # single refit here is cheap (~0.3s, ~35s for the whole n.sim=100 run), so
@@ -817,10 +814,10 @@ test_that("occu_multi posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multi-response group). Same list-of-matrices response
-  # shape int_occu() pools, but simulate() is custom (joint multi-species
-  # state, not independent per-source arms). Measured (seed = 0): posterior
-  # min p_unif 0.019, narrow max 4.3e-6.
+  # (multi-response group). Same list-of-matrices response shape int_occu()
+  # pools, but simulate() is custom (joint multi-species state, not
+  # independent per-source arms). Measured (seed = 0): posterior min p_unif
+  # 0.019, narrow max 4.3e-6.
   fit <- .SBC_REG_FIXTURES$occu_multi()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -847,11 +844,11 @@ test_that("dyn_int_occu posterior SBC: correct fit uniform, mis-scaled is not", 
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (the multi-season x multi-source product shape,
-  # section 6h). A named list of S per-source 3D arrays, pooled with
-  # `.tobs_sbc_pool_named_3d`; simulate() wraps the family's own
-  # `.tobs_simulate_dyn_int_occu()` handler. Measured (seed = 0): posterior
-  # min p_unif 0.033, narrow max 2.5e-5.
+  # (the multi-season x multi-source product shape, section 6h). A named
+  # list of S per-source 3D arrays, pooled with `.tobs_sbc_pool_named_3d`;
+  # simulate() wraps the family's own `.tobs_simulate_dyn_int_occu()`
+  # handler. Measured (seed = 0): posterior min p_unif 0.033, narrow max
+  # 2.5e-5.
   fit <- .SBC_REG_FIXTURES$dyn_int_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -878,14 +875,14 @@ test_that("t_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (section 6i). A pg_gibbs family whose fit$draws is
-  # already the real pooled posterior sample; loglik_many is a Laplace
-  # approximation to the AR1 year effect's marginal (FD-validated gradient
-  # and Hessian, brute-force-cross-checked against a dense grid at T = 2).
-  # `qs` only scores the reported psi/p/AR1-hyperparameter coefficients
-  # (matching every other family's test); log_lik's own presence/finiteness
-  # is covered by the generic cross-family CONTRACT test.
-  # Measured (seed = 0): posterior min p_unif 0.081, narrow max 1.2e-4.
+  # (section 6i). A pg_gibbs family whose fit$draws is already the real
+  # pooled posterior sample; loglik_many is a Laplace approximation to the
+  # AR1 year effect's marginal (FD-validated gradient and Hessian,
+  # brute-force-cross-checked against a dense grid at T = 2). `qs` only
+  # scores the reported psi/p/AR1-hyperparameter coefficients (matching
+  # every other family's test); log_lik's own presence/finiteness is
+  # covered by the generic cross-family CONTRACT test. Measured (seed = 0):
+  # posterior min p_unif 0.081, narrow max 1.2e-4.
   fit <- .SBC_REG_FIXTURES$t_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -912,12 +909,12 @@ test_that("cover posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multiarm-S3 group). Same two-independent-block
-  # shape as occu_categorical (presence, positive); positive = "lognormal"
-  # only for v1, dispersion held fixed (no SE anywhere in the package for
-  # it). Checked at both N=200 and N=600 during development -- consistent,
-  # no anomaly like the ms_occu near-miss (#226). Measured (seed = 0, N=200):
-  # posterior min p_unif 0.124, narrow max 1.8e-8.
+  # (multiarm-S3 group). Same two-independent-block shape as occu_categorical
+  # (presence, positive); positive = "lognormal" only for v1, dispersion held
+  # fixed (no SE anywhere in the package for it). Checked at both N=200 and
+  # N=600 during development -- consistent, no anomaly like the ms_occu
+  # near-miss (#226). Measured (seed = 0, N=200): posterior min p_unif 0.124,
+  # narrow max 1.8e-8.
   fit <- .SBC_REG_FIXTURES$cover()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -944,11 +941,11 @@ test_that("occu_categorical posterior SBC: correct fit uniform, mis-scaled is no
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multiarm-S3 group). occu_categorical has no
-  # fit$means/fit$draws -- two independent Laplace-Gaussian blocks (presence,
-  # class) instead of a joint MVN draw matrix -- so the scored quantity names
-  # come off the registry's own draws() rather than fit$means. Measured
-  # (seed = 0): posterior min p_unif 0.057, narrow max 2.8e-5.
+  # (multiarm-S3 group). occu_categorical has no fit$means/fit$draws -- two
+  # independent Laplace-Gaussian blocks (presence, class) instead of a joint
+  # MVN draw matrix -- so the scored quantity names come off the registry's
+  # own draws() rather than fit$means. Measured (seed = 0): posterior min
+  # p_unif 0.057, narrow max 2.8e-5.
   fit <- .SBC_REG_FIXTURES$occu_categorical()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -975,19 +972,19 @@ test_that("ms_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6j) / gcol33/tulpaObs#226.
-  # SPECIES-COUNT SCOPED: at S=5 this family's Laplace-EM posterior is
-  # measurably non-Gaussian (validated against method="nuts", the exact
-  # reference posterior: Rhat 1.011, ESS 523, 0 divergences -- Vf/Cinv came
-  # back 3-15x too narrow and point estimates measurably off), and posterior
-  # SBC fails hard (p_unif as low as 0 on some coefficients). At S=20 (the
-  # `.SBC_REG_FIXTURES$ms_occu()` fixture below), the SAME plain Laplace-EM
-  # -- no AGHQ debiasing -- calibrates cleanly: 5 seeds during development
-  # (0-4), min p_unif range 0.0017-0.032, 0 quantities below 1e-3 out of 81
-  # possible across all 5 runs, no reproducible failing coefficient. Do NOT
-  # shrink the fixture's N/species count for speed -- that resurrects the
-  # S=5 failure this test exists to guard against. Measured (seed = 0):
-  # posterior min p_unif 0.010, narrow max <1e-3.
+  # (community group, section 6j) /. SPECIES-COUNT SCOPED: at S=5 this
+  # family's Laplace-EM posterior is measurably non-Gaussian (validated
+  # against method="nuts", the exact reference posterior: Rhat 1.011, ESS
+  # 523, 0 divergences -- Vf/Cinv came back 3-15x too narrow and point
+  # estimates measurably off), and posterior SBC fails hard (p_unif as low
+  # as 0 on some coefficients). At S=20 (the `.SBC_REG_FIXTURES$ms_occu()`
+  # fixture below), the SAME plain Laplace-EM -- no AGHQ debiasing --
+  # calibrates cleanly: 5 seeds during development (0-4), min p_unif range
+  # 0.0017-0.032, 0 quantities below 1e-3 out of 81 possible across all 5
+  # runs, no reproducible failing coefficient. Do NOT shrink the fixture's
+  # N/species count for speed -- that resurrects the S=5 failure this test
+  # exists to guard against. Measured (seed = 0): posterior min p_unif
+  # 0.010, narrow max <1e-3.
   fit <- .SBC_REG_FIXTURES$ms_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -1014,17 +1011,17 @@ test_that("ms_int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6l) / gcol33/tulpaObs#226.
-  # SPECIES-COUNT SCOPED the same way ms_occu was: a direct probe at three
-  # seeds on a small fixture found `sp3_p2_(Intercept)` stuck at p_unif
-  # ~0.0029-0.0030 (reproducible, ms_occu's exact failure signature). At
-  # S=14 (the `.SBC_REG_FIXTURES$ms_int_occu()` fixture below, matching this
-  # family's own recovery-test fixture size), the plain Laplace-EM -- no
-  # debiasing -- calibrates cleanly: 5 seeds during development (0-4), min
-  # p_unif range 0.0013-0.052, 0 quantities below 1e-3 out of 43 possible
-  # across all 5 runs, no reproducible failing coefficient. Do NOT shrink
-  # the fixture's N/species count for speed. Measured (seed = 0): posterior
-  # min p_unif 0.052, narrow max <1e-3.
+  # (community group, section 6l) /. SPECIES-COUNT SCOPED the same way
+  # ms_occu was: a direct probe at three seeds on a small fixture found
+  # `sp3_p2_(Intercept)` stuck at p_unif ~0.0029-0.0030 (reproducible,
+  # ms_occu's exact failure signature). At S=14 (the
+  # `.SBC_REG_FIXTURES$ms_int_occu()` fixture below, matching this family's
+  # own recovery-test fixture size), the plain Laplace-EM -- no debiasing --
+  # calibrates cleanly: 5 seeds during development (0-4), min p_unif range
+  # 0.0013-0.052, 0 quantities below 1e-3 out of 43 possible across all 5
+  # runs, no reproducible failing coefficient. Do NOT shrink the fixture's
+  # N/species count for speed. Measured (seed = 0): posterior min p_unif
+  # 0.052, narrow max <1e-3.
   fit <- .SBC_REG_FIXTURES$ms_int_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -1051,16 +1048,16 @@ test_that("ms_occu_cover posterior SBC: correct fit uniform, mis-scaled is not",
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6j-bis). The occ+p+pos
-  # analogue of ms_occu; theta is the per-species realized coefficient (S x P,
-  # species-major) plus one shared dispersion coordinate, not fit$means alone
-  # (a community mean), so the scored quantity names come off the registry's
-  # own draws() as occu_categorical/cover do. Safe to attempt where
+  # (community group, section 6j-bis). The occ+p+pos analogue of ms_occu;
+  # theta is the per-species realized coefficient (S x P, species-major) plus
+  # one shared dispersion coordinate, not fit$means alone (a community mean),
+  # so the scored quantity names come off the registry's own draws() as
+  # occu_categorical/cover do. Safe to attempt where
   # ms_occu/ms_int_occu/ms_count are not because this family's Cinv stays
-  # consistent with Sigma under AGHQ debiasing (#226 part 2, commit
-  # `03b87ad`) -- confirmed clean over 9 seeds during development (0-8), every
-  # one comfortably above 1e-3 (range 0.0024-0.087), no coefficient repeating
-  # as the minimum more than twice out of 17 possible (chance level), narrow
+  # consistent with Sigma under AGHQ debiasing (#226 part 2, commit `03b87ad`)
+  # -- confirmed clean over 9 seeds during development (0-8), every one
+  # comfortably above 1e-3 (range 0.0024-0.087), no coefficient repeating as
+  # the minimum more than twice out of 17 possible (chance level), narrow
   # control rejecting hard on all nine. Measured (seed = 0): posterior min
   # p_unif 0.087, narrow max 5.2e-4.
   fit <- .SBC_REG_FIXTURES$ms_occu_cover()
@@ -1089,13 +1086,13 @@ test_that("occu_multiscale_cover posterior SBC: correct fit uniform, mis-scaled 
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (multiarm-S3 group, section 6m). The standard
-  # single-block fit shape (unlike cover()); the exchangeable unit is the
-  # CELL, not the plot, so pooling/site track cell indices. Checked at three
-  # configurations (n_cells=40 seeds 0/1, n_cells=120 seed 0) before
-  # registering -- all consistent, no anomaly like the ms_occu/ms_int_occu
-  # near-misses (#226). Measured (n_cells=40, seed=0): posterior min p_unif
-  # 0.093 (psi_(Intercept)), narrow max 5.5e-6.
+  # (multiarm-S3 group, section 6m). The standard single-block fit shape
+  # (unlike cover()); the exchangeable unit is the CELL, not the plot, so
+  # pooling/site track cell indices. Checked at three configurations
+  # (n_cells=40 seeds 0/1, n_cells=120 seed 0) before registering -- all
+  # consistent, no anomaly like the ms_occu/ms_int_occu near-misses (#226).
+  # Measured (n_cells=40, seed=0): posterior min p_unif 0.093
+  # (psi_(Intercept)), narrow max 5.5e-6.
   fit <- .SBC_REG_FIXTURES$occu_multiscale_cover()
   res <- suppressMessages(sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L))
@@ -1122,19 +1119,18 @@ test_that("ms_count posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6n) / gcol33/tulpaObs#226.
-  # SPECIES-COUNT SCOPED the same way ms_occu/ms_int_occu were: a multi-seed
-  # (0, 1, 2) probe on a small fixture originally found `sp3_mu_(Intercept)`
-  # pinned at p_unif ~9.6e-7-9.9e-7 every time (worse than ms_occu/
-  # ms_int_occu's own small-fixture failures, plausibly because this family
-  # has no detection arm to dilute it). At S=20 (the
-  # `.SBC_REG_FIXTURES$ms_count()` fixture below, matching ms_occu's own
-  # resolved scale), the plain Laplace-EM -- no debiasing -- calibrates
-  # cleanly: 5 seeds during development (0-4), min p_unif range
-  # 0.0016-0.086, 0 quantities below 1e-3 out of 41 possible across all 5
-  # runs, no reproducible failing coefficient. Do NOT shrink the fixture's
-  # N/species count for speed. Measured (seed = 0): posterior min p_unif
-  # 0.034, narrow max <1e-3.
+  # (community group, section 6n) /. SPECIES-COUNT SCOPED the same way
+  # ms_occu/ms_int_occu were: a multi-seed (0, 1, 2) probe on a small
+  # fixture originally found `sp3_mu_(Intercept)` pinned at p_unif
+  # ~9.6e-7-9.9e-7 every time (worse than ms_occu/ ms_int_occu's own
+  # small-fixture failures, plausibly because this family has no detection
+  # arm to dilute it). At S=20 (the `.SBC_REG_FIXTURES$ms_count()` fixture
+  # below, matching ms_occu's own resolved scale), the plain Laplace-EM --
+  # no debiasing -- calibrates cleanly: 5 seeds during development (0-4),
+  # min p_unif range 0.0016-0.086, 0 quantities below 1e-3 out of 41
+  # possible across all 5 runs, no reproducible failing coefficient. Do NOT
+  # shrink the fixture's N/species count for speed. Measured (seed = 0):
+  # posterior min p_unif 0.034, narrow max <1e-3.
   fit <- .SBC_REG_FIXTURES$ms_count()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -1160,18 +1156,18 @@ test_that("ms_distance posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6p). Multi-seed
-  # reproducibility probe (seeds 0-1) on this same fixture found a DIFFERENT
-  # coefficient dipping moderately low each time (seed 0:
-  # sp15_sigma_(Intercept) at 6.3e-4; seed 1: sp19_lambda_abund_cov1 at
-  # 2.7e-4), consistent w/ the ~6% expected false-positive rate across 60
-  # tested quantities per run, NOT a reproducible calibration bug (that
-  # signature is the SAME coefficient pinned at ~1e-6-1e-7 on every seed).
-  # bad.factor=1.75's posterior arm matched bad.factor=3's exactly
-  # (min_post=0.0006338732 at sp15_sigma_(Intercept), 1/60 below 1e-3) --
-  # expected, bad.factor only rescales the narrow control arm, not the
-  # well-specified posterior. Measured (seed = 0, bad.factor = 3): posterior
-  # min p_unif 6.3e-4 (1/60 below 1e-3), narrow max p_unif 3.0e-15.
+  # (community group, section 6p). Multi-seed reproducibility probe (seeds
+  # 0-1) on this same fixture found a DIFFERENT coefficient dipping
+  # moderately low each time (seed 0: sp15_sigma_(Intercept) at 6.3e-4; seed
+  # 1: sp19_lambda_abund_cov1 at 2.7e-4), consistent w/ the ~6% expected
+  # false-positive rate across 60 tested quantities per run, NOT a
+  # reproducible calibration bug (that signature is the SAME coefficient
+  # pinned at ~1e-6-1e-7 on every seed). bad.factor=1.75's posterior arm
+  # matched bad.factor=3's exactly (min_post=0.0006338732 at
+  # sp15_sigma_(Intercept), 1/60 below 1e-3) -- expected, bad.factor only
+  # rescales the narrow control arm, not the well-specified posterior.
+  # Measured (seed = 0, bad.factor = 3): posterior min p_unif 6.3e-4 (1/60
+  # below 1e-3), narrow max p_unif 3.0e-15.
   fit <- .SBC_REG_FIXTURES$ms_distance()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 3.0, seed = 0L)
@@ -1197,13 +1193,13 @@ test_that("ms_dyn_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6q). Shared gamma/eps
-  # globals condition each species' psi1/p draw on the FULL (mu, global)
-  # vector via the (P+G) x P `Bf[[s]]` cross-Hessian block (verified by
-  # inspecting dim(Bf[[1]]) directly, not assumed square). Measured (seed =
-  # 0): posterior min p_unif 4.1e-3 (0/42 below 1e-3) at BOTH bad.factor =
-  # 1.75 and 3 (bad.factor rescales the narrow control only); narrow max
-  # p_unif 6.5e-6 (bad.factor=1.75) / 1.2e-15 (bad.factor=3).
+  # (community group, section 6q). Shared gamma/eps globals condition each
+  # species' psi1/p draw on the FULL (mu, global) vector via the (P+G) x P
+  # `Bf[[s]]` cross-Hessian block (verified by inspecting dim(Bf[[1]])
+  # directly, not assumed square). Measured (seed = 0): posterior min
+  # p_unif 4.1e-3 (0/42 below 1e-3) at BOTH bad.factor = 1.75 and 3
+  # (bad.factor rescales the narrow control only); narrow max p_unif 6.5e-6
+  # (bad.factor=1.75) / 1.2e-15 (bad.factor=3).
   fit <- .SBC_REG_FIXTURES$ms_dyn_occu()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 1.75, seed = 0L)
@@ -1229,14 +1225,14 @@ test_that("ms_abun posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # gcol33/tulpaObs#220 (community group, section 6r). ms_abun() needed TWO
-  # upstream tulpa engine changes before it could even be attempted --
-  # tulpa#398 (blup_cross) exposed the mode/theta cross-Hessian, but that
-  # alone was not enough: tulpa_re_aghq() also only ever exposed the
-  # per-RE-TERM DIAGONAL of a group's posterior covariance (blup_var). This
-  # family's lambda (abundance) and p (detection) arms share a per-species
-  # grouping factor with real cross-arm posterior covariance -- the same
-  # lambda/p identifiability ridge tobs()'s penalized-EM exists to break for
+  # (community group, section 6r). ms_abun() needed TWO upstream tulpa
+  # engine changes before it could even be attempted -- (blup_cross) exposed
+  # the mode/theta cross-Hessian, but that alone was not enough:
+  # tulpa_re_aghq() also only ever exposed the per-RE-TERM DIAGONAL of a
+  # group's posterior covariance (blup_var). This family's lambda
+  # (abundance) and p (detection) arms share a per-species grouping factor
+  # with real cross-arm posterior covariance -- the same lambda/p
+  # identifiability ridge tobs()'s penalized-EM exists to break for
   # occupancy psi/p -- so drawing a species' b_lambda_s and b_p_s
   # independently would repeat the #226 bug one level deeper (inside a
   # species instead of between the community mean and a species). Fixed by

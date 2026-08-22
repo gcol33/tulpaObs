@@ -1,6 +1,6 @@
 # Community N-mixture + latent() factors -- the spAbundance lfMsNMix analogue,
-# and the spatial-factor case (a shared field alongside the factors).
-# gcol33/tulpaObs#117. Poisson.
+# and the spatial-factor case (a shared field alongside the factors)..
+# Poisson.
 #
 #   N_{s,i} ~ Poisson(lambda_{s,i}),  y_{s,i,j} | N ~ Binomial(N_{s,i}, p_{s,i,j})
 #   log lambda_{s,i} = X_i (mu + b_s) [+ f_i] + sum_q lambda_{s,q} zeta_{q,i}

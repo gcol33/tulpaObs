@@ -1,9 +1,9 @@
-# gcol33/tulpaObs#241: each source of an integrated response surveys its own
-# subset of the sites in `data`, so the site a source row measures is a join on
-# a site key -- `site.map`, or the response's row names against rownames(data)
-# -- and never the row's position. simulate_int_occu() gives source 2 onward a
-# non-contiguous site set, so reading a source in row order attaches the tail of
-# every such source to the wrong latent states, silently.
+# each source of an integrated response surveys its own subset of the sites in
+# `data`, so the site a source row measures is a join on a site key --
+# `site.map`, or the response's row names against rownames(data) -- and never
+# the row's position. simulate_int_occu() gives source 2 onward a non-contiguous
+# site set, so reading a source in row order attaches the tail of every such
+# source to the wrong latent states, silently.
 
 test_that("each source joins to the sites it names (#241)", {
   sim <- simulate_int_occu(N_total = 40, n_data = 2, J = c(3, 2),

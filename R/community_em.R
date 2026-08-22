@@ -47,16 +47,16 @@
 
 
 # AGHQ variance-component debias, shared by every .tobs_community_em()
-# consumer (generalized from R/ms_occu_cover.R's own bespoke copy,
-# gcol33/tulpaObs#226 part 2). The EM's Sigma/Cinv carry the documented
-# Laplace small-cluster attenuation; this integrates the EXACT per-species RE
-# posterior by adaptive Gauss-Hermite quadrature at the EM's own per-species
-# mode/curvature (b_list, Cinv_list) and recovers the raw second moment
-# E[b b'] the EM's own M-step targets -- the quantity Sigma should equal at
-# the true (non-attenuated) posterior. `arm_idx` is an arbitrary NAMED list
-# (not hardcoded arm names): the debiased Sigma comes back keyed the same way,
-# so this serves any family's arm layout. `sp_ll(s, theta, global)` is the
-# SAME per-species callback .tobs_community_em() already threads through.
+# consumer (generalized from R/ms_occu_cover.R's own bespoke copy). The EM's
+# Sigma/Cinv carry the documented Laplace small-cluster attenuation; this
+# integrates the EXACT per-species RE posterior by adaptive Gauss-Hermite
+# quadrature at the EM's own per-species mode/curvature (b_list, Cinv_list)
+# and recovers the raw second moment E[b b'] the EM's own M-step targets --
+# the quantity Sigma should equal at the true (non-attenuated) posterior.
+# `arm_idx` is an arbitrary NAMED list (not hardcoded arm names): the debiased
+# Sigma comes back keyed the same way, so this serves any family's arm layout.
+# `sp_ll(s, theta, global)` is the SAME per-species callback
+# .tobs_community_em() already threads through.
 .tobs_cem_aghq_sigma <- function(sp_ll, mu, global, b_list, Cinv_list,
                                  Sinv, arm_idx, P, n_quad = 5L) {
   S  <- length(b_list)
@@ -102,13 +102,13 @@
   })
 }
 
-# Reproject Cov(b_s|y) at a NEW Sinv without re-deriving the Newton solve
-# (gcol33/tulpaObs#226 part 2). Cinv_s = solve(Htt_s + Sinv); Htt_s is pure
-# likelihood curvature (independent of Sigma) and is recoverable from the
-# EM's own output as solve(Cinv_old_s) - Sinv_old. Exact, no new
-# approximation -- validated to machine precision against a direct
-# construction of the joint (mu, b_s) arrowhead precision (dev_notes probe,
-# 2026-08-12; first applied in R/ms_occu_cover.R, commit `03b87ad`).
+# Reproject Cov(b_s|y) at a NEW Sinv without re-deriving the Newton solve.
+# Cinv_s = solve(Htt_s + Sinv); Htt_s is pure likelihood curvature
+# (independent of Sigma) and is recoverable from the EM's own output as
+# solve(Cinv_old_s) - Sinv_old. Exact, no new approximation -- validated to
+# machine precision against a direct construction of the joint (mu, b_s)
+# arrowhead precision (dev_notes probe, 2026-08-12; first applied in
+# R/ms_occu_cover.R, commit `03b87ad`).
 .tobs_cem_reproject_cinv <- function(Cinv_list, Sinv_old, Sinv_new) {
   lapply(Cinv_list, function(C_s) {
     Htt_s <- solve(C_s) - Sinv_old
@@ -141,7 +141,7 @@
 #'   dominant cost when the per-species likelihood is expensive (an N-mixture /
 #'   distance marginal sums over the latent count).
 #' @param re_aghq Debias `Sigma`/`Cinv` by adaptive Gauss-Hermite quadrature of
-#'   the exact per-species RE posterior (gcol33/tulpaObs#226 part 2), gated to
+#'   the exact per-species RE posterior, gated to
 #'   `P <= re_aghq_maxdim` (tensor AGHQ over the joint b couples the arms).
 #'   Defaults `FALSE` -- every existing caller is byte-identical unless it
 #'   opts in. `n_quad` sets the per-dimension node count.
@@ -269,13 +269,13 @@
   }
 
   # One joint-Newton mode-find of (mu, global, {b_s}) at fixed Sigma. Returns the
-  # updated mode, per-species posterior covariances Cinv (Cov(b_s|y)), the
-  # u-b_s cross-Hessian blocks Bf (u=(mu,global); gcol33/tulpaObs#226 -- needed
-  # to draw (u, b_s) jointly rather than independently: Cov(u,b_s) =
-  # -Vf %*% Bf_s %*% Cinv_s, and conditional on a draw of u, b_s's mean shifts
-  # by -Cinv_s %*% t(Bf_s) %*% (u_draw - u_hat) while its covariance stays
-  # exactly Cinv_s), and the marginal fixed-effect information Sf (Schur
-  # complement of the b-block, Vf = solve(Sf)).
+  # updated mode, per-species posterior covariances Cinv (Cov(b_s|y)), the u-b_s
+  # cross-Hessian blocks Bf (u=(mu,global) -- needed to draw (u, b_s) jointly
+  # rather than independently: Cov(u,b_s) = -Vf %*% Bf_s %*% Cinv_s, and
+  # conditional on a draw of u, b_s's mean shifts by -Cinv_s %*% t(Bf_s) %*%
+  # (u_draw - u_hat) while its covariance stays exactly Cinv_s), and the marginal
+  # fixed-effect information Sf (Schur complement of the b-block, Vf =
+  # solve(Sf)).
   solve_mode <- function(mu, global, b_list, Sinv) {
     F_cur <- total_F(mu, global, b_list, Sinv)
     Cinv_list <- vector("list", S)
@@ -366,9 +366,9 @@
 
   # ---- EM loop ----
   converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
-  # Progress + ETA for the community EM iterations (gcol33/tulpaObs#43); ON by
-  # default, reusing tulpa's shared reporter so the heartbeat file matches every
-  # other fitting loop. ETA is the upper bound to max_iter, finalised on convergence.
+  # Progress + ETA for the community EM iterations; ON by default, reusing tulpa's
+  # shared reporter so the heartbeat file matches every other fitting loop. ETA is
+  # the upper bound to max_iter, finalised on convergence.
   .prog <- tulpa:::.tulpa_iter_progress("community-em", max_iter, unit = "iter")
   for (em in seq_len(max_iter)) {
     n_iter <- em
@@ -414,12 +414,12 @@
   Vf <- (Vf + t(Vf)) / 2
   logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
 
-  # AGHQ variance-component debias (gcol33/tulpaObs#226 part 2), opt-in
-  # (re_aghq defaults FALSE -- every existing caller is byte-identical unless
-  # it explicitly asks for this). Sigma carries the documented Laplace
-  # small-cluster attenuation; Cinv must be reprojected at the debiased Sinv
-  # or it silently keeps the pre-debias value even though Sigma changed (the
-  # exact bug found and fixed in R/ms_occu_cover.R, commit `03b87ad`).
+  # AGHQ variance-component debias, opt-in (re_aghq defaults FALSE -- every
+  # existing caller is byte-identical unless it explicitly asks for this).
+  # Sigma carries the documented Laplace small-cluster attenuation; Cinv must
+  # be reprojected at the debiased Sinv or it silently keeps the pre-debias
+  # value even though Sigma changed (the exact bug found and fixed in
+  # R/ms_occu_cover.R, commit `03b87ad`).
   Cinv_out <- res$Cinv
   debias_method <- "none"
   if (isTRUE(re_aghq) && P <= as.integer(re_aghq_maxdim)) {

@@ -1,9 +1,9 @@
-# Community / multispecies N-mixture NUTS (ms_abun(), method = "nuts"; tulpaObs#14).
-# The sampler draws the EXACT joint posterior -- community means, per-species
-# deviations, and community covariances -- over the closed-form per-(species,
-# site) Royle marginal via the in-tree C++ FullGradFn (src/ms_abun_nuts.cpp),
-# warm-started at the Laplace-EM mode. The R target .tobs_ms_abun_nuts_logpost
-# (R/ms_abun_nuts.R) is the oracle; the C++ port is cross-checked against it.
+# Community / multispecies N-mixture NUTS (ms_abun(), method = "nuts"). The sampler
+# draws the EXACT joint posterior -- community means, per-species deviations, and
+# community covariances -- over the closed-form per-(species, site) Royle marginal
+# via the in-tree C++ FullGradFn (src/ms_abun_nuts.cpp), warm-started at the
+# Laplace-EM mode. The R target .tobs_ms_abun_nuts_logpost (R/ms_abun_nuts.R) is the
+# oracle; the C++ port is cross-checked against it.
 #
 # Coverage: (1) the R oracle gradient vs finite differences, (2) the C++
 # FullGradFn byte-exact vs the R oracle, (3) community-mean recovery + 0
@@ -115,7 +115,7 @@ test_that("ms_abun NUTS C++ FullGradFn matches the R oracle", {
 # The latent sum is re-evaluated on every leapfrog step, so its width IS the
 # per-step cost, and a SHARED ceiling is set by the single heaviest cell in the
 # whole array -- every other cell then pays for that one. Each cell's ceiling is
-# resolved from its own warm-mode abundance instead (gcol33/tulpaObs#233).
+# resolved from its own warm-mode abundance instead.
 #
 # What has to hold: the narrower sum returns the SAME target. That is what these
 # assert, on both the C++ target and the R oracle, together with the narrowing
@@ -318,7 +318,7 @@ test_that("ms_abun NUTS S3 methods + WAIC work", {
 })
 
 
-# --- (7) shared areal field (proper-CAR) recovery (tulpaObs#73) -------------
+# --- (7) shared areal field (proper-CAR) recovery -------------
 
 .msan_grid_graph <- function(side) {
   N <- side * side; A <- matrix(0L, N, N)

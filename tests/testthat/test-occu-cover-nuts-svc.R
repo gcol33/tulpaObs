@@ -2,10 +2,10 @@
 # test-occu-cover-nuts-svc.R - a SECOND coupled areal field on the occu_cover()
 # NUTS path: the intercept field plus one spatially-varying-coefficient (trend)
 # field, each its own block with its own per-site weight, whitened field and
-# (sigma, rho, alpha) coordinates (gcol33/tulpaObs#214).
+# (sigma, rho, alpha) coordinates.
 #
-# The validation battery is the one the sampled-hyper block was held to
-# (gcol33/tulpaObs#204), reproduced for two blocks:
+# The validation battery is the one the sampled-hyper block was held to,
+# reproduced for two blocks:
 #   - the compiled target equals the R oracle on the full log posterior
 #   - the analytic gradient equals a central FD, including every hyper
 #     coordinate of BOTH blocks, asserted apart from the coefficient scores
@@ -57,7 +57,7 @@
 
 # Fit with the intercept field + one trend field, both copied onto the cover arm
 # (the fixture simulates a coupled truth, so the copy is declared -- a bare areal
-# term is an occurrence-only field, gcol33/tulpaObs#217).
+# term is an occurrence-only field).
 .ocsvc_fit <- function(inp, control = list(), field = "icar",
                        copy_call = "copy(spatial())") {
   f <- stats::as.formula(sprintf(

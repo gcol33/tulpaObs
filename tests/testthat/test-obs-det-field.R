@@ -1,15 +1,15 @@
-# DETECTION-arm areal field on the observation families (gcol33/tulpaObs#114):
-# removal / fp_occu / dyn_abun carry a spatially-varying field on their detection
-# arm (capture logit / true-positive p11 / detection p) via the shared areal-BFGS
-# nested-Laplace driver, the field routed to the detection arm instead of the
-# abundance / occupancy arm. removal's detection design is per-pass, so its
-# per-observation eta-gradient is summed to a per-site field gradient; fp_occu and
-# dyn_abun carry per-site detection designs, so the field loads on eta directly
-# (no aggregation). Detection fields are more weakly identified than abundance
-# fields (a per-site binary-ish detection channel), so the recovery bar is a
-# correlation with the truth surface, the arm slope, and a `spatial_field_arm`
-# label of "detection". A detection-arm field under NUTS stays gated (the C++
-# field block loads on the abundance / occupancy arm); that gate is asserted too.
+# DETECTION-arm areal field on the observation families: removal / fp_occu /
+# dyn_abun carry a spatially-varying field on their detection arm (capture logit /
+# true-positive p11 / detection p) via the shared areal-BFGS nested-Laplace
+# driver, the field routed to the detection arm instead of the abundance /
+# occupancy arm. removal's detection design is per-pass, so its per-observation
+# eta-gradient is summed to a per-site field gradient; fp_occu and dyn_abun carry
+# per-site detection designs, so the field loads on eta directly (no aggregation).
+# Detection fields are more weakly identified than abundance fields (a per-site
+# binary-ish detection channel), so the recovery bar is a correlation with the
+# truth surface, the arm slope, and a `spatial_field_arm` label of "detection". A
+# detection-arm field under NUTS stays gated (the C++ field block loads on the
+# abundance / occupancy arm); that gate is asserted too.
 
 # Smoothed ICAR-like field on a side x side grid, demeaned (sum-to-zero).
 .odf_grid_adj <- function(side) {

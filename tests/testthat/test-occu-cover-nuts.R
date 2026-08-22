@@ -88,8 +88,8 @@ test_that("occu_cover NUTS now samples the coupled icar field; family advertises
   adj <- matrix(0L, 36, 36)
   for (i in seq_len(35)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
   # An intrinsic icar() field on the psi formula now samples via the coupled
-  # sum-to-zero field (gcol33/tulpaObs#113); confirm it runs + centres the field
-  # (full recovery lives in test-occu-cover-spatial-nuts.R).
+  # sum-to-zero field; confirm it runs + centres the field (full recovery lives
+  # in test-occu-cover-spatial-nuts.R).
   fit_icar <- suppressWarnings(tobs(
     formula = ~ 1 + icar(graph = adj), data = inp$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,

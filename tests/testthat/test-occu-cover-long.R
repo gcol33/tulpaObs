@@ -1,4 +1,4 @@
-# Single occu_cover() fit from a long / plot-level frame (gcol33/tulpaObs#107).
+# Single occu_cover() fit from a long / plot-level frame.
 #
 # tobs() now accepts the same long-frame contract for ONE species that the by=
 # batch path accepts for many: pass site / visit / response / y_pos / det.covs
@@ -159,9 +159,9 @@ test_that("single long-frame occu_cover fit == the hand-built tobs_data route", 
 
 # ---- positive (unbounded) cover arm: lognormal / gamma ----------------------
 #
-# gcol33/tulpaObs#107: the cover arm's tobs_data() storage type follows the
-# positive distribution -- beta is a [0, 1] proportion ("cover"), lognormal /
-# gamma are positive reals ("positive"). The long-frame builder picks it from
+# the cover arm's tobs_data() storage type follows the positive
+# distribution -- beta is a [0, 1] proportion ("cover"), lognormal / gamma
+# are positive reals ("positive"). The long-frame builder picks it from
 # `positive = `, so a lognormal cover that exceeds 1 round-trips instead of
 # being rejected by the [0, 1] check.
 

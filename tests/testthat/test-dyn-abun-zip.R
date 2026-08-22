@@ -1,6 +1,6 @@
 # =============================================================================
 # test-dyn-abun-zip.R - zero-inflated open N-mixture (Dail-Madsen) for
-# dyn_abun(mixture = "zip" / "zinb"; gcol33/tulpaObs#116).
+# dyn_abun(mixture = "zip" / "zinb").
 #
 # A structural-zero site is never occupied (N_t = 0 for every season), so every
 # count at that site is zero; the observed per-site marginal is the two-component

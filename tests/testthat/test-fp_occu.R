@@ -1,5 +1,5 @@
 # Multistate false-positive occupancy (Miller et al. 2011 confirmed-detection
-# design), non-spatial Laplace (analytic-gradient BFGS) + NUTS (gcol33/tulpaObs#40).
+# design), non-spatial Laplace (analytic-gradient BFGS) + NUTS.
 #
 # Recovery-grade tests: point recovery against simulated truth + 95% CI coverage
 # across seeds, plus a closed-form correctness anchor (the two-state marginal
@@ -198,7 +198,7 @@ test_that("fp_occu NUTS recovers truth and scores WAIC", {
 })
 
 
-# --- NUTS + random effect on the occupancy (psi) arm (tulpaObs#51) ----------
+# --- NUTS + random effect on the occupancy (psi) arm ----------
 
 # Simulate fp_occu with a site-grouped occupancy random intercept
 # b_g ~ N(0, sigma_re^2): eta_psi = beta0 + b_g.
@@ -485,10 +485,10 @@ test_that("fp_occu() bym2 + proper-CAR recover the occupancy field + slope (#131
 test_that("fp_occu() temporal()-only field recovers the AR1 field + slope (#114)", {
   skip_on_cran()
   skip_if_fast()
-  # A temporal() term on its own (no areal field) runs the shared areal-BFGS
-  # driver with a single temporal block on the occupancy arm (gcol33/tulpaObs#114).
-  # Occupancy fields are weakly identified (one binary site per node), so the
-  # temporal-field bar is lower than the count families.
+  # A temporal() term on its own (no areal field) runs the shared areal-BFGS driver
+  # with a single temporal block on the occupancy arm. Occupancy fields are weakly
+  # identified (one binary site per node), so the temporal-field bar is lower than
+  # the count families.
   Tt <- 8L; per_t <- 30L; N <- Tt * per_t; J <- 4L
   fcor <- slope <- rep(NA_real_, 8L)
   for (s in seq_len(8L)) {

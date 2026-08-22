@@ -1,6 +1,6 @@
 # =============================================================================
-# test-occu-cover-progress.R - outer-grid heartbeat file survives verbose=FALSE
-# (gcol33/tulpaObs#43).
+# test-occu-cover-progress.R
+# - outer-grid heartbeat file survives verbose=FALSE.
 #
 # The cover()/occu_cover() nested-Laplace joint grid has two progress channels:
 # the Rcout console bar and a heartbeat file written to disk (the only signal

@@ -1,5 +1,5 @@
 # ms_occu_cover_spatial.R - reduced-rank spatial-factor community occu_cover
-# (gcol33/tulpa#67, Stage 1: K = 1).
+# (Stage 1: K = 1).
 #
 # The community / joint-SDM form of occu_cover: one model over many species that
 # shares a small set of latent spatial factors and borrows strength via

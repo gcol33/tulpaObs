@@ -39,8 +39,8 @@
       dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
                            log = TRUE) - y_pos[j]
     } else if (positive == "gaussian") {
-      # Identity-Gaussian arm (gcol33/tulpaObs#112): y_pos is the raw response,
-      # so the density is the plain Gaussian with no change-of-variable Jacobian.
+      # Identity-Gaussian arm: y_pos is the raw response, so the density is the
+      # plain Gaussian with no change-of-variable Jacobian.
       dens <- stats::dnorm(y_pos[j], mean = eta_pos[, j], sd = sd_disp,
                            log = TRUE)
     } else if (positive == "lognormal_trunc") {
@@ -98,10 +98,10 @@
     bundle  <- .tobs_joint_draws(object, n = n.draws)
     if (isTRUE(object$armspecific)) {
       # Arm-specific separate latents store no node map / weight on the bundle
-      # block (gcol33/tulpaObs#95); the pointwise-loglik consumer runs over the
-      # fit's observations, so it rebuilds the per-arm per-observation node map
-      # and covariate-weight lookup from `armspec_blocks` and hands them to
-      # .tobs_joint_arm_eta exactly as the shared-field path passes spi_* / wfun.
+      # block; the pointwise-loglik consumer runs over the fit's observations, so
+      # it rebuilds the per-arm per-observation node map and covariate-weight
+      # lookup from `armspec_blocks` and hands them to .tobs_joint_arm_eta
+      # exactly as the shared-field path passes spi_* / wfun.
       u_occ  <- .tobs_armspec_obs_units(object, 1L, nrow(enc$occ_data$X))
       u_pos  <- .tobs_armspec_obs_units(object, 2L, nrow(enc$pos_data$X))
       wf_occ <- .tobs_armspec_obs_wfun(object, 1L)
@@ -226,7 +226,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Posterior predictive check + PIT for the cover hurdle (gcol33/tulpaObs#27)
+# Posterior predictive check + PIT for the cover hurdle
 # ---------------------------------------------------------------------------
 
 # Randomized PIT for a cover() hurdle fit (length N). The predictive CDF mixes a
@@ -355,8 +355,8 @@ predict.cover_fit <- function(object, newdata = NULL,
                                      level = 0.95, nsim = 1000L, draws = TRUE,
                                      ...) {
   # Nested-Laplace shared-field fit: route through the unified joint predict
-  # substrate (gcol33/tulpaObs#23). Map the legacy fixed-effects type names onto
-  # the joint vocabulary so old calls keep working.
+  # substrate. Map the legacy fixed-effects type names onto the joint vocabulary
+  # so old calls keep working.
   if (!is.null(.tobs_joint_fit(object))) {
     if (is.null(type)) type <- "occurrence"
     type <- switch(type,
@@ -394,7 +394,7 @@ predict.cover_fit <- function(object, newdata = NULL,
   mu <- if (positive %in% c("beta", "beta_oi")) {
     stats::plogis(eta_pos)
   } else if (identical(positive, "gaussian")) {
-    # Identity-Gaussian arm (gcol33/tulpaObs#112): mu = eta on the response scale.
+    # Identity-Gaussian arm: mu = eta on the response scale.
     eta_pos
   } else {
     exp(eta_pos + object$sigma_pos^2 / 2)
@@ -454,10 +454,10 @@ summary.cover_fit <- function(object, ...) {
   if (!is.null(object$nuts) && !is.null(object$draws)) {
     return(.tobs_cover_nuts_summary(object))
   }
-  # Arm labels (gcol33/tulpaObs#61): the two hurdle arms are `presence`
-  # (the y > 0 Bernoulli arm) and `positive` (the y | y > 0 arm). The `to =`
-  # argument of a spatial() bar validates against these labels, so summary()
-  # prints the same names (formula label == output label).
+  # Arm labels: the two hurdle arms are `presence` (the y > 0 Bernoulli arm)
+  # and `positive` (the y | y > 0 arm). The `to =` argument of a spatial()
+  # bar validates against these labels, so summary() prints the same names
+  # (formula label == output label).
   out <- list(
     family       = object$family,
     positive     = object$positive %||% "lognormal",

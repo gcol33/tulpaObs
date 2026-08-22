@@ -2,9 +2,9 @@
 # test-occu-ttd.R - time-to-detection occupancy (occu_ttd(); unmarked occuTTD).
 #
 # Two-state occupancy marginal with a censored-exponential time-to-detection
-# emission (gcol33/tulpaObs#116): z ~ Bernoulli(psi), t | z=1 ~ Exp(rate lambda)
-# censored at surveyLength. Latent z integrates out in closed form; the exact
-# marginal is maximised (optim BFGS) with an observed-information vcov -- the
+# emission: z ~ Bernoulli(psi), t | z=1 ~ Exp(rate lambda) censored at
+# surveyLength. Latent z integrates out in closed form; the exact marginal is
+# maximised (optim BFGS) with an observed-information vcov -- the
 # royle_nichols() recipe with a continuous emission. Non-spatial laplace only.
 # =============================================================================
 

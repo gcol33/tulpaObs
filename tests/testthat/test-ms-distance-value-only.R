@@ -1,4 +1,4 @@
-# Value-only kernel path for ms_distance() (gcol33/tulpaObs#164 lever 1).
+# Value-only kernel path for ms_distance().
 #
 # The community-latent mode-adaptation backtracking line search
 # (R/community_latent.R) calls the oracle's ll_cell() / data_ll() to evaluate a

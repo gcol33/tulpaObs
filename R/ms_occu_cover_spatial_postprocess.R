@@ -670,15 +670,14 @@ tobs_associations <- function(object,
 # Detect a spatial request on the three occu_cover arms. The supported surface is
 # a single areal field term -- icar() (improper), car_proper() (proper CAR with a
 # correlation rho), or bym2() (the convolution with a variance fraction phi) -- on
-# the occupancy arm and, optionally, the SAME field on the cover (positive) arm
-# (a cover-arm factor, gcol33/tulpa#67 Stage 3). Returns the shared-field
-# adjacency, the `field_type` ("icar" / "car_proper" / "bym2"), the
-# fixed-effects occupancy / cover formulas (with the field term stripped), and
-# `cover_factor` (TRUE when the cover arm also carries the field); NULL when no
-# arm carries a structured term (the non-spatial path). Detection terms,
-# unsupported terms, a multi-term arm, a cover-arm field without a matching
-# occupancy field, or a cover field of a different type / graph all error (the
-# field is shared, so the two arms must name one term on one graph).
+# the occupancy arm and, optionally, the SAME field on the cover (positive) arm (a
+# cover-arm factor). Returns the shared-field adjacency, the `field_type` ("icar"
+# / "car_proper" / "bym2"), the fixed-effects occupancy / cover formulas (with the
+# field term stripped), and `cover_factor` (TRUE when the cover arm also carries
+# the field); NULL when no arm carries a structured term (the non-spatial path).
+# Detection terms, unsupported terms, a multi-term arm, a cover-arm field without
+# a matching occupancy field, or a cover field of a different type / graph all
+# error (the field is shared, so the two arms must name one term on one graph).
 .tobs_ms_ocs_spatial_request <- function(occ_formula, det_formula, pos_formula,
                                          data) {
   parse_terms <- function(f) {

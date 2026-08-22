@@ -1,9 +1,9 @@
-# Regression + recovery test for gcol33/tulpaObs#8: the tobs_data() output
-# (det.covs as a named list of [N, J] matrices) must compose with
-# tobs(visits = ...), and the visit-level detection covariate it carries
-# must be estimated correctly. Before the fix the call errored with
-# "object 'effort' not found"; the visit-level-detection path - the whole
-# point of occu() - had no clean public route and was unexercised by tests.
+# Regression + recovery test: the tobs_data() output (det.covs as a
+# named list of [N, J] matrices) must compose with tobs(visits = ...), and
+# the visit-level detection covariate it carries must be estimated
+# correctly. Before the fix the call errored with "object 'effort' not
+# found"; the visit-level-detection path - the whole point of occu() - had
+# no clean public route and was unexercised by tests.
 
 test_that("tobs_data() det.covs list composes with tobs(visits = ...)", {
   set.seed(1)

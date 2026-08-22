@@ -1,8 +1,8 @@
 # occu_cover() shared spatial field + per-group random intercept on the
-# occupancy arm (gcol33/tulpaObs#56, the tulpaObs consumer of tulpa#86's field +
-# per-group RE composition in the joint cell-coupling engine). The RE joins the
-# joint fit as one `iid` prior block whose variance integrates on the outer grid
-# alongside the field sigma / alpha.
+# occupancy arm (the tulpaObs consumer's field + per-group RE composition in
+# the joint cell-coupling engine). The RE joins the joint fit as one `iid`
+# prior block whose variance integrates on the outer grid alongside the field
+# sigma / alpha.
 
 .ocfr_grid_adj <- function(side) {
   ng <- side * side

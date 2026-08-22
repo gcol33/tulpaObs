@@ -99,12 +99,12 @@ struct LognormalPositive {
 };
 
 
-// Identity-link Gaussian positive arm (gcol33/tulpaObs#112): the delta-normal
-// hurdle's magnitude part, for a positive response already on a real,
-// unbounded scale. It is LognormalPositive with the response taken as-is (no
-// log transform) and no change-of-variable Jacobian: residual is (y - eta),
-// mean on the response scale is mu = eta. Dispersion is the SD sigma (= phi),
-// shared handling with the lognormal arm everywhere outside the density.
+// Identity-link Gaussian positive arm: the delta-normal hurdle's magnitude
+// part, for a positive response already on a real, unbounded scale. It is
+// LognormalPositive with the response taken as-is (no log transform) and no
+// change-of-variable Jacobian: residual is (y - eta), mean on the response
+// scale is mu = eta. Dispersion is the SD sigma (= phi), shared handling with
+// the lognormal arm everywhere outside the density.
 struct GaussianPositive {
     static constexpr const char* spec_name()            { return "occu_cover_gaussian"; }
     static constexpr const char* multiscale_spec_name() { return "occu_multiscale_cover_gaussian"; }
@@ -224,7 +224,7 @@ struct BetaPositive {
 // ---------------------------------------------------------------------------
 // Positive-arm code dispatch. The cover positive arm is selected at runtime by
 // an integer code shared with the coupling / ploglik layers:
-//   0 = lognormal, 3 = beta, 4 = gaussian (gcol33/tulpaObs#112).
+//   0 = lognormal, 3 = beta, 4 = gaussian.
 // Single source for the NUTS targets (cover_nuts, occu_cover_nuts, the
 // community spatial-factor sampler, multiscale) so no positive-density branch
 // is copy-pasted across the samplers -- each calls these and the compiler
@@ -281,24 +281,24 @@ inline double pos_grad_logdisp(int code, double y, double eta, double phi) {
 // L + w(1 - P0) = 1 to collapse cross(w, p) -> w(1-w) P0 p_v / L^2 and
 // cross(p_v, p_w) -> -w(1-w) P0 p_v p_w / L^2 (see derivation note).
 //
-// Rank-1 (p, p) emission (gcol33/tulpaObs#94): the observed (p, p) off-diagonal
-// cross is exactly the rank-1 a * p p^T, a = -w(1-w) P0 / L^2. When
-// `rank1_coef_out` and `rank1_p_out` are both non-null (and the curvature is
-// Observed) the block writes (a, p) there for the engine's rank-1 self-cross
-// path INSTEAD of the dense `cross_p_p`, and folds the rank-1's own diagonal
-// a p_v^2 into `nh_p` (storing the true diagonal minus a p_v^2) so the engine
-// adds the full a p p^T. The two paths are mutually exclusive; pass
-// `cross_p_p = nullptr` when requesting rank-1. With both rank-1 pointers null
-// the dense `cross_p_p` path is byte-identical to before.
+// Rank-1 (p, p) emission: the observed (p, p) off-diagonal cross is exactly the
+// rank-1 a * p p^T, a = -w(1-w) P0 / L^2. When `rank1_coef_out` and
+// `rank1_p_out` are both non-null (and the curvature is Observed) the block
+// writes (a, p) there for the engine's rank-1 self-cross path INSTEAD of the
+// dense `cross_p_p`, and folds the rank-1's own diagonal a p_v^2 into `nh_p`
+// (storing the true diagonal minus a p_v^2) so the engine adds the full a p
+// p^T. The two paths are mutually exclusive; pass `cross_p_p = nullptr` when
+// requesting rank-1. With both rank-1 pointers null the dense `cross_p_p` path
+// is byte-identical to before.
 // ---------------------------------------------------------------------------
-// `wt` (gcol33/tulpaObs detection-pattern compression) is an optional per-visit
-// integer multiplicity: row v stands for wt[v] exchangeable non-detected visits
-// that share this detection row (identical eta_p[v]). Passing nullptr (or all
-// ones) is the uncompressed path and is byte-identical to before. The reduction
-// is exact: P0 = prod_v (1 - p_v)^{wt_v}, and the mixture's score / observed
-// Hessian in the compressed (unique-row) basis is S^T H S with S the row->pattern
-// selection, which collapses to per-row weight factors on g_p / cross_w_p and to
-// the rank-1 vector wt_v * p_v (see the derivation below and
+// `wt` ( detection-pattern compression) is an optional per-visit integer
+// multiplicity: row v stands for wt[v] exchangeable non-detected visits that
+// share this detection row (identical eta_p[v]). Passing nullptr (or all ones) is
+// the uncompressed path and is byte-identical to before. The reduction is exact:
+// P0 = prod_v (1 - p_v)^{wt_v}, and the mixture's score / observed Hessian in the
+// compressed (unique-row) basis is S^T H S with S the row->pattern selection,
+// which collapses to per-row weight factors on g_p / cross_w_p and to the rank-1
+// vector wt_v * p_v (see the derivation below and
 // dev_notes/occu_multiscale_cover_derivation.md). Only all-undetected rows are
 // ever compressed (the caller keeps detected visits individual for their cover),
 // so wt applies uniformly across this block's rows.
@@ -420,14 +420,13 @@ inline double nodet_mixture_block(
 // >= 1 detection the occupancy / detection arms factorise from the cover arm,
 // so this writes arm 0 (psi) and arm 1 (p) score / observed information and
 // returns  log psi + sum_v [ y_det log p_v + (1 - y_det) log(1 - p_v) ]
-// WITHOUT any cover (pos) contribution -- the caller adds its positive-arm
-// term (one log f_pos per detected visit, one aggregated log f_pos, or one
-// latent marginal log M). Cross-Hessians are zero in the det branch.
-// `s` is the batch (species) index (gcol33/tulpa#66). It offsets the reads
-// (eta / y species column) and the writes (the rc * n_batch species-major
-// buffer slot [s * rc + j]). s = 0 with a B=1 CellEtas/Derivs is byte-identical
-// to the pre-batch path, so the existing per-visit / latent / multiscale
-// callers (which omit s) are unchanged.
+// WITHOUT any cover (pos) contribution -- the caller adds its positive-arm term
+// (one log f_pos per detected visit, one aggregated log f_pos, or one latent
+// marginal log M). Cross-Hessians are zero in the det branch. `s` is the batch
+// (species) index. It offsets the reads (eta / y species column) and the writes
+// (the rc * n_batch species-major buffer slot [s * rc + j]). s = 0 with a B=1
+// CellEtas/Derivs is byte-identical to the pre-batch path, so the existing
+// per-visit / latent / multiscale callers (which omit s) are unchanged.
 inline double occu_det_psi_p_block(double                     psi,
                                    const tulpa::CellEtas&     etas,
                                    const tulpa::CellResponse& y_cell,
@@ -468,12 +467,11 @@ inline double occu_det_psi_p_block(double                     psi,
 // nodet_mixture_block with w = psi over the cell's Jc visits, places the
 // occupancy score / curvature into arm 0 and the detection terms into arm 1
 // (incl. the (psi, p) and (p, p) cross-Hessian blocks under the Observed
-// curvature), and returns log L.
-// `s` (gcol33/tulpa#66) offsets the species column of the reads and the
-// species-major slot of the writes; s = 0 / B=1 is byte-identical, so the
-// pre-batch callers (which omit s) are unchanged. The compact (psi, p) and
-// (p, p) cross buffers are sliced to species s by the same s * (rc_k * rc_l)
-// offset the kernel uses to lay them out.
+// curvature), and returns log L. `s` offsets the species column of the reads
+// and the species-major slot of the writes; s = 0 / B=1 is byte-identical,
+// so the pre-batch callers (which omit s) are unchanged. The compact (psi,
+// p) and (p, p) cross buffers are sliced to species s by the same s * (rc_k
+// * rc_l) offset the kernel uses to lay them out.
 inline double occu_nodet_block(double                     psi,
                                const tulpa::CellEtas&     etas,
                                const tulpa::CellResponse& y_cell,
@@ -501,9 +499,9 @@ inline double occu_nodet_block(double                     psi,
                         : nullptr;
 
     // Detection (p, p) cross-Hessian: prefer the engine's rank-1 self-cross
-    // path (gcol33/tulpaObs#94) on the single-response path, where the dense
-    // V x V block is exactly rank-1; fall back to the dense cross_p_p buffer
-    // otherwise (batched, or an engine that did not supply the descriptor).
+    // path on the single-response path, where the dense V x V block is
+    // exactly rank-1; fall back to the dense cross_p_p buffer otherwise
+    // (batched, or an engine that did not supply the descriptor).
     double* rank1_coef = nullptr;
     double* rank1_p    = nullptr;
     double* cross_p_p  = nullptr;

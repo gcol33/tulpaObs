@@ -1,6 +1,6 @@
 # Dail-Madsen open-population N-mixture (Poisson initial abundance, binomial
 # survival, Poisson recruitment), non-spatial Laplace (analytic-gradient BFGS over
-# the exact HMM forward marginal) + NUTS (gcol33/tulpaObs#37).
+# the exact HMM forward marginal) + NUTS.
 #
 # Recovery-grade tests: point recovery against simulated truth + 95% CI coverage
 # across seeds, plus a correctness anchor (the C++ forward log-lik against an
@@ -244,7 +244,7 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
 })
 
 
-# --- NUTS + random effect (tulpaObs#51) ------------------------------------
+# --- NUTS + random effect ------------------------------------
 
 # Dail-Madsen data with a per-site intercept RE on the initial-abundance arm.
 sim_dyn_abun_lambda_re <- function(N, T, J, ngrp, beta_lambda, p, omega, gamma,
@@ -284,7 +284,7 @@ test_that("dyn_abun() NUTS samples a single initial-abundance RE and recovers it
   expect_lt(mean(fit$nuts$divergent), 0.2)
 })
 
-# --- Laplace + random effect (tulpaObs#51) --------------------------------
+# --- Laplace + random effect --------------------------------
 
 test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE", {
   skip_on_cran()
@@ -321,7 +321,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE"
   expect_gt(mean(est_sigma), 0.3)   # not collapsed to zero
 })
 
-# --- detection-arm random effect (tulpaObs#82) ----------------------------
+# --- detection-arm random effect ----------------------------
 
 # Dail-Madsen data with a per-site intercept RE on the detection (p) arm.
 sim_dyn_abun_p_re <- function(N, T, J, ngrp, beta_lambda, beta_p, omega, gamma,

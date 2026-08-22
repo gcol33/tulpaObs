@@ -1,10 +1,10 @@
 // nmix_re_oracle.h
 // Native compiled REGroupOracle for the single-species N-mixture with
 // site-level grouped random effects on EITHER the abundance (lambda) or
-// detection (p) arm (gcol33/tulpaObs#13). The grouping factor is something
-// other than species (station, observer-per-site, site cluster); the per-group
-// RE vector b has dimension d = sum over RE-blocks of n_coefs (1..3), entering
-// ONE arm via the per-site design row Z_i (length d).
+// detection (p) arm. The grouping factor is something other than species
+// (station, observer-per-site, site cluster); the per-group RE vector b has
+// dimension d = sum over RE-blocks of n_coefs (1..3), entering ONE arm via
+// the per-site design row Z_i (length d).
 //
 // All of the Z-sandwich + group-loop + REGroupOracle plumbing is shared with
 // the other count-model grouped-RE oracles in CountGroupedOracle

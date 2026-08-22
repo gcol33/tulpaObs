@@ -1,6 +1,6 @@
 # =============================================================================
 # test-predict-spatial.R - tobs_predict_spatial(), the documented IDW-on-the-
-# field spatial predictor (gcol33/tulpaObs#179).
+# field spatial predictor.
 #
 # WHAT IS ASSERTED, AND AGAINST WHAT
 #

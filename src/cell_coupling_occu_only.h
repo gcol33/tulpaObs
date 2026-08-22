@@ -1,7 +1,7 @@
 // cell_coupling_occu_only.h
 // Stateless `CellCouplingSpec` implementing the per-cell log-density of the
 // single-season occupancy mixture (psi/p arms only, NO cover arm) for the joint
-// nested-Laplace path in tulpa (gcol33/tulpaObs#81 consumer).
+// nested-Laplace path in tulpa ( consumer).
 //
 // This is `OccuCoverCoupling` with the positive (cover) arm removed: the same
 // site-level occupancy + detection mixture, fitted single-arm through the joint

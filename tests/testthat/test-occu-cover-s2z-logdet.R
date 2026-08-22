@@ -1,4 +1,4 @@
-# Regression test for gcol33/tulpa#69.
+# Regression test.
 #
 # The intrinsic-ICAR sum-to-zero log-det in the coupled occu_cover joint Laplace
 # was reconstructed via the matrix-determinant lemma from the Hessian A with the
@@ -18,7 +18,7 @@
 # NOT reach this regime -- the cancellation needs the coupled occu_cover
 # structure, where occupancy/detection zeros leave field units near-null-curvature.
 
-test_that("occu_cover rank-1 s2z log-det matches densify above the 256-node field (gcol33/tulpa#69)", {
+test_that("occu_cover rank-1 s2z log-det matches densify above the 256-node field", {
   skip_on_cran()
   old <- Sys.getenv("TULPA_S2Z_DENSIFY_MAX", unset = NA)
   on.exit(if (is.na(old)) Sys.unsetenv("TULPA_S2Z_DENSIFY_MAX")

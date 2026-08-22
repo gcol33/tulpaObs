@@ -1,5 +1,5 @@
 # jsdm() as the community GLMM on an observed presence/absence response -- the
-# spOccupancy lfJSDM / sfJSDM model class (gcol33/tulpaObs#121):
+# spOccupancy lfJSDM / sfJSDM model class:
 #
 #   y_{s,i}         ~ Bernoulli(psi_{s,i})            (observed, no detection)
 #   logit psi_{s,i} = X_i (mu + b_s) [+ f_{u(i)}] [+ sum_q lambda_{s,q} zeta_{q,i}]
@@ -56,8 +56,8 @@
 # an SD of beta_sd / sqrt(S) -- 0.10 on the intercept, 0.075 on the slope --
 # away from that constant. Scoring a fit against the population constant
 # therefore spends most of its tolerance on draw noise, and what is left is too
-# coarse to see estimator bias: that is how gcol33/tulpaObs#153 survived, a
-# slope inflated 1.44x sitting inside `tolerance = 0.35`.
+# coarse to see estimator bias: that is how survived, a slope inflated 1.44x
+# sitting inside `tolerance = 0.35`.
 #
 # So the assertions below score against `beta_real`, the mean of that seed's own
 # draw, which removes the draw noise and leaves a pure estimator budget. They
@@ -137,7 +137,7 @@ test_that("jsdm() recovers community means with per-species coefficients", {
 # --- (3) lfJSDM: latent factors ---------------------------------------------
 
 # Smoke coverage of the lfJSDM path: the factor block and the S3 surface on a
-# small fixture, no threshold tied to the size (gcol33/tulpaObs#159).
+# small fixture, no threshold tied to the size.
 test_that("lfJSDM wires the factor block and S3", {
   d <- .jsdmc_sim(N = 60L, S = 5L, Q = 1L, seed = 11L)
   f <- tobs(~ x + latent(1), data = d$data, family = jsdm(), y = d$y,
@@ -165,9 +165,9 @@ test_that("lfJSDM recovers residual species co-occurrence", {
   expect_gt(stats::cor(f$ms_factor$residual_cor[off], d$cor_res[off]), 0.8)
   # The community coefficients used to be inflated here -- slope 1.44x truth,
   # one-sided over 16 seeds -- because the factor magnitude was a joint-mode
-  # estimate with nothing bounding it (gcol33/tulpaObs#153). With the magnitude
-  # set by the joint site marginal the slope is unbiased: 0.796 vs 0.800 over
-  # seeds 11-26, 7 seeds above truth and 9 below.
+  # estimate with nothing bounding it. With the magnitude set by the joint site
+  # marginal the slope is unbiased: 0.796 vs 0.800 over seeds 11-26, 7 seeds
+  # above truth and 9 below.
   #
   # Scored per coefficient against this seed's realized mean, so neither a
   # one-sided shift nor a draw offset can hide in the other. On seed 11 the fit
@@ -196,8 +196,8 @@ test_that("lfJSDM recovers the residual correlation over seeds", {
   # any single fit, so it is asserted here rather than on the single-seed fit
   # above: averaging 4 seeds cuts the per-seed spread in half and makes the
   # budget an estimator budget. Measured over these 4 seeds the mean deviation
-  # is +0.036 (intercept) and +0.017 (slope); before gcol33/tulpaObs#153 was
-  # fixed the slope's was +0.325.
+  # is +0.036 (intercept) and +0.017 (slope); before was fixed the slope's was
+  # +0.325.
   expect_lt(abs(mean(dev[, 1])), 0.09)
   expect_lt(abs(mean(dev[, 2])), 0.09)
 })

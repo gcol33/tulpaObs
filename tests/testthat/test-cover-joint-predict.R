@@ -1,6 +1,5 @@
 # predict() for the cover() hurdle on the nested-Laplace shared-field path
-# (gcol33/tulpaObs#23) and the unified joint-fit substrate it shares with
-# occu_cover() (gcol33/tulpaObs#24).
+# and the unified joint-fit substrate it shares with occu_cover().
 
 .cjp_chain_adj <- function(n) {
   adj <- matrix(0L, n, n)

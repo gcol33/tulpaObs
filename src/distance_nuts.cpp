@@ -22,10 +22,10 @@ namespace tulpaObs {
 
 struct DistNutsModel {
     int n_sites = 0, n_bins = 0, p_lam = 0, p_sig = 0, key = 0, K_max = 0;
-    // Per-site K_hi cap (gcol33/tulpaObs#168), FIXED for the whole chain (set
-    // once in dist_nuts_build() from the R wrapper's verified headroom -- the
-    // same one the warm-start Laplace fit's score-gap guard already checked at
-    // its mode) rather than re-verified at every leapfrog gradient call. The R
+    // Per-site K_hi cap, FIXED for the whole chain (set once in
+    // dist_nuts_build() from the R wrapper's verified headroom -- the same one
+    // the warm-start Laplace fit's score-gap guard already checked at its
+    // mode) rather than re-verified at every leapfrog gradient call. The R
     // wrapper runs ONE post-hoc check at the posterior mean after sampling and
     // re-runs the whole chain at a wider headroom on disagreement, mirroring
     // the escalate-and-refit pattern the other fitters use.
@@ -36,20 +36,19 @@ struct DistNutsModel {
     Rcpp::NumericMatrix X_lambda, X_sigma;
     DistQuad quad;
     int total = 0;
-    // Built once in dist_nuts_build() and reused across every leapfrog step
-    // (gcol33/tulpaObs#167): K_max is fixed for the model, so the O(K_max)
-    // combinatorial table and the per-site derivative scratch would otherwise
-    // be rebuilt from scratch on every one of the thousands of gradient calls
-    // a NUTS run makes.
+    // Built once in dist_nuts_build() and reused across every leapfrog step:
+    // K_max is fixed for the model, so the O(K_max) combinatorial table and
+    // the per-site derivative scratch would otherwise be rebuilt from scratch
+    // on every one of the thousands of gradient calls a NUTS run makes.
     std::vector<double> comb_table;
     mutable DistScratch scratch;
-    // Optional single intercept random effect on the abundance arm (tulpaObs#51),
-    // loaded on eta_lambda (nuts_re_block.h). The flat vector grows by
-    // [z_1..z_G, log_sigma_re] at the tail.
+    // Optional single intercept random effect on the abundance arm, loaded on
+    // eta_lambda (nuts_re_block.h). The flat vector grows by [z_1..z_G,
+    // log_sigma_re] at the tail.
     ReBlock re;
-    // Optional fixed-hyper areal field on the abundance (log lambda) arm
-    // (tulpaObs#72): the shared non-centered field z = Linv %*% raw added to
-    // eta_lambda (nuts_field_block.h). Field XOR RE (gated upstream).
+    // Optional fixed-hyper areal field on the abundance (log lambda) arm:
+    // the shared non-centered field z = Linv %*% raw added to eta_lambda
+    // (nuts_field_block.h). Field XOR RE (gated upstream).
     FieldBlock field;
 };
 

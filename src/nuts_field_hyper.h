@@ -1,11 +1,11 @@
 // nuts_field_hyper.h
 // Non-centered areal field block whose HYPERPARAMETERS are sampled alongside the
-// whitened field (gcol33/tulpaObs#204). The sibling header nuts_field_block.h
-// carries the same field with the hypers pinned at a nested-Laplace point
-// estimate; here the field marginal SD (sigma), the mixing / spatial-correlation
-// parameter (rho) and the cross-arm copy amplitude (alpha) are coordinates of
-// the sampled vector, so the sampler integrates the outer hyperparameter layer
-// itself instead of conditioning on the deterministic backend's summary of it.
+// whitened field. The sibling header nuts_field_block.h carries the same field
+// with the hypers pinned at a nested-Laplace point estimate; here the field
+// marginal SD (sigma), the mixing / spatial-correlation parameter (rho) and the
+// cross-arm copy amplitude (alpha) are coordinates of the sampled vector, so the
+// sampler integrates the outer hyperparameter layer itself instead of
+// conditioning on the deterministic backend's summary of it.
 //
 // The field is
 //
@@ -17,7 +17,7 @@
 // re-decomposes anything:
 //
 //   icar        B1 = U_+ diag(1 / sqrt(lambda_+))  (sum-to-zero eigen-loading of
-//               the intrinsic precision Q, gcol33/tulpaObs#71), s1 = 1, no raw2.
+//               the intrinsic precision Q), s1 = 1, no raw2.
 //               Cov(z) = sigma^2 Q^+ on the sum-to-zero subspace.
 //   bym2        B1 = the same centred ICAR basis, s1 = sqrt(rho / scale_factor),
 //               raw2 = the unstructured iid block with s2 = sqrt(1 - rho)
@@ -42,14 +42,14 @@
 // change-of-variables leaves a normalised log-density of log(e) + log(1 - e),
 // e = expit(u), per sampled hyper.
 //
-// A block may carry a per-site design WEIGHT (gcol33/tulpaObs#214), which is
-// what makes it a spatially-varying coefficient rather than a second intercept
-// field: site i loads w_i * z[unit(i)] on the state arm and alpha * w_i *
-// z[unit(i)] on the copied arm. An absent weight vector is the unit weight, so
-// an intercept field carries none. Several blocks stack -- each with its own
-// basis, site -> unit map, weight and (sigma, rho, alpha) coordinates -- and the
-// flat vector lays them out back to back, so a fit that carries one block has
-// the layout it had before the second was possible.
+// A block may carry a per-site design WEIGHT, which is what makes it a
+// spatially-varying coefficient rather than a second intercept field: site i
+// loads w_i * z[unit(i)] on the state arm and alpha * w_i * z[unit(i)] on the
+// copied arm. An absent weight vector is the unit weight, so an intercept field
+// carries none. Several blocks stack -- each with its own basis, site -> unit
+// map, weight and (sigma, rho, alpha) coordinates -- and the flat vector lays
+// them out back to back, so a fit that carries one block has the layout it had
+// before the second was possible.
 
 #ifndef TULPAOBS_NUTS_FIELD_HYPER_H
 #define TULPAOBS_NUTS_FIELD_HYPER_H
@@ -346,7 +346,7 @@ inline double hyper_field_backward(const HyperFieldBlock& fb, const double* thet
 }
 
 // --------------------------------------------------------------------------
-// Several field blocks on one arm pair (gcol33/tulpaObs#214)
+// Several field blocks on one arm pair
 //
 // Block b contributes w_b(i) * z_b[unit_b(i)] to the state arm and
 // alpha_b * w_b(i) * z_b[unit_b(i)] to the copied arm. The three helpers below

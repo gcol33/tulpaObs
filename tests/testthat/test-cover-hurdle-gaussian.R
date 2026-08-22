@@ -1,7 +1,7 @@
 # Tests for cover(response = "gaussian") -- the identity-Gaussian (delta-normal)
-# positive arm (gcol33/tulpaObs#112). It is the lognormal arm on the raw response
-# (no log transform, no Jacobian), for a magnitude that lives on a real,
-# unbounded scale. Presence is the nonzero sentinel (y != 0), not y > 0.
+# positive arm. It is the lognormal arm on the raw response (no log transform, no
+# Jacobian), for a magnitude that lives on a real, unbounded scale. Presence is
+# the nonzero sentinel (y != 0), not y > 0.
 
 test_that("cover(response = 'gaussian') constructor is wired through", {
   fam <- cover(response = "gaussian")
@@ -86,8 +86,8 @@ test_that("cover(gaussian): WAIC works, PPC gated, NUTS available", {
   w <- waic(fit)
   expect_true(is.finite(w$waic) && is.finite(w$p_waic))
   expect_error(ppc(fit), "not defined for cover.*gaussian")
-  # NUTS is wired for the identity-Gaussian arm (gcol33/tulpaObs#112); a short
-  # sample returns a cover_fit rather than erroring.
+  # NUTS is wired for the identity-Gaussian arm; a short sample returns a
+  # cover_fit rather than erroring.
   nut <- tobs(formula = ~ x, data = sim$data,
               family = cover(response = "gaussian"), y = sim$y, method = "nuts",
               control = list(n.iter = 400L, n.warmup = 300L, verbose = FALSE))

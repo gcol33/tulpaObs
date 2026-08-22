@@ -96,10 +96,10 @@ test_that("dyn_occu recovers (psi1, gamma, epsilon, p) within bias tolerance", {
 
 test_that("fitted()$z is the forward-backward smoothed state for dynamic models", {
   skip_if_fast()
-  # tulpaObs#18: dynamic fitted()$z must be the HMM smoothing posterior
-  # P(z_t=1 | y_{1:T}), not the marginal occupancy psi_t. We verify (a) shape
-  # [n_sites x n_seasons], (b) any detected (site, season) smooths to 1, and
-  # (c) recovery against simulated truth beats the marginal-psi plug-in baseline.
+  # dynamic fitted()$z must be the HMM smoothing posterior P(z_t=1 | y_{1:T}),
+  # not the marginal occupancy psi_t. We verify (a) shape [n_sites x n_seasons],
+  # (b) any detected (site, season) smooths to 1, and (c) recovery against
+  # simulated truth beats the marginal-psi plug-in baseline.
   set.seed(7)
   n_sites <- 250; n_seasons <- 4; n_visits <- 4
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
@@ -141,7 +141,7 @@ test_that("fitted()$z is the forward-backward smoothed state for dynamic models"
 })
 
 
-# --- season-varying colonization / extinction (gcol33/tulpaObs#124) ----------
+# --- season-varying colonization / extinction ----------
 
 test_that("a season-varying rate covariate routes to the interval path", {
   # A [n_sites x (T-1)] matrix covariate on colonization / extinction triggers
@@ -215,7 +215,7 @@ test_that("dyn_occu recovers season-varying gamma/epsilon + ~95% coverage", {
   expect_true(all(colMeans(cover) >= 0.85))
 })
 
-# --- season-varying detection (gcol33/tulpaObs#124) --------------------------
+# --- season-varying detection --------------------------
 
 test_that("a season-varying detection covariate routes to the season path", {
   # A [n_sites x T] matrix covariate on detection triggers the season-indexed

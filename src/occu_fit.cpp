@@ -279,7 +279,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     for (; idx < n_params; idx++)
         col_names[idx] = "param[" + std::to_string(idx + 1) + "]";
 
-    // ---- Name the SVC block (gcol33/tulpaObs#118) ----
+    // ---- Name the SVC block ----
     // The engine exports the SVC offsets on ParamLayout, so the block is named
     // here instead of falling through to "param[k]" above. The offsets are
     // absolute positions in the parameter vector, so they are written directly
@@ -314,7 +314,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         }
     }
 
-    // ---- Name the areal spatial field block (gcol33/tulpaObs#142) ----
+    // ---- Name the areal spatial field block ----
     // ICAR/BYM2/CAR_PROPER field nodes + their hyperparameters were falling
     // through to "param[k]"; the engine already exports the offsets on
     // ParamLayout (the SVC pattern above), so name them here.
@@ -341,7 +341,7 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         }
     }
 
-    // ---- Name the continuous GP block (gcol33/tulpaObs#152) ----
+    // ---- Name the continuous GP block ----
     // layout.has_spatial covers only the areal types, so the GP block has its
     // own offsets and was falling through to "param[k]" -- which is why the
     // field could not be read off a fit without counting columns by hand.
@@ -382,8 +382,8 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     }
 
     // The areal field block's layout, so R can slice the field off the draws
-    // without re-deriving offsets or parsing names (gcol33/tulpaObs#142). All
-    // indices 1-based for R; NA where an offset does not exist for this type.
+    // without re-deriving offsets or parsing names. All indices 1-based for
+    // R; NA where an offset does not exist for this type.
     if (layout.has_spatial && layout.spatial_start >= 0) {
         result["spatial_layout"] = Rcpp::List::create(
             Rcpp::Named("type")          = std::string(layout.is_bym2 ? "bym2" :
@@ -404,9 +404,9 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     }
 
     // The continuous GP block's layout, mirroring spatial_layout / svc_layout
-    // so R slices the field by position rather than by parsing column names
-    // (gcol33/tulpaObs#152). 1-based; field_start is NA for a collapsed fit,
-    // where the field is marginalised out and there is nothing to report.
+    // so R slices the field by position rather than by parsing column names.
+    // 1-based; field_start is NA for a collapsed fit, where the field is
+    // marginalised out and there is nothing to report.
     if (layout.is_gp && layout.log_sigma2_gp_idx >= 0) {
         result["gp_layout"] = Rcpp::List::create(
             Rcpp::Named("n_units")          = data.gp_data.n_obs,

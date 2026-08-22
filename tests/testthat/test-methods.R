@@ -62,7 +62,7 @@ test_that("S3 methods work on single-season fit", {
   expect_true(is.data.frame(re) || is.list(re))
 })
 
-test_that("convergence()/converged() read one record across families (tulpaObs#88)", {
+test_that("convergence()/converged() read one record across families", {
   # occu(): the verdict lives at fit$convergence (the package-wide convention).
   occ <- .fit_simple()$fit
   rec <- convergence(occ)
@@ -91,10 +91,10 @@ test_that("convergence()/converged() read one record across families (tulpaObs#8
 
 test_that("non-NUTS fits report NA sampler diagnostics, NUTS reports numeric", {
   skip_if_fast()
-  # tulpaObs#17: a Laplace / nested-Laplace fit ran no HMC trajectory, so the
-  # NUTS-only sampler-health fields (acceptance, divergence, tree depth, step
-  # size) must be NA rather than the constants 1 / 0 / 0 / 0 -- otherwise a user
-  # checking sampler health reads "no sampler ran" as "sampler ran cleanly".
+  # a Laplace / nested-Laplace fit ran no HMC trajectory, so the NUTS-only
+  # sampler-health fields (acceptance, divergence, tree depth, step size) must
+  # be NA rather than the constants 1 / 0 / 0 / 0 -- otherwise a user checking
+  # sampler health reads "no sampler ran" as "sampler ran cleanly".
   fit_lap <- .fit_simple(method = "laplace")$fit
   expect_identical(fit_lap$method, "laplace")
   expect_true(all(is.na(fit_lap$accept_prob)))
@@ -253,7 +253,7 @@ test_that("predict(quantiles=) drives the levels AND the column names", {
 
   # Narrowing the interval moves the endpoints, it does not only relabel them
   # (the failure was a table whose columns stated the default level whatever
-  # was asked for, gcol33/tulpaObs#242).
+  # was asked for).
   expect_true(all(pr$q10 > pd$q2.5))
   expect_true(all(pr$q90 < pd$q97.5))
 
@@ -306,12 +306,12 @@ test_that("tobs_predict_spatial builds newocc.covs from the fitted formula", {
   expect_equal(pr$mean, c(0.5 + 2, 0.5 - 2))
 
   # `newocc.covs` is a data.frame, so its column order is the user's. The
-  # covariate has to meet the coefficient of the same NAME (tulpaObs#243).
+  # covariate has to meet the coefficient of the same NAME.
   expect_equal(tobs_predict_spatial(obj, nc, newocc.covs = wrong,
                                     node.coords = nodes)$mean, pr$mean)
 
   # The quantile columns are named from the levels, the same spelling the
-  # design-matrix predictor uses (tulpaObs#242).
+  # design-matrix predictor uses.
   expect_named(pr, c("mean", "sd", "q2.5", "q50", "q97.5"))
   expect_named(tobs_predict_spatial(obj, nc, newocc.covs = right,
                                     node.coords = nodes,
@@ -386,7 +386,7 @@ test_that("nobs() resolves a per-family handler and refuses an unknown type", {
                                  class = c("tobs_fit", "tulpa_fit"))
 
   # An unregistered model type used to return NA, which AIC() / BIC() then
-  # carried with no indication why (gcol33/tulpaObs#245).
+  # carried with no indication why.
   expect_error(nobs(bare("not_a_family")), "no observation count registered")
   expect_error(nobs(bare("not_a_family")), "not_a_family")
 

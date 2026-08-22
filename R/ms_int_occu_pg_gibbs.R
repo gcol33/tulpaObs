@@ -1,7 +1,7 @@
 # ms_int_occu_pg_gibbs.R - Polya-Gamma Gibbs for COMMUNITY multi-source
-# integrated occupancy (spOccupancy-style; gcol33/tulpaObs#115, #126). The
-# community integrated extension of msPGOcc (R/ms_occu_pg_gibbs.R): a single
-# latent occupancy state per (species, site) observed by D detection sources,
+# integrated occupancy (spOccupancy-style). The community integrated
+# extension of msPGOcc (R/ms_occu_pg_gibbs.R): a single latent occupancy
+# state per (species, site) observed by D detection sources,
 #
 #   logit psi_{s,i}   = X_psi_i . beta_psi_s,   beta_psi_s ~ N(mu_psi, diag(tau_psi^2))
 #   logit p_{s,i,d}   = X_pd_i  . beta_pd_s,     beta_pd_s  ~ N(mu_pd,  diag(tau_pd^2))
@@ -25,7 +25,7 @@
                                            n.iter = NULL, n.warmup = NULL,
                                            n.chains = NULL, n.thin = NULL, seed = NULL,
                                            verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
   rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))

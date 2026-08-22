@@ -1,13 +1,12 @@
 # Parameter-recovery tests for formula random effects fit under the
-# DETERMINISTIC engine (gcol33/tulpaObs#11). The default Laplace engine fits iid
-# intercept RE, uncorrelated random slopes, and correlated slopes via a
-# variance-component EM (R/em_laplace_re.R) instead of silently dropping them.
-# The raw EM integrates the RE block by Laplace (the glmer nAGQ=1 regime, not
-# Breslow-Clayton PQL), which attenuates sigma / the RE correlation for binary
-# data; by default an adaptive Gauss-Hermite pass (R/re_aghq.R) debiases them.
-# The sigma tolerances here are still generous (single-seed noise + detection
-# thinning), with the calibrated check against NUTS and a multi-seed AGHQ-vs-EM
-# bias check below.
+# DETERMINISTIC engine. The default Laplace engine fits iid intercept RE,
+# uncorrelated random slopes, and correlated slopes via a variance-component EM
+# (R/em_laplace_re.R) instead of silently dropping them. The raw EM integrates
+# the RE block by Laplace (the glmer nAGQ=1 regime, not Breslow-Clayton PQL),
+# which attenuates sigma / the RE correlation for binary data; by default an
+# adaptive Gauss-Hermite pass (R/re_aghq.R) debiases them. The sigma tolerances
+# here are still generous (single-seed noise + detection thinning), with the
+# calibrated check against NUTS and a multi-seed AGHQ-vs-EM bias check below.
 
 sim_occu_re_intercept <- function(seed = 101, ng = 30L, per = 25L, J = 6L,
                                   b0 = 0.3, b1 = -0.6, sigma = 0.9, p = 0.45) {
@@ -267,10 +266,10 @@ test_that("LKJ regularization keeps the RE correlation off the +-1 boundary", {
   expect_lt(abs(mean(reg_rho) - 0.612), 0.12)
 })
 
-# Single-season occupancy with a DETECTION random intercept (gcol33/tulpaObs#11
-# follow-up): detection p = sigmoid(d0 + b_obs[observer]), b_obs ~ N(0, sigma);
-# occupancy psi = sigmoid(b0 + b1 occ_cov). The random effect enters the
-# detection predictor, so the AGHQ refine integrates b through p (not psi).
+# Single-season occupancy with a DETECTION random intercept ( follow-up):
+# detection p = sigmoid(d0 + b_obs[observer]), b_obs ~ N(0, sigma); occupancy
+# psi = sigmoid(b0 + b1 occ_cov). The random effect enters the detection
+# predictor, so the AGHQ refine integrates b through p (not psi).
 sim_det_re_intercept <- function(seed = 1, N = 400L, J = 6L, ng = 40L,
                                  b0 = 0.4, b1 = -0.7, d0 = 0.2, sigma = 0.8) {
   set.seed(seed)

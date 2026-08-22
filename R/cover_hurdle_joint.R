@@ -51,17 +51,16 @@
   list(arm_occ = arm_occ, keys = og$keys, lconst = og$lconst)
 }
 
-# Collapse the positive (beta) arm to its exact grouped sufficient statistics
-# (tulpaObs#49). Beta is not a count family, so there is no single-row collapse:
-# a group of plots sharing the positive design row AND every per-observation
-# component of its linear predictor (cell, trend weight, RE/time index) are
-# exchangeable Beta(mu*phi, (1-mu)*phi) draws, and the beta log-density is linear
-# in log(y) and log(1-y). One row carrying (n = count, slog_y = sum log(y),
-# slog_1my = sum log(1-y)) therefore leaves the log-likelihood, gradient and
-# (Fisher) Hessian pointwise unchanged -- the per-arm `n_trials`, `slog_y`,
-# `slog_1my` are read by tulpa's built-in beta spec (gcol33/tulpa). `keys` is the
-# named list of per-observation latent components; the X-row plus every key forms
-# the grouping key.
+# Collapse the positive (beta) arm to its exact grouped sufficient statistics.
+# Beta is not a count family, so there is no single-row collapse: a group of
+# plots sharing the positive design row AND every per-observation component of
+# its linear predictor (cell, trend weight, RE/time index) are exchangeable
+# Beta(mu*phi, (1-mu)*phi) draws, and the beta log-density is linear in log(y)
+# and log(1-y). One row carrying (n = count, slog_y = sum log(y), slog_1my = sum
+# log(1-y)) therefore leaves the log-likelihood, gradient and (Fisher) Hessian
+# pointwise unchanged -- the per-arm `n_trials`, `slog_y`, `slog_1my` are read by
+# tulpa's built-in beta spec. `keys` is the named list of per-observation latent
+# components; the X-row plus every key forms the grouping key.
 .cover_aggregate_pos <- function(y, X, keys) {
   parts <- c(as.data.frame(X, stringsAsFactors = FALSE), keys)
   gid   <- as.integer(factor(do.call(paste, c(parts, list(sep = "\r")))))
@@ -171,8 +170,7 @@
 # build their latent prior blocks and what derived quantities they report; the
 # arm build, the engine control list, and the per-arm beta post-processing are
 # the same computation in all three. Extracted here so a correction to the
-# reported se_occ / se_pos cannot land on one route and miss the other two
-# (gcol33/tulpaObs#170).
+# reported se_occ / se_pos cannot land on one route and miss the other two.
 # ---------------------------------------------------------------------------
 
 # Both response arms for the joint engine, plus the positive-arm family and its
@@ -243,19 +241,19 @@
 #     re-factorizes with the observed Hessian, so the reported SEs, log_det and
 #     grid weights are unchanged. The lognormal arm is exactly quadratic (one
 #     inner step), so observed curvature is already optimal -> "lm".
-#   * n_threads_outer -- outer-grid parallelism (gcol33/tulpa#46 lever 2), one
-#     replicated cell-solve state per thread. Preferred over inner per-obs
-#     threads on many-core hardware, where the mode-region cells dominate.
+#   * n_threads_outer -- outer-grid parallelism, one replicated cell-solve
+#     state per thread. Preferred over inner per-obs threads on many-core
+#     hardware, where the mode-region cells dominate.
 #   * adaptive_grid -- brackets the mode with FULL inner solves and densifies
 #     near it, so it never approximates the marginal and cannot drop the true
-#     mode (gcol33/tulpaObs#20).
+#     mode.
 #   * progress / progress.file -- two independent channels, both ON by default.
 #     `progress` gates the console bar (NOT tied to `verbose`); `progress.file`
 #     is emitted whenever non-empty and is the only channel that survives a
-#     detached Start-Process stdout buffer (gcol33/tulpa#53). `[[` (exact) not
-#     `$`: `control$progress` prefix-matches `progress.file`.
-#   * checkpoint -- grid-cell checkpoint/resume (gcol33/tulpa#50), forwarded
-#     verbatim so a killed run resumes instead of restarting.
+#     detached Start-Process stdout buffer. `[[` (exact) not `$`:
+#     `control$progress` prefix-matches `progress.file`.
+#   * checkpoint -- grid-cell checkpoint/resume, forwarded verbatim so a
+#     killed run resumes instead of restarting.
 .cover_joint_control <- function(control, positive, integration = NULL,
                                  prune = FALSE) {
   head <- list(
@@ -286,13 +284,13 @@
 # total covariance over the outer grid.
 #
 # The engine returns per-cell modes and per-cell precision blocks in the SCALED
-# design's parameterization (`encode_cover_hurdle()`, gcol33/tulpaObs#9), so each
-# cell is transformed to the natural scale first and aggregated after. Doing it
+# design's parameterization (`encode_cover_hurdle()`), so each cell is
+# transformed to the natural scale first and aggregated after. Doing it
 # cell-by-cell on the full constrained vcov block preserves the intercept's
 # cross-covariance contribution; a diag-only approach would underestimate the
-# intercept SE. Returns the beta means, their SEs, and the layout pieces
-# (`p_occ` / `p_pos`, the per-arm index vectors, the scale transforms) the
-# callers report or reuse.
+# intercept SE. Returns the beta means, their SEs, and the layout pieces (`p_occ`
+# / `p_pos`, the per-arm index vectors, the scale transforms) the callers report
+# or reuse.
 .cover_joint_beta_moments <- function(fit, enc) {
   layout <- fit$arm_layout
   p_occ  <- layout$p[1]; p_pos <- layout$p[2]
@@ -338,18 +336,18 @@
        se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)))
 }
 
-# Build one areal latent block restricted to a SINGLE arm with NO cross-arm copy
-# (gcol33/tulpaObs#65). The block carries the field's own precision axis (tau for
-# icar/car/car_proper, sigma + rho for bym2) integrated on the outer grid; the
-# OTHER arm's per-arm spatial_idx is the all-zero sentinel, which the joint
-# multi-block scatter reads as "this arm's rows do not see this block" (the
-# `l_b > 0` guard in nested_laplace_joint_multi.h), so the field contributes to
-# exactly one arm. This is the no-copy assembler; the shared/copied intercept +
-# trend path uses the copy spec instead (one assembler, copy off here, copy on
-# there). `slot` is the active arm (1 = occ, 2 = pos); `n_occ` / `n_pos` size the
-# sentinel; `idx_active` is the per-obs node code on the active arm.
-# `svc_weight` (NULL for the intercept field) is the per-obs design column,
-# placed on the active arm with a zero sentinel weight on the inactive arm.
+# Build one areal latent block restricted to a SINGLE arm with NO cross-arm copy.
+# The block carries the field's own precision axis (tau for icar/car/car_proper,
+# sigma + rho for bym2) integrated on the outer grid; the OTHER arm's per-arm
+# spatial_idx is the all-zero sentinel, which the joint multi-block scatter reads
+# as "this arm's rows do not see this block" (the `l_b > 0` guard in
+# nested_laplace_joint_multi.h), so the field contributes to exactly one arm.
+# This is the no-copy assembler; the shared/copied intercept + trend path uses
+# the copy spec instead (one assembler, copy off here, copy on there). `slot` is
+# the active arm (1 = occ, 2 = pos); `n_occ` / `n_pos` size the sentinel;
+# `idx_active` is the per-obs node code on the active arm. `svc_weight` (NULL for
+# the intercept field) is the per-obs design column, placed on the active arm
+# with a zero sentinel weight on the inactive arm.
 .cover_armspecific_block <- function(type, graph, slot, idx_active,
                                      n_occ, n_pos, svc_weight, control,
                                      block_label) {
@@ -373,10 +371,10 @@
   # Field precision grid (own amplitude per field). icar/car/car_proper use the
   # single-arm tau parameterization (sigma = 1/sqrt(tau)); bym2 adds rho. The
   # sigma grid default mirrors the shared path's amplitude range. Override via
-  # control$sigma.grid (translated to tau for the intrinsic backends).
-  # Whether this axis is ours to move (gcol33/tulpaObs#186): the marker goes on
-  # the vector finally written into the block, so track the provenance here and
-  # apply it after the tau translation / bym2 pairing below.
+  # control$sigma.grid (translated to tau for the intrinsic backends). Whether
+  # this axis is ours to move: the marker goes on the vector finally written
+  # into the block, so track the provenance here and apply it after the tau
+  # translation / bym2 pairing below.
   sigma_auto <- is.null(control$sigma.grid)
   sigma_grid <- as.numeric(control$sigma.grid %||%
                            exp(seq(log(0.2), log(2.5), length.out = 7)))
@@ -398,16 +396,15 @@
   } else if (block$type == "bym2") {
     # BYM2 fits as a non-copied length-2 block (structured phi ICAR + iid theta
     # on n_nodes), parameterized by (sigma, rho) on the outer grid. The
-    # arm-specific draw projection reconstructs the rho-mixed unit field
-    # z = sqrt(rho) * scale_factor * phi + sqrt(1 - rho) * theta from the two
-    # sub-blocks (gcol33/tulpaObs#107), so predict / WAIC see the full mix. The
-    # block's bym2 grid is the PAIRED (cartesian-expanded) (sigma, rho) vectors
-    # the registry consumes, not two separate axes.
-    # The mixing-weight axis is READ from the engine rather than restated here
-    # (gcol33/tulpaObs#206): this block is meant to reach the registry as any
-    # other bym2 block does, and the engine's own `bym2_rho` default is what
-    # every other route gets. A copy of its nodes goes stale the moment the
-    # engine moves them, which is what it did in gcol33/tulpa#361.
+    # arm-specific draw projection reconstructs the rho-mixed unit field z =
+    # sqrt(rho) * scale_factor * phi + sqrt(1 - rho) * theta from the two
+    # sub-blocks, so predict / WAIC see the full mix. The block's bym2 grid is
+    # the PAIRED (cartesian-expanded) (sigma, rho) vectors the registry
+    # consumes, not two separate axes. The mixing-weight axis is READ from the
+    # engine rather than restated here: this block is meant to reach the
+    # registry as any other bym2 block does, and the engine's own `bym2_rho`
+    # default is what every other route gets. A copy of its nodes goes stale
+    # the moment the engine moves them, which upstream has already done once.
     rho_auto <- is.null(control$rho.grid)
     rho_vals <- as.numeric(control$rho.grid %||% tulpa:::.nl_grid_axis("bym2_rho"))
     gr <- expand.grid(sigma = sort(sigma_grid), rho = rho_vals,
@@ -415,9 +412,9 @@
     block$sigma_grid   <- .tobs_mark_auto(gr$sigma, sigma_auto)
     block$rho_grid     <- .tobs_mark_auto(gr$rho, rho_auto)
     # The joint nested-Laplace engine is tulpa's: its `scale_factor` MULTIPLIES
-    # the structured block, so it takes 1 / sqrt(s) (gcol33/tulpaObs#232). The
-    # draw substrate and the SLA reconstruction read this same stored value
-    # back and mirror the engine's spelling, so they need no conversion.
+    # the structured block, so it takes 1 / sqrt(s). The draw substrate and the
+    # SLA reconstruction read this same stored value back and mirror the
+    # engine's spelling, so they need no conversion.
     block$scale_factor <- .bym2_engine_scale(.bym2_scale(graph))
   } else {
     stop(sprintf(paste0(
@@ -439,14 +436,14 @@
   block
 }
 
-# Fit the cover hurdle with arm-specific separate spatial latent field(s)
-# (gcol33/tulpaObs#65): one or more single-arm `||` bars, each a per-arm areal
-# field with its own precision and NO cross-arm copy. Each bar's design columns
-# (intercept + covariates) become independent non-copied areal blocks placed on
-# that bar's single arm via the 0-sentinel spatial_idx on the other arm; each
-# field's precision is integrated on the outer nested-Laplace grid. Separate
-# single-arm bars (one to = "presence", one to = "positive") are independent
-# per-arm fields with no coupling between them. Same output contract as
+# Fit the cover hurdle with arm-specific separate spatial latent field(s): one
+# or more single-arm `||` bars, each a per-arm areal field with its own
+# precision and NO cross-arm copy. Each bar's design columns (intercept +
+# covariates) become independent non-copied areal blocks placed on that bar's
+# single arm via the 0-sentinel spatial_idx on the other arm; each field's
+# precision is integrated on the outer nested-Laplace grid. Separate single-arm
+# bars (one to = "presence", one to = "positive") are independent per-arm
+# fields with no coupling between them. Same output contract as
 # fit_cover_hurdle_joint_nested so decode_cover_hurdle_joint consumes it
 # unchanged; the arm-specific block layout is recorded on the fit
 # (`armspec_blocks`) so the joint-draw projection scatters each block onto its
@@ -572,13 +569,13 @@
 }
 
 # Fit the cover hurdle with a correlated separable-MCAR coefficient field shared
-# onto the positive arm (gcol33/tulpaObs#64). The p design columns of the bar
-# become p coupled areal fields with a free cross-covariance Sigma (x) Q^-1
-# (within-arm covariance among the fields, integrated over the outer CCD in
-# log-Cholesky coordinates); the whole correlated field is copied onto the
-# positive arm with one estimated amplitude alpha (the cross-arm transfer). Same
-# output contract as fit_cover_hurdle_joint_nested so decode_cover_hurdle_joint
-# consumes it unchanged.
+# onto the positive arm. The p design columns of the bar become p coupled areal
+# fields with a free cross-covariance Sigma (x) Q^-1 (within-arm covariance
+# among the fields, integrated over the outer CCD in log-Cholesky coordinates);
+# the whole correlated field is copied onto the positive arm with one estimated
+# amplitude alpha (the cross-arm transfer). Same output contract as
+# fit_cover_hurdle_joint_nested so decode_cover_hurdle_joint consumes it
+# unchanged.
 .fit_cover_hurdle_joint_mcar <- function(enc, data, positive = enc$positive,
                                          control = list(), priors = NULL) {
   mc    <- enc$mcar
@@ -695,8 +692,8 @@
   names(sigma_mcar) <- mc$field_names
   names(rho_mcar)   <- rho_names
   # Multi-block axis names carry the block prefix: the copy amplitude is b1.alpha.
-  # A single-arm correlated field (gcol33/tulpaObs#109) has no copy, so no alpha
-  # axis -- report NA rather than indexing a missing name (which errors).
+  # A single-arm correlated field has no copy, so no alpha axis -- report NA
+  # rather than indexing a missing name (which errors).
   has_alpha <- "b1.alpha" %in% names(fit$theta_mean)
   alpha_mu <- if (has_alpha) as.numeric(fit$theta_mean[["b1.alpha"]]) else NA_real_
   alpha_sd <- if (has_alpha) as.numeric(fit$theta_sd[["b1.alpha"]])   else NA_real_
@@ -824,18 +821,17 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # rows in encode_cover_hurdle (obs_keep) shrink the obs set; subset the
   # spatial_idx vector accordingly.
   data_obs <- data[enc$obs_keep, , drop = FALSE]
-  # Replicated CAR (gcol33/tulpaObs#82): a `by` factor on the shared bar replicates
-  # the field across the factor's levels. Build I_L (x) Q and offset each
-  # observation's node into its level's copy (tulpa::tulpa_bar_field_replicate),
-  # then resolve the field over the replicated graph so its precision is the
-  # block-diagonal Kronecker and the field hyperparameters are shared across
-  # levels (one sigma[, rho_car]). The coupled trend block copies the same
-  # replicated structure and the copy onto the positive arm carries the whole
-  # replicated field at the one estimated alpha, so `by` composes with the shared
-  # field, the trend, and the cross-arm copy unchanged. No `by` is the identity.
-  # Injecting the offset index as the field's node column lets the SAME
-  # prior_from_spec build the precision and resolve the index over the replicated
-  # graph in one pass.
+  # Replicated CAR: a `by` factor on the shared bar replicates the field across the
+  # factor's levels. Build I_L (x) Q and offset each observation's node into its
+  # level's copy (tulpa::tulpa_bar_field_replicate), then resolve the field over
+  # the replicated graph so its precision is the block-diagonal Kronecker and the
+  # field hyperparameters are shared across levels (one sigma[, rho_car]). The
+  # coupled trend block copies the same replicated structure and the copy onto the
+  # positive arm carries the whole replicated field at the one estimated alpha, so
+  # `by` composes with the shared field, the trend, and the cross-arm copy
+  # unchanged. No `by` is the identity. Injecting the offset index as the field's
+  # node column lets the SAME prior_from_spec build the precision and resolve the
+  # index over the replicated graph in one pass.
   by_replicated <- FALSE
   if (!is.null(spec$by_var)) {
     if (is.null(data_obs[[spec$by_var]])) {
@@ -884,13 +880,13 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # unweighted areal formula term is the shared intercept field; a SECOND,
   # weighted areal term (`icar(graph = adj, weight = col, group_var = ...)`)
   # adds a shared areal field on the same graph, weighted per observation by
-  # `col` and copied onto the positive arm with its own alpha axis
-  # (gcol33/tulpaObs#59). This is the analogue of the INLA joint model's
-  # `f(cell.slope, time, model = "besag") + f(cell.slope.ab, time, copy =)`
-  # spatially-varying time trend (two coupled besag fields, two copy
-  # coefficients). The per-observation weight enters each arm's field
-  # contribution via the engine's per-block `svc_weight`. `enc$trend` carries
-  # the per-observation weight over `data_obs`; subset it to the positive arm.
+  # `col` and copied onto the positive arm with its own alpha axis. This is
+  # the analogue of the INLA joint model's `f(cell.slope, time, model =
+  # "besag") + f(cell.slope.ab, time, copy =)` spatially-varying time trend
+  # (two coupled besag fields, two copy coefficients). The per-observation
+  # weight enters each arm's field contribution via the engine's per-block
+  # `svc_weight`. `enc$trend` carries the per-observation weight over
+  # `data_obs`; subset it to the positive arm.
   trend_spec <- if (!is.null(enc$trend)) {
     list(w_occ = enc$trend$w_occ,
          w_pos = enc$trend$w_occ[enc$idx_pos],
@@ -950,36 +946,34 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   # Outer joint-grid integration controls, shared by the multi-block and
   # single-block dispatch. The dense outer tensor (sigma x [rho] x alpha x
-  # phi_pos) concentrates almost all posterior mass on a handful
-  # of cells, but the inner latent mode moves substantially across the grid,
-  # so the cheap-pass prune is OFF by default: the full-grid solve is the
-  # correct default (gcol33/tulpaObs#20). The rank-safe speed path is the
-  # adaptive grid (`adaptive_grid = TRUE`): it brackets the mode with FULL
-  # inner solves and densifies near it, so it never approximates the
-  # marginal and cannot drop the true mode. The cheap-pass prune is available
-  # opt-in via control$prune = TRUE; it is now rank-faithful (a neighbour-
-  # warm-started lattice sweep) and gated (a safety check falls back to the
-  # full grid if the screen's ranking looks unreliable), but the correct
-  # full grid remains the default. Override via control$prune /
-  # control$prune.tol.
-  # This is the only route that exposes the opt-in cheap-pass screen
-  # (`control$prune`), and the only one with no outer-grid layout default: the
-  # coupled-trend multi-block path (>= 3 latent axes: intercept + trend
-  # sigma/alpha) can request "ccd" via control$integration, and NULL falls
-  # through to the engine default (gcol33/tulpa#61, tulpaObs#31).
+  # phi_pos) concentrates almost all posterior mass on a handful of cells, but
+  # the inner latent mode moves substantially across the grid, so the
+  # cheap-pass prune is OFF by default: the full-grid solve is the correct
+  # default. The rank-safe speed path is the adaptive grid (`adaptive_grid =
+  # TRUE`): it brackets the mode with FULL inner solves and densifies near it,
+  # so it never approximates the marginal and cannot drop the true mode. The
+  # cheap-pass prune is available opt-in via control$prune = TRUE; it is now
+  # rank-faithful (a neighbour- warm-started lattice sweep) and gated (a
+  # safety check falls back to the full grid if the screen's ranking looks
+  # unreliable), but the correct full grid remains the default. Override via
+  # control$prune / control$prune.tol. This is the only route that exposes the
+  # opt-in cheap-pass screen (`control$prune`), and the only one with no
+  # outer-grid layout default: the coupled-trend multi-block path (>= 3 latent
+  # axes: intercept + trend sigma/alpha) can request "ccd" via
+  # control$integration, and NULL falls through to the engine default.
   joint_control <- .cover_joint_control(control, positive, prune = TRUE)
 
   # Exact sufficient-statistic reduction of the occurrence (binomial) arm,
-  # default ON (tulpaObs#48). The collapse is pointwise exact -- observations
-  # sharing the occurrence design row AND every per-observation latent component
-  # (cell, trend weight, RE/time index) are exchangeable Bernoulli trials, so one
-  # Binomial row (n = count, y = successes) leaves the gradient and Hessian
-  # unchanged, and shifts the log-likelihood by the parameter-free binomial
-  # constant the reduction introduces (`agg_lconst` below, removed from the
-  # reported marginal). Multi-seed parameter recovery on the aggregated path
-  # holds against simulated truth (test-cover-hurdle-aggregate-recovery.R), so
-  # the reduction is the default; set control$aggregate.occ = FALSE for the
-  # full per-plot occurrence arm. `[[` (exact), never `$` (prefix-matching).
+  # default ON. The collapse is pointwise exact -- observations sharing the
+  # occurrence design row AND every per-observation latent component (cell, trend
+  # weight, RE/time index) are exchangeable Bernoulli trials, so one Binomial row
+  # (n = count, y = successes) leaves the gradient and Hessian unchanged, and
+  # shifts the log-likelihood by the parameter-free binomial constant the
+  # reduction introduces (`agg_lconst` below, removed from the reported
+  # marginal). Multi-seed parameter recovery on the aggregated path holds against
+  # simulated truth (test-cover-hurdle-aggregate-recovery.R), so the reduction is
+  # the default; set control$aggregate.occ = FALSE for the full per-plot
+  # occurrence arm. `[[` (exact), never `$` (prefix-matching).
   do_agg_occ <- !isFALSE(control[["aggregate.occ"]])
 
   # sum lchoose(n_g, y_g) over the groups the occurrence reduction forms, in
@@ -990,18 +984,18 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   agg_lconst <- 0
 
   # Exact grouped sufficient-statistic reduction of the positive (beta) arm,
-  # default ON for the beta arm (tulpaObs#49). Beta has no single-row collapse,
-  # so plots sharing the positive design row AND every per-observation latent
-  # component are collapsed to one row carrying (n, sum log y, sum log(1-y));
-  # tulpa's built-in beta spec reads those sufficient statistics. Byte-identical
-  # to the full per-plot beta arm (test-cover-hurdle-aggregate-pos.R), with the
+  # default ON for the beta arm. Beta has no single-row collapse, so plots
+  # sharing the positive design row AND every per-observation latent component
+  # are collapsed to one row carrying (n, sum log y, sum log(1-y)); tulpa's
+  # built-in beta spec reads those sufficient statistics. Byte-identical to the
+  # full per-plot beta arm (test-cover-hurdle-aggregate-pos.R), with the
   # both-arms-aggregated default behind a multi-seed parameter-recovery suite
   # (test-cover-hurdle-aggregate-recovery.R), so the reduction is the default;
   # set control$aggregate.pos = FALSE for the full per-plot positive arm. The
-  # collapse is beta-only -- a lognormal positive arm would need its own
-  # (n, sum, sum-of-squares) statistics, so an EXPLICIT aggregate.pos = TRUE
-  # errors there rather than silently no-op, while the default leaves a non-beta
-  # arm untouched. `[[` (exact), never `$` (prefix-matching).
+  # collapse is beta-only -- a lognormal positive arm would need its own (n,
+  # sum, sum-of-squares) statistics, so an EXPLICIT aggregate.pos = TRUE errors
+  # there rather than silently no-op, while the default leaves a non-beta arm
+  # untouched. `[[` (exact), never `$` (prefix-matching).
   agg_pos_req <- control[["aggregate.pos"]]
   do_agg_pos  <- if (positive == "beta") !isFALSE(agg_pos_req) else isTRUE(agg_pos_req)
   if (isTRUE(agg_pos_req) && positive != "beta") {
@@ -1022,7 +1016,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # field -- each copied onto the positive arm with its own alpha axis. The
     # engine's multi-block driver (list-valued prior + list-valued copy) carries
     # the per-block svc_weight and per-block alpha; the returned theta_grid axes
-    # are b<k>.sigma / b<k>.alpha (gcol33/tulpaObs#15 on the cover hurdle).
+    # are b<k>.sigma / b<k>.alpha ( on the cover hurdle).
     base_block <- prior_for_joint
     if (is.null(base_block$sigma_grid)) {
       base_block$sigma_grid <- .tobs_default_sigma_grid()
@@ -1138,9 +1132,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     }
     # Adaptive grid forwarding. Defaults match the joint engine's defaults
     # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
-    # under-coverage fix in INLAabun D3 — see gcol33/tulpaObs#8. Pass
-    # `control$adaptive.grid = FALSE` to recover the legacy fixed-grid
-    # behaviour for reproducibility checks.
+    # under-coverage fix in INLAabun D3. Pass `control$adaptive.grid
+    # = FALSE` to recover the legacy fixed-grid behaviour for
+    # reproducibility checks.
     arm_pos$field_coef <- list(
       name = "alpha",
       grid = .tobs_num_auto(alpha_grid))
@@ -1174,12 +1168,12 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # posterior mean and SD from the engine's `theta_mean` / `theta_sd`. Those
   # are computed against the phi-axis marginal (foreign-axis slice cells
   # filtered out by `.joint_recalibrate_axis_moments`) with Laplace-at-mode
-  # SD at the modal cell (gcol33/tulpa#20), so they are grid-spacing-
-  # independent. Hand-rolling `sum(weights * theta_grid^2) - mean^2` against
+  # SD at the modal cell, so they are grid-spacing- independent.
+  # Hand-rolling `sum(weights * theta_grid^2) - mean^2` against
   # `theta_grid[, "phi_pos"]` underestimates SD on sharply peaked axes and
   # additionally collapses on slice cells that pin phi at the modal value
-  # while varying other axes -- that's the legacy pattern tulpa#20/#21 were
-  # added to replace.
+  # while varying other axes -- that's the legacy pattern were added to
+  # replace.
   #
   # The phi axis carries the gaussian residual SD for lognormal and the
   # beta precision for beta; surface under the respective slot names.

@@ -296,7 +296,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' joint parameter vcov exactly singular. Do not compare fits, or a fit
 #' against [simulate_occu_cover()]'s `sigma`, by reading the raw `sigma` on
 #' this path: it is the field's amplitude against the unscaled intrinsic ICAR
-#' precision `Q = D - W` (`gcol33/tulpaObs#221`), which differs from `field_sd`
+#' precision `Q = D - W`, which differs from `field_sd`
 #' by `sqrt(scale_q)`, a graph-size-dependent factor (about 2.1 for a 30-node
 #' chain graph). `field_sd` is the number comparable across fits and to a
 #' simulation truth; `sigma` is the raw amplitude the engine's grid axis is
@@ -428,7 +428,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' cover arm inherits no field, so per-cell conditional cover (and its change over
 #' time, `delta_cover_cond`) comes out flat. A `spatial()` bar placed in the
 #' `positive` formula adds an INDEPENDENT, non-copied areal field on the cover arm
-#' alone (gcol33/tulpaObs#110):
+#' alone:
 #'
 #' ```r
 #' tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
@@ -510,8 +510,8 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' intercepts may be written on the **detection** or **positive-cover** formula
 #' with the usual `lme4` bar or `re()` spelling, e.g.
 #' `detection = ~ effort + (1 | habitat)`. The grouping is per visit -- one code
-#' per `(site, visit)` entry, distinct from the per-site occupancy-arm grouping
-#' (gcol33/tulpaObs#56) -- so a many-level categorical visit covariate (an EUNIS
+#' per `(site, visit)` entry, distinct from the per-site occupancy-arm
+#' grouping -- so a many-level categorical visit covariate (an EUNIS
 #' habitat class, an observer) enters as a partially pooled random intercept.
 #' **Crossed** (`(1 | habitat) + (1 | observer)`) and **nested**
 #' (`(1 | region/site)`, which expands to `re(region) + re(region:site)`)
@@ -630,7 +630,7 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "k.tail.points", "k.conf.bands",
       "re.sigma.grid", "re.sigma.grid.p", "re.sigma.grid.pos",
       # Condition the NUTS + areal sampler on the warm nested-Laplace fit's
-      # (sigma, rho, alpha) instead of sampling them (gcol33/tulpaObs#204).
+      # (sigma, rho, alpha) instead of sampling them.
       "fixed.hyper",
       "checkpoint"
     )
@@ -1137,7 +1137,7 @@ double_observer <- function(type = c("independent", "dependent")) {
 #' Multi-season integrated occupancy family
 #'
 #' Dynamic (multi-season) occupancy observed by several detection sources
-#' (spOccupancy `tIntPGOcc`; gcol33/tulpaObs#122): the product of a dynamic
+#' (spOccupancy `tIntPGOcc`): the product of a dynamic
 #' occupancy HMM (season-1 occupancy `psi1`, colonization `gamma`, extinction
 #' `eps`) and integrated occupancy (a per-season emission that pools multiple
 #' detection sources). Pooling sources across seasons is how colonization /
@@ -1199,7 +1199,7 @@ dyn_int_occu <- function() {
 #' `mu_log_r` and narrows its SE at the same time.
 #'
 #' Measured on simulated data (39 `laplace` fits at 8 and 36 species,
-#' `sigma_logr = 0.5`, gcol33/tulpaObs#235): where `sigma_log_r` came back at
+#' `sigma_logr = 0.5`): where `sigma_log_r` came back at
 #' least 0.30, the nominal 95% interval covered 33 of 34 with a
 #' `sqrt(mean(z^2))` of 0.88; where it came back below, it covered 2 of 5, the
 #' point estimate was 2.2x further from the truth and the SE 28% narrower. So
@@ -1678,7 +1678,7 @@ distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
 #' vectorised R Newton over the same closed forms. Spatial fields / NUTS (the
 #' native multi-process likelihood) and the latent-class *misclassification*
 #' variant (the K-class generalisation of [fp_occu()], a confusion matrix on the
-#' observed label) are documented follow-ups (gcol33/tulpaObs#106).
+#' observed label) are documented follow-ups.
 #'
 #' @param classes optional character vector of class labels (length `K`), used
 #'   only to name the coefficient blocks; when `NULL`, `K` is taken from
@@ -1830,7 +1830,7 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' \emph{One arm only (free / separate).} A field written in one arm's formula is
 #' a separate latent on that arm alone, with its own precision and no cross-arm
-#' coupling (gcol33/tulpaObs#65). A field in each arm's formula gives two
+#' coupling. A field in each arm's formula gives two
 #' independent latents:
 #'
 #' ```r
@@ -1852,9 +1852,8 @@ occu_categorical <- function(classes = NULL) {
 #' and slope fields independent, while a single `|` makes them correlated (a free
 #' cross-covariance, MCAR). A correlated `|` bar shared across both arms (in the
 #' shared `formula`, or on `presence` with `copy()` on `positive`) is copied with
-#' one estimated amplitude (gcol33/tulpaObs#64); placed on one arm's formula it is
-#' a free-Sigma correlated field on that arm alone, no cross-arm copy
-#' (gcol33/tulpaObs#109).
+#' one estimated amplitude; placed on one arm's formula it is a free-Sigma
+#' correlated field on that arm alone, no cross-arm copy.
 #'
 #' ```
 #' field in the shared formula (or copy())   one shared / copied latent (presence anchor, coupling estimated)
@@ -1961,7 +1960,7 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
     default_engine = "laplace",
     status         = "working",
     # The cover response is a plain length-N cover vector, so it may sit on the
-    # top formula LHS (`cover.flat ~ ...`) and drop `y =` (gcol33/tulpaObs#66).
+    # top formula LHS (`cover.flat ~ ...`) and drop `y =`.
     response       = "vector",
     params         = list(positive = positive, breaks = breaks),
     # The cover hurdle has its own (.dispatch_cover) grid-based control surface,

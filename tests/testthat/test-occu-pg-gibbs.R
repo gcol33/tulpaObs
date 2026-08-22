@@ -1,6 +1,6 @@
 # =============================================================================
 # test-occu-pg-gibbs.R - Polya-Gamma Gibbs for single-season occupancy
-# (method = "pg_gibbs"; spOccupancy PGOcc; gcol33/tulpaObs#126).
+# (method = "pg_gibbs"; spOccupancy PGOcc).
 #
 # A REAL Gibbs chain over the exact posterior via PG data augmentation (Polson,
 # Scott & Windle 2013) using tulpa's tested PG sampler -- distinct from

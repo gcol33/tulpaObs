@@ -1,10 +1,10 @@
 # Areal count() -- a plain areal field (icar / bym2 / car_proper) on the
 # abundance formula, routed to nested-Laplace (the spAbundance spAbund analogue).
 # The field is a latent GMRF prior on the count GLMM block, integrated over its
-# hyperparameters by the shared nested-Laplace EM machinery (no new C++).
-# Poisson only: with one field node per site the negbin size / gaussian residual
-# variance and the latent field are not jointly identified under the fixed-phi
-# outer loop (gcol33/tulpaObs#117), so those are gated.
+# hyperparameters by the shared nested-Laplace EM machinery (no new C++). Poisson
+# only: with one field node per site the negbin size / gaussian residual variance
+# and the latent field are not jointly identified under the fixed-phi outer loop,
+# so those are gated.
 #
 # Recovery-grade (per the "statistical code needs recovery tests" rule): the
 # fixed effects recover to near-nominal 95% coverage across seeds and the latent
@@ -62,10 +62,10 @@ test_that("areal count() gates the unsupported forms", {
          family = count("gaussian"), method = "nested_laplace"),
     "not yet supported|not.*jointly identified|areal")
 
-  # A varying-coefficient / weighted field IS wired (the svcAbund analogue,
-  # gcol33/tulpaObs#120); its recovery lives in test-count-svc.R. A group_var
-  # naming the field node is the identity map when the graph has one node per
-  # site, so it fits rather than erroring.
+  # A varying-coefficient / weighted field IS wired (the svcAbund analogue);
+  # its recovery lives in test-count-svc.R. A group_var naming the field node
+  # is the identity map when the graph has one node per site, so it fits
+  # rather than erroring.
   expect_s3_class(
     tobs(~ x + icar(graph = d$graph, weight = x, group_var = "cell"),
          data = cbind(d$data, cell = seq_len(d$N)), y = d$y,
@@ -174,7 +174,7 @@ test_that("areal count recovers the field under car_proper", {
   expect_gt(stats::cor(fit_cp$spatial_field, d$field), 0.7)
 })
 
-test_that("areal count recovers the field + slope under bym2 (gcol33/tulpaObs#116)", {
+test_that("areal count recovers the field + slope under bym2", {
   skip_if_fast()
   skip_on_cran()
   # bym2 reconstructs the rho-mixed unit field z = sqrt(rho/scale) * phi +
@@ -204,7 +204,7 @@ test_that("areal count recovers the field + slope under bym2 (gcol33/tulpaObs#11
 # --- (6) binomial areal field (spOccupancy svcPGBinom) ---------------------
 # Unlike negbin / gaussian, a binomial areal count IS identified against a
 # per-node field: the variance is pinned by the trial count n, so there is no
-# free dispersion for the field to absorb (gcol33/tulpaObs#125).
+# free dispersion for the field to absorb.
 
 # Binomial successes with a smooth sum-to-zero areal field:
 # logit p_i = X_i beta + f_i, y_i ~ Binom(n_i, p_i).
@@ -281,7 +281,7 @@ test_that("Bernoulli areal count recovers the field (trials = 1, svcPGBinom)", {
   expect_gt(stats::median(fcor), 0.6)
 })
 
-test_that("areal count recovers a continuous SPDE field + slope (gcol33/tulpaObs#116)", {
+test_that("areal count recovers a continuous SPDE field + slope", {
   skip_if_fast()
   skip_on_cran()
   skip_if_no_tulpamesh()
@@ -325,12 +325,11 @@ test_that("areal count recovers a slope under a continuous NNGP gp() field", {
   skip_if_fast()
   skip_on_cran()
   # A continuous NNGP gp() field on the count formula routes to tulpa's single-
-  # block `nngp` nested-Laplace kernel (gcol33/tulpaObs#117 follow-up): the GP
-  # marginal variance and range are integrated on the kernel's own outer grid and
-  # the field is Schur-folded out, so the fit reports grid-integrated fixed
-  # effects plus the GP hyperparameter posterior (fit$gp_hyper). The per-cell
-  # field itself is not reconstructed on this path -- spde() is the route for a
-  # continuous field map.
+  # block `nngp` nested-Laplace kernel ( follow-up): the GP marginal variance and
+  # range are integrated on the kernel's own outer grid and the field is
+  # Schur-folded out, so the fit reports grid-integrated fixed effects plus the
+  # GP hyperparameter posterior (fit$gp_hyper). The per-cell field itself is not
+  # reconstructed on this path -- spde() is the route for a continuous field map.
   set.seed(7)
   n <- 150L
   coords <- cbind(runif(n), runif(n))

@@ -14,10 +14,10 @@
 // The first two read the compact (one row per valid visit) layout described in
 // occu_cover_ragged.h and assemble their predictors from the shared `Arms`
 // view, so a dense fit -- flattened to that layout by .occu_cover_visit_view()
-// in R -- and a compact fit of the same data give identical results
-// (gcol33/tulpaObs#185). The aggregated modes are dense-only (compact input is
-// gated to cover_aggregate = "none"), so cpp_occu_cover_ppc_agg keeps the
-// padded [n_sites x max_visits] grid and takes its predictors precomputed.
+// in R -- and a compact fit of the same data give identical results. The
+// aggregated modes are dense-only (compact input is gated to cover_aggregate =
+// "none"), so cpp_occu_cover_ppc_agg keeps the padded [n_sites x max_visits]
+// grid and takes its predictors precomputed.
 
 #include <Rcpp.h>
 #include <vector>
@@ -38,7 +38,7 @@ namespace shape = tulpaObs::shape;
 
 namespace {
 // Positive-arm response-scale mean / replicate draw. `positive` follows the
-// shared cover scheme (lognormal 0, beta 3, gaussian 4, gcol33/tulpaObs#112).
+// shared cover scheme (lognormal 0, beta 3, gaussian 4).
 inline double mean_pos(double eta, double d, int positive) {
   if (positive == 3) return stable_plogis(clamp_eta(eta));                 // beta mean
   if (positive == 4) return eta;                              // gaussian: mu = eta

@@ -42,7 +42,7 @@
                                          phi_loadings = NULL, weights = NULL) {
   d <- p_lam + p_p
   # Default: flat design weights over the fixed tensor grid. The mode-centred CCD
-  # path (gcol33/tulpaObs#60) passes its own corrected R-INLA design weights.
+  # path passes its own corrected R-INLA design weights.
   if (is.null(weights))
     weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
   ok <- is.finite(weights) & weights > 0
@@ -352,7 +352,7 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
                                  c("range", "sigma", "r"), weights = weights)
 
   # ---- outer integration over (range, sigma [, r]): opt-in mode-centred CCD over
-  # the log hyperparameters, declining to the fixed tensor grid (gcol33/tulpaObs#60).
+  # the log hyperparameters, declining to the fixed tensor grid.
   out <- NULL; integration_used <- "grid"; pareto_k <- NA_real_
   if (identical(integration, "ccd")) {
     rm0 <- prior_range[1]; sm0 <- prior_sigma[1]

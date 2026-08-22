@@ -1,7 +1,7 @@
-# Mode-centred CCD for the outer field-hyperparameter integration
-# (gcol33/tulpaObs#60). The helper reuses tulpa's exported CCD primitives; these
-# tests pin its moment-recovery and decline behaviour (fast, no model fitting),
-# plus an end-to-end engage/decline check on an areal family (slow).
+# Mode-centred CCD for the outer field-hyperparameter integration. The helper
+# reuses tulpa's exported CCD primitives; these tests pin its moment-recovery
+# and decline behaviour (fast, no model fitting), plus an end-to-end
+# engage/decline check on an areal family (slow).
 
 test_that(".tobs_ccd_outer_grid reproduces the Gaussian outer moments", {
   # Known outer posterior in u = (log tau, rho) ~ N(mu, S): the CCD design must

@@ -31,7 +31,7 @@ The public accessor for whether a fit converged, with one return shape across
 every \code{tobs()} family. Each family stores its optimiser / EM / sampler verdict
 under \code{fit$convergence}, but historically the cover hurdle (\code{cover()}) put the
 flag at \code{fit$converged} instead, so a consumer that read one location got \code{NA}
-for the other family (gcol33/tulpaObs#88). These accessors normalise both
+for the other family. These accessors normalise both
 layouts: \code{convergence()} returns the full record (\code{converged}, \code{n_iter}, and
 \code{sla_status} when the simplified-Laplace marginals were used), and
 \code{converged()} returns the single logical.

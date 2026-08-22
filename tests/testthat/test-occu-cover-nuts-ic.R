@@ -1,15 +1,14 @@
 # =============================================================================
 # test-occu-cover-nuts-ic.R - the occu_cover() information criteria score the
-# structured terms a sampled fit carries (gcol33/tulpaObs#211).
+# structured terms a sampled fit carries.
 #
-# A `(1 | g)` on the detection / positive-cover formula samples under
-# method = "nuts" (gcol33/tulpaObs#205) and the coupled areal field samples with
-# its hypers (gcol33/tulpaObs#204). Both are OFFSETS rather than coefficients --
-# the random effect per (site, visit), the field per site -- so
-# .tobs_occu_cover_components() returns them alongside the coefficient draws and
-# every diagnostic built on it folds them in: the pointwise log-likelihood
-# (WAIC / LOO / CPO), the posterior predictive check, and the PIT / LOO-PIT.
-# Tests:
+# A `(1 | g)` on the detection / positive-cover formula samples under method =
+# "nuts" and the coupled areal field samples with its hypers. Both are OFFSETS
+# rather than coefficients -- the random effect per (site, visit), the field per
+# site -- so .tobs_occu_cover_components() returns them alongside the
+# coefficient draws and every diagnostic built on it folds them in: the
+# pointwise log-likelihood (WAIC / LOO / CPO), the posterior predictive check,
+# and the PIT / LOO-PIT. Tests:
 #   - the per-visit offsets equal the fitter's own per-(site, visit) predictor
 #     construction, on both observation arms
 #   - the criteria MOVE with the random effect, and a zeroed offset reproduces
@@ -256,10 +255,10 @@ test_that("a sampled coupled field is scored per site", {
   od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
                   det.covs = c("det_cov1", "pos_cov1"))
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
-  # copy(spatial()) is what puts the field on the cover arm as well
-  # (gcol33/tulpaObs#217), which is what the simulated alpha = 1 does and what
-  # keeps the field_pos assertion below non-vacuous: without it the amplitude is
-  # 0 and both sides of that comparison are zero matrices.
+  # copy(spatial()) is what puts the field on the cover arm as well, which is
+  # what the simulated alpha = 1 does and what keeps the field_pos assertion
+  # below non-vacuous: without it the amplitude is 0 and both sides of that
+  # comparison are zero matrices.
   fit <- tobs(formula = ~ occ_cov1 + car_proper(graph = adj),
               data = cbind(data.frame(site_id = seq_len(N)), sim$data),
               family = occu_cover("lognormal"), detection = ~ det_cov1,

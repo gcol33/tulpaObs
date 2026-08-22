@@ -139,8 +139,8 @@ test_that("ms_int_occu NUTS recovers community means + de-attenuates the varianc
 })
 
 test_that("ms_int_occu NUTS community-mean 95% CIs cover at the nominal rate", {
-  # gcol33/tulpaObs#139: raise the single-seed / directional check to a 20-seed
-  # CI-coverage study on the community means (per-arm intercepts).
+  # raise the single-seed / directional check to a 20-seed CI-coverage study
+  # on the community means (per-arm intercepts).
   skip_on_cran()
   skip_if_fast()
   sp <- paste0("sp", seq_len(12))

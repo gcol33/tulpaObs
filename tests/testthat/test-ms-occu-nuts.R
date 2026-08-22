@@ -1,6 +1,6 @@
 # =============================================================================
 # test-ms-occu-nuts.R - community (multispecies) single-season occupancy NUTS
-# (ms_occu(), method = "nuts"; tulpaObs#69).
+# (ms_occu(), method = "nuts").
 #
 # The sampler draws the EXACT joint posterior -- community means, per-species
 # deviations, and the two INDEPENDENT per-arm community covariances -- over the

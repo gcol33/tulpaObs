@@ -1,9 +1,9 @@
-# gcol33/tulpaObs#225: int_occu() with a single source is mathematically the
-# same model as occu() -- one shared latent occupancy state observed through
-# one detection process. This boundary anchor (the same kind dyn_int_occu()
-# already carries against dyn_occu()/int_occu()) caught two compounding bugs
-# that left int_occu()'s detection-arm intercept and SE silently wrong on
-# every fit with an autoscaled detection covariate:
+# int_occu() with a single source is mathematically the same model as
+# occu() -- one shared latent occupancy state observed through one detection
+# process. This boundary anchor (the same kind dyn_int_occu() already
+# carries against dyn_occu()/int_occu()) caught two compounding bugs that
+# left int_occu()'s detection-arm intercept and SE silently wrong on every
+# fit with an autoscaled detection covariate:
 #
 #   1. int_occu()'s per-source detection design matrix lost its column names
 #      when padded to full-site width (R/occu.R), so the covariate

@@ -1,9 +1,9 @@
 # Promote the joint nested-Laplace outer Pareto-k diagnostic to the tobs_fit top
-# level + glance() (gcol33/tulpaObs#104), including its mode-Hessian-vs-grid-moment
-# proposal source (gcol33/tulpa#116). The raw joint engine attaches pareto_k /
-# pareto_k_is_ess / pareto_k_scope / pareto_k_proposal_source to the object the
-# postprocess wrappers nest at $joint_fit; a user reading fit$pareto_k directly
-# should not have to reach into $joint_fit.
+# level + glance(), including its mode-Hessian-vs-grid-moment proposal source. The
+# raw joint engine attaches pareto_k / pareto_k_is_ess / pareto_k_scope /
+# pareto_k_proposal_source to the object the postprocess wrappers nest at
+# $joint_fit; a user reading fit$pareto_k directly should not have to reach into
+# $joint_fit.
 
 # --------------------------------------------------------------------------- #
 # Extractor: surface a ran diagnostic, stay inert when diagnose.k was off       #
@@ -135,8 +135,8 @@ test_that("occu_cover() spatial fit surfaces pareto_k at the top level + glance"
   expect_true("pareto_k_proposal_source" %in% names(fit))
   # The full set of outer-proposal sources the joint engine reports: the
   # single-Gaussian grid-moment proposal, its moment-matching refinement, the
-  # grid-mixture proposal (gcol33/tulpa#121), the FD mode-Hessian delta-collapse
-  # fallback, or NA when diagnose.k stayed off.
+  # grid-mixture proposal, the FD mode-Hessian delta-collapse fallback, or NA
+  # when diagnose.k stayed off.
   expect_true(fit$pareto_k_proposal_source %in%
                 c("mode_hessian", "grid_moment", "moment_matched",
                   "grid_mixture", NA_character_))

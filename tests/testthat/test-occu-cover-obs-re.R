@@ -1,9 +1,9 @@
 # occu_cover() random intercept on the observation arms (detection / positive
 # cover), composed with the shared spatial field on the nested-Laplace joint
-# engine (gcol33/tulpaObs#102). A per-visit categorical grouping (e.g. an EUNIS
-# habitat class) enters the detection (or cover) linear predictor as an iid RE
-# block whose variance integrates on the outer grid and whose per-group BLUPs are
-# partially pooled. The block rides ONE arm: the detection arm carries field_coef
+# engine. A per-visit categorical grouping (e.g. an EUNIS habitat class) enters
+# the detection (or cover) linear predictor as an iid RE block whose variance
+# integrates on the outer grid and whose per-group BLUPs are partially pooled.
+# The block rides ONE arm: the detection arm carries field_coef
 # = 1 (so the iid block scatters) while the shared field is still skipped on
 # detection by its 0-node sentinel.
 
@@ -291,10 +291,10 @@ test_that("occu_cover() crossed RE: predict sums both groupings, unseen shrinks"
   expect_true(all(is.finite(pd$mean[unseen])))
 })
 
-test_that(".occu_cover_obs_re_design builds slope Z (scaffolding for tulpa#114)", {
+test_that(".occu_cover_obs_re_design builds the slope Z", {
   # Engine-independent: a random-slope bar parses + designs into a 2-coef
-  # correlated block with intercept + slope columns, even though the joint fit is
-  # gated on gcol33/tulpa#114. Drives the design builder directly.
+  # correlated block with intercept + slope columns, even though the joint fit
+  # gates it on the engine version. Drives the design builder directly.
   pp <- tulpaObs:::.occu_cover_obs_re_parse(~ x + (area | habitat), "detection")
   expect_true(pp$has_slope)
   expect_length(pp$terms, 1L)
@@ -388,7 +388,7 @@ test_that("occu_cover() nested detection RE recovers both levels' BLUPs", {
   expect_gt(mn[["cor_s"]], 0.6)
 })
 
-# --- random slopes on the detection arm (#103, consuming tulpa#114) -----------
+# --- random slopes on the detection arm (#103, consuming) -----------
 
 test_that("occu_cover() uncorrelated random slope: weighted iid block fits + reports", {
   skip_on_cran()

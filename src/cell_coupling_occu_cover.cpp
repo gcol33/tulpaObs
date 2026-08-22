@@ -204,7 +204,7 @@ void cpp_register_occu_cover_beta_coupling() {
        std::make_shared<tulpaObs::OccuCoverBetaCoupling>());
 }
 
-// Identity-Gaussian positive arm (gcol33/tulpaObs#112).
+// Identity-Gaussian positive arm.
 // [[Rcpp::export]]
 void cpp_register_occu_cover_gaussian_coupling() {
     auto fp = lookup_registrar();
@@ -212,8 +212,8 @@ void cpp_register_occu_cover_gaussian_coupling() {
        std::make_shared<tulpaObs::OccuCoverGaussianCoupling>());
 }
 
-// Cell-aggregated cover variants (tulpaObs#33): the pos arm carries one row per
-// detected occupancy unit (the mean / median cover), evaluated once per cell.
+// Cell-aggregated cover variants: the pos arm carries one row per detected
+// occupancy unit (the mean / median cover), evaluated once per cell.
 // [[Rcpp::export]]
 void cpp_register_occu_cover_lognormal_agg_coupling() {
     auto fp = lookup_registrar();
@@ -305,9 +305,9 @@ Rcpp::List cpp_eval_occu_cover_gaussian_cell(
     );
 }
 
-// Cell-aggregated twins (tulpaObs#33). `eta_pos` and `y_pos` are length 1 (the
-// cell's aggregated cover predictor / mean-or-median observation); `eta_p` /
-// `y_det` stay length J. The returned `grad_pos` / `neg_hess_pos` are length 1.
+// Cell-aggregated twins. `eta_pos` and `y_pos` are length 1 (the cell's
+// aggregated cover predictor / mean-or-median observation); `eta_p` / `y_det`
+// stay length J. The returned `grad_pos` / `neg_hess_pos` are length 1.
 // [[Rcpp::export]]
 Rcpp::List cpp_eval_occu_cover_lognormal_agg_cell(
     double                     eta_psi,

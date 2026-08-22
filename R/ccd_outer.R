@@ -1,6 +1,6 @@
 # =============================================================================
 # ccd_outer.R - mode-centred CCD for the outer field-hyperparameter integration
-# of the in-package spatial / community fitters (gcol33/tulpaObs#60).
+# of the in-package spatial / community fitters.
 #
 # The areal-BFGS families (dyn_abun, fp_occu), the community N-mixture Newton
 # path (ms_abun + areal), and the SPDE community path each integrate their field

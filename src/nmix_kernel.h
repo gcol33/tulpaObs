@@ -404,7 +404,7 @@ inline NMixSiteResult compute_nmix_site(
 }
 
 // -----------------------------------------------------------------------------
-// Per-site sweep accumulator (gcol33/tulpaObs#173)
+// Per-site sweep accumulator
 //
 // The count families' R-facing sweeps -- `cpp_nmix_total_log_lik()`
 // (nmix_loglik.cpp) and `cpp_removal_total_log_lik()` (removal_laplace.cpp) --

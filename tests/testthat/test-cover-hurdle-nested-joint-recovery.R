@@ -105,13 +105,12 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
     expect_true(is.finite(fit$sigma_pos) && fit$sigma_pos > 0)
     sigma_hats[r] <- fit$sigma_pos
   }
-  # Grid geometry (gcol33/tulpaObs#197): the simulator's sigma = 0.6 and
-  # rho = 0.7 each sit inside their pinned axis and on none of its nodes.
-  # The pins this file used to carry, c(0.3, 0.6, 0.9) and c(0.5, 0.7, 0.9),
-  # put each truth on the MIDDLE node of a symmetric three-node axis;
-  # measured over these same ten seeds that placement moves the numbers
-  # below by less than one part in a hundred (mean relative error 0.0384 on
-  # the centred pins, 0.0346 here).
+  # Grid geometry: the simulator's sigma = 0.6 and rho = 0.7 each sit inside
+  # their pinned axis and on none of its nodes. The pins this file used to
+  # carry, c(0.3, 0.6, 0.9) and c(0.5, 0.7, 0.9), put each truth on the
+  # MIDDLE node of a symmetric three-node axis; measured over these same ten
+  # seeds that placement moves the numbers below by less than one part in a
+  # hundred (mean relative error 0.0384 on the centred pins, 0.0346 here).
   #
   # Bands are the measurement on the pins above (tulpa 0.0.163): mean
   # relative error 0.0346, worst seed 0.1392. Simulating the same ten seeds
@@ -142,10 +141,10 @@ test_that("joint areal cover hurdle recovers the betas + slope CIs, calibrated (
       formula = ~ x + bym2(graph = adj, group_var = "region"),
       data = sim$data, family = cover("lognormal"), y = sim$y,
       method = "nested_laplace",
-      # Same off-node pins as the sigma_pos test above (gcol33/tulpaObs#197):
-      # simulator sigma = 0.6 and rho = 0.7 sit inside their axis and on no
-      # node. Measured over these fifteen seeds, the centred pins the file
-      # used to carry give the identical coverage (0.933 either way).
+      # Same off-node pins as the sigma_pos test above: simulator sigma = 0.6
+      # and rho = 0.7 sit inside their axis and on no node. Measured over
+      # these fifteen seeds, the centred pins the file used to carry give the
+      # identical coverage (0.933 either way).
       control = list(sigma.grid = c(0.25, 0.5, 1.0), rho.grid = c(0.4, 0.6, 0.85)))
     expect_s3_class(fit, "cover_fit")
     bo2[r] <- fit$beta_occ[2]; bp2[r] <- fit$beta_pos[2]
@@ -224,16 +223,15 @@ simulate_joint_beta_for_recovery <- function(N = 600, n_s = 30,
 test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
   skip_on_cran()
   skip_if_fast()
-  # phi_pos is integrated on the outer joint hyperparameter grid
-  # (tulpaObs#7). The kernel sees a per-arm phi axis; the beta arm's default is
-  # `exp(seq(log(2), log(300), length.out = 7))`, set in
-  # `.cover_pos_family_grid()`. The marginal likelihood across that axis weights
-  # phi self-consistently with the integrated spatial hyperparameters, so
-  # the previous-design failure mode — a profiled-and-refitted phi that
-  # under-shoots at thin n_pos because upstream shrinkage collapsed the
-  # field-corrected linear-predictor variance — no longer applies. See
-  # dev_notes/plan_phi_outer_grid.md for the math and dev_notes/
-  # probe_beta_phi_small_sample.R for the probe that ruled out a
+  # phi_pos is integrated on the outer joint hyperparameter grid. The kernel
+  # sees a per-arm phi axis; the beta arm's default is `exp(seq(log(2),
+  # log(300), length.out = 7))`, set in `.cover_pos_family_grid()`. The marginal
+  # likelihood across that axis weights phi self-consistently with the
+  # integrated spatial hyperparameters, so the previous-design failure mode — a
+  # profiled-and-refitted phi that under-shoots at thin n_pos because upstream
+  # shrinkage collapsed the field-corrected linear-predictor variance — no
+  # longer applies. See dev_notes/plan_phi_outer_grid.md for the math and
+  # dev_notes/ probe_beta_phi_small_sample.R for the probe that ruled out a
   # small-sample MLE bias of the legacy Brent step.
   truth_phi <- 30
   n_seeds   <- 10L
@@ -250,11 +248,11 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
       family   = cover("beta"),
       y        = sim$y,
       method   = "nested_laplace",
-      # Off-node pins (gcol33/tulpaObs#197): simulator sigma = 0.5 and
-      # rho = 0.7 sit inside their axis and on no node. The pins this test
-      # used to carry, c(0.3, 0.5, 0.8) and c(0.5, 0.7, 0.9), put each truth
-      # on the middle node; measured over these ten seeds that placement
-      # gives mean relative error 0.0298 against 0.0246 here.
+      # Off-node pins: simulator sigma = 0.5 and rho = 0.7 sit inside their
+      # axis and on no node. The pins this test used to carry, c(0.3, 0.5,
+      # 0.8) and c(0.5, 0.7, 0.9), put each truth on the middle node;
+      # measured over these ten seeds that placement gives mean relative
+      # error 0.0298 against 0.0246 here.
       control  = list(
         sigma.grid     = c(0.3, 0.65, 1.0),
         rho.grid       = c(0.4, 0.6, 0.85)

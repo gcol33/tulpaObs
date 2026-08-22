@@ -1,9 +1,9 @@
 # =============================================================================
 # test-occu-spatial-svc-recovery.R - the standalone occu() nested-Laplace path
-# carrying a varying-coefficient spatial bar (gcol33/tulpaObs#67): a cell-indexed
-# spatial intercept field PLUS a spatial trend field weighted by a per-site
-# covariate, with NO cover arm. This is occu_cover() with the cover arm removed
-# (the apples-to-apples occupancy-only match for spOccupancy svcTPGOcc).
+# carrying a varying-coefficient spatial bar: a cell-indexed spatial intercept
+# field PLUS a spatial trend field weighted by a per-site covariate, with NO
+# cover arm. This is occu_cover() with the cover arm removed (the
+# apples-to-apples occupancy-only match for spOccupancy svcTPGOcc).
 #
 # Mirrors the occu_cover trend / MCAR recovery tests (cover arm dropped):
 # simulate occupancy with a KNOWN spatial intercept field f1, a KNOWN spatial

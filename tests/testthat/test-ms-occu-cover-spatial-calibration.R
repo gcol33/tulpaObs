@@ -1,12 +1,12 @@
 # test-ms-occu-cover-spatial-calibration.R - multi-seed identifiability +
 # rare-species calibration for the Stage-1 reduced-rank spatial-factor community
-# occu_cover (gcol33/tulpa#67). A single-seed recovery proves the fitter can
-# work; these aggregate over seeds (recovery is not a lucky draw, the (L, w) sign
-# anchor resolves consistently) and check that the per-species occupancy psi
-# posterior intervals are calibrated -- the property that justifies the spatial
-# class. The held-out variant blanks a random subset of cells and asks whether
-# the shared ICAR field predicts the unobserved cells with nominal coverage,
-# including for genuinely rare species.
+# occu_cover. A single-seed recovery proves the fitter can work; these aggregate
+# over seeds (recovery is not a lucky draw, the (L, w) sign anchor resolves
+# consistently) and check that the per-species occupancy psi posterior intervals
+# are calibrated -- the property that justifies the spatial class. The held-out
+# variant blanks a random subset of cells and asks whether the shared ICAR field
+# predicts the unobserved cells with nominal coverage, including for genuinely
+# rare species.
 
 .mcal_grid_adj <- function(nr, nc) {
   N <- nr * nc

@@ -1,4 +1,4 @@
-# The continuous NNGP gp() surface: exposure + recovery (gcol33/tulpaObs#152).
+# The continuous NNGP gp() surface: exposure + recovery.
 #
 # gp() was smoke-tested only (test-spatial-occ.R just checks the fit runs and
 # `n_params > 2`). Once the NNGP neighbour-pair distance packing bug and the
@@ -10,24 +10,24 @@
 # its AMPLITUDE is severely attenuated -- sd(field_hat) sits at a few percent
 # of sd(field_truth), reproducibly, even under near-perfect detection data and
 # 5x longer warmup (ruling out both weak occupancy identifiability and
-# insufficient adaptation as the explanation). Filed upstream as
-# gcol33/tulpa#243: `compute_gp_spatial_prior` samples the field CENTERED (the
-# NNGP density evaluated directly on the raw field), a textbook Neal's funnel
-# for a hierarchical scale + high-dimensional field jointly sampled by NUTS.
-# The engine already has a non-centered transform (`nngp_nc_forward` /
+# insufficient adaptation as the explanation). Filed upstream as:
+# `compute_gp_spatial_prior` samples the field CENTERED (the NNGP density
+# evaluated directly on the raw field), a textbook Neal's funnel for a
+# hierarchical scale + high-dimensional field jointly sampled by NUTS. The
+# engine already has a non-centered transform (`nngp_nc_forward` /
 # `nngp_nc_backward` in hmc_gp_nc.h) but it is wired only into the post-hoc
 # draw-storage path, never into the actual sampling gradient -- so every fit
-# runs centered regardless of `gp_parameterization`. This mirrors what
-# gcol33/tulpa#144 left open for svc() ("sigma_svc reads high... may be the
-# funnel... untested either way") -- svc() shares the identical centered
+# runs centered regardless of `gp_parameterization`. This mirrors what left
+# open for svc() ("sigma_svc reads high... may be the funnel... untested
+# either way") -- svc() shares the identical centered
 # joint-hyperparameter-and-field architecture.
 #
-# Until gcol33/tulpa#243 lands, this test scores what the fit can actually
-# deliver: the surface's SHAPE (correlation with truth) and that phi (range)
-# recovers -- not the amplitude, which is the tracked, upstream-blocked gap.
-# This is the same split test-occu-svc-nngp-recovery.R makes for svc(): a
-# recovery test on cor(), a separate calibration test that does NOT assert on
-# the surface's scale.
+# Until lands, this test scores what the fit can actually deliver: the
+# surface's SHAPE (correlation with truth) and that phi (range) recovers --
+# not the amplitude, which is the tracked, upstream-blocked gap. This is the
+# same split test-occu-svc-nngp-recovery.R makes for svc(): a recovery test
+# on cor(), a separate calibration test that does NOT assert on the surface's
+# scale.
 
 .gpr_sim <- function(N, J, seed, sigma_f = 1.2, phi_f = 0.25, p_det = 0.6,
                      b0 = 0.2) {
@@ -73,7 +73,7 @@ test_that("the gp() field is exposed, named, and correctly shaped", {
   expect_equal(sum(grepl("^param\\[", cn)), 0L)
 
   # fitted() reads the same offset the sampler put in the psi logit, not a
-  # dropped/flat field (gcol33/tulpaObs#152's third reported bug).
+  # dropped/flat field ('s third reported bug).
   psi_hat <- fitted(fit)$psi
   expect_gt(length(unique(round(psi_hat, 8))), 1L)
 })
@@ -94,11 +94,11 @@ test_that("occu() + gp() recovers the shape of a known GP surface", {
   expect_gt(sum(ok), 2L)
 
   # Measured 0.046 / 0.720 / 0.736 / 0.699 (mean 0.55) at N = 40, J = 6, p =
-  # 0.6 -- the same scale as gcol33/tulpaObs#152's own repro. Seed 1 is a weak
-  # outlier; the floor stays well clear of it rather than being tuned to
-  # exclude it. This asserts the surface carries real spatial signal; it does
-  # NOT assert the fit is calibrated (the amplitude is known attenuated --
-  # gcol33/tulpa#243).
+  # 0.6 -- the same scale as the original repro. Seed 1 is a weak outlier; the
+  # floor
+  # stays well clear of it rather than being tuned to exclude it. This asserts
+  # the surface carries real spatial signal; it does NOT assert the fit is
+  # calibrated (the amplitude is known attenuated --).
   expect_gt(mean(cr[ok]), 0.35)
 })
 
@@ -110,17 +110,16 @@ test_that("occu() + gp() identifies the NNGP range but not the amplitude", {
   fit <- .gpr_fit(sim, seed = 1L)
 
   # phi (range) recovers reasonably despite the amplitude funnel -- measured
-  # 0.21 on this seed, 0.28-0.67 over several others (gcol33/tulpa#243) against
-  # a truth of 0.25. This is the asymmetry that issue points at: the general
-  # NNGP machinery (shared with icar/svc/spde) is sound, only the field/sigma2
-  # coupling is not.
+  # 0.21 on this seed, 0.28-0.67 over several others against a truth of 0.25.
+  # This is the asymmetry that issue points at: the general NNGP machinery
+  # (shared with icar/svc/spde) is sound, only the field/sigma2 coupling is
+  # not.
   phi_hat <- exp(as.numeric(fit$means[["log_phi_gp"]]))
   expect_gt(phi_hat, 0.05); expect_lt(phi_hat, 2.0)
 
   # No assertion on sigma2_gp or sd(fit$spatial_field) here. Measured
   # sd(field_hat)/sd(field_truth) at 1.7%-11.8% across seeds, unchanged by 5x
-  # longer warmup and unrelated to divergence count (gcol33/tulpa#243) -- a
-  # threshold here would either be so loose it asserts nothing or would record
-  # the bug as expected behaviour. That claim belongs to the upstream issue,
-  # not this test.
+  # longer warmup and unrelated to divergence count -- a threshold here would
+  # either be so loose it asserts nothing or would record the bug as expected
+  # behaviour. That claim belongs to the upstream issue, not this test.
 })

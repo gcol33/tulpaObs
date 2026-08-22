@@ -1,10 +1,10 @@
 # Community-spatial / SVC occupancy -- ms_occu() + a shared areal field or a
 # varying-coefficient bar on the occupancy arm (the spOccupancy sfMsPGOcc /
-# svcMsPGOcc analogue; gcol33/tulpaObs#118). A plain intercept field keeps the
-# in-tree C++ community-spatial path; a bar spatial(~ 1 + w || cell, graph)
-# routes to the block-coordinate occupancy-field fitter (R/ms_occu_field.R): the
-# community occupancy Laplace-EM with the field as a psi offset, alternated with
-# a two-state-marginal field update. The field is informed by every species at
+# svcMsPGOcc analogue). A plain intercept field keeps the in-tree C++
+# community-spatial path; a bar spatial(~ 1 + w || cell, graph) routes to the
+# block-coordinate occupancy-field fitter (R/ms_occu_field.R): the community
+# occupancy Laplace-EM with the field as a psi offset, alternated with a
+# two-state-marginal field update. The field is informed by every species at
 # each site, so it recovers alongside the community means.
 
 .msof_grid_graph <- function(side) {
@@ -58,7 +58,7 @@ test_that("svcMsPGOcc (occupancy SVC bar) recovers the intercept + trend fields"
 # Smoke coverage of the routing decision itself: a plain intercept field must not
 # be diverted onto the block-coordinate R path, since the dedicated C++ fitter is
 # the faster and already recovery-tested one. Asserted on a small grid, with the
-# field-recovery threshold left to the gated block (gcol33/tulpaObs#159).
+# field-recovery threshold left to the gated block.
 test_that("a plain intercept ms_occu field routes to the C++ spatial fitter", {
   # The cost here is the nested-Laplace outer grid, not the design, so the fixture
   # is trimmed on species and visits rather than on sites.

@@ -1,7 +1,7 @@
 # FD-checks for every closed-form derivative of the OccuCoverCoupling
-# CellCouplingSpec (tulpaObs consumer of gcol33/tulpa#32 Layer B.2), across its
-# three positive-arm policies -- lognormal, beta and identity-Gaussian -- and
-# both cover granularities (per-visit and cell-aggregated).
+# CellCouplingSpec, across its three positive-arm
+# policies -- lognormal, beta and identity-Gaussian -- and both cover
+# granularities (per-visit and cell-aggregated).
 #
 # The spec lives in src/cell_coupling_occu_cover.h; the direct evaluators
 # `cpp_eval_occu_cover_{lognormal,beta,gaussian}[_agg]_cell` return the cell
@@ -270,10 +270,10 @@ for (fam in oc_fams) {
 
 
 # ---------------------------------------------------------------------------
-# Cell-aggregated cover (tulpaObs#33). The pos arm carries ONE row per cell (the
-# mean / median cover over the cell's detected visits), so the det branch adds a
-# single log f_pos(ybar; eta_pos_cell). eta_pos / y_pos are length 1; eta_p and
-# y_det stay length J.
+# Cell-aggregated cover. The pos arm carries ONE row per cell (the mean / median
+# cover over the cell's detected visits), so the det branch adds a single log
+# f_pos(ybar; eta_pos_cell). eta_pos / y_pos are length 1; eta_p and y_det stay
+# length J.
 # ---------------------------------------------------------------------------
 
 setup_cell_agg <- function(seed, Jc, y_det, fam) {

@@ -1,5 +1,4 @@
-# Declare a defaulted outer-grid axis as OURS with tulpa::auto_grid()
-# (gcol33/tulpaObs#186, consumer of gcol33/tulpa#293).
+# Declare a defaulted outer-grid axis as OURS with tulpa::auto_grid().
 #
 # The engine's auto-recenter decides axis PROVENANCE, not field presence: it may
 # move an axis that is absent, marked, or exactly equal to its own default, and
@@ -44,7 +43,7 @@ test_that("the alpha and sigma defaults read the engine's axes (#209)", {
   # What the read buys, asserted as the property rather than as a value: the
   # engine recognises both axes as ITS OWN default by value on the paths these
   # grids reach, which is the belt that still holds when a reshape has dropped
-  # the auto_grid() marker (gcol33/tulpaObs#191).
+  # the auto_grid() marker.
   matches <- tulpa:::.nl_axis_matches_default
   expect_true(matches(tulpaObs:::.tobs_default_sigma_grid(),
                       "sigma_grid", ".joint_areal"))
@@ -112,7 +111,7 @@ test_that("the per-front-door default axes declare themselves", {
 
 # --------------------------------------------------------------------------- #
 # cover() multi-block: the non-spatial blocks and the copy axis                 #
-# (gcol33/tulpaObs#190, #191)                                                   #
+# #
 # --------------------------------------------------------------------------- #
 
 .agp_temporal <- function(type, n_times = 5L, n = 10L) {
@@ -165,12 +164,12 @@ test_that("cover() multi-block RE block declares its defaulted sigma axis", {
 
 test_that("cover() multi-block carries the copy axis's mark through as.numeric()", {
   skip_if_no_auto_grid()
-  # gcol33/tulpaObs#191: `.cover_build_multi_prior()` coerced the vector its
-  # caller had just marked, so the copy axis reached the engine looking like a
-  # pin. Both provenances round-trip. The axis is `alpha_grid` since
-  # gcol33/tulpaObs#192 -- the copy coefficient rides the one field tulpa's
-  # `.resolve_one_copy_spec()` reads a grid off, and the retired
-  # `sigma_pos_grid` was never read on any cover() route.
+  # `.cover_build_multi_prior()` coerced the vector its caller had just
+  # marked, so the copy axis reached the engine looking like a pin. Both
+  # provenances round-trip. The axis is `alpha_grid` since -- the copy
+  # coefficient rides the one field tulpa's `.resolve_one_copy_spec()` reads a
+  # grid off, and the retired `sigma_pos_grid` was never read on any cover()
+  # route.
   g <- matrix(0L, 4L, 4L); g[1, 2] <- g[2, 1] <- g[2, 3] <- g[3, 2] <-
     g[3, 4] <- g[4, 3] <- 1L
   sp <- list(type = "icar", n_spatial_units = 4L,
@@ -249,8 +248,8 @@ test_that("arm-specific bym2 defaults rho to the engine's axis (#206)", {
   # The nodes are READ from the engine at fit time, so this block integrates the
   # same mixing-weight axis a bym2 block reaching the registry any other way
   # does. The assertion reads the engine too: a literal here would drift out of
-  # step exactly as the block's own copy did when gcol33/tulpa#361 extended the
-  # axis to cover a rho near 1.
+  # step exactly as the block's own copy did when extended the axis to cover a
+  # rho near 1.
   engine_rho <- tulpa:::.nl_grid_axis("bym2_rho")
   b <- .agp_block("bym2", list())
   expect_equal(as.numeric(unique(b$rho_grid)), as.numeric(engine_rho))

@@ -1,11 +1,11 @@
-# Detection-arm SPDE mesh field on an INTEGRATED (multi-source) occupancy model
-# (gcol33/tulpaObs#216). A term's process is the formula it is written in, so an
-# spde() on the `detection` formula loads a continuous Matern field on the
-# detection logit; the shared latent occupancy state stays whatever the
-# occupancy formula says. The detection arm is one arm observed through S
-# sources, so the field is fit once per source block -- each source recovers its
-# own realization at its own sites -- and `fit$spatial_field_det` is the
-# per-source named list of mesh fields.
+# Detection-arm SPDE mesh field on an INTEGRATED (multi-source) occupancy model.
+# A term's process is the formula it is written in, so an spde() on the
+# `detection` formula loads a continuous Matern field on the detection logit;
+# the shared latent occupancy state stays whatever the occupancy formula says.
+# The detection arm is one arm observed through S sources, so the field is fit
+# once per source block -- each source recovers its own realization at its own
+# sites -- and `fit$spatial_field_det` is the per-source named list of mesh
+# fields.
 #
 # Simulator: psi non-spatial (occ_cov slope 0.7); both sources' detection logits
 # carry the SAME smooth signal `u_true` plus a det_cov slope (0.4) on top of
@@ -155,10 +155,9 @@ test_that("the detection field changes the fit it is dropped from", {
   expect_gt(min(abs(fit$means[ints] - fit_flat$means[ints])), 0.02)
 })
 
-# gcol33/tulpaObs#218: the per-source field was reportable
-# (fit$spatial_field_det[["src1"]] / [["src2"]]) but not predictive.
-# fitted()$p on an integrated fit is now a named list, one vector per source,
-# each carrying that source's own field.
+# the per-source field was reportable (fit$spatial_field_det[["src1"]] /
+# [["src2"]]) but not predictive. fitted()$p on an integrated fit is now a
+# named list, one vector per source, each carrying that source's own field.
 test_that("fitted() adds each source's detection-arm spde() field to p", {
   skip_on_cran()
   skip_if_fast()

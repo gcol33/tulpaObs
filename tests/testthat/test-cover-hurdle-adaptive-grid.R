@@ -7,9 +7,9 @@
 # on the positive arm's `field_coef` (`R/cover_hurdle_joint.R`). Every fit below
 # pins that axis at `c(0, 0.5, 1.0, 1.5)` with `alpha_true = 1.5`, so the truth
 # sits AT its top node -- the configuration the adaptive-grid fix was written
-# against (INLAabun Demo 3, gcol33/tulpaObs#8). A pinned axis is a deliberate
-# pin as far as the engine's auto-recenter rescue is concerned, so the placement
-# holds on every seed.
+# against (INLAabun Demo 3). A pinned axis is a deliberate pin as far as the
+# engine's auto-recenter rescue is concerned, so the placement holds on every
+# seed.
 #
 # A fixed grid carries no cell past its own top node, so at that placement the
 # copy axis is truncated exactly where the posterior piles up. The adaptive path
@@ -17,12 +17,11 @@
 # points whenever the relative integrand density at the boundary exceeds
 # `adaptive_grid_edge_thresh`.
 #
-# Until gcol33/tulpaObs#194 the boundary was set on `control$sigma.pos.grid`, an
-# axis of the retired (sigma_occ, sigma_pos) parameterization that no cover()
-# route ever read (gcol33/tulpaObs#192). These fits therefore integrated the
-# package default copy axis `c(0, 0.1, 0.234, 0.548, 1.282, 3)` with
-# `alpha_true = 1.5` sitting between its 1.282 and 3.0 nodes, i.e. inside the
-# grid rather than at its edge.
+# Until the boundary was set on `control$sigma.pos.grid`, an axis of the retired
+# (sigma_occ, sigma_pos) parameterization that no cover() route ever read. These
+# fits therefore integrated the package default copy axis `c(0, 0.1, 0.234,
+# 0.548, 1.282, 3)` with `alpha_true = 1.5` sitting between its 1.282 and 3.0
+# nodes, i.e. inside the grid rather than at its edge.
 #
 # What the boundary costs is the UPPER END of the reported interval, not
 # coverage: see the second test for the measurement and for why the coverage
@@ -208,14 +207,14 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
   expect_gt(sd(hi_adapt), 5 * sd(hi_fixed))
 
   # Coverage does NOT separate the two arms at this placement, and the file no
-  # longer claims it does (gcol33/tulpaObs#194). Both arms cover 20/20 here.
-  # With the truth exactly ON the top node the upper side of the fixed arm's
-  # interval cannot miss: since gcol33/tulpa#353 a grid's outer cell contributes
-  # its own half-width to the reported support, so the fixed read reaches past
-  # 1.5 by construction, and before that change the quantile clamped AT 1.5 and
-  # `truth <= ci_hi` held as an equality. The 0.53 -> 0.83 gain recorded when
-  # the adaptive path landed was measured on a Wald summary, which this file
-  # replaced. All that is defended here is non-regression.
+  # longer claims it does. Both arms cover 20/20 here. With the truth exactly ON
+  # the top node the upper side of the fixed arm's interval cannot miss: since a
+  # grid's outer cell contributes its own half-width to the reported support, so
+  # the fixed read reaches past 1.5 by construction, and before that change the
+  # quantile clamped AT 1.5 and `truth <= ci_hi` held as an equality. The 0.53
+  # -> 0.83 gain recorded when the adaptive path landed was measured on a Wald
+  # summary, which this file replaced. All that is defended here is
+  # non-regression.
   expect_gte(mean(cover_adapt) - mean(cover_fixed), -0.15)
 })
 
@@ -255,15 +254,14 @@ test_that("adaptive refinement is a no-op on the copy axis when the integrand ha
 test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
   skip_on_cran()
   skip_if_fast()
-  # tulpaObs#20: the dense outer tensor concentrates posterior mass on a few
-  # cells (ESS ~ 1), so most cells run a full-data inner solve for negligible
-  # weight. The cheap-pass prune skips them. This test asserts pruning is a
-  # no-op on the inference: the modal hyperparameters and the coefficient
-  # estimates must match the un-pruned dense-grid fit, and the pruned cells
-  # must carry negligible weight (the mode is never pruned). Nothing here
-  # depends on where the truth sits relative to a node; the copy axis is pinned
-  # so the grid this runs on is stated rather than inherited from the package
-  # default.
+  # the dense outer tensor concentrates posterior mass on a few cells (ESS ~
+  # 1), so most cells run a full-data inner solve for negligible weight. The
+  # cheap-pass prune skips them. This test asserts pruning is a no-op on the
+  # inference: the modal hyperparameters and the coefficient estimates must
+  # match the un-pruned dense-grid fit, and the pruned cells must carry
+  # negligible weight (the mode is never pruned). Nothing here depends on where
+  # the truth sits relative to a node; the copy axis is pinned so the grid this
+  # runs on is stated rather than inherited from the package default.
   n_s <- 25L; adj <- chain_adj_for_test(n_s)
   sim <- simulate_d3_like(seed = 101L, alpha_true = 1.0, N = 400L, n_s = n_s)
   ctrl_grid <- list(

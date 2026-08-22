@@ -154,7 +154,7 @@ test_that("silencing the console leaves the heartbeat file channel alone", {
 })
 
 
-# --- family-scoped capability groups (gcol33/tulpaObs#160) -------------------
+# --- family-scoped capability groups -------------------
 #
 # `max.outer` / `factor.starts` used to be admitted route-wide, so every Laplace
 # family accepted them and all but six dropped them. They are now opted into per

@@ -44,7 +44,7 @@
 }
 
 # Identity-Gaussian (delta-normal) cover: the exported simulator draws the raw
-# unbounded magnitude at present sites (gcol33/tulpaObs#112).
+# unbounded magnitude at present sites.
 .cn_sim_gaussian <- function(N = 500L, beta_occ = c(-0.4, 0.8),
                              beta_pos = c(2.0, 0.4), sigma_pos = 0.5,
                              seed = 1L) {
@@ -293,7 +293,7 @@ test_that("cover NUTS fit supports the S3 method surface", {
 test_that("the positive-arm density code has one definition and one policy", {
   # .occu_cover_pos_code() used to be defined twice at top level, with different
   # unknown-input policies, and a third time under a second name on the NUTS
-  # path; file collation order decided which ran (gcol33/tulpaObs#267).
+  # path; file collation order decided which ran.
   expect_equal(.occu_cover_pos_code("lognormal"), 0L)
   expect_equal(.occu_cover_pos_code("beta"),      3L)
   expect_equal(.occu_cover_pos_code("gaussian"),  4L)

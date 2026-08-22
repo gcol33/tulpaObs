@@ -218,13 +218,12 @@
 # Spatial fitter: a shared ICAR / BYM2 / proper-CAR field on the abundance arm
 # ---------------------------------------------------------------------------
 
-# Fit the spatial community N-mixture (the sfMsNMix analogue, gcol33/tulpaObs#12).
-# One spatial unit per site (identity map, as for single-species abun()).
-# Dispatches on the abundance-formula spatial term type to the matching nested
-# Laplace-EM wrapper in nmix_laplace_re_spatial.R. The NB size r is integrated
-# over the outer grid (field-agnostic), so it falls out of the existing r-grid
-# plumbing as a global grid hyperparameter (not the per-species log_r RE the
-# non-spatial NB path uses).
+# Fit the spatial community N-mixture (the sfMsNMix analogue). One spatial unit
+# per site (identity map, as for single-species abun()). Dispatches on the
+# abundance-formula spatial term type to the matching nested Laplace-EM wrapper in
+# nmix_laplace_re_spatial.R. The NB size r is integrated over the outer grid
+# (field-agnostic), so it falls out of the existing r-grid plumbing as a global
+# grid hyperparameter (not the per-species log_r RE the non-spatial NB path uses).
 .tobs_fit_ms_nmix_spatial <- function(model, spatial, mixture = "poisson",
                                       K_max = NULL, max_iter = 100L,
                                       inner_solver = "em", n_quad = 1L,
@@ -457,7 +456,7 @@
   }
 
   # ---- outer integration over (tau[, rho]): opt-in mode-centred CCD, silently
-  # declining to the fixed tensor grid (gcol33/tulpaObs#60).
+  # declining to the fixed tensor grid.
   packed <- NULL; integration_used <- "grid"; pareto_k <- NA_real_
   if (identical(integration, "ccd")) {
     axes <- c(list(.tobs_ccd_axis("tau", "log", lower = 0.3, upper = 30, start = 3.16)),
@@ -684,14 +683,14 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
         matrix(as.numeric(raw$b_omega), ncol = 1L,
                dimnames = list(model$species_names, "logit_omega")) else NULL,
       # Per-species FULL joint (lambda, p) posterior covariance / mode-theta
-      # cross-Hessian (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g,
-      # gcol33/tulpa#398 pt. 2) -- present only on the joint_fd/joint_grad
-      # (n_quad > 1) path; NULL under the default n_quad = 1 Laplace-EM
+      # cross-Hessian (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g pt.
+      # 2) -- present only on the joint_fd/joint_grad (n_quad > 1) path;
+      # NULL under the default n_quad = 1 Laplace-EM
       # (cpp_nmix_community_em(), which does not expose this). Same
       # convention as every .tobs_community_em()-based family's
       # `Cinv[[s]]`/`Bf[[s]]` (R/community_em.R): `Cinv[[s]]` is
-      # `(p_lambda+p_p) x (p_lambda+p_p)`, `Bf[[s]]` is
-      # `n_theta x (p_lambda+p_p)`, indexed species-order-matching
+      # `(p_lambda+p_p) x (p_lambda+p_p)`, `Bf[[s]]` is `n_theta x
+      # (p_lambda+p_p)`, indexed species-order-matching
       # `model$species_names` (same order `blup_lambda`/`blup_p` use, since
       # nmix_laplace_re()'s re_terms lists lambda before p).
       Cinv = raw$blup_cov_g %||% NULL,

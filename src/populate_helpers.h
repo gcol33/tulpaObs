@@ -48,8 +48,8 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
                                               : tulpa::SpatialType::BYM2;
         // set_spatial_adjacency() derives spatial_partition / n_spatial_components
         // from the CSR arrays; assigning them directly leaves the partition at its
-        // default (0 nodes), which tulpa's compute_param_layout now rejects
-        // (ABI 40, gcol33/tulpaRatio#19).
+        // default (0 nodes), which tulpa's compute_param_layout now rejects (ABI
+        // 40Ratio#19).
         data.set_spatial_adjacency(Rcpp::as<int>(sp["n_units"]),
                                    Rcpp::as<std::vector<int>>(sp["adj_row_ptr"]),
                                    Rcpp::as<std::vector<int>>(sp["adj_col_idx"]),

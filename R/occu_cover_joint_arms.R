@@ -1,6 +1,7 @@
 # =============================================================================
-# occu_cover_joint.R - joint nested-Laplace path for occu_cover()
-# driven by the cell-coupling registry (gcol33/tulpa#32 Layer B.2 consumer).
+# occu_cover_joint.R
+# - joint nested-Laplace path for occu_cover() driven by the cell-coupling
+# registry ( consumer).
 #
 # Routes through tulpa_nested_laplace_joint(cell_coupling =
 # "occu_cover_lognormal") with a 3-arm responses list:
@@ -243,18 +244,17 @@
 
   # p arm: one row per valid visit. field_coef = 0 excludes the detection
   # predictor from every shared field (the per-arm field_coef multiplies the
-  # field amplitude on EVERY block, so one scalar decouples the p arm from
-  # both the intercept field and the trend field). spatial_idx is then a
-  # placeholder.
+  # field amplitude on EVERY block, so one scalar decouples the p arm from both
+  # the intercept field and the trend field). spatial_idx is then a placeholder.
   # field_coef gates EVERY latent block on this arm (it is the per-arm arm_scale
   # multiplier), so it stays 0 to decouple the detection predictor from the
   # shared field -- UNLESS the detection arm carries its own non-copied block: a
-  # random effect (gcol33/tulpaObs#102) or an arm-specific spatial field
-  # (gcol33/tulpa#140). The shared field is decoupled from detection by its
-  # `spatial_idx = 0` sentinel either way (the engine skips a 0 node before any
-  # field indexing), so when the detection arm carries its own block field_coef
-  # is 1 so that block scatters onto the detection rows; the shared field's
-  # detection `spatial_idx` is forced to the same sentinel.
+  # random effect or an arm-specific spatial field. The shared field is
+  # decoupled from detection by its `spatial_idx = 0` sentinel either way (the
+  # engine skips a 0 node before any field indexing), so when the detection arm
+  # carries its own block field_coef is 1 so that block scatters onto the
+  # detection rows; the shared field's detection `spatial_idx` is forced to the
+  # same sentinel.
   det_field_coef <- if (!is.null(model$re_det) || isTRUE(det_field)) 1.0 else 0
   arm_p <- list(
     y            = as.numeric(y_det_visit),
@@ -270,13 +270,13 @@
 
   # pos arm rows. `cover_aggregate = "none"` (per-visit) keeps one row per valid
   # detected visit, aligned with the p arm so the cell-coupling spec reads them
-  # positionally. "mean" / "median" (tulpaObs#33) collapse the cover arm to ONE
-  # row per occupancy unit (site) that has any detection, carrying the
-  # mean / median cover over that site's detected visits and the site-level
-  # positive design; the `_agg` cell-coupling spec evaluates the cover density
-  # once per cell so the cover arm contributes at the cell scale rather than the
-  # per-visit scale (otherwise a cell with many detected plots drives the shared
-  # field far more than the single occupancy observation for that cell).
+  # positionally. "mean" / "median" collapse the cover arm to ONE row per
+  # occupancy unit (site) that has any detection, carrying the mean / median
+  # cover over that site's detected visits and the site-level positive design;
+  # the `_agg` cell-coupling spec evaluates the cover density once per cell so
+  # the cover arm contributes at the cell scale rather than the per-visit scale
+  # (otherwise a cell with many detected plots drives the shared field far more
+  # than the single occupancy observation for that cell).
   pos_cover_values <- NULL
   if (identical(cover_aggregate, "none")) {
     pos_site  <- site_of_visit
@@ -309,13 +309,13 @@
   }
   n_pos_rows <- length(pos_site)
 
-  # Observation-arm RE terms (gcol33/tulpaObs#102, #103), aligned to the arm rows
-  # by the same `keep` the detection arm uses. model$re_det / model$re_pos are
-  # per-term LISTS (one entry per crossed / nested / slope term); each term's
-  # site-major group codes -- and, for a random slope, its per-row design `Z`
-  # (intercept + covariate columns) -- are subset by `keep`. The detection arm is
-  # one row per valid visit; per-visit cover (the only mode an obs-arm RE
-  # supports) is the same row set, so both subset by `keep`.
+  # Observation-arm RE terms, aligned to the arm rows by the same `keep` the
+  # detection arm uses. model$re_det / model$re_pos are per-term LISTS (one entry
+  # per crossed / nested / slope term); each term's site-major group codes --
+  # and, for a random slope, its per-row design `Z` (intercept + covariate
+  # columns) -- are subset by `keep`. The detection arm is one row per valid
+  # visit; per-visit cover (the only mode an obs-arm RE supports) is the same row
+  # set, so both subset by `keep`.
   keep_re_term <- function(d) c(d, list(codes = as.integer(d$codes_flat[keep]),
     Z = if (!is.null(d$Z)) d$Z[keep, , drop = FALSE] else NULL))
   re_det_terms <- if (!is.null(model$re_det)) lapply(model$re_det, keep_re_term)
@@ -370,7 +370,7 @@
 #     the psi = 1 boundary at weak detection (the logit-scale score vanishes as
 #     psi -> 1, so an unpenalised intercept runs away).
 #   * The cover (pos) intercept prior keeps the cover intercept off the
-#     field-level confound (tulpaObs#32). The cover arm sees the shared field
+# field-level confound. The cover arm sees the shared field
 #     only at detected visits, so its intercept trades off against the field
 #     level over those cells -- a direction the sum-to-zero field constraint
 #     does not pin when low-occupancy regions carry no cover. Left at the

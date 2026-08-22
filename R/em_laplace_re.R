@@ -1,6 +1,5 @@
 # =============================================================================
-# Deterministic variance-component EM for occupancy random effects
-# (gcol33/tulpaObs#11).
+# Deterministic variance-component EM for occupancy random effects.
 #
 # tulpa's Laplace engine (tulpa_laplace) finds the latent mode at a FIXED RE
 # covariance. This driver wraps it in the two loops the engine does not carry
@@ -345,8 +344,8 @@
   weights <- NULL
   converged <- FALSE
   occ_fit <- NULL; det_fit <- NULL
-  # Progress + ETA for the variance-component RE-EM iterations
-  # (gcol33/tulpaObs#43); ON by default, finalised on convergence.
+  # Progress + ETA for the variance-component RE-EM iterations; ON by
+  # default, finalised on convergence.
   .prog <- tulpa:::.tulpa_iter_progress("re-em", max_iter, unit = "iter")
   for (it in seq_len(max_iter)) {
     # ---- E-step: psi and p both carry their arm's RE posterior mode. ----

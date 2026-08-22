@@ -401,7 +401,7 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # order; any trailing visit / random-effect columns are ignored by the kernel,
 # matching WAIC). Returns NA when the model_type has no pointwise kernel or the
 # evaluation errors, so a fit never fails to assemble over a logLik plumbing
-# detail (gcol33/tulpaObs#87).
+# detail.
 .tobs_laplace_marginal_loglik <- function(model, par) {
   tryCatch({
     draw <- matrix(as.numeric(par), nrow = 1L)
@@ -856,7 +856,7 @@ pit_residuals.tobs_fit <- function(object, n.samples = 250, ...) {
   yint <- y; storage.mode(yint) <- "integer"
   # Per-site posterior-mean predictive CDF limits for the detected/all-zero
   # event (cpp_single_pit_cdf); the randomized-PIT interpolation + jitter is
-  # tulpa::tulpa_pit()'s job, as for cover()/occu_cover() (gcol33/tulpaObs#222).
+  # tulpa::tulpa_pit()'s job, as for cover()/occu_cover().
   lim <- cpp_single_pit_cdf(X_occ, X_det, draws[, seq_len(p_occ + p_det), drop = FALSE],
                             as.integer(draw_idx), yint)
   tulpa::tulpa_pit(lim$cdf_upper, cdf_lower = lim$cdf_lower)

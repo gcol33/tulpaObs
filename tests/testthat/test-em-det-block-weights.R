@@ -1,4 +1,4 @@
-# The M-step detection block of the EM-Laplace path (gcol33/tulpaObs#208).
+# The M-step detection block of the EM-Laplace path.
 #
 # The E-step weight w_i = P(z_i = 1 | y_i, theta) is continuous in (0, 1) and
 # belongs on the block as a per-observation `weights` vector: that is what makes
@@ -13,9 +13,9 @@
 # the row is dropped, which is the same statement.
 #
 # The whole encoding rests on the engine consuming `weights` on the spatial
-# Laplace route (gcol33/tulpa#385, tulpa >= 0.0.184); the last block asserts
-# that contract directly so an engine regression fails here rather than silently
-# reverting the M-step to an unweighted fit.
+# Laplace route (tulpa >= 0.0.184); the last block asserts that contract
+# directly so an engine regression fails here rather than silently reverting the
+# M-step to an unweighted fit.
 
 .det_block_data <- function(n = 80, J = 3, seed = 4) {
   set.seed(seed)
@@ -142,7 +142,7 @@ test_that("the spatial Laplace kernel consumes the weights the block hands it", 
   skip_if_no_tulpamesh()
   # An integer weight is exactly row replication; the same fit through the
   # replicated design must land on the same mode. If the engine ever drops
-  # `weights` on the spatial route again (gcol33/tulpa#385), this separates.
+  # `weights` on the spatial route again, this separates.
   fx <- .det_block_data(n = 80)
   sp <- .det_block_spde(fx$coords, arm = c(TRUE, FALSE))
   set.seed(3)

@@ -192,11 +192,11 @@ test_that("by = (cover) equals independent single-species cover() fits", {
 
 # ---- the by= looped backend is COMPACT on the nested-Laplace route ----------
 #
-# gcol33/tulpaObs#107: the default looped by= backend builds each species' arms
-# (and the shared visit grid) compactly when the route is nested_laplace, so it
-# no longer allocates B dense [n_sites x max_visits] response matrices plus a
-# dense visit grid -- the padded-grid memory the single-fit compact path already
-# avoids. The fit must still equal an independent dense single-species fit to the
+# the default looped by= backend builds each species' arms (and the shared
+# visit grid) compactly when the route is nested_laplace, so it no longer
+# allocates B dense [n_sites x max_visits] response matrices plus a dense visit
+# grid -- the padded-grid memory the single-fit compact path already avoids. The
+# fit must still equal an independent dense single-species fit to the
 # compact-vs-dense tolerance (the same invariant as test-occu-cover-compact.R).
 
 test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fits", {
@@ -279,10 +279,10 @@ test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fi
 
 # ---- by= with a positive (unbounded) cover arm ------------------------------
 #
-# gcol33/tulpaObs#107: the by= cover arm picks its tobs_data() storage type from
-# the family's positive distribution, so a lognormal cover that exceeds 1 routes
-# through type = "positive" instead of being rejected by the [0, 1] check that
-# type = "cover" enforces (the regime the old by= path could not handle).
+# the by= cover arm picks its tobs_data() storage type from the family's
+# positive distribution, so a lognormal cover that exceeds 1 routes through type
+# = "positive" instead of being rejected by the [0, 1] check that type = "cover"
+# enforces (the regime the old by= path could not handle).
 
 test_that("by = (occu_cover, lognormal) accepts cover > 1 via the positive type", {
   skip_on_cran()

@@ -1,6 +1,6 @@
 # =============================================================================
 # test-fem-matrices.R - fem_matrices(), the SPDE mesh-assembly entry point
-# re-exported from tulpaMesh (gcol33/tulpaObs#179).
+# re-exported from tulpaMesh.
 #
 # The Matern SPDE precision is built from these two matrices as
 # Q = tau^2 (kappa^2 C + G)^2 / C, so a silently wrong C or G does not error --

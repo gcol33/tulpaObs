@@ -1,4 +1,4 @@
-# predict() for the joint occu_cover fit (gcol33/tulpaObs#22).
+# predict() for the joint occu_cover fit.
 #
 # The joint engine builds an ICAR shared field internally, couples it
 # onto the cover arm with the alpha axis, and integrates (sigma, alpha) on the

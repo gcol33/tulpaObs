@@ -183,9 +183,9 @@
 #
 # There is deliberately no default. The range is in coordinate units, so no
 # value is right for every dataset, and a default would be an invented prior:
-# tulpa's own NNGP anchors ship unset and its layout gate errors without them
-# (gcol33/tulpa#144). Failing here names the term and the coordinate scale
-# instead of surfacing as a ModelData field name.
+# tulpa's own NNGP anchors ship unset and its layout gate errors without
+# them. Failing here names the term and the coordinate scale instead of
+# surfacing as a ModelData field name.
 .tobs_check_prior_range <- function(prior_range, term) {
   if (is.null(prior_range)) {
     stop(sprintf(paste0(
@@ -678,13 +678,13 @@
 # `spatial()` umbrella's `model =` choices; an areal/continuous term added to
 # the registry below is exposed through `spatial()` by listing it here too.
 #
-# `svc` is the continuous varying-coefficient field. It sits here rather than
-# only behind its own verb so the two ways of asking for a spatially-varying
-# coefficient read as one concept with a model choice (gcol33/tulpaObs#146):
-# the areal flavour is the weighted bar `spatial(~ 1 + w || node, graph = adj)`,
-# the continuous flavour is `spatial(lon, lat, model = "svc", coefficients = ...)`.
-# It returns a `tobs_svc` spec, not a `tobs_spatial` one -- the parser bins by
-# class, so the umbrella is a front door, not a change of type.
+# `svc` is the continuous varying-coefficient field. It sits here rather than only
+# behind its own verb so the two ways of asking for a spatially-varying coefficient
+# read as one concept with a model choice: the areal flavour is the weighted bar
+# `spatial(~ 1 + w || node, graph = adj)`, the continuous flavour is `spatial(lon,
+# lat, model = "svc", coefficients = ...)`. It returns a `tobs_svc` spec, not a
+# `tobs_spatial` one -- the parser bins by class, so the umbrella is a front door,
+# not a change of type.
 .tobs_spatial_models <- c("icar", "bym2", "car", "car_proper",
                           "gp", "multiscale_gp", "spde", "svc")
 
@@ -829,14 +829,14 @@
   # before the model data is in scope.
   correlated <- identical(bar_formula[[2L]][[1L]], as.name("|"))
 
-  # `by` (replicated CAR, gcol33/tulpaObs#82): a factor column name naming the
-  # replication grouping. With L levels the whole field is replicated L times
-  # over the block-diagonal Kronecker graph I_L (x) Q, sharing the
-  # hyperparameters across levels (tulpa::tulpa_bar_field_replicate). Orthogonal
-  # to the bar character and to `to`. The tobs term machinery evaluates the
-  # spatial() arguments, so a bare data column would not resolve in the formula
-  # environment; `by` is taken as a string column name (resolved at fit time
-  # against the model data, like the bar's node index).
+  # `by` (replicated CAR): a factor column name naming the replication grouping.
+  # With L levels the whole field is replicated L times over the block-diagonal
+  # Kronecker graph I_L (x) Q, sharing the hyperparameters across levels
+  # (tulpa::tulpa_bar_field_replicate). Orthogonal to the bar character and to
+  # `to`. The tobs term machinery evaluates the spatial() arguments, so a bare
+  # data column would not resolve in the formula environment; `by` is taken as a
+  # string column name (resolved at fit time against the model data, like the
+  # bar's node index).
   if (!is.null(by) && (!is.character(by) || length(by) != 1L || !nzchar(by))) {
     stop("spatial(<bar>, by = ): `by` must be a single replication-factor ",
          "column name (a string), e.g. by = \"habitat\".", call. = FALSE)
@@ -855,18 +855,18 @@
 }
 
 # Expand a captured varying-coefficient bar spec against the model data into the
-# pair the existing weighted-areal-term machinery (gcol33/tulpaObs#59) consumes:
-# one unweighted intercept areal field plus, per bar covariate column, a
-# weight-scaled trend areal field, all on the same graph keyed by the bar's node
-# index (the areal group_var). Each is a plain `tobs_spatial` term identical to
-# what `icar(graph, group_var = node)` / `icar(graph, weight = col,
-# group_var = node)` would produce, so the bar form desugars to exactly the
-# two-term coupled cover path with no engine change. Returns a list of
-# `tobs_spatial` terms in column order (intercept first).
-# Validate a bar's node-index column against the graph dimension (the bar RHS is
-# the graph node index, the old group_var). Shared by the independent expansion
-# (.tobs_expand_spatial_bar) and the arm-specific field builder
-# (.tobs_armspecific_bar_fields), so one source of truth for the check.
+# pair the existing weighted-areal-term machinery consumes: one unweighted
+# intercept areal field plus, per bar covariate column, a weight-scaled trend
+# areal field, all on the same graph keyed by the bar's node index (the areal
+# group_var). Each is a plain `tobs_spatial` term identical to what `icar(graph,
+# group_var = node)` / `icar(graph, weight = col, group_var = node)` would
+# produce, so the bar form desugars to exactly the two-term coupled cover path
+# with no engine change. Returns a list of `tobs_spatial` terms in column order
+# (intercept first). Validate a bar's node-index column against the graph
+# dimension (the bar RHS is the graph node index, the old group_var). Shared by
+# the independent expansion (.tobs_expand_spatial_bar) and the arm-specific
+# field builder (.tobs_armspecific_bar_fields), so one source of truth for the
+# check.
 .tobs_validate_bar_node <- function(node, graph, data) {
   if (is.null(data[[node]])) {
     stop(sprintf(paste0(
@@ -892,9 +892,9 @@
 }
 
 # Resolve a bar spec's areal graph + per-observation node index, applying the
-# `by` replication (gcol33/tulpaObs#82) when the spec carries one. With a `by`
-# factor of L levels the graph is replicated to the block-diagonal Kronecker
-# I_L (x) Q and each observation's node is offset into its level's copy
+# `by` replication when the spec carries one. With a `by` factor of L levels the
+# graph is replicated to the block-diagonal Kronecker I_L (x) Q and each
+# observation's node is offset into its level's copy
 # (tulpa::tulpa_bar_field_replicate), so the L per-level fields are independent
 # (disjoint graph) yet share one precision -- the outer integration grid stays
 # one axis. No `by` is the identity (base graph + raw node index). This is the
@@ -948,26 +948,26 @@
     # Carry the field name onto each desugared block so a copy() in the positive
     # arm can resolve "<name>" (whole field) or "<name>.<component>" (one block).
     term$field_name <- spec$field_name
-    # Carry the replication factor (gcol33/tulpaObs#82) onto each desugared term.
-    # The shared-field path keeps the BASE graph + node column here and replicates
-    # at fit time (where the data is in scope), so the intercept and trend blocks
-    # share one replicated graph + offset index; `by_var` is NULL without `by`.
+    # Carry the replication factor onto each desugared term. The shared-field path
+    # keeps the BASE graph + node column here and replicates at fit time (where
+    # the data is in scope), so the intercept and trend blocks share one
+    # replicated graph + offset index; `by_var` is NULL without `by`.
     term$by_var <- spec$by_var
     out[[i]] <- term
   }
   out
 }
 
-# Expand a captured arm-specific (single-arm `to`) spatial bar
-# (gcol33/tulpaObs#65) against the model data into the per-field design columns
-# the cover-hurdle joint driver places on ONE arm with no cross-arm copy. Unlike
-# `.tobs_expand_spatial_bar` (which desugars a shared field to the existing
-# copied two-block machinery), this keeps the bar as a single self-describing
-# spec: the areal `type`, `graph`, the node-index column and per-obs node codes,
-# the single target `arm`, and the per-field design weights (the intercept's are
-# all-ones, a covariate column's is its per-row value). The fitter builds one
-# non-copied areal block per field, restricted to `arm` via a 0-sentinel
-# spatial_idx on the other arm. `data_obs` is the NA-dropped data.
+# Expand a captured arm-specific (single-arm `to`) spatial bar against the model
+# data into the per-field design columns the cover-hurdle joint driver places on
+# ONE arm with no cross-arm copy. Unlike `.tobs_expand_spatial_bar` (which
+# desugars a shared field to the existing copied two-block machinery), this
+# keeps the bar as a single self-describing spec: the areal `type`, `graph`, the
+# node-index column and per-obs node codes, the single target `arm`, and the
+# per-field design weights (the intercept's are all-ones, a covariate column's
+# is its per-row value). The fitter builds one non-copied areal block per field,
+# restricted to `arm` via a 0-sentinel spatial_idx on the other arm. `data_obs`
+# is the NA-dropped data.
 .tobs_armspecific_bar_fields <- function(spec, data_obs) {
   arm <- spec$to
   if (length(arm) != 1L) {
@@ -1086,10 +1086,10 @@
          call. = FALSE)
   )
   out <- do.call(ctor, c(list(spec$graph), level_args))
-  # Propagate the replication factor (gcol33/tulpaObs#82) onto the tulpa_spatial
-  # spec; the cover / occu_cover nested-Laplace fit reads it and replicates the
-  # graph (I_L (x) Q) + offsets the node index just before resolving the field.
-  # NULL (no `by`) leaves the spec unchanged.
+  # Propagate the replication factor onto the tulpa_spatial spec; the cover /
+  # occu_cover nested-Laplace fit reads it and replicates the graph (I_L (x) Q)
+  # + offsets the node index just before resolving the field. NULL (no `by`)
+  # leaves the spec unchanged.
   out$by_var <- spec$by_var
   out
 }

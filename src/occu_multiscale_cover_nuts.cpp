@@ -1,6 +1,6 @@
 // occu_multiscale_cover_nuts.cpp
 // NUTS target for the non-spatial three-level occupancy + cover hurdle
-// (occu_multiscale_cover(), gcol33/tulpaObs#70). The flat parameter vector is
+// (occu_multiscale_cover()). The flat parameter vector is
 //   theta = (beta_psi, beta_theta, beta_p[site, visit], beta_pos[site, visit],
 //            log_disp)
 // and the joint log-posterior is the exact three-level marginal (z over cells

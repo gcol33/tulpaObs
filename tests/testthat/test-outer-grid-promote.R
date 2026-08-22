@@ -1,7 +1,7 @@
 # Promote the joint nested-Laplace outer-grid placement record to the tobs_fit
-# top level + glance() (gcol33/tulpaObs#187). The engine reports where the outer
-# grid ended up -- outer_grid_placement ("fixed" / "auto_recentered"),
-# outer_grid_recenter_attempts, outer_grid_prior_added, and (gcol33/tulpa#293)
+# top level + glance(). The engine reports where the outer grid ended up --
+# outer_grid_placement ("fixed" / "auto_recentered"),
+# outer_grid_recenter_attempts, outer_grid_prior_added, and
 # outer_grid_recenter_declined, the reason a "fixed" placement stayed fixed --
 # on the object the postprocess wrappers nest at $joint_fit / $joint. A caller
 # asking whether the auto grid did anything should not have to reach in there;
@@ -126,8 +126,8 @@ test_that("occu_cover() spatial fit surfaces outer_grid_placement at the top lev
   expect_true(fit$outer_grid_placement %in% c("fixed", "auto_recentered"))
   # Same value as the nested raw object it was promoted from.
   expect_identical(fit$outer_grid_placement, fit$joint_fit$outer_grid_placement)
-  # A "fixed" placement carries the reason it stayed fixed (gcol33/tulpa#293);
-  # a recentered one carries the attempt count instead.
+  # A "fixed" placement carries the reason it stayed fixed; a recentered one
+  # carries the attempt count instead.
   if (identical(fit$outer_grid_placement, "fixed")) {
     expect_true("outer_grid_recenter_declined" %in% names(fit))
     expect_identical(fit$outer_grid_recenter_declined,

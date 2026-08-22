@@ -180,12 +180,12 @@
   do.call(cbind, cols)
 }
 
-# Community joint occupancy + cover pointwise log-likelihood, columns
-# species-major: [n_draws x (n_species * n_sites)]. Per species the exact
-# two-state occu_cover marginal (.occu_cover_site_ll, the same source of truth
-# the fit's negative-log-posterior uses) is scored over the community-mean
-# pseudo-draws with the per-species BLUP deviation plugged into each arm; the
-# shared positive density handles beta / lognormal / gaussian (gcol33/tulpaObs#116).
+# Community joint occupancy + cover pointwise log-likelihood, columns species-major:
+# [n_draws x (n_species * n_sites)]. Per species the exact two-state occu_cover
+# marginal (.occu_cover_site_ll, the same source of truth the fit's
+# negative-log-posterior uses) is scored over the community-mean pseudo-draws with
+# the per-species BLUP deviation plugged into each arm; the shared positive density
+# handles beta / lognormal / gaussian.
 .tobs_ploglik_community_occu_cover <- function(object, draws) {
   model <- object$model
   cm    <- object$ms_community

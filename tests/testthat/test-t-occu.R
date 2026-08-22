@@ -1,6 +1,6 @@
 # =============================================================================
 # test-t-occu.R - multi-season occupancy with an AR1 year random effect
-# (t_occu(); spOccupancy tPGOcc; gcol33/tulpaObs#124).
+# (t_occu(); spOccupancy tPGOcc).
 #
 # Distinct from dyn_occu() (colext): NO colonization / extinction transition --
 # per-(site, season) occupancy is a Bernoulli GLMM with a shared AR1 year effect
@@ -55,7 +55,7 @@ test_that("t_occu() gates + S3 surface", {
 test_that("t_occu() fits at the documented default method = 'auto'", {
   # t_occu() is the one family whose default_engine is "pg_gibbs"; every other
   # block here passes `method` explicitly, so the default route needs its own
-  # assertion (gcol33/tulpaObs#253).
+  # assertion.
   sim <- simulate_t_occu(N = 60, T_seasons = 5, J = 3, seed = 1)
   expect_equal(t_occu()$default_engine, "pg_gibbs")
   expect_equal(.tobs_resolve_method("auto", t_occu())$engine, "pg_gibbs")

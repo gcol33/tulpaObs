@@ -1,7 +1,7 @@
 # =============================================================================
 # test-occu-cover-batch-fused.R - the bit-identity gate for the FUSED batched
-# C++ driver (gcol33/tulpa#66). Distinct from test-occu-cover-batch.R, which
-# gates the Stage-1 looped backend behind the public tobs_batch API.
+# C++ driver. Distinct from test-occu-cover-batch.R, which gates the Stage-1
+# looped backend behind the public tobs_batch API.
 #
 # This drives tulpa's batched joint nested-Laplace entry
 # (cpp_nested_laplace_joint_multi_batch, via the tulpa_nl_joint_batch wrapper)
@@ -11,13 +11,13 @@
 # reorganises the work -- one design pass, B block-diagonal species solves --
 # so the statistics must match exactly.
 #
-# Field-size coverage (gcol33/tulpa#69): the ICAR sum-to-zero penalty has a
-# dense rank-1 (1 1') Hessian. The single-species sparse path stores it exactly
-# for a field up to S2Z_DENSIFY_MAX = 256 nodes (densified block) and folds it
-# in at solve time (Woodbury) above that. The per-species batched solve must be
-# bit-identical to the independent fit in BOTH regimes, so the gate runs at a
-# small densified field (N = 16) AND a large field that exercises the s2z rank-1
-# path on the single-species oracle (N = 300, n_x > 256).
+# Field-size coverage: the ICAR sum-to-zero penalty has a dense rank-1 (1 1')
+# Hessian. The single-species sparse path stores it exactly for a field up to
+# S2Z_DENSIFY_MAX = 256 nodes (densified block) and folds it in at solve time
+# (Woodbury) above that. The per-species batched solve must be bit-identical to
+# the independent fit in BOTH regimes, so the gate runs at a small densified
+# field (N = 16) AND a large field that exercises the s2z rank-1 path on the
+# single-species oracle (N = 300, n_x > 256).
 # =============================================================================
 
 # Build responses + an ICAR (multi-block) prior for one species of a tiny
@@ -56,11 +56,11 @@
 # per-species modes + log-marginals + the stored inner-precision Q match
 # cell-for-cell, and that the two species are genuinely distinct fits.
 #
-# `offset_arm` (gcol33/tulpa#228): when set to a coupled-arm index, thread a
-# nonzero, heterogeneous per-observation exposure offset through that arm. The
-# batched compute_eta_species must add it exactly as the single-species
-# compute_eta does; with the offset dropped the batched fit disagrees with the
-# oracle cell-for-cell.
+# `offset_arm`: when set to a coupled-arm index, thread a nonzero,
+# heterogeneous per-observation exposure offset through that arm. The batched
+# compute_eta_species must add it exactly as the single-species compute_eta
+# does; with the offset dropped the batched fit disagrees with the oracle
+# cell-for-cell.
 .batch_fused_identity_at <- function(N, J = 4L, offset_arm = NULL) {
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) { if (s > 1L) adj[s, s-1L] <- 1L; if (s < N) adj[s, s+1L] <- 1L }
@@ -155,16 +155,16 @@ test_that("fused batched driver is per-species bit-identical to independent fits
 })
 
 
-test_that("fused batched driver threads a nonzero per-observation offset (gcol33/tulpa#228)", {
-  # Regression for gcol33/tulpa#228: the batched compute_eta_species built the
-  # per-arm linear predictor without adding pa.offset, silently dropping any
-  # exposure/effort offset on a coupled arm -- while the single-species
-  # compute_eta added it -- so a joint fit with an offset disagreed cell-for-cell
-  # with the independent oracle and violated the batch file's own bit-identity
-  # invariant. Threading a nonzero heterogeneous offset on the positive (cover)
-  # arm and requiring the batched per-species modes / log-marginals / inner
-  # precision to stay bit-identical to the single-species fits (which carry the
-  # offset) pins the fix. Before the fix this fails; after it, byte-identity holds.
+test_that("fused batched driver threads a nonzero per-observation offset", {
+  # Regression: the batched compute_eta_species built the per-arm linear
+  # predictor without adding pa.offset, silently dropping any exposure/effort
+  # offset on a coupled arm -- while the single-species compute_eta added it -- so
+  # a joint fit with an offset disagreed cell-for-cell with the independent oracle
+  # and violated the batch file's own bit-identity invariant. Threading a nonzero
+  # heterogeneous offset on the positive (cover) arm and requiring the batched
+  # per-species modes / log-marginals / inner precision to stay bit-identical to
+  # the single-species fits (which carry the offset) pins the fix. Before the fix
+  # this fails; after it, byte-identity holds.
   skip_on_cran()
   skip_if_fast()
   .batch_fused_identity_at(N = 16L, offset_arm = 3L)
@@ -175,9 +175,9 @@ test_that("fused batched driver is bit-identical at a large field (s2z rank-1 re
   # N = 300 > S2Z_DENSIFY_MAX (256), so the single-species sparse oracle folds
   # the ICAR sum-to-zero rank-1 in at solve time (Woodbury) rather than storing
   # the densified 1 1'. The batched per-species solve must still match the
-  # independent fit cell-for-cell -- this is the regime gcol33/tulpa#69 flags as
-  # the one a sparse-native batched driver must get right (the 2nd-species s2z
-  # correctness contract).
+  # independent fit cell-for-cell -- this is the regime flags as the one a
+  # sparse-native batched driver must get right (the 2nd-species s2z correctness
+  # contract).
   skip_on_cran()
   skip_if_fast()
   .batch_fused_identity_at(N = 300L)

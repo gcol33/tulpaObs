@@ -1,9 +1,10 @@
-# dyn_int_occu.R - Multi-season integrated occupancy (spOccupancy tIntPGOcc;
-# gcol33/tulpaObs#122). The product of the two shipped families: a dynamic
-# (multi-season HMM) occupancy state whose per-season emission pools SEVERAL
-# detection sources (integrated occupancy). Integrated models exist because a
-# single source is too sparse to identify psi; pooling sources across seasons is
-# how colonization / extinction estimates come out of opportunistic data.
+# dyn_int_occu.R
+# - Multi-season integrated occupancy (spOccupancy tIntPGOcc). The product of
+# the two shipped families: a dynamic (multi-season HMM) occupancy state whose
+# per-season emission pools SEVERAL detection sources (integrated occupancy).
+# Integrated models exist because a single source is too sparse to identify psi;
+# pooling sources across seasons is how colonization / extinction estimates come
+# out of opportunistic data.
 #
 #   z_i1              ~ Bernoulli(psi1_i)
 #   z_it | z_i,t-1    : colonization gamma_i (0 -> 1), survival 1 - eps_i (1 -> 1)
@@ -284,7 +285,7 @@
 }
 
 # ---------------------------------------------------------------------------
-# Areal field on the first-season occupancy arm (stIntPGOcc, gcol33/tulpaObs#122)
+# Areal field on the first-season occupancy arm (stIntPGOcc)
 # ---------------------------------------------------------------------------
 
 # An ICAR field on the initial-occupancy (psi1) arm of the multi-season
@@ -301,7 +302,7 @@
                                            integration = "grid") {
   if (!identical(spatial$type, "icar"))
     stop("dyn_int_occu() + a spatial field supports icar() only in v1 ",
-         "(bym2 / car_proper are follow-ups; gcol33/tulpaObs#122).", call. = FALSE)
+         "(bym2 / car_proper are follow-ups).", call. = FALSE)
   S <- model$S; n_sites <- model$n_sites
   X_psi <- model$X_psi; X_gam <- model$X_gam; X_eps <- model$X_eps
   X_det <- model$X_det
@@ -350,7 +351,7 @@
   draws <- .rmvn(n_draws, means, V); colnames(draws) <- nm
 
   # Intercept field on the legacy scalar slots; any weighted (SVC) blocks become
-  # the trend field(s) -- svcTIntPGOcc (gcol33/tulpaObs#122).
+  # the trend field(s) -- svcTIntPGOcc.
   fmeans <- res$field_means %||% list(res$field_mean)
   trend_labels <- fb$labels[-1L]
   trend_fields <- if (length(fmeans) > 1L) {
@@ -401,14 +402,14 @@
     sources = sources)
 
   # A shared areal field on the first-season occupancy formula routes to the
-  # stIntPGOcc fitter under nested_laplace (gcol33/tulpaObs#122); otherwise the
-  # non-spatial Laplace fit. Only a psi1-arm icar() field is supported.
+  # stIntPGOcc fitter under nested_laplace; otherwise the non-spatial Laplace
+  # fit. Only a psi1-arm icar() field is supported.
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
       !is.null(structs$svc) || !is.null(structs$latent))
     stop("dyn_int_occu(): temporal / re / svc / latent terms are not wired; a ",
          "shared areal field icar() on the first-season occupancy formula is the ",
-         "structured term supported (gcol33/tulpaObs#122).", call. = FALSE)
+         "structured term supported.", call. = FALSE)
   if (!is.null(structs$spatial)) {
     if (!isTRUE(structs$spatial$shared[1L]))
       stop("dyn_int_occu() areal field sits on the first-season occupancy arm ",

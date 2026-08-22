@@ -1,6 +1,6 @@
-# WAIC / pointwise log-likelihood for the cover-family joint fits
-# (gcol33/tulpaObs#26): occu_cover() (non-spatial Laplace + spatial nested
-# Laplace) and the nested-joint cover() shared-field fit.
+# WAIC / pointwise log-likelihood for the cover-family joint fits:
+# occu_cover() (non-spatial Laplace + spatial nested Laplace) and the
+# nested-joint cover() shared-field fit.
 
 .jw_chain_adj <- function(n) {
   adj <- matrix(0L, n, n)

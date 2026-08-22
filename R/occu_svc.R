@@ -1,6 +1,6 @@
 # =============================================================================
 # occu_svc.R - continuous NNGP spatially-varying coefficients on the Laplace
-# backends of single-season occupancy (gcol33/tulpaObs#143).
+# backends of single-season occupancy.
 #
 # `spatial(lon, lat, model = "svc", coefficients = )` -- equivalently the direct
 # `svc(lon, lat, coefficients = )` -- declares K continuous coefficient surfaces:
@@ -39,7 +39,7 @@
 # range-checked. Both consumers -- the Laplace field builder
 # (`.tobs_svc_field_blocks`) and the NUTS spec packer (R/occu_fit.R) -- go
 # through here, so the term reads its columns against the same design the
-# coefficients are and neither path can drift (gcol33/tulpaObs#146).
+# coefficients are and neither path can drift.
 #
 # `family` and `arm` name the model in the error, so a mistyped coefficient
 # reports the design it was matched against rather than a bare index failure.
@@ -248,8 +248,8 @@
 # areal-BFGS driver -- one coefficient surface per `indices` entry, loaded by that
 # design column of the arm the term sits on (a column of ones is the unweighted
 # intercept surface). Shared by every family that rides the driver, so the term's
-# validation and hyperparameter grid live in one place rather than once per family
-# (gcol33/tulpaObs#143, #144).
+# validation and hyperparameter grid live in one place rather than once per
+# family.
 #
 # `X_arm` is the design matrix of the arm the surfaces load on -- the occupancy
 # logit for occu()/fp_occu(), log lambda for the count families -- so `indices` is
@@ -265,7 +265,7 @@
     stop(sprintf(paste0("svc() is wired on the %s predictor of %s(); a ",
                         "detection-arm varying coefficient is not yet fit on the ",
                         "Laplace backends. Move the term to the %s formula%s. ",
-                        "(tulpaObs#143, #144)"),
+                        ""),
                  arm, family, arm,
                  if (identical(family, "occu")) ", or use method = \"nuts\"" else ""),
          call. = FALSE)
@@ -316,7 +316,7 @@
     stop(sprintf(paste0("%s() fits svc() on the %s arm, so it cannot be combined ",
                         "with a detection-arm areal field in the same fit. Move ",
                         "the areal term to the %s formula, or drop svc(). ",
-                        "(tulpaObs#144)"),
+                        ""),
                  family, .tobs_svc_arm_label(family),
                  .tobs_svc_arm_label(family)), call. = FALSE)
   invisible(TRUE)
@@ -404,11 +404,11 @@
 
 
 # Fit single-season occupancy with continuous NNGP varying coefficients on the
-# Laplace backends (gcol33/tulpaObs#143). `model` is the autoscaled tobs_model;
-# `svc` the resolved `tobs_svc` term. Returns a `tobs_fit` whose `svc_field`
-# matches the NUTS path's naming (a bare vector for one varying coefficient, an
-# n_sites x n_svc matrix otherwise) and whose `svc_hyper` carries each surface's
-# marginal SD and range, marginalised over the outer grid.
+# Laplace backends. `model` is the autoscaled tobs_model; `svc` the resolved
+# `tobs_svc` term. Returns a `tobs_fit` whose `svc_field` matches the NUTS
+# path's naming (a bare vector for one varying coefficient, an n_sites x n_svc
+# matrix otherwise) and whose `svc_hyper` carries each surface's marginal SD and
+# range, marginalised over the outer grid.
 #
 # `max_iter` is the per-cell BFGS iteration budget over (coefficients, surfaces),
 # so it scales with the number of field values rather than with the EM iteration

@@ -1,7 +1,7 @@
 # predict() for the joint cover-family fits: occu_cover() (3-arm) and the
 # cover() hurdle on the nested-Laplace shared-field path (2-arm). One predict
 # path serves both, driven by the family-agnostic draw bundle in
-# joint_substrate.R (gcol33/tulpaObs#22, #23, #24).
+# joint_substrate.R.
 #
 # Returns a posterior-draws object with a tidy accessor -- the tulpaObs analogue
 # of the hand-rolled INLA pred.inla.joint() collaborators write
@@ -89,15 +89,14 @@
   cbind(X_site, matrix(0.0, nrow(X_site), p_arm - slots$p_site))
 }
 
-# Per-arm RE BLUP offset at `newdata` (gcol33/tulpaObs#102, #103): an
-# [n_rows x n_draws] matrix added to the arm's linear predictor, SUMMED over
-# every RE term on that arm (crossed / nested groupings each contribute). For
-# each term, a row's grouping level (the term's grouping variable, e.g.
-# `habitat`) is matched against the fitted levels and the matching group's latent
-# draws are added; an UNSEEN level (no match) or a `newdata` without the grouping
-# column shrinks that term to the population mean (offset 0). The draws come from
-# the grid-integrated posterior so the offset is marginalised over the joint, not
-# a plug-in of the BLUP mean.
+# Per-arm RE BLUP offset at `newdata`: an [n_rows x n_draws] matrix added to the
+# arm's linear predictor, SUMMED over every RE term on that arm (crossed / nested
+# groupings each contribute). For each term, a row's grouping level (the term's
+# grouping variable, e.g. `habitat`) is matched against the fitted levels and the
+# matching group's latent draws are added; an UNSEEN level (no match) or a
+# `newdata` without the grouping column shrinks that term to the population mean
+# (offset 0). The draws come from the grid-integrated posterior so the offset is
+# marginalised over the joint, not a plug-in of the BLUP mean.
 .occu_cover_re_offset <- function(bundle, arm, nd, n_rows, n_draws) {
   off   <- matrix(0, n_rows, n_draws)
   terms <- Filter(function(r) identical(r$arm, arm), bundle$re %||% list())
@@ -150,10 +149,10 @@
 .tobs_cover_mu <- function(eta_pos, bundle, object) {
   latent <- identical(object$model$cover_aggregate, "latent")
   if (identical(bundle$positive, "beta_oi")) {
-    # One-inflated Beta (gcol33/tulpaObs#108): the conditional cover mixes the
-    # constant ceiling mass (cover = 1) with the interior Beta mean,
-    # E[cover | y > 0] = pi + (1 - pi) * plogis(eta_pos). cover()-only, so no
-    # latent cover-aggregate variant.
+    # One-inflated Beta: the conditional cover mixes the constant ceiling mass
+    # (cover = 1) with the interior Beta mean, E[cover | y > 0] = pi + (1 -
+    # pi) * plogis(eta_pos). cover()-only, so no latent cover-aggregate
+    # variant.
     pi1 <- object$pi_one %||% 0
     return(pi1 + (1 - pi1) * stats::plogis(eta_pos))
   }
@@ -171,9 +170,9 @@
     return(mu)
   }
   if (identical(bundle$positive, "gaussian")) {
-    # Identity-Gaussian arm (gcol33/tulpaObs#112): the response IS the mean, so the
-    # conditional cover mean is the linear predictor itself, mu = eta. No latent
-    # cover-aggregate variant (the latent path is lognormal / beta only).
+    # Identity-Gaussian arm: the response IS the mean, so the conditional cover
+    # mean is the linear predictor itself, mu = eta. No latent cover-aggregate
+    # variant (the latent path is lognormal / beta only).
     return(eta_pos)
   }
   if (identical(bundle$positive, "lognormal_trunc")) {
@@ -216,11 +215,10 @@
 # one. `field_specs` labels each block's arm and weight; a fit that carries none
 # (the standalone occu() route, older cover fits) follows the ordering the field
 # assembly guarantees, block 1 the unweighted intercept field and blocks 2.. the
-# trend fields. cover() arm-specific fits (gcol33/tulpaObs#65) and occu_cover()
-# arm-specific cover fields (gcol33/tulpaObs#110) carry their own per-block
-# weight column and keep it -- an intercept-only arm-specific field needs no
-# time_col (gcol33/tulpaObs#95); a pos-arm trend field resolves its weight from
-# newdata.
+# trend fields. cover() arm-specific fits and occu_cover() arm-specific cover
+# fields carry their own per-block weight column and keep it -- an intercept-only
+# arm-specific field needs no time_col; a pos-arm trend field resolves its weight
+# from newdata.
 .tobs_joint_trend_blocks <- function(object, bundle, time_col) {
   n_field <- length(bundle$blocks)
   if (n_field <= 1L || isTRUE(object$armspecific)) return(bundle)
@@ -274,10 +272,10 @@
 # cover) for whichever arms were evaluated.
 #
 # Each arm's linear predictor is the fitted betas, plus the shared-field
-# contribution, plus that arm's RE BLUP offset (gcol33/tulpaObs#102): the group's
-# latent draws are added when the fit carries an RE on the arm AND `newdata`
-# supplies the grouping column; otherwise the term shrinks to the population mean
-# (offset 0), the field-only behaviour.
+# contribution, plus that arm's RE BLUP offset: the group's latent draws are
+# added when the fit carries an RE on the arm AND `newdata` supplies the grouping
+# column; otherwise the term shrinks to the population mean (offset 0), the
+# field-only behaviour.
 .tobs_joint_arm_states <- function(object, bundle, nd, cell, arms = NULL) {
   present <- names(bundle$b)[!vapply(bundle$b, is.null, logical(1))]
   arms    <- if (is.null(arms)) present else intersect(arms, present)
@@ -459,14 +457,14 @@
   X_site
 }
 
-# Core predict handler for the rerouted standalone occu() SVC joint fit
-# (gcol33/tulpaObs#81). The occupancy psi and detection p are computed PER DRAW
-# from the grid-integrated joint posterior (betas + shared field + the arm's RE
-# BLUP offset) and only then summarized -- the marginalize-derived-quantities
-# rule, so the per-cell psi carries the joint posterior's correlation, including
-# the spatial field at each cell. Supports
-# `type = "occupancy" | "detection" | "both" | "change"`; "change" reads the
-# occupancy difference between two values of the trend-field weight covariate.
+# Core predict handler for the rerouted standalone occu() SVC joint fit. The
+# occupancy psi and detection p are computed PER DRAW from the grid-integrated
+# joint posterior (betas + shared field + the arm's RE BLUP offset) and only
+# then summarized -- the marginalize-derived-quantities rule, so the per-cell
+# psi carries the joint posterior's correlation, including the spatial field at
+# each cell. Supports `type = "occupancy" | "detection" | "both" | "change"`;
+# "change" reads the occupancy difference between two values of the trend-field
+# weight covariate.
 .tobs_predict_occu_joint <- function(object, newdata = NULL,
                                      type = "occupancy", times = NULL,
                                      level = 0.95, nsim = 1000L,

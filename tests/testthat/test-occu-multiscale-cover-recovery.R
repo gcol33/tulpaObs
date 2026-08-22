@@ -1,6 +1,7 @@
 # =============================================================================
-# test-occu-multiscale-cover-recovery.R - three-level occupancy + cover hurdle
-# (gcol33/tulpaObs#29), joint nested-Laplace cell-coupling path.
+# test-occu-multiscale-cover-recovery.R
+# - three-level occupancy + cover hurdle, joint nested-Laplace
+# cell-coupling path.
 #
 # Structural gates (always run):
 #   - rejects a state formula with no cell-declaring areal term / no group_var
@@ -98,10 +99,10 @@ test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplac
     expect_lt(abs(bias[j]), 0.25, label = paste0("bias ", nm[j]))
   }
 
-  # 95% Wald CI coverage of the coefficients (working-family gate,
-  # gcol33/tulpaObs#97): pooled over the eight coefficients x seeds at the 0.85
-  # floor, 0.65 per-coordinate floor for Monte-Carlo slack on the shared-field
-  # psi / p intercepts. Measured pooled coverage ~0.95 at 18 seeds.
+  # 95% Wald CI coverage of the coefficients (working-family gate): pooled over
+  # the eight coefficients x seeds at the 0.85 floor, 0.65 per-coordinate floor
+  # for Monte-Carlo slack on the shared-field psi / p intercepts. Measured
+  # pooled coverage ~0.95 at 18 seeds.
   cover <- vapply(seq_along(nm), function(j) {
     lo <- est[ok, j] - 1.96 * se[ok, j]
     hi <- est[ok, j] + 1.96 * se[ok, j]

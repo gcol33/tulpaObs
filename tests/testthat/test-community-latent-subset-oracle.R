@@ -1,9 +1,8 @@
 # The site-subset contract every community-latent oracle's `ll_cell(eta, idx)`
-# implements (gcol33/tulpaObs#162 lever 2): with `idx` given, the result must
-# equal `ll_cell(eta)[idx, , drop = FALSE]` -- evaluating only the requested
-# sites is an optimisation, never a different answer. These are direct,
-# ungated unit tests of that contract (not a full fit), so they stay fast and
-# run on every push.
+# implements: with `idx` given, the result must equal `ll_cell(eta)[idx, ,
+# drop = FALSE]` -- evaluating only the requested sites is an optimisation,
+# never a different answer. These are direct, ungated unit tests of that
+# contract (not a full fit), so they stay fast and run on every push.
 #
 # The case worth a dedicated regression test is `length(idx) == 1`: `vapply`
 # only returns a matrix when its `FUN.VALUE` has length > 1, so a single

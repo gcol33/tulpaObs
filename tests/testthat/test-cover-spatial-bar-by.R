@@ -1,4 +1,4 @@
-# Replicated CAR via spatial(by=) on the cover hurdle (gcol33/tulpaObs#82).
+# Replicated CAR via spatial(by=) on the cover hurdle.
 #
 # `by = "grp"` on a spatial bar replicates the whole field across the levels of a
 # factor: the graph becomes the block-diagonal Kronecker I_L (x) Q (L disjoint

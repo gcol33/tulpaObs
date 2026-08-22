@@ -1,7 +1,7 @@
 # =============================================================================
 # test-occu-cover-joint-coupled.R - end-to-end gates for the joint-coupled
-# engine wired through the occu_cover_lognormal cell-coupling spec
-# (gcol33/tulpa#32 Layer B.2 consumer + R-facing fit wiring).
+# engine wired through the occu_cover_lognormal cell-coupling spec (
+# consumer + R-facing fit wiring).
 #
 # Routed via `tobs(method = "nested_laplace", control = list(engine =
 # "joint"))`. Compares against the v3 nested-Laplace path that
@@ -163,7 +163,7 @@ test_that("joint returns the joint betas+field posterior covariance", {
 })
 
 
-test_that("joint parameter-surface vcov carries beta x hyper cross-cov (tulpaObs#46)", {
+test_that("joint parameter-surface vcov carries beta x hyper cross-cov", {
   N <- 40L; J <- 4L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -245,7 +245,7 @@ test_that("joint errors on non-spatial occu_cover", {
 })
 
 
-test_that("joint regularises the cover (pos) intercept by default (tulpaObs#32)", {
+test_that("joint regularises the cover (pos) intercept by default", {
   # The pos arm sees the shared field only at detected visits, so its intercept
   # confounds with the field level over those cells -- a direction the
   # sum-to-zero field constraint does not pin when low-occupancy regions carry
@@ -370,12 +370,12 @@ test_that("joint recovers slopes, hypers, field shape (10 seeds)", {
 
   expect_gt(mean(field_cor[ok]), 0.80)
 
-  # 95% Wald CI coverage on the shared-field path (working-family gate,
-  # gcol33/tulpaObs#96): pooled over the three slope coefficients x seeds at the
-  # 0.85 floor, with a loose 0.55 per-coordinate floor -- the field-coupled psi
-  # slope carries the mild Laplace nested under-dispersion, so the pooled measure
-  # (not any single coordinate) is the gate. Measured pooled coverage 0.94
-  # (lognormal) at 18 seeds.
+  # 95% Wald CI coverage on the shared-field path (working-family gate): pooled
+  # over the three slope coefficients x seeds at the 0.85 floor, with a loose
+  # 0.55 per-coordinate floor -- the field-coupled psi slope carries the mild
+  # Laplace nested under-dispersion, so the pooled measure (not any single
+  # coordinate) is the gate. Measured pooled coverage 0.94 (lognormal) at 18
+  # seeds.
   cov_cells <- cbind(
     abs(est_psi_x[ok] - beta_occ_truth[2L]) < 1.96 * se_psi_x[ok],
     abs(est_p_x[ok]   - beta_p_truth[2L])   < 1.96 * se_p_x[ok],
@@ -463,8 +463,8 @@ test_that("joint (beta arm) recovers slopes + field shape (10 seeds)", {
 
   expect_gt(mean(field_cor[ok]), 0.80)
 
-  # 95% Wald CI coverage on the shared-field path (beta arm; working-family gate,
-  # gcol33/tulpaObs#96). Measured pooled coverage 0.93 at 18 seeds.
+  # 95% Wald CI coverage on the shared-field path (beta arm; working-family
+  # gate). Measured pooled coverage 0.93 at 18 seeds.
   cov_cells <- cbind(
     abs(est_psi_x[ok] - beta_occ_truth[2L]) < 1.96 * se_psi_x[ok],
     abs(est_p_x[ok]   - beta_p_truth[2L])   < 1.96 * se_p_x[ok],

@@ -22,7 +22,7 @@ inert auto-recenter is visible in a batch summary:
 recenter did not apply -- for instance a user-pinned axis, or
 \code{"auto_recenter_disabled"}. \code{NA} when the grid was recentered.}
 }
-A fit that also requested the Pareto-k diagnostic (\code{control$diagnose.k = TRUE}, off by default per gcol33/tulpaObs#101) adds three more:
+A fit that also requested the Pareto-k diagnostic (\code{control$diagnose.k = TRUE}, off by default) adds three more:
 \describe{
 \item{\code{pareto_k}}{The outer importance-sampling \eqn{\hat{k}} for the
 hyperparameter Gaussian summary; \verb{< 0.7} indicates a reliable summary,
@@ -30,8 +30,8 @@ hyperparameter Gaussian summary; \verb{< 0.7} indicates a reliable summary,
 \item{\code{pareto_k_is_ess}}{The importance-sampling effective sample size on
 the PSIS-smoothed weights (numeric); \code{pareto_k_is_ess / control$k.samples}
 is the relative IS efficiency.}
-\item{\code{pareto_k_proposal_source}}{How the importance proposal was built
-(gcol33/tulpa#116, #121): \code{"mode_hessian"} from the Laplace curvature at
+\item{\code{pareto_k_proposal_source}}{How the importance proposal was
+built: \code{"mode_hessian"} from the Laplace curvature at
 the hyperparameter mode -- curvature-backed, so the \eqn{\hat{k}} stays
 trustworthy even when a sharp posterior collapses the integration grid to
 ~1 cell; \code{"grid_moment"} from the grid-weighted covariance of the
@@ -44,7 +44,6 @@ samples on a spread grid.}
 Extends the generic \code{tulpa_fit} glance with the joint nested-Laplace outer
 grid placement and the outer Pareto-k diagnostic when present. The
 joint-coupled families (\code{occu_cover()}, \code{cover()}, \code{occu()} spatial,
-\code{occu_multiscale_cover()}) carry both at the fit top level
-(gcol33/tulpaObs#104, gcol33/tulpaObs#187); every other family glances exactly
-as before.
+\code{occu_multiscale_cover()}) carry both at the fit top level; every other
+family glances exactly as before.
 }

@@ -56,7 +56,7 @@
 #   (1 | g/h)          -> re(g) + re(interaction(g, h, drop = TRUE))   [both intercept]
 #
 # The LHS (intercept + slopes) is distributed across every grouping factor the
-# RHS implies. See gcol33/tulpaObs#10.
+# RHS implies. See.
 
 # Recognise a parenthesised bar term `( <lhs> | <rhs> )` / `( <lhs> || <rhs> )`.
 # Returns list(op, lhs, rhs) or NULL. Inspects the AST, never the string.
@@ -165,8 +165,8 @@
 # so `(1 + x | cell)` and `(x || g/h)` contribute the same grouping factors they
 # expand to (`cell`; `g`, `g:h`). A bar's RHS may name several factors (crossed /
 # nested), so each is returned separately. Used by the cover()/occu_cover() guard
-# (gcol33/tulpaObs#62) to flag a bar grouping factor that collides with an areal
-# term's graph-node `group_var`.
+# to flag a bar grouping factor that collides with an areal term's graph-node
+# `group_var`.
 .tobs_collect_bar_groups <- function(formula) {
   out <- character(0)
   walk <- function(e) {
@@ -184,16 +184,16 @@
   out
 }
 
-# Soft guard for the cover() / occu_cover() formula papercut (gcol33/tulpaObs#62).
-# A user who learns the engine's inline-MCAR bar idiom (`tulpa::spatial(graph,
-# ~ 1 + x | cell)`) may carry the `| cell` spelling into a cover formula, where it
-# is legitimately parsed as a random effect, not a spatial field. RE bars are
-# supported and must not be rejected; but when a bar's grouping factor is ALSO the
-# graph-node `group_var` of an areal term in the same formula (the strong-signal
-# confusion case), emit an informative message() that the bar is being fitted as an
-# IID random effect, pointing to the spatial() bar / two-term form for a spatial
-# field. Suppressible (message, not warning/error) and a no-op when the bar's
-# factor is unrelated to any spatial term (an unambiguous, intended RE).
+# Soft guard for the cover() / occu_cover() formula papercut. A user who learns the
+# engine's inline-MCAR bar idiom (`tulpa::spatial(graph, ~ 1 + x | cell)`) may
+# carry the `| cell` spelling into a cover formula, where it is legitimately parsed
+# as a random effect, not a spatial field. RE bars are supported and must not be
+# rejected; but when a bar's grouping factor is ALSO the graph-node `group_var` of
+# an areal term in the same formula (the strong-signal confusion case), emit an
+# informative message() that the bar is being fitted as an IID random effect,
+# pointing to the spatial() bar / two-term form for a spatial field. Suppressible
+# (message, not warning/error) and a no-op when the bar's factor is unrelated to
+# any spatial term (an unambiguous, intended RE).
 #
 # `formula` is the original (pre-desugar) process formula; `spatial_specs` is the
 # list of parsed `tobs_spatial` specs from that formula (each carrying `group_var`

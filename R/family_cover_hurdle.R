@@ -61,8 +61,8 @@
          "in [0, 1]).", call. = FALSE)
   }
   # A spatially varying trend is model structure and so lives in the formula,
-  # as a second weighted areal term (gcol33/tulpaObs#59). `control$trend` is
-  # removed: control carries fitting behaviour only. `[[` (exact), never `$`.
+  # as a second weighted areal term. `control$trend` is removed: control
+  # carries fitting behaviour only. `[[` (exact), never `$`.
   if (!is.null(control[["trend"]])) {
     stop("control$trend is no longer supported for cover hurdle models.\n",
          "Declare spatially varying trends directly in the formula, e.g.\n\n",
@@ -76,7 +76,7 @@
   # as (sigma, alpha) with `sigma_pos = alpha * sigma`, and has done since that
   # axis was retired, so nothing has read the knob on any cover() route: a fit
   # pinning it integrated the default coupling axis and reported a bit-identical
-  # log-marginal (gcol33/tulpaObs#192). `[[` (exact), never `$`.
+  # log-marginal. `[[` (exact), never `$`.
   if (!is.null(control[["sigma.pos.grid"]])) {
     stop("control$sigma.pos.grid is no longer supported for cover hurdle ",
          "models.\nThe joint engine integrates the copy coefficient `alpha`, ",
@@ -168,8 +168,8 @@
     stop("an arm-specific spatial bar (single-arm `to`) in a cover() formula ",
          "requires method = 'nested_laplace' or 'nested_laplace_sla' (got ",
          "engine '", engine, "'). The separate per-arm latent fields integrate ",
-         "each field's precision on the outer nested-Laplace grid ",
-         "(gcol33/tulpaObs#65).", call. = FALSE)
+         "each field's precision on the outer nested-Laplace grid.",
+         call. = FALSE)
   }
 
   if (identical(engine, "nested_laplace")) {
@@ -237,11 +237,11 @@ encode_cover_hurdle <- function(formula, data, y,
   positive <- match.arg(positive)
   if (!is.numeric(y)) stop("`y` must be numeric.", call. = FALSE)
   .tobs_check_site_count(length(y), nrow(data), "values")
-  # The identity-Gaussian arm (gcol33/tulpaObs#112) is the delta-normal hurdle
-  # for a response on a real, unbounded scale: absence is the exact 0 sentinel,
-  # presence is any nonzero magnitude (which may be negative). The bounded-cover
-  # arms (beta / lognormal / ordinal) keep the [0, 1] cover-fraction contract and
-  # the y > 0 presence rule.
+  # The identity-Gaussian arm is the delta-normal hurdle for a response on a
+  # real, unbounded scale: absence is the exact 0 sentinel, presence is any
+  # nonzero magnitude (which may be negative). The bounded-cover arms (beta /
+  # lognormal / ordinal) keep the [0, 1] cover-fraction contract and the y > 0
+  # presence rule.
   if (!identical(positive, "gaussian")) {
     rng <- range(y, na.rm = TRUE)
     if (rng[1] < 0 || rng[2] > 1) {
@@ -334,12 +334,12 @@ encode_cover_hurdle <- function(formula, data, y,
 
   X_occ_natural <- stats::model.matrix(fe_occ_formula, data_obs)
 
-  # One-inflated Beta (gcol33/tulpaObs#108): the presence arm still models y > 0,
-  # but plots recorded at full cover (y = 1) are a genuine point mass, not a near-1
-  # continuous value. With a constant inflation probability the likelihood
-  # factorizes -- pi is the share of positive plots at the ceiling, and the
-  # interior Beta is fit on the (0, 1) plots only -- so the Beta arm drops the
-  # ceiling rows and `oi` carries pi for the decode / predict.
+  # One-inflated Beta: the presence arm still models y > 0, but plots recorded at
+  # full cover (y = 1) are a genuine point mass, not a near-1 continuous value.
+  # With a constant inflation probability the likelihood factorizes -- pi is the
+  # share of positive plots at the ceiling, and the interior Beta is fit on the (0,
+  # 1) plots only -- so the Beta arm drops the ceiling rows and `oi` carries pi for
+  # the decode / predict.
   oi <- NULL
   is_pos <- occur == 1L
   if (positive == "beta_oi") {
@@ -369,9 +369,9 @@ encode_cover_hurdle <- function(formula, data, y,
     # in pos_data$trunc_upper below.
     y_pos_resp <- log(y_pos)
   } else if (positive == "gaussian") {
-    # Identity-Gaussian arm (gcol33/tulpaObs#112): a plain Gaussian on the raw
-    # positive response (already on a real, unbounded scale), with no log
-    # transform and no change-of-variable Jacobian.
+    # Identity-Gaussian arm: a plain Gaussian on the raw positive response
+    # (already on a real, unbounded scale), with no log transform and no
+    # change-of-variable Jacobian.
     y_pos_resp <- y_pos
   } else if (positive == "ordinal") {
     # Interval-censored Gaussian on log-cover with fixed Braun-Blanquet
@@ -409,10 +409,10 @@ encode_cover_hurdle <- function(formula, data, y,
   X_pos_natural <- stats::model.matrix(fe_pos_formula, data_pos)
 
   # Autoscale numeric columns of each arm's design matrix so the optimizer
-  # sees well-conditioned predictors (gcol33/tulpaObs#9). Each arm gets its
-  # own scaling parameters; betas / SEs are transformed back to natural
-  # scale by `decode_cover_hurdle*()`. Pass `autoscale = FALSE` to disable
-  # — used by internal tests that probe `.loglik_cover_*` against a known
+  # sees well-conditioned predictors. Each arm gets its own scaling
+  # parameters; betas / SEs are transformed back to natural scale by
+  # `decode_cover_hurdle*()`. Pass `autoscale = FALSE` to disable — used by
+  # internal tests that probe `.loglik_cover_*` against a known
   # natural-scale truth, where any centering would shift the maximum.
   if (isTRUE(autoscale)) {
     occ_scaled <- .autoscale_design(X_occ_natural)
@@ -475,8 +475,7 @@ encode_cover_hurdle <- function(formula, data, y,
 # bar is copy-only across both arms -- an arm-specific correlated field is not
 # defined (the cross-field Sigma lives within one arm, so without a copy there is
 # no cross-arm transfer to estimate). The independent (`||`) single-arm bar is a
-# separate per-arm latent (gcol33/tulpaObs#65), routed past this check in
-# `.encode_cover_terms`.
+# separate per-arm latent, routed past this check in `.encode_cover_terms`.
 .cover_bar_check_to <- function(spec) {
   to  <- spec$to %||% .tobs_cover_arms
   bad <- setdiff(to, .tobs_cover_arms)
@@ -487,31 +486,31 @@ encode_cover_hurdle <- function(formula, data, y,
       paste0("c(", paste0("\"", to, "\"", collapse = ", "), ")")),
       call. = FALSE)
   }
-  # Both cover arms (the copy-only correlated field, gcol33/tulpaObs#64) OR a
-  # single arm (a free-Sigma correlated field on that arm alone, no cross-arm
-  # copy, gcol33/tulpaObs#109) are both supported.
+  # Both cover arms (the copy-only correlated field) OR a single arm (a
+  # free-Sigma correlated field on that arm alone, no cross-arm copy) are
+  # both supported.
   invisible(spec)
 }
 
-# Desugar a captured INDEPENDENT (`||`) varying-coefficient spatial bar
-# (gcol33/tulpaObs#61) into the intercept + per-covariate trend `tobs_spatial`
-# terms the cover machinery already consumes. The expanded terms are plain
-# icar/bym2/car/car_proper specs identical to the two-term form, so the bar
-# desugars to exactly the existing #59 coupled path. A correlated (`|`) bar is
-# routed earlier in `.encode_cover_terms` to `.cover_build_mcar_spec()`.
+# Desugar a captured INDEPENDENT (`||`) varying-coefficient spatial bar into
+# the intercept + per-covariate trend `tobs_spatial` terms the cover machinery
+# already consumes. The expanded terms are plain icar/bym2/car/car_proper
+# specs identical to the two-term form, so the bar desugars to exactly the
+# existing #59 coupled path. A correlated (`|`) bar is routed earlier in
+# `.encode_cover_terms` to `.cover_build_mcar_spec()`.
 .cover_desugar_spatial_bar <- function(spec, data_obs) {
   .cover_bar_check_to(spec)
   .tobs_expand_spatial_bar(spec, data_obs)
 }
 
-# Build the correlated separable-MCAR field spec (gcol33/tulpaObs#64) for the
-# cover hurdle from a captured correlated bar (single `|`). The bar's design
-# columns (intercept + covariates) become the p coupled areal fields sharing a
-# free cross-covariance Sigma (x) Q^-1; both arms (presence + positive) see the
-# same fields and the whole correlated field is copied onto the positive arm
-# with one estimated amplitude alpha (the cross-arm transfer). The within-arm
-# covariance Sigma (the relationship AMONG the fields, e.g. does a high-baseline
-# cell trend up?) is integrated over the outer CCD grid in log-Cholesky coords.
+# Build the correlated separable-MCAR field spec for the cover hurdle from a
+# captured correlated bar (single `|`). The bar's design columns (intercept +
+# covariates) become the p coupled areal fields sharing a free cross-covariance
+# Sigma (x) Q^-1; both arms (presence + positive) see the same fields and the
+# whole correlated field is copied onto the positive arm with one estimated
+# amplitude alpha (the cross-arm transfer). The within-arm covariance Sigma (the
+# relationship AMONG the fields, e.g. does a high-baseline cell trend up?) is
+# integrated over the outer CCD grid in log-Cholesky coords.
 #
 # `data_obs` is the NA-dropped data. The intercept field's per-observation
 # weight is all-ones; a covariate field's is the design column. Returns a
@@ -531,11 +530,11 @@ encode_cover_hurdle <- function(formula, data, y,
   specs <- tulpa::tulpa_bar_field_specs(spec$bar_formula, data_obs)
   node  <- attr(specs, "node")
   .tobs_validate_bar_node(node, spec$graph, data_obs)
-  # Replicate over the `by` levels (gcol33/tulpaObs#82): the separable-MCAR field
-  # is built over I_L (x) Q -- one disjoint correlated (intercept, slope) field
-  # per level -- with the cross-field Sigma (x) Q^-1 shared across levels (no
-  # `by` is the identity). The copy onto the positive arm carries the whole
-  # replicated field at the one estimated amplitude alpha, unchanged.
+  # Replicate over the `by` levels: the separable-MCAR field is built over I_L
+  # (x) Q -- one disjoint correlated (intercept, slope) field per level -- with
+  # the cross-field Sigma (x) Q^-1 shared across levels (no `by` is the
+  # identity). The copy onto the positive arm carries the whole replicated field
+  # at the one estimated amplitude alpha, unchanged.
   rg      <- .tobs_bar_resolve_graph(spec, data_obs, node)
   graph   <- rg$graph
   n_nodes <- nrow(graph)
@@ -576,21 +575,20 @@ encode_cover_hurdle <- function(formula, data, y,
 #     tulpa_spatial spec the engine consumes (`spatial`);
 #   * a weighted areal term (`icar(graph = adj, weight = col, group_var = ...)`)
 #     is the spatially-varying TREND field -- the formula-DSL spelling of the
-#     coupled second besag block (gcol33/tulpaObs#59). Its per-observation weight
-#     `col` and label come back in `trend`.
-# A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`,
-# gcol33/tulpaObs#61) is the compact single-term spelling: it desugars in place
-# to the intercept field (its `1` column) plus a weight-scaled trend field per
-# covariate column, all on the bar's node index, so the two forms feed the same
-# machinery. The shared `to = c("presence", "positive")` path is the only one
-# wired here; `|` and arm-specific `to` are gated below.
-# svc()/latent() are not meaningful for the cover hurdle and are rejected.
-# Split a per-arm cover formula into its fixed-effects formula and its spatial-
-# field terms (tagged with the arm via `to =`, so a field placed in `presence` /
-# `positive` lands on that arm through the same machinery a shared `to =` bar
-# uses). lme4 bars are desugared first so `(1 | g)` reads as re(); temporal() /
-# re() / other structured terms are not routed per-arm yet (declare them on the
-# shared `formula`).
+#     coupled second besag block. Its per-observation weight `col` and label
+#     come back in `trend`.
+# A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj, to = ...)`)
+# is the compact single-term spelling: it desugars in place to the intercept
+# field (its `1` column) plus a weight-scaled trend field per covariate column,
+# all on the bar's node index, so the two forms feed the same machinery. The
+# shared `to = c("presence", "positive")` path is the only one wired here; `|`
+# and arm-specific `to` are gated below. svc()/latent() are not meaningful for
+# the cover hurdle and are rejected. Split a per-arm cover formula into its
+# fixed-effects formula and its spatial- field terms (tagged with the arm via
+# `to =`, so a field placed in `presence` / `positive` lands on that arm through
+# the same machinery a shared `to =` bar uses). lme4 bars are desugared first so
+# `(1 | g)` reads as re(); temporal() / re() / other structured terms are not
+# routed per-arm yet (declare them on the shared `formula`).
 .cover_lift_arm_fields <- function(formula, arm) {
   if (is.null(formula)) return(list(fe = NULL, fields = list()))
   tt   <- stats::terms(.tobs_desugar_bars(formula), keep.order = TRUE)
@@ -748,8 +746,8 @@ encode_cover_hurdle <- function(formula, data, y,
     if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar) &&
         isTRUE(spec$correlated)) {
       # Correlated bar (single `|`): one separable-MCAR block over the bar's
-      # design columns sharing a free Sigma, copied onto the positive arm
-      # (gcol33/tulpaObs#64). Distinct from the `||` (independent) desugaring.
+      # design columns sharing a free Sigma, copied onto the positive arm.
+      # Distinct from the `||` (independent) desugaring.
       if (!is.null(mcar)) {
         stop("cover(): only one correlated spatial bar (single `|`) is ",
              "supported.", call. = FALSE)
@@ -757,12 +755,12 @@ encode_cover_hurdle <- function(formula, data, y,
       mcar <- .cover_build_mcar_spec(spec, data_obs)
     } else if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar) &&
                length(spec$to %||% .tobs_cover_arms) == 1L) {
-      # Arm-specific INDEPENDENT bar (single-arm `to`, gcol33/tulpaObs#65): a
-      # separate per-arm latent field on ONLY that arm, with its own precision
-      # and NO cross-arm copy. Distinct from the shared `||` (both-arm) desugar,
-      # which copies a presence-anchored field onto the positive arm. Each
-      # single-arm bar is collected as a self-describing field block; the fitter
-      # places each on its arm via a 0-sentinel spatial_idx on the other arm.
+      # Arm-specific INDEPENDENT bar (single-arm `to`): a separate per-arm
+      # latent field on ONLY that arm, with its own precision and NO cross-arm
+      # copy. Distinct from the shared `||` (both-arm) desugar, which copies a
+      # presence-anchored field onto the positive arm. Each single-arm bar is
+      # collected as a self-describing field block; the fitter places each on
+      # its arm via a 0-sentinel spatial_idx on the other arm.
       armspec[[length(armspec) + 1L]] <- .tobs_armspecific_bar_fields(spec, data_obs)
     } else if (inherits(spec, "tobs_spatial") && isTRUE(spec$is_bar)) {
       expanded <- .cover_desugar_spatial_bar(spec, data_obs)
@@ -781,11 +779,11 @@ encode_cover_hurdle <- function(formula, data, y,
                    spec$label %||% class(spec)[1]), call. = FALSE)
     }
   }
-  # Soft guard (gcol33/tulpaObs#62): a bare `| / ||` RE bar whose grouping factor
-  # is also an areal term's graph-node group_var is the engine-bar-idiom papercut
-  # -- the bar is fitted as an IID random effect, not a spatial field. RE bars are
-  # legitimate, so this informs (message) rather than rejecting; it is silent when
-  # the bar's factor is unrelated to any spatial term.
+  # Soft guard: a bare `| / ||` RE bar whose grouping factor is also an areal
+  # term's graph-node group_var is the engine-bar-idiom papercut -- the bar is
+  # fitted as an IID random effect, not a spatial field. RE bars are legitimate,
+  # so this informs (message) rather than rejecting; it is silent when the bar's
+  # factor is unrelated to any spatial term.
   if (!is.null(re_guard_formula)) {
     .tobs_cover_bar_re_guard(re_guard_formula, spatial_specs)
   }
@@ -796,13 +794,13 @@ encode_cover_hurdle <- function(formula, data, y,
          "(~ 1 + w | node).", call. = FALSE)
   }
   if (length(armspec) > 0L) {
-    # Arm-specific separate latents (gcol33/tulpaObs#65) are an independent
-    # spatial structure: each is its own per-arm block with its own precision and
-    # no cross-arm copy. They do not compose with the shared/copied intercept +
-    # trend machinery, the correlated MCAR copy, or temporal()/re() blocks in the
-    # same fit (those are coupled structures; mixing would silently re-introduce a
-    # cross-arm transfer the user opted out of). Reject the combination with a
-    # pointer rather than ignoring one half.
+    # Arm-specific separate latents are an independent spatial structure: each is
+    # its own per-arm block with its own precision and no cross-arm copy. They do
+    # not compose with the shared/copied intercept + trend machinery, the
+    # correlated MCAR copy, or temporal()/re() blocks in the same fit (those are
+    # coupled structures; mixing would silently re-introduce a cross-arm transfer
+    # the user opted out of). Reject the combination with a pointer rather than
+    # ignoring one half.
     if (length(spatial_specs) > 0L || !is.null(mcar)) {
       stop("cover(): arm-specific spatial fields (single-arm `to`) are a ",
            "separate per-arm structure with no cross-arm copy; they cannot be ",
@@ -831,13 +829,12 @@ encode_cover_hurdle <- function(formula, data, y,
 }
 
 # Partition the cover() formula's areal terms into the shared intercept field
-# and the optional spatially-varying trend field (gcol33/tulpaObs#59). An
-# unweighted areal term is the intercept; a weighted areal term
-# (`icar(..., weight = col)`) is the trend -- the second coupled besag block
-# that `control$trend` used to introduce. Both spellings of the weighted term --
-# bare `icar(..., weight = )` and the umbrella `spatial(model = "icar",
-# weight = )` -- resolve to the same `tobs_spatial` term and so to the same
-# trend block.
+# and the optional spatially-varying trend field. An unweighted areal term is
+# the intercept; a weighted areal term (`icar(..., weight = col)`) is the trend
+# -- the second coupled besag block that `control$trend` used to introduce. Both
+# spellings of the weighted term -- bare `icar(..., weight = )` and the umbrella
+# `spatial(model = "icar", weight = )` -- resolve to the same `tobs_spatial`
+# term and so to the same trend block.
 #
 # Returns list(spatial, trend):
 #   * spatial: the tulpa_spatial spec for the intercept field, or NULL.
@@ -1005,8 +1002,7 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
   }
 
   # positive == "beta": the beta arm is penalised via the beta solver's own
-  # beta_prior (gcol33/tulpa, tulpa_laplace_beta gained beta_prior); the
-  # occurrence arm is penalised by occ_bp above.
+  # beta_prior; the occurrence arm is penalised by occ_bp above.
   m_pos <- tulpa::tulpa_laplace_beta(
     y         = enc$pos_data$y,
     X         = enc$pos_data$X,
@@ -1147,11 +1143,11 @@ decode_cover_hurdle <- function(fits, enc, family,
       n_total      = enc$N,
       n_positive   = enc$oi$n_positive %||% length(enc$idx_pos),
       converged    = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),
-      # Unified convergence record, the same list every other family stores
-      # (gcol33/tulpaObs#88), so a mixed-family QC pass reads one accessor
-      # (`convergence(fit)` / `fit$convergence$converged`) across occu /
-      # occu_cover / cover. The top-level `converged` is kept for glance() and
-      # back-compat; `sla_status` carries the simplified-Laplace marginal code.
+      # Unified convergence record, the same list every other family stores, so
+      # a mixed-family QC pass reads one accessor (`convergence(fit)` /
+      # `fit$convergence$converged`) across occu / occu_cover / cover. The
+      # top-level `converged` is kept for glance() and back-compat;
+      # `sla_status` carries the simplified-Laplace marginal code.
       convergence  = list(
         converged  = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),
         n_iter     = fits$m_occ$n_iter %||% NA_integer_,

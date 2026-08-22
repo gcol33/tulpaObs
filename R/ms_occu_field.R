@@ -2,7 +2,7 @@
 # ms_occu_field.R - community occupancy with a shared latent structure on the
 # occupancy arm: a shared areal field / varying-coefficient field (the
 # spOccupancy sfMsPGOcc / svcMsPGOcc analogues), latent factors (lfMsPGOcc), or
-# BOTH (the spatial-factor case). gcol33/tulpaObs#117, #118, #119.
+# BOTH (the spatial-factor case)..
 #
 #   logit psi_{s,i} = X_i . (mu_psi + b_psi_s) + sum_k W[i,k] F[u(i),k]
 #                                              + sum_q lambda_{s,q} zeta_{q,i}
@@ -47,8 +47,8 @@
   ad <- vapply(su, function(z) z$any_det,       logical(Ns))    # n_sites x n_species
   qmat <- (1 - p_site)^nv
   # `idx` (a subset of site rows) restricts the per-species marginal to those
-  # sites; `su[[s]]` (fixed per-site detection summaries) is subsetted to match
-  # (gcol33/tulpaObs#162 lever 2).
+  # sites; `su[[s]]` (fixed per-site detection summaries) is subsetted to
+  # match.
   summ_subset <- function(summ, idx)
     list(n_valid = summ$n_valid[idx, , drop = FALSE],
          n_det   = summ$n_det[idx, , drop = FALSE],
@@ -141,20 +141,19 @@
   res <- .tobs_community_latent_ascent(
     spatial = spatial, latent = latent, model = model, what = "ms_occu()",
     make_oracle = make_oracle, em_fit = em_fit, offset_of = offset_of,
-    # 150 is the ms_count-measured factor budget (gcol33/tulpaObs#156); this
-    # family's 16-seed recovery was measured AT it (magnitude median 1.021,
-    # slope z 0.71) rather than inheriting it untested.
+    # 150 is the ms_count-measured factor budget; this family's 16-seed
+    # recovery was measured AT it (magnitude median 1.021, slope z 0.71)
+    # rather than inheriting it untested.
     allow = "icar", tol = tol, max.outer = max.outer, factor.outer = 150L,
-    # One starting direction, from this family's own measurement
-    # (gcol33/tulpaObs#164). Over 10 seeds at N=250, S=16, Q=2, J=5 the
-    # multi-start's 7 extra candidates cost 3.5-4.3x and, on 4 of the 8
-    # reseeded seeds, landed on the EXACT SAME loadings as the 1-start fit
-    # (d_mag = d_res = 0.0000) -- the eight directions are converging to one
-    # basin, not escaping it. The one seed flagged by mag_ratio (1.40x truth)
-    # reproduced identically at 8 starts too, so it is a hard fixture the
-    # multi-start was never going to reach (the same character as the
-    # ms_abun measurement's own seed 314). Family default 1;
-    # `control$factor.starts` still overrides it.
+    # One starting direction, from this family's own measurement. Over 10
+    # seeds at N=250, S=16, Q=2, J=5 the multi-start's 7 extra candidates
+    # cost 3.5-4.3x and, on 4 of the 8 reseeded seeds, landed on the EXACT
+    # SAME loadings as the 1-start fit (d_mag = d_res = 0.0000) -- the eight
+    # directions are converging to one basin, not escaping it. The one seed
+    # flagged by mag_ratio (1.40x truth) reproduced identically at 8 starts
+    # too, so it is a hard fixture the multi-start was never going to reach
+    # (the same character as the ms_abun measurement's own seed 314). Family
+    # default 1; `control$factor.starts` still overrides it.
     factor.starts = if (is.null(factor.starts)) 1L else factor.starts,
     n.quad = n.quad, verbose = verbose)
 

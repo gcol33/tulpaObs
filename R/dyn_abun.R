@@ -383,12 +383,12 @@
 #
 # The two arms differ only in WHERE the offset enters and HOW cheaply the marginal
 # re-evaluates per quadrature node:
-#   - lambda (tulpaObs#51): eta_lambda enters ONLY the season-1 initial
+# - lambda: eta_lambda enters ONLY the season-1 initial
 #     distribution, so the data-conditional weights c(n1) = P(all data | N_1 = n1)
 #     are eta-independent and precomputed ONCE (the O(K^2 T) HMM backward pass,
 #     cpp_dyn_abun_init_weights_mat); each node is an O(K) dot (cpp_dyn_abun_init_-
 #     loglik).
-#   - p (tulpaObs#82): eta_p enters every season's observation pmf, so c cannot be
+# - p: eta_p enters every season's observation pmf, so c cannot be
 #     precomputed -- each node re-evaluates the full O(K^2 T) forward marginal with
 #     a closed-form second-order eta_p forward-mode pass (cpp_dyn_abun_p_loglik).
 # The non-offset arms and the dispersion are held fixed during the integration
@@ -558,11 +558,11 @@
 
 
 # Fit a Dail-Madsen open N-mixture with a site-level grouped RE on the
-# initial-abundance (lambda, tulpaObs#51) OR the detection (p, tulpaObs#82) arm
-# under the Laplace / AGHQ path (one grouping factor, RE dim <= 3). The survival
-# (omega) and recruitment (gamma) arms never carry structured terms (rejected
-# upstream -- they are processes > 2). RE on BOTH arms at once is rejected: the
-# AGHQ path integrates one arm at a time.
+# initial-abundance (lambda) OR the detection (p) arm under the Laplace / AGHQ
+# path (one grouping factor, RE dim <= 3). The survival (omega) and recruitment
+# (gamma) arms never carry structured terms (rejected upstream -- they are
+# processes > 2). RE on BOTH arms at once is rejected: the AGHQ path integrates
+# one arm at a time.
 .tobs_fit_dyn_abun_re <- function(model, re, max_iter = 300L, tol = 1e-8,
                                   verbose = TRUE, n_quad = 9L, lkj_eta = 1.5,
                                   theta_prior_sd = 100) {
@@ -574,7 +574,7 @@
   if (length(arms$lambda) && length(arms$p)) {
     stop("Random effects on BOTH the initial-abundance (lambda) and detection ",
          "(p) arms in one dyn_abun fit are not supported; the AGHQ path ",
-         "integrates one arm at a time. Put the RE on lambda OR p. (tulpaObs#82)",
+         "integrates one arm at a time. Put the RE on lambda OR p.",
          call. = FALSE)
   }
   arm    <- if (length(arms$lambda)) "lambda" else "p"

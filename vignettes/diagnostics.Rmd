@@ -449,7 +449,7 @@ the top decile, and the derived cover-arm SD 87 of 100: the posterior sits
 systematically low on field scale, or the simulator draws it high. `alpha`,
 being a ratio of the two SDs, stays uniform at 0.52, and so do the slopes,
 which points at a common scale factor rather than at the coupling. The cause
-is open (gcol33/tulpaObs#213). Read the field-SD ranks on a pooled fit with
+is open. Read the field-SD ranks on a pooled fit with
 that in mind.
 
 Supply `model.only = TRUE` to get the callback list instead of running the

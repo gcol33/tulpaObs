@@ -1,13 +1,13 @@
 # ms_count_pg_gibbs.R - Polya-Gamma Gibbs for the community Bernoulli / binomial
 # GLMM (jsdm() and count(response="binomial") community, ms_count(); spOccupancy
-# msPGOcc-family / svcMsPGBinom; gcol33/tulpaObs#126). The community
-# relative-abundance GLMM on a LOGISTIC response has no latent state and no
-# detection sub-model -- y is the observed k-of-n (n = 1 for jsdm's
-# presence/absence) -- so this is the simplest of the PG engines: per-species
-# coefficients with Gaussian community hyperpriors, each an exactly conjugate
-# Gaussian update conditional on the Polya-Gamma auxiliaries. Only the logistic
-# responses (bernoulli / binomial) admit PG augmentation; the Poisson / negbin /
-# gaussian responses of ms_count() are not routed here.
+# msPGOcc-family / svcMsPGBinom). The community relative-abundance GLMM on a
+# LOGISTIC response has no latent state and no detection sub-model -- y is the
+# observed k-of-n (n = 1 for jsdm's presence/absence) -- so this is the simplest
+# of the PG engines: per-species coefficients with Gaussian community
+# hyperpriors, each an exactly conjugate Gaussian update conditional on the
+# Polya-Gamma auxiliaries. Only the logistic responses (bernoulli / binomial)
+# admit PG augmentation; the Poisson / negbin / gaussian responses of ms_count()
+# are not routed here.
 #
 #   logit(p_{s,i}) = X_i . beta_s,   beta_s ~ N(mu, diag(tau^2))
 #   y_{s,i} ~ Binomial(n_{s,i}, p_{s,i})           (n = 1 = jsdm bernoulli)
@@ -23,7 +23,7 @@
                                         n.iter = NULL, n.warmup = NULL,
                                         n.chains = NULL, n.thin = NULL, seed = NULL,
                                         verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
   if (!(model$response %in% c("bernoulli", "binomial"))) {

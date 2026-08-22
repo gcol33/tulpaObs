@@ -1,7 +1,7 @@
 # =============================================================================
 # ms_dyn_occu_spatial.R - community DYNAMIC occupancy with a shared areal field
-# on the first-season occupancy (psi1) arm (spOccupancy stMsPGOcc / svcTMsPGOcc;
-# gcol33/tulpaObs#123).
+# on the first-season occupancy (psi1) arm (spOccupancy stMsPGOcc /
+# svcTMsPGOcc).
 #
 #   logit psi1_{s,i} = X_i . (mu_psi1 + b_psi1_s) + sum_k W[i,k] F[u(i),k]
 #   logit p_{s,i}    = Xdet_i . (mu_p + b_p_s)

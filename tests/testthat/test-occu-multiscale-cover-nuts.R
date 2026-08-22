@@ -1,7 +1,6 @@
 # =============================================================================
 # test-occu-multiscale-cover-nuts.R - non-spatial NUTS for the three-level
-# occupancy + cover hurdle (occu_multiscale_cover(), method = "nuts";
-# gcol33/tulpaObs#70).
+# occupancy + cover hurdle (occu_multiscale_cover(), method = "nuts").
 #
 # The sampler draws the EXACT coefficient posterior of the non-spatial three-
 # level marginal (z over cells, a over plots both summed in closed form) via the

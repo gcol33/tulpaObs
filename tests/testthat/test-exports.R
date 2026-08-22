@@ -3,19 +3,19 @@
 # These run against the NAMESPACE rather than the loaded namespace, because that
 # is exactly where the gap opens: tests resolve internal functions whether or not
 # they are exported, so a family can be missing from NAMESPACE while its whole
-# test file passes. abun() shipped that way (gcol33/tulpaObs#147) -- a roxygen
-# block whose `@export` bound to the next definition it saw, an internal helper
-# interposed between the block and the constructor. `library(tulpaObs); abun()`
-# failed for users while `test-abun.R` was green.
+# test file passes. abun() shipped that way -- a roxygen block whose `@export`
+# bound to the next definition it saw, an internal helper interposed between the
+# block and the constructor. `library(tulpaObs); abun()` failed for users while
+# `test-abun.R` was green.
 
-test_that("every family constructor is exported (tulpaObs#147)", {
+test_that("every family constructor is exported", {
   fams <- names(tulpaObs:::.tobs_family_methods)
   expect_gt(length(fams), 0)
   exports <- getNamespaceExports("tulpaObs")
   expect_setequal(intersect(fams, exports), fams)
 })
 
-test_that("no internal (dot-prefixed) name is exported (tulpaObs#147)", {
+test_that("no internal (dot-prefixed) name is exported", {
   # A dot-prefixed export is the signature of a roxygen block that attached to
   # the wrong definition: the block's @export lands on whatever internal helper
   # follows it. The internals are documented as .tobs_* / .dispatch_* and are

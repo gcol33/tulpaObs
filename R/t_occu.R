@@ -1,8 +1,8 @@
 # t_occu.R - multi-season occupancy with a temporal (AR1) year random effect on
-# the occupancy state (spOccupancy tPGOcc; gcol33/tulpaObs#124). Distinct from
-# dyn_occu() (colext): there is NO colonization / extinction transition -- the
-# per-(site, season) occupancy state is a Bernoulli GLMM with a shared AR1 year
-# effect on the logit,
+# the occupancy state (spOccupancy tPGOcc). Distinct from dyn_occu() (colext):
+# there is NO colonization / extinction transition -- the per-(site, season)
+# occupancy state is a Bernoulli GLMM with a shared AR1 year effect on the
+# logit,
 #
 #   z_{i,t}          ~ Bernoulli(psi_{i,t}),  logit psi_{i,t} = X_occ_i . beta + eta_t
 #   eta_t            = rho eta_{t-1} + w_t,    w_t ~ N(0, sigma^2)   (AR1 year effect)
@@ -99,7 +99,7 @@ t_occu <- function() {
                                       n.iter = NULL, n.warmup = NULL,
                                       n.chains = NULL, n.thin = NULL, seed = NULL,
                                       verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
   rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))

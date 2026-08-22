@@ -1,7 +1,8 @@
 # =============================================================================
-# ms_distance.R - community / multispecies binned distance sampling
-# (the spAbundance msDS analogue), with optional latent factors (lfMsDS) and a
-# shared field (the spatial-factor case, sfMsDS). gcol33/tulpaObs#117. Poisson.
+# ms_distance.R
+# - community / multispecies binned distance sampling (the spAbundance
+# msDS analogue), with optional latent factors (lfMsDS) and a shared
+# field (the spatial-factor case, sfMsDS).. Poisson.
 #
 # Per-species binned distance sampling with Gaussian community hyperpriors on the
 # per-species abundance and detection-scale coefficients:
@@ -148,8 +149,8 @@
   qo  <- as.integer(model$quad_order %||% 64L)
   # Built ONCE for the whole fit (every species, every EM/block-coordinate
   # iteration) rather than Newton-Raphson root-finding the Gauss-Legendre nodes
-  # fresh on every `sweep()` call (gcol33/tulpaObs#165) -- `sweep()` is the
-  # community EM's inner-loop oracle, called far more than once per species.
+  # fresh on every `sweep()` call -- `sweep()` is the community EM's inner-loop
+  # oracle, called far more than once per species.
   qptr <- cpp_distance_build_quad(cut, tc, qo)
   ys  <- lapply(seq_len(S), function(s)
     matrix(as.integer(model$y[, , s]), model$n_sites, model$n_bins))
@@ -163,12 +164,11 @@
     quad_xptr = qptr,
     # `idx` (a subset of site rows) lets a caller sweep only those sites --
     # `eta_lam` / `eta_sig` must already be subsetted to the same rows by the
-    # caller (gcol33/tulpaObs#162 lever 2); `ys[[s]]` is subsetted here since it
-    # is this closure's own fixed data.
-    # `value_only = TRUE` skips every gradient/Fisher computation in the
-    # compiled kernel and returns just `log_lik` (gcol33/tulpaObs#164) -- for a
-    # caller that only reads `sw$log_lik` (the oracle's `ll_cell` / `data_ll`),
-    # not `working()`, which needs the full sweep.
+    # caller; `ys[[s]]` is subsetted here since it is this closure's own fixed
+    # data. `value_only = TRUE` skips every gradient/Fisher computation in the
+    # compiled kernel and returns just `log_lik` -- for a caller that only reads
+    # `sw$log_lik` (the oracle's `ll_cell` / `data_ll`), not `working()`, which
+    # needs the full sweep.
     sweep = function(s, eta_lam, eta_sig, eta_b = 0, idx = NULL, value_only = FALSE) {
       y_use <- if (is.null(idx)) ys[[s]] else ys[[s]][idx, , drop = FALSE]
       cpp_distance_site_sweep(y_use, eta_lam, eta_sig, qptr, K_max,
@@ -185,9 +185,9 @@
 .tobs_ms_distance_oracle <- function(eng, eta_sig_list, eta_b, Ns, S) {
   # `idx` (a subset of site rows) restricts the sweep to those sites --
   # `eta_sig_list[[s]]` and `eta_b` (fixed at this oracle's construction) are
-  # subsetted here to match, and `eng$sweep`'s own `ys[[s]]` subsets itself
-  # (gcol33/tulpaObs#162 lever 2). `eta_b` is a scalar (0, or the hazard shape
-  # parameter) in every caller, so it needs no subsetting.
+  # subsetted here to match, and `eng$sweep`'s own `ys[[s]]` subsets itself.
+  # `eta_b` is a scalar (0, or the hazard shape parameter) in every caller, so
+  # it needs no subsetting.
   eval_all <- function(eta, idx = NULL, value_only = FALSE) {
     ii <- idx %||% seq_len(Ns)
     lapply(seq_len(S), function(s)
@@ -203,7 +203,7 @@
         curv  = vapply(sws, function(sw)
           pmax(as.numeric(sw$info_lam - sw$var_N * sw$swl^2), 1e-8), numeric(Ns)))
     },
-    # value_only = TRUE: ll_cell only ever reads log_lik (gcol33/tulpaObs#164).
+    # value_only = TRUE: ll_cell only ever reads log_lik.
     ll_cell = function(eta, idx = NULL) {
       nn <- length(idx %||% seq_len(Ns))
       # vapply degenerates to a plain vector (not an nn x S matrix) when
@@ -243,7 +243,7 @@
 #
 # Half-normal key only: under the hazard key the shared log-shape is a community
 # global, and the sweep returns its score and information already summed over
-# sites, with no per-site cross terms to sandwich (gcol33/tulpaObs#161).
+# sites, with no per-site cross terms to sandwich.
 .tobs_ms_distance_info_block <- function(sw, X_lam, X_sig, lam_idx, sig_idx, P) {
   # diag(info) - Var(N|y) v v', expanded. The two diagonal entries cannot see the
   # relative sign inside v; the off-diagonal is where it lands.
@@ -279,7 +279,7 @@
   if (!identical(mixture, "poisson")) {
     stop("ms_distance() is Poisson-only: the negative-binomial size is a ",
          "per-site dispersion that the community distance fit does not yet ",
-         "carry as a per-species random effect (gcol33/tulpaObs#117). Use ",
+         "carry as a per-species random effect. Use ",
          "mixture = \"poisson\".", call. = FALSE)
   }
   S  <- model$n_species
@@ -337,8 +337,7 @@
         if (hazard) sw$grad_b else numeric(0))
     }
     # The community EM otherwise central-differences this, at 2U sweeps per
-    # species per Newton step, and every sweep sums over the latent N
-    # (gcol33/tulpaObs#161).
+    # species per Newton step, and every sweep sums over the latent N.
     sp_info <- if (hazard) NULL else function(s, theta, global) {
       e <- eta_of(s, theta)
       .tobs_ms_distance_info_block(eng$sweep(s, e$lam, e$sig, 0),
@@ -383,13 +382,13 @@
       n.quad = n.quad, verbose = verbose)
   }
 
-  # Guard the per-site truncation at the converged community coefficients
-  # (gcol33/tulpaObs#168): the field / factor offsets the block-coordinate
-  # ascent converged to (`res$field$site_off`, `res$factor$offset`) are the
-  # SAME ones `eta_of()` inside `em_fit()` folds into eta_lambda, so the check
-  # runs at the predictor the fit actually used. Escalates to the shared
-  # ceiling on disagreement and re-fits the whole community model, exactly as
-  # the single-species and areal-spatial guards do.
+  # Guard the per-site truncation at the converged community coefficients: the
+  # field / factor offsets the block-coordinate ascent converged to
+  # (`res$field$site_off`, `res$factor$offset`) are the SAME ones `eta_of()`
+  # inside `em_fit()` folds into eta_lambda, so the check runs at the
+  # predictor the fit actually used. Escalates to the shared ceiling on
+  # disagreement and re-fits the whole community model, exactly as the
+  # single-species and areal-spatial guards do.
   if (eng$headroom >= 0L) {
     site_off_mode <- if (!is.null(res$field)) res$field$site_off else NULL
     fac_off_mode  <- if (!is.null(res$factor)) res$factor$offset else NULL
@@ -475,11 +474,11 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
       # community EM's own Newton solve, conditional on the converged
       # community mean) -- what a per-species-coefficient consumer (SBC's
       # "rank a fixed species set" design, a calibrated per-species CI) needs
-      # beyond the point BLUP; not previously exposed on the fit object.
-      # Bf = the (mu,global)-b_s cross-Hessian block from the same Newton
-      # solve (gcol33/tulpaObs#226): mu/global and b_s are NOT independent in
-      # the posterior, and Bf is what lets a consumer draw them jointly
-      # instead -- see .tobs_sbc_community_b_draws (R/sbc.R).
+      # beyond the point BLUP; not previously exposed on the fit object. Bf =
+      # the (mu,global)-b_s cross-Hessian block from the same Newton solve:
+      # mu/global and b_s are NOT independent in the posterior, and Bf is
+      # what lets a consumer draw them jointly instead -- see
+      # .tobs_sbc_community_b_draws (R/sbc.R).
       Cinv = em$Cinv, Bf = em$Bf),
     convergence = list(converged = isTRUE(em$converged),
                        n_iter = em$n_iter %||% NA_integer_)
@@ -524,13 +523,13 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
 # (deterministic per-species matrices), not `object$draws`, matching
 # ms_occu()/ms_count()'s own `simulate()` handlers. `key = "halfnorm"` only --
 # the hazard key's log-shape is a community `global` scalar not carried by
-# `ms_community`, a documented follow-up (gcol33/tulpaObs#227).
+# `ms_community`, a documented follow-up.
 .tobs_simulate_ms_distance <- function(object, nsim = 1) {
   model <- object$model
   if (!identical(model$key, "halfnorm")) {
     stop("simulate() for ms_distance() fits is only wired for key = ",
          "\"halfnorm\" (the hazard key's log-shape is a community global not ",
-         "carried by ms_community; gcol33/tulpaObs#227).", call. = FALSE)
+         "carried by ms_community).", call. = FALSE)
   }
   cm <- object$ms_community
   n_sites <- model$n_sites; n_bins <- model$n_bins; n_species <- model$n_species

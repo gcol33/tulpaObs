@@ -1,12 +1,12 @@
 # Temporal() field composed WITH the areal spatial field on the count observation
 # families (removal / distance / fp_occu / dyn_abun) under method =
-# "nested_laplace" (gcol33/tulpaObs#78). The shared areal-BFGS driver
-# (R/areal_bfgs.R) carries a second latent block (the AR1 temporal precision)
-# alongside the spatial field, both grid-integrated. Each fit simulates a dataset
-# with BOTH a smoothed ICAR-like spatial field on the abundance / occupancy arm
-# and an AR1 temporal effect over seasons, then checks recovery of the fixed-
-# effect slope, the spatial field shape, and -- where the field is identified --
-# the temporal field shape and autocorrelation.
+# "nested_laplace". The shared areal-BFGS driver (R/areal_bfgs.R) carries a
+# second latent block (the AR1 temporal precision) alongside the spatial field,
+# both grid-integrated. Each fit simulates a dataset with BOTH a smoothed
+# ICAR-like spatial field on the abundance / occupancy arm and an AR1 temporal
+# effect over seasons, then checks recovery of the fixed- effect slope, the
+# spatial field shape, and -- where the field is identified -- the temporal field
+# shape and autocorrelation.
 #
 # Identifiability differs by family. The count likelihoods (removal, distance)
 # identify both fields well at a moderate grid, so they assert recovery of the
@@ -177,9 +177,9 @@ test_that("dyn_abun() areal field + AR1 temporal composes and recovers the lambd
 
 test_that("count() temporal() term errors with a pointer", {
   # The observation families (removal / distance / fp_occu / dyn_abun) all support
-  # a temporal-only field now (tulpaObs#114). The count() relative-abundance GLMM
-  # still gates every non-areal structured term (temporal / re / svc / latent),
-  # so it carries the not-yet-wired temporal pointer here (tulpaObs#117).
+  # a temporal-only field now. The count() relative-abundance GLMM still gates
+  # every non-areal structured term (temporal / re / svc / latent), so it carries
+  # the not-yet-wired temporal pointer here.
   nsite <- 40L
   set.seed(1); seas <- sample(rep(1:3, length.out = nsite))
   dat <- data.frame(abund_cov1 = rnorm(nsite), season = seas)

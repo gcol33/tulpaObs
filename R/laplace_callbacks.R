@@ -282,21 +282,21 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
   p_occ <- ncol(X_occ); p_det <- ncol(X_det)
   p_col <- ncol(X_col); p_ext <- ncol(X_ext)
 
-  # Season-varying colonization / extinction (gcol33/tulpaObs#124): a rate that
-  # varies by interval carries a long-form [(n_sites x (T-1)) x p] design (built
-  # by .tobs_interval_arm_design, site-major interval-minor). The E-step then
-  # uses a per-interval transition matrix and the M-step encodes one logistic
-  # row per (site, interval); constant rates keep the site-level design, the
+  # Season-varying colonization / extinction: a rate that varies by interval
+  # carries a long-form [(n_sites x (T-1)) x p] design (built by
+  # .tobs_interval_arm_design, site-major interval-minor). The E-step then uses
+  # a per-interval transition matrix and the M-step encodes one logistic row per
+  # (site, interval); constant rates keep the site-level design, the
   # per-interval transition collapses to a constant one, and the M-step
   # aggregates over a site's intervals -- byte-identical to the pre-#124 path.
   n_int  <- model$n_intervals %||% (n_seasons - 1L)
   col_sv <- isTRUE(model$col_season_varying)
   ext_sv <- isTRUE(model$ext_season_varying)
-  # Season-varying detection (gcol33/tulpaObs#124): X_det is then the long-form
-  # [(n_sites x n_seasons) x p] design (site-major season-minor); the per-season
-  # detection probability is a [n_sites x n_seasons] matrix. A constant-detection
-  # arm keeps the site-level design and the matrix broadcasts the site's single
-  # probability across seasons -- byte-identical to the pre-#124 path.
+  # Season-varying detection: X_det is then the long-form [(n_sites x n_seasons)
+  # x p] design (site-major season-minor); the per-season detection probability
+  # is a [n_sites x n_seasons] matrix. A constant-detection arm keeps the
+  # site-level design and the matrix broadcasts the site's single probability
+  # across seasons -- byte-identical to the pre-#124 path.
   det_sv <- isTRUE(model$det_season_varying)
 
   # The state field enters season-1 occupancy psi1 only (one psi1 row per
@@ -434,10 +434,10 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     # constant-rate arm col_y / ext_y are the expected colonization / extinction
     # events summed over a site's T-1 intervals, and the same M pseudo-binomial
     # inflation encodes ONE logistic observation per site (as for the occupancy
-    # arm). For a SEASON-VARYING arm (gcol33/tulpaObs#124) the per-interval joints
-    # are kept and encode ONE logistic row per (site, interval), site-major
-    # interval-minor to match the long-form design; a covariate on that interval
-    # then drives the rate. `t(mat)` flattens site-major interval-minor.
+    # arm). For a SEASON-VARYING arm the per-interval joints are kept and encode
+    # ONE logistic row per (site, interval), site-major interval-minor to match
+    # the long-form design; a covariate on that interval then drives the rate.
+    # `t(mat)` flattens site-major interval-minor.
     trans_block <- function(sv, y_agg, n_agg, y_mat, n_mat, Xarm) {
       if (sv) {
         # Per-interval M-step = a WEIGHTED logistic regression: for interval
@@ -479,12 +479,11 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
 
     # Detection: per-(site, season) rows weighted by w[i, t] = P(z_it = 1 | y).
     # Replaces the legacy hard threshold (w > 0.5) which silently dropped
-    # site-seasons in the boundary regime and double-counted detection
-    # evidence for site-seasons in the high-confidence regime. A constant-detection
-    # arm's X_det is site-indexed, so per-season rows read the site's covariates
-    # (design_row = i); a season-varying arm's X_det is the long-form
-    # [(site x season) x p] design, so the row is the (site, season) index
-    # (i - 1) * n_seasons + t (gcol33/tulpaObs#124).
+    # site-seasons in the boundary regime and double-counted detection evidence for
+    # site-seasons in the high-confidence regime. A constant-detection arm's X_det
+    # is site-indexed, so per-season rows read the site's covariates (design_row =
+    # i); a season-varying arm's X_det is the long-form [(site x season) x p]
+    # design, so the row is the (site, season) index (i - 1) * n_seasons + t.
     rows_i <- integer(n_sites * n_seasons)
     det_count <- integer(n_sites * n_seasons)
     vis_count <- integer(n_sites * n_seasons)
@@ -549,10 +548,10 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     z1 <- z[, 1]
     # Colonization/extinction from hard transitions. For a constant-rate arm the
     # per-site transition counts encode one logistic row per site; a
-    # season-varying arm (gcol33/tulpaObs#124) keeps each interval separate (one
-    # row per (site, interval), n_trials = 1 at the matching origin state and 0
-    # elsewhere so the engine drops the non-matching rows), site-major
-    # interval-minor to match the long-form design.
+    # season-varying arm keeps each interval separate (one row per (site,
+    # interval), n_trials = 1 at the matching origin state and 0 elsewhere so
+    # the engine drops the non-matching rows), site-major interval-minor to
+    # match the long-form design.
     col_y <- integer(n_sites); col_n <- integer(n_sites)
     ext_y <- integer(n_sites); ext_n <- integer(n_sites)
     cym <- if (col_sv) matrix(0L, n_sites, n_int) else NULL
@@ -586,9 +585,9 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
 
     # Detection counts among occupied (z = 1) site-seasons. A constant-detection
     # arm aggregates a site's detections over its seasons onto one per-site row;
-    # a season-varying arm (gcol33/tulpaObs#124) keeps one row per (site, season)
-    # so each reads the season's own detection covariate (the long-form X_det row
-    # (i - 1) * n_seasons + t).
+    # a season-varying arm keeps one row per (site, season) so each reads the
+    # season's own detection covariate (the long-form X_det row (i - 1) *
+    # n_seasons + t).
     if (det_sv) {
       row_map <- integer(n_sites * n_seasons)
       dcv <- integer(n_sites * n_seasons); vcv <- integer(n_sites * n_seasons)

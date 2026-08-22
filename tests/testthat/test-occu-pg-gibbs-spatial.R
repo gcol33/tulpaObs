@@ -1,7 +1,7 @@
 # =============================================================================
 # test-occu-pg-gibbs-spatial.R - spatial Polya-Gamma Gibbs for single-season
-# occupancy with an intrinsic areal (ICAR) field on the occupancy logit
-# (occu() + icar() under method = "pg_gibbs"; spOccupancy spPGOcc; tulpaObs#126).
+# occupancy with an intrinsic areal (ICAR) field on the occupancy logit (occu() +
+# icar() under method = "pg_gibbs"; spOccupancy spPGOcc).
 #
 # logit(psi_i) = X_i beta + f_i, f ~ ICAR(tau). Conditional on the Polya-Gamma
 # auxiliaries the joint (beta, f) update is a Gaussian Markov random field draw;

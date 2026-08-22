@@ -197,9 +197,9 @@ test_that("WAIC draw-chunking is exact (chunk size does not change the result)",
 # all read .occu_cover_visit_view(), which is the compact fit's stored visit rows
 # and a flattening of the dense fit's padded grid. Everything downstream of it
 # therefore has to agree between the two builds; that is what these three assert
-# (gcol33/tulpaObs#185, where cpo() / ppc() instead read model$y /
-# model$valid and errored on a compact fit with "'x' must be an array of at least
-# two dimensions" while waic() worked).
+# (where cpo() / ppc() instead read model$y / model$valid and errored on a
+# compact fit with "'x' must be an array of at least two dimensions" while waic()
+# worked).
 
 test_that(".occu_cover_visit_view is identical for a dense and a compact fit", {
   skip_on_cran()

@@ -1,12 +1,12 @@
 # Correlated (`|`) / separable-MCAR spatial coefficient fields on the cover
-# hurdle (gcol33/tulpaObs#64). A single bar `~ 1 + time | cell` declares the
-# intercept field u_cell and the time-slope field s_cell as CORRELATED Besag
-# fields with a free 2x2 cross-covariance Sigma (the within-arm covariance among
-# the fields), then copies the whole correlated field onto the positive arm with
-# one estimated amplitude alpha (the cross-arm transfer). The free Sigma is
-# integrated over the outer mode-centred CCD in log-Cholesky coordinates; the
-# recovered Sigma SDs and cross-correlation are weighted-quantile summaries of
-# the marginalized posterior, never a plug-in of the modal cell.
+# hurdle. A single bar `~ 1 + time | cell` declares the intercept field u_cell
+# and the time-slope field s_cell as CORRELATED Besag fields with a free 2x2
+# cross-covariance Sigma (the within-arm covariance among the fields), then
+# copies the whole correlated field onto the positive arm with one estimated
+# amplitude alpha (the cross-arm transfer). The free Sigma is integrated over
+# the outer mode-centred CCD in log-Cholesky coordinates; the recovered Sigma
+# SDs and cross-correlation are weighted-quantile summaries of the marginalized
+# posterior, never a plug-in of the modal cell.
 #
 # These tests are parameter-recovery against simulated truth (a KNOWN Sigma:
 # both field SDs AND the cross-correlation rho, plus the cross-arm copy alpha),

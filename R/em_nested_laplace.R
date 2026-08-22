@@ -670,7 +670,7 @@
   }
   if (type == "bym2") {
     # A tulpa multi-block prior: the engine multiplies the structured block by
-    # this, where the term carries the Riebler constant (gcol33/tulpaObs#232).
+    # this, where the term carries the Riebler constant.
     out$scale_factor <- if (is.null(spatial$scale_factor)) 1.0 else
       .bym2_engine_scale(as.numeric(spatial$scale_factor))
     if (!is.null(spatial$sigma_grid)) out$sigma_grid <- spatial$sigma_grid
@@ -679,8 +679,8 @@
       sg <- exp(seq(log(0.2), log(2.0), length.out = 3))
       rg <- c(0.3, 0.7)
       gr <- expand.grid(sigma = sg, rho = rg)
-      # Ours, not the user's, so the engine may recentre it
-      # (gcol33/tulpaObs#186); `expand.grid()` drops the marker, hence after.
+      # Ours, not the user's, so the engine may recentre it; `expand.grid()`
+      # drops the marker, hence after.
       out$sigma_grid <- tulpa::auto_grid(gr$sigma)
       out$rho_grid   <- tulpa::auto_grid(gr$rho)
     }
@@ -817,12 +817,12 @@
 # =============================================================================
 
 # Decide whether a standalone occu() nested-Laplace fit reroutes through the
-# joint direct-grid engine (.tobs_fit_occu_joint) instead of the EM
-# fixed-point path (.tobs_em_nested_laplace). The EM path oscillates / does not
-# converge on the varying-coefficient (SVC) occupancy bar at EVA scale
-# (gcol33/tulpaObs#81); the joint engine integrates the field hyperparameters on
-# a direct outer grid, so it cannot oscillate. The reroute is scoped to exactly
-# the SVC case the joint single-arm engine covers:
+# joint direct-grid engine (.tobs_fit_occu_joint) instead of the EM fixed-point
+# path (.tobs_em_nested_laplace). The EM path oscillates / does not converge on
+# the varying-coefficient (SVC) occupancy bar at EVA scale; the joint engine
+# integrates the field hyperparameters on a direct outer grid, so it cannot
+# oscillate. The reroute is scoped to exactly the SVC case the joint single-arm
+# engine covers:
 #   * single-season occupancy (`single`),
 #   * an areal ICAR spatial term carrying a varying-coefficient structure -- an
 #     independent (`||`) varying-coefficient bar, the explicit intercept +

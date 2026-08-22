@@ -1,8 +1,8 @@
 # Multi-seed recovery for the two "working" families the audit flagged as
-# under-validated (gcol33/tulpaObs#84): dynamic occupancy (dyn_occu) had only a
-# single-seed point check, and single-source integrated occupancy (int_occu) had
-# FD / smoke / loglik-vs-EM checks but no |est - truth| recovery. These add
-# multi-seed recovery so a calibration regression in either family is caught.
+# under-validated: dynamic occupancy (dyn_occu) had only a single-seed point
+# check, and single-source integrated occupancy (int_occu) had FD / smoke /
+# loglik-vs-EM checks but no |est - truth| recovery. These add multi-seed
+# recovery so a calibration regression in either family is caught.
 
 # --------------------------------------------------------------------------- #
 # dyn_occu: multi-seed (psi1, gamma, epsilon, p) recovery.                      #
@@ -128,12 +128,12 @@ test_that("dyn_occu marginal recursion matches unmarked::colext at its MLE", {
 })
 
 # Head-to-head coefficient equivalence with unmarked::colext. The exact
-# forward-backward E-step (gcol33/tulpaObs#86) brings tulpaObs's dynamic-occupancy
-# EM close to colext's MLE; the exact-marginal Newton refinement on the EM mode
-# (gcol33/tulpaObs#86, .tobs_dyn_occu_marginal_refine) then closes the residual
-# EM pseudo-count discretisation gap, landing on colext's MLE. The tolerance is
-# therefore tight (the two optimisers maximise the same marginal).
-test_that("dyn_occu coefficients match unmarked::colext (tulpaObs#86)", {
+# forward-backward E-step brings tulpaObs's dynamic-occupancy EM close to colext's
+# MLE; the exact-marginal Newton refinement on the EM mode
+# (.tobs_dyn_occu_marginal_refine) then closes the residual EM pseudo-count
+# discretisation gap, landing on colext's MLE. The tolerance is therefore tight
+# (the two optimisers maximise the same marginal).
+test_that("dyn_occu coefficients match unmarked::colext", {
   skip_on_cran()
   skip_if_fast()
   skip_if_not_installed("unmarked")

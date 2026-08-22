@@ -1,4 +1,4 @@
-# Per-fit quadrature caching (gcol33/tulpaObs#165).
+# Per-fit quadrature caching.
 #
 # cpp_distance_site_sweep / cpp_distance_total_log_lik / cpp_distance_laplace_fixed
 # / cpp_distance_grouped_oracle / cpp_distance_ploglik_batch / cpp_distance_nuts

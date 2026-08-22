@@ -1,17 +1,16 @@
 # Compact-but-PRINCIPLED outer-grid for a correlated-slope `miid` block's free
-# Sigma, in the engine's column-major lower-triangular log-Cholesky coordinates
-# (gcol33/tulpa#114). A p = 2 (intercept + one slope) block -- the common
-# `(1 + x | g)` -- gets a (sigma_0, sigma_1, rho) tensor sized to compose with the
-# shared field + copy amplitude under the engine's outer-grid cap. The grid is a
-# coarsened version of the engine's `.mcar_default_logchol_grid`: SYMMETRIC
-# correlation nodes that include 0 and reach strong +/- (so the marginal
-# correlation is not forced into a lop-sided range), and log-spaced SD nodes
-# spanning small to large. The slope covariate is standardized
-# (.occu_cover_obs_re_design), so a fixed SD bracket is meaningful for any
-# covariate scale. Users widen it via `control$re.logchol.grid.p` /
-# `re.logchol.grid.pos`. For p != 2 (multi-slope correlated, rare) return NULL so
-# the engine fills its own default; that design is grid-heavy and usually needs
-# an explicit coarse grid.
+# Sigma, in the engine's column-major lower-triangular log-Cholesky coordinates. A
+# p = 2 (intercept + one slope) block -- the common `(1 + x | g)` -- gets a
+# (sigma_0, sigma_1, rho) tensor sized to compose with the shared field + copy
+# amplitude under the engine's outer-grid cap. The grid is a coarsened version of
+# the engine's `.mcar_default_logchol_grid`: SYMMETRIC correlation nodes that
+# include 0 and reach strong +/- (so the marginal correlation is not forced into a
+# lop-sided range), and log-spaced SD nodes spanning small to large. The slope
+# covariate is standardized (.occu_cover_obs_re_design), so a fixed SD bracket is
+# meaningful for any covariate scale. Users widen it via
+# `control$re.logchol.grid.p` / `re.logchol.grid.pos`. For p != 2 (multi-slope
+# correlated, rare) return NULL so the engine fills its own default; that design
+# is grid-heavy and usually needs an explicit coarse grid.
 .occu_cover_miid_logchol_grid <- function(p, sig_grid = NULL, rho_grid = NULL) {
   if (!identical(as.integer(p), 2L)) return(NULL)
   sig_grid <- sig_grid %||% c(0.35, 0.8, 1.6)
@@ -26,9 +25,9 @@
 }
 
 # Public hyperparameter name for each RE block, aligned with the descriptor
-# list (gcol33/tulpaObs#103). A lone term on an arm keeps the legacy bare name
-# (sigma_re / sigma_re_p / sigma_re_pos for psi / detection / positive cover);
-# crossed / nested terms sharing an arm are disambiguated by the grouping var
+# list. A lone term on an arm keeps the legacy bare name (sigma_re /
+# sigma_re_p / sigma_re_pos for psi / detection / positive cover); crossed /
+# nested terms sharing an arm are disambiguated by the grouping var
 # (sigma_re_p_<var>), so every block's variance gets a distinct, stable name.
 .occu_cover_re_sigma_names <- function(re_descs) {
   if (!length(re_descs)) return(character(0))
@@ -59,11 +58,10 @@
 
 # Post-process an occu_cover joint-coupled engine fit into a tobs_fit. `fit` is
 # the tulpa_nested_laplace_joint return (single-species) or a per-species slice
-# of a batched fused fit assembled to the same shape (gcol33/tulpa#66); `ctx`
-# carries the Part-A context the shaping needs. Marginalisation here is a
-# weighted sum over outer-grid cells (order-invariant), so a fused fixed-grid
-# slice and an adaptive single-species fit shape identically given the same
-# cells.
+# of a batched fused fit assembled to the same shape; `ctx` carries the Part-A
+# context the shaping needs. Marginalisation here is a weighted sum over
+# outer-grid cells (order-invariant), so a fused fixed-grid slice and an
+# adaptive single-species fit shape identically given the same cells.
 .occu_cover_jc_postprocess <- function(fit, ctx) {
   adj            <- ctx$adj
   is_latent      <- ctx$is_latent
@@ -138,17 +136,17 @@
   field_sd       <- bfv$field_sd
   Vj             <- bfv$Vj
 
-  # Per-group RE BLUPs (gcol33/tulpaObs#56, #102, #103). The RE blocks trail the
-  # n_fields field blocks, so term i's blocks sit at layout positions
-  # n_fields + block_start .. (+ n_blocks - 1); each block's latent is a
-  # contiguous run in `modes`. The per-(group, coefficient) posterior-mean offset
-  # is the grid-weighted mean of those columns (centred per coefficient), the SD
-  # their grid-weighted posterior SD. A random intercept / uncorrelated slope has
-  # one `iid` block per coefficient (`block c` -> column `c`); a correlated slope
-  # is one `miid` block whose latent is coefficient-major (field a, group g at
-  # (a-1)*n_groups + g), reshaped to [n_groups x n_coefs]. `latent_idx` is the
-  # coefficient-major column run (the predict draws reshape it identically). The
-  # per-coefficient variance / correlation is filled from the hyper axes below.
+  # Per-group RE BLUPs. The RE blocks trail the n_fields field blocks, so term
+  # i's blocks sit at layout positions n_fields + block_start .. (+ n_blocks -
+  # 1); each block's latent is a contiguous run in `modes`. The per-(group,
+  # coefficient) posterior-mean offset is the grid-weighted mean of those columns
+  # (centred per coefficient), the SD their grid-weighted posterior SD. A random
+  # intercept / uncorrelated slope has one `iid` block per coefficient (`block c`
+  # -> column `c`); a correlated slope is one `miid` block whose latent is
+  # coefficient-major (field a, group g at (a-1)*n_groups + g), reshaped to
+  # [n_groups x n_coefs]. `latent_idx` is the coefficient-major column run (the
+  # predict draws reshape it identically). The per-coefficient variance /
+  # correlation is filled from the hyper axes below.
   re_descs <- ctx$re_descs %||% list()
   re_sig_names <- .occu_cover_re_sigma_names(re_descs)
   re_terms <- vector("list", length(re_descs))
@@ -258,17 +256,17 @@
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
   }
-  # Sorbye-Rue geo-mean marginal SD (gcol33/tulpaObs#221). `sigma` on this path
-  # is the raw amplitude against the unscaled intrinsic precision Q = D - W --
-  # the shared/trend occupancy field supports only icar here (bym2 is coerced
-  # to icar with rho fixed to 1 upstream, `.occu_cover_spatial_fields()`), so
-  # every field on this path shares the same Sorbye-Rue scale. That differs
-  # from the #204 NUTS path's `field_sd`, which states the geo-mean marginal SD
-  # directly, by sqrt(scale_q) -- a FIXED constant given the graph, not an
-  # independent grid axis, so it is reported alongside `sigma` (`fit$field_sd`
-  # / `field_sd_trend...`) rather than folded into `hyper_names`: doing that
-  # would add a row/column to the joint parameter vcov perfectly collinear
-  # with `sigma`'s (correlation exactly 1), singular by construction, which is
+  # Sorbye-Rue geo-mean marginal SD. `sigma` on this path is the raw amplitude
+  # against the unscaled intrinsic precision Q = D - W -- the shared/trend
+  # occupancy field supports only icar here (bym2 is coerced to icar with rho
+  # fixed to 1 upstream, `.occu_cover_spatial_fields()`), so every field on
+  # this path shares the same Sorbye-Rue scale. That differs from the #204 NUTS
+  # path's `field_sd`, which states the geo-mean marginal SD directly, by
+  # sqrt(scale_q) -- a FIXED constant given the graph, not an independent grid
+  # axis, so it is reported alongside `sigma` (`fit$field_sd` /
+  # `field_sd_trend...`) rather than folded into `hyper_names`: doing that
+  # would add a row/column to the joint parameter vcov perfectly collinear with
+  # `sigma`'s (correlation exactly 1), singular by construction, which is
   # exactly what broke `chol(V)` in `test-occu-cover-joint.R` on the first cut
   # of this fix. Kept OUT of `means`/`sds`/`vcov`/`draws` for that reason.
   field_sd_summary <- list()
@@ -290,22 +288,22 @@
   # trend field. Each RE block's variance is its `b<n_fields+i>.sigma` axis.
   has_re     <- !is.null(ctx$re_spec)
   has_any_re <- length(re_descs) > 0L
-  # Arm-specific cover field blocks (gcol33/tulpaObs#110) trail the occupancy
-  # field blocks: fields 1..n_occ_fields are the shared occupancy intercept +
-  # trends (copied to cover with alpha), the rest are the non-copied pos-arm
-  # fields. Each reports its own sigma (b<k>.sigma) with no alpha copy axis.
+  # Arm-specific cover field blocks trail the occupancy field blocks: fields
+  # 1..n_occ_fields are the shared occupancy intercept + trends (copied to
+  # cover with alpha), the rest are the non-copied pos-arm fields. Each
+  # reports its own sigma (b<k>.sigma) with no alpha copy axis.
   has_pos_armspec <- isTRUE(ctx$has_pos_armspec)
   n_occ_fields    <- ctx$n_occ_fields %||% n_fields
   pos_field_specs <- ctx$pos_field_specs %||% list()
   if (mcar) {
-    # Free-Sigma MCAR hyperparameters (gcol33/tulpaObs#63). Reconstruct Sigma per
-    # outer-grid cell from the log-Cholesky axes b1.L<i><j>, derive each field SD
-    # (sigma_mcar<a>, a = 1 intercept .. p) and each cross-correlation
-    # (rho_mcar_<a><b>), and carry the per-cell values so their grid-weighted
-    # moments AND their between-cell covariance with the betas / other hypers are
-    # marginalized over the joint posterior, not plugged in at the mode (the
-    # marginalize-derived-quantities rule). The whole correlated field's copy
-    # amplitude onto the cover arm is the alpha_mcar grid axis.
+    # Free-Sigma MCAR hyperparameters. Reconstruct Sigma per outer-grid cell from
+    # the log-Cholesky axes b1.L<i><j>, derive each field SD (sigma_mcar<a>, a =
+    # 1 intercept .. p) and each cross-correlation (rho_mcar_<a><b>), and carry
+    # the per-cell values so their grid-weighted moments AND their between-cell
+    # covariance with the betas / other hypers are marginalized over the joint
+    # posterior, not plugged in at the mode (the marginalize-derived-quantities
+    # rule). The whole correlated field's copy amplitude onto the cover arm is
+    # the alpha_mcar grid axis.
     p_f  <- n_fields
     m_lc <- p_f * (p_f + 1L) / 2L
     axis_nm <- character(m_lc); tt <- 1L
@@ -350,9 +348,9 @@
       pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
       put_field_sd(paste0("sigma_trend", suffix), paste0("field_sd_trend", suffix))
     }
-    # Arm-specific cover fields (gcol33/tulpaObs#110): blocks n_occ_fields+1 ..
-    # n_fields, each a NON-copied ICAR with its own precision axis (b<k>.tau,
-    # sigma = 1/sqrt(tau)) and NO alpha copy. Report the grid-weighted marginal SD
+    # Arm-specific cover fields: blocks n_occ_fields+1 .. n_fields, each a
+    # NON-copied ICAR with its own precision axis (b<k>.tau, sigma = 1/sqrt(tau))
+    # and NO alpha copy. Report the grid-weighted marginal SD
     # (marginalize-derived-quantities). A lone intercept field keeps the bare
     # `sigma_pos_field`; a covariate column is suffixed by its name.
     for (j in seq_along(pos_field_specs)) {
@@ -463,7 +461,7 @@
   # Split the stacked per-field summaries into one block of n_cells per coupled
   # field. Occupancy fields are blocks 1..n_occ_fields (the intercept field --
   # the back-compat `spatial_field` -- then the coupled trends); the
-  # arm-specific cover fields (gcol33/tulpaObs#110) are the trailing blocks.
+  # arm-specific cover fields are the trailing blocks.
   fs <- .tobs_joint_field_split(field_demeaned, field_sd, n_cells, n_fields,
                                 n_occ_fields, coupled_trends)
   fblocks         <- fs$blocks
@@ -476,11 +474,10 @@
   field_trend       <- fs$field_trend
   trend_field_table <- fs$trend_field_table
 
-  # Arm-specific cover field posteriors (gcol33/tulpaObs#110): the per-cell z
-  # tables for the independent cover-arm field(s), surfaced separately from the
-  # occupancy fields so the user can inspect the cover trend map. The first is the
-  # intercept field (bare `pos_field` / `pos_field_table`); a covariate column is
-  # keyed by its name.
+  # Arm-specific cover field posteriors: the per-cell z tables for the independent
+  # cover-arm field(s), surfaced separately from the occupancy fields so the user
+  # can inspect the cover trend map. The first is the intercept field (bare
+  # `pos_field` / `pos_field_table`); a covariate column is keyed by its name.
   pos_field_blocks <- if (has_pos_armspec && n_fields > n_occ_fields)
                         fblocks[(n_occ_fields + 1L):n_fields] else list()
   pos_field_means  <- lapply(pos_field_blocks, function(b) b$mean)
@@ -524,7 +521,7 @@
   # Record the pos-arm dispersion the spec held fixed (sigma_pos for non-latent;
   # the latent path integrates sigma_u on the grid instead). The pointwise
   # log-likelihood reads it to score the cover term at the fitted dispersion
-  # rather than a bare unit default (gcol33/tulpaObs#34).
+  # rather than a bare unit default.
   if (!is_latent) model$cover_pos_disp <- sigma_pos_init
 
   # Spatial summary. The correlated MCAR field reports its per-field SDs
@@ -556,7 +553,7 @@
       sigma_mean = unname(hyper_means["sigma"]),
       alpha_mean = unname(hyper_means["alpha"]),
       # Geo-mean marginal SD (Sorbye-Rue), the #204 NUTS `field_sd` convention
-      # (gcol33/tulpaObs#221) -- `sigma_mean` above is the raw amplitude.
+      # -- `sigma_mean` above is the raw amplitude.
       field_sd_mean = fsd$mean, field_sd_sd = fsd$sd,
       sigma_trend_mean = if (has_trend)
         unname(hyper_means[if (n_trend == 1L) "sigma_trend"
@@ -602,10 +599,10 @@
                       if (length(nonint)) nonint[[1L]]$column_name else NULL
                     } else NULL,
     trend_weights = if (has_trend) trend_labels        else NULL,
-    # Arm-specific cover field (gcol33/tulpaObs#110): `field_specs` labels every
-    # field block (shared occupancy vs pos arm) + its weight column so the draw
-    # substrate maps each block to (occ, pos) amplitudes; the pos-field tables are
-    # the independent cover field posterior for user inspection.
+    # Arm-specific cover field: `field_specs` labels every field block (shared
+    # occupancy vs pos arm) + its weight column so the draw substrate maps each
+    # block to (occ, pos) amplitudes; the pos-field tables are the independent
+    # cover field posterior for user inspection.
     field_specs      = ctx$field_specs,
     has_pos_armspec  = has_pos_armspec,
     pos_field        = pos_field,
@@ -617,13 +614,13 @@
     joint_vcov      = Vj,
     method       = "joint",
     positive     = model$positive,
-    # Per-term RE summaries (gcol33/tulpaObs#56, #102, #103): a flat list, one
-    # entry per RE block, each carrying its arm, grouping var + observed levels,
-    # variance component, centred per-group BLUPs + SDs, group count, and latent
-    # column indices (for the marginalized predict draws). A lone term on an arm
-    # is keyed by the arm ("psi" / "p" / "pos"); crossed / nested terms sharing an
-    # arm are keyed "<arm>:<var>". ranef() stacks them; predict() sums every term
-    # on the predicted arm.
+    # Per-term RE summaries: a flat list, one entry per RE block, each carrying
+    # its arm, grouping var + observed levels, variance component, centred
+    # per-group BLUPs + SDs, group count, and latent column indices (for the
+    # marginalized predict draws). A lone term on an arm is keyed by the arm
+    # ("psi" / "p" / "pos"); crossed / nested terms sharing an arm are keyed
+    # "<arm>:<var>". ranef() stacks them; predict() sums every term on the
+    # predicted arm.
     re           = if (length(re_terms)) {
                      keys <- .occu_cover_re_keys(
                        vapply(re_terms, `[[`, character(1), "arm"),

@@ -87,8 +87,8 @@ registered family uses.
 \code{int_occu} (full source-site overlap only) pools on the SITE axis and
 leaves the per-source axis alone, since its response is a list of one
 detection matrix per source; the rank statistic is the shared machinery
-unchanged. Registering it surfaced a real bug (\code{gcol33/tulpaObs#225},
-fixed): the detection intercept was silently left in standardized-covariate
+unchanged. Registering it surfaced a real bug (since fixed): the detection
+intercept was silently left in standardized-covariate
 units on every fit with an autoscaled detection covariate, independent of
 SBC.
 

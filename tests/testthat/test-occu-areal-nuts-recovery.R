@@ -1,10 +1,11 @@
 # =============================================================================
-# Areal-field exposure + recovery for single-season occupancy NUTS
-# (gcol33/tulpaObs#142). The occu() NUTS path samples an icar/bym2 areal field
-# but used to leave the field params unnamed ("param[k]") and fit$spatial_field
-# NULL, so the field could only be smoke-tested. The engine already exports the
-# block offsets on ParamLayout; occu_fit.cpp now emits them as `spatial_layout`
-# and names the columns, and `.tobs_areal_field` slices `fit$spatial_field`.
+# Areal-field exposure + recovery for single-season occupancy NUTS. The occu()
+# NUTS path samples an icar/bym2 areal field but used to leave the field params
+# unnamed ("param[k]") and fit$spatial_field NULL, so the field could only be
+# smoke-tested. The engine already exports the block offsets on ParamLayout;
+# occu_fit.cpp
+# now emits them as `spatial_layout` and names the columns, and
+# `.tobs_areal_field` slices `fit$spatial_field`.
 #
 # For icar/car_proper the field node enters the logit predictor directly, so the
 # centred posterior-mean node is the per-cell surface; occupancy fields are

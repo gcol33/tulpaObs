@@ -1,8 +1,8 @@
 # =============================================================================
 # test-progress-all-variants.R - the outer-grid heartbeat file is emitted under
 # verbose = FALSE for EVERY fitting backend, not just the nested-Laplace cover
-# grid (gcol33/tulpaObs#43). Each backend reads the same scoped
-# `tulpa.nl_progress` option tobs() sets from control$progress[.file]:
+# grid. Each backend reads the same scoped `tulpa.nl_progress` option tobs()
+# sets from control$progress[.file]:
 #   * EM-Laplace occupancy            -> tulpa's em_laplace R loop
 #   * community EM (ms_occu)          -> community_em.R R loop
 #   * NUTS (any family)               -> tulpa's HMC sampler (C++ GridProgress)

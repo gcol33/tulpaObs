@@ -1,4 +1,4 @@
-# Single-term varying-coefficient spatial bar in cover() (gcol33/tulpaObs#61).
+# Single-term varying-coefficient spatial bar in cover().
 #
 # A `spatial(~ 1 + time || cell, graph = adj)` bar in a shared cover() formula is
 # sugar: it desugars to the existing two weighted-areal-term coupled trend path
@@ -186,7 +186,7 @@ test_that("`to =` is not a bar argument (retired: arm chosen by placement)", {
     "unexpected argument `to`")
 })
 
-test_that("a correlated `|` bar fits an MCAR field (gcol33/tulpaObs#64)", {
+test_that("a correlated `|` bar fits an MCAR field", {
   d <- .bar_small_data()
   # Tiny smoke data: the outer CCD over Sigma is weakly identified and declines
   # to the tensor grid (a benign grid-size note); the assertion is plumbing
@@ -235,10 +235,10 @@ test_that("a correlated `|` bar cannot co-exist with another areal term", {
 })
 
 test_that("a single-arm || placement is wired as an arm-specific separate latent", {
-  # gcol33/tulpaObs#65: an INDEPENDENT (`||`) bar placed in one arm's formula
-  # fits an arm-specific separate field on that arm only, with its own precision
-  # and no cross-arm copy. Recovery lives in
-  # test-cover-spatial-bar-armspecific.R; here the assertion is plumbing.
+  # an INDEPENDENT (`||`) bar placed in one arm's formula fits an arm-specific
+  # separate field on that arm only, with its own precision and no cross-arm
+  # copy. Recovery lives in test-cover-spatial-bar-armspecific.R; here the
+  # assertion is plumbing.
   d <- .bar_small_data()
   fit <- suppressWarnings(tobs(
     presence = ~ time +

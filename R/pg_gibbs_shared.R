@@ -1,12 +1,12 @@
 # pg_gibbs_shared.R - single source of truth for the Polya-Gamma Gibbs conjugate
 # machinery shared by every PG-Gibbs fitter (occu_pg_gibbs, t_occu,
 # ms_occu_pg_gibbs, ms_int_occu_pg_gibbs, ms_dyn_occu_pg_gibbs,
-# ms_count_pg_gibbs; gcol33/tulpaObs#135). Conditional on the Polya-Gamma
-# auxiliaries omega, a logistic-coefficient update is exactly conjugate Gaussian
-# and every fitter re-derived the same three pieces: the conjugate draw, the
-# community mean + Inverse-Gamma variance update, and the post-sampling
-# summary / fit assembly. Extracting them keeps the sampler math in one place;
-# the per-family fitters keep only their latent-state step and design layout.
+# ms_count_pg_gibbs). Conditional on the Polya-Gamma auxiliaries omega, a
+# logistic-coefficient update is exactly conjugate Gaussian and every fitter
+# re-derived the same three pieces: the conjugate draw, the community mean +
+# Inverse-Gamma variance update, and the post-sampling summary / fit assembly.
+# Extracting them keeps the sampler math in one place; the per-family fitters
+# keep only their latent-state step and design layout.
 
 # Community hyperprior defaults: the community-mean prior variance and the
 # near-Jeffreys Inverse-Gamma(a, b) shape/rate on each community variance

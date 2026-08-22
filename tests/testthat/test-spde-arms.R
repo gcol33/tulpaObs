@@ -1,7 +1,7 @@
 # Parameter recovery for an SPDE mesh field on the STATE arm of the integrated,
-# JSDM, community, and dynamic occupancy paths (gcol33/tulpaObs#21). Each fits a
-# model whose state (psi / season-1 psi1) linear predictor carries a smooth
-# Matern-like signal `u_true`, through the SPDE-Laplace EM, and asserts
+# JSDM, community, and dynamic occupancy paths. Each fits a model whose state
+# (psi / season-1 psi1) linear predictor carries a smooth Matern-like signal
+# `u_true`, through the SPDE-Laplace EM, and asserts
 #   (a) state fixed-effect (slope) recovery within tolerance, and
 #   (b) field-shape recovery cor(A u_hat, u_true) above a per-arm bound.
 #
@@ -37,15 +37,14 @@
 # field amp 0.9): x-slope 0.535-0.629 (truth 0.6), field_cor min 0.765, mean
 # 0.806. The field is shared across species.
 #
-# Since gcol33/tulpaObs#121 jsdm() is the COMMUNITY GLMM (per-species
-# coefficients under a Gaussian community covariance), so its spde() field is
-# fit by the shared block-coordinate driver (R/community_latent.R) rather than
-# the single-block SPDE-Laplace EM: mesh nodes carry the field, the barycentric
-# projector A maps them onto sites, the precision is
-# Q(kappa) = kappa^4 C0 + 2 kappa^2 G1 + G1 C0^-1 G1 scaled by the driver's tau,
-# and kappa (the Matern range) is gridded by the field marginal. That makes it
-# method = "nested_laplace", alongside the areal community fields, and the
-# community-mean coefficient is `mu_*`.
+# Since jsdm() is the COMMUNITY GLMM (per-species coefficients under a Gaussian
+# community covariance), so its spde() field is fit by the shared
+# block-coordinate driver (R/community_latent.R) rather than the single-block
+# SPDE-Laplace EM: mesh nodes carry the field, the barycentric projector A maps
+# them onto sites, the precision is Q(kappa) = kappa^4 C0 + 2 kappa^2 G1 + G1
+# C0^-1 G1 scaled by the driver's tau, and kappa (the Matern range) is gridded
+# by the field marginal. That makes it method = "nested_laplace", alongside the
+# areal community fields, and the community-mean coefficient is `mu_*`.
 .sim_spde_jsdm <- function(seed, n_sites = 600, n_species = 6) {
   set.seed(seed)
   coords <- cbind(runif(n_sites), runif(n_sites))

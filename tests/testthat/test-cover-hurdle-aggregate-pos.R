@@ -1,6 +1,6 @@
 # =============================================================================
 # test-cover-hurdle-aggregate-pos.R - control$aggregate.pos: exact grouped-beta
-# sufficient-statistic reduction of the positive (cover) arm (tulpaObs#49).
+# sufficient-statistic reduction of the positive (cover) arm.
 #
 # Beta is not a count family, so there is no single-row collapse. Plots sharing
 # the positive design row AND every per-observation latent component (cell, trend
@@ -49,8 +49,8 @@
   ctrl <- list(verbose = FALSE, sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L,
                aggregate.occ = agg.occ, aggregate.pos = agg.pos)
-  # The trend is a second weighted areal term in the formula (gcol33/tulpaObs#59),
-  # not a control knob; the unweighted bym2() is the shared intercept field.
+  # The trend is a second weighted areal term in the formula, not a control knob;
+  # the unweighted bym2() is the shared intercept field.
   if (trend) {
     ctrl$alpha.grid <- c(0, 0.5, 1.0); ctrl$alpha.grid.trend <- c(0, 0.5, 1.0)
     f <- ~ x + bym2(graph = s$adj, group_var = "region") +
@@ -222,10 +222,10 @@ test_that("aggregate.pos errors for the lognormal positive arm", {
 
 
 # Cell-level (leave-one-group-out) LOO on a cover() fit whose plots are grouped
-# into spatial cells via group_var = "region" (tulpaObs#105). The group_var maps
-# the 16 cells' worth of plots onto 16 field nodes, so the per-row spatial index
-# (spi_full) genuinely aggregates many columns into each cell and exercises the
-# real LOGO-CV path, not a degenerate identity map.
+# into spatial cells via group_var = "region". The group_var maps the 16 cells'
+# worth of plots onto 16 field nodes, so the per-row spatial index (spi_full)
+# genuinely aggregates many columns into each cell and exercises the real
+# LOGO-CV path, not a degenerate identity map.
 test_that("cover(): loo.unit = 'cell' is the auto cell map == explicit group == hand-aggregated", {
   skip_on_cran()
   skip_if_fast()

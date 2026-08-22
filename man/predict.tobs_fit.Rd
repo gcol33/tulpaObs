@@ -66,8 +66,8 @@ trend field / driving the change map; auto-resolved from the fit's stored
 trend weight when omitted.}
 
 \item{X_det.0}{Optional detection design for out-of-sample \code{"detection"} /
-\code{"both"} prediction on a \code{single}-season or \code{\link[=int_occu]{int_occu()}} fit
-(gcol33/tulpaObs#223): a plain design matrix for a single-season fit, or
+\code{"both"} prediction on a \code{single}-season or \code{\link[=int_occu]{int_occu()}} fit: a plain
+design matrix for a single-season fit, or
 a list of one design matrix per source (named by source, or in source
 order) for an \code{int_occu()} fit -- matching \code{fitted()$p}'s per-source
 shape. In-sample locations only: like the state-arm \code{svc()}/\code{spde()}

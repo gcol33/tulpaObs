@@ -121,6 +121,9 @@ jobs:
       # Every shard checks the pin. A shard is a full fit of the engine, so a
       # skew that only one job would have caught is no guard at all -- and the
       # shards no longer share a runner to inherit it from.
+      - name: Check for issue-tracker references
+        run: Rscript .github/scripts/check-issue-refs.R
+
       - name: Verify engine pin
         run: Rscript .github/scripts/check-engine-pin.R
 

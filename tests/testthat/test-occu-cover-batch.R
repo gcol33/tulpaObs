@@ -1,5 +1,6 @@
 # =============================================================================
-# test-occu-cover-batch.R - batched multi-response occu_cover (gcol33/tulpa#66).
+# test-occu-cover-batch.R
+# - batched multi-response occu_cover.
 #
 # The batched-independent path fits B species in one tobs() call, each with the
 # per-species model. The defining gate: a B-species batch must be PER-SPECIES
@@ -98,10 +99,10 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   # passes off: adaptive.grid = FALSE turns off edge-driven refinement, and
   # var.of.means.consistency = FALSE turns off the post-integration consistency
   # pass (joint-path default ON, independent of adaptive.grid -- it otherwise
-  # refines a peaked axis on the single fits but not the fused batch; see
-  # gcol33/tulpaObs#58, gcol33/tulpa#69). The default batch backend is "looped"
-  # (correct + fastest); this gate opts into the FUSED backend
-  # (control$batch.backend = "fused") to validate it against independent fits.
+  # refines a peaked axis on the single fits but not the fused batch; see). The
+  # default batch backend is "looped" (correct + fastest); this gate opts into
+  # the FUSED backend (control$batch.backend = "fused") to validate it against
+  # independent fits.
   ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint",
                adaptive.grid = FALSE, var.of.means.consistency = FALSE,
                diagnose.k = FALSE)

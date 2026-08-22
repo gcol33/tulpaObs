@@ -1,7 +1,7 @@
 // cell_coupling_occu_cover.h
 // Stateless `CellCouplingSpec` implementing the per-cell log-density of
 // the occu-cover hurdle (psi/p/pos arms) for the joint nested-Laplace
-// path in tulpa (gcol33/tulpa#32 Layer B.2 consumer).
+// path in tulpa ( consumer).
 //
 // Arm layout (kk indexes the spec's arm_ids() return):
 //   kk = 0 -> psi arm: 1 row per cell, carries no y data, eta = logit psi_c
@@ -30,7 +30,7 @@
 // each concrete spec (`occu_cover_lognormal`, `occu_cover_beta`) is a typedef
 // over a positive-arm policy supplying log_density / grad_eta / neg_hess_eta.
 //
-// `Aggregated` (tulpaObs#33) selects the cover arm's granularity:
+// `Aggregated` selects the cover arm's granularity:
 //   * Aggregated = false (per-visit): the pos arm carries one row per visit
 //     aligned with the detection arm; the det branch adds log f_pos at every
 //     detected visit (the J_det-factor cover likelihood).
@@ -94,10 +94,10 @@ public:
         // log-density are still exact.
         const bool want_hess = !out.grad_only;
 
-        // Batched multi-response (gcol33/tulpa#66): the visit-design row is
-        // species-invariant, so loop species INNER -- the kernel scatters each
-        // species' derivatives into its own block. With B = 1 the loop runs
-        // once at s = 0 and every (.., s) accessor / species-major write
+        // Batched multi-response: the visit-design row is species-invariant,
+        // so loop species INNER -- the kernel scatters each species'
+        // derivatives into its own block. With B = 1 the loop runs once at s =
+        // 0 and every (.., s) accessor / species-major write
         // [s * rc + j] reduces to the pre-batch path, byte-identical.
         const int base2_stride = out.n_rows_in_arm(2);
         double total_ll = 0.0;

@@ -1,7 +1,7 @@
 # Cover-hurdle spatially-varying trend declared as a weighted areal formula
-# term (gcol33/tulpaObs#59). A spatially varying trend is model structure, so
-# it lives in the formula as a second weighted icar() term, not in
-# control$trend (removed, breaking).
+# term. A spatially varying trend is model structure, so it lives in the
+# formula as a second weighted icar() term, not in control$trend (removed,
+# breaking).
 
 # Build a grid ICAR adjacency.
 .grid_adj <- function(g) {

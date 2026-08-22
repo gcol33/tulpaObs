@@ -1,6 +1,5 @@
 # =============================================================================
-# Single-species N-mixture random effects via the shared AGHQ engine
-# (gcol33/tulpaObs#13).
+# Single-species N-mixture random effects via the shared AGHQ engine.
 #
 # The community-N-mixture path (R/nmix_laplace_re.R) routes a native compiled
 # oracle (NMixCommunityOracle) through tulpa::tulpa_re_aghq(): the grouping
@@ -258,13 +257,13 @@
   p_lam    <- ncol(model$X_processes[[1]]); p_sig <- ncol(model$X_processes[[2]])
   # Built ONCE for the whole profile -- every candidate eta_b's oracle reuses it
   # instead of rebuilding the Gauss-Legendre quadrature per candidate
-  # (gcol33/tulpaObs#165; cutpoints/transect/quad_order don't vary with eta_b).
+  # (cutpoints/transect/quad_order don't vary with eta_b).
   quad_xptr <- cpp_distance_build_quad(as.numeric(model$cutpoints),
                                        .dist_transect_code(model$transect),
                                        as.integer(model$quad_order))
 
   # A make_oracle closure at a FIXED hazard shape eta_b (0 for the half-normal
-  # key). Profiling rebuilds the closure per candidate eta_b (gcol33/tulpaObs#114).
+  # key). Profiling rebuilds the closure per candidate eta_b.
   make_oracle_eb <- function(eta_b) function(arm_code, Z_site, K_max)
     cpp_distance_grouped_oracle(
       arm = arm_code, y_bins = y_bins,

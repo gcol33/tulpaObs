@@ -1,9 +1,8 @@
 # Factor reuse + grad-only + parallel outer grid through the real occu_cover
-# beta cell-coupling spec (gcol33/tulpa#46). Exercises the sparse joint path
-# (force.sparse = TRUE) where the inner_refresh / grad-only / parallel levers
-# live: the beta arm honours CellDerivs::grad_only (skips its trigamma on a
-# reuse step), so the converged joint fit must be invariant to inner.refresh and
-# to n.threads.outer.
+# beta cell-coupling spec. Exercises the sparse joint path (force.sparse = TRUE)
+# where the inner_refresh / grad-only / parallel levers live: the beta arm
+# honours CellDerivs::grad_only (skips its trigamma on a reuse step), so the
+# converged joint fit must be invariant to inner.refresh and to n.threads.outer.
 
 .fit_joint_beta <- function(seed, inner.refresh = 1L, n.threads.outer = 1L) {
     N <- 30L; J <- 4L

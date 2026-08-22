@@ -1,4 +1,4 @@
-# Work-stealing parallel coupled-cell scatter (gcol33/tulpa#107 flatten).
+# Work-stealing parallel coupled-cell scatter ( flatten).
 #
 # When the outer nested-Laplace grid is UNDER-SATURATED (fewer active grid cells
 # than team threads -- the tail of any grid, small grids, or a many-core server)

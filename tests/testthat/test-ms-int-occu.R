@@ -5,11 +5,11 @@
 # Multiple detection sources share one latent occupancy state per species; per-
 # species occupancy + per-source detection coefficient RE with per-arm Gaussian
 # community covariances. The latent state marginalises out per species-site (a
-# multi-source two-state mixture, analytic gradient) and the per-species
-# deviations are integrated by the shared community Laplace-EM (R/community_em.R).
-# status = "working" (gcol33/tulpaObs#100): community-mean coverage validated near
-# nominal across 30 seeds and two sources (measured ~0.89, clearing the 0.85
-# working floor; gated at 0.82 for finite-sample stability, see the coverage test).
+# multi-source two-state mixture, analytic gradient) and the per-species deviations
+# are integrated by the shared community Laplace-EM (R/community_em.R). status =
+# "working": community-mean coverage validated near nominal across 30 seeds and two
+# sources (measured ~0.89, clearing the 0.85 working floor; gated at 0.82 for
+# finite-sample stability, see the coverage test).
 # =============================================================================
 
 
@@ -66,11 +66,11 @@ test_that("ms_int_occu() community-mean 95% CIs cover near the nominal rate", {
     m <- fit$means[names(truth)]; sd <- fit$sds[names(truth)]
     covered <- c(covered, abs(m - truth) < 1.96 * sd)
   }
-  # Working-family gate (gcol33/tulpaObs#100): pooled over the shared psi and
-  # both per-source detection means x 30 seeds. Measured ~0.89, clearing the 0.85
-  # working floor of the recovery rubric; the binary community-mean intervals
-  # carry the mild Laplace under-dispersion of occupancy data, so the gate is held
-  # at 0.82 for finite-sample stability (well above the 0.80 experimental floor).
+  # Working-family gate: pooled over the shared psi and both per-source detection
+  # means x 30 seeds. Measured ~0.89, clearing the 0.85 working floor of the
+  # recovery rubric; the binary community-mean intervals carry the mild Laplace
+  # under-dispersion of occupancy data, so the gate is held at 0.82 for
+  # finite-sample stability (well above the 0.80 experimental floor).
   expect_gt(mean(covered), 0.82)
 })
 

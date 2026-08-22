@@ -4,12 +4,12 @@
 #
 # `.occu_cover_jc_postprocess()` (3 arms: psi, p, pos) and
 # `.occu_jc_postprocess()` (2 arms: psi, p) shape the same object out of the
-# same engine return. Everything that does not mention the cover arm is the
-# same computation in both: dropping non-converged outer-grid cells, the law-of-
+# same engine return. Everything that does not mention the cover arm is the same
+# computation in both: dropping non-converged outer-grid cells, the law-of-
 # total-covariance (betas + field) block, the parameter-surface vcov, and the
 # per-field split into the intercept field plus the trend fields. The helpers
 # below carry that spine, so a correction to the reported joint posterior lands
-# on both routes (gcol33/tulpaObs#171).
+# on both routes.
 #
 # Every helper takes the arms as data -- an index vector or a list of per-arm
 # (idx, mean) pairs -- so the 2-arm and 3-arm callers differ only in what they
@@ -24,10 +24,10 @@
 # weighted sum downstream; zero-mass cells stay represented in `fit$weights`, the
 # moments just route around them. When the engine left NO usable weight (an
 # unguarded upstream normalization collapses `fit$weights` to all NaN once any
-# cell is non-finite, gcol33/tulpa#65) the sampler `tulpa_posterior_draws()` uses
-# for predict / WAIC would find no positive-weight cell, so fall back to the same
-# pure softmax the reported moments use and keep the two consistent. Untouched
-# when the engine weights are already usable (every finite-grid fit).
+# cell is non-finite) the sampler `tulpa_posterior_draws()` uses for predict /
+# WAIC would find no positive-weight cell, so fall back to the same pure softmax
+# the reported moments use and keep the two consistent. Untouched when the engine
+# weights are already usable (every finite-grid fit).
 #
 # `label` names the route in the error / warning text.
 .tobs_joint_ok_cells <- function(fit, label) {
@@ -182,8 +182,8 @@
 # field. Field 1 is the intercept field (the back-compat `spatial_field`); the
 # next `n_own_fields - 1` are the spatially-varying trend fields, in block order,
 # labelled by their weight column. Any blocks beyond `n_own_fields` belong to a
-# different arm (the arm-specific cover fields of gcol33/tulpaObs#110) and are
-# returned unsliced in `blocks` for the caller to name.
+# different arm (the arm-specific cover fields) and are returned unsliced in
+# `blocks` for the caller to name.
 .tobs_joint_field_split <- function(field_demeaned, field_sd, n_cells, n_fields,
                                     n_own_fields, coupled_trends) {
   field_block <- function(b) {

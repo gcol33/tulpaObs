@@ -1,9 +1,9 @@
 # Season-varying survival (omega) and recruitment (gamma) for the Dail-Madsen
-# open N-mixture (dyn_abun(), gcol33/tulpaObs#80 part b). The transition from
-# season t-1 to t uses interval-(t-1) vital rates, so a season covariate on
-# omega / gamma drives the dynamics. The forward HMM kernel
-# carries length-(T-1) interval-indexed eta with per-interval forward-mode
-# gradients; the constant-rate (scalar) path is the broadcast special case.
+# open N-mixture (dyn_abun()). The transition from season t-1 to t uses
+# interval-(t-1) vital rates, so a season covariate on omega / gamma drives
+# the dynamics. The forward HMM kernel carries length-(T-1) interval-indexed
+# eta with per-interval forward-mode gradients; the constant-rate (scalar)
+# path is the broadcast special case.
 #
 # Tests: an FD anchor on the per-interval analytic gradient, a no-regression
 # guard that the scalar broadcast is bit-identical to a per-interval vector of

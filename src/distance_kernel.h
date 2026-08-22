@@ -54,17 +54,17 @@
 
 namespace tulpaObs {
 
-// Combinatorial term of the latent-N marginal sum (gcol33/tulpaObs#167): the
-// sum runs N = R_i .. K_max with K_lo = R_i exactly (the site's own detected
-// total), so the per-N term `-lgamma((N - R_i) + 1)` depends only on the
-// offset k = N - R_i, NEVER on R_i itself -- it is the SAME table for every
-// site. Building it once per fit (size K_max + 1, covering the widest range
-// any site can need) and indexing into it replaces up to n_sites * K_max
-// redundant R::lgammafn() calls per sweep with array lookups; a caller that
-// sweeps the same K_max repeatedly (a Newton iteration, a NUTS leapfrog step,
-// an AGHQ node) builds this ONCE outside its loop and passes it to every
-// compute_distance_site() call. Byte-identical to the inline computation --
-// same R::lgammafn(), just memoized.
+// Combinatorial term of the latent-N marginal sum: the sum runs N = R_i ..
+// K_max with K_lo = R_i exactly (the site's own detected total), so the per-N
+// term `-lgamma((N - R_i) + 1)` depends only on the offset k = N - R_i, NEVER
+// on R_i itself -- it is the SAME table for every site. Building it once per
+// fit (size K_max + 1, covering the widest range any site can need) and
+// indexing into it replaces up to n_sites * K_max redundant R::lgammafn()
+// calls per sweep with array lookups; a caller that sweeps the same K_max
+// repeatedly (a Newton iteration, a NUTS leapfrog step, an AGHQ node) builds
+// this ONCE outside its loop and passes it to every compute_distance_site()
+// call. Byte-identical to the inline computation -- same R::lgammafn(), just
+// memoized.
 inline std::vector<double> dist_build_comb_table(int K_max) {
     std::vector<double> t((std::size_t) K_max + 1);
     for (int k = 0; k <= K_max; ++k) t[k] = -R::lgammafn((double)k + 1.0);
@@ -102,27 +102,25 @@ struct DistSiteResult {
 // nearest); `eta_sigma` the log-scale detection predictor; `eta_b` the log-shape
 // (hazard-rate only, ignored for half-normal); `key` the detection key; `quad`
 // the per-fit bin quadrature; `K_max` the marginal-sum truncation (>= sum(y));
-// `r` the NB size (+Inf -> Poisson).
-// `value_only`: skip every derivative computation (the per-bin quadrature
-// second-derivative accumulation, its five per-bin derivative vectors, and
-// the whole detection-arm gradient/Fisher block) and fill only `log_lik` (plus
-// the cheap `mean_N` / `var_N` / `boundary_weight` / `p_det` moments the
-// log-likelihood sum already produces). Every gradient/info field of the
-// returned struct is left at its zero-initialized default in this mode -- the
-// caller must not read them. For a caller that only needs `ll_cell` (the
-// per-site marginal value at a trial point, e.g. the mode-adaptation
-// backtracking line search in R/community_latent.R), this drops the 5 extra
-// per-bin heap-allocated vectors and the O(n_dparam^2 * n_bins) detection
-// block that `working()`'s score/curvature need but a value lookup does not.
-// `headroom` (gcol33/tulpaObs#168): caps this site's own ceiling at
-// `K_lo + headroom` rather than the shared `K_max`, mirroring
-// nmix_precompute_site()'s per-site cap (nmix_kernel.h). K_lo == R (the site's
-// detected total) exactly for every distance site, so unlike the N-mixture the
-// comb_table stays valid unchanged -- it is already indexed by the offset
-// `k = N - K_lo`, never by K_lo itself (dist_build_comb_table(), #167), so
-// capping here needs only a smaller K_grid, no separate per-site cache. A
-// negative headroom (the default) disables the cap: every site still sums to
-// the shared K_max, the historical behaviour.
+// `r` the NB size (+Inf -> Poisson). `value_only`: skip every derivative
+// computation (the per-bin quadrature second-derivative accumulation, its five
+// per-bin derivative vectors, and the whole detection-arm gradient/Fisher block)
+// and fill only `log_lik` (plus the cheap `mean_N` / `var_N` / `boundary_weight`
+// / `p_det` moments the log-likelihood sum already produces). Every
+// gradient/info field of the returned struct is left at its zero-initialized
+// default in this mode -- the caller must not read them. For a caller that only
+// needs `ll_cell` (the per-site marginal value at a trial point, e.g. the
+// mode-adaptation backtracking line search in R/community_latent.R), this drops
+// the 5 extra per-bin heap-allocated vectors and the O(n_dparam^2 * n_bins)
+// detection block that `working()`'s score/curvature need but a value lookup
+// does not. `headroom`: caps this site's own ceiling at `K_lo + headroom` rather
+// than the shared `K_max`, mirroring nmix_precompute_site()'s per-site cap
+// (nmix_kernel.h). K_lo == R (the site's detected total) exactly for every
+// distance site, so unlike the N-mixture the comb_table stays valid unchanged --
+// it is already indexed by the offset `k = N - K_lo`, never by K_lo itself
+// (dist_build_comb_table(), #167), so capping here needs only a smaller K_grid,
+// no separate per-site cache. A negative headroom (the default) disables the
+// cap: every site still sums to the shared K_max, the historical behaviour.
 inline DistSiteResult compute_distance_site(
     const int* y_bins, int n_bins,
     double eta_lambda, double eta_sigma, double eta_b,
@@ -239,10 +237,10 @@ inline DistSiteResult compute_distance_site(
         base_const = -lambda + det_const - (double)R * log1mp - sum_lgam_yfact;
     }
 
-    // Per-site ceiling K_hi (gcol33/tulpaObs#168): headroom >= 0 caps this
-    // site's sum at K_lo + headroom rather than the shared K_max, whenever that
-    // cap is tighter -- a site whose own total already sits within `headroom`
-    // of K_max keeps the shared ceiling, never grows past it.
+    // Per-site ceiling K_hi: headroom >= 0 caps this site's sum at K_lo +
+    // headroom rather than the shared K_max, whenever that cap is tighter -- a
+    // site whose own total already sits within `headroom` of K_max keeps the
+    // shared ceiling, never grows past it.
     const int K_hi = (headroom >= 0 && K_lo <= K_max - headroom)
         ? K_lo + headroom : K_max;
     const int K_grid = K_hi - K_lo + 1;
@@ -250,11 +248,10 @@ inline DistSiteResult compute_distance_site(
     std::vector<double>& a = scratch ? scratch->a : a_local;
     a.resize(K_grid);
     // K_lo == R exactly (see above), so N - R == k always: the combinatorial
-    // term depends only on the offset k, never on R itself (gcol33/tulpaObs#167)
-    // -- comb_table[k], when supplied, is a memoized -lgamma(k+1) built once per
-    // fit rather than recomputed at every (site, call) pair. Indexing k up to
-    // K_hi - K_lo <= K_max - K_lo stays in the table's bounds regardless of the
-    // cap.
+    // term depends only on the offset k, never on R itself -- comb_table[k],
+    // when supplied, is a memoized -lgamma(k+1) built once per fit rather than
+    // recomputed at every (site, call) pair. Indexing k up to K_hi - K_lo <=
+    // K_max - K_lo stays in the table's bounds regardless of the cap.
     double max_a = -std::numeric_limits<double>::infinity();
     for (int k = 0; k < K_grid; ++k) {
         const int N = K_lo + k;

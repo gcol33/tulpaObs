@@ -11,7 +11,7 @@
 # scaled onto the cover arm by the copy coefficient alpha. This file normalizes
 # those three differences ONCE into a family-agnostic draw bundle so predict()
 # and the pointwise log-likelihood share a single draws -> linear-predictor
-# path (gcol33/tulpaObs#24).
+# path.
 # =============================================================================
 
 
@@ -24,16 +24,14 @@
 # The copy coefficient alpha scales the shared field onto a copied arm; 0 is on
 # the grid so an uncoupled arm is reachable exactly. sigma is the field
 # amplitude. bym2 additionally mixes structured and unstructured components at
-# rho.
-# Declare an outer-grid axis this package defaulted rather than one the user
-# pinned (gcol33/tulpaObs#186, consumer of gcol33/tulpa#293). The engine's
-# auto-recenter decides axis PROVENANCE, not field presence: a marked axis (or
-# one whose nodes are exactly the engine's own default) may be recentred onto
-# the hyperparameter mode, anything else is treated as a deliberate pin and is
-# never moved. Because tulpaObs writes a grid on every joint fit -- it derives
-# a second axis from the first, and hands the same vector to several blocks --
-# an unmarked default is indistinguishable from a pin and silently makes the
-# rescue inert.
+# rho. Declare an outer-grid axis this package defaulted rather than one the
+# user pinned. The engine's auto-recenter decides axis
+# PROVENANCE, not field presence: a marked axis (or one whose nodes are exactly
+# the engine's own default) may be recentred onto the hyperparameter mode,
+# anything else is treated as a deliberate pin and is never moved. Because
+# tulpaObs writes a grid on every joint fit -- it derives a second axis from
+# the first, and hands the same vector to several blocks -- an unmarked default
+# is indistinguishable from a pin and silently makes the rescue inert.
 #
 # The marker is an attribute, so `sort()` / `[` / `c()` / `as.numeric()` /
 # `expand.grid()` all drop it: call this LAST, on the vector actually written
@@ -63,15 +61,14 @@
 # it with `.tobs_mark_auto()`.
 #
 # The copy-coefficient and field-SD axes are READ from the engine rather than
-# restated here (gcol33/tulpaObs#209). Both fields are bound in the engine's
-# `.NL_FAMILY_AXES` on the very paths these grids reach -- `alpha_grid` and
-# `sigma_grid` on `.copy`, `sigma_grid` on `.joint_areal` -- so
-# `.nl_axis_matches_default()` recognises a grid carrying those nodes as a
-# default by VALUE, independently of the `auto_grid()` marker. Reading holds
-# that recognition in step permanently: it is the belt that still classifies
-# the axis as ours after a reshape has dropped the marker, which is the failure
-# gcol33/tulpaObs#191 filed, and a restated copy loses the belt the moment the
-# engine moves the nodes the way gcol33/tulpa#361 moved `bym2_rho`.
+# restated here. Both fields are bound in the engine's `.NL_FAMILY_AXES` on the
+# very paths these grids reach -- `alpha_grid` and `sigma_grid` on `.copy`,
+# `sigma_grid` on `.joint_areal` -- so `.nl_axis_matches_default()` recognises
+# a grid carrying those nodes as a default by VALUE, independently of the
+# `auto_grid()` marker. Reading holds that recognition in step permanently: it
+# is the belt that still classifies the axis as ours after a reshape has
+# dropped the marker, which is the failure filed, and a restated copy loses the
+# belt the moment the engine moves the nodes the way moved `bym2_rho`.
 .tobs_default_alpha_grid <- function() {
   tulpa::auto_grid(tulpa:::.nl_grid_axis("copy_alpha"))
 }
@@ -88,18 +85,18 @@
 # arm-specific block and the occu_cover() NUTS warm fit.
 #
 # These nodes are deliberately tulpaObs's own, NOT a read of the engine's
-# `joint_car_rho` (gcol33/tulpaObs#209), which today holds the same four values.
-# Two reasons, and they point the same way. The engine binds neither this axis
-# nor the `rho_car_grid` field it is written to into `.NL_FAMILY_AXES`, by its
-# own statement, precisely so a caller passing these nodes stays classified as
-# a caller rather than as the engine's default -- so unlike the alpha and
-# field-SD axes above there is no value-recognition belt to hold in step, and
-# the equality is coincidence rather than contract. And the axis does not exist
-# at this package's declared `Imports` floor (tulpa 0.0.136 errors on the key),
-# so a read would have to fall back to these nodes anyway, making the default
-# grid a function of which engine happens to be installed within one declared
-# floor. Provenance is carried by the `auto_grid()` marker, which the rescue
-# reads before it ever reaches the value comparison.
+# `joint_car_rho`, which today holds the same four values. Two reasons, and they
+# point the same way. The engine binds neither this axis nor the `rho_car_grid`
+# field it is written to into `.NL_FAMILY_AXES`, by its own statement, precisely
+# so a caller passing these nodes stays classified as a caller rather than as
+# the engine's default -- so unlike the alpha and field-SD axes above there is
+# no value-recognition belt to hold in step, and the equality is coincidence
+# rather than contract. And the axis does not exist at this package's declared
+# `Imports` floor (tulpa 0.0.136 errors on the key), so a read would have to
+# fall back to these nodes anyway, making the default grid a function of which
+# engine happens to be installed within one declared floor. Provenance is
+# carried by the `auto_grid()` marker, which the rescue reads before it ever
+# reaches the value comparison.
 .tobs_default_rho_car_grid <- function() {
   tulpa::auto_grid(c(0.5, 0.8, 0.95, 0.99))
 }
@@ -140,28 +137,27 @@
 }
 
 # Promote the outer Pareto-k diagnostic from a joint nested-Laplace result to the
-# tobs_fit top level (gcol33/tulpaObs#104). The joint engine attaches `pareto_k`,
-# `pareto_k_is_ess`, `pareto_k_scope`, and `pareto_k_proposal_source` (the
-# mode-Hessian-vs-grid-moment proposal source, gcol33/tulpa#116) to the raw
-# result the postprocess wrappers nest at `$joint_fit`. A user diagnostic should
-# read `fit$pareto_k` / `fit$pareto_k_proposal_source` directly rather than reach
-# into `$joint_fit`, so each joint-coupled family splices the result of this into
-# its return list. Returns a named list of the fields actually present (so
-# `c(list(...), .tobs_promote_pareto_k(jf), list(...))` adds exactly those), or
-# NULL when the joint result carries none -- diagnose.k defaults OFF
-# (gcol33/tulpaObs#101), so the fields are NA-or-absent and this is inert unless
-# the diagnostic was requested.
+# tobs_fit top level. The joint engine attaches `pareto_k`, `pareto_k_is_ess`,
+# `pareto_k_scope`, and `pareto_k_proposal_source` (the
+# mode-Hessian-vs-grid-moment proposal source) to the raw result the postprocess
+# wrappers nest at `$joint_fit`. A user diagnostic should read `fit$pareto_k` /
+# `fit$pareto_k_proposal_source` directly rather than reach into `$joint_fit`, so
+# each joint-coupled family splices the result of this into its return list.
+# Returns a named list of the fields actually present (so `c(list(...),
+# .tobs_promote_pareto_k(jf), list(...))` adds exactly those), or NULL when the
+# joint result carries none -- diagnose.k defaults OFF, so the fields are
+# NA-or-absent and this is inert unless the diagnostic was requested.
 .tobs_promote_pareto_k <- function(jf) {
   if (!is.list(jf)) return(NULL)
   keys <- c("pareto_k", "pareto_k_is_ess", "pareto_k_scope",
             "pareto_k_proposal_source")
   present <- keys[keys %in% names(jf)]
   if (length(present) == 0L) return(NULL)
-  # Inert unless the diagnostic actually ran (gcol33/tulpaObs#101): with
-  # diagnose.k OFF the engine sets every field to NA and returns, so there is
-  # nothing to surface. A diagnostic that ran reports a finite k-hat and its
-  # finite IS-ESS (pareto_k_is_ess), so gate on a usable number rather than
-  # mirroring the always-present NA placeholders.
+  # Inert unless the diagnostic actually ran: with diagnose.k OFF the engine
+  # sets every field to NA and returns, so there is nothing to surface. A
+  # diagnostic that ran reports a finite k-hat and its finite IS-ESS
+  # (pareto_k_is_ess), so gate on a usable number rather than mirroring the
+  # always-present NA placeholders.
   k    <- jf$pareto_k
   ess  <- jf$pareto_k_is_ess
   ran  <- (length(k) == 1L && is.finite(k)) ||
@@ -171,17 +167,17 @@
 }
 
 # Promote the outer-grid placement record from a joint nested-Laplace result to
-# the tobs_fit top level (gcol33/tulpaObs#187). The engine reports where the
-# outer grid ended up -- `outer_grid_placement` ("fixed" / "auto_recentered"),
-# `outer_grid_recenter_attempts`, `outer_grid_prior_added`, and (gcol33/tulpa#293)
+# the tobs_fit top level. The engine reports where the outer grid ended up --
+# `outer_grid_placement` ("fixed" / "auto_recentered"),
+# `outer_grid_recenter_attempts`, `outer_grid_prior_added`, and
 # `outer_grid_recenter_declined`, the reason a "fixed" placement stayed fixed.
 # Without this promotion a caller has to reach into `$joint_fit` / `$joint` to
 # learn whether the auto grid did anything, which is how an inert recenter stayed
 # invisible across a whole batch. Same contract as `.tobs_promote_pareto_k()`:
 # returns a named list of the fields actually present so the result splices with
 # `c(list(...), .tobs_promote_outer_grid(jf), list(...))`, and NULL when the
-# result carries none (a fit from an engine predating the record, or a
-# non-joint path).
+# result carries none (a fit from an engine predating the record, or a non-joint
+# path).
 #
 # NOT gated on the placement being "auto_recentered": a fixed placement with its
 # decline reason is precisely the case worth surfacing.
@@ -267,7 +263,7 @@
 # intercept field; blocks 2.. carry the per-cell trend weight. The bundle reuses
 # the cover roster slot names ("occ" for psi, "pos" empty) so the shared
 # `.tobs_joint_arm_eta` accumulator and the predict path read it unchanged: the
-# occupancy psi arm is "occ", and there is no positive arm. (gcol33/tulpaObs#81)
+# occupancy psi arm is "occ", and there is no positive arm.
 .tobs_joint_draws_occu <- function(object, jf, layout, n) {
   tg      <- jf$theta_grid
   n_cells <- object$model$n_cells %||% object$model$n_sites
@@ -309,11 +305,11 @@
        blocks = blocks, n_cells = n_cells)
 }
 
-# cover (2-arm occ/pos) with arm-specific separate latents (gcol33/tulpaObs#65):
-# one or more NON-copied areal blocks, each placed on exactly ONE arm. Block b is
-# stored as a unit-precision latent z; its amplitude on the active arm is sigma_b
-# (= 1/sqrt(tau_b) for icar/car_proper, the bym2 mixed amplitude otherwise), and
-# its amplitude on the OTHER arm is 0 (no cross-arm copy). The bundle's per-block
+# cover (2-arm occ/pos) with arm-specific separate latents: one or more NON-copied
+# areal blocks, each placed on exactly ONE arm. Block b is stored as a
+# unit-precision latent z; its amplitude on the active arm is sigma_b (=
+# 1/sqrt(tau_b) for icar/car_proper, the bym2 mixed amplitude otherwise), and its
+# amplitude on the OTHER arm is 0 (no cross-arm copy). The bundle's per-block
 # amp_occ / amp_pos encode this directly -- one is the field amplitude, the other
 # is 0 -- so the shared `.tobs_joint_arm_eta` accumulator scatters each block onto
 # its own arm only. A non-intercept (slope) field also carries its per-arm weight.
@@ -384,8 +380,8 @@
     # Its node map and per-cell weight are NOT stored here: the consumer supplies
     # them via `.tobs_joint_arm_eta`'s `units` / `wfun` -- predict() the newdata
     # cell map and column, the pointwise-loglik consumer the per-observation map
-    # and weight built from the fit's armspec_blocks (gcol33/tulpaObs#95). A
-    # non-intercept (slope) field carries its covariate column name to look up.
+    # and weight built from the fit's armspec_blocks. A non-intercept (slope)
+    # field carries its covariate column name to look up.
     wt <- if (isTRUE(meta[[b]]$is_intercept)) NULL else meta[[b]]$column_name
     list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = wt)
   })
@@ -417,10 +413,10 @@
   n_field <- length(starts)
   field_idx <- lapply(starts, function(s0) s0 + seq_len(n_cells))
 
-  # Per-arm RE latent draws (gcol33/tulpaObs#102): each RE block stored its
-  # latent column indices in fit$re[[arm]]$latent_idx; draw them from the SAME
-  # grid-integrated posterior so the BLUP offset is marginalized over the joint,
-  # not plugged in at the mode. They trail the fields in the latent vector.
+  # Per-arm RE latent draws: each RE block stored its latent column indices in
+  # fit$re[[arm]]$latent_idx; draw them from the SAME grid-integrated posterior
+  # so the BLUP offset is marginalized over the joint, not plugged in at the
+  # mode. They trail the fields in the latent vector.
   re_meta <- Filter(function(r) !is.null(r$latent_idx), object$re %||% list())
   re_idx  <- lapply(re_meta, function(r) as.integer(r$latent_idx))
 
@@ -435,11 +431,11 @@
   b_occ <- take(p[1L]); b_det <- take(p[2L]); b_pos <- take(p[3L])
 
   trend_cols  <- object$trend_weights %||% object$trend_weight
-  # Per-block arm + weight labels (gcol33/tulpaObs#110). A shared occupancy field
-  # scales occ by b<k>.sigma and cover by b<k>.alpha * b<k>.sigma; an arm-specific
-  # cover field (arm == "pos") scales cover by its OWN b<k>.sigma and occ by 0 (no
-  # copy). `field_specs` labels every block; older fits (no field_specs) fall back
-  # to the all-shared convention.
+  # Per-block arm + weight labels. A shared occupancy field scales occ by
+  # b<k>.sigma and cover by b<k>.alpha * b<k>.sigma; an arm-specific cover field
+  # (arm == "pos") scales cover by its OWN b<k>.sigma and occ by 0 (no copy).
+  # `field_specs` labels every block; older fits (no field_specs) fall back to the
+  # all-shared convention.
   field_specs <- object$field_specs
   cn <- colnames(tg)
   blocks <- lapply(seq_len(n_field), function(b) {
@@ -495,7 +491,7 @@
   # grid (control$phi.grid.pos, or the latent path's sigma_u); otherwise the
   # dispersion the fit held FIXED in the cell-coupling spec. Falling back to a
   # bare 1 would score every spatial occu_cover fit at unit dispersion regardless
-  # of the value the spec used (gcol33/tulpaObs#34).
+  # of the value the spec used.
   fixed_disp <- object$model$cover_pos_disp %||% 1
   list(n = n, positive = positive, cells = cells,
        disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = fixed_disp),
@@ -523,7 +519,7 @@
   # ICAR blocks under the (sigma, alpha) per-block copy convention, axes named
   # b<k>.sigma / b<k>.alpha. The occupancy arm scales block k by b<k>.sigma, the
   # positive arm by b<k>.alpha * b<k>.sigma; block 1 is the unweighted intercept
-  # field, blocks 2.. carry the per-observation trend weight. (gcol33/tulpaObs#15)
+  # field, blocks 2.. carry the per-observation trend weight.
   field_starts <- layout$field_starts
   n_field <- length(field_starts %||% integer(0))
   if (n_field > 1L) {
@@ -592,14 +588,13 @@
        blocks = list(block), n_cells = n_phi)
 }
 
-# Pointwise-log-likelihood consumer helpers for arm-specific cover() fits
-# (gcol33/tulpaObs#65): the per-arm fields store no node map / weight on their
-# bundle blocks (gcol33/tulpaObs#95), so the loglik consumer -- which runs over
-# the fit's observations -- rebuilds them from `object$armspec_blocks` and hands
-# them to `.tobs_joint_arm_eta` as `units` / `wfun`. The predict consumer instead
-# supplies the newdata cell map and a newdata-column lookup. Every block on an
-# arm shares one per-observation node map (they index the same graph), so the
-# first block on the arm carries it.
+# Pointwise-log-likelihood consumer helpers for arm-specific cover() fits: the
+# per-arm fields store no node map / weight on their bundle blocks, so the loglik
+# consumer -- which runs over the fit's observations -- rebuilds them from
+# `object$armspec_blocks` and hands them to `.tobs_joint_arm_eta` as `units` /
+# `wfun`. The predict consumer instead supplies the newdata cell map and a
+# newdata-column lookup. Every block on an arm shares one per-observation node
+# map (they index the same graph), so the first block on the arm carries it.
 #
 # Per-arm per-observation node map; `seq_len(n_rows)` when the arm has no field
 # (the amplitude check in `.tobs_joint_arm_eta` then never indexes it).
@@ -640,12 +635,12 @@
 #
 # A block's arm membership is carried entirely by its per-arm amplitude
 # (`amp_occ` / `amp_pos`): a shared field scales both arms, an arm-specific field
-# (gcol33/tulpaObs#65) has zero amplitude on the arm it does not sit on (no
-# cross-arm copy). Every block on an arm then reads the SAME consumer-supplied
-# `units` / `wfun` -- predict() passes the newdata cell map and a newdata-column
-# lookup; the pointwise-log-likelihood consumer passes the per-observation node
-# map and weight. Blocks store neither map nor weight themselves, so an
-# arm-specific field maps correctly at predict time (gcol33/tulpaObs#95).
+# has zero amplitude on the arm it does not sit on (no cross-arm copy). Every
+# block on an arm then reads the SAME consumer-supplied `units` / `wfun` --
+# predict() passes the newdata cell map and a newdata-column lookup; the
+# pointwise-log-likelihood consumer passes the per-observation node map and
+# weight. Blocks store neither map nor weight themselves, so an arm-specific
+# field maps correctly at predict time.
 .tobs_joint_arm_eta <- function(bundle, X, arm, units, wfun = NULL) {
   B <- bundle$b[[arm]]
   if (is.null(B)) {

@@ -1,10 +1,10 @@
 // distance_quad_build.cpp
 // R-level factory for the per-fit detection quadrature (distance_quad.h): built
-// ONCE per fit and threaded as an external pointer into every repeated .Call()
-// the fit makes into the compiled distance kernel (cpp_distance_site_sweep,
+// ONCE per fit and threaded as an external pointer into every repeated .Call() the
+// fit makes into the compiled distance kernel (cpp_distance_site_sweep,
 // cpp_distance_total_log_lik, cpp_distance_laplace_fixed, cpp_distance_nuts,
-// cpp_distance_grouped_oracle, cpp_distance_ploglik_batch), instead of paying
-// the Gauss-Legendre Newton-Raphson root-find on every call (gcol33/tulpaObs#165).
+// cpp_distance_grouped_oracle, cpp_distance_ploglik_batch), instead of paying the
+// Gauss-Legendre Newton-Raphson root-find on every call.
 
 #include "distance_quad.h"
 #include <Rcpp.h>

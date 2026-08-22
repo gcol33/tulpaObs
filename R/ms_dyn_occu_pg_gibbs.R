@@ -1,7 +1,7 @@
 # ms_dyn_occu_pg_gibbs.R - Polya-Gamma Gibbs for COMMUNITY multi-season (dynamic)
-# occupancy (spOccupancy tMsPGOcc; gcol33/tulpaObs#115, #126). Combines the
-# community PG machinery (msPGOcc, R/ms_occu_pg_gibbs.R) with a 2-state HMM
-# forward-filter backward-sample (FFBS) latent-state step:
+# occupancy (spOccupancy tMsPGOcc). Combines the community PG machinery (msPGOcc,
+# R/ms_occu_pg_gibbs.R) with a 2-state HMM forward-filter backward-sample (FFBS)
+# latent-state step:
 #
 #   z_{s,i,1}          ~ Bernoulli(psi1_{s,i})      per-species season-1 occupancy
 #   z_{s,i,t}          : colonization gamma_i (0->1), survival 1 - eps_i (1->1)
@@ -23,7 +23,7 @@
                                            n.iter = NULL, n.warmup = NULL,
                                            n.chains = NULL, n.thin = NULL, seed = NULL,
                                            verbose = FALSE, ...) {
-  # Sampler defaults come from the one engine table (gcol33/tulpaObs#188).
+  # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
   rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))

@@ -117,8 +117,9 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
             // Cover term at a detected plot with an observed cover; a missing
             // (NA -> non-finite) cover drops out (missing-at-random cover), the
             // detection mixture above still counts it. Without the guard an NA
-            // cover poisons sum_cover with NaN (gcol33/tulpaObs#133), unlike the
-            // 2-level sibling occu_cover_ploglik.cpp which already guards it.
+            // cover poisons sum_cover with NaN, unlike the 2-level sibling
+            // occu_cover_ploglik.cpp
+            // which already guards it.
             double cv = y_pos((std::size_t) i, j);
             if (std::isfinite(cv)) {
               double eta_pos = eta_pos_site;

@@ -1,12 +1,12 @@
-# Recovery + regression tests for a continuous SPDE field on the multi-block
-# EM nested-Laplace occupancy path (method = "nested_laplace"). Closes the last
-# arm of gcol33/tulpaObs#21: the non-joint multi-block engine now carries the
-# SPDE mesh projection A (a many-to-one site -> mesh-node map) via the same
-# make_spde_block factory + SpdeQBuilder the single-Laplace SPDE path uses
-# (tulpa LatentBlock INDEXED_MULTI), so an spde() field fits end to end.
+# Recovery + regression tests for a continuous SPDE field on the multi-block EM
+# nested-Laplace occupancy path (method = "nested_laplace"). Closes the last
+# gap: the non-joint multi-block engine now carries the SPDE mesh projection
+# A (a many-to-one site -> mesh-node map) via the same make_spde_block factory
+# + SpdeQBuilder the single-Laplace SPDE path uses (tulpa LatentBlock
+# INDEXED_MULTI), so an spde() field fits end to end.
 #
 # Meshes are built with cutoff = 0 + the default max_edge (reliable across
-# seeds; works around the tulpaMesh zero-triangle collapse, gcol33/tulpaMesh#3).
+# seeds; works around the tulpaMesh zero-triangle collapse).
 
 simulate_spde_occu <- function(seed, n_sites, J = 8,
                                beta_occ = c(-0.5, 0.7),

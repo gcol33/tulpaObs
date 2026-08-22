@@ -1,5 +1,6 @@
 # =============================================================================
-# test-occu-cover-aggregate.R - cell-aggregated cover (tulpaObs#33).
+# test-occu-cover-aggregate.R
+# - cell-aggregated cover.
 #
 # occu_cover(cover_aggregate = "mean"/"median") collapses the cover arm to one
 # observation per occupancy unit (the mean / median cover over that unit's

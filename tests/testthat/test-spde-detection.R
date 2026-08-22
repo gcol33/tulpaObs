@@ -1,8 +1,8 @@
 # Parameter recovery for an SPDE mesh field on the DETECTION arm of a
-# single-season occupancy model (gcol33/tulpaObs#21). The state arm is
-# non-spatial; the field sits on logit(p) and is fit through the SPDE-Laplace
-# EM path. Asserts (a) detection fixed-effect recovery within tolerance and
-# (b) detection field-shape recovery cor(u_hat, u_truth) > 0.7.
+# single-season occupancy model. The state arm is non-spatial; the field sits
+# on logit(p) and is fit through the SPDE-Laplace EM path. Asserts (a)
+# detection fixed-effect recovery within tolerance and (b) detection
+# field-shape recovery cor(u_hat, u_truth) > 0.7.
 #
 # Simulator: psi non-spatial (occ_cov slope 0.7), detection logit carries a
 # smooth Matern-like signal `u_true` plus a det_cov slope (0.4). The recovered
@@ -99,10 +99,10 @@ test_that("detection-arm spde() recovery holds across seeds", {
   expect_gt(mean(field_cor),   0.72)
 })
 
-# gcol33/tulpaObs#218: the field was reportable (fit$spatial_field_det) but not
-# predictive -- fitted()/predict() built the detection logit from the fixed
-# effects alone. fitted(fit)$p must now equal the fixed-effect predictor plus
-# the projected field, and predict() with no newdata delegates to fitted().
+# the field was reportable (fit$spatial_field_det) but not predictive --
+# fitted()/predict() built the detection logit from the fixed effects alone.
+# fitted(fit)$p must now equal the fixed-effect predictor plus the projected
+# field, and predict() with no newdata delegates to fitted().
 test_that("fitted() adds the detection-arm spde() field to p", {
   skip_on_cran()
   skip_if_fast()

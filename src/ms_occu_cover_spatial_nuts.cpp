@@ -1,8 +1,8 @@
 // ms_occu_cover_spatial_nuts.cpp
 // C++ marginal log-likelihood + (later) gradient for the reduced-rank
-// spatial-factor community occu_cover NUTS target (gcol33/tulpa#67). The R
-// reference .ms_ocs_joint_logpost (R/ms_occu_cover_spatial_nuts.R) is the oracle;
-// this port mirrors it block by block and is cross-checked against it.
+// spatial-factor community occu_cover NUTS target. The R reference
+// .ms_ocs_joint_logpost (R/ms_occu_cover_spatial_nuts.R) is the oracle; this port
+// mirrors it block by block and is cross-checked against it.
 //
 // Step 1 (this commit): the per-species per-cell occu_cover marginal log-lik with
 // the shared latent field injected on the occupancy predictor (and, with a

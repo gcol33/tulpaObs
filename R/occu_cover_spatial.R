@@ -139,9 +139,8 @@
 # A weighted areal term (`icar(graph = adj, weight = col)`) is a second coupled
 # field -- a spatially-varying coefficient on `col` sharing the same areal
 # graph -- the formula-DSL spelling of the trend field that `control$trend`
-# also produces (gcol33/tulpaObs#15). The joint engine couples N such fields;
-# the single-field `v2_joint` / `v3_nested` engines take only the intercept
-# field.
+# also produces. The joint engine couples N such fields; the single-field
+# `v2_joint` / `v3_nested` engines take only the intercept field.
 # ---------------------------------------------------------------------------
 .occu_cover_spatial_fields <- function(formula, data, arm_fields = list()) {
   bind <- .tobs_bind_formulas(list(psi = formula), data)
@@ -168,16 +167,16 @@
     spatial <- c(spatial, extra)
   }
   if (length(spatial) == 0L) return(NULL)
-  # A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj)`,
-  # gcol33/tulpaObs#61) desugars in place to the intercept field + per-covariate
-  # trend fields, the same pair the two-term form produces -- INDEPENDENT areal
-  # fields, each with its own precision. A correlated bar (single `|`, the
-  # free-Sigma separable MCAR of gcol33/tulpaObs#64) declares the SAME per-field
-  # design, but the intercept + coefficient fields share a free cross-covariance
-  # Sigma on the occupancy arm and are copied onto the cover arm together with one
-  # amplitude alpha (gcol33/tulpaObs#63). It is fitted as one coupled MCAR block
-  # rather than independent fields, so it must be the only spatial term (one field
-  # structure per fit); `correlated` flags it for the joint-coupled fitter.
+  # A varying-coefficient bar (`spatial(~ 1 + w || node, graph = adj)`) desugars
+  # in place to the intercept field + per-covariate trend fields, the same pair
+  # the two-term form produces -- INDEPENDENT areal fields, each with its own
+  # precision. A correlated bar (single `|`, the free-Sigma separable MCAR)
+  # declares the SAME per-field design, but the intercept + coefficient fields
+  # share a free cross-covariance Sigma on the occupancy arm and are copied onto
+  # the cover arm together with one amplitude alpha. It is fitted as one coupled
+  # MCAR block rather than independent fields, so it must be the only spatial term
+  # (one field structure per fit); `correlated` flags it for the joint-coupled
+  # fitter.
   specs <- list()
   correlated <- FALSE
   # Arm-specific INDEPENDENT fields, keyed by internal arm slot: "pos" (cover) and
@@ -234,11 +233,11 @@
     }
   }
 
-  # Soft guard (gcol33/tulpaObs#62): a bare `| / ||` RE bar whose grouping factor
-  # is also an areal term's graph-node group_var is fitted as an IID random effect,
-  # not a spatial field (the engine-bar-idiom papercut). Informs (message) without
-  # rejecting -- RE bars are legitimate -- and is silent when the bar's factor is
-  # unrelated to any spatial term.
+  # Soft guard: a bare `| / ||` RE bar whose grouping factor is also an areal
+  # term's graph-node group_var is fitted as an IID random effect, not a spatial
+  # field (the engine-bar-idiom papercut). Informs (message) without rejecting --
+  # RE bars are legitimate -- and is silent when the bar's factor is unrelated to
+  # any spatial term.
   .tobs_cover_bar_re_guard(formula, specs)
 
   bad <- Filter(function(s) !s$type %in% c("icar", "bym2"), specs)
@@ -288,14 +287,14 @@
   group_var <- if (length(gvs) == 1L) gvs[[1L]] else NULL
 
   # An optional per-group random INTERCEPT on the occupancy arm, layered on the
-  # shared field (gcol33/tulpaObs#56, the consumer of tulpa#86's field + per-group
-  # RE composition in the joint cell-coupling engine). It joins the joint fit as a
-  # single `iid` prior block whose per-cell offset rides the occupancy predictor;
-  # its variance integrates on the outer grid alongside the field sigma / alpha.
-  # Scope: one random-intercept term -- a scalar per group -- maps onto the one
-  # iid block. A random slope or a correlated multi-coefficient block has no
-  # scalar-per-group form here and errors (the non-spatial cover-hurdle EM is the
-  # route for richer RE).
+  # shared field (the consumer's field + per-group RE composition in the joint
+  # cell-coupling engine). It joins the joint fit as a single `iid` prior block
+  # whose per-cell offset rides the occupancy predictor; its variance integrates
+  # on the outer grid alongside the field sigma / alpha. Scope: one
+  # random-intercept term -- a scalar per group -- maps onto the one iid block. A
+  # random slope or a correlated multi-coefficient block has no scalar-per-group
+  # form here and errors (the non-spatial cover-hurdle EM is the route for richer
+  # RE).
   re_terms <- Filter(function(t) inherits(t$spec, "tobs_re"), bind$terms)
   re_spec  <- NULL
   if (length(re_terms) > 0L) {
@@ -315,10 +314,10 @@
                     var       = lab$var, levels = lab$levels)
   }
 
-  # Correlated (`|`) MCAR field requirements (gcol33/tulpaObs#63): at least one
-  # coefficient beyond the intercept (a single field has no cross-covariance),
-  # intrinsic CAR only, and no per-group RE (the MCAR block already spans the
-  # full coupled field structure; a layered iid block is not wired with it yet).
+  # Correlated (`|`) MCAR field requirements: at least one coefficient beyond
+  # the intercept (a single field has no cross-covariance), intrinsic CAR only,
+  # and no per-group RE (the MCAR block already spans the full coupled field
+  # structure; a layered iid block is not wired with it yet).
   if (correlated) {
     if (length(specs) < 2L) {
       stop(paste0(
@@ -340,14 +339,14 @@
     }
   }
 
-  # Arm-specific fields (gcol33/tulpaObs#110, extended to the detection arm): each
-  # is a separate, non-copied block on ONE arm (cover or detection); it composes
-  # with the shared occupancy field (which still drives psi and, via the alpha
-  # copy, delta_cover_exp) but NOT with the correlated `|` MCAR field (that already
-  # spans the whole coupled structure with its own copy). Like the occu_cover
-  # shared field, an arm-specific field is fitted as ICAR (rho fixed to 1); bym2 /
-  # car on the bar is read as ICAR. Every arm-specific field shares the occupancy
-  # field's areal graph (one node set).
+  # Arm-specific fields (extended to the detection arm): each is a separate,
+  # non-copied block on ONE arm (cover or detection); it composes with the shared
+  # occupancy field (which still drives psi and, via the alpha copy,
+  # delta_cover_exp) but NOT with the correlated `|` MCAR field (that already spans
+  # the whole coupled structure with its own copy). Like the occu_cover shared
+  # field, an arm-specific field is fitted as ICAR (rho fixed to 1); bym2 / car on
+  # the bar is read as ICAR. Every arm-specific field shares the occupancy field's
+  # areal graph (one node set).
   arm_label <- c(pos = "positive", p = "detection")
   for (slot in names(armspec)) {
     af <- armspec[[slot]]

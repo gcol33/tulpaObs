@@ -71,6 +71,9 @@ jobs:
             any::dplyr
             any::ggplot2
 
+      - name: Check for issue-tracker references
+        run: Rscript .github/scripts/check-issue-refs.R
+
       - name: Verify engine pin
         run: Rscript .github/scripts/check-engine-pin.R
 

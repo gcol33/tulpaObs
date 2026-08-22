@@ -1,7 +1,7 @@
 // removal_spatial.cpp
 // Nested-Laplace entry points for the areal-spatial removal-sampling abundance
-// model (gcol33/tulpaObs#51): an ICAR or proper-CAR field on the abundance arm
-// of the sequential-depletion removal marginal. The removal per-site marginal
+// model: an ICAR or proper-CAR field on the abundance arm of the
+// sequential-depletion removal marginal. The removal per-site marginal
 // (compute_removal_site) shares the NMixSiteResult moment interface with the
 // Royle N-mixture, so it reuses the family-agnostic nested-Laplace driver and
 // outer-grid orchestration in nmix_count_spatial_driver.h verbatim -- only the

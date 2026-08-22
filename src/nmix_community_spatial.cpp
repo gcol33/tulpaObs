@@ -701,7 +701,7 @@ Rcpp::List run_community_spatial_grid(
 
     const int n_grid = (int)plan.size();
     std::vector<CommSpatialResult> results(n_grid);
-    // outer-grid progress (tulpa#45)
+    // outer-grid progress
     auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
                                            progress_every, progress_throttle, progress_file);
     for (int k = 0; k < n_grid; ++k) {
@@ -924,7 +924,7 @@ Rcpp::List cpp_nmix_community_spatial_spde(
 
     std::vector<CommSpatialResult> results(n_grid);
     std::vector<MatrixXd> Qmats(n_grid);   // keep alive for the SpdeCtx pointers
-    // outer-grid progress (tulpa#45)
+    // outer-grid progress
     auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
                                            progress_every, progress_throttle, progress_file);
     for (int k = 0; k < n_grid; ++k) {

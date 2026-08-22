@@ -23,14 +23,14 @@ struct FpNutsModel {
     std::vector<int> y;
     Rcpp::NumericMatrix X_psi, X_p11, X_p10, X_b;
     std::vector<std::vector<int>> obs_by_site;
-    // Optional single intercept RE on the occupancy (psi) arm (tulpaObs#51),
-    // loaded on eta_psi (nuts_re_block.h). The block [z_1..z_G, log_sigma_re]
-    // follows the four coefficient blocks.
+    // Optional single intercept RE on the occupancy (psi) arm, loaded on
+    // eta_psi (nuts_re_block.h). The block [z_1..z_G, log_sigma_re] follows
+    // the four coefficient blocks.
     int n_pre_re = 0;
     ReBlock re;
-    // Optional fixed-hyper areal field on the occupancy (psi) arm (tulpaObs#72):
-    // the shared non-centered field z = Linv %*% raw added to eta_psi
-    // (nuts_field_block.h). Field XOR RE (gated upstream).
+    // Optional fixed-hyper areal field on the occupancy (psi) arm: the shared
+    // non-centered field z = Linv %*% raw added to eta_psi (nuts_field_block.h).
+    // Field XOR RE (gated upstream).
     FieldBlock field;
 };
 

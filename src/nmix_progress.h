@@ -1,10 +1,10 @@
 // nmix_progress.h
 // tulpaObs-side factory over tulpa's shared GridProgress reporter
-// (<tulpa/nested_progress.h>, gcol33/tulpa#45). The N-mixture areal/SPDE
-// spatial fitters run their own outer hyperparameter-grid loops (they do not
-// route through tulpa's run_nested_laplace_grid), so they construct the same
-// reporter directly. One factory keeps the construction logic single-source
-// across the four nmix spatial translation units.
+// (<tulpa/nested_progress.h>). The N-mixture areal/SPDE spatial fitters run
+// their own outer hyperparameter-grid loops (they do not route through
+// tulpa's run_nested_laplace_grid), so they construct the same reporter
+// directly. One factory keeps the construction logic single-source across
+// the four nmix spatial translation units.
 
 #ifndef TULPAOBS_NMIX_PROGRESS_H
 #define TULPAOBS_NMIX_PROGRESS_H
@@ -15,13 +15,13 @@
 
 namespace tulpaObs {
 
-// Returns a live GridProgress when either channel is wanted, else nullptr
-// (zero overhead). `on` gates the Rcout console line (the verbose/TTY channel);
-// the heartbeat `file` is written whenever it is non-empty, independent of `on`,
-// so a detached fit (on = false) with a file still gets its ETA -- the channel
-// it exists for (gcol33/tulpaObs#43). The caller ticks it once per completed
-// outer-grid cell and finishes after the loop; see the four cpp_nmix_*_spatial
-// / cpp_nested_laplace_nmix_* entries.
+// Returns a live GridProgress when either channel is wanted, else nullptr (zero
+// overhead). `on` gates the Rcout console line (the verbose/TTY channel); the
+// heartbeat `file` is written whenever it is non-empty, independent of `on`, so
+// a detached fit (on = false) with a file still gets its ETA -- the channel it
+// exists for. The caller ticks it once per completed outer-grid cell and
+// finishes after the loop; see the four cpp_nmix_*_spatial /
+// cpp_nested_laplace_nmix_* entries.
 inline std::unique_ptr<tulpa_progress::GridProgress> make_grid_progress(
         const char* label, int total, bool on,
         int every, double throttle, const std::string& file,
@@ -36,12 +36,12 @@ inline std::unique_ptr<tulpa_progress::GridProgress> make_grid_progress(
 }
 
 // Same factory, but reads the four progress knobs from the scoped
-// `tulpa.nl_progress` R option that tobs() sets (gcol33/tulpaObs#43). The
-// in-tree EM / Newton fitters that run on the main R thread (every Laplace
-// fitter does -- it is a .Call, no OpenMP at this level) call this directly
-// instead of threading four arguments through their cpp signatures. MUST be
-// called on the main thread (it reads an R option). `width` is the loop
-// concurrency for the ETA (1 for a serial EM/Newton).
+// `tulpa.nl_progress` R option that tobs() sets. The in-tree EM / Newton
+// fitters that run on the main R thread (every Laplace fitter does -- it is
+// a .Call, no OpenMP at this level) call this directly instead of threading
+// four arguments through their cpp signatures. MUST be called on the main
+// thread (it reads an R option). `width` is the loop concurrency for the
+// ETA (1 for a serial EM/Newton).
 inline std::unique_ptr<tulpa_progress::GridProgress> make_grid_progress_from_option(
         const char* label, int total, int width = 1) {
     SEXP optS = Rf_GetOption1(Rf_install("tulpa.nl_progress"));

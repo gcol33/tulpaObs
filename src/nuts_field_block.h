@@ -1,11 +1,11 @@
 // nuts_field_block.h
 // Shared fixed-hyper non-centered areal field block for the count / occupancy
-// observation-family NUTS targets (gcol33/tulpaObs#72). The field is a whitened
-// Gaussian z = Linv %*% raw, raw ~ N(0, I), with Linv the inverse Cholesky of the
-// FIXED field precision tau Q(rho) (a small ridge proper-ises an intrinsic ICAR).
-// The field covariance is fixed at the nested-Laplace posterior estimate; NUTS
-// samples only the whitened raw (and the family coefficients). The field loads
-// additively onto one arm's per-site linear predictor,
+// observation-family NUTS targets. The field is a whitened Gaussian z = Linv %*%
+// raw, raw ~ N(0, I), with Linv the inverse Cholesky of the FIXED field precision
+// tau Q(rho) (a small ridge proper-ises an intrinsic ICAR). The field covariance
+// is fixed at the nested-Laplace posterior estimate; NUTS samples only the
+// whitened raw (and the family coefficients). The field loads additively onto one
+// arm's per-site linear predictor,
 //   eta_arm[site] += z[field_map[site]].
 //
 // This is the same forward / backward arithmetic the N-mixture spatial NUTS
@@ -32,15 +32,14 @@ namespace tulpaObs {
 //
 // The field is z = L %*% raw with raw ~ N(0, I_{n_raw}) and L a (possibly non-
 // square) n_field_units x n_raw loading. A FULL-RANK proper-CAR precision gives
-// the square case L = Linv (n_raw == n_field_units): the inverse Cholesky of
-// tau Q(rho). A RANK-DEFICIENT intrinsic field (ICAR / BYM2 structured block) has
-// the constant vector in its precision null space, so a square whitening leaves a
-// flat field-mean direction that maxes the NUTS tree depth. The sum-to-zero
-// reparameterisation (gcol33/tulpaObs#71) drops that direction: L is the
-// n_field_units x (n_field_units - 1) eigen-loading over the non-null eigenpairs
-// of tau Q, so z is automatically centred (sum z = 0) and the geometry is well
-// conditioned. The two cases differ ONLY in the shape of L; the forward / backward
-// arithmetic below is identical.
+// the square case L = Linv (n_raw == n_field_units): the inverse Cholesky of tau
+// Q(rho). A RANK-DEFICIENT intrinsic field (ICAR / BYM2 structured block) has the
+// constant vector in its precision null space, so a square whitening leaves a flat
+// field-mean direction that maxes the NUTS tree depth. The sum-to-zero
+// reparameterisation drops that direction: L is the n_field_units x (n_field_units
+// - 1) eigen-loading over the non-null eigenpairs of tau Q, so z is automatically
+// centred (sum z = 0) and the geometry is well conditioned. The two cases differ
+// ONLY in the shape of L; the forward / backward arithmetic below is identical.
 struct FieldBlock {
     int n_field_units = 0;            // field nodes (== spatial units), rows of L
     int n_raw = 0;                    // whitened coordinates, cols of L

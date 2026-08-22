@@ -460,7 +460,7 @@ Rcpp::List cpp_nested_laplace_nmix_spde(
     Rcpp::NumericMatrix modes(n_grid, n_x);
     Rcpp::List cov_blocks(n_grid);
 
-    // outer-grid progress (tulpa#45)
+    // outer-grid progress
     auto gp = tulpaObs::make_grid_progress("nmix-spatial", n_grid, progress,
                                            progress_every, progress_throttle, progress_file);
     for (int k = 0; k < n_grid; ++k) {
