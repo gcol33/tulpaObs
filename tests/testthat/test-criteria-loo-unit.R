@@ -239,7 +239,12 @@ test_that("loo::loo_compare() reads two tobs_fit objects", {
   cmp <- loo::loo_compare(list(with_x = l1, noise = l2))
   expect_s3_class(cmp, "compare.loo")
   expect_equal(nrow(cmp), 2L)
-  expect_setequal(rownames(cmp), c("with_x", "noise"))
+  # loo >= 2.10 returns a data.frame carrying the member names in a `model`
+  # column; before that the comparison was a matrix naming them in its rows.
+  # DESCRIPTION admits both, so read the names from whichever the installed
+  # version populates.
+  member <- if ("model" %in% colnames(cmp)) cmp$model else rownames(cmp)
+  expect_setequal(member, c("with_x", "noise"))
   expect_true(all(c("elpd_diff", "se_diff", "elpd_loo") %in% colnames(cmp)))
   expect_true(all(is.finite(cmp[, "elpd_diff"])))
   # loo_compare() sorts the best member first, at a zero difference to itself.
