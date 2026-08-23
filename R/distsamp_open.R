@@ -625,6 +625,10 @@
     data = data, y = y, cutpoints = cutpoints,
     transect = family$params$transect, K_max = family$params$K_max,
     mixture = mixture, dynamics = dynamics)
+  .tobs_reject_unwired_structs(
+    model, "distsamp_open()",
+    hint = paste0("the open-population distance marginal is fitted on fixed ",
+                  "effects only, so drop the term"))
   if (!identical(dynamics, "constant"))
     .tobs_fit_distsamp_open_dyn(model, verbose = isTRUE(control$verbose))
   else if (mixture %in% c("zip", "zinb"))

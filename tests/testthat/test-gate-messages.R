@@ -107,3 +107,97 @@ test_that("distance() cutpoints gate reports the expected length", {
          y = matrix(0L, 10, 3), method = "laplace", verbose = FALSE),
     "cutpoints must have length ncol\\(y\\) \\+ 1 = 4")
 })
+
+test_that("a family that does not consume a structured term rejects it", {
+  skip_on_cran()
+  # The binder strips every registry term and lme4 bar out of the fixed-effect
+  # formula, so a dispatcher that never reads `structured_terms` returns a
+  # fixed-effects fit that looks like the structured one the caller asked for.
+  # Each case below is a term the family cannot honour; every one must error.
+  chain <- function(n) {
+    a <- matrix(0, n, n)
+    a[cbind(1:(n - 1), 2:n)] <- 1; a[cbind(2:n, 1:(n - 1))] <- 1
+    a
+  }
+  cp <- c(0, 25, 50, 75, 100)
+
+  rn <- simulate_royle_nichols(N = 20, J = 3, seed = 1)
+  rn$data$g <- factor(rep(1:4, length.out = nrow(rn$data)))
+  expect_error(
+    tobs(~ x + icar(graph = chain(nrow(rn$data))), detection = ~ 1,
+         data = rn$data, family = royle_nichols(), y = rn$y,
+         method = "laplace", verbose = FALSE),
+    "royle_nichols[(][)]: the spatial field icar[(][)] is not wired")
+  expect_error(
+    tobs(~ x + (1 | g), detection = ~ 1, data = rn$data,
+         family = royle_nichols(), y = rn$y, method = "laplace",
+         verbose = FALSE),
+    "royle_nichols[(][)]: a random effect .* is not wired")
+
+  do <- simulate_double_observer(N = 20, seed = 1)
+  do$data$g  <- factor(rep(1:4, length.out = nrow(do$data)))
+  do$data$yr <- rep(1:4, length.out = nrow(do$data))
+  expect_error(
+    tobs(~ abund_cov1 + temporal(yr), detection = ~ 1, data = do$data,
+         family = double_observer(), y = do$y, method = "laplace",
+         verbose = FALSE),
+    "double_observer[(][)]: temporal[(][)] is not wired")
+  # A term written in `detection =` is arm-tagged, not a separate channel: it
+  # has to be rejected on the detection arm too.
+  expect_error(
+    tobs(~ abund_cov1, detection = ~ (1 | g), data = do$data,
+         family = double_observer(), y = do$y, method = "laplace",
+         verbose = FALSE),
+    "double_observer[(][)]: a random effect .* is not wired")
+
+  gd <- simulate_gdistremoval(N = 20, seed = 1)
+  expect_error(
+    tobs(~ abund_cov1 + icar(graph = chain(nrow(gd$data))), detection = ~ 1,
+         removal = ~ 1, data = gd$data, family = gdistremoval(cutpoints = cp),
+         y = gd$y, y_rem = gd$y_rem, method = "laplace", verbose = FALSE),
+    "gdistremoval[(][)]: the spatial field icar[(][)] is not wired")
+
+  ds <- simulate_distsamp_open(N = 20, seed = 1)
+  ds$data$g <- factor(rep(1:4, length.out = nrow(ds$data)))
+  expect_error(
+    tobs(~ abund_cov1 + (1 | g), detection = ~ 1, data = ds$data,
+         family = distsamp_open(cutpoints = cp), y = ds$y, method = "laplace",
+         verbose = FALSE),
+    "distsamp_open[(][)]: a random effect .* is not wired")
+})
+
+test_that("ms_int_occu() parses its formulas instead of passing them to model.matrix()", {
+  skip_on_cran()
+  s  <- simulate_ms_int_occu(seed = 1)
+  n  <- nrow(s$data)
+  sp <- paste0("sp", seq_len(dim(s$y[[1L]])[3L]))
+
+  # `1 | site` with a numeric `site` is valid base-R that evaluates to a
+  # constant TRUE column, so an unparsed formula fits a silently DIFFERENT
+  # model rather than dropping the term.
+  s$data$site <- seq_len(n)
+  expect_error(
+    tobs(~ x + (1 | site), detection = ~ 1, data = s$data,
+         family = ms_int_occu(), y = s$y, species = sp, method = "laplace",
+         verbose = FALSE),
+    "ms_int_occu[(][)]: a random effect .* is not wired")
+
+  # A registry term used to die as "could not find function" instead of the
+  # family's own pointer.
+  adj <- matrix(0, n, n)
+  adj[cbind(1:(n - 1), 2:n)] <- 1; adj[cbind(2:n, 1:(n - 1))] <- 1
+  expect_error(
+    tobs(~ x + icar(graph = adj), detection = ~ 1, data = s$data,
+         family = ms_int_occu(), y = s$y, species = sp, method = "laplace",
+         verbose = FALSE),
+    "ms_int_occu[(][)]: the spatial field icar[(][)] is not wired")
+
+  # The fixed-effects fit is unaffected by the binder: same designs, same fit.
+  f <- tobs(~ x, detection = ~ 1, data = s$data, family = ms_int_occu(),
+            y = s$y, species = sp, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+  expect_s3_class(f, "tobs_fit")
+  expect_identical(colnames(f$model$X_psi), c("(Intercept)", "x"))
+  expect_true(all(vapply(f$model$X_p, function(X)
+    identical(colnames(X), "(Intercept)"), logical(1))))
+})

@@ -1389,6 +1389,16 @@
     occ_formula = formula, det_formula = detection,
     data = data, y = y, species = dots$species, site_map = dots$site_map)
 
+  # The community integrated family consumes no structured term on either
+  # engine: the shared community Laplace-EM and the PG-Gibbs sampler both fit
+  # per-species coefficients with a community covariance and nothing else.
+  .tobs_reject_unwired_structs(
+    model, "ms_int_occu()",
+    hint = paste0("the community integrated family fits per-species ",
+                  "occupancy / per-source detection coefficients with a ",
+                  "community covariance and no structured term; a shared ",
+                  "field is wired for ms_occu() and ms_dyn_occu()"))
+
   # Polya-Gamma Gibbs (method = "pg_gibbs"): the community integrated PG
   # sampler, giving a calibrated community-variance posterior (vs the
   # attenuated Laplace-EM). Site-level per-source detection, no structured

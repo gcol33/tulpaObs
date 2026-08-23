@@ -404,12 +404,10 @@
   # A shared areal field on the first-season occupancy formula routes to the
   # stIntPGOcc fitter under nested_laplace; otherwise the non-spatial Laplace
   # fit. Only a psi1-arm icar() field is supported.
-  structs <- .tobs_structures_from_model(model)
-  if (!is.null(structs$temporal) || !is.null(structs$re) ||
-      !is.null(structs$svc) || !is.null(structs$latent))
-    stop("dyn_int_occu(): temporal / re / svc / latent terms are not wired; a ",
-         "shared areal field icar() on the first-season occupancy formula is the ",
-         "structured term supported.", call. = FALSE)
+  structs <- .tobs_reject_unwired_structs(
+    model, "dyn_int_occu()", wired = "spatial",
+    hint = paste0("a shared areal field icar() on the first-season occupancy ",
+                  "formula is the structured term supported"))
   if (!is.null(structs$spatial)) {
     if (!isTRUE(structs$spatial$shared[1L]))
       stop("dyn_int_occu() areal field sits on the first-season occupancy arm ",

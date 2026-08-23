@@ -213,6 +213,10 @@
   model <- .tobs_build_double_observer(
     abund_formula = formula, det_formula = detection, data = data, y = y,
     type = type, primary = dots$primary)
+  .tobs_reject_unwired_structs(
+    model, "double_observer()",
+    hint = paste0("the double-observer marginal is fitted on fixed effects ",
+                  "only, so drop the term"))
   .tobs_fit_double_observer(model, verbose = isTRUE(control$verbose))
 }
 

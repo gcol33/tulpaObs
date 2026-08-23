@@ -253,6 +253,11 @@
     occ_formula = formula, det_formula = vd$det_formula, data = data, y = y,
     K_max = family$params$K_max,
     det_visit_formula = vd$det_visit_formula, det_visit_data = vd$visits)
+  .tobs_reject_unwired_structs(
+    model, "royle_nichols()",
+    hint = paste0("the Royle-Nichols marginal is fitted on fixed effects only ",
+                  "(abundance-induced detection heterogeneity is the only ",
+                  "latent structure), so drop the term"))
   .tobs_fit_royle_nichols(model, verbose = isTRUE(control$verbose))
 }
 

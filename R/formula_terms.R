@@ -1077,6 +1077,50 @@
 }
 
 
+# The binder strips every structured term out of the fixed-effect formula
+# before `model.matrix()` sees it, so a family whose fitter never reads
+# `model$structured_terms` builds a fixed-effects-only design and returns a fit
+# that looks like the structured one the caller asked for. Each family
+# therefore states which structured slots it consumes and rejects the rest.
+#
+# `wired` names the slots the family DOES consume; `context` labels the family
+# ("gdistremoval()"), `hint` says what to do instead. The resolved structure
+# list is returned so a caller that wires a slot reads it from here rather than
+# resolving twice.
+.tobs_reject_unwired_structs <- function(model, context, wired = character(),
+                                         hint = NULL) {
+  structs <- .tobs_structures_from_model(model)
+  unwired <- setdiff(c("spatial", "temporal", "re", "svc", "latent"), wired)
+  hit <- unwired[!vapply(structs[unwired], is.null, logical(1))]
+  if (length(hit)) {
+    stop(sprintf("%s: %s %s not wired for this family%s",
+                 context, .tobs_struct_labels(structs, hit),
+                 if (length(hit) == 1L) "is" else "are",
+                 if (is.null(hint)) "." else paste0("; ", hint)),
+         call. = FALSE)
+  }
+  invisible(structs)
+}
+
+# Name the offending terms the way the caller wrote them. A spatial slot
+# carries its own kind (icar / bym2 / spde / ...), which is what tells the user
+# which term to drop; the other slots have one spelling each.
+.tobs_struct_labels <- function(structs, slots) {
+  lab <- vapply(slots, function(slot) {
+    switch(slot,
+      spatial = {
+        ty <- structs$spatial$type
+        if (is.null(ty)) "a spatial field" else sprintf("the spatial field %s()", ty)
+      },
+      temporal = "temporal()",
+      re       = "a random effect (an lme4 bar or re())",
+      svc      = "svc()",
+      latent   = "latent()")
+  }, character(1))
+  paste(lab, collapse = " / ")
+}
+
+
 # Convert an areal `tobs_spatial` term into the `tulpa_spatial` spec the
 # cover-hurdle nested-Laplace path consumes. The areal terms retain the raw
 # adjacency `graph` (and an optional `group_var` mapping observations to graph

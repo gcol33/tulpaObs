@@ -241,6 +241,10 @@
     abund_formula = formula, det_formula = detection,
     rem_formula = dots$removal %||% ~1, data = data, y = y, y_rem = dots$y_rem,
     cutpoints = cutpoints, transect = family$params$transect)
+  .tobs_reject_unwired_structs(
+    model, "gdistremoval()",
+    hint = paste0("the joint distance-removal marginal is fitted on fixed ",
+                  "effects only, so drop the term"))
   .tobs_fit_gdistremoval(model, verbose = isTRUE(control$verbose))
 }
 

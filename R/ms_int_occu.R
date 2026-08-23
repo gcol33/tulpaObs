@@ -255,8 +255,19 @@
     stop("det_formula must be a formula or a list of D formulas.", call. = FALSE)
   }
 
-  X_psi <- stats::model.matrix(occ_formula, data)
-  X_p   <- lapply(det_formulas, function(f) stats::model.matrix(f, data))
+  # Bind before building the designs: `.tobs_bind_formulas()` desugars lme4 bars
+  # and strips every registry term out of the fixed-effect formulas, and carries
+  # the resolved specs on `structured_terms` for the dispatcher to accept or
+  # reject. Without it a bar such as `(1 | site)` is valid base-R syntax that
+  # `model.matrix()` evaluates to a logical column, silently fitting a different
+  # model, and a registry term such as `icar()` dies as "could not find function".
+  bind <- .tobs_bind_formulas(
+    c(list(psi = occ_formula), stats::setNames(det_formulas, proc_names)), data)
+  fe_psi <- bind$fe$psi
+  fe_p   <- bind$fe[proc_names]
+
+  X_psi <- stats::model.matrix(fe_psi, data)
+  X_p   <- unname(lapply(fe_p, function(f) stats::model.matrix(f, data)))
 
   # Clean each source / species detection matrix: binary, NA -> 0 with a
   # parallel validity mask. Each source's rows are scattered into the full
@@ -316,7 +327,8 @@
     X_psi         = X_psi,
     X_p           = X_p,
     summaries     = summaries,
-    formulas      = list(occ = occ_formula, det = det_formulas),
+    formulas      = list(occ = fe_psi, det = fe_p),
+    structured_terms = bind$terms,
     data          = data,
     process_info  = process_info
   ), class = "tobs_model")
