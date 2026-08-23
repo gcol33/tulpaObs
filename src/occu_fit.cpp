@@ -73,7 +73,6 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         spec.name = "occupancy";
         spec.ll_double = tulpaObs::occ_log_likelihood<double>;
         spec.ll_arena  = tulpaObs::occ_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaObs::occ_log_likelihood<fwd::Dual>;
         spec.residual_fn = tulpaObs::occ_residual;
         spec.n_extra_params = p_det_visit;
         response_ptr = &occ_response;
@@ -94,7 +93,6 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         spec.name = "dynamic_occupancy";
         spec.ll_double = tulpaObs::dyn_occ_log_likelihood<double>;
         spec.ll_arena  = tulpaObs::dyn_occ_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaObs::dyn_occ_log_likelihood<fwd::Dual>;
         spec.n_extra_params = 0;
         response_ptr = &dyn_response;
 
@@ -144,7 +142,6 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         spec.name = "integrated_occupancy";
         spec.ll_double = tulpaObs::integrated_occ_log_likelihood<double>;
         spec.ll_arena  = tulpaObs::integrated_occ_log_likelihood<tulpa::arena::Var>;
-        spec.ll_fwd    = tulpaObs::integrated_occ_log_likelihood<fwd::Dual>;
         spec.n_extra_params = 0;
         response_ptr = &int_response;
 
