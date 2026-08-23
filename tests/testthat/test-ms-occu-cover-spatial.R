@@ -1266,10 +1266,12 @@ test_that("tobs() front door recovers a BYM2 field and its variance fraction", {
   skip_if_fast()
   # bym2() on the occupancy arm routes to the spatial fit with a BYM2 field: the
   # combined-effect shape + F = W L' are recovered, and the spatial-variance
-  # fraction phi is a positive fraction. phi is a single-field-realisation
-  # variance component, so its EM point estimate is high-variance and attenuated
-  # at small N (it recovers toward truth as species / visits grow); the field
-  # shape -- the quantity that matters -- recovers strongly throughout.
+  # fraction phi is a positive fraction. phi settles later in the EM than the
+  # field shape does -- the shape is already converged while phi is still
+  # climbing, so a fit stopped at a loose tolerance reports whatever value phi
+  # had reached by then rather than where it lands. It is scored at a tolerance
+  # tight enough for phi to settle. Across seeds phi stays a high-variance
+  # single-realisation variance component, so the band around truth is wide.
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L
   phi_true <- 0.7
   sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 8L,
@@ -1282,7 +1284,7 @@ test_that("tobs() front door recovers a BYM2 field and its variance fraction", {
     detection = ~ det_cov1, positive = ~ pos_cov1,
     y = sim$y, y_pos = sim$y_pos, species = sim$species,
     method = "laplace",
-    control = list(n.factors = 1L, sd.load = 1.2, max.iter = 25L, tol = 1e-3))
+    control = list(n.factors = 1L, sd.load = 1.2, max.iter = 25L, tol = 1e-5))
 
   expect_identical(fit$spatial$type, "bym2")
   expect_identical(fit$spatial$field_type, "bym2")
