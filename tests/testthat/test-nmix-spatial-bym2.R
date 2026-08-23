@@ -153,7 +153,15 @@ test_that("BYM2 recovers slopes and total offset on simulated data", {
     max_iter = 120L, tol = 1e-6
   )
   # Slopes are well-identified; intercepts ride the N-mix identifiability ridge.
-  expect_lt(abs(fit$beta_lambda_mean["elev"] - dat$beta_lambda_true[2]), 0.30)
+  # Labelled with the outer grid's state: the reported slope is an average over
+  # (sigma, rho) cells, so a slope that moved says nothing on its own about
+  # whether the fit or the integration moved.
+  top <- which.max(fit$weights)
+  grid_lab <- sprintf("[scale_factor %.6g, top cell sigma %.4g rho %.2g w %.3f]",
+                      fit$scale_factor, fit$theta_grid[top, 1L],
+                      fit$theta_grid[top, 2L], fit$weights[top])
+  expect_lt(abs(fit$beta_lambda_mean["elev"] - dat$beta_lambda_true[2]), 0.30,
+            label = paste("|elev - truth|", grid_lab))
   expect_lt(abs(fit$beta_p_mean["wind"]      - dat$beta_p_true[2]),      0.30)
   # Total offset phi should correlate positively with the truth.
   rho_phi <- cor(fit$phi_mean, dat$phi_true)

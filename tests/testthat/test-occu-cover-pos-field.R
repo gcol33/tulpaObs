@@ -231,7 +231,11 @@ test_that("occu_cover cover-arm intercept field SD recovers across seeds", {
   # Median tracks truth to within 20% (measured ~8% downward shrinkage).
   expect_lt(abs(stats::median(rec) - truth) / truth, 0.20)
   # No collapse to zero and no runaway -- the amplitude, not just the shape.
-  expect_true(all(rec > 0.4 & rec < 0.85))
+  # Asserted on the extremes rather than on all(), so a failure reports the
+  # value that left the band: a near-zero collapse and a runaway want opposite
+  # responses, and a bare TRUE/FALSE cannot tell them apart.
+  expect_gt(min(rec), 0.4)
+  expect_lt(max(rec), 0.85)
 })
 
 

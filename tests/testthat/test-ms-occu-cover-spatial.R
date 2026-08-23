@@ -1290,9 +1290,18 @@ test_that("tobs() front door recovers a BYM2 field and its variance fraction", {
   expect_identical(fit$spatial$field_type, "bym2")
   expect_null(fit$spatial$rho_w)
   expect_length(fit$spatial$phi_w, 1L)
-  expect_gt(fit$spatial$phi_w, 0.2)        # a real spatial fraction
+  # Labelled with the rest of the field's state: phi_w alone cannot separate a
+  # variance fraction that is genuinely near zero from a structured block whose
+  # loading was mis-scaled, and the two want opposite responses.
+  num <- function(x) if (is.null(x)) NA_real_ else as.numeric(x)[1L]
+  W_fit <- as.numeric(fit$spatial$field)
+  phi_lab <- sprintf("phi_w [scale_factor %.6g, sd(field) %.4g, cor(W) %.3f]",
+                     num(fit$spatial$scale_factor), stats::sd(W_fit),
+                     abs(stats::cor(W_fit, as.numeric(sim$truth$w))))
+  expect_gt(fit$spatial$phi_w, 0.2, label = phi_lab)   # a real spatial fraction
   expect_lt(fit$spatial$phi_w, 1)
-  expect_lt(abs(fit$spatial$phi_w - phi_true), 0.45)
+  expect_lt(abs(fit$spatial$phi_w - phi_true), 0.45,
+            label = paste("|", phi_lab, "- truth |"))
 
   W_hat <- as.numeric(fit$spatial$field)
   F_hat <- outer(W_hat, as.numeric(fit$spatial$loadings))
