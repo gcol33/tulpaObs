@@ -162,7 +162,7 @@ test_that("a fit carrying neither term scores bit for bit as with no offset", {
   zero <- matrix(0, vw$V, S)
   none <- matrix(0, vw$V, 0L)
   vd <- function(X) tulpaObs:::.occu_cover_visit_design(X, vw$V)
-  ppc <- function(od, op) {
+  ppc_kernel <- function(od, op) {
     set.seed(101)
     tulpaObs:::cpp_occu_cover_ppc(
       X_occ = fit$model$X_occ, X_det_site = fit$model$X_det_site,
@@ -175,7 +175,7 @@ test_that("a fit carrying neither term scores bit for bit as with no offset", {
       any_det = vw$any_det, n_valid = as.integer(vw$n_valid),
       positive = 0L, eta_bound = tulpaObs:::.TOBS_ETA_BOUND, freeman = TRUE)
   }
-  expect_identical(ppc(zero, zero), ppc(none, none))
+  expect_identical(ppc_kernel(zero, zero), ppc_kernel(none, none))
 
   lim <- function(od) tulpaObs:::cpp_occu_cover_cdf_limits(
     X_occ = fit$model$X_occ, X_det_site = fit$model$X_det_site,
@@ -201,7 +201,7 @@ test_that("the PPC and the PIT see the random-effect offsets too", {
   vd  <- function(X) tulpaObs:::.occu_cover_visit_design(X, vw$V)
   none <- matrix(0, vw$V, 0L)
 
-  ppc <- function(od) {
+  ppc_kernel <- function(od) {
     set.seed(55)
     tulpaObs:::cpp_occu_cover_ppc(
       X_occ = fit$model$X_occ, X_det_site = fit$model$X_det_site,
@@ -214,7 +214,7 @@ test_that("the PPC and the PIT see the random-effect offsets too", {
       any_det = vw$any_det, n_valid = as.integer(vw$n_valid),
       positive = 0L, eta_bound = tulpaObs:::.TOBS_ETA_BOUND, freeman = TRUE)
   }
-  expect_false(isTRUE(all.equal(ppc(c0$off_det)$fit.y, ppc(none)$fit.y)))
+  expect_false(isTRUE(all.equal(ppc_kernel(c0$off_det)$fit.y, ppc_kernel(none)$fit.y)))
 
   lim <- function(od) tulpaObs:::cpp_occu_cover_cdf_limits(
     X_occ = fit$model$X_occ, X_det_site = fit$model$X_det_site,
