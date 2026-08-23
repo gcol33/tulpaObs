@@ -457,7 +457,12 @@
     fit$svc_hyper <- stats::setNames(hypers[b + seq_len(k)], paste0("svc", seq_len(k)))
     fit$svc_field_arm <- arm
   }
-  fit
+  # Every block reported above is part of the arm's linear predictor, so the
+  # per-site offset they jointly load (`res$eta_offset`, the same value `eval()`
+  # was called with at the mode) is recorded for the post-fit readers. Without
+  # it fitted() / residuals() / predict() and WAIC / LOO / DIC / CPO rebuild eta
+  # from the coefficients alone and score a model without the field.
+  .tobs_set_field_eta_offset(fit, if (det_arm) 2L else 1L, res$eta_offset)
 }
 
 # Areal-BFGS nested-Laplace fit over one OR several latent field blocks (#78).

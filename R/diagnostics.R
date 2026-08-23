@@ -577,6 +577,11 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   # R loop, still via compute_nmix_site) is batched over draws in the kernel.
   eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
   eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p) # [S x n_obs]
+  # An areal / temporal / continuous field is part of the arm it loads on, so it
+  # enters the pointwise log-likelihood or WAIC / LOO would score the
+  # coefficient-only model (R/field_offset.R).
+  eta_lambda <- .tobs_add_eta_offset(eta_lambda, model, 1L)
+  eta_p      <- .tobs_add_eta_offset(eta_p, model, 2L)
   r_vec <- .tobs_count_nb_size(model, draws)
   ll <- cpp_nmix_ploglik_batch(as.integer(model$y_long), as.integer(model$site_idx),
                                eta_p, eta_lambda, K_max, as.numeric(r_vec),
@@ -600,8 +605,10 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   site_tot <- tapply(y, factor(site_idx, levels = seq_len(n_sites)), sum)
   site_tot[is.na(site_tot)] <- 0L
   K_max <- as.integer(max(as.integer(site_tot)) + 100L)
-  eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)
-  eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p)
+  eta_lambda <- .tobs_add_eta_offset(
+    draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda), model, 1L)
+  eta_p      <- .tobs_add_eta_offset(
+    draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p), model, 2L)
   r_vec <- .tobs_count_nb_size(model, draws)
   cpp_removal_ploglik_batch(y, site_idx, eta_p, eta_lambda, K_max,
                             as.numeric(r_vec), max(1L, as.integer(n.threads)))
@@ -620,8 +627,10 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   y <- model$y; storage.mode(y) <- "integer"
   K_max <- as.integer(3L * max(rowSums(y)) + 100L)
   off <- p_lam + p_sig
-  eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)      # [S x n_sites]
-  eta_sigma  <- draws[, p_lam + seq_len(p_sig), drop = FALSE] %*% t(X_sigma)
+  eta_lambda <- .tobs_add_eta_offset(
+    draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda), model, 1L)  # [S x n_sites]
+  eta_sigma  <- .tobs_add_eta_offset(
+    draws[, p_lam + seq_len(p_sig), drop = FALSE] %*% t(X_sigma), model, 2L)
   eta_b <- if (hazard) draws[, off + 1L] else rep(0, nrow(draws))
   r_vec <- if (is_nb) exp(draws[, off + (if (hazard) 2L else 1L)])
            else rep(Inf, nrow(draws))
@@ -645,8 +654,10 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
                                    model$process_info[[4]]$p)
   X_psi <- model$X_processes[[1]]; X_p11 <- model$X_processes[[2]]
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
-  eta_psi <- draws[, lay$psi, drop = FALSE] %*% t(X_psi)
-  eta_p11 <- draws[, lay$p11, drop = FALSE] %*% t(X_p11)
+  eta_psi <- .tobs_add_eta_offset(draws[, lay$psi, drop = FALSE] %*% t(X_psi),
+                                  model, 1L)
+  eta_p11 <- .tobs_add_eta_offset(draws[, lay$p11, drop = FALSE] %*% t(X_p11),
+                                  model, 2L)
   eta_p10 <- draws[, lay$p10, drop = FALSE] %*% t(X_p10)
   eta_b   <- draws[, lay$b,   drop = FALSE] %*% t(X_b)
   cpp_fp_occu_ploglik_batch(as.integer(model$y_long), as.integer(model$site_idx),
@@ -665,8 +676,10 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
                                     model$process_info[[4]]$p)
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
-  eta_lambda <- draws[, lay$lambda, drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
-  eta_p      <- draws[, lay$p,      drop = FALSE] %*% t(X_p)
+  eta_lambda <- .tobs_add_eta_offset(
+    draws[, lay$lambda, drop = FALSE] %*% t(X_lambda), model, 1L)  # [S x n_sites]
+  eta_p      <- .tobs_add_eta_offset(
+    draws[, lay$p,      drop = FALSE] %*% t(X_p), model, 2L)
   eta_omega  <- draws[, lay$omega,  drop = FALSE] %*% t(X_omega)
   eta_gamma  <- draws[, lay$gamma,  drop = FALSE] %*% t(X_gamma)
   # The NB size is estimated jointly with the coefficients and stored as the

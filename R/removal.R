@@ -310,10 +310,6 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   model    <- object$model
   draws    <- object$draws
   n_draws  <- nrow(draws)
-  p_lam    <- model$process_info[[1]]$p
-  p_p      <- model$process_info[[2]]$p
-  X_lambda <- model$X_processes[[1]]
-  X_p      <- model$X_processes[[2]]
   n_sites  <- model$n_sites
   n_pass   <- model$n_passes
   site_idx <- model$site_idx
@@ -323,7 +319,9 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   is_nb <- !is.null(r_size) && is.finite(r_size)
   # Draw selection + latent N + depleting-binomial pass removals run in
   # cpp_simulate_removal from R's RNG stream in the former order (byte-identical).
-  res <- cpp_simulate_removal(X_lambda, X_p, draws[, seq_len(p_lam + p_p), drop = FALSE],
+  ab <- .tobs_sim_arm_block(model, draws, 2L)
+  p_lam <- ab$p[1L]; p_p <- ab$p[2L]
+  res <- cpp_simulate_removal(ab$X[[1L]], ab$X[[2L]], ab$draws,
     as.integer(site_idx), as.integer(visit_idx), n_sites, n_pass, p_lam, p_p,
     is_nb, if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
   if (nsim == 1L) res[[1]] else res

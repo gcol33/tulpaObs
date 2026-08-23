@@ -230,6 +230,9 @@
                                       lkj_eta = 1, integration = "grid",
                                       verbose = TRUE) {
   .tobs_reject_weighted_spatial(spatial, "ms_abun() spatial")
+  .tobs_reject_det_arm_spatial(spatial, "ms_abun()", "shared abundance",
+                               "a spatially-varying detection logit",
+                               "is not wired for ms_abun() on either method.")
   # The areal shared field is integrated by one of two inner solvers (the field
   # hyperparameter is outer-grid integrated either way -- the nested-approx +
   # debias split). "em" (default): the closed-form community Laplace-EM M-step.

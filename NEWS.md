@@ -1,5 +1,64 @@
 # tulpaObs NEWS
 
+## 0.0.237 (2026-08-22)
+
+* **The fitted field now reaches every post-fit door on the five count families
+  (#254).** `abun()`, `removal()`, `distance()`, `fp_occu()` and `dyn_abun()`
+  estimate a latent areal / temporal / continuous surface that is part of the
+  arm's linear predictor, but every reader rebuilt eta from
+  `model$X_processes` and the coefficients alone. `fitted()` returned
+  `exp(X beta)` for a fit whose log-mean is `X beta + f`; `residuals()` and
+  `predict()` inherited that, and WAIC / LOO / DIC / CPO scored a model the fit
+  never made. On a 25-cell ICAR N-mixture the reported per-site abundance
+  correlated 0.32 with the truth where the fit's own predictor correlates 0.91.
+  Nothing warned.
+
+  The offset is now recorded once per ARM on `model$field_eta_offset`, in that
+  process's own design row layout (`R/field_offset.R`) -- written by the shared
+  areal-BFGS field attach, the shared NUTS field attach, and the two C++ areal
+  branches, then moved onto the fit's model at the ONE dispatch tail the seven
+  observation-family branches now share (the model swap there is what dropped
+  whatever a fitter set on its own autoscaled copy). `fitted()` / `residuals()`
+  / `predict()`, the five pointwise-log-likelihood kernels, and `simulate()`
+  (hence `test_dispersion()` / `test_zero_inflation()` / `test_outliers()` /
+  `check_model()`) all read it through one accessor. The deterministic and the
+  sampled (fixed-hyper NUTS) field paths, a detection-arm field with its
+  per-pass expansion (#114), and a temporal-only or `svc()` block all ride the
+  same slot. `simulate()` carries it as a design column with its coefficient
+  pinned at 1, so the C++ simulators are untouched and a field-free fit is
+  byte-identical. A fit with no field carries no offset and is unchanged.
+
+  `logLik()` on a SAMPLED field fit was the same omission one level up: the
+  field is not one of the coefficient draw columns, so each family's
+  posterior-mean marginal evaluation ran it at offset 0 and `log_prob` --
+  what `logLik()` / `AIC()` / `BIC()` / `glance()` read -- described a model
+  without the field while the criteria scored one with it (on a 25-cell
+  `car_proper` N-mixture, -232.11 against the field-aware -199.89). It is
+  re-evaluated through the same pointwise kernel the criteria use, so the two
+  cannot disagree. The deterministic grid-integrated field paths already
+  evaluate their marginal with the field in the predictor and keep their own
+  grid-weighted value.
+
+  `count()` reads the shared field -> per-site contribution helper now
+  (`.tobs_spatial_field_offset()`, was `.count_spatial_field_offset()`); its own
+  `count_field_offset` slot is unchanged.
+
+* **A `detection = ~ icar(...)` term is no longer fitted as a spatially-varying
+  ABUNDANCE (#255).** `removal()`, `fp_occu()` and `dyn_abun()` rejected a
+  detection-arm field under NUTS with a pointer to `nested_laplace`; three
+  sibling fitters had no such check and loaded the term on the state arm
+  instead -- `.tobs_fit_distance_nuts_spatial()`,
+  `.tobs_fit_abun_nuts_spatial()` and `.tobs_fit_nmix_spatial()`, so `abun()`
+  routed no arm on EITHER method. Asking for a spatially-varying detection
+  probability returned a spatially-varying abundance, silently: on a 25-cell
+  fixture the field a "detection" term produced recovered the ABUNDANCE truth
+  surface at cor 0.90. The check is one shared helper
+  (`.tobs_reject_det_arm_spatial()`), called by the six single-species areal
+  fitters and both `ms_abun()` areal fitters, so a ninth cannot omit it.
+  `abun()` / `ms_abun()` say so explicitly (no detection arm is wired on either
+  method); the four observation families keep their pointer to
+  `method = "nested_laplace"`, where that field is fitted.
+
 ## 0.0.236 (2026-08-22)
 
 * **Six R sites that stated one fact twice, or guarded on a field nothing sets

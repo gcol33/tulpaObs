@@ -238,6 +238,9 @@
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   .tobs_reject_weighted_spatial(spatial, "abun NUTS abundance spatial")
+  .tobs_reject_det_arm_spatial(spatial, "abun() NUTS", "abundance",
+                               "a spatially-varying detection logit",
+                               "is not wired for abun() on either method.")
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf(paste0("abun() NUTS + areal spatial supports icar() / car_proper() / ",
                         "bym2() on the abundance arm; got '%s'."),
@@ -318,5 +321,6 @@
                   vcov = cov, log_lik = ll_mean, converged = TRUE, K_max = K_max)
   fit <- build_nmix_fit(raw_fit, model, spatial = spatial)
   .tobs_nuts_field_attach(fit, run, ll_mean, n.chains,
-                          prior_type = spatial$type, fl = fl)
+                          prior_type = spatial$type, fl = fl,
+                          field_map = seq_len(n_sites))
 }

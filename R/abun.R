@@ -208,7 +208,16 @@
                                 mixture = mix_code, K_max = K_max,
                                 max_iter = max_iter, tol = tol,
                                 verbose = verbose)
-  build_nmix_fit(raw, model, spatial = spatial)
+  fit <- build_nmix_fit(raw, model, spatial = spatial)
+  # The field is part of log lambda, so its per-site contribution is recorded for
+  # the post-fit readers (the areal field is one node per site; an spde field
+  # reaches the sites through the mesh projector A). Without it fitted() /
+  # residuals() / predict() and WAIC / LOO / DIC / CPO score log lambda = X beta.
+  # A detection-formula term never reaches here (rejected above), so the arm
+  # label the areal-BFGS route reports is the abundance arm here by construction.
+  fit$spatial_field_arm <- "abundance"
+  .tobs_set_field_eta_offset(fit, 1L,
+                             .tobs_spatial_field_offset(fit, spatial, model))
 }
 
 
@@ -253,6 +262,9 @@
                                    site_idx, mixture = "P", K_max, max_iter,
                                    tol, verbose) {
   .tobs_reject_weighted_spatial(spatial, "N-mixture abundance spatial")
+  .tobs_reject_det_arm_spatial(spatial, "abun()", "abundance",
+                               "a spatially-varying detection logit",
+                               "is not wired for abun() on either method.")
   # Continuous Matern field: the SPDE FEM precision Q(range, sigma) and the
   # mesh projection A are threaded through the same outer-grid integrator the
   # areal path uses, with (range, sigma) as the grid axes.
@@ -536,8 +548,10 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   p_p   <- model$process_info[[2]]$p
   beta_lambda <- means[seq_len(p_lam)]
   beta_p      <- means[p_lam + seq_len(p_p)]
-  lambda <- exp(as.vector(model$X_processes[[1]] %*% beta_lambda))
-  p_obs  <- plogis(as.vector(model$X_processes[[2]] %*% beta_p))
+  lambda <- exp(as.vector(model$X_processes[[1]] %*% beta_lambda) +
+                (.tobs_eta_offset(model, 1L) %||% 0))
+  p_obs  <- plogis(as.vector(model$X_processes[[2]] %*% beta_p) +
+                   (.tobs_eta_offset(model, 2L) %||% 0))
   list(lambda = lambda, p = p_obs, N = object$mean_N)
 }
 
@@ -618,7 +632,6 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 # the posterior replicates carry the same excess-zero structure as the fit.
 .tobs_simulate_nmix <- function(object, nsim = 1) {
   model  <- object$model; draws <- object$draws
-  p_lam  <- model$process_info[[1]]$p; p_p <- model$process_info[[2]]$p
   r_size <- object$nmix_dispersion$r
   is_nb  <- !is.null(r_size) && is.finite(r_size)
   zi_om  <- if (isTRUE(object$zero_inflated) && is.finite(object$zi_omega %||% NA_real_))
@@ -628,8 +641,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   # cpp_simulate_nmix from R's RNG stream in the same order as the former loop,
   # so the simulation is byte-identical under a seed (the ZI draw is skipped when
   # zi_omega is NA, leaving the plain stream unchanged).
-  res <- cpp_simulate_nmix(model$X_processes[[1]], model$X_processes[[2]],
-    draws[, seq_len(p_lam + p_p), drop = FALSE],
+  ab <- .tobs_sim_arm_block(model, draws, 2L)
+  p_lam <- ab$p[1L]; p_p <- ab$p[2L]
+  res <- cpp_simulate_nmix(ab$X[[1L]], ab$X[[2L]], ab$draws,
     as.integer(model$site_idx), as.integer(model$visit_idx),
     model$n_sites, model$max_visits, p_lam, p_p, is_nb,
     if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim), zi_om)

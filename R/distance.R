@@ -531,9 +531,14 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   p_sig <- model$process_info[[2]]$p
   beta_lambda <- means[seq_len(p_lam)]
   beta_sigma  <- means[p_lam + seq_len(p_sig)]
-  lambda <- exp(as.vector(model$X_processes[[1]] %*% beta_lambda))
-  sigma  <- exp(as.vector(model$X_processes[[2]] %*% beta_sigma))
-  p <- object$p_det
+  lambda <- exp(as.vector(model$X_processes[[1]] %*% beta_lambda) +
+                (.tobs_eta_offset(model, 1L) %||% 0))
+  sig_off <- .tobs_eta_offset(model, 2L)
+  sigma  <- exp(as.vector(model$X_processes[[2]] %*% beta_sigma) +
+                (sig_off %||% 0))
+  # A detection-arm field makes the detection scale vary by site, so the cached
+  # scalar-arm `p_det` no longer describes it; recompute p from this sigma.
+  p <- if (is.null(sig_off)) object$p_det else NULL
   if (is.null(p)) {
     shape <- object$distance_shape$shape
     p <- vapply(sigma, function(s)
@@ -549,8 +554,6 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   model   <- object$model
   draws   <- object$draws
   n_draws <- nrow(draws)
-  p_lam   <- model$process_info[[1]]$p
-  p_sig   <- model$process_info[[2]]$p
   n_sites <- model$n_sites
   n_bins  <- model$n_bins
   r_size  <- object$nmix_dispersion$r
@@ -565,8 +568,10 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   # path is no longer used here.
   is_nb <- !is.null(r_size) && is.finite(r_size)
   transect_code <- if (identical(model$transect, "point")) 1L else 0L
-  res <- cpp_simulate_distance(model$X_processes[[1]], model$X_processes[[2]],
-    draws[, seq_len(p_lam + p_sig), drop = FALSE], as.numeric(model$cutpoints),
+  ab <- .tobs_sim_arm_block(model, draws, 2L)
+  p_lam <- ab$p[1L]; p_sig <- ab$p[2L]
+  res <- cpp_simulate_distance(ab$X[[1L]], ab$X[[2L]],
+    ab$draws, as.numeric(model$cutpoints),
     .dist_key_code(model$key), transect_code,
     if (is.null(shape)) 0 else as.numeric(shape),
     n_sites, n_bins, p_lam, p_sig, is_nb,
@@ -601,17 +606,8 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
 # detection scale sigma at new X_sigma. Mirrors the nmix predictor's lambda mode.
 .tobs_predict_distance <- function(object, X.0 = NULL, type = c("lambda", "sigma")) {
   type  <- match.arg(type)
-  model <- object$model
-  p_lam <- model$process_info[[1]]$p
-  p_sig <- model$process_info[[2]]$p
-  if (identical(type, "lambda")) {
-    X <- X.0 %||% model$X_processes[[1]]
-    beta <- object$means[seq_len(p_lam)]
-    return(exp(as.vector(X %*% beta)))
-  }
-  X <- X.0 %||% model$X_processes[[2]]
-  beta <- object$means[p_lam + seq_len(p_sig)]
-  exp(as.vector(X %*% beta))
+  exp(.tobs_predict_eta(object, X.0,
+                        if (identical(type, "lambda")) 1L else 2L))
 }
 
 

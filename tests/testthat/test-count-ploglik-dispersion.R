@@ -82,11 +82,19 @@ test_that("an areal negbin abun() is scored as negbin, not Poisson", {
   expect_equal(model$nb_r, as.numeric(fit$nmix_dispersion$r))
   expect_true(all(is.finite(.tobs_count_nb_size(model, fit$draws))))
 
-  # Discriminates: dropping the size falls back to the Poisson marginal.
+  # Discriminates: the size travels on the model, so dropping it (the Poisson
+  # marginal) or replacing it moves the score. The Poisson gap is small on this
+  # fixture because the areal field is part of the scored predictor and absorbs
+  # much of the between-site overdispersion the size would otherwise carry, so
+  # the magnitude is asserted against a size far from the grid-integrated
+  # estimate, where the separation does not depend on how much overdispersion
+  # the field left behind.
   th <- at_mode(fit)
+  nb_ll <- sum(.tobs_ploglik_from_draws(model, th))
   pois <- model; pois$nb_r <- NULL
-  expect_gt(abs(sum(.tobs_ploglik_from_draws(model, th)) -
-                sum(.tobs_ploglik_from_draws(pois, th))), 1)
+  expect_false(isTRUE(all.equal(nb_ll, sum(.tobs_ploglik_from_draws(pois, th)))))
+  small <- model; small$nb_r <- 1
+  expect_gt(abs(nb_ll - sum(.tobs_ploglik_from_draws(small, th))), 1)
 })
 
 test_that("dyn_abun(mixture = 'negbin') is scored at the estimated log_r", {

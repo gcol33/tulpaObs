@@ -561,21 +561,21 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   p <- vapply(model$process_info, function(pp) pp$p, integer(1))
   off <- cumsum(c(0L, p))
   lp <- function(k) stats::plogis(as.vector(model$X_processes[[k]] %*%
-                                            means[off[k] + seq_len(p[k])]))
+                                            means[off[k] + seq_len(p[k])]) +
+                                  (.tobs_eta_offset(model, k) %||% 0))
   list(psi = lp(1), p11 = lp(2), p10 = lp(3), b = lp(4), z = object$w1)
 }
 
 # simulate() for fp_occu: draw z, then per visit emit a multistate detection.
 .tobs_simulate_fp_occu <- function(object, nsim = 1) {
   model <- object$model; draws <- object$draws; n_draws <- nrow(draws)
-  p <- vapply(model$process_info, function(pp) pp$p, integer(1))
-  off <- cumsum(c(0L, p))
   n_sites <- model$n_sites; J <- model$max_visits
   # Draw selection + z + per-site multistate detection replicate run in
   # cpp_simulate_fp_occu from R's RNG stream in the former order (byte-identical).
-  res <- cpp_simulate_fp_occu(model$X_processes[[1]], model$X_processes[[2]],
-    model$X_processes[[3]], model$X_processes[[4]], draws[, seq_len(sum(p)), drop = FALSE],
-    n_sites, J, p[1], p[2], p[3], p[4], as.integer(nsim))
+  ab <- .tobs_sim_arm_block(model, draws, 4L)
+  p <- ab$p
+  res <- cpp_simulate_fp_occu(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],
+    ab$draws, n_sites, J, p[1], p[2], p[3], p[4], as.integer(nsim))
   if (nsim == 1L) res[[1]] else res
 }
 
@@ -602,12 +602,8 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
 # predict() for fp_occu: occupancy psi (default) or true detection p11 at new X.
 .tobs_predict_fp_occu <- function(object, X.0 = NULL, type = c("psi", "p11")) {
   type  <- match.arg(type)
-  model <- object$model
-  p <- vapply(model$process_info, function(pp) pp$p, integer(1))
-  off <- cumsum(c(0L, p))
   k <- if (identical(type, "psi")) 1L else 2L
-  X <- X.0 %||% model$X_processes[[k]]
-  stats::plogis(as.vector(X %*% object$means[off[k] + seq_len(p[k])]))
+  stats::plogis(.tobs_predict_eta(object, X.0, k))
 }
 
 

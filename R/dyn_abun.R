@@ -859,8 +859,10 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   p <- vapply(model$process_info, function(pp) pp$p, integer(1))
   off <- cumsum(c(0L, p))
   T <- model$n_seasons; n_sites <- model$n_sites; nIv <- T - 1L
-  lambda <- exp(as.vector(model$X_processes[[1]] %*% means[off[1] + seq_len(p[1])]))
-  pdet   <- stats::plogis(as.vector(model$X_processes[[2]] %*% means[off[2] + seq_len(p[2])]))
+  lambda <- exp(as.vector(model$X_processes[[1]] %*% means[off[1] + seq_len(p[1])]) +
+                (.tobs_eta_offset(model, 1L) %||% 0))
+  pdet   <- stats::plogis(as.vector(model$X_processes[[2]] %*% means[off[2] + seq_len(p[2])]) +
+                          (.tobs_eta_offset(model, 2L) %||% 0))
   omega  <- .tobs_dyn_abun_arm_matrix(
     stats::plogis(as.vector(model$X_processes[[3]] %*% means[off[3] + seq_len(p[3])])),
     n_sites, nIv)
@@ -876,8 +878,6 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 # simulate() for dyn_abun: draw the abundance trajectory and emit counts.
 .tobs_simulate_dyn_abun <- function(object, nsim = 1) {
   model <- object$model; draws <- object$draws; n_draws <- nrow(draws)
-  p <- vapply(model$process_info, function(pp) pp$p, integer(1))
-  off <- cumsum(c(0L, p))
   n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
   is_nb <- identical(object$mixture %||% "poisson", "negbin")
   r_disp <- object$dispersion$r %||% NA_real_
@@ -885,9 +885,10 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   # (R_unif_index), latent N (rpois; NB via rpois(rgamma)), and the survival /
   # recruitment / detection draws run in cpp_simulate_dyn_abun from R's RNG stream
   # in the former site-major order (byte-identical).
-  res <- cpp_simulate_dyn_abun(model$X_processes[[1]], model$X_processes[[2]],
-    model$X_processes[[3]], model$X_processes[[4]],
-    draws[, seq_len(sum(p)), drop = FALSE], n_sites, T, J,
+  ab <- .tobs_sim_arm_block(model, draws, 4L)
+  p <- ab$p
+  res <- cpp_simulate_dyn_abun(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],
+    ab$draws, n_sites, T, J,
     p[1], p[2], p[3], p[4], is_nb,
     if (is_nb && is.finite(r_disp)) as.numeric(r_disp) else NA_real_,
     as.integer(nsim))
@@ -961,12 +962,8 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 # predict() for dyn_abun: initial abundance lambda at new X (default).
 .tobs_predict_dyn_abun <- function(object, X.0 = NULL, type = c("lambda", "gamma")) {
   type  <- match.arg(type)
-  model <- object$model
-  p <- vapply(model$process_info, function(pp) pp$p, integer(1))
-  off <- cumsum(c(0L, p))
   k <- if (identical(type, "lambda")) 1L else 4L
-  X <- X.0 %||% model$X_processes[[k]]
-  exp(as.vector(X %*% object$means[off[k] + seq_len(p[k])]))
+  exp(.tobs_predict_eta(object, X.0, k))
 }
 
 

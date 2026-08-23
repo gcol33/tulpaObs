@@ -57,7 +57,7 @@
 # otherwise it is the spatial field. `fl` is the field loading (its fixed `tau`
 # / `rho` are recorded so the fit says which hyperparameters it sampled under).
 .tobs_nuts_field_attach <- function(fit, run, log_lik, n_chains, prior_type, fl,
-                                    temporal = NULL) {
+                                    field_map, temporal = NULL) {
   b_idx <- run$b_idx
   fit$draws <- run$draws[, b_idx, drop = FALSE]
   fit$means <- run$par[b_idx]
@@ -83,6 +83,12 @@
     epsilon = run$chains[[1L]]$epsilon, n_chains = as.integer(n_chains),
     divergent_total = sum(divergent), tau = fl$tau, rho = fl$rho,
     n_raw = run$n_raw, prior_type = prior_type, fixed_hyper = TRUE)
+  # The field is part of the state arm's linear predictor but is not among the
+  # coefficient columns `fit$draws` keeps, so its posterior-mean per-site
+  # contribution (`field_mean` read through the site -> field-unit map) is
+  # recorded for the post-fit readers. Without it fitted() / residuals() /
+  # predict() and WAIC / LOO / DIC / CPO score the coefficients alone.
+  fit <- .tobs_set_field_eta_offset(fit, 1L, run$field_mean[field_map])
   # Diagnostics over the coefficient block -- the coordinates the fit reports.
   # The whitened field `raw` coordinates are sampled but carry no reported
   # parameter, so they are summarised through the field they map to.

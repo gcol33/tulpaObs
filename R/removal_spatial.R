@@ -248,7 +248,15 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     bym2       = do.call(removal_laplace_bym2, c(common,
                    list(scale_factor = spatial$scale_factor %||%
                           .bym2_scale(spatial$graph)))))
-  build_nmix_fit(raw, model, spatial = spatial)
+  fit <- build_nmix_fit(raw, model, spatial = spatial)
+  # The field is part of log lambda, so its per-site contribution is recorded for
+  # the post-fit readers (the areal-BFGS branches above record theirs through
+  # .tobs_attach_field_results()). Without it fitted() / residuals() / predict()
+  # and WAIC / LOO / DIC / CPO score log lambda = X beta. A detection-arm term
+  # took the BFGS branch above, so the field is the abundance arm's here.
+  fit$spatial_field_arm <- "abundance"
+  .tobs_set_field_eta_offset(fit, 1L,
+                             .tobs_spatial_field_offset(fit, spatial, model))
 }
 
 # Areal field + temporal block on the removal abundance arm via the shared areal-
@@ -377,10 +385,9 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   temporal_only <- is.null(spatial) && !is.null(temporal)
   if (!temporal_only) {
     .tobs_reject_weighted_spatial(spatial, "removal NUTS abundance spatial")
-    if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
-      stop(paste0("removal() NUTS carries the areal field on the abundance arm; a ",
-                  "detection-arm field (a spatially-varying capture logit) is wired ",
-                  "under method = \"nested_laplace\"."), call. = FALSE)
+    .tobs_reject_det_arm_spatial(spatial, "removal() NUTS", "abundance",
+                                 "a spatially-varying capture logit",
+                                 "is wired under method = \"nested_laplace\".")
     if (!spatial$type %in% c("icar", "car_proper", "bym2"))
       stop(sprintf(paste0("removal() NUTS + areal spatial supports icar() / ",
                           "car_proper() / bym2() on the abundance arm; got '%s'. ",
@@ -490,5 +497,6 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   .tobs_nuts_field_attach(
     fit, run, ll_mean, n.chains,
     prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
+    field_map = field_map,
     temporal = if (temporal_only) temporal else NULL)
 }

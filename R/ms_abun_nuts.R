@@ -536,6 +536,9 @@
   .tobs_fill_sampler(environment(), "nuts", family = "ms_abun")
 
   .tobs_reject_weighted_spatial(spatial, "ms_abun NUTS abundance spatial")
+  .tobs_reject_det_arm_spatial(spatial, "ms_abun() NUTS", "shared abundance",
+                               "a spatially-varying detection logit",
+                               "is not wired for ms_abun() on either method.")
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(
       "ms_abun() NUTS + areal spatial supports icar() / car_proper() / bym2() ",

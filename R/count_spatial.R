@@ -156,45 +156,6 @@
 }
 
 
-# Per-site field contribution to eta: sum_k W[i,k] F_k[u(i)]. The intercept field
-# carries weight 1; a varying-coefficient (SVC) field carries its covariate
-# column. Recorded on the model so fitted() / predict() add the FULL field
-# contribution rather than the intercept field alone -- which is the whole
-# contribution only when there is no SVC field. Returns NULL when the fit carries
-# no reconstructed field.
-.count_spatial_field_offset <- function(fit, spatial, model) {
-  # The NNGP GP field is integrated out on the nested path (no reconstructed
-  # per-cell realization), so there is no per-site field offset to add; fitted()
-  # / predict() run on the field-integrated fixed effects.
-  if (identical(spatial$type, "gp")) return(NULL)
-  flds <- c(list(fit$spatial_field), as.list(fit$trend_fields %||% list()))
-  flds <- Filter(function(z) !is.null(z) && !all(is.na(z)), flds)
-  if (!length(flds)) return(NULL)
-
-  # Continuous SPDE field: the realization lives on the mesh nodes, so the
-  # per-site contribution is the barycentric projection A %*% mesh_field (A is
-  # n_sites x n_mesh), summed over the intercept + any covariate-weighted fields.
-  A <- fit$spatial$tulpa_spec$A
-  if (!is.null(A)) {
-    off <- numeric(nrow(A))
-    for (fk in flds) off <- off + as.numeric(A %*% as.numeric(fk))
-    return(off)
-  }
-
-  sp_fields <- .tobs_resolve_occu_spatial_fields(spatial, model)
-  if (length(sp_fields) < length(flds)) return(NULL)
-  n   <- length(as.numeric(flds[[1L]]))
-  off <- numeric(n)
-  for (k in seq_along(flds)) {
-    wk <- sp_fields[[k]]$weight
-    w  <- if (is.null(wk)) rep(1, n) else as.numeric(wk)
-    if (length(w) != n) return(NULL)
-    off <- off + w * as.numeric(flds[[k]])
-  }
-  off
-}
-
-
 # ---------------------------------------------------------------------------
 # Continuous NNGP Gaussian-process field on the count arm (gp())
 # ---------------------------------------------------------------------------

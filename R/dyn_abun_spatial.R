@@ -124,11 +124,9 @@
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
   .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
-  if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
-    stop(paste0("dyn_abun() NUTS carries the areal field on the initial-abundance ",
-                "arm; a detection-arm field (a spatially-varying detection logit) ",
-                "is wired under method = \"nested_laplace\"."),
-         call. = FALSE)
+  .tobs_reject_det_arm_spatial(spatial, "dyn_abun() NUTS", "initial-abundance",
+                               "a spatially-varying detection logit",
+                               "is wired under method = \"nested_laplace\".")
   if (!spatial$type %in% c("icar", "car_proper", "bym2"))
     stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports icar() / ",
                         "car_proper() / bym2() on the initial-abundance arm; got ",
@@ -190,7 +188,8 @@
   fit <- build_dyn_abun_fit(
     .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
   .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
-                          prior_type = spatial$type, fl = fl)
+                          prior_type = spatial$type, fl = fl,
+                          field_map = seq_len(n_sites))
 }
 
 # Coefficient + whitened-field column names for a field dyn_abun NUTS run.
@@ -295,5 +294,5 @@
     .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
   .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
                           prior_type = temporal$type, fl = fl,
-                          temporal = temporal)
+                          field_map = ti, temporal = temporal)
 }

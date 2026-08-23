@@ -160,6 +160,22 @@
   scales       <- scale_info$scales
   process_info <- model$process_info
 
+  # Shared tail for the observation-family dispatch branches below. Each fitter
+  # ran against the autoscaled `fit_model`, so the coefficients / covariance are
+  # transformed back to the natural scale and the unscaled `model` is restored --
+  # which drops every slot the fitter set on its own copy, so the fitted field's
+  # per-arm eta offset is (re)attached against the restored model here, where a
+  # single call reaches every family.
+  .tobs_finalize_family_fit <- function(fit) {
+    fit <- .unscale_fit_per_process(fit, scales, process_info)
+    fit$vcov  <- .unscale_vcov(fit$vcov, scales, process_info)
+    fit$model <- model
+    fit <- .tobs_attach_model_eta_offset(fit)
+    fit <- .tobs_nuts_field_loglik(fit)
+    fit$intercepts <- compute_intercepts(model, fit$means)
+    fit
+  }
+
   # N-mixture abundance: a closed-form marginal Laplace fit (tulpa owns the
   # likelihood). No EM, no NUTS yet. `method` is "laplace" (non-spatial) or
   # "nested_laplace" (areal spatial offset). Reuses the per-process autoscaler;
@@ -198,11 +214,7 @@
         max.treedepth = max.treedepth, adapt.delta = adapt.delta,
         seed = seed, verbose = verbose)
       }
-      fit <- .unscale_fit_per_process(fit, scales, process_info)
-      fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-      fit$model  <- model
-      fit$intercepts <- compute_intercepts(model, fit$means)
-      return(fit)
+      return(.tobs_finalize_family_fit(fit))
     }
     nmix_method <- if (is.null(spatial)) "laplace" else "nested_laplace"
     fit <- .tobs_fit_nmix(fit_model, method = nmix_method, spatial = spatial,
@@ -212,11 +224,7 @@
                           n_quad = n.quad, lkj_eta = re.lkj,
                           sigma_beta = sigma.beta,
                           verbose = verbose)
-    fit <- .unscale_fit_per_process(fit, scales, process_info)
-    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-    fit$model  <- model
-    fit$intercepts <- compute_intercepts(model, fit$means)
-    return(fit)
+    return(.tobs_finalize_family_fit(fit))
   }
 
   # Removal sampling: the sequential-depletion abundance marginal (its latent N
@@ -275,11 +283,7 @@
       fit <- .tobs_fit_removal(fit_model, mixture = mixture, K_max = K.max,
                                max_iter = max.iter, tol = tol, verbose = verbose)
     }
-    fit <- .unscale_fit_per_process(fit, scales, process_info)
-    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-    fit$model  <- model
-    fit$intercepts <- compute_intercepts(model, fit$means)
-    return(fit)
+    return(.tobs_finalize_family_fit(fit))
   }
 
   # Distance sampling: the binned multinomial-over-N marginal (its latent N
@@ -333,11 +337,7 @@
       fit <- .tobs_fit_distance(fit_model, mixture = mixture, K_max = K.max,
                                 max_iter = max.iter, tol = tol, verbose = verbose)
     }
-    fit <- .unscale_fit_per_process(fit, scales, process_info)
-    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-    fit$model  <- model
-    fit$intercepts <- compute_intercepts(model, fit$means)
-    return(fit)
+    return(.tobs_finalize_family_fit(fit))
   }
 
   # Open-population (Dail-Madsen) N-mixture: the latent abundance sequence summed
@@ -357,11 +357,7 @@
              call. = FALSE)
       }
       fit <- .tobs_fit_dyn_abun_zip(fit_model, max_iter = 300L, verbose = verbose)
-      fit <- .unscale_fit_per_process(fit, scales, process_info)
-      fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-      fit$model  <- model
-      fit$intercepts <- compute_intercepts(model, fit$means)
-      return(fit)
+      return(.tobs_finalize_family_fit(fit))
     }
     if (!is.null(temporal))
       .tobs_check_count_temporal(temporal, spatial, method, "dyn_abun",
@@ -418,11 +414,7 @@
       fit <- .tobs_fit_dyn_abun(fit_model, max_iter = 300L, tol = 1e-8,
                                 verbose = verbose)
     }
-    fit <- .unscale_fit_per_process(fit, scales, process_info)
-    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-    fit$model  <- model
-    fit$intercepts <- compute_intercepts(model, fit$means)
-    return(fit)
+    return(.tobs_finalize_family_fit(fit))
   }
 
   # False-positive occupancy: the Miller et al. (2011) multistate marginal (its
@@ -472,11 +464,7 @@
       fit <- .tobs_fit_fp_occu(fit_model, max_iter = 500L, tol = 1e-8,
                                sigma.beta = NULL, verbose = verbose)
     }
-    fit <- .unscale_fit_per_process(fit, scales, process_info)
-    fit$vcov   <- .unscale_vcov(fit$vcov, scales, process_info)
-    fit$model  <- model
-    fit$intercepts <- compute_intercepts(model, fit$means)
-    return(fit)
+    return(.tobs_finalize_family_fit(fit))
   }
 
   # Continuous NNGP varying coefficient(s) on single-season occupancy under the
@@ -565,7 +553,7 @@
       # not the intercept field alone; a plain intercept field reduces to
       # spatial_field.
       fit$model$count_field_offset <-
-        .count_spatial_field_offset(fit, spatial, model)
+        .tobs_spatial_field_offset(fit, spatial, model)
       fit$intercepts <- compute_intercepts(model, fit$means)
       return(fit)
     }

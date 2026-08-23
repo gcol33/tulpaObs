@@ -136,11 +136,9 @@
   temporal_only <- is.null(spatial) && !is.null(temporal)
   if (!temporal_only) {
     .tobs_reject_weighted_spatial(spatial, "fp_occu NUTS occupancy spatial")
-    if (isTRUE(spatial$shared[2L]) && !isTRUE(spatial$shared[1L]))
-      stop(paste0("fp_occu() NUTS carries the areal field on the occupancy (psi) ",
-                  "arm; a detection-arm field (a spatially-varying p11 logit) is ",
-                  "wired under method = \"nested_laplace\"."),
-           call. = FALSE)
+    .tobs_reject_det_arm_spatial(spatial, "fp_occu() NUTS", "occupancy (psi)",
+                                 "a spatially-varying p11 logit",
+                                 "is wired under method = \"nested_laplace\".")
     if (!spatial$type %in% c("icar", "car_proper", "bym2"))
       stop(sprintf(paste0("fp_occu() NUTS + areal spatial supports icar() / ",
                           "car_proper() / bym2() on the psi arm; got '%s'. ",
@@ -232,5 +230,6 @@
   .tobs_nuts_field_attach(
     fit, run, ev_mean$log_lik, n.chains,
     prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
+    field_map = field_map,
     temporal = if (temporal_only) temporal else NULL)
 }

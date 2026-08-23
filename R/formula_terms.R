@@ -1056,6 +1056,26 @@
   invisible(spec)
 }
 
+# A field written in the `detection =` formula is arm-tagged by
+# `.tobs_structures_from_model()` as `shared = c(state, detection) = c(FALSE,
+# TRUE)`. Every fitter below loads its field on the STATE arm (log lambda /
+# psi); a fitter that does not route the detection arm has to reject such a
+# term, because loading it on the state arm fits a spatially-varying abundance /
+# occupancy where the caller asked for a spatially-varying detection, and
+# nothing downstream says so. `context` names the fitter, `arm` the arm it does
+# load, `effect` what a detection-arm field would be there, and `route` where
+# (if anywhere) that field is fitted instead.
+.tobs_det_arm_spatial <- function(spec) {
+  inherits(spec, "tobs_spatial") &&
+    isTRUE(spec$shared[2L]) && !isTRUE(spec$shared[1L])
+}
+
+.tobs_reject_det_arm_spatial <- function(spec, context, arm, effect, route) {
+  if (!.tobs_det_arm_spatial(spec)) return(invisible(spec))
+  stop(sprintf("%s carries the areal field on the %s arm; a detection-arm field (%s) %s",
+               context, arm, effect, route), call. = FALSE)
+}
+
 
 # Convert an areal `tobs_spatial` term into the `tulpa_spatial` spec the
 # cover-hurdle nested-Laplace path consumes. The areal terms retain the raw
