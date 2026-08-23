@@ -32,7 +32,12 @@
   fit <- tobs(
     formula = fm, data = dat, family = cover("lognormal"), y = y,
     method = "nested_laplace",
-    control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9))
+    # rho is the BYM2 mixing weight between the structured and iid parts. An
+    # intrinsic ICAR field has no such axis, and pinning one the fitted path
+    # does not read is refused rather than ignored.
+    control = if (prior == "bym2")
+                list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9))
+              else list(sigma.grid = c(0.4, 0.8))
   )
   list(fit = fit, n_s = n_s, N = N)
 }
