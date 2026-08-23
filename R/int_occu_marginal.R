@@ -80,7 +80,16 @@
     n_src <- model$n_sources
     p_occ <- ncol(X_occ)
 
-    X_det_list <- lapply(seq_len(n_src), function(s) model$X_processes[[1 + s]])
+    # The marginal below, and refresh() under it, read p_s by ROW of
+    # y_sources[[s]], so the detection design has to be in that row order.
+    # X_processes carries one row per site and is zero-padded at the sites a
+    # source did not survey, so mapping it through site_maps puts row r on the
+    # site that row r of y_sources belongs to. A source given as the rows it
+    # surveyed has fewer rows than sites, and reading the site-indexed design
+    # positionally would score it at another site's row -- a padded one, where
+    # the zero intercept sends p to 0.5 whatever beta says.
+    X_det_list <- lapply(seq_len(n_src), function(s)
+      model$X_processes[[1 + s]][model$site_maps[[s]] + 1L, , drop = FALSE])
     p_det <- vapply(X_det_list, ncol, integer(1))
 
     pi_list <- model$process_info
