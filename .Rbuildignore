@@ -6,6 +6,8 @@
 ^pkgdown$
 ^_pkgdown\.yml$
 ^\.github$
+^\.gitignore$
+^\.gitattributes$
 ^CLAUDE\.md$
 ^AGENTS\.md$
 ^DESIGN\.md$
