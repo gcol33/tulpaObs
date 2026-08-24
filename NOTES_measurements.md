@@ -1357,3 +1357,36 @@ statistic -- 0.112/sqrt(12) = 0.032, clearing 0.6 by ~2 SE, where the median's
 1.253 sd/sqrt(n) = 0.040 clears it by only ~1. (The pos-field case is the
 opposite shape -- a tight core with rare escapees -- and takes the median.)
 12 seeds where the block ran 2, so the block costs ~6x its old wall time.
+
+### #279 follow-on: nested detection-RE BLUP recovery (`test-occu-cover-obs-re.R:388`)
+
+Surfaced by the Cholesky field draw, NOT caused by it. The two draws have the
+same distribution (verified directly, `dev_notes/probe_279_cov_equiv.R`): at
+40,000 draws on the 9x9 fixture both empirical covariances converge to
+`Q^+ / scale`, max relative error 0.0135 (Cholesky) vs 0.0187 (eigen), and the
+two differ from each other (max abs 0.0346) by no more than each differs from
+the target -- Monte-Carlo noise, not a distributional shift. Geometric-mean
+marginal SD 1.0004 vs 1.0007.
+
+`cor_s` = cor(BLUP, truth) for the nested `region:site` level, 20 seeds each
+(`dev_notes/probe_279_obsre_seeds.R`, and the same with the pre-fix eigen draw
+restored via `assignInNamespace`):
+
+| draw            | seeds 1:5 mean | 20-seed mean | median | range       |
+|-----------------|----------------|--------------|--------|-------------|
+| pre-fix (eigen) | 0.6195         | 0.5424       | 0.558  | 0.170-0.840 |
+| post-fix (chol) | 0.5176         | 0.5063       | 0.510  | 0.217-0.772 |
+
+20-seed means differ by 0.036 against a difference-SE of ~0.054 -> inside noise,
+as the covariance equality requires. The asserted floor of 0.6 was above the
+estimator's mean under BOTH draws; pre-fix it cleared on a 5-seed mean by 0.0195,
+about a quarter of that mean's own standard error (~0.076). The eigenbasis pinned
+which draw each seed produced, so the luck was reproducible and read as stable.
+
+Threshold moved 0.6 -> 0.40 on a 20-seed mean (SE ~0.038, so ~3 SE of headroom),
+plus a per-seed `max(cor_s) > 0.5` gross-regression guard. The parent level is
+untouched at 0.55 (20-seed mean 0.786 post-fix, 0.841 pre-fix).
+
+The parent/nested gap (~0.79 vs ~0.52) is information content, not a fitting
+defect: at `K = 3` sites per region a nested group carries ~4.5 sites of binary
+detections and its BLUP is shrunk hard. Estimator left alone.
