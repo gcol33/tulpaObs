@@ -54,13 +54,16 @@ simulate_nmix_bym2 <- function(seed,
   # and the structured variance share they are named for.
   scale_factor <- .bym2_scale_from_Q(Q)
 
-  # Draw v from scaled ICAR (sum-to-zero), w from N(0, I).
-  # Pseudo-inverse via spectral decomposition.
-  inv_eig <- ifelse(abs(eig$values) > 1e-10, 1 / eig$values, 0)
-  Sigma_v <- eig$vectors %*% diag(inv_eig) %*% t(eig$vectors)
-  Sigma_v <- (Sigma_v + t(Sigma_v)) / 2
-  v_raw <- as.vector(MASS::mvrnorm(1, mu = rep(0, n_sites), Sigma = Sigma_v))
-  v_field <- v_raw - mean(v_raw)
+  # Draw v from scaled ICAR (sum-to-zero), w from N(0, I). The ICAR component
+  # goes through the package's Cholesky draw: Sigma_v is basis-invariant, but
+  # drawing from it through a spectral decomposition is not -- Q here has
+  # repeated eigenvalues in bulk, and the eigenvector basis inside a repeated
+  # block is fixed only up to a rotation the linear-algebra library chooses, so
+  # a fixed seed would give a different field on a different build (#279).
+  # .tobs_draw_icar_unit() returns the field already divided by
+  # sqrt(scale_factor), so multiply it back out to keep v on the raw ICAR scale
+  # the a_coef below expects.
+  v_field <- as.numeric(.tobs_draw_icar_unit(Q, scale_factor)) * sqrt(scale_factor)
   w_field <- rnorm(n_sites)
 
   a_coef <- sigma_true * sqrt(rho_true / scale_factor)

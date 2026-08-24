@@ -542,7 +542,14 @@ test_that("occu_cover spatial NUTS recovers betas + field (beta arm, smoke)", {
   expect_lte(max(div[ok]), 8L)
   expect_gt(mean(fcor[ok]), 0.6)
   bias <- abs(colMeans(est[ok, , drop = FALSE]) - truth)
-  expect_true(all(bias[1:6] < 0.35))
+  # Asserted on the worst coefficient rather than on all(), so a failure names
+  # the one that left the band and by how much: all() reports only FALSE, and a
+  # single coefficient drifting and the whole vector drifting want different
+  # responses.
+  nm <- names(nut$means) %||% paste0("beta", seq_along(bias))
+  expect_lt(max(bias[1:6]), 0.35,
+            label = sprintf("max coefficient bias [worst %s, seeds used %d/%d]",
+                            nm[which.max(bias[1:6])], sum(ok), n_seeds))
   expect_lt(bias[7], 0.45)
 })
 

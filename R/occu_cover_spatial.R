@@ -90,18 +90,8 @@
 # Returns an n_nodes x n_draw matrix.
 # ---------------------------------------------------------------------------
 .occu_cover_draw_icar_field <- function(adj, n_draw = 1L) {
-  Q       <- .occu_cover_icar_Q(adj)
-  scale_q <- .occu_cover_icar_scale(adj)
-  eig  <- eigen(Q, symmetric = TRUE)
-  keep <- eig$values > 1e-8
-  out <- vapply(seq_len(n_draw), function(i) {
-    z_white <- stats::rnorm(sum(keep))
-    fk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                       (z_white / sqrt(eig$values[keep])))
-    fk <- fk - mean(fk)
-    fk / sqrt(scale_q)
-  }, numeric(nrow(adj)))
-  matrix(out, nrow(adj), as.integer(n_draw))
+  .tobs_draw_icar_unit(.occu_cover_icar_Q(adj), .occu_cover_icar_scale(adj),
+                       n_draw)
 }
 
 

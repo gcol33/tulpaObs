@@ -653,13 +653,7 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
   # ICAR field, Sorbye-Rue scaled (geo-mean marginal variance 1).
   Q       <- .occu_cover_icar_Q(adj)
   scale_q <- .occu_cover_icar_scale(adj)
-  eig  <- eigen(Q, symmetric = TRUE)
-  keep <- eig$values > 1e-8
-  draw_field <- function() {
-    zw <- stats::rnorm(sum(keep))
-    ff <- as.numeric(eig$vectors[, keep, drop = FALSE] %*% (zw / sqrt(eig$values[keep])))
-    (ff - mean(ff)) / sqrt(scale_q)
-  }
+  draw_field <- function() as.numeric(.tobs_draw_icar_unit(Q, scale_q))
   f <- draw_field()
 
   # Optional spatially-varying trend: a SECOND ICAR field f_trend, weighted per

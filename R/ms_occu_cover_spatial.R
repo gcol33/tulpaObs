@@ -166,10 +166,10 @@ simulate_ms_occu_cover_spatial <- function(adj,
   # K shared latent factors W (N x K), each drawn at unit-marginal scale (the geo
   # mean of the field's marginal variances is 1, the Sorbye-Rue convention
   # simulate_occu_cover uses) so the loadings carry the amplitude. An icar field
-  # uses the improper eigen draw (K = 1 reproduces the single-field stream); a
-  # proper-CAR field draws from R(rho)^{-1}; a bym2 field is the convolution
-  # sqrt(1-phi) v + sqrt(phi) u*. The car / bym2 branches are gated, so the
-  # default icar stream stays byte-identical.
+  # is the sum-to-zero scaled ICAR draw; a proper-CAR field draws from
+  # R(rho)^{-1}; a bym2 field is the convolution sqrt(1-phi) v + sqrt(phi) u*.
+  # All three go through a Cholesky, so the realisation a seed produces does not
+  # depend on the linear-algebra library underneath (see .tobs_draw_icar_unit).
   W <- matrix(0, N, K)
   if (identical(field, "car_proper")) {
     spec    <- .ms_ocs_field_spec(adj, "car_proper")
@@ -185,28 +185,14 @@ simulate_ms_occu_cover_spatial <- function(adj,
     # convolution b = sqrt(1-phi) v + sqrt(phi) u* is unit marginal too.
     Q       <- .occu_cover_icar_Q(adj)
     scale_q <- .occu_cover_icar_scale(adj)
-    eig  <- eigen(Q, symmetric = TRUE)
-    keep <- eig$values > 1e-8
     for (k in seq_len(K)) {
-      z_white <- stats::rnorm(sum(keep))
-      u <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                        (z_white / sqrt(eig$values[keep])))
-      u <- (u - mean(u)) / sqrt(scale_q)         # scaled ICAR component u*
-      v <- stats::rnorm(N)                       # iid component
+      u <- as.numeric(.tobs_draw_icar_unit(Q, scale_q))  # scaled ICAR component
+      v <- stats::rnorm(N)                               # iid component
       W[, k] <- sqrt(1 - phi) * v + sqrt(phi) * u
     }
   } else {
-    Q       <- .occu_cover_icar_Q(adj)
-    scale_q <- .occu_cover_icar_scale(adj)
-    eig  <- eigen(Q, symmetric = TRUE)
-    keep <- eig$values > 1e-8
-    for (k in seq_len(K)) {
-      z_white <- stats::rnorm(sum(keep))
-      wk <- as.numeric(eig$vectors[, keep, drop = FALSE] %*%
-                         (z_white / sqrt(eig$values[keep])))
-      wk <- wk - mean(wk)
-      W[, k] <- wk / sqrt(scale_q)
-    }
+    W[] <- .tobs_draw_icar_unit(.occu_cover_icar_Q(adj),
+                                .occu_cover_icar_scale(adj), K)
   }
 
   # Per-species loadings L (S x K), lower-triangular with positive diagonal --
@@ -368,6 +354,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
     s   <- numeric(N); s[pos] <- (1 / eig$values[pos]) / scale_q
     spec$V           <- eig$vectors
     spec$s           <- s
+    spec$scale_q     <- scale_q
     spec$hyper_name  <- "phi"
     spec$hyper_bounds <- c(0, 1 - 1e-4)
     spec$rank        <- N

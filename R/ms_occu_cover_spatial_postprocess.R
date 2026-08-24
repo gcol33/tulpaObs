@@ -141,6 +141,12 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
         # CAR correlation rho or the BYM2 spatial-variance fraction phi.
         rho_w    = if (identical(ft, "car_proper")) hypr else NULL,
         phi_w    = if (identical(ft, "bym2"))       hypr else NULL,
+        # The Sorbye-Rue constant the BYM2 structured block is scaled by. It is
+        # a property of the graph alone, so it is the first thing to compare
+        # when the same fit reports a different variance fraction on another
+        # platform: a phi that moved with it and a phi that moved without it
+        # have nothing in common.
+        scale_factor = model$field_spec$scale_q,
         sd_L     = fit$sd_L,
         associations = .ms_ocs_associations(fit, d, model$species_names),
         maps     = .ms_ocs_map_summary(model, fit)

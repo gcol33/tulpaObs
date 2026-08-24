@@ -1293,3 +1293,67 @@ proven artifacts rather than calibrated values, and were deleted:
 Symptom that located the dead formals: `abun(method = "nuts")` ran
 `.tobs_fit_model()`'s `n.iter = 2000` rather than its own `1000L` -- measured 2050
 iterations, 2000 kept.
+
+## #279 -- areal field simulators drew from a LAPACK eigenbasis
+
+**Degeneracy of the fixture graphs.** Repeated eigenvalues of the ICAR precision
+(gap < 1e-9 relative): 8x8 grid **31 of 64**, 9x9 grid **39 of 81**.
+
+**The realisation was basis-dependent.** Rotating inside the repeated blocks
+gives an exact eigendecomposition of the same `Q` (residual 5.1e-15, against
+5.3e-15 for the original). Same seed, two bases:
+
+| | eigen draw | Cholesky draw |
+|---|---|---|
+| `cor(f_basisA, f_basisB)` | **-0.0137** | **+1.0000** |
+| via `MASS::mvrnorm` (nmix route) | +0.1363 | -- |
+| `sd` each side | 0.9352 / 0.9352 | -- |
+
+**The Cholesky replacement is the same distribution** (9x9 graph, 200k draws):
+empirical covariance vs the centred `Q^+` off by 0.0045 (eigen) / 0.0063 (chol),
+Monte Carlo error; geometric-mean marginal SD target 0.791238, eigen 0.791519,
+chol 0.791398.
+
+**It was not the fit.** `ms_occu_cover` BYM2 fixture, Windows: joint Hessian min
+eigenvalue +1.20 against max 2.6e4 over all 15 EM iterations with `chol()`
+succeeding at eps = 0 every time; the phi profile unimodal at every M-step with
+`optimize()` matching a 960-point grid argmax to 4 dp; the EOF warm start's
+leading singular value clearing the second by 13% and unmoved (`|cor|` 1.000000,
+min over 200) by perturbations at 1e-15; the inner `optim(BFGS)` returning
+convergence 0 at 127 gradient evaluations against its 400 cap. Perturbing the
+objective and gradient by a relative 1e-15 -- the size of a BLAS reordering --
+moves `phi_w` from 0.756105 to 0.758952 / 0.758586, a 0.003 move. The nmix BYM2
+fit does not move at all: `scale_factor` 0.604775456220684, and perturbing it by
+1e-15, 1e-12, 1e-9 and 1e-6 leaves the slope error at 0.00605, the winning cell
+at (sigma 0.866, rho 0.3) and its weight at 0.2379.
+
+### Seed counts behind the two multi-seed assertions
+
+Both thresholds were tuned to one realisation of an arbitrary eigenbasis, and
+the basis pinning is what hid how seed-fragile they were.
+
+**`test-occu-cover-pos-field.R`**, cover-arm field SD, truth 0.6, 40 seeds:
+median / mean 0.5480, sd 0.0932, min 0.3315, max 1.0324, median bias **-8.7%**;
+quantiles (0, .05, .25, .5, .75, .95, 1) = 0.332, 0.441, 0.546, 0.548, 0.550,
+0.598, 1.032. **2 of 40** outside the asserted band (0.4, 0.85). Quartiles span
+0.004, so the median over 6 seeds is stable; `min`/`max` over 6 held with
+probability 0.95^6 ~ 0.735, i.e. a ~26% failure rate on any platform. Band kept,
+scored on the median; per-seed guard (0.1, 2.0) sits clear of the measured
+extremes.
+
+**`test-ms-occu-cover-spatial.R`** K = 2, `cor(F_hat, F_true)`, 12 seeds:
+
+```
+2024 0.6481 | 77 0.5365 | 1 0.5010 | 2 0.5532 | 3 0.6244 | 11 0.6348
+  42 0.7110 | 101 0.7312 | 202 0.7890 | 303 0.8107 | 404 0.8432 | 505 0.5996
+mean 0.6652  median 0.6414  sd 0.1120  min 0.5010  max 0.8432
+```
+
+**4 of 12 below the asserted 0.6** -- the threshold sits inside the
+distribution, so asserting it on each of two seeds held with probability near
+0.67^2 ~ 0.45. Scored on the MEAN, not the median: the spread is symmetric with
+no outliers (0.501 to 0.843), which makes the mean's standard error the tighter
+statistic -- 0.112/sqrt(12) = 0.032, clearing 0.6 by ~2 SE, where the median's
+1.253 sd/sqrt(n) = 0.040 clears it by only ~1. (The pos-field case is the
+opposite shape -- a tight core with rare escapees -- and takes the median.)
+12 seeds where the block ran 2, so the block costs ~6x its old wall time.

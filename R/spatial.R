@@ -151,6 +151,37 @@ csr_to_adjacency <- function(csr, n) {
 # call rather than inferred from which kernel it reaches.
 .bym2_engine_scale <- function(s) 1 / sqrt(s)
 
+# Unit-scale realisations of the improper ICAR field on a graph: f ~ N(0, Q^+)
+# on the sum-to-zero space, divided by sqrt(scale_q) so the geometric-mean
+# marginal SD is 1 -- the Sorbye-Rue convention the fitters and every
+# simulate_* entry share. Returns an [n_nodes x n_draw] matrix. `Q` and
+# `scale_q` are passed in because every call site already holds them.
+#
+# The draw goes through the Cholesky of Q + 11'/N, NOT an eigenbasis of Q. Both
+# give the same distribution, but a lattice Q has repeated eigenvalues in bulk
+# (31 of 64 on an 8x8 grid, 39 of 81 on a 9x9), and inside a repeated block the
+# eigenvector basis is fixed only up to an orthogonal rotation that no LAPACK
+# build is obliged to resolve the same way. An eigen draw therefore makes the
+# realisation, at a FIXED seed, a property of the linear-algebra library rather
+# than of the seed: two exact eigendecompositions of the same Q give fields
+# correlating at -0.01. That is what made three areal fixtures report different
+# answers on the Linux runner than here, on nominally the same data (#279).
+#
+# chol() of a positive-definite matrix is unique, so this construction has no
+# such freedom. Q + 11'/N is positive definite on a connected graph, and its
+# inverse agrees with Q^+ on the sum-to-zero space that the centring projects
+# onto. It is the construction the car_proper branch of
+# simulate_ms_occu_cover_spatial() already used.
+.tobs_draw_icar_unit <- function(Q, scale_q, n_draw = 1L) {
+  N  <- nrow(Q)
+  Rc <- chol(Q + matrix(1 / N, N, N))
+  out <- vapply(seq_len(n_draw), function(i) {
+    f <- backsolve(Rc, stats::rnorm(N))
+    (f - mean(f)) / sqrt(scale_q)
+  }, numeric(N))
+  matrix(out, N, as.integer(n_draw))
+}
+
 # Resolve the scale factor at an areal-BYM2 fitter door: compute it from the
 # graph when the caller left it out, validate whatever came in. Both count
 # fitters (nmix, removal) go through here, so a missing argument means the same
