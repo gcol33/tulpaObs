@@ -251,6 +251,83 @@ sampled intervals, which is the like-for-like check; the shipped gate is coverag
 of the TRUTH, since agreeing with the deterministic backend is the circularity
 #204 exists to remove.
 
+### Re-measured over 40 seeds after the Cholesky field draw (#279)
+
+`dev_notes/probe_ocsn_hyper.R`, the same fixture and controls, seeds 7001-7040 on
+both field types, at the shipped `adapt.delta = 0.99` for this path. The
+simulator's ICAR draw changed in 8c67903, so these are different realisations of
+the same truth at the same seeds.
+
+| field | n | mean alpha | \|err\| | mean field_sd | \|err\| | median field_sd | alpha cov | field_sd cov | div | s / fit |
+|---|---|---|---|---|---|---|---|---|---|---|
+| icar | 12 | 0.974 | 0.026 | 1.067 | 0.367 | 1.009 | 1.00 | 1.00 | 0 | 47 |
+| icar | 20 | 1.062 | 0.062 | 0.940 | 0.240 | 0.870 | 1.00 | 1.00 | 0 | 46 |
+| icar | 40 | 1.095 | 0.095 | 0.933 | 0.233 | 0.853 | 0.97 | 0.97 | 0 | 43 |
+| car_proper | 12 | 0.964 | 0.036 | 1.166 | **0.466** | 1.108 | 1.00 | 1.00 | 0 | 63 |
+| car_proper | 20 | 1.053 | 0.053 | 1.042 | 0.342 | 0.967 | 1.00 | 1.00 | 0 | 62 |
+| car_proper | 40 | 1.076 | 0.076 | 1.011 | 0.311 | 0.935 | 0.97 | 0.97 | 0 | 60 |
+
+The bold cell is the CI failure: `expect_lt(abs(mean(fsd_mean[ok]) - sig_true),
+0.45)` at 12 seeds reads 0.466 here and 0.470 on the Linux runner. It reproduces
+locally and is deterministic, so it is a property of a code state, not a flake.
+
+**The band was not wrong; 12 seeds was too few for it.** `field_sd` is weakly
+identified at 64 binary occupancy sites: a single fit's posterior mean ranges
+0.45 to 1.87 with a per-seed SD of 0.344 (icar) / 0.362 (car_proper), so the mean
+over 12 seeds carries a standard error of 0.099 / 0.105 and over 20 seeds 0.077 /
+0.081. The old gate sat about 1.3 SE above the car_proper bias, which the fixed
+seed set can cross on its own: seeds 7008-7013 are a run of high draws (1.51,
+1.30, 1.44, 1.50, 1.58, 1.12 against a 40-seed mean of 1.011). Bootstrapping the
+40 measured values, a random 12-seed set clears the 0.45 band 90% of the time and
+a 20-seed set 95%; on the actual seed prefix the value is 0.342 at 20 and 0.298
+at 30. The fix raises `n_seeds` to 20 and leaves both bands where the earlier
+measurement put them.
+
+Robustifying the summary instead does NOT work, and was measured rather than
+assumed: an across-seed median of the per-fit medians is *less* stable at this
+size (bootstrap 0.80 at n = 12 for car_proper against 0.90 for the mean form),
+because the committed seed set is extreme on every summary of it.
+
+Two things changed between the table above and this one -- the field realisations
+(8c67903) and `adapt.delta` (0.9 then, 0.99 now, the step-size fix in the section
+below) -- so the two are not like-for-like and the agreement between the old
+12-seed means (0.943 / 1.012) and the new 40-seed means (0.933 / 1.011) is
+recorded as descriptive, not as evidence that the estimator is unchanged. The
+divergences that motivated that section are gone at the shipped setting: 0 across
+all 80 fits, against 68 (max 13) for car_proper at 0.9.
+
+The interval coverage, which is the calibration claim the block exists to make,
+is unaffected throughout: 1.00 on both hypers and both field types at 12 and 20
+seeds, 0.97 at 40.
+
+### The smoke block in the same file is fragile the same way
+
+`dev_notes/probe_ocsn_smoke.R`, seeds 5001-5040, beta cover arm at phi = 20, the
+block's own controls (1200 kept after 800 warmup, 1 chain), 47 s per fit.
+
+| n | worst of beta 1-6 | max bias 1-6 (gate 0.35) | bias log_phi (gate 0.45) |
+|---|---|---|---|
+| 4 | psi_occ_cov1 | 0.161 | 0.080 |
+| 8 | psi_(Intercept) | 0.096 | 0.050 |
+| 12 | psi_occ_cov1 | 0.068 | 0.072 |
+| 20 | psi_occ_cov1 | 0.119 | 0.040 |
+| 40 | psi_occ_cov1 | 0.104 | 0.012 |
+
+Field cor 0.775 mean / 0.510 min over 40 seeds, 2 divergences in total.
+
+This block averages 4 seeds, and the occupancy coefficients carry a per-seed SD
+of 0.35 (`psi_(Intercept)`) and 0.35 (`psi_occ_cov1`) against detection at 0.16
+and cover at 0.06-0.10. A 4-seed mean therefore carries a standard error of 0.18
+against a 0.35 band -- one standard error of headroom, and it is the assertion
+that failed on the pre-8c67903 draws (run 32672430330, `all(bias[1:6] < 0.35)`)
+while the field_sd band above passed, the two swapping sides when the
+realisations moved. Raised to 12 seeds, where the standard error is 0.10 and the
+measured worst coefficient is 0.068. Bands unchanged.
+
+Together the two changes add about 20 minutes to this file (14 for the hyper
+block, 6 for the smoke block) against a shard that has run 2.5-3.4 h under a
+350-minute cap.
+
 ### car_proper divergences are a step-size artifact, and adapt.delta clears them
 
 `Q(rho) = D - rho W` approaches the intrinsic (rank-deficient) limit as rho -> 1,

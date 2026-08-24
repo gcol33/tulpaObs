@@ -519,7 +519,12 @@ test_that("occu_cover spatial NUTS recovers betas + field (beta arm, smoke)", {
   skip_on_cran()
   skip_if_fast()
 
-  n_seeds <- 4L
+  # The occupancy coefficients carry a per-seed SD of about 0.35 at 64 cells,
+  # so a 4-seed mean would carry a standard error of 0.18 against a 0.35 band:
+  # one standard error of headroom, which a seed set can cross on its own. At 12
+  # seeds the standard error is 0.10 and the measured worst coefficient is 0.068.
+  # See NOTES_measurements.md.
+  n_seeds <- 12L
   side <- 8L; J <- 5L
   est <- matrix(NA_real_, n_seeds, 7L)
   fcor <- div <- rep(NA_real_, n_seeds)
@@ -618,7 +623,15 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
   #             itself is NOT the comparable quantity: icar, bym2 and car_proper
   #             normalise their precisions differently, so the same field has
   #             three different sigmas and one field_sd.
-  n_seeds <- 12L
+  #
+  # 20 seeds, not 12. `field_sd` is weakly identified at 64 binary occupancy
+  # sites -- a single fit's posterior mean ranges 0.45 to 1.87 over 40 seeds,
+  # with a per-seed SD of about 0.35 -- so the mean over 12 seeds carries one
+  # standard error of about 0.10 and which side of a band it lands on is partly
+  # a property of the seed set. Seeds 7008-7013 happen to be a run of high draws.
+  # Measured over 40 seeds in NOTES_measurements.md; the bands below are
+  # unchanged, only the sample size the mean is taken over.
+  n_seeds <- 20L
   side <- 8L; J <- 5L
   sig_true <- 0.7; alpha_true <- 1.0
   for (ty in c("icar", "car_proper")) {
@@ -650,10 +663,13 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
     expect_gte(mean(fsd_lo[ok] <= sig_true & sig_true <= fsd_hi[ok]), 0.85)
     # A one-sided shift is a property of the MEAN over seeds, so it is asserted
     # there and not per fit. Both gates are set from the measurement, not chosen:
-    # alpha lands within 0.06 of truth, field_sd about 0.25 high (the posterior of
-    # a positive variance component at 64 binary sites is right-skewed, so its
-    # MEAN sits above the bulk -- `fit$nuts$hyper_median` is the summary to quote).
-    # See NOTES_measurements.md.
+    # over 20 seeds alpha lands within 0.06 of truth and field_sd 0.24 (icar) /
+    # 0.34 (car_proper) high. The field_sd shift is expected and not a defect:
+    # the posterior of a positive variance component at 64 binary sites is
+    # right-skewed, so its MEAN sits above the bulk -- `fit$nuts$hyper_median`
+    # is the summary to quote against a truth, and the calibration claim proper
+    # is the interval coverage asserted just above, which measures 1.00 on both
+    # field types. See NOTES_measurements.md.
     expect_lt(abs(mean(a_mean[ok]) - alpha_true), 0.35)
     expect_lt(abs(mean(fsd_mean[ok]) - sig_true), 0.45)
   }
