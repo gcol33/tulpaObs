@@ -19,7 +19,7 @@ Imports:
     Matrix,
     methods,
     Rcpp (>= 1.0.12),
-    tulpa (>= 0.1.19),
+    tulpa (>= 0.1.20),
     tulpaMesh (>= 0.1.3),
     parallel,
     loo (>= 2.7.0)
@@ -45,7 +45,7 @@ LinkingTo:
     RcppEigen,
     tulpa
 Remotes:
-    gcol33/tulpa@v0.1.19
+    gcol33/tulpa@v0.1.20
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, dyn_abun, distance, fp_occu, method-gibbs-recovery, re-laplace-recovery,
