@@ -1390,3 +1390,54 @@ untouched at 0.55 (20-seed mean 0.786 post-fix, 0.841 pre-fix).
 The parent/nested gap (~0.79 vs ~0.52) is information content, not a fitting
 defect: at `K = 3` sites per region a nested group carries ~4.5 sites of binary
 detections and its BLUP is shrunk hard. Estimator left alone.
+
+## `occu_multiscale_cover()` NUTS coverage, and why the assertion was pooled
+
+Behind `test-occu-multiscale-cover-nuts.R` (3). Fixture as committed: `n_cells =
+70`, `plots_per_cell = 4`, `visits_per_plot = 4`, `positive = "beta"`, `phi = 12`,
+**`sigma = 0`** (no areal field in the truth), `seed = 600 + s`; NUTS `n.iter =
+600`, `n.warmup = 600`, `n.chains = 2`, `seed = 100 + s`. 40 seeds, 0 errors,
+0 divergences, 4.7 s per seed (one NUTS fit plus one Laplace fit), tulpaObs
+47b728f / tulpa 0.1.20.
+
+| coef | truth | bias | mean se | sd(est) | sd/se | coverage |
+|---|---|---|---|---|---|---|
+| `psi_x_cell` | 0.600 | -0.044 | 0.297 | 0.331 | 1.11 | **0.850** |
+| `psi_(Intercept)` | 0.200 | +0.085 | 0.277 | 0.267 | 0.97 | 0.925 |
+| `pos_(Intercept)` | -0.847 | +0.003 | 0.042 | 0.040 | 0.96 | 0.950 |
+| `pos_x_cov` | -0.300 | +0.003 | 0.042 | 0.042 | 1.01 | 0.950 |
+| `theta_(Intercept)` | 0.500 | +0.017 | 0.211 | 0.236 | 1.12 | 0.950 |
+| `p_(Intercept)` | 0.300 | -0.033 | 0.119 | 0.104 | 0.88 | 0.975 |
+| `p_x_pdet` | -0.400 | +0.009 | 0.121 | 0.097 | 0.80 | 0.975 |
+| `theta_x_plot` | 0.400 | +0.029 | 0.199 | 0.204 | 1.03 | 0.975 |
+
+Pooled 302/320 = **0.944**, exact 95% CI [0.913, 0.966], which brackets nominal.
+Every `sd(est)/mean(se)` lies in [0.80, 1.12], so no arm carries an SE miss.
+
+**The old `min(cover) >= 0.80` at 8 seeds was a coin flip.** A per-coefficient
+rate over 8 seeds is a small binomial and the minimum over eight of them
+compounds; at the coverages above
+
+```
+P(pass)  n= 8 seeds  0.464     <- the committed form
+         n=20        0.812
+         n=40        0.862
+         n=60        0.893
+```
+
+so raising seeds does not fix that form. It failed when 8c67903 moved the
+simulator's RNG stream by one normal (`rnorm(sum(keep))`, N-1 = 69, to
+`rnorm(N)` = 70): the field is discarded at `sigma = 0` but the stream position
+is not, so the fixture landed on a different draw and the coin came up the other
+way. Not a regression; the "42 files re-draw their data" cost of #279.
+
+Replaced by pooled coverage `>= 0.85` (false-failure rate ~0 at every size tried)
+plus a per-coefficient floor of 0.60 as a gross-regression guard (false-failure
+rate 3e-5 at 40 seeds), and `n_seeds` 8 -> 40. Margins on the other assertions in
+the block at 40 seeds: `max|bias|` 0.085 against 0.30, `max|NUTS - Laplace|`
+0.042 against 0.15, divergences 0 against 5.
+
+`psi_x_cell` at 0.850 (34/40, CI [0.702, 0.943]) is genuinely under nominal --
+0.95 is excluded, 0.80 is not. It is the cell-level occupancy slope competing
+with the one-node-per-cell field the model fits whether or not the truth carries
+one, the same confounding spPGOcc documents. Reported, not tuned away.

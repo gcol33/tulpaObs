@@ -110,7 +110,8 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
   tv <- c(truth$beta_psi, truth$beta_theta, truth$beta_p, truth$beta_pos)
   nm <- c("psi_(Intercept)", "psi_x_cell", "theta_(Intercept)", "theta_x_plot",
           "p_(Intercept)", "p_x_pdet", "pos_(Intercept)", "pos_x_cov")
-  n_seeds <- 8L
+  # 40 seeds at a measured 4.7 s per seed (one NUTS fit plus one Laplace fit).
+  n_seeds <- 40L
 
   est <- matrix(NA_real_, n_seeds, length(nm), dimnames = list(NULL, nm))
   se  <- matrix(NA_real_, n_seeds, length(nm), dimnames = list(NULL, nm))
@@ -149,20 +150,36 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
   }
 
   ok <- stats::complete.cases(est)
-  expect_gte(sum(ok), 6L)
+  expect_gte(sum(ok), 30L)
 
   # Point recovery of every fixed-effect coefficient (mean over seeds).
   bias <- colMeans(est[ok, , drop = FALSE]) - tv
   expect_true(all(abs(bias) < 0.3),
               info = paste(round(bias, 3), collapse = " | "))
 
-  # 95% Wald CI coverage of the coefficients.
+  # 95% Wald CI coverage of the coefficients, scored POOLED over coefficients
+  # rather than as a minimum. A per-coefficient rate over this many seeds is a
+  # small binomial, and taking the minimum over eight of them compounds: at the
+  # measured coverages a `min(cover) >= 0.80` form over 8 seeds passes only 46%
+  # of the time, so which side of it a run lands on is a property of the draw
+  # rather than of the estimator. Pooling is stable at every size tried
+  # (NOTES_measurements.md).
   cover <- vapply(seq_along(nm), function(j) {
     lo <- est[ok, j] - 1.96 * se[ok, j]
     hi <- est[ok, j] + 1.96 * se[ok, j]
     mean(tv[j] >= lo & tv[j] <= hi)
   }, numeric(1))
-  expect_gte(min(cover), 0.80)
+  pooled <- mean(vapply(seq_along(nm), function(j)
+    sum(tv[j] >= est[ok, j] - 1.96 * se[ok, j] &
+        tv[j] <= est[ok, j] + 1.96 * se[ok, j]), numeric(1))) / sum(ok)
+  expect_gte(pooled, 0.85)
+
+  # Per-coefficient floor as a gross-regression guard only, NOT a calibration
+  # claim. The weakest arm is the cell-level occupancy slope, which competes
+  # with the one-node-per-cell field the model fits whether or not the truth
+  # carries one; it measures 0.85 over 40 seeds, 95% CI [0.702, 0.943], so it is
+  # genuinely under nominal and comfortably over this floor.
+  expect_gte(min(cover), 0.60)
 
   # NUTS posterior mean tracks the Laplace mode (same closed-form marginal).
   expect_lt(max(abs(colMeans(est[ok, , drop = FALSE]) -
