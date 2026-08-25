@@ -162,11 +162,11 @@ side alone: a low recovered SD buys a proportionally narrower interval
 around an error that did not shrink with it. Both halves moving together is
 what the 8-and-36 pool showed and what is absent there. The \code{mu_log_r}
 interval at that group count is separately about 1.28x too narrow whatever
-the recovered SD (gcol33/tulpaObs#280).
+the recovered SD.
 
 A fit now says whether its dispersion variance is distinguishable from zero
 at all: \code{fit$ms_dispersion$sigma_log_r_boundary} carries the boundary test
-and a fit that fails it warns (gcol33/tulpaObs#250).
+and a fit that fails it warns.
 
 What the penalty reaches on this block appears to be the boundary rather
 than the calibration. Measured on 20 seeds of that fixture at 8 species with
