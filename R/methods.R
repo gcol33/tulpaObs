@@ -983,7 +983,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   # "sigma" (detection scale); route before the occupancy match.arg(type).
   if (identical(object$model$model_type, "distance")) {
     dist_type <- if (missing(type) || length(type) > 1L) "lambda" else type
-    return(.tobs_predict_distance(object, X.0 = X.0, type = dist_type))
+    return(.tobs_predict_distance(object, X.0 = X.0, type = dist_type,
+                                  quantiles = quantiles))
   }
   # False-positive occupancy: response types are "psi" (occupancy) and "p11"
   # (true detection); route before the standard occupancy match.arg(type).
@@ -991,14 +992,16 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     fp_type <- if (missing(type) || length(type) > 1L) "psi" else type
     if (identical(fp_type, "occupancy")) fp_type <- "psi"
     if (identical(fp_type, "detection")) fp_type <- "p11"
-    return(.tobs_predict_fp_occu(object, X.0 = X.0, type = fp_type))
+    return(.tobs_predict_fp_occu(object, X.0 = X.0, type = fp_type,
+                                 quantiles = quantiles))
   }
   # Open N-mixture: response types are "lambda" (initial abundance) and "gamma"
   # (recruitment); route before the standard occupancy match.arg(type).
   if (identical(object$model$model_type, "dyn_abun")) {
     da_type <- if (missing(type) || length(type) > 1L) "lambda" else type
     if (identical(da_type, "abundance")) da_type <- "lambda"
-    return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type))
+    return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type,
+                                  quantiles = quantiles))
   }
   # Families predicting from `newdata` with their own response types, all
   # through `.tobs_predict_<model_type>(object, newdata =, type =)`. Each

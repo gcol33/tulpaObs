@@ -12,8 +12,11 @@
 \item{em_result}{The EM-Laplace return list with \verb{$fits$occ/det/col/ext}
 and \verb{$weights} (n_sites x n_seasons matrix).}
 
-\item{spatial}{Optional \code{tobs_spatial}. Currently unsupported (returns
-\code{valid = FALSE}); the dyn_occu builder does not accept spatial.}
+\item{spatial}{Optional \code{tobs_spatial}. A state-arm field reaches this
+evaluator (\code{.validate_spatial_laplace()} blocks only a detection-arm SPDE
+for the dynamic model), and the correction is intentionally NOT applied
+under one -- see \code{.sla_spatial_reason()}, the same decision the single-
+season and integrated paths take. Returns \code{valid = FALSE}.}
 
 \item{prior_spec}{Optional prior spec; passed to the init-block Louis
 info so the penalty is included.}

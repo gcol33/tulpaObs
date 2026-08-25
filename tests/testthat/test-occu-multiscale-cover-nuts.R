@@ -19,26 +19,8 @@
 # =============================================================================
 
 
-# Build a bound multiscale model from a simulate_occu_multiscale_cover() output,
-# mirroring the dispatcher (.dispatch_occu_multiscale_cover) so the gradient
-# checks see exactly the model the NUTS fitter does.
-.omcn_model <- function(sim, positive,
-                        occ = ~ x_cell, theta = ~ x_plot,
-                        det = ~ x_pdet, pos = ~ x_cov) {
-  occ_f <- stats::as.formula(
-    paste(deparse(occ), "+ icar(graph = sim$adj, group_var = \"cell\")"))
-  si <- tulpaObs:::.occu_cover_spatial_fields(occ_f, sim$data)
-  vd_det <- tulpaObs:::.normalize_visits(NULL, det, nrow(sim$y), ncol(sim$y))
-  vd_pos <- tulpaObs:::.normalize_visits(NULL, pos, nrow(sim$y), ncol(sim$y))
-  tulpaObs:::.tobs_build_occu_multiscale_cover(
-    occ_formula = si$fe, theta_formula = theta,
-    det_formula = vd_det$det_formula, pos_formula = vd_pos$det_formula,
-    data = sim$data, y = sim$y, y_pos = sim$y_pos,
-    plot_cell = as.integer(sim$data[[si$group_var]]),
-    n_cells = nrow(si$fields[[1L]]$graph), positive = positive,
-    det_visit_formula = vd_det$det_visit_formula, det_visit_data = vd_det$visits,
-    pos_visit_formula = vd_pos$det_visit_formula, pos_visit_data = vd_pos$visits)
-}
+# The bound model the gradient checks see is the one the NUTS fitter does:
+# .omc_bind_model (helper-occu-multiscale-cover.R) mirrors the dispatcher.
 
 .omcn_fd_grad <- function(f, theta, h = 1e-6) {
   vapply(seq_along(theta), function(j) {
@@ -60,7 +42,7 @@ test_that("occu_multiscale_cover NUTS C++ FullGradFn matches the R oracle", {
                  else c(log(0.10), -0.4),
       positive = positive, phi = if (positive == "beta") 12 else 0.35,
       sigma = 0, alpha = 0, seed = if (positive == "beta") 22L else 11L)
-    model <- .omcn_model(sim, positive)
+    model <- .omc_bind_model(sim, positive)
     lay   <- tulpaObs:::.tobs_occu_mscale_cover_nuts_layout(model)
     spec  <- tulpaObs:::.tobs_occu_mscale_cover_nuts_spec(model)
 

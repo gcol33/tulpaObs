@@ -195,6 +195,72 @@ t_occu <- function() {
     extra = list(temporal_field = eta_mean))
 }
 
+# ---------------------------------------------------------------------------
+# S3 helpers (routed to from methods.R by model_type == "t_occu")
+# ---------------------------------------------------------------------------
+
+# fitted() for t_occu(): per-(site, season) psi from the fixed occupancy design
+# plus the AR1 year effect (fit$temporal_field, one value per season);
+# detection p is per-SITE (t_occu()'s detection design is site-level,
+# broadcast across every season -- see .tobs_build_t_occu() above). With NO
+# colonization / extinction transition the seasons are conditionally
+# independent given psi, so z is the single-season Bayes posterior
+# P(z=1 | y) applied per season: certain when the site was ever detected that
+# season, else psi weighted by the non-detection likelihood over that
+# season's visits (a season with zero visits falls back to psi, the prior).
+.tobs_fitted_t_occu <- function(object) {
+  model <- object$model; means <- object$means
+  pi_list <- model$process_info
+  p_psi <- pi_list[[1L]]$p; p_p <- pi_list[[2L]]$p
+  n_sites <- model$n_sites; n_seasons <- model$n_seasons
+  beta_psi <- means[seq_len(p_psi)]
+  beta_p   <- means[p_psi + seq_len(p_p)]
+  eta_t <- object$temporal_field %||% rep(0, n_seasons)
+  eta_psi <- as.vector(model$X_occ %*% beta_psi)          # [n_sites]
+  psi <- plogis(outer(eta_psi, eta_t, "+"))                # [n_sites x n_seasons]
+  p   <- plogis(as.vector(model$X_det %*% beta_p))         # [n_sites]
+
+  nvis <- model$nvis; anydet <- model$anydet
+  z <- matrix(NA_real_, n_sites, n_seasons)
+  for (t in seq_len(n_seasons)) {
+    prod_1mp <- (1 - p)^nvis[, t]
+    denom <- psi[, t] * prod_1mp + (1 - psi[, t])
+    z[, t] <- ifelse(anydet[, t], 1, psi[, t] * prod_1mp / denom)
+  }
+  list(psi = psi, p = p, z = z)
+}
+
+# residuals() for t_occu(): the per-(site, season) smoothed state posterior
+# against that season's ever-detected indicator -- the same construction
+# .tobs_residuals_dynamic() uses for dyn_occu(), minus the colonization /
+# extinction smoothing there is no transition to smooth across here -- at site
+# level, and each visit's detection against z * p (p broadcast across a
+# site's seasons) at visit level.
+.tobs_residuals_t_occu <- function(object, type) {
+  model <- object$model
+  fv <- .tobs_fitted_t_occu(object)
+  y  <- model$y
+  n_sites <- model$n_sites; n_seasons <- model$n_seasons; mv <- model$max_visits
+
+  z_obs <- matrix(NA_real_, n_sites, n_seasons)
+  for (i in seq_len(n_sites)) for (t in seq_len(n_seasons)) {
+    raw <- y[i, t, ]; raw <- raw[!is.na(raw) & raw >= 0]
+    if (length(raw)) z_obs[i, t] <- as.numeric(any(raw == 1))
+  }
+  occ_resid <- .tobs_resid_binary(z_obs, fv$z, type)
+
+  det_resid <- array(NA_real_, dim = c(n_sites, n_seasons, mv))
+  for (t in seq_len(n_seasons)) {
+    yt <- y[, t, ]
+    seen <- !is.na(yt) & yt >= 0
+    expected <- matrix(fv$z[, t] * fv$p, n_sites, mv)
+    dr <- matrix(NA_real_, n_sites, mv)
+    dr[seen] <- .tobs_resid_binary(yt[seen], expected[seen], type)
+    det_resid[, t, ] <- dr
+  }
+  list(occ = occ_resid, det = det_resid)
+}
+
 .dispatch_t_occu <- function(formula, data, family, detection, y, visits,
                              engine, priors, control,
                              approx = "gaussian_laplace",

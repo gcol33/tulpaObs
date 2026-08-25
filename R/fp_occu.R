@@ -607,11 +607,14 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   list(occ = NULL, det = det)
 }
 
-# predict() for fp_occu: occupancy psi (default) or true detection p11 at new X.
-.tobs_predict_fp_occu <- function(object, X.0 = NULL, type = c("psi", "p11")) {
-  type  <- match.arg(type)
-  k <- if (identical(type, "psi")) 1L else 2L
-  stats::plogis(.tobs_predict_eta(object, X.0, k))
+# predict() for fp_occu: occupancy psi (default) or true detection p11 at new
+# X. NULL X.0 returns fitted(); a design matrix returns a mean/sd/quantile
+# table over the posterior draws (.tobs_count_arm_predict(), R/field_offset.R).
+.tobs_predict_fp_occu <- function(object, X.0 = NULL, type = c("psi", "p11"),
+                                  quantiles = c(0.025, 0.5, 0.975)) {
+  type <- match.arg(type)
+  .tobs_count_arm_predict(object, X.0, if (identical(type, "psi")) 1L else 2L,
+                          quantiles)
 }
 
 

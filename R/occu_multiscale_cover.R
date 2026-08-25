@@ -53,24 +53,12 @@
   }
   y_int[!valid] <- 0L
 
-  y_pos_num <- matrix(as.numeric(y_pos), n_plots, max_visits)
-  pos_mask  <- valid & (y_int == 1L)
-  if (any(!is.finite(y_pos_num[pos_mask]))) {
-    stop("y_pos must be finite at every detected visit (y == 1).", call. = FALSE)
-  }
-  if (identical(positive, "beta")) {
-    if (any(pos_mask & (y_pos_num <= 0 | y_pos_num >= 1))) {
-      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit.",
-           call. = FALSE)
-    }
-  } else if (identical(positive, "lognormal")) {
-    if (any(pos_mask & (y_pos_num <= 0))) {
-      stop("Lognormal positive arm requires y_pos > 0 at every detected visit.",
-           call. = FALSE)
-    }
-  }
-  # gaussian: any finite real is in support (checked finite above).
-  y_pos_num[!pos_mask] <- 0
+  # Cover values through the same validator the two-level family uses: a
+  # detected visit whose cover was not recorded is carried as NA and drops only
+  # its cover factor (cover missing at random); undetected visits zero-fill.
+  y_pos_num <- .occu_cover_validate_pos_values(
+    matrix(as.numeric(y_pos), n_plots, max_visits),
+    valid & (y_int == 1L), positive)
 
   # The state-process formula's FE part is cell-level. Build it over plots, then
   # aggregate to one row per cell (the first plot of each cell). Cells with no
@@ -261,16 +249,18 @@
   det_v   <- valid & (y == 1L)
   log_hdet <- ifelse(valid, ifelse(y == 1L, log_p, log_1mp), 0)
 
-  # Cover density at detected visits only.
+  # Cover density at detected visits with an observed cover: a detected visit
+  # carrying NA cover keeps its detection factor and drops only this one.
+  cov_v    <- det_v & is.finite(ypos)
   cover_lf <- matrix(0, n_plots, J)
-  if (any(det_v)) {
-    ep <- eta_pos[det_v]; cv <- ypos[det_v]
+  if (any(cov_v)) {
+    ep <- eta_pos[cov_v]; cv <- ypos[cov_v]
     # One boundary policy for the positive arm, shared with the coupling
     # kernel and the samplers: `.tobs_log_safe` on every log, no clamp on the
     # RESPONSE. Nudging the cover to 1e-9 evaluated a density at a value the
     # data does not carry; the shared policy keeps the density finite at a
     # cover of exactly 0 or 1 and leaves the response alone.
-    cover_lf[det_v] <- .occu_cover_pos_logdens(
+    cover_lf[cov_v] <- .occu_cover_pos_logdens(
       cv, ep, exp(par[idx$disp]),
       if (is_beta) "beta" else if (is_gauss) "gaussian" else "lognormal")
   }
@@ -393,6 +383,7 @@
   start[idx$p[1]]     <- 0
   is_gauss <- identical(model$positive, "gaussian")
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  pos_vals <- pos_vals[is.finite(pos_vals)]
   if (length(pos_vals) > 0L) {
     if (is_beta) {
       start[idx$pos[1]] <- stats::qlogis(min(max(mean(pos_vals), 1e-3), 1 - 1e-3))

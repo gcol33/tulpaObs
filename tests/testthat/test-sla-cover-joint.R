@@ -157,14 +157,16 @@ test_that("SLA joint fit exposes skew + draws fields", {
     expect_equal(length(fit$skew_pos), p_pos)
     expect_true(all(is.finite(fit$skew_pos)))
 
-    # Draws matrices: 1000 rows x p_arm columns.
-    expect_true(is.matrix(fit$draws_occ))
-    expect_equal(nrow(fit$draws_occ), 1000L)
-    expect_equal(ncol(fit$draws_occ), p_occ)
+    # The grid-combined marginals the gamma corrects, one pair per arm, in the
+    # joint latent's own coordinates -- what .tobs_cover_eta_draws() reshapes
+    # the posterior draw bundle against.
+    expect_equal(length(fit$sla_ref$occ$mean), p_occ)
+    expect_equal(length(fit$sla_ref$occ$sd), p_occ)
+    expect_true(all(is.finite(fit$sla_ref$occ$sd)))
 
-    expect_true(is.matrix(fit$draws_pos))
-    expect_equal(nrow(fit$draws_pos), 1000L)
-    expect_equal(ncol(fit$draws_pos), p_pos)
+    expect_equal(length(fit$sla_ref$pos$mean), p_pos)
+    expect_equal(length(fit$sla_ref$pos$sd), p_pos)
+    expect_true(all(is.finite(fit$sla_ref$pos$sd)))
 })
 
 
@@ -192,12 +194,11 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
     ))
 
     # Match the standalone-Laplace convention (decode_cover_hurdle): the
-    # off-mode sets sla_status = "off" and leaves skew / draws as NULL.
+    # off-mode sets sla_status = "off" and leaves the skew fields NULL.
     expect_identical(fit$sla_status %||% "off", "off")
     expect_null(fit$skew_occ)
     expect_null(fit$skew_pos)
-    expect_null(fit$draws_occ)
-    expect_null(fit$draws_pos)
+    expect_null(fit$sla_ref)
 })
 
 

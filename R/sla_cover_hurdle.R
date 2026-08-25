@@ -39,11 +39,14 @@
 .loglik_cover_occ <- function(beta_occ, enc) {
   y <- enc$occ_data$y
   X <- enc$occ_data$X
-  eta <- as.numeric(X %*% beta_occ)
-  # Bernoulli log-likelihood using log1p for numerical stability.
-  #   y log(p) + (1-y) log(1-p)
-  # = y * eta - log1p(exp(eta))
-  ll <- sum(y * eta - log1p(exp(eta)))
+  eta <- .tobs_clamp_eta(as.numeric(X %*% beta_occ))
+  # Bernoulli log-likelihood:
+  #   y log(p) + (1-y) log(1-p) = y * eta - log(1 + exp(eta))
+  # `.sla_gamma_fd()` steps beta by +-2h along a Sigma column, so eta is
+  # evaluated at displaced coefficients and can saturate the predictor on data
+  # the fitted mode does not; the clamp and the stable log-normalizer keep the
+  # displaced value finite so the finite difference is defined.
+  ll <- sum(y * eta - .tobs_log1pexp(eta))
   ll
 }
 
@@ -64,7 +67,7 @@
   y <- enc$pos_data$y
   X <- enc$pos_data$X
   if (length(y) == 0L) return(0)
-  mu  <- plogis(as.numeric(X %*% beta_pos))
+  mu  <- plogis(.tobs_clamp_eta(as.numeric(X %*% beta_pos)))
   a   <- mu * phi
   b   <- (1 - mu) * phi
   ll <- sum(lgamma(phi) - lgamma(a) - lgamma(b) +
@@ -193,59 +196,4 @@
 
   list(gamma_occ = gamma_occ, gamma_pos = gamma_pos, valid = TRUE,
        reason = "ok")
-}
-
-
-# ---------------------------------------------------------------------------
-# Resample draws on both arms
-#
-# For each cover_fit we keep two parallel sets of pseudo-draws (occ + pos)
-# in `fit$draws_occ` / `fit$draws_pos`. Joint correlations across arms are
-# not modelled (the two arms are independent under the single-Laplace path);
-# joint correlations within each arm are not preserved either (matches the
-# single-season occu SLA behaviour).
-# ---------------------------------------------------------------------------
-
-#' Build SN-resampled per-arm pseudo-draws for a cover hurdle fit
-#'
-#' Returns `list(draws_occ, draws_pos, sla_status)`. If `sla_res$valid`
-#' is `FALSE`, draws fall back to Gaussian samples around the per-arm
-#' MAP +- SE.
-#'
-#' @keywords internal
-.sla_build_cover_hurdle_draws <- function(beta_occ, se_occ,
-                                          beta_pos, se_pos,
-                                          sla_res,
-                                          V_occ = NULL, V_pos = NULL,
-                                          n_pseudo = 1000L) {
-  # Draw each arm from its full per-arm covariance (V_occ / V_pos) so the
-  # coefficient correlation propagates to predicted cover; fall back to the
-  # diagonal of the reported SEs only when the covariance is unavailable.
-  # The subsequent .sla_replace_draws() preserves the joint
-  # rank-correlation while imposing the skew-normal marginals.
-  draw_arm <- function(beta, se, V) {
-    p <- length(beta)
-    if (!is.null(V) && all(dim(as.matrix(V)) == p)) {
-      d <- .rmvn(n_pseudo, beta, (as.matrix(V) + t(as.matrix(V))) / 2)
-    } else {
-      d <- matrix(NA_real_, n_pseudo, p)
-      for (j in seq_len(p)) d[, j] <- rnorm(n_pseudo, beta[j], max(se[j], 1e-4))
-    }
-    colnames(d) <- names(beta)
-    d
-  }
-  draws_occ <- draw_arm(beta_occ, se_occ, V_occ)
-  draws_pos <- draw_arm(beta_pos, se_pos, V_pos)
-
-  if (isTRUE(sla_res$valid)) {
-    draws_occ <- .sla_replace_draws(draws_occ, beta_occ, se_occ,
-                                    sla_res$gamma_occ)
-    draws_pos <- .sla_replace_draws(draws_pos, beta_pos, se_pos,
-                                    sla_res$gamma_pos)
-    sla_status <- "simplified_laplace"
-  } else {
-    sla_status <- paste0("fallback_gaussian (", sla_res$reason, ")")
-  }
-  list(draws_occ = draws_occ, draws_pos = draws_pos,
-       sla_status = sla_status)
 }

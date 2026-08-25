@@ -613,21 +613,6 @@
   rowSums(.tobs_pointwise_loglik(f, n.draws = nrow(Theta)))
 }
 
-# The Poisson / negative-binomial count GLMM has no latent state and so no
-# `simulate()` handler to borrow; its replicate is the response drawn at the
-# fitted mean, which is that handler's whole content for this family.
-.tobs_sbc_replicate_count <- function(f) {
-  m <- f$model
-  p <- m$process_info[[1L]]$p
-  mu <- exp(as.vector(m$X_occ %*% f$draws[1L, seq_len(p)]))
-  switch(m$response,
-         poisson = stats::rpois(length(mu), mu),
-         negbin  = stats::rnbinom(length(mu), mu = mu,
-                                  size = exp(f$draws[1L, p + 1L])),
-         stop("SBC on count() is registered for the poisson and negbin ",
-              "responses; this fit is ", sQuote(m$response), ".",
-              call. = FALSE))
-}
 
 # One registry row. `state` / `det` name the arm formulas in the fitted model,
 # `resp` its response slot, `extra` any further arguments the family's front
@@ -2574,9 +2559,11 @@
   fp_occu       = .tobs_sbc_simple_entry(
     "psi", "p11",
     extra = function(m) list(p10 = m$formulas$p10, certainty = m$formulas$b)),
-  count         = .tobs_sbc_simple_entry(
-    "occ", resp = "y_count", y_vector = TRUE,
-    replicate = .tobs_sbc_replicate_count),
+  # `.tobs_simulate_count()` (R/count_methods.R) is registered as count()'s
+  # `simulate()` handler, so the default replicate (`stats::simulate(f, nsim =
+  # 1L)`, .tobs_sbc_simple_entry()'s fallback) already draws at the sampled
+  # theta row the SBC driver writes into `f$draws`.
+  count         = .tobs_sbc_simple_entry("occ", resp = "y_count", y_vector = TRUE),
   # Independent-observer double_observer(): both p1/p2 read ONE `detection`
   # formula slot (`fit$model$formulas$p`), same shape as every other simple
   # entry's site-level (state, det) pair. The dependent (`type =

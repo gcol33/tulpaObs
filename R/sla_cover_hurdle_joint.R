@@ -100,9 +100,12 @@
     eta_pos <- eta_pos + s_pos_k * field_z[spi_pos]
   }
 
-  # Occurrence Bernoulli (logit link), log1p-stable.
-  y_occ <- enc$occ_data$y
-  ll_occ <- sum(y_occ * eta_occ - log1p(exp(eta_occ)))
+  # Occurrence Bernoulli (logit link). Clamped and evaluated through the
+  # stable log-normalizer: the FD step displaces beta along a Sigma column and
+  # can saturate the predictor, where `log1p(exp(eta))` overflows to Inf.
+  y_occ  <- enc$occ_data$y
+  eta_occ <- .tobs_clamp_eta(eta_occ)
+  ll_occ <- sum(y_occ * eta_occ - .tobs_log1pexp(eta_occ))
 
   # Positive arm. Beta on natural scale, or Gaussian on log y (Jacobian
   # `-log y` is beta-independent; we drop it).
@@ -112,7 +115,7 @@
       0
     } else {
       phi_k <- fit$theta_grid[k, "phi_pos"]
-      mu_pos <- plogis(eta_pos)
+      mu_pos <- plogis(.tobs_clamp_eta(eta_pos))
       a <- mu_pos * phi_k
       b <- (1 - mu_pos) * phi_k
       sum(lgamma(phi_k) - lgamma(a) - lgamma(b) +
@@ -298,9 +301,9 @@
 # ---------------------------------------------------------------------------
 # Orchestrator: per-coefficient marginal SLA gamma for both arms.
 #
-# Returns `list(gamma_occ, gamma_pos, valid, reason)` shaped identically
-# to `.sla_compute_cover_hurdle()` (standalone-Laplace path), so the
-# existing `.sla_build_cover_hurdle_draws()` consumer can stay unchanged.
+# Returns `list(gamma_occ, gamma_pos, mu_*, sd_*, valid, reason)`, the gamma
+# fields shaped identically to `.sla_compute_cover_hurdle()` (standalone-Laplace
+# path) so both decodes read one shape.
 # ---------------------------------------------------------------------------
 .sla_compute_cover_hurdle_joint <- function(fit, enc, positive) {
   layout <- fit$arm_layout
@@ -387,6 +390,11 @@
     return(list(gamma_occ = gamma_occ, gamma_pos = gamma_pos, valid = FALSE,
                 reason = "non-finite marginal gamma on at least one coefficient"))
   }
-  list(gamma_occ = gamma_occ, gamma_pos = gamma_pos, valid = TRUE,
-       reason = "ok")
+  # The marginals the gamma is a skewness of, returned with it: a skewness is a
+  # property of a specific marginal, and these are in the joint latent's own
+  # (scaled) coordinates rather than the natural-scale ones the fit reports.
+  list(gamma_occ = gamma_occ, gamma_pos = gamma_pos,
+       mu_occ = mu_occ, sd_occ = sqrt(sigma2_occ),
+       mu_pos = mu_pos, sd_pos = sqrt(sigma2_pos),
+       valid = TRUE, reason = "ok")
 }

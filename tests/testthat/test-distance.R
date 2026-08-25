@@ -294,8 +294,14 @@ test_that("S3 surface works for distance fits", {
 
   X0 <- cbind(1, c(-1, 0, 1), 0)
   pr <- predict(fit, X.0 = X0, type = "lambda")
-  expect_length(pr, 3L)
-  expect_true(all(pr > 0) && all(diff(pr) > 0))
+  expect_equal(nrow(pr), 3L)
+  expect_true(all(c("mean", "sd", "q2.5", "q50", "q97.5") %in% names(pr)))
+  expect_true(all(pr$mean > 0) && all(diff(pr$mean) > 0))
+  expect_true(all(pr$q2.5 <= pr$mean & pr$mean <= pr$q97.5))
+
+  # A design with the wrong column count reaches a named error, not `%*%`'s.
+  expect_error(predict(fit, X.0 = cbind(1, 1), type = "lambda"),
+               "X.0 has 2 columns but the lambda arm has 3 coefficients")
 
   ysim <- simulate(fit, seed = 1)
   expect_equal(dim(ysim), dim(sim$y))

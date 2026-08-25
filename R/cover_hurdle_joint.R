@@ -291,21 +291,35 @@
 # intercept SE. Returns the beta means, their SEs, and the layout pieces (`p_occ`
 # / `p_pos`, the per-arm index vectors, the scale transforms) the callers report
 # or reuse.
+#
+# Gated through the shared `.tobs_joint_ok_cells()` spine
+# (joint_postprocess_shared.R): a cell whose inner Newton failed holds a NaN
+# mode, and `0 * NaN` is still NaN, so a raw `crossprod(fit$weights, modes)`
+# is poisoned even when the failed cell's weight is exactly zero. Returns the
+# reconciled `fit` (weights fixed up when the engine collapsed them to all-NaN)
+# so the caller stores that copy, not the raw one, and `converged` so the
+# caller can report whether every grid cell survived.
 .cover_joint_beta_moments <- function(fit, enc) {
   layout <- fit$arm_layout
   p_occ  <- layout$p[1]; p_pos <- layout$p[2]
   bocc_idx <- layout$beta_start[1] + seq_len(p_occ)
   bpos_idx <- layout$beta_start[2] + seq_len(p_pos)
 
+  oc       <- .tobs_joint_ok_cells(fit, "cover joint")
+  ok_cells <- oc$ok_cells
+  w        <- oc$w
+  fit      <- oc$fit
+
   scale_occ <- enc$scale_occ %||% .scale_meta(enc$occ_data$X)
   scale_pos <- enc$scale_pos %||% .scale_meta(enc$pos_data$X)
   T_occ <- .scale_transform(scale_occ); T_pos <- .scale_transform(scale_pos)
-  modes_occ <- fit$modes[, bocc_idx, drop = FALSE] %*% t(T_occ)
-  modes_pos <- fit$modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
-  beta_occ <- as.numeric(crossprod(fit$weights, modes_occ))
-  beta_pos <- as.numeric(crossprod(fit$weights, modes_pos))
-  var_of_means_occ <- as.numeric(crossprod(fit$weights, modes_occ^2)) - beta_occ^2
-  var_of_means_pos <- as.numeric(crossprod(fit$weights, modes_pos^2)) - beta_pos^2
+  modes     <- fit$modes[ok_cells, , drop = FALSE]
+  modes_occ <- modes[, bocc_idx, drop = FALSE] %*% t(T_occ)
+  modes_pos <- modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
+  beta_occ <- as.numeric(crossprod(w, modes_occ))
+  beta_pos <- as.numeric(crossprod(w, modes_pos))
+  var_of_means_occ <- as.numeric(crossprod(w, modes_occ^2)) - beta_occ^2
+  var_of_means_pos <- as.numeric(crossprod(w, modes_pos^2)) - beta_pos^2
 
   inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
   if (is.null(inner_blocks)) {
@@ -313,27 +327,29 @@
   } else {
     occ_rows <- seq_along(bocc_idx)
     pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
-    n_grid_eff <- length(inner_blocks)
+    inner_blocks_ok <- inner_blocks[ok_cells]
+    n_grid_eff <- length(inner_blocks_ok)
     diag_occ <- matrix(0, n_grid_eff, p_occ)
     diag_pos <- matrix(0, n_grid_eff, p_pos)
     for (k in seq_len(n_grid_eff)) {
-      V_block <- inner_blocks[[k]]
+      V_block <- inner_blocks_ok[[k]]
       if (is.null(V_block)) next
       V_occ_nat <- T_occ %*% V_block[occ_rows, occ_rows, drop = FALSE] %*% t(T_occ)
       V_pos_nat <- T_pos %*% V_block[pos_rows, pos_rows, drop = FALSE] %*% t(T_pos)
       diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
       diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
     }
-    w_eff <- fit$weights[seq_len(n_grid_eff)]
-    mean_of_var_occ <- as.numeric(crossprod(w_eff, diag_occ))
-    mean_of_var_pos <- as.numeric(crossprod(w_eff, diag_pos))
+    mean_of_var_occ <- as.numeric(crossprod(w, diag_occ))
+    mean_of_var_pos <- as.numeric(crossprod(w, diag_pos))
   }
 
   list(p_occ = p_occ, p_pos = p_pos, bocc_idx = bocc_idx, bpos_idx = bpos_idx,
        T_occ = T_occ, T_pos = T_pos,
        beta_occ = beta_occ, beta_pos = beta_pos,
        se_occ = sqrt(pmax(0, var_of_means_occ + mean_of_var_occ)),
-       se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)))
+       se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)),
+       converged = length(ok_cells) == length(fit$log_marginal),
+       fit = fit)
 }
 
 # Build one areal latent block restricted to a SINGLE arm with NO cross-arm copy.
@@ -511,6 +527,7 @@
 
   # Shared per-arm beta post-processing (identical to the single-field path).
   bm <- .cover_joint_beta_moments(fit, enc)
+  fit   <- bm$fit
   p_pos <- bm$p_pos
   beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
   se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
@@ -564,6 +581,7 @@
     armspecific = TRUE,
     armspec_blocks = armspec_meta,
     sigma_armspecific = sigma_fields,
+    converged = bm$converged,
     joint = fit
   )
 }
@@ -645,6 +663,7 @@
 
   # Shared per-arm beta post-processing (identical to the single-field path).
   bm <- .cover_joint_beta_moments(fit, enc)
+  fit   <- bm$fit
   p_pos <- bm$p_pos
   beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
   se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
@@ -715,6 +734,7 @@
     mcar = TRUE, mcar_field_names = mc$field_names,
     sigma_mcar = sigma_mcar, rho_mcar = rho_mcar,
     alpha_mcar = alpha_mu, alpha_mcar_sd = alpha_sd,
+    converged = bm$converged,
     joint = fit
   )
 }
@@ -1159,6 +1179,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   # Posterior-weighted mean / SE for the per-arm beta blocks.
   bm <- .cover_joint_beta_moments(fit, enc)
+  fit   <- bm$fit
   p_pos <- bm$p_pos
   beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
   se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
@@ -1242,6 +1263,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     trend_w_pos   = if (has_trend) trend_spec$w_pos else NULL,
     sigma_trend   = sigma_trend,
     alpha_trend   = alpha_trend,
+    converged    = bm$converged,
     joint        = fit
   )
 }

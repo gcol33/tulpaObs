@@ -170,6 +170,14 @@
   sds_nat
 }
 
+# Marginal SEs from a covariance block, `NA` when the block is unavailable.
+# `p` is the width to report, so a caller that could not invert its Hessian
+# still gets a vector of the right length.
+.sd_from_vcov <- function(V, p) {
+  if (is.null(V)) return(rep(NA_real_, p))
+  sqrt(pmax(diag(as.matrix(V)), 0))
+}
+
 # Transform an `n_draws x p` matrix of pseudo-draws (rows = posterior
 # samples, columns = coefficients) from scaled space to natural space.
 .unscale_draws_mat <- function(draws_sc, scale) {

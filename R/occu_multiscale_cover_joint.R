@@ -186,6 +186,7 @@
   # Pre-fit the pos-arm dispersion at the empirical sample value at detected
   # visits (lognormal: SD of log y_pos; beta: moment-matched precision).
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
+  pos_vals <- pos_vals[is.finite(pos_vals)]
   phi_pos_init <- if (is_beta) {
     if (length(pos_vals) >= 2L) {
       mu_hat  <- mean(pos_vals); var_hat <- max(stats::var(pos_vals), 1e-6)
@@ -341,20 +342,16 @@
   bp_idx     <- layout$beta_start[3L] + seq_len(p_p)
   bpos_idx   <- layout$beta_start[4L] + seq_len(p_pos)
 
-  ok_cells <- which(is.finite(fit$log_marginal))
-  if (length(ok_cells) == 0L) {
-    stop("occu_multiscale_cover: inner Newton failed at every grid cell. ",
-         "Bump control$max.iter or tighten control$tol.", call. = FALSE)
-  }
-  if (length(ok_cells) < length(fit$log_marginal)) {
-    n_bad <- length(fit$log_marginal) - length(ok_cells)
-    warning(sprintf(
-      "occu_multiscale_cover: dropping %d / %d outer-grid cell(s) whose inner ",
-      n_bad, length(fit$log_marginal)),
-      "Newton did not converge.", call. = FALSE)
-  }
-  w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
-  w     <- w_raw / sum(w_raw)
+  # Converged outer-grid cells, their softmax weights and the reconciled
+  # fit$weights (joint_postprocess_shared.R -- shared with occu_joint /
+  # occu_cover). Reassigning `fit` here (not just reading ok_cells/w) matters:
+  # `fit` is stored below as `joint_fit`, which predict()/WAIC read via
+  # tulpa_posterior_draws() -- without the reconciled weights that sampler
+  # would see the engine's all-NaN collapse whenever any cell failed.
+  oc       <- .tobs_joint_ok_cells(fit, "occu_multiscale_cover joint")
+  ok_cells <- oc$ok_cells
+  w        <- oc$w
+  fit      <- oc$fit
   modes <- fit$modes[ok_cells, , drop = FALSE]
   beta_psi_m   <- as.numeric(crossprod(w, modes[, bpsi_idx,   drop = FALSE]))
   beta_theta_m <- as.numeric(crossprod(w, modes[, btheta_idx, drop = FALSE]))

@@ -165,6 +165,30 @@
   eta
 }
 
+# Design-matrix response-scale prediction for a plain coefficient arm (no
+# latent state to marginalise), reported with an interval rather than
+# `.tobs_predict_eta()`'s single posterior-mean point: the posterior draws at
+# process `k`'s own coefficient block, response-scaled by its own link
+# (log / logit, `.tobs_nmix_response_draws()`, R/abun.R), summarised through
+# `.tobs_quantile_df()` at the caller's own `quantiles`. NULL `X.0` returns the
+# fit's in-sample `fitted()` surface, matching `.tobs_predict_nmix()`'s
+# shortcut -- `type` names which arm of that surface to read.
+.tobs_count_arm_predict <- function(object, X.0, k,
+                                    quantiles = c(0.025, 0.5, 0.975)) {
+  if (is.null(X.0)) return(fitted(object))
+  pi_list <- object$model$process_info
+  p    <- vapply(pi_list, function(pp) pp$p, integer(1))
+  off  <- cumsum(c(0L, p))
+  p_k  <- p[k]
+  if (ncol(X.0) != p_k) {
+    stop(sprintf("X.0 has %d columns but the %s arm has %d coefficients",
+                 ncol(X.0), pi_list[[k]]$name, p_k), call. = FALSE)
+  }
+  pred <- .tobs_nmix_response_draws(object$draws, X.0, off[k], p_k,
+                                    pi_list[[k]]$link %||% "log")
+  .tobs_quantile_df(pred, .tobs_check_quantiles(quantiles, n = 3L))
+}
+
 # A SAMPLED (NUTS) field is not among the coefficient columns the fit keeps, so
 # the family's own posterior-mean marginal evaluation runs it at offset 0: the
 # reported data log-likelihood -- what `logLik()` / `AIC()` / `BIC()` /

@@ -1,5 +1,112 @@
 # tulpaObs NEWS
 
+## 0.0.245 (2026-08-26)
+
+* **Three joint routes each bypassed part of the shared joint-postprocess
+  spine (#258).** `.tobs_joint_ok_cells()` (`R/joint_postprocess_shared.R`)
+  is the declared gate for a joint nested-Laplace fit: drop outer-grid cells
+  whose inner Newton failed, error when none survived, warn when some did,
+  and reconcile the engine's weight vector when it collapsed to all-NaN.
+  Only `occu_joint` and `occu_cover()` called it. `cover()`'s joint route
+  skipped the gate entirely -- `.cover_joint_beta_moments()` aggregated betas
+  with the raw engine weights and never inspected `log_marginal`, so a fit
+  with a failed cell reported `converged = TRUE`, no warning, and betas
+  averaged in a NaN mode. `occu_multiscale_cover()`'s route reimplemented the
+  cell filter but dropped the weights reconciliation, so `predict()` / WAIC
+  on a fit with one failed cell handed `tulpa::tulpa_posterior_draws()` an
+  all-NaN weight vector -- the exact condition the reconciliation exists to
+  fix. `cover()`'s joint route was also the only one that did not splice
+  `pareto_k` onto the top-level fit. `.cover_joint_beta_moments()` now runs
+  every cover joint fitter through `.tobs_joint_ok_cells()` and returns the
+  reconciled fit plus a `converged` flag the decode reports; the
+  multiscale-cover route now calls the shared gate instead of its own copy;
+  the cover decode splices `.tobs_promote_pareto_k()` beside the outer-grid
+  record like its three siblings.
+
+* **`laplace_sla` on `cover()` reaches the scores it was computed for (#268).**
+  Both cover routes built skew-normal pseudo-draws at fit time and stored them
+  on the fit as `draws_occ` / `draws_pos`. Nothing read them:
+  `.tobs_cover_eta_draws()` is the only per-draw eta source for ploglik / PIT /
+  PPC / LOO / WAIC / `predict()`, and it rebuilt Gaussian draws from the arm
+  Hessians instead, so `method = "laplace_sla"` and `"nested_laplace_sla"`
+  produced numerically identical scores to `method = "laplace"`. The correction
+  is now imposed where the draws are consumed, by
+  `.tobs_cover_sla_arms()`: the separate-Laplace route reshapes the per-arm
+  Gaussian resample, and the joint route reshapes the posterior bundle's arm
+  coefficient blocks with the field blocks untouched, so each keeps whatever
+  covariance its own source carried (the full per-arm `V`, or the grid mixture
+  plus the shared field). Measured on the beta-cover fixture, WAIC moves
+  174.26 -> 173.44. The two stored draw matrices are gone with
+  `.sla_build_cover_hurdle_draws()`; a fit carries `sla_ref` instead.
+
+* **A cover simplified-Laplace gamma is a skewness of the marginal it was
+  differenced against (#283).** The gamma comes out of
+  `.sla_compute_cover_hurdle()` / `.sla_compute_cover_hurdle_joint()` at
+  `fits$m_*$mode` against `enc$*_data$X`, i.e. in the SCALED parameterization
+  `encode_cover_hurdle()` autoscales each arm into, and it was handed the
+  NATURAL-scale `beta_occ` / `se_occ` to build the skew-normals from. Skewness
+  is invariant under a positive rescale of one coordinate, so a scaled slope is
+  unaffected, but the natural intercept is a combination of scaled coordinates
+  and its skewness is a different number: on a centered covariate the reported
+  intercept gamma was -0.0221 where the natural-scale value is -0.0164. The
+  marginals the gamma corrects now travel with it as `fit$sla_ref`, and the
+  reshaping happens in those coordinates.
+
+* **A random-effect fit that asked for the correction says it did not get it
+  (#268).** `R/laplace.R`'s RE branch passed `approx = "gaussian_laplace"` to
+  `build_laplace_fit()` rather than the caller's `approx`, so `method =
+  "laplace_sla"` with a formula random effect returned Gaussian marginals and
+  reported `sla_status = "off"` -- the one status `print()` suppresses, and the
+  one that says the correction was never requested. It now records
+  `"fallback_gaussian (random-effect M-step)"`, the form every other decline in
+  the package takes. `.validate_re_laplace()` drops the `approx` formal it
+  never read.
+
+* **The two cover SLA evaluators no longer overflow on a displaced beta
+  (#268).** `.sla_gamma_fd()` steps the coefficients +-2h along a Sigma column,
+  so the Bernoulli arms are evaluated at displaced values that can saturate the
+  linear predictor, where `log1p(exp(eta))` overflows to `Inf` and takes the
+  arm log-likelihood to `-Inf` and the finite difference with it. The
+  occurrence arm (both the separate and the joint evaluator) and the beta arm's
+  `plogis()` now take `.tobs_clamp_eta()`, and the log-normalizer goes through
+  the new shared `.tobs_log1pexp()`. The same data got a correction under
+  `int_occu` and a silent `fallback_gaussian (FD gamma ... non-finite)` under
+  `cover()`.
+
+* **Two documentation defects in the same layer (#268).**
+  `.sla_replace_draws()` documented a three-regime fallback keyed on a constant
+  (`SN_GAMMA_MAX`) that does not exist anywhere in the package, and an
+  `sla_fallback` attribute the loop sets only on a moment-match error; it now
+  describes the two regimes the loop implements. `.sla_compute_dyn_occu()`
+  declined a spatial term with "does not support spatial yet", which is false
+  for the state arm -- `.validate_spatial_laplace()` blocks only a
+  detection-arm SPDE for the dynamic model, so a state-arm `spde()` does reach
+  the evaluator, where the decline is the same deliberate one its two siblings
+  phrase through `.sla_spatial_reason()`. It now uses that.
+
+* **`occu_multiscale_cover()` admits a detected visit with an unrecorded cover
+  (#262).** A recorded presence whose cover was not written down is ordinary in
+  the releve data this family exists for. `occu_cover()` has always kept such a
+  visit and dropped only its cover factor; the multiscale builder refused the
+  data outright (`y_pos must be finite at every detected visit`), and had it not,
+  three kernels disagreed about what a non-finite cover meant -- the two fit
+  kernels would have carried the `NaN` into the likelihood while the family's own
+  pointwise-loglik kernel already gated it. The builder now runs the same
+  `.occu_cover_validate_pos_values()` as the two-level family, carrying a missing
+  cover as `NA`, and the gate is in the cell-coupling spec, the NUTS target and
+  the R marginal. Cover is missing at random: the visit keeps its detection, and
+  because a detected plot's density factorises, the occupancy / availability /
+  detection arms are unmoved. Data that fits today is unaffected -- the gate
+  cannot fire on a finite cover.
+* The detected-plot score behind that gate is now written once
+  (`mscale_det_plot_block()` in `src/occu_coupling_shared.h`), where the
+  cell-coupling spec and the NUTS target each derived it (#270). They reach the
+  cover arm through one of two adapters (`PosPolicyAccess` for the spec's
+  compile-time policy, `PosCodeAccess` for the sampler's runtime code), so
+  neither gives up its own dispatch, and `want_logdisp` keeps the beta arm's
+  digamma work out of the grid-integrated paths that do not differentiate the
+  dispersion.
+
 ## 0.0.244 (2026-08-25)
 
 * **`residuals()` has one return shape, and an unregistered family is an error

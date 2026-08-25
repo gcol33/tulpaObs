@@ -971,11 +971,15 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   list(occ = NULL, det = out)
 }
 
-# predict() for dyn_abun: initial abundance lambda at new X (default).
-.tobs_predict_dyn_abun <- function(object, X.0 = NULL, type = c("lambda", "gamma")) {
-  type  <- match.arg(type)
-  k <- if (identical(type, "lambda")) 1L else 4L
-  exp(.tobs_predict_eta(object, X.0, k))
+# predict() for dyn_abun: initial abundance lambda at new X (default), or
+# recruitment gamma. NULL X.0 returns fitted(); a design matrix returns a
+# mean/sd/quantile table over the posterior draws (.tobs_count_arm_predict(),
+# R/field_offset.R).
+.tobs_predict_dyn_abun <- function(object, X.0 = NULL, type = c("lambda", "gamma"),
+                                   quantiles = c(0.025, 0.5, 0.975)) {
+  type <- match.arg(type)
+  .tobs_count_arm_predict(object, X.0, if (identical(type, "lambda")) 1L else 4L,
+                          quantiles)
 }
 
 

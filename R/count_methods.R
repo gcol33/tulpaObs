@@ -12,9 +12,10 @@
 # fields, not the intercept field alone. `spatial_field` is the fallback for a
 # fit made before the offset was recorded (a plain intercept field, weight 1).
 # The field is skipped for newdata (a new site has no field node -- field
-# interpolation is a separate concern).
-.tobs_count_eta <- function(object, X, add_field = FALSE) {
-  beta <- object$means[seq_len(object$model$process_info[[1L]]$p)]
+# interpolation is a separate concern). `beta` defaults to the fit's posterior
+# mean; simulate() passes a sampled draw row instead, so both read one design.
+.tobs_count_eta <- function(object, X, add_field = FALSE, beta = NULL) {
+  beta <- beta %||% object$means[seq_len(object$model$process_info[[1L]]$p)]
   eta  <- as.numeric(X %*% beta)
   if (isTRUE(add_field)) {
     fld <- object$model$count_field_offset %||% object$spatial_field
@@ -125,4 +126,34 @@
         sign(y - mu) * sqrt(pmax(2 * (t1 + t2), 0))
       }))
   list(occ = r, det = NULL)
+}
+
+# Posterior replicate response vectors, one draw row per replicate (as
+# .tobs_simulate_nmix() and its siblings do): a random row of `object$draws`
+# stands in for a sampled coefficient vector, so under SBC -- which overwrites
+# `object$draws` with the single row being scored -- the replicate is drawn at
+# exactly that theta, not the fit's own posterior mean. count() carries no
+# per-draw dispersion coordinate (`count_phi` is a fixed nuisance from the
+# fit's own outer loop, R/tobs_dispatch.R), so every replicate reuses it.
+.tobs_simulate_count <- function(object, nsim = 1) {
+  model    <- object$model
+  response <- model$response %||% "poisson"
+  draws    <- object$draws
+  p        <- model$process_info[[1L]]$p
+  n        <- nrow(model$X_occ)
+  phi      <- object$count_dispersion$phi %||% NA_real_
+  nt       <- as.integer(round(model$n_trials %||% rep(1L, n)))
+  one <- function() {
+    beta <- draws[sample.int(nrow(draws), 1L), seq_len(p)]
+    eta  <- .tobs_count_eta(object, model$X_occ, add_field = TRUE, beta = beta)
+    mu   <- .tobs_count_mu(object, eta)
+    switch(response,
+      poisson  = stats::rpois(n, mu),
+      negbin   = stats::rnbinom(n, mu = mu, size = phi),
+      gaussian = stats::rnorm(n, mu, sqrt(phi)),
+      binomial = stats::rbinom(n, size = nt, prob = mu),
+      stop("simulate() for count() is not wired for response = '", response,
+           "'.", call. = FALSE))
+  }
+  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
 }

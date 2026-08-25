@@ -64,11 +64,11 @@ test_that("cover(response='beta') with simplified_laplace attaches skew + status
   expect_true(all(is.finite(fit$skew_pos)))
   expect_named(fit$skew_occ, colnames(fit$encoding$occ_data$X))
   expect_named(fit$skew_pos, colnames(fit$encoding$pos_data$X))
-  # Draws should be filled in.
-  expect_true(is.matrix(fit$draws_occ))
-  expect_true(is.matrix(fit$draws_pos))
-  expect_equal(nrow(fit$draws_occ), 1000L)
-  expect_equal(nrow(fit$draws_pos), 1000L)
+  # The marginals the gamma corrects travel with it, one pair per arm.
+  expect_equal(length(fit$sla_ref$occ$mean), length(fit$beta_occ))
+  expect_equal(length(fit$sla_ref$occ$sd), length(fit$beta_occ))
+  expect_equal(length(fit$sla_ref$pos$mean), length(fit$beta_pos))
+  expect_equal(length(fit$sla_ref$pos$sd), length(fit$beta_pos))
 })
 
 
@@ -108,8 +108,85 @@ test_that("cover() default leaves SLA off and produces no skew fields", {
   expect_identical(fit$sla_status %||% "off", "off")
   expect_null(fit$skew_occ)
   expect_null(fit$skew_pos)
-  expect_null(fit$draws_occ)
-  expect_null(fit$draws_pos)
+  expect_null(fit$sla_ref)
+})
+
+
+# ---- the correction reaches the per-draw consumers (gcol33/tulpaObs#268) ---
+
+test_that("laplace_sla reshapes the per-draw predictors, laplace does not", {
+  sim <- simulate_beta_cover_local(N = 400, seed = 31)
+  base <- list(formula = ~ x, data = sim$data, family = cover("beta"),
+               y = sim$y)
+  fit_g <- do.call(tobs, c(base, list(method = "laplace")))
+  fit_s <- do.call(tobs, c(base, list(method = "laplace_sla")))
+  expect_identical(fit_s$sla_status, "simplified_laplace")
+
+  # The correction reshapes marginals; it does not move the mode or the
+  # curvature, so the two fits enter .tobs_cover_eta_draws() with the same
+  # Gaussian and, under one seed, the same underlying draw.
+  expect_equal(fit_s$beta_occ, fit_g$beta_occ)
+  expect_equal(fit_s$se_occ, fit_g$se_occ)
+
+  set.seed(7); e_g <- tulpaObs:::.tobs_cover_eta_draws(fit_g, 1000L)
+  set.seed(7); e_s <- tulpaObs:::.tobs_cover_eta_draws(fit_s, 1000L)
+  # Every per-draw score (ploglik / PIT / PPC / predict) reads these. They were
+  # identical before #268: the corrected draws were built at fit time, stored,
+  # and read by nothing, so `laplace_sla` scored exactly as `laplace`.
+  expect_false(isTRUE(all.equal(e_g$eta_occ, e_s$eta_occ)))
+  expect_false(isTRUE(all.equal(e_g$eta_pos, e_s$eta_pos)))
+
+  # A fit carrying no accepted correction passes its draws through untouched,
+  # object for object -- not a resample that happens to have the same law.
+  B <- matrix(rnorm(20), 10, 2)
+  expect_null(fit_g$sla_ref)
+  out <- tulpaObs:::.tobs_cover_sla_arms(fit_g, B, B)
+  expect_identical(out$occ, B)
+  expect_identical(out$pos, B)
+
+  # What reaches the draws is the fit's own per-coefficient gamma, not a
+  # reshuffle: a large injected skewness lands as that column's third
+  # standardized moment, and a zero one leaves its column alone.
+  fit_x <- fit_s
+  fit_x$skew_occ <- c(0.5, 0)
+  set.seed(11)
+  Bx <- matrix(rnorm(2 * 4000), 4000, 2)
+  colnames(Bx) <- colnames(fit_s$encoding$occ_data$X)
+  ox <- tulpaObs:::.tobs_cover_sla_arms(fit_x, Bx, Bx)$occ
+  zx <- (ox[, 1] - mean(ox[, 1])) / stats::sd(ox[, 1])
+  expect_gt(mean(zx^3), 0.3)
+  expect_identical(ox[, 2], Bx[, 2])
+})
+
+test_that("the SLA reference marginals are the coordinates gamma was differenced in", {
+  # A covariate the autoscaler centers: the natural-scale intercept is then a
+  # combination of scaled coordinates, so it has a different marginal -- and a
+  # different skewness -- from the scaled intercept the FD differenced.
+  set.seed(41)
+  N <- 400
+  elev <- rnorm(N, 1200, 300)
+  z <- (elev - 1200) / 300
+  occur <- rbinom(N, 1, plogis(-0.3 + 0.7 * z))
+  mu <- plogis(0.4 - 1.0 * z)
+  y <- numeric(N)
+  ip <- occur == 1L
+  y[ip] <- rbeta(sum(ip), mu[ip] * 25, (1 - mu[ip]) * 25)
+  y <- pmin(pmax(y, 0), 1 - 1e-6)
+
+  fit <- tobs(~ elev, data = data.frame(elev = elev), family = cover("beta"),
+              y = y, method = "laplace_sla")
+  expect_identical(fit$sla_status, "simplified_laplace")
+
+  p <- ncol(fit$encoding$occ_data$X)
+  expect_equal(fit$sla_ref$occ$mean, as.numeric(fit$occ$mode)[seq_len(p)],
+               ignore_attr = TRUE)
+  expect_equal(fit$sla_ref$occ$sd,
+               sqrt(diag(solve(fit$occ$H_beta)))[seq_len(p)],
+               ignore_attr = TRUE)
+  # ... and that is NOT the natural-scale report the fit prints, which is the
+  # whole reason the pair is carried rather than re-read off beta_occ / se_occ.
+  expect_gt(abs(fit$sla_ref$occ$mean[1] - as.numeric(fit$beta_occ)[1]), 1e-6)
+  expect_gt(abs(fit$sla_ref$occ$sd[1] - as.numeric(fit$se_occ)[1]), 1e-6)
 })
 
 

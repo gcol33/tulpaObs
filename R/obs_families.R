@@ -813,6 +813,12 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' per-visit p predictor; `positive = ~ ...` the cover predictor (default the
 #' detection formula). `y_pos` is read only where `y == 1`.
 #'
+#' A detected visit (`y_cjv = 1`) with a missing cover (`y_pos_cjv = NA`) keeps
+#' its detection term but drops the `f_pos` factor: cover is taken
+#' missing-at-random, so the cover likelihood runs over the detected visits with
+#' an observed cover. This is the rule [occu_cover()] applies, and it holds on
+#' every engine below.
+#'
 #' @section Identifiability:
 #' The availability (`theta`) and detection (`p`) levels separate only with
 #' replication WITHIN a plot. Single releves supply none, so a plain fit

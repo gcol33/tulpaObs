@@ -609,11 +609,14 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
 }
 
 # predict() for distance: abundance lambda (density) at new X_lambda, or the
-# detection scale sigma at new X_sigma. Mirrors the nmix predictor's lambda mode.
-.tobs_predict_distance <- function(object, X.0 = NULL, type = c("lambda", "sigma")) {
+# detection scale sigma at new X_sigma. Mirrors the nmix predictor's lambda
+# mode: NULL X.0 returns fitted(); a design matrix returns a mean/sd/quantile
+# table over the posterior draws (.tobs_count_arm_predict(), R/field_offset.R).
+.tobs_predict_distance <- function(object, X.0 = NULL, type = c("lambda", "sigma"),
+                                   quantiles = c(0.025, 0.5, 0.975)) {
   type  <- match.arg(type)
-  exp(.tobs_predict_eta(object, X.0,
-                        if (identical(type, "lambda")) 1L else 2L))
+  .tobs_count_arm_predict(object, X.0,
+                          if (identical(type, "lambda")) 1L else 2L, quantiles)
 }
 
 

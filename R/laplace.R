@@ -79,7 +79,7 @@
   # in R/em_laplace_re.R; everything else errors with a pointer to NUTS rather
   # than being silently dropped.
   if (!is.null(re)) {
-    .validate_re_laplace(re, model, spatial, approx)
+    .validate_re_laplace(re, model, spatial)
     em_result <- .tobs_em_laplace_re(model, re, priors = priors,
                                      max_iter = max_iter, tol = tol,
                                      damping = damping, aghq = re_aghq,
@@ -89,7 +89,7 @@
     fit <- build_laplace_fit(em_result, model, spatial,
                              c(occ = ncol(model$X_processes[[1]]),
                                det = ncol(model$X_processes[[2]])),
-                             prior_spec = NULL, approx = "gaussian_laplace",
+                             prior_spec = NULL, approx = approx,
                              re_block = re_block)
     fit$re <- if (inherits(re, "tobs_re")) list(re) else re
     return(fit)

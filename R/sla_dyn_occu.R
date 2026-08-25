@@ -196,8 +196,11 @@
 #' @param model A `tobs_model` (model_type = "dynamic").
 #' @param em_result The EM-Laplace return list with `$fits$occ/det/col/ext`
 #'   and `$weights` (n_sites x n_seasons matrix).
-#' @param spatial Optional `tobs_spatial`. Currently unsupported (returns
-#'   `valid = FALSE`); the dyn_occu builder does not accept spatial.
+#' @param spatial Optional `tobs_spatial`. A state-arm field reaches this
+#'   evaluator (`.validate_spatial_laplace()` blocks only a detection-arm SPDE
+#'   for the dynamic model), and the correction is intentionally NOT applied
+#'   under one -- see `.sla_spatial_reason()`, the same decision the single-
+#'   season and integrated paths take. Returns `valid = FALSE`.
 #' @param prior_spec Optional prior spec; passed to the init-block Louis
 #'   info so the penalty is included.
 #' @return List(gamma, valid, reason).
@@ -206,7 +209,7 @@
                                   prior_spec = NULL) {
   bail <- .sla_bailer("gamma")
   if (!is.null(spatial)) {
-    return(bail("SLA for dyn_occu does not support spatial yet"))
+    return(bail(.sla_spatial_reason("dyn_occu")))
   }
   if (is.null(em_result$weights)) {
     return(bail("em_result$weights missing (need n_sites x n_seasons matrix)"))

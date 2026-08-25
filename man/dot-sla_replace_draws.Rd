@@ -18,20 +18,24 @@ A column whose gamma is a no-op keeps its correlated
 Gaussian draw unchanged.
 }
 \details{
-Behaviour at large |gamma|:
+Behaviour by gamma:
 \itemize{
-\item |gamma| < \code{cap}: SN draws via moment match.
-\item |gamma| in [cap, SN_GAMMA_MAX): SN draws with gamma clipped to
-\code{sign(gamma) * cap}. The default \code{cap = 0.5} aligns with the
-validity envelope identified in dev_notes/simplified_laplace_derivation.md
-sec.2.6 -- the cumulant expansion saturates above |gamma| ~ 0.5 and
-overstates magnitude. Clipping there avoids over-correcting CIs
-in the high-skew regime where SLA itself is unreliable.
-\item |gamma| >= SN_GAMMA_MAX or NaN: Gaussian draws (no SLA correction).
+\item non-finite gamma, or \verb{|gamma| < 1e-6}: the column keeps its incoming
+correlated Gaussian draw (the correction is a no-op there).
+\item \verb{|gamma| <= cap}: SN draws via moment match at gamma.
+\item \verb{|gamma| > cap}: SN draws with gamma clipped to \code{sign(gamma) * cap},
+and the column is named in the \code{sla_clipped} attribute. The default
+\code{cap = 0.5} aligns with the validity envelope identified in
+dev_notes/simplified_laplace_derivation.md sec.2.6 -- the cumulant
+expansion saturates above |gamma| ~ 0.5 and overstates magnitude.
+Clipping there avoids over-correcting CIs in the high-skew regime where
+SLA itself is unreliable. There is no magnitude above which the
+correction is abandoned: clipping covers every finite gamma.
 }
 
 Returns the modified draws matrix with attributes:
 attr "sla_clipped"  -- character vector of param names whose gamma was capped
-attr "sla_fallback" -- character vector of param names that stayed Gaussian
+attr "sla_fallback" -- character vector of param names whose moment match
+errored, so the column kept its Gaussian draw
 }
 \keyword{internal}

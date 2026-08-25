@@ -128,6 +128,25 @@ test_that("predict.tobs_stack with X.0 needs matching member designs", {
   expect_error(predict(ens, X.0 = X0), "same occupancy design")
 })
 
+test_that("predict.tobs_stack names columns for the requested quantiles", {
+  sim <- sim_occu()
+  f1 <- fit_lap(~ x,     sim)
+  f2 <- fit_lap(~ x + w, sim)
+  ens <- tobs_stack(f1, f2)
+  X0 <- model.matrix(~ x, sim$data)[1:5, , drop = FALSE]
+
+  # Non-default levels name their own columns, not the hardcoded 2.5/50/97.5.
+  pr <- predict(ens, X.0 = X0, quantiles = c(0.1, 0.5, 0.9))
+  expect_true(all(c("mean", "sd", "q10", "q50", "q90") %in% names(pr)))
+  expect_false(any(c("q2.5", "q97.5") %in% names(pr)))
+
+  # Previously reached stats::quantile() unchecked.
+  expect_error(predict(ens, X.0 = X0, quantiles = c(0.9, 0.1, 0.5)),
+               "increasing")
+  expect_error(predict(ens, X.0 = X0, quantiles = c(0, 0.5, 1)),
+               "strictly inside")
+})
+
 test_that("n.seeds builds a tobs_stack of K members and predicts out-of-sample", {
   skip_on_cran()
   skip_if_fast()

@@ -250,6 +250,53 @@ inline double pos_grad_logdisp(int code, double y, double eta, double phi) {
         default: return LognormalPositive::grad_logdisp(y, eta, phi);
     }
 }
+inline double pos_neg_hess_eta(int code, double y, double eta, double phi) {
+    switch (code) {
+        case 3:  return BetaPositive::neg_hess_eta(y, eta, phi);
+        case 4:  return GaussianPositive::neg_hess_eta(y, eta, phi);
+        default: return LognormalPositive::neg_hess_eta(y, eta, phi);
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// Positive-arm access for the shared blocks below. A cell-coupling spec is
+// templated on one policy and resolves the arm at compile time; a NUTS target
+// holds the runtime code above. Both reach the same three entry points through
+// one of these adapters, so a block using the cover arm is written once and
+// neither caller gives up its own dispatch. `grad_hess_eta` stays one call
+// (rather than grad_eta + neg_hess_eta) because the beta arm's digamma work is
+// shared between the two.
+// ---------------------------------------------------------------------------
+template <class P>
+struct PosPolicyAccess {
+    static double log_density(double y, double eta, double phi) {
+        return P::log_density(y, eta, phi);
+    }
+    static void grad_hess_eta(double y, double eta, double phi, bool want_hess,
+                              double& grad, double& neg_hess) {
+        P::grad_hess_eta(y, eta, phi, want_hess, grad, neg_hess);
+    }
+    static double grad_logdisp(double y, double eta, double phi) {
+        return P::grad_logdisp(y, eta, phi);
+    }
+};
+
+struct PosCodeAccess {
+    int code;
+    explicit PosCodeAccess(int code_) : code(code_) {}
+    double log_density(double y, double eta, double phi) const {
+        return pos_log_density(code, y, eta, phi);
+    }
+    void grad_hess_eta(double y, double eta, double phi, bool want_hess,
+                       double& grad, double& neg_hess) const {
+        grad = pos_grad_eta(code, y, eta, phi);
+        if (want_hess) neg_hess = pos_neg_hess_eta(code, y, eta, phi);
+    }
+    double grad_logdisp(double y, double eta, double phi) const {
+        return pos_grad_logdisp(code, y, eta, phi);
+    }
+};
 
 
 // ---------------------------------------------------------------------------
@@ -527,6 +574,68 @@ inline double occu_nodet_block(double                     psi,
     if (want_hess) out.arm_neg_hess_diag[0][base0] = nh_psi;
     return cell_ll;
 }
+
+// ---------------------------------------------------------------------------
+// Three-level (cell -> plot -> visit) detected plot.
+//
+// A plot with at least one detection sits inside an occupied cell and has its
+// availability forced (a = 1), so its density factorizes over visits:
+//
+//   log Q_j = log theta_j
+//           + sum_{v: y=1} [ log p_jv + log f_pos(y_pos_jv; eta_pos_jv, phi) ]
+//           + sum_{v: y=0}   log(1 - p_jv)
+//
+// There are no cross terms, so every caller needs only the per-element scores.
+// A detected visit whose cover was not recorded (y_pos non-finite) drops its
+// cover factor and leaves that visit's pos-arm slots untouched -- cover
+// missing at random, the rule the two-level twin applies at
+// cell_coupling_occu_cover.h.
+//
+// Visits are addressed 0..nv-1 within the plot; `emit_p` / `emit_pos` receive
+// that local index, so each caller places the score in its own layout (the
+// coupling spec's contiguous per-cell rows, or the sampler's padded
+// [n_plots x J] grid behind a valid mask). `want_logdisp` accumulates the
+// per-visit log-dispersion score into `g_logdisp`: the samplers differentiate
+// the dispersion, the grid-integrated paths carry it as a fixed phi and pass
+// false, which also keeps the beta arm's digamma work out of their inner loop.
+template <class Pos, class EtaP, class EtaPos, class YDet, class YPos,
+          class EmitP, class EmitPos>
+inline double mscale_det_plot_block(const Pos& pos, double eta_theta, int nv,
+                                    EtaP eta_p, EtaPos eta_pos,
+                                    YDet y_det, YPos y_pos, double phi,
+                                    bool want_hess, bool want_logdisp,
+                                    double& g_theta, double& nh_theta,
+                                    EmitP emit_p, EmitPos emit_pos,
+                                    double& g_logdisp)
+{
+    const double theta = sigmoid_(eta_theta);
+    double log_lik = log_safe(theta);
+    g_theta = 1.0 - theta;
+    if (want_hess) nh_theta = theta * (1.0 - theta);
+
+    for (int v = 0; v < nv; v++) {
+        const double p_v  = sigmoid_(eta_p(v));
+        const double nh_p = want_hess ? p_v * (1.0 - p_v) : 0.0;
+        if (y_det(v) > 0.5) {
+            log_lik += log_safe(p_v);
+            emit_p(v, 1.0 - p_v, nh_p);
+
+            const double y_v = y_pos(v);
+            if (!std::isfinite(y_v)) continue;
+            const double eta_v = eta_pos(v);
+            log_lik += pos.log_density(y_v, eta_v, phi);
+            double g_pos = 0.0, nh_pos = 0.0;
+            pos.grad_hess_eta(y_v, eta_v, phi, want_hess, g_pos, nh_pos);
+            emit_pos(v, g_pos, nh_pos);
+            if (want_logdisp) g_logdisp += pos.grad_logdisp(y_v, eta_v, phi);
+        } else {
+            log_lik += log_safe(1.0 - p_v);
+            emit_p(v, -p_v, nh_p);
+        }
+    }
+    return log_lik;
+}
+
 
 // ---------------------------------------------------------------------------
 // Three-level (cell -> plot -> visit) no-detection cell.

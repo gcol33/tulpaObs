@@ -163,7 +163,7 @@ test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
   re_int <- tulpaObs:::.tobs_term_re(group = s$d$g, type = "intercept")
   stub <- list(model_type = "community", data = s$d, X_det_visit = NULL)
   expect_error(
-    tulpaObs:::.validate_re_laplace(re_int, stub, NULL, "gaussian_laplace"),
+    tulpaObs:::.validate_re_laplace(re_int, stub, NULL),
     "single|nuts")
 
   # RE on the detection predictor alone is now supported (own RE block), so the
@@ -172,21 +172,21 @@ test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
   re_det$shared <- c(FALSE, TRUE)
   stub2 <- list(model_type = "single", data = s$d, X_det_visit = NULL)
   expect_silent(
-    tulpaObs:::.validate_re_laplace(re_det, stub2, NULL, "gaussian_laplace"))
+    tulpaObs:::.validate_re_laplace(re_det, stub2, NULL))
 
   # A single RE shared across BOTH predictors stays NUTS-only (each arm fits its
   # own block on the deterministic path, not one shared realization).
   re_both <- tulpaObs:::.tobs_term_re(group = s$d$g, type = "intercept")
   re_both$shared <- c(TRUE, TRUE)
   expect_error(
-    tulpaObs:::.validate_re_laplace(re_both, stub2, NULL, "gaussian_laplace"),
+    tulpaObs:::.validate_re_laplace(re_both, stub2, NULL),
     "shared|nuts")
 
   # RE + visit-level detection covariates also stays NUTS-only.
   stub3 <- list(model_type = "single", data = s$d,
                 X_det_visit = matrix(0, nrow(s$d), 1L))
   expect_error(
-    tulpaObs:::.validate_re_laplace(re_det, stub3, NULL, "gaussian_laplace"),
+    tulpaObs:::.validate_re_laplace(re_det, stub3, NULL),
     "visit|nuts")
 })
 
