@@ -7,6 +7,7 @@
 
 #include "nmix_community_oracle.h"
 #include "nmix_oracle_emit.h"
+#include "long_form_group.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <cmath>
@@ -40,16 +41,19 @@ NMixCommunityOracle::NMixCommunityOracle(const Rcpp::IntegerVector& y,
     n_groups = n_species;
     mu       = Eigen::VectorXd::Zero(d);
 
+    // n_sites / n_species arrive as plain int arguments, forwarded from further
+    // up by both R callers, so the designs are related to them here.
+    tulpaObs::shape::check_nrow(X_lambda, n_sites, "X_lambda");
+    tulpaObs::shape::check_nrow(X_p, y.size(), "X_p");
+
     Xlam.resize(n_sites, p_lam);
     for (int i = 0; i < n_sites; ++i)
         for (int c = 0; c < p_lam; ++c) Xlam(i, c) = X_lambda(i, c);
 
     // Group the long-form rows by (species, site), preserving input order.
-    const int n_obs = y.size();
-    std::vector<std::vector<std::vector<int>>> rows(
-        n_species, std::vector<std::vector<int>>(n_sites));
-    for (int r = 0; r < n_obs; ++r)
-        rows[species_idx[r] - 1][site_idx[r] - 1].push_back(r);
+    const std::vector<std::vector<std::vector<int>>> rows =
+        group_rows_by_species_site(species_idx, site_idx, n_species, n_sites,
+                                   y.size());
 
     sp_sites.assign(n_species, std::vector<SiteRec>());
     for (int s = 0; s < n_species; ++s) {

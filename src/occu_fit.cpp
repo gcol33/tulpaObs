@@ -113,6 +113,14 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
 
         Rcpp::List y_list = Rcpp::as<Rcpp::List>(spec_r["y_sources"]);
         Rcpp::List site_map_list = Rcpp::as<Rcpp::List>(spec_r["site_maps"]);
+        // n_sources arrives as its own spec entry; Rcpp::List::operator[](int)
+        // is unchecked, so both lists are related to it before the loop.
+        if ((int) y_list.size() != n_sources)
+            Rcpp::stop("y_sources must hold %d source(s); got %d.",
+                       n_sources, (int) y_list.size());
+        if ((int) site_map_list.size() != n_sources)
+            Rcpp::stop("site_maps must hold %d source(s); got %d.",
+                       n_sources, (int) site_map_list.size());
         for (int s = 0; s < n_sources; s++) {
             Rcpp::IntegerMatrix ys = Rcpp::as<Rcpp::IntegerMatrix>(y_list[s]);
             int ns = ys.nrow();
@@ -124,6 +132,10 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
             int_response.n_visits[s].resize(ns);
             int_response.any_detected[s].resize(ns, false);
             int_response.site_map[s] = Rcpp::as<std::vector<int>>(site_map_list[s]);
+            if ((int) int_response.site_map[s].size() != ns)
+                Rcpp::stop("site_maps[[%d]] must hold one entry per source row "
+                           "(%d); got %d.", s + 1, ns,
+                           (int) int_response.site_map[s].size());
 
             for (int i = 0; i < ns; i++) {
                 int nv = 0;

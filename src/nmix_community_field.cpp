@@ -21,6 +21,7 @@
 // Poisson abundance only. One spatial unit per site (map_site_to_unit = identity
 // on the caller side; we still take an explicit map for generality).
 
+#include "long_form_group.h"
 #include "nmix_kernel.h"
 #include "nmix_spatial_kernel.h"
 #include "newton_step.h"                // newton_backtrack
@@ -122,10 +123,9 @@ Rcpp::List cpp_nmix_community_field_solve(
     // Group rows by (species, site).
     std::vector<std::vector<SiteVisits>> sp_sites(n_species);
     {
-        std::vector<std::vector<std::vector<int>>> rows(
-            n_species, std::vector<std::vector<int>>(n_sites));
-        for (int r = 0; r < n_obs; ++r)
-            rows[species_idx[r] - 1][site_idx[r] - 1].push_back(r);
+        const std::vector<std::vector<std::vector<int>>> rows =
+            tulpaObs::group_rows_by_species_site(species_idx, site_idx,
+                                                 n_species, n_sites, n_obs);
         for (int s = 0; s < n_species; ++s)
             for (int i = 0; i < n_sites; ++i)
                 if (!rows[s][i].empty()) {
@@ -233,20 +233,11 @@ Rcpp::List cpp_nmix_community_field_solve(
         // Add the prior: grad -= tau Q z; H += tau Q.
         VectorXd grad = grad_z;
         MatrixXd H = Hzz;
-        for (int sp = 0; sp < n_spatial; ++sp) {
-            const double q_diag = (double)n_neighbors[sp];
-            H(sp, sp) += tau * q_diag;
-            double nbr = 0.0;
-            for (int kk = adj_row_ptr[sp]; kk < adj_row_ptr[sp + 1]; ++kk) {
-                int t = adj_col_idx[kk];
-                nbr += z(t);
-                if (t > sp) {
-                    H(sp, t) -= tau * rho;
-                    H(t, sp) -= tau * rho;
-                }
-            }
-            grad(sp) -= tau * (q_diag * z(sp) - rho * nbr);
-        }
+        // The field is the whole latent block here, so the CAR helper's
+        // z-block offset is 0 (no coefficient block in front of it).
+        tulpaObs::nmix_add_car_to_spatial_block(
+            /*p_lam=*/0, /*p_p=*/0, n_spatial, tau, rho,
+            adj_row_ptr, adj_col_idx, n_neighbors, z, grad, H);
 
         grad_norm = grad.norm();
         if (verbose)
@@ -294,13 +285,9 @@ Rcpp::List cpp_nmix_community_field_solve(
     // Final marginal-correction terms at the mode.
     log_lik = sweep(z, grad_z, Hzz, boundary_max, /*want_hess=*/true);
     MatrixXd H = Hzz;
-    for (int sp = 0; sp < n_spatial; ++sp) {
-        H(sp, sp) += tau * (double)n_neighbors[sp];
-        for (int kk = adj_row_ptr[sp]; kk < adj_row_ptr[sp + 1]; ++kk) {
-            int t = adj_col_idx[kk];
-            if (t > sp) { H(sp, t) -= tau * rho; H(t, sp) -= tau * rho; }
-        }
-    }
+    tulpaObs::nmix_add_car_to_H_only(
+        /*p_lam=*/0, /*p_p=*/0, n_spatial, tau, rho,
+        adj_row_ptr, adj_col_idx, n_neighbors, H);
     // For ICAR, the rank-deficient (constant-z) direction is pinned by the
     // sum-to-zero constraint; add a large quadratic penalty on (sum z)^2 so the
     // log|H_zz| is the constrained determinant (the field Laplace normaliser).

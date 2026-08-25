@@ -12,6 +12,7 @@
 #include <vector>
 #include <cmath>
 #include "tobs_math.h"
+#include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -24,11 +25,6 @@ inline double clp(double x) {
   if (x < 1e-12) return 1e-12;
   if (x > 1.0 - 1e-12) return 1.0 - 1e-12;
   return x;
-}
-// log(exp(a)+exp(b)) as the R code writes it: m + log(exp(a-m)+exp(b-m)).
-inline double lae2(double a, double b) {
-  double m = a > b ? a : b;
-  return m + std::log(std::exp(a - m) + std::exp(b - m));
 }
 }  // namespace
 
@@ -58,6 +54,37 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
   const int n_cells = X_psi.nrow();
   const int J = y.ncol();
   const bool has_pv = p_p_visit > 0, has_posv = p_pos_visit > 0;
+
+  // Every design row count and every coefficient offset comes from a different
+  // argument than the buffer it indexes: the block widths and offsets are
+  // packed in R against `draws`, the visit blocks are site-major [n_plots x J],
+  // and plot_cell addresses the per-cell accumulator. None of that is checked
+  // downstream -- the sibling multiscale NUTS builder checks its cell index,
+  // this kernel checked nothing -- so it is related here, before any .begin().
+  namespace sh = tulpaObs::shape;
+  const R_xlen_t total = draws.ncol();
+  sh::check_block(idx_psi, p_psi, total, "psi");
+  sh::check_block(idx_theta, p_theta, total, "theta");
+  sh::check_block(idx_p_site, p_p_site, total, "p_site");
+  sh::check_block(idx_p_visit, p_p_visit, total, "p_visit");
+  sh::check_block(idx_pos_site, p_pos_site, total, "pos_site");
+  sh::check_block(idx_pos_visit, p_pos_visit, total, "pos_visit");
+  sh::check_block(idx_disp, 1, total, "disp");
+
+  sh::check_dim(X_psi, n_cells, p_psi, "X_psi");
+  sh::check_dim(X_theta, n_plots, p_theta, "X_theta");
+  sh::check_dim(X_p_site, n_plots, p_p_site, "X_p_site");
+  sh::check_dim(X_pos_site, n_plots, p_pos_site, "X_pos_site");
+  if (has_pv)
+    sh::check_dim(X_p_visit, (R_xlen_t) n_plots * J, p_p_visit, "X_p_visit");
+  if (has_posv)
+    sh::check_dim(X_pos_visit, (R_xlen_t) n_plots * J, p_pos_visit,
+                  "X_pos_visit");
+  sh::check_dim(y, n_plots, J, "y");
+  sh::check_dim(y_pos, n_plots, J, "y_pos");
+  sh::check_dim(valid, n_plots, J, "valid");
+  sh::check_len(plot_cell, n_plots, "plot_cell");
+  sh::check_index1(plot_cell, n_cells, "plot_cell");
 
   Rcpp::NumericMatrix ll(S, n_cells);
   const double* pd  = draws.begin();
@@ -156,7 +183,7 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
         if (det_plot) {
           log_pj = log_theta + sum_hdet + sum_cover;
         } else {
-          log_pj = lae2(log_theta + sum_1mp, log_1mtheta);
+          log_pj = tulpaObs::logsumexp2(log_theta + sum_1mp, log_1mtheta);
         }
         int cell = pc[i] - 1;
         sum_logpj[cell] += log_pj;
@@ -174,7 +201,7 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
         if (det_cell[c]) {
           val = log_psi + sum_logpj[c];
         } else {
-          val = lae2(log_psi + sum_logpj[c], log_1mpsi);
+          val = tulpaObs::logsumexp2(log_psi + sum_logpj[c], log_1mpsi);
         }
         pll[(std::size_t) c * S + d] = val;
       }

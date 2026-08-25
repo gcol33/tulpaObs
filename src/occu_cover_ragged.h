@@ -30,6 +30,7 @@
 #include <Rcpp.h>
 #include <cstddef>
 #include "tobs_math.h"
+#include "tobs_shape.h"
 
 namespace tulpaObs {
 namespace occu_cover_ragged {
@@ -138,9 +139,17 @@ inline Arms make_arms(const Rcpp::NumericMatrix& X_occ,
   if (b_det.ncol() != a.p_det_site + a.p_det_vis || b_occ.ncol() != a.p_occ) {
     Rcpp::stop("coefficient draws do not match the arm designs.");
   }
+  if (b_det.nrow() != a.S) {
+    Rcpp::stop("b_det must carry the same %d draws as b_occ; got %d.",
+               a.S, (int) b_det.nrow());
+  }
   if (field_occ.nrow() != a.n_sites || field_occ.ncol() != a.S) {
     Rcpp::stop("field_occ must be [n_sites x S].");
   }
+  // site() indexes the per-site designs and the per-site accumulators of all
+  // three kernels, so the map is bounds-checked once here rather than in each.
+  tulpaObs::shape::check_index1(site_of_visit, a.n_sites, "site_of_visit");
+
   a.X_occ = X_occ.begin();
   a.X_det_site = X_det_site.begin();
   a.X_det_visit = X_det_visit.begin();
@@ -167,6 +176,10 @@ inline void attach_cover(Arms& a, const Rcpp::NumericMatrix& X_pos_site,
   }
   if (b_pos.ncol() != a.p_pos_site + a.p_pos_vis) {
     Rcpp::stop("coefficient draws do not match the cover-arm design.");
+  }
+  if (b_pos.nrow() != a.S) {
+    Rcpp::stop("b_pos must carry the same %d draws as b_occ; got %d.",
+               a.S, (int) b_pos.nrow());
   }
   if (field_pos.nrow() != a.n_sites || field_pos.ncol() != a.S) {
     Rcpp::stop("field_pos must be [n_sites x S].");

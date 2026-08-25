@@ -13,6 +13,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "cover_hurdle_shape.h"
 #include "tobs_math.h"
 #include "tobs_shape.h"
 using namespace Rcpp;
@@ -40,29 +41,8 @@ Rcpp::List cpp_cover_pit_cdf(
     Rcpp::NumericVector trunc_upper
 ) {
   const int S = eta_occ.nrow(), N = eta_occ.ncol();
-  const int N_pos = eta_pos.ncol();
-  shape::check_nrow(eta_pos, S, "eta_pos");
-  shape::check_len(occur, N, "occur");
-  shape::check_len(pos_col, N, "pos_col");
-  shape::check_len(disp, S, "disp");
-  shape::check_len(y_pos, N_pos, "y_pos");
-  if (positive == 2) {                           // ordinal class bounds
-    shape::check_len(lower, N_pos, "lower");
-    shape::check_len(upper, N_pos, "upper");
-  } else if (positive == 1) {                    // lognormal_trunc ceiling
-    shape::check_len(trunc_upper, N_pos, "trunc_upper");
-  }
-  // Every plot with occurrence 1 carries a positive-arm row, and pos_col holds
-  // the 1-based eta_pos column of that row. The 0 marking a plot with no such
-  // row would read the column before the first.
-  for (int i = 0; i < N; ++i) {
-    if (occur[i] != 1) continue;
-    const int j = pos_col[i] - 1;
-    if (j < 0 || j >= N_pos) {
-      Rcpp::stop("pos_col[%d] = %d at a plot with occurrence 1; expected an "
-                 "eta_pos column in [1, %d].", i + 1, (int) pos_col[i], N_pos);
-    }
-  }
+  tulpaObs::cover_hurdle::check_arms(eta_occ, eta_pos, occur, y_pos, pos_col,
+                                     disp, positive, lower, upper, trunc_upper);
   Rcpp::NumericMatrix Fl(S, N), Fu(S, N);
   for (int i = 0; i < N; ++i) {
     for (int s = 0; s < S; ++s) {

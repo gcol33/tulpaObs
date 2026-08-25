@@ -22,6 +22,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_shape.h"
 #include "tobs_math.h"
 #include "occu_cover_ragged.h"      // Arms -- the shared per-draw predictor view
 #include "occu_coupling_shared.h"   // pos_log_density -- the fit-kernel positive density
@@ -83,9 +84,10 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
   const int n_sites = arms.n_sites;
   const int V       = arms.V;
   const int S       = arms.S;
-  if (y_det_visit.size() != V || y_pos_visit.size() != V) {
-    Rcpp::stop("y_det_visit / y_pos_visit must be length V.");
-  }
+  namespace sh = tulpaObs::shape;
+  sh::check_len(y_det_visit, V, "y_det_visit");
+  sh::check_len(y_pos_visit, V, "y_pos_visit");
+  sh::check_len(disp, S, "disp");
 
   Rcpp::NumericMatrix ll(S, n_sites);
 

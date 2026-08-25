@@ -5,6 +5,7 @@
 // stores the per-site bin counts, and exposes the factory.
 
 #include "distance_re_oracle.h"
+#include "tobs_shape.h"
 #include <Rcpp.h>
 #include <vector>
 
@@ -36,6 +37,11 @@ DistanceGroupedOracle::DistanceGroupedOracle(
     std::vector<std::vector<int>> y_by_site_ignored;
     build_common(arm_, dummy_y, site_idx, X_lambda, X_sigma, Z_site,
                  site_group, n_sites_, n_groups_, nb, y_by_site_ignored);
+
+    // n_sites arrives from the RE design (R/nmix_re_aghq.R takes it from
+    // length(design[[1]]$idx)), not from nrow(y_bins), so the two are related
+    // here before the per-site bin counts are copied out.
+    tulpaObs::shape::check_nrow(y_bins, n_sites_, "y_bins");
 
     quad = *dist_quad_from_xptr(quad_xptr);
     comb_table = dist_build_comb_table(K_max);

@@ -297,3 +297,197 @@ test_that("cpp_occu_cover_ppc checks the per-visit view and the dispersion", {
   expect_error(run(disp = d$disp[-1]),
                "disp must have length 3; got 2.", fixed = TRUE)
 })
+
+# --- kernels reached by #263 ------------------------------------------------
+# The blocks above cover what #236 / #237 swept. These cover the entry points
+# those sweeps did not reach: a buffer sized from one argument and indexed with
+# values taken from another, with nothing relating the two.
+
+test_that("cpp_cover_hurdle_ploglik bounds pos_col like its PIT sibling", {
+  S <- 3L; N <- 5L; n_pos <- 2L
+  d <- list(eta_occ = matrix(0, S, N), eta_pos = matrix(0, S, n_pos),
+            disp = rep(1, S), occur = c(1L, 0L, 1L, 0L, 0L),
+            y_pos = c(0.2, 0.4), pos_col = c(1L, 0L, 2L, 0L, 0L),
+            positive = 0L, lower = numeric(0), upper = numeric(0),
+            trunc_upper = numeric(0), n_threads = 1L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_cover_hurdle_ploglik, d, list(...))
+
+  expect_equal(dim(run()), c(S, N))
+
+  # The WAIC path read the column before the first where the PIT path errored.
+  expect_error(run(pos_col = c(0L, 0L, 2L, 0L, 0L)),
+               "pos_col[1] = 0 at a plot with occurrence 1", fixed = TRUE)
+  expect_error(run(pos_col = c(1L, 0L, 3L, 0L, 0L)),
+               "pos_col[3] = 3 at a plot with occurrence 1", fixed = TRUE)
+
+  expect_error(run(eta_pos = d$eta_pos[-1, , drop = FALSE]),
+               "eta_pos must have 3 rows; got 2.", fixed = TRUE)
+  expect_error(run(disp = d$disp[-1]),
+               "disp must have length 3; got 2.", fixed = TRUE)
+  expect_error(run(y_pos = d$y_pos[-1]),
+               "y_pos must have length 2; got 1.", fixed = TRUE)
+  expect_error(run(occur = d$occur[-1]),
+               "occur must have length 5; got 4.", fixed = TRUE)
+  expect_error(run(positive = 2L),
+               "lower must have length 2; got 0.", fixed = TRUE)
+  expect_error(run(positive = 1L),
+               "trunc_upper must have length 2; got 0.", fixed = TRUE)
+})
+
+test_that("cpp_occu_cover_ploglik_ragged bounds site_of_visit and the draws", {
+  S <- 3L; n_sites <- 4L; V <- 6L
+  d <- list(X_occ = matrix(1, n_sites, 1L),
+            X_det_site = matrix(1, n_sites, 1L),
+            X_pos_site = matrix(1, n_sites, 1L),
+            X_det_visit = matrix(0, V, 0L),
+            X_pos_visit = matrix(0, V, 0L),
+            site_of_visit = c(1L, 1L, 2L, 3L, 4L, 4L),
+            y_det_visit = c(1L, 0L, 0L, 1L, 0L, 0L),
+            y_pos_visit = c(0.3, 0, 0, 0.5, 0, 0),
+            b_occ = matrix(0, S, 1L), b_det = matrix(0, S, 1L),
+            b_pos = matrix(0, S, 1L), disp = rep(1, S),
+            field_occ = matrix(0, n_sites, S),
+            field_pos = matrix(0, n_sites, S),
+            off_det = matrix(0, V, 0L), off_pos = matrix(0, V, 0L),
+            positive = 0L, eta_bound = 30, n_threads = 1L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_occu_cover_ploglik_ragged, d,
+                                   list(...))
+
+  expect_equal(dim(run()), c(S, n_sites))
+
+  # site() feeds the per-site accumulators of all three ragged kernels.
+  expect_error(run(site_of_visit = c(1L, 1L, 2L, 3L, 4L, 5L)),
+               "site_of_visit[6] = 5 is outside [1, 4].", fixed = TRUE)
+  expect_error(run(site_of_visit = c(0L, 1L, 2L, 3L, 4L, 4L)),
+               "site_of_visit[1] = 0 is outside [1, 4].", fixed = TRUE)
+  expect_error(run(site_of_visit = c(NA_integer_, 1L, 2L, 3L, 4L, 4L)),
+               "site_of_visit[1] is NA.", fixed = TRUE)
+
+  # b_occ fixes the draw count; the other two arms have to agree with it.
+  expect_error(run(b_det = matrix(0, S + 1L, 1L)),
+               "b_det must carry the same 3 draws as b_occ; got 4.", fixed = TRUE)
+  expect_error(run(b_pos = matrix(0, S - 1L, 1L)),
+               "b_pos must carry the same 3 draws as b_occ; got 2.", fixed = TRUE)
+  expect_error(run(disp = d$disp[-1]),
+               "disp must have length 3; got 2.", fixed = TRUE)
+})
+
+test_that("cpp_occu_mscale_cover_ploglik checks its blocks, dims and plot_cell", {
+  S <- 3L; n_cells <- 2L; n_plots <- 4L; J <- 2L
+  total <- 6L
+  d <- list(draws = matrix(0, S, total),
+            X_psi = matrix(1, n_cells, 1L),
+            X_theta = matrix(1, n_plots, 1L),
+            X_p_site = matrix(1, n_plots, 1L),
+            X_p_visit = matrix(0, n_plots * J, 0L),
+            X_pos_site = matrix(1, n_plots, 1L),
+            X_pos_visit = matrix(0, n_plots * J, 0L),
+            y = matrix(0L, n_plots, J),
+            y_pos = matrix(0, n_plots, J),
+            valid = matrix(TRUE, n_plots, J),
+            plot_cell = c(1L, 1L, 2L, 2L),
+            positive = 0L,
+            idx_psi = 0L, p_psi = 1L, idx_theta = 1L, p_theta = 1L,
+            idx_p_site = 2L, p_p_site = 1L, idx_p_visit = 0L, p_p_visit = 0L,
+            idx_pos_site = 3L, p_pos_site = 1L,
+            idx_pos_visit = 0L, p_pos_visit = 0L,
+            idx_disp = 4L, n_threads = 1L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_occu_mscale_cover_ploglik, d,
+                                   list(...))
+
+  expect_equal(dim(run()), c(S, n_cells))
+
+  # A block is an offset and a width packed in R against a third argument.
+  expect_error(run(idx_disp = total),
+               "disp block [6, 7) does not fit a draw row of 6 columns.",
+               fixed = TRUE)
+  expect_error(run(p_psi = 7L),
+               "psi block [0, 7) does not fit a draw row of 6 columns.",
+               fixed = TRUE)
+  expect_error(run(idx_theta = -1L),
+               "theta block [-1, 0) does not fit a draw row of 6 columns.",
+               fixed = TRUE)
+
+  # plot_cell addresses the per-cell accumulator.
+  expect_error(run(plot_cell = c(1L, 1L, 2L, 3L)),
+               "plot_cell[4] = 3 is outside [1, 2].", fixed = TRUE)
+  expect_error(run(plot_cell = c(1L, 1L, 2L, 2L, 2L)),
+               "plot_cell must have length 4; got 5.", fixed = TRUE)
+
+  expect_error(run(y = matrix(0L, n_plots + 1L, J)),
+               "y must be [4 x 2]; got [5 x 2].", fixed = TRUE)
+  expect_error(run(valid = matrix(TRUE, n_plots, J + 1L)),
+               "valid must be [4 x 2]; got [4 x 3].", fixed = TRUE)
+  # n_cells is X_psi's own row count, so the row half is a tautology; the
+  # column half is not -- p_psi is packed separately against the draw row.
+  expect_error(run(X_psi = matrix(1, n_cells, 2L)),
+               "X_psi must be [2 x 1]; got [2 x 2].", fixed = TRUE)
+  expect_error(run(X_theta = matrix(1, n_plots, 2L)),
+               "X_theta must be [4 x 1]; got [4 x 2].", fixed = TRUE)
+})
+
+test_that("the grouped-RE oracle factories relate their counts to their designs", {
+  n_sites <- 4L; n_groups <- 2L; J <- 2L
+  n_obs <- n_sites * J
+  d <- list(arm = 0L,
+            y = rep(1L, n_obs),
+            site_idx = rep(seq_len(n_sites), each = J),
+            X_lambda = matrix(1, n_sites, 1L),
+            X_p = matrix(1, n_obs, 1L),
+            Z_site = matrix(1, n_sites, 1L),
+            site_group = c(1L, 1L, 2L, 2L),
+            n_sites = n_sites, n_groups = n_groups, K_max = 20L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_nmix_grouped_oracle, d, list(...))
+
+  expect_true(inherits(run(), "externalptr"))
+
+  # n_sites / n_groups are forwarded from further up, never derived from the
+  # designs, so build_common is where the two meet.
+  expect_error(run(X_lambda = matrix(1, n_sites + 1L, 1L)),
+               "X_lambda must have 4 rows; got 5.", fixed = TRUE)
+  expect_error(run(Z_site = matrix(1, n_sites - 1L, 1L)),
+               "Z_site must have 4 rows; got 3.", fixed = TRUE)
+  expect_error(run(site_group = c(1L, 1L, 2L, 3L)),
+               "site_group[4] = 3 is outside [1, 2].", fixed = TRUE)
+  # A site whose grouping value is NA used to be dropped from every group,
+  # biasing the variance component with no error.
+  expect_error(run(site_group = c(1L, 1L, 2L, NA_integer_)),
+               "site_group[4] is NA.", fixed = TRUE)
+  bad_site <- d$site_idx; bad_site[n_obs] <- 5L
+  expect_error(run(site_idx = bad_site),
+               "site_idx[8] = 5 is outside [1, 4].", fixed = TRUE)
+  expect_error(run(X_p = matrix(1, n_obs - 1L, 1L)),
+               "X_p must have 8 rows; got 7.", fixed = TRUE)
+
+  # The removal factory shares the same builder.
+  expect_error(do.call(tulpaObs:::cpp_removal_grouped_oracle,
+                       utils::modifyList(d, list(site_group = c(1L, 1L, 2L, 3L)))),
+               "site_group[4] = 3 is outside [1, 2].", fixed = TRUE)
+})
+
+test_that("cpp_nmix_community_oracle bounds its species / site codes", {
+  n_sites <- 3L; n_species <- 2L; J <- 2L
+  n_obs <- n_sites * n_species * J
+  d <- list(y = rep(1L, n_obs),
+            site_idx = rep(rep(seq_len(n_sites), each = J), times = n_species),
+            species_idx = rep(seq_len(n_species), each = n_sites * J),
+            X_lambda = matrix(1, n_sites, 1L),
+            X_p = matrix(1, n_obs, 1L),
+            n_sites = n_sites, n_species = n_species, K_max = 20L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_nmix_community_oracle, d, list(...))
+
+  expect_true(inherits(run(), "externalptr"))
+
+  # rows[species_idx[r] - 1][site_idx[r] - 1].push_back(r) is a heap WRITE
+  # through both codes, and neither was checked.
+  bad_sp <- d$species_idx; bad_sp[1] <- 3L
+  expect_error(run(species_idx = bad_sp),
+               "species_idx[1] = 3 is outside [1, 2].", fixed = TRUE)
+  bad_site <- d$site_idx; bad_site[2] <- 0L
+  expect_error(run(site_idx = bad_site),
+               "site_idx[2] = 0 is outside [1, 3].", fixed = TRUE)
+  expect_error(run(X_lambda = matrix(1, n_sites + 2L, 1L)),
+               "X_lambda must have 3 rows; got 5.", fixed = TRUE)
+  expect_error(run(X_p = matrix(1, n_obs + 1L, 1L)),
+               "X_p must have 12 rows; got 13.", fixed = TRUE)
+})

@@ -5,6 +5,7 @@
 #ifndef TULPAOCC_POPULATE_HELPERS_H
 #define TULPAOCC_POPULATE_HELPERS_H
 
+#include "tobs_shape.h"
 #include <Rcpp.h>
 #include <vector>
 #include <string>
@@ -491,6 +492,19 @@ inline tulpaObs::DynOccResponseData build_dyn_occ_response(
     Rcpp::LogicalVector any_detected_r,
     int n_sites, int n_seasons, int max_visits
 ) {
+    // dyn_occ_log_likelihood indexes y at base_y + j for j < max_visits over
+    // every (site, season), so the flat response has to carry exactly that many
+    // entries; it is stored whole, so nothing downstream would notice a short one.
+    namespace sh = tulpaObs::shape;
+    sh::check_dim_arg(n_sites, "n_sites");
+    sh::check_dim_arg(n_seasons, "n_seasons");
+    sh::check_dim_arg(max_visits, "max_visits");
+    sh::check_len(y_flat_r,
+                  (R_xlen_t) n_sites * n_seasons * max_visits, "y_flat");
+    sh::check_len(n_visits_r, (R_xlen_t) n_sites * n_seasons, "n_visits");
+    sh::check_len(any_detected_r, (R_xlen_t) n_sites * n_seasons,
+                  "any_detected");
+
     tulpaObs::DynOccResponseData dyn;
     dyn.n_sites = n_sites;
     dyn.n_seasons = n_seasons;
@@ -508,6 +522,11 @@ inline tulpaObs::DynOccResponseData build_dyn_occ_response(
 // Add a process to ModelData from an R matrix
 // ============================================================================
 inline void add_process(tulpa::ModelData& data, Rcpp::NumericMatrix X_r, int N) {
+    // N is the observation count the caller declared for the whole model; this
+    // copies X_r row by row up to it. Relating the two here covers every
+    // process in cpp_occu_fit rather than each call site.
+    tulpaObs::shape::check_nrow(X_r, N, "X_processes[[k]]");
+
     tulpa::ProcessData proc;
     proc.p = X_r.ncol();
     proc.X_flat.resize(N * proc.p);

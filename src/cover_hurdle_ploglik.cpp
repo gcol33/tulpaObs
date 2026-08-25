@@ -18,6 +18,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "cover_hurdle_shape.h"
 #include "tobs_math.h"
 #ifdef _OPENMP
 #include <omp.h>
@@ -69,9 +70,8 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
 ) {
   const int S = eta_occ.nrow();
   const int N = eta_occ.ncol();
-  if (disp.size() != S) Rcpp::stop("disp must be length S (expand before call).");
-  if (occur.size() != N || pos_col.size() != N)
-    Rcpp::stop("occur / pos_col must be length N.");
+  tulpaObs::cover_hurdle::check_arms(eta_occ, eta_pos, occur, y_pos, pos_col,
+                                     disp, positive, lower, upper, trunc_upper);
 
   Rcpp::NumericMatrix ll(S, N);
   const double* peo  = eta_occ.begin();

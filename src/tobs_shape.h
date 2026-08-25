@@ -68,10 +68,15 @@ inline void check_len(const V& v, R_xlen_t n, const char* what) {
 }
 
 // Every entry of a 0-based index vector inside [0, n). The offending entry is
-// reported at its 1-based position, the one the R caller sees.
+// reported at its 1-based position, the one the R caller sees. NA is rejected
+// by name: it reaches C++ as INT_MIN, which reads as an arbitrary index rather
+// than as the missing value it is.
 inline void check_index0(const Rcpp::IntegerVector& v, R_xlen_t n,
                          const char* what) {
   for (R_xlen_t k = 0; k < v.size(); ++k) {
+    if (Rcpp::IntegerVector::is_na(v[k])) {
+      Rcpp::stop("%s[%d] is NA.", what, k + 1);
+    }
     if (v[k] < 0 || (R_xlen_t) v[k] >= n) {
       Rcpp::stop("%s[%d] = %d is outside [0, %d).", what, k + 1, (int) v[k], n);
     }
@@ -82,9 +87,28 @@ inline void check_index0(const Rcpp::IntegerVector& v, R_xlen_t n,
 inline void check_index1(const Rcpp::IntegerVector& v, R_xlen_t n,
                          const char* what) {
   for (R_xlen_t k = 0; k < v.size(); ++k) {
+    if (Rcpp::IntegerVector::is_na(v[k])) {
+      Rcpp::stop("%s[%d] is NA.", what, k + 1);
+    }
     if (v[k] < 1 || (R_xlen_t) v[k] > n) {
       Rcpp::stop("%s[%d] = %d is outside [1, %d].", what, k + 1, (int) v[k], n);
     }
+  }
+}
+
+// A coefficient block [off, off + width) inside a draw row of `total` columns.
+// The offsets and widths are packed in R against the draw matrix and arrive as
+// separate scalar arguments, so a kernel reading one is reading two arguments
+// against a third. A zero-width block is an absent arm: nothing reads its
+// offset, so it passes whatever that offset says.
+inline void check_block(int off, int width, R_xlen_t total, const char* what) {
+  if (width < 0) {
+    Rcpp::stop("%s block width must be non-negative; got %d.", what, width);
+  }
+  if (width == 0) return;
+  if (off < 0 || (R_xlen_t) off + (R_xlen_t) width > total) {
+    Rcpp::stop("%s block [%d, %d) does not fit a draw row of %d columns.",
+               what, off, off + width, total);
   }
 }
 

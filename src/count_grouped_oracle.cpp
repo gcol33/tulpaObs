@@ -8,6 +8,7 @@
 
 #include "count_grouped_oracle.h"
 #include "nmix_oracle_emit.h"
+#include "tobs_shape.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <cmath>
@@ -25,6 +26,22 @@ void CountGroupedOracle::build_common(int arm_,
                                       const Rcpp::IntegerVector& site_group,
                                       int n_sites_, int n_groups_, bool nb,
                                       std::vector<std::vector<int>>& y_by_site_out) {
+    // Every buffer below is sized from n_sites_ / n_groups_ and indexed with
+    // values that arrive in other arguments, so the two are related here rather
+    // than at each factory: the callers forward n_sites / n_groups from further
+    // up (R/nmix_re_aghq.R takes n_sites from the RE design, not from nrow of
+    // any design matrix), so nothing downstream asserts the relation.
+    namespace sh = tulpaObs::shape;
+    sh::check_dim_arg(n_sites_, "n_sites");
+    sh::check_dim_arg(n_groups_, "n_groups");
+    sh::check_nrow(X_lambda, n_sites_, "X_lambda");
+    sh::check_nrow(Z_site, n_sites_, "Z_site");
+    sh::check_len(site_group, n_sites_, "site_group");
+    sh::check_index1(site_group, n_groups_, "site_group");
+    sh::check_len(site_idx, y.size(), "site_idx");
+    sh::check_index1(site_idx, n_sites_, "site_idx");
+    sh::check_nrow(X_p, y.size(), "X_p");
+
     arm      = arm_;
     p_lam    = X_lambda.ncol();
     p_p      = X_p.ncol();
@@ -62,10 +79,8 @@ void CountGroupedOracle::build_common(int arm_,
     }
 
     sites_by_group.assign(n_groups, std::vector<int>());
-    for (int i = 0; i < n_sites; ++i) {
-        const int g = site_group[i] - 1;
-        if (g >= 0 && g < n_groups) sites_by_group[g].push_back(i);
-    }
+    for (int i = 0; i < n_sites; ++i)
+        sites_by_group[site_group[i] - 1].push_back(i);
 
     eta_lambda_base = Eigen::VectorXd::Zero(n_sites);
     eta_p_site.assign(n_sites, std::vector<double>());
