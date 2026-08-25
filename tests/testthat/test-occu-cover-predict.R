@@ -217,7 +217,16 @@ test_that("trend fit errors clearly when time_col is unavailable", {
 # (sigma / alpha) factor or a plug-in of posterior means into the nonlinear
 # plogis would collapse this coverage. Returns truth alongside the fit so the
 # delta is computed from the generative parameters, not re-estimated.
-.ocp_build_trend_fit_truth <- function(N = 40L, J = 6L, seed = 202L) {
+# 120 cells and 10 visits, not 40 and 6. The block below asserts that the
+# predicted change tracks the true one, which needs the trend surface it is
+# read off to be identified: at 40 chain cells its correlation with truth runs
+# 0.12 to 0.86 over seeds and the predicted change inherits that, clearing its
+# band on 11 draws of 16. At 120 cells and 10 visits the surface recovers on
+# every seed measured (0.53 to 0.97) and so does the change, with the interval
+# coverage in the same block unaffected. Widening the two grids was tried
+# first and rejected: it moved the correlation barely and cost the coverage.
+# See NOTES_measurements.md.
+.ocp_build_trend_fit_truth <- function(N = 120L, J = 10L, seed = 202L) {
     adj <- .ocp_chain_adj(N)
     sim <- simulate_occu_cover(
         N = N, J = J, positive = "lognormal", adj = adj,

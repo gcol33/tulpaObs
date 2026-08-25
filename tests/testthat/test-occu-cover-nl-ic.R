@@ -32,8 +32,16 @@
   adj
 }
 
+# sigma_re is 2.0, not the 0.9 a recovery fixture would use. Every claim below
+# rests on the fit having FOUND a substantial random effect, and the grid
+# returns 0.30 to 1.57 across seeds when the truth is 0.9 -- so the premise
+# fails on its own roughly a fifth of the time, and a fit whose RE came out
+# near zero is one WAIC correctly penalises for carrying the offsets: its
+# effective parameter count triples for almost no gain in lppd. At 2.0 the
+# smallest margin over 12 fits on both arms is 2.8x the band it has to clear.
+# See NOTES_measurements.md.
 .ocnl_sim <- function(seed, arm = "p", side = 6L, J = 6L, n_g = 6L,
-                      sigma_re = 0.9) {
+                      sigma_re = 2.0) {
   adj <- .ocnl_grid_adj(side)
   simulate_occu_cover(
     N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
@@ -86,7 +94,11 @@ test_that("the grid-integrated components carry the per-visit RE offset", {
     adj <- .ocnl_grid_adj(6L)
     fit <- .ocnl_fit(sim, adj, arm)
 
-    S  <- 400L
+    # 1500 draws, not 400: the comparison below is a per-group mean over draws
+    # against the BLUPs, so its Monte Carlo error has to sit under the
+    # tolerance it is checked at. Measured worst case over seeds and arms,
+    # 0.068 at 400 draws against a 0.05 tolerance and 0.026 at 1500.
+    S  <- 1500L
     set.seed(11)
     c0 <- tulpaObs:::.tobs_occu_cover_components(fit, S)
     expect_identical(is.null(c0$off_det), !identical(arm, "p"))

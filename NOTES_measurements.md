@@ -1566,3 +1566,70 @@ The 0.25 band is untouched. Whether 0.99 also clears the Linux 0.271 is a
 prediction from the mechanism and from the 12x reduction it produces on the
 Windows draws in the same regime, not a measurement -- the next full-recovery
 run is what tests it.
+
+## Two occu_cover fixtures after the Cholesky field draw (#279)
+
+`8c67903` draws every areal field through a Cholesky instead of a LAPACK
+eigenbasis, so a fixed seed no longer produces the realisation it used to. The
+estimators are untouched; two fixtures that assert on one realisation landed on
+the wrong side of their bands with the new draws. Neither band moved.
+
+### `test-occu-cover-nl-ic.R`: the fixture's true RE, 0.9 -> 2.0
+
+Every criteria claim in the file rests on the fit having found a substantial
+random effect. At `sigma_re` truth 0.9 the grid returns 0.30 to 1.57 over 10
+seeds (arm p: mean 0.895, median 0.900; arm pos: mean 0.986, median 1.022), so
+the premise fails on its own on roughly a fifth of draws, and seed 1 came back
+0.301 against the 0.4 the block asks for.
+
+A fit whose RE came out near zero is one WAIC is right to penalise. On seeds 1
+and 6 the offsets roughly triple the effective parameter count for almost no
+gain in lppd -- `p_waic` 25.7 against 9.9, and 28.9 against 10.9 -- so elpd
+falls. On seeds where the RE is substantial `p_waic` DROPS when the offsets are
+carried (15.4 against 19.1) and elpd rises 12 to 30 nats. The direction of the
+criteria claim is conditional on the fitted variance, not on the draw count:
+raising the posterior draws 400 -> 1500 -> 4000 leaves the negative gains
+negative to within a nat.
+
+At truth 2.0, over 6 seeds on each arm, the worst margin is 2.8x the band:
+
+| arm | min sigma_re (band 0.4) | min d_lppd (5) | min d_elpd (5) | min WAIC gain (3) | min LOO gain (3) |
+|---|---|---|---|---|---|
+| p | 1.12 | 13.35 | 14.39 | 14.57 | 13.67 |
+| pos | 1.23 | 12.83 | 15.56 | 15.78 | 15.35 |
+
+1.5 also passes everywhere but leaves 4.04 against a band of 3 on one draw.
+
+The draw count in the first block goes 400 -> 1500 for a separate reason: it
+compares a per-group mean OVER DRAWS against the BLUPs at a tolerance of 0.05,
+and that comparison's Monte Carlo error is 0.068 at 400 draws and 0.026 at 1500.
+That one IS draw-limited, and it is the only assertion in the file that is.
+
+`zero offset == no offset`, the structural invariant the file exists for, held
+on 20 of 20 fits throughout, before and after.
+
+### `test-occu-cover-predict.R`: 40 cells and 6 visits -> 120 and 10
+
+`cor(delta_p, delta_true)` tracks the trend surface it is read off almost
+exactly, and at 40 chain cells that surface is not identified: over 16 seeds its
+correlation with truth runs 0.122 to 0.856 and the predicted change clears its
+0.5 band on 11 draws of 16. Averaging does not rescue it -- bootstrapped
+P(mean > 0.5) is 0.82 at 12 seeds and 0.85 at 16.
+
+Widening the outer grids was tried first and rejected. The fixture integrates
+over `sigma.grid = c(0.5, 1.0)` and `alpha.grid = c(0, 0.5)` while its truth is
+sigma 0.8 and alpha 0.6, so the copy amplitude cannot reach the value the data
+were drawn at; bracketing both moved the correlation from 0.556 to 0.584 and
+cost the interval coverage in the same block, 16 of 16 draws over 0.8 falling to
+11 of 16 with a minimum of 0.175.
+
+More data is what identifies it:
+
+| fixture | cor mean | cor min | over 0.5 | trend-field cor min | coverage over 0.8 |
+|---|---|---|---|---|---|
+| N=40 J=6 | 0.556 | 0.182 | 11/16 | 0.122 | 16/16 |
+| N=80 J=6 | 0.661 | -0.027 | 12/16 | 0.114 | 16/16 |
+| N=80 J=10 | 0.635 | -0.171 | 13/16 | -0.136 | 16/16 |
+| N=120 J=10 | 0.851 | **0.532** | **16/16** | 0.527 | 16/16 |
+
+The file runs in 6 s at the larger fixture.
