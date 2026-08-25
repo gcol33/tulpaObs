@@ -161,8 +161,8 @@ test_that("constant-rate dyn_abun fit is unchanged (no-regression at fit level)"
 
 
 # ---------------------------------------------------------------------------
-# The SIMULATOR reads the same two arm shapes as the likelihood
-# (gcol33/tulpaObs#257). cpp_simulate_dyn_abun indexed X_omega / X_gamma at the
+# The SIMULATOR reads the same two arm shapes as the likelihood.
+# cpp_simulate_dyn_abun indexed X_omega / X_gamma at the
 # per-site stride unconditionally, so a season-varying design's non-intercept
 # columns were read from the wrong memory region and the interval variation the
 # kernel above integrates was dropped: omega and gamma came out constant across

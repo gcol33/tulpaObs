@@ -91,8 +91,7 @@
                        "the multi-source ms_int_occu() carries one detection ",
                        "design per source"))),
   # The abundance arm is log-linked: reaching the occupancy fallback below
-  # reported plogis() of a log lambda as an occupancy probability
-  # (gcol33/tulpaObs#256).
+  # would report plogis() of a log lambda as an occupancy probability.
   ms_nmix = list(
     abundance = list(formula = "lambda", coef = "coef_lambda",
                      fitted = "lambda", inv = "log"),

@@ -451,7 +451,7 @@
     # A group whose posterior solve failed comes back with NA BLUP and
     # BLUP-variance rows. Adopting the refinement would replace this group's
     # finite EM values with NA, so the pass declines exactly as it does on any
-    # other failure and records why (gcol33/tulpaObs#281).
+    # other failure and records why.
     if (!is.null(ref) && isTRUE(ref$ok) && length(ref$groups_failed)) {
       aghq_status <- list(applied = FALSE, declined = "group_solve_failed",
                           groups_failed = ref$groups_failed)

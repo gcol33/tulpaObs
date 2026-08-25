@@ -67,7 +67,7 @@ test_that("fitted() / predict() / residuals() work on jsdm", {
 
 
 # ---------------------------------------------------------------------------
-# The community predict() arm registry (gcol33/tulpaObs#256)
+# The community predict() arm registry
 # ---------------------------------------------------------------------------
 
 test_that("every registered community arm is wired to the shared predictor", {

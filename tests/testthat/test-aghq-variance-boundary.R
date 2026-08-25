@@ -1,5 +1,4 @@
-# Testing a scalar community variance component against its lower boundary
-# (gcol33/tulpaObs#250 item 3).
+# Testing a scalar community variance component against its lower boundary.
 #
 # A variance component that has collapsed toward zero is invisible from the fit
 # it arrives on: the optimizer converges, the point estimate is ordinary, and

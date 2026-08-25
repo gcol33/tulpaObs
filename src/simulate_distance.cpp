@@ -55,8 +55,7 @@ Rcpp::List cpp_simulate_distance(
   std::vector<double> cut(cutpoints.begin(), cutpoints.end());
   // The rule is (cutpoints, transect, quad_order); the order is the caller's
   // `model$quad_order`, not a constant, or a fit at any other order is
-  // simulated from per-bin probabilities it was never fit against
-  // (gcol33/tulpaObs#257).
+  // simulated from per-bin probabilities it was never fit against.
   if (quad_order < 1) Rcpp::stop("quad_order must be a positive integer.");
   tulpaObs::DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
   Rcpp::RNGScope scope;

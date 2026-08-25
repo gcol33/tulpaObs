@@ -272,7 +272,7 @@ test_that("ms_dyn_occu() + spatial SVC bar recovers intercept + trend fields", {
 
 
 # ---------------------------------------------------------------------------
-# The HMM forward marginal (gcol33/tulpaObs#259)
+# The HMM forward marginal
 # ---------------------------------------------------------------------------
 
 # Independent per-site reference: the scaled forward filter written straight

@@ -1,7 +1,7 @@
 // community_spatial_driver.h
 //
-// STATUS: NOT YET WIRED. This is the extraction target for gcol33/tulpaObs#239
-// (the community spatial Laplace-EM written twice, once per response family).
+// STATUS: NOT YET WIRED. This is the extraction target for the community
+// spatial Laplace-EM written twice, once per response family.
 // Nothing includes it yet, so it contributes no code to the build; migrating
 // src/nmix_community_spatial.cpp and src/ms_occu_spatial.cpp onto it, and then
 // giving the occupancy side the SPDE arm the N-mixture side already has, is the
@@ -30,7 +30,7 @@
 //         then discarded by `(void) sigma_beta;` at
 //         nmix_community_spatial.cpp:353, so dropping it from this signature
 //         preserves behaviour. It remains an R-visible argument that does
-//         nothing, which belongs to gcol33/tulpaObs#266.
+//         nothing, which is a separate cleanup from this extraction.
 //
 // What the audit does NOT establish is that a migrated build reproduces the
 // current one. That needs the migration plus a before/after equivalence run on

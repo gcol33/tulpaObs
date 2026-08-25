@@ -200,8 +200,7 @@
 
   # Per-group solve status: a group the engine could not solve has NA BLUP and
   # BLUP-variance rows, which would otherwise replace the EM's finite values for
-  # that group. The caller declines the whole refinement on it
-  # (gcol33/tulpaObs#281).
+  # that group. The caller declines the whole refinement on it.
   gstat <- .tobs_aghq_group_status(ref)
 
   list(
@@ -226,10 +225,10 @@
 
 
 # =============================================================================
-# Per-group solve status on an AGHQ fit (gcol33/tulpaObs#281).
+# Per-group solve status on an AGHQ fit.
 #
 # tulpa::tulpa_re_aghq() reports, per group, whether that group's posterior mode
-# search and precision factorization succeeded (`group_ok`, gcol33/tulpa#605).
+# search and precision factorization succeeded (`group_ok`).
 # A group it marks FALSE comes back with NA `blup` / `blup_var` / `blup_cov_g`
 # rows, so every per-group quantity read off it is NA and every community-level
 # quantity summing over groups is not a function of that group's data. The
@@ -298,7 +297,7 @@
 # optimizer converges, the point estimate is ordinary, and nothing warns. The
 # gate has to be the component's OWN uncertainty. An absolute cut on `sigma_hat`
 # is a number with nothing behind it and does not transfer between fixtures, so
-# it is not one (gcol33/tulpaObs#250 item 3).
+# it is not one.
 #
 # A 1x1 covariance block's integration coordinate IS log(sigma) -- the
 # log-Cholesky diagonal of a 1x1 factor, equivalently that block's single log-SD
@@ -322,7 +321,7 @@
 # `re_par_se` is the block of the SAME joint inverse Hessian `theta_cov` is the
 # top-left block of, so this reads the fit's own curvature and costs no solve.
 # `re_par_se` / `re_par_layout` arrived in tulpa 12b641d, first released in
-# v0.1.18 (gcol33/tulpa#418); the DESCRIPTION engine floor is already above it.
+# v0.1.18; the DESCRIPTION engine floor is already above it.
 #
 # The record comes back in one shape whatever happened: `available = FALSE` plus
 # a `reason` where the engine returned no curvature for the block, so a caller

@@ -108,7 +108,7 @@ test_that("ms_distance()'s shared per-species engine quad matches a standalone b
 
 
 # ---------------------------------------------------------------------------
-# The SIMULATOR builds the rule at the fit's own order (gcol33/tulpaObs#257).
+# The SIMULATOR builds the rule at the fit's own order.
 # cpp_simulate_distance had no quad_order parameter and hardcoded 64, while
 # quad.order is a user-facing knob every likelihood path reads from
 # model$quad_order -- so a fit at any other order was simulated from per-bin

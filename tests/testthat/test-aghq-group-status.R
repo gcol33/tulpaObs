@@ -1,4 +1,4 @@
-# The per-group AGHQ solve status on a fit (gcol33/tulpaObs#281).
+# The per-group AGHQ solve status on a fit.
 #
 # tulpa::tulpa_re_aghq() reports, per group, whether that group's posterior mode
 # search and precision factorization succeeded. A group it marks failed comes
@@ -99,7 +99,7 @@ test_that("a failed species is on the fit, not only in a warning", {
   skip_if_fast()
   # A species whose solve fails takes the AGHQ objective to its failure
   # sentinel at the same parameter, and the engine refuses such an optimum
-  # outright (gcol33/tulpa#606) -- so a fit REPORTING one is not reachable from
+  # outright -- so a fit REPORTING one is not reachable from
   # data. The status is injected at the extractor instead, which is the boundary
   # it crosses on its way to this package; what the engine does with a genuinely
   # unsolvable group is pinned upstream.

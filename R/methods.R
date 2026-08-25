@@ -665,7 +665,7 @@ fitted.tobs_fit <- function(object, ...) {
 #' `det`, the OBSERVATION-level series (per visit / pass / distance bin). A
 #' family carrying only one of the two levels fills that one and leaves the
 #' other `NULL`; nothing returns a bare matrix, so a caller reading `$occ` gets
-#' the state residual or `NULL`, never an error (gcol33/tulpaObs#261).
+#' the state residual or `NULL`, never an error.
 #'
 #' @param object A `tobs_fit` object.
 #' @param type One of `"deviance"` (default), `"pearson"`, or `"response"`.

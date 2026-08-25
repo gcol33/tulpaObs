@@ -396,7 +396,7 @@
         lkj_eta = lkj_eta, theta_prior_sd = 100, max_iter = as.integer(inner_maxit))
       # A species the community solve could not fit comes back with NA BLUPs,
       # which would reach the shared-field solve as NA coefficients rather than
-      # as a failed node. The node is refused instead (gcol33/tulpaObs#281).
+      # as a failed node. The node is refused instead.
       if (is.null(comm) || !.tobs_aghq_group_status(comm)$all_ok) return(NULL)
       theta_cur <- comm$theta; Sigma_cur <- comm$Sigma_list
       mu_lambda <- comm$theta[seq_len(p_lam)]
@@ -712,8 +712,8 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     ),
     ms_dispersion = ms_dispersion,
     ms_zi = ms_zi,
-    # `group_ok` / `groups_failed` are the per-species AGHQ solve status
-    # (gcol33/tulpaObs#281): NULL on the EM path, which solves every species by
+    # `group_ok` / `groups_failed` are the per-species AGHQ solve status: NULL
+    # on the EM path, which solves every species by
     # Newton and has no such status; a logical of length n_species on the joint
     # AGHQ path. A species listed in `groups_failed` contributed NA BLUPs, so
     # `converged` is FALSE and every community-level quantity on the fit --

@@ -147,11 +147,11 @@
 #'   around an error that did not shrink with it. Both halves moving together is
 #'   what the 8-and-36 pool showed and what is absent there. The `mu_log_r`
 #'   interval at that group count is separately about 1.28x too narrow whatever
-#'   the recovered SD (gcol33/tulpaObs#280).
+#'   the recovered SD.
 #'
 #'   A fit now says whether its dispersion variance is distinguishable from zero
 #'   at all: `fit$ms_dispersion$sigma_log_r_boundary` carries the boundary test
-#'   and a fit that fails it warns (gcol33/tulpaObs#250).
+#'   and a fit that fails it warns.
 #'
 #'   What the penalty reaches on this block appears to be the boundary rather
 #'   than the calibration. Measured on 20 seeds of that fixture at 8 species with
@@ -506,7 +506,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     # an objective already undefined at the starting parameters, and an optimum
     # whose value is the per-group failure sentinel rather than an attained
     # marginal likelihood. Naming only the first sent a reader after a Hessian
-    # that was never the cause (gcol33/tulpaObs#281).
+    # that was never the cause.
     stop("Community N-mixture optimization failed: the AGHQ engine returned no ",
          "fit (a singular or non-finite optimum, or a per-species posterior ",
          "solve that failed -- the engine's warning names which species). Try a ",
@@ -516,7 +516,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # Per-species solve status. A species the engine could not solve has NA BLUPs,
   # so the community means, the covariance blocks and the dispersion block are
   # not estimates of what it contributes; the fit carries the status and is not
-  # reported as converged (gcol33/tulpaObs#281).
+  # reported as converged.
   # (Groups are species; this fitter is indexed, not named -- build_ms_nmix_fit()
   # attaches the species names when it assembles the reported fit.)
   gstat <- .tobs_aghq_group_status(fit)
@@ -588,7 +588,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # Both scalar blocks are one variance over species and either can settle at
   # its lower boundary, where the fit still converges and the point estimate is
   # still ordinary. Raised once, after both are attached, so a fit collapsing on
-  # both says so in one place (gcol33/tulpaObs#250 item 3).
+  # both says so in one place.
   .tobs_warn_variance_boundary(Filter(Negate(is.null), list(
     sigma_log_r = out$sigma_log_r_boundary,
     sigma_omega = out$sigma_omega_boundary)))

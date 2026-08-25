@@ -384,8 +384,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   b_out    <- unlist(lapply(ref$blup,     function(M) as.numeric(t(M))), use.names = FALSE)
   bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))), use.names = FALSE)
   # A group the engine could not solve carries NA BLUPs into `b` / `b_var`, so
-  # the fit is not reported as converged and says which groups failed
-  # (gcol33/tulpaObs#281).
+  # the fit is not reported as converged and says which groups failed.
   gstat <- .tobs_aghq_group_status(ref)
 
   # Refreshed posterior occupancy w1 at the refined estimate (for fitted()); the

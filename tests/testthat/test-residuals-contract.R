@@ -7,7 +7,7 @@
 # level. Three shapes used to be in use -- that list, a bare matrix, and
 # `list(mu = , det = )` -- and eight model types reached a fallback that
 # differenced against a `z` their `fitted()` does not carry, returning an
-# all-NA or an empty vector as a success (gcol33/tulpaObs#261).
+# all-NA or an empty vector as a success.
 # =============================================================================
 
 ctl_res <- list(verbose = FALSE, progress = FALSE, max.iter = 15L)

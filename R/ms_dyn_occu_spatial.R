@@ -93,7 +93,7 @@
 # A site whose forward mass underflows to zero contributes -Inf and takes the
 # species with it. The likelihood is over every site it was handed: a step that
 # kills a site is one the EM line search must reject, not one it accepts on the
-# surviving subset (gcol33/tulpaObs#259).
+# surviving subset.
 .ms_dyn_occu_fwd_ll_vec <- function(psi1, gamma, eps, em, n_sites, n_seasons) {
   psi1  <- pmin(pmax(psi1,  1e-12), 1 - 1e-12)
   gamma <- pmin(pmax(gamma, 1e-12), 1 - 1e-12)

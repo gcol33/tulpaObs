@@ -135,8 +135,7 @@
   bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))),
                      use.names = FALSE)
   # A group the engine could not solve carries NA BLUPs into `b` / `b_var`, so
-  # the fit is not reported as converged and says which groups failed
-  # (gcol33/tulpaObs#281).
+  # the fit is not reported as converged and says which groups failed.
   gstat <- .tobs_aghq_group_status(ref)
 
   list(

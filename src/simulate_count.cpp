@@ -114,7 +114,7 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
   // accepts and refused at any other, rather than indexed on an assumption:
   // read at the per-site stride, a season-varying design's non-intercept
   // columns land in the wrong memory region and the interval variation is
-  // silently dropped (gcol33/tulpaObs#257).
+  // silently dropped.
   const int nIv = T - 1;
   const int nrow_om = X_omega.nrow(), nrow_gm = X_gamma.nrow();
   const bool om_iv = (nIv > 0 && nrow_om == n_sites * nIv);
