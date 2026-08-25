@@ -1093,24 +1093,29 @@ decode_cover_hurdle <- function(fits, enc, family,
     hyperpar$phi_pos <- fits$phi_pos
   }
 
-  # Simplified-Laplace gamma + skew-normal pseudo-draws per arm.
+  # Simplified-Laplace gamma, plus the marginals it is a skewness OF. The gamma
+  # is differenced at `fits$m_*$mode` against `enc$*_data$X`, i.e. in the SCALED
+  # parameterization the arms were optimized in, so it corrects the scaled
+  # marginals; `sla_ref` carries them alongside it and `.tobs_cover_eta_draws()`
+  # imposes the skew-normal marginals on its own draws there. Pairing the gamma
+  # with the natural-scale `beta_occ` / `se_occ` instead names a different
+  # marginal for every coefficient whose natural coordinate is a combination of
+  # scaled ones -- the intercept, under any centered covariate.
   skew_occ <- NULL
   skew_pos <- NULL
-  draws_occ <- NULL
-  draws_pos <- NULL
+  sla_ref  <- NULL
   sla_status <- "off"
   if (identical(approx, "simplified_laplace")) {
     sla_res <- .sla_compute_cover_hurdle(fits, enc, fits$positive)
-    sla_draws <- .sla_build_cover_hurdle_draws(
-      beta_occ, se_occ, beta_pos, se_pos, sla_res,
-      V_occ = V_occ, V_pos = V_pos
-    )
-    draws_occ <- sla_draws$draws_occ
-    draws_pos <- sla_draws$draws_pos
-    sla_status <- sla_draws$sla_status
     if (isTRUE(sla_res$valid)) {
       skew_occ <- sla_res$gamma_occ
       skew_pos <- sla_res$gamma_pos
+      sla_ref  <- list(
+        occ = list(mean = beta_occ_sc, sd = .sd_from_vcov(V_occ_sc, p_occ_n)),
+        pos = list(mean = beta_pos_sc, sd = .sd_from_vcov(V_pos_sc, p_pos_n)))
+      sla_status <- "simplified_laplace"
+    } else {
+      sla_status <- paste0("fallback_gaussian (", sla_res$reason, ")")
     }
   }
 
@@ -1156,8 +1161,7 @@ decode_cover_hurdle <- function(fits, enc, family,
                        pos = fits$m_pos$log_marginal),
       skew_occ     = skew_occ,
       skew_pos     = skew_pos,
-      draws_occ    = draws_occ,
-      draws_pos    = draws_pos,
+      sla_ref      = sla_ref,
       sla_status   = sla_status
     ),
     class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit")

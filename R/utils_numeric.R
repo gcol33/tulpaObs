@@ -15,6 +15,13 @@
   pmin(pmax(e, -bound), bound)
 }
 
+# log(1 + exp(e)), the Bernoulli log-normalizer, evaluated so the exponential
+# is taken at a non-positive argument: `log1p(exp(e))` overflows to Inf at
+# e > ~709 and so turns the arm log-likelihood into -Inf. Elementwise.
+.tobs_log1pexp <- function(e) {
+  pmax(e, 0) + log1p(exp(-abs(e)))
+}
+
 # log(x) guarded at x <= 0, returning -1e300 rather than -Inf / NaN -- the R twin
 # of src/occu_coupling_shared.h::log_safe_. Used by the cover positive-arm density
 # so the WAIC / LOO pointwise density and the fit kernel agree at the cover

@@ -16,8 +16,8 @@ Under an SLA method (\code{method = "nested_laplace_sla"}), the per-arm marginal
 skewness is
 computed via \code{.sla_compute_cover_hurdle_joint()} (mixture third-moment
 over the outer grid; per-grid FD of the joint inner log-lik along the
-constraint-corrected Sigma columns), and per-arm pseudo-draws are
-resampled from moment-matched skew-normals via
-\code{\link[=.sla_build_cover_hurdle_draws]{.sla_build_cover_hurdle_draws()}}.
+constraint-corrected Sigma columns) and stored with the grid-combined
+marginals it corrects, which \code{.tobs_cover_eta_draws()} reshapes the joint
+posterior draw bundle against.
 }
 \keyword{internal}

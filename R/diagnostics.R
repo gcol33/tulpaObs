@@ -289,11 +289,12 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "dyn_int_occu")) {
     return(.tobs_ploglik_dyn_int_occu(object, nd, n.threads = n.threads))
   }
-  # Community occupancy (ms_occu / ms_dyn_occu / ms_int_occu): per-(species,
-  # site) marginal scored over the community-mean pseudo-draws with per-species
-  # BLUP deviations plugged in (R/community_ploglik.R).
+  # Community occupancy (ms_occu / ms_dyn_occu / ms_int_occu) and community
+  # binned distance sampling (ms_distance): per-(species, site) marginal scored
+  # over the community-mean pseudo-draws with per-species BLUP deviations
+  # plugged in (R/community_ploglik.R).
   if ((object$model$model_type %||% "NULL") %in%
-      c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover")) {
+      c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover", "ms_distance")) {
     return(.tobs_ploglik_ms_community(object, nd, n.threads = n.threads))
   }
 
@@ -953,8 +954,8 @@ NULL
     } else {
       paste0(" Multi-season and community goodness-of-fit tests are not ",
              "implemented; use waic() for those families. (The count ",
-             "families abun / removal / distance / dyn_abun have per-site-total ",
-             "dispersion / zero-inflation / outlier tests.)")
+             "families abun / removal / distance / dyn_abun / count have ",
+             "per-site-total dispersion / zero-inflation / outlier tests.)")
     }
     stop(sprintf("%s supports single-season occupancy fits only (model_type = %s).%s",
                  fn, mt, hint), call. = FALSE)

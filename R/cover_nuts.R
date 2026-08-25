@@ -286,8 +286,7 @@
     log_marginal = c(occ = ll_mean, pos = NA_real_),
     skew_occ     = NULL,
     skew_pos     = NULL,
-    draws_occ    = NULL,
-    draws_pos    = NULL,
+    sla_ref      = NULL,
     sla_status   = "off",
     # NUTS posterior + generic inference surface (coef / vcov / confint / logLik).
     draws        = draws,

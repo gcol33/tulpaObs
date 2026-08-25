@@ -219,6 +219,42 @@
   do.call(cbind, cols)
 }
 
+# Community binned distance sampling (ms_distance): per-(species, site)
+# marginal log-likelihood scored over the community-mean pseudo-draws with the
+# per-species BLUP deviation plugged into each arm -- the bins are pooled by
+# the same closed-form marginal the fit used (.tobs_ms_distance_engine(),
+# R/ms_distance.R), so `sweep(..., value_only = TRUE)$log_lik` already returns
+# the per-site value. Half-normal key only; under the hazard key the shared
+# log-shape is a community `global` and rides the trailing `log_b` draw column.
+.tobs_ploglik_community_ms_distance <- function(object, draws) {
+  model <- object$model
+  cm    <- object$ms_community
+  n_sites <- model$n_sites; n_species <- model$n_species
+  eng <- .tobs_ms_distance_engine(model)
+  lam_cols <- .tobs_community_proc_cols(object, 1L)
+  sig_cols <- .tobs_community_proc_cols(object, 2L)
+  hazard <- eng$hazard
+  b_col  <- if (hazard) match("log_b", colnames(draws)) else NA_integer_
+  field      <- model$distance_field_offset
+  factor_off <- model$distance_factor_offset
+  M <- nrow(draws)
+  cols <- vector("list", n_species)
+  for (s in seq_len(n_species)) {
+    bl <- cm$blup_lambda[s, ]; bs <- cm$blup_sigma[s, ]
+    ll_s <- matrix(0, M, n_sites)
+    for (m in seq_len(M)) {
+      eta_lam <- as.numeric(model$X_processes[[1L]] %*% (draws[m, lam_cols] + bl))
+      if (!is.null(field))      eta_lam <- eta_lam + as.numeric(field)
+      if (!is.null(factor_off)) eta_lam <- eta_lam + factor_off[, s]
+      eta_sig <- as.numeric(model$X_processes[[2L]] %*% (draws[m, sig_cols] + bs))
+      eta_b   <- if (hazard) draws[m, b_col] else 0
+      ll_s[m, ] <- eng$sweep(s, eta_lam, eta_sig, eta_b, value_only = TRUE)$log_lik
+    }
+    cols[[s]] <- ll_s
+  }
+  do.call(cbind, cols)
+}
+
 # Dispatch: community pointwise log-likelihood given an explicit draw matrix.
 .tobs_ploglik_community <- function(object, draws, n.threads = 1L) {
   switch(object$model$model_type,
@@ -226,6 +262,7 @@
     ms_int_occu   = .tobs_ploglik_community_twostate(object, draws),
     ms_dyn_occu   = .tobs_ploglik_community_dynamic(object, draws, n.threads),
     ms_occu_cover = .tobs_ploglik_community_occu_cover(object, draws),
+    ms_distance   = .tobs_ploglik_community_ms_distance(object, draws),
     stop("No community pointwise log-likelihood for model_type = '",
          object$model$model_type, "'.", call. = FALSE))
 }

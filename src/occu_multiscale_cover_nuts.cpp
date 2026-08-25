@@ -107,18 +107,6 @@ inline MscaleCoverNutsModel mscale_cover_nuts_build(const Rcpp::List& spec) {
     return m;
 }
 
-// log f_pos at a detected visit (mirrors the policy dispatch). `disp` is the
-// raw dispersion parameter on the natural scale: phi (beta precision) or sigma
-// (lognormal SD), both = exp(log_disp).
-inline double ms_cover_pos_logdens(int positive, double y_pos, double eta, double disp) {
-    return pos_log_density(positive, y_pos, eta, disp);
-}
-inline void ms_cover_pos_grad(int positive, double y_pos, double eta, double disp,
-                              double& g_eta, double& g_logdisp) {
-    g_eta     = pos_grad_eta(positive, y_pos, eta, disp);
-    g_logdisp = pos_grad_logdisp(positive, y_pos, eta, disp);
-}
-
 // Build the [n_plots x J] eta matrices (site predictor broadcast across a
 // plot's visits + optional visit-varying part, visit-major rows). Returns flat
 // length n_plots*J, plot-major (row p*J + v), matching `y` / `y_pos` / `valid`.
@@ -181,6 +169,10 @@ inline double mscale_cover_nuts_eval(const MscaleCoverNutsModel& m, const double
     double ge_logdisp = 0.0;
     double lp = 0.0;
 
+    // Reused per plot: the plot's valid visit rows in the padded grid.
+    std::vector<int> det_rows;
+    det_rows.reserve(J);
+
     for (int c = 0; c < m.n_cells; ++c) {
         const std::vector<int>& plots = m.plots_of_cell[c];
         const int M_c = (int) plots.size();
@@ -205,28 +197,29 @@ inline double mscale_cover_nuts_eval(const MscaleCoverNutsModel& m, const double
                 const int pi = plots[jj];
                 const double theta_j = sigmoid_(eta_theta[pi]);
                 if (plot_det[jj]) {
-                    // Detected plot: factorised. log theta + per-visit GLM terms.
-                    lp += log_safe(theta_j);
-                    ge_theta[pi] += 1.0 - theta_j;
+                    // Detected plot: factorised. log theta + per-visit GLM
+                    // terms, from the shared block the cell-coupling spec also
+                    // evaluates; this layout gathers the plot's valid visits
+                    // out of the padded grid and scatters the scores back.
+                    det_rows.clear();
                     for (int v = 0; v < J; ++v) {
                         const int row = pi * J + v;
-                        if (!m.valid[row]) continue;
-                        const double p_v = sigmoid_(eta_p[row]);
-                        if (m.y[row] == 1) {
-                            lp += log_safe(p_v);
-                            ge_p[row] += 1.0 - p_v;
-                            const double eta_po = eta_pos[row];
-                            const double ypos   = m.y_pos[row];
-                            lp += ms_cover_pos_logdens(m.positive, ypos, eta_po, disp);
-                            double g_eta = 0.0, g_ld = 0.0;
-                            ms_cover_pos_grad(m.positive, ypos, eta_po, disp, g_eta, g_ld);
-                            ge_pos[row] += g_eta;
-                            ge_logdisp  += g_ld;
-                        } else {
-                            lp += log_safe(1.0 - p_v);
-                            ge_p[row] += -p_v;
-                        }
+                        if (m.valid[row]) det_rows.push_back(row);
                     }
+                    const int nv = (int) det_rows.size();
+                    double g_th = 0.0, nh_th = 0.0;
+                    lp += mscale_det_plot_block(
+                        PosCodeAccess(m.positive), eta_theta[pi], nv,
+                        [&](int t) { return eta_p[det_rows[t]]; },
+                        [&](int t) { return eta_pos[det_rows[t]]; },
+                        [&](int t) { return (double) m.y[det_rows[t]]; },
+                        [&](int t) { return m.y_pos[det_rows[t]]; },
+                        disp, /*want_hess=*/false, /*want_logdisp=*/true,
+                        g_th, nh_th,
+                        [&](int t, double g, double) { ge_p[det_rows[t]] += g; },
+                        [&](int t, double g, double) { ge_pos[det_rows[t]] += g; },
+                        ge_logdisp);
+                    ge_theta[pi] += g_th;
                 } else {
                     // Non-detected plot inside an occupied cell: within-plot
                     // availability mixture m_j = theta_j P0_j + (1 - theta_j).

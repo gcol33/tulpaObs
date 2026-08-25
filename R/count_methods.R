@@ -12,9 +12,10 @@
 # fields, not the intercept field alone. `spatial_field` is the fallback for a
 # fit made before the offset was recorded (a plain intercept field, weight 1).
 # The field is skipped for newdata (a new site has no field node -- field
-# interpolation is a separate concern).
-.tobs_count_eta <- function(object, X, add_field = FALSE) {
-  beta <- object$means[seq_len(object$model$process_info[[1L]]$p)]
+# interpolation is a separate concern). `beta` defaults to the fit's posterior
+# mean; simulate() passes a sampled draw row instead, so both read one design.
+.tobs_count_eta <- function(object, X, add_field = FALSE, beta = NULL) {
+  beta <- beta %||% object$means[seq_len(object$model$process_info[[1L]]$p)]
   eta  <- as.numeric(X %*% beta)
   if (isTRUE(add_field)) {
     fld <- object$model$count_field_offset %||% object$spatial_field
@@ -83,48 +84,6 @@
     })
 }
 
-# simulate(): a replicate response drawn at one posterior beta draw (a random
-# row of object$draws, the .tobs_simulate_distance() / .tobs_simulate_nmix()
-# convention) under the family's own distribution -- count() has no detection
-# process and no latent state, so this IS its whole posterior predictive.
-# Reuses .tobs_count_eta() / .tobs_count_mu() (field offset + link) against a
-# lightweight stand-in carrying that one draw as `means`, rather than
-# R/sbc.R's .tobs_sbc_replicate_count() duplicating the mean/field/link
-# computation inline (which it did without the field offset, and read a
-# negbin dispersion column `object$draws` for count() has never carried).
-# Drives test_dispersion() / test_zero_inflation() / test_outliers() via
-# .tobs_count_gof_families (R/diagnostics_count_gof.R).
-.tobs_simulate_count <- function(object, nsim = 1) {
-  model    <- object$model
-  response <- model$response %||% "poisson"
-  draws    <- object$draws
-  n_draws  <- nrow(draws)
-  p        <- model$process_info[[1L]]$p
-  n        <- nrow(model$X_occ)
-  disp     <- object$count_dispersion
-  one <- function() {
-    beta <- draws[sample.int(n_draws, 1L), seq_len(p)]
-    fake <- list(model = model, means = beta,
-                spatial_field = object$spatial_field)
-    eta  <- .tobs_count_eta(fake, model$X_occ, add_field = TRUE)
-    mu   <- .tobs_count_mu(fake, eta)
-    if (identical(model$link %||% "log", "logit")) {
-      nt <- as.numeric(model$n_trials %||% rep(1, n)); mu <- mu * nt
-    }
-    switch(response,
-      poisson  = stats::rpois(n, mu),
-      negbin   = stats::rnbinom(n, mu = mu, size = disp$phi %||% Inf),
-      gaussian = stats::rnorm(n, mu, sqrt(disp$phi %||% 1)),
-      binomial = {
-        nt <- as.numeric(model$n_trials %||% rep(1, n))
-        stats::rbinom(n, size = round(nt), prob = mu / pmax(nt, 1))
-      },
-      stop("simulate() for count() is not implemented for response = '",
-           response, "'.", call. = FALSE))
-  }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
-}
-
 # residuals(): deviance (default), Pearson, or response (raw y - mu), per the
 # family. A count GLMM has one series, one value per response row: it fills the
 # unit-level `occ` slot of the residuals() contract and leaves `det` NULL. Poisson / negbin deviance uses the standard GLM saturated-model form;
@@ -167,4 +126,34 @@
         sign(y - mu) * sqrt(pmax(2 * (t1 + t2), 0))
       }))
   list(occ = r, det = NULL)
+}
+
+# Posterior replicate response vectors, one draw row per replicate (as
+# .tobs_simulate_nmix() and its siblings do): a random row of `object$draws`
+# stands in for a sampled coefficient vector, so under SBC -- which overwrites
+# `object$draws` with the single row being scored -- the replicate is drawn at
+# exactly that theta, not the fit's own posterior mean. count() carries no
+# per-draw dispersion coordinate (`count_phi` is a fixed nuisance from the
+# fit's own outer loop, R/tobs_dispatch.R), so every replicate reuses it.
+.tobs_simulate_count <- function(object, nsim = 1) {
+  model    <- object$model
+  response <- model$response %||% "poisson"
+  draws    <- object$draws
+  p        <- model$process_info[[1L]]$p
+  n        <- nrow(model$X_occ)
+  phi      <- object$count_dispersion$phi %||% NA_real_
+  nt       <- as.integer(round(model$n_trials %||% rep(1L, n)))
+  one <- function() {
+    beta <- draws[sample.int(nrow(draws), 1L), seq_len(p)]
+    eta  <- .tobs_count_eta(object, model$X_occ, add_field = TRUE, beta = beta)
+    mu   <- .tobs_count_mu(object, eta)
+    switch(response,
+      poisson  = stats::rpois(n, mu),
+      negbin   = stats::rnbinom(n, mu = mu, size = phi),
+      gaussian = stats::rnorm(n, mu, sqrt(phi)),
+      binomial = stats::rbinom(n, size = nt, prob = mu),
+      stop("simulate() for count() is not wired for response = '", response,
+           "'.", call. = FALSE))
+  }
+  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
 }

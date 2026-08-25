@@ -195,6 +195,72 @@ t_occu <- function() {
     extra = list(temporal_field = eta_mean))
 }
 
+# ---------------------------------------------------------------------------
+# S3 helpers (routed to from methods.R by model_type == "t_occu")
+# ---------------------------------------------------------------------------
+
+# fitted() for t_occu(): per-(site, season) psi from the fixed occupancy design
+# plus the AR1 year effect (fit$temporal_field, one value per season);
+# detection p is per-SITE (t_occu()'s detection design is site-level,
+# broadcast across every season -- see .tobs_build_t_occu() above). With NO
+# colonization / extinction transition the seasons are conditionally
+# independent given psi, so z is the single-season Bayes posterior
+# P(z=1 | y) applied per season: certain when the site was ever detected that
+# season, else psi weighted by the non-detection likelihood over that
+# season's visits (a season with zero visits falls back to psi, the prior).
+.tobs_fitted_t_occu <- function(object) {
+  model <- object$model; means <- object$means
+  pi_list <- model$process_info
+  p_psi <- pi_list[[1L]]$p; p_p <- pi_list[[2L]]$p
+  n_sites <- model$n_sites; n_seasons <- model$n_seasons
+  beta_psi <- means[seq_len(p_psi)]
+  beta_p   <- means[p_psi + seq_len(p_p)]
+  eta_t <- object$temporal_field %||% rep(0, n_seasons)
+  eta_psi <- as.vector(model$X_occ %*% beta_psi)          # [n_sites]
+  psi <- plogis(outer(eta_psi, eta_t, "+"))                # [n_sites x n_seasons]
+  p   <- plogis(as.vector(model$X_det %*% beta_p))         # [n_sites]
+
+  nvis <- model$nvis; anydet <- model$anydet
+  z <- matrix(NA_real_, n_sites, n_seasons)
+  for (t in seq_len(n_seasons)) {
+    prod_1mp <- (1 - p)^nvis[, t]
+    denom <- psi[, t] * prod_1mp + (1 - psi[, t])
+    z[, t] <- ifelse(anydet[, t], 1, psi[, t] * prod_1mp / denom)
+  }
+  list(psi = psi, p = p, z = z)
+}
+
+# residuals() for t_occu(): the per-(site, season) smoothed state posterior
+# against that season's ever-detected indicator -- the same construction
+# .tobs_residuals_dynamic() uses for dyn_occu(), minus the colonization /
+# extinction smoothing there is no transition to smooth across here -- at site
+# level, and each visit's detection against z * p (p broadcast across a
+# site's seasons) at visit level.
+.tobs_residuals_t_occu <- function(object, type) {
+  model <- object$model
+  fv <- .tobs_fitted_t_occu(object)
+  y  <- model$y
+  n_sites <- model$n_sites; n_seasons <- model$n_seasons; mv <- model$max_visits
+
+  z_obs <- matrix(NA_real_, n_sites, n_seasons)
+  for (i in seq_len(n_sites)) for (t in seq_len(n_seasons)) {
+    raw <- y[i, t, ]; raw <- raw[!is.na(raw) & raw >= 0]
+    if (length(raw)) z_obs[i, t] <- as.numeric(any(raw == 1))
+  }
+  occ_resid <- .tobs_resid_binary(z_obs, fv$z, type)
+
+  det_resid <- array(NA_real_, dim = c(n_sites, n_seasons, mv))
+  for (t in seq_len(n_seasons)) {
+    yt <- y[, t, ]
+    seen <- !is.na(yt) & yt >= 0
+    expected <- matrix(fv$z[, t] * fv$p, n_sites, mv)
+    dr <- matrix(NA_real_, n_sites, mv)
+    dr[seen] <- .tobs_resid_binary(yt[seen], expected[seen], type)
+    det_resid[, t, ] <- dr
+  }
+  list(occ = occ_resid, det = det_resid)
+}
+
 .dispatch_t_occu <- function(formula, data, family, detection, y, visits,
                              engine, priors, control,
                              approx = "gaussian_laplace",
@@ -218,32 +284,6 @@ t_occu <- function() {
     verbose  = isTRUE(control[["verbose"]]))
 }
 
-# ---------------------------------------------------------------------------
-# S3 helpers (routed to from methods.R by model_type == "t_occu")
-# ---------------------------------------------------------------------------
-
-# fitted(): psi is [n_sites x n_seasons] (X_occ beta + the AR1 year effect,
-# season by season); p is per-site (t_occu's v1 detection design is
-# site-level, broadcast across seasons -- see .tobs_fit_t_occu_pg_gibbs); z is
-# the per-(site, season) Bayes posterior P(z = 1 | y), a single-season update
-# in each cell since there is no colonization / extinction transition to
-# smooth through (unlike dyn_occu()'s HMM).
-.tobs_fitted_t_occu <- function(object) {
-  model <- object$model
-  means <- object$means
-  p_psi <- model$process_info[[1L]]$p; p_p <- model$process_info[[2L]]$p
-  eta_site <- as.vector(model$X_occ %*% means[seq_len(p_psi)])
-  psi <- plogis(outer(eta_site, object$temporal_field, "+"))
-  p   <- as.vector(plogis(model$X_det %*% means[p_psi + seq_len(p_p)]))
-
-  n_sites <- model$n_sites; T_s <- model$n_seasons
-  nvis <- model$nvis; anydet <- model$anydet
-  p_mat <- matrix(p, n_sites, T_s)
-  no_det <- (1 - p_mat)^nvis
-  z <- ifelse(anydet, 1, psi * no_det / (psi * no_det + (1 - psi)))
-  list(psi = psi, p = p, z = z)
-}
-
 # predict(): psi (occupancy, default; a [nrow x n_seasons] matrix carrying the
 # fitted AR1 year effect at each season, matching fitted()$psi) or p
 # (detection, per row) at the fitted or new design, on the response scale.
@@ -262,28 +302,6 @@ t_occu <- function() {
        else stats::model.matrix(model$formulas$occ, newdata)
   eta_site <- as.vector(X %*% means[seq_len(p_psi)])
   stats::plogis(outer(eta_site, object$temporal_field, "+"))
-}
-
-# residuals(): the per-(site, season) smoothed state against the ever-detected
-# indicator (NA where no visit was conducted that season), and each visit's
-# detection against z * p (t_occu's p is site-level, broadcast across seasons
-# and visits).
-.tobs_residuals_t_occu <- function(object, type) {
-  model <- object$model
-  fv    <- fitted(object)
-  n_sites <- model$n_sites; T_s <- model$n_seasons
-  z_obs <- matrix(NA_real_, n_sites, T_s)
-  z_obs[model$nvis > 0L] <- 0
-  z_obs[model$anydet]    <- 1
-  occ_resid <- .tobs_resid_binary(z_obs, fv$z, type)
-
-  y <- model$y
-  p_mat <- matrix(fv$p, n_sites, T_s)
-  expected <- array(fv$z * p_mat, dim(y))
-  seen <- !is.na(y) & y >= 0
-  det_resid <- array(NA_real_, dim(y))
-  det_resid[seen] <- .tobs_resid_binary(y[seen], expected[seen], type)
-  list(occ = occ_resid, det = det_resid)
 }
 
 #' Simulate multi-season occupancy with an AR1 year effect (tPGOcc)

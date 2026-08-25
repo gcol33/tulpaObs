@@ -141,42 +141,38 @@ private:
         for (int j = 0; j < M_c; j++) {
             const int sz = sizes[j];
             const double eta_theta = etas.eta(1, j);
-            const double theta = sigmoid_(eta_theta);
 
             if (plot_det[j]) {
                 // Detected plot: log theta_j + sum_v [detected: log p + log f_pos;
                 // undetected: log(1-p)]. Fully factorized -> no cross-Hessians.
-                cell_ll += log_safe(theta);
-                out.arm_grad[1][j] = 1.0 - theta;
-                if (want_hess) out.arm_neg_hess_diag[1][j] = theta * (1.0 - theta);
-
-                for (int v = 0; v < sz; v++) {
-                    const int row = off[j] + v;
-                    const double p_v = sigmoid_(etas.eta(2, row));
-                    if (y_cell.y(2, row) > 0.5) {
-                        cell_ll += log_safe(p_v);
-                        out.arm_grad[2][row] = 1.0 - p_v;
-                        if (want_hess) out.arm_neg_hess_diag[2][row] = p_v * (1.0 - p_v);
-
-                        const double y_pos   = y_cell.y(3, row);
-                        const double eta_pos = etas.eta(3, row);
-                        cell_ll += PosPolicy::log_density(y_pos, eta_pos, phi);
-                        double g_pos = 0.0, h_pos = 0.0;
-                        PosPolicy::grad_hess_eta(y_pos, eta_pos, phi,
-                                                 want_hess, g_pos, h_pos);
-                        out.arm_grad[3][row] = g_pos;
-                        if (want_hess) out.arm_neg_hess_diag[3][row] = h_pos;
-                    } else {
-                        cell_ll += log_safe(1.0 - p_v);
-                        out.arm_grad[2][row] = -p_v;
-                        if (want_hess) out.arm_neg_hess_diag[2][row] = p_v * (1.0 - p_v);
-                    }
-                }
+                // The score is the shared mscale_det_plot_block; this layout's
+                // arm rows are contiguous from off[j], so it writes through.
+                const int base = off[j];
+                double g_th = 0.0, nh_th = 0.0, g_ld = 0.0;
+                cell_ll += mscale_det_plot_block(
+                    PosPolicyAccess<PosPolicy>(), eta_theta, sz,
+                    [&](int v) { return etas.eta(2, base + v); },
+                    [&](int v) { return etas.eta(3, base + v); },
+                    [&](int v) { return y_cell.y(2, base + v); },
+                    [&](int v) { return y_cell.y(3, base + v); },
+                    phi, want_hess, /*want_logdisp=*/false, g_th, nh_th,
+                    [&](int v, double g, double nh) {
+                        out.arm_grad[2][base + v] = g;
+                        if (want_hess) out.arm_neg_hess_diag[2][base + v] = nh;
+                    },
+                    [&](int v, double g, double nh) {
+                        out.arm_grad[3][base + v] = g;
+                        if (want_hess) out.arm_neg_hess_diag[3][base + v] = nh;
+                    },
+                    g_ld);
+                out.arm_grad[1][j] = g_th;
+                if (want_hess) out.arm_neg_hess_diag[1][j] = nh_th;
             } else {
                 // Non-detected plot inside an occupied cell: within-plot
                 // occupancy mixture m_j = theta_j P0_j + (1 - theta_j). Reuse
                 // the shared nodet block with w = theta_j over this plot's
                 // visits; place its compact outputs into the cell buffers.
+                const double theta = sigmoid_(eta_theta);
                 std::vector<double> eta_p_buf(sz);
                 for (int v = 0; v < sz; v++) eta_p_buf[v] = etas.eta(2, off[j] + v);
 

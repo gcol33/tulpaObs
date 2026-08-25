@@ -86,6 +86,37 @@
   NULL
 }
 
+# Impose a cover fit's simplified-Laplace marginals on one arm's block of
+# coefficient draws. `B` is [S x p] in the SCALED parameterization the arms were
+# optimized in (`encode_cover_hurdle()` autoscales each arm's design), which is
+# where `.sla_compute_cover_hurdle[_joint]()` differences the log-likelihood and
+# so the only coordinates its gamma names a marginal of; `ref` carries that
+# block's scaled-space mean and SD. Every draw source the cover routes have --
+# the per-arm Gaussian-Laplace resample and the joint grid bundle -- is in those
+# same coordinates, so one helper serves both and each keeps whatever covariance
+# its own source carried (the full per-arm V, or the joint grid mixture plus the
+# shared field). Returns `B` untouched whenever the fit carries no usable
+# correction, so `method = "laplace"` and a declined `laplace_sla` read exactly
+# what they read before.
+.tobs_cover_sla_block <- function(B, gamma, ref) {
+  if (is.null(B) || is.null(gamma) || is.null(ref)) return(B)
+  m <- ref$mean
+  s <- ref$sd
+  p <- ncol(B)
+  if (length(gamma) != p || length(m) != p || length(s) != p) return(B)
+  if (!all(is.finite(m)) || !all(is.finite(s))) return(B)
+  .sla_replace_draws(B, m, s, gamma)
+}
+
+# Both arms of one draw bundle. `object$sla_ref` is present only on a fit whose
+# simplified-Laplace gamma was accepted, so this is the single gate.
+.tobs_cover_sla_arms <- function(object, B_occ, B_pos) {
+  ref <- object$sla_ref
+  if (is.null(ref)) return(list(occ = B_occ, pos = B_pos))
+  list(occ = .tobs_cover_sla_block(B_occ, object$skew_occ, ref$occ),
+       pos = .tobs_cover_sla_block(B_pos, object$skew_pos, ref$pos))
+}
+
 # Per-draw cover linear predictors [S x N] / [S x N_pos]. Separate-Laplace path:
 # sample each arm's Gaussian-Laplace posterior at its scaled design. Nested-joint
 # path: sample the grid-integrated joint and project the shared field at each
@@ -96,6 +127,12 @@
   positive <- object$positive %||% "lognormal"
   if (!is.null(.tobs_joint_fit(object))) {
     bundle  <- .tobs_joint_draws(object, n = n.draws)
+    # Reshape the arm coefficient blocks to the simplified-Laplace marginals
+    # before any predictor is assembled; the field blocks are untouched, so the
+    # coefficient-field dependence the grid mixture carries is preserved.
+    sla_b   <- .tobs_cover_sla_arms(object, bundle$b$occ, bundle$b$pos)
+    bundle$b$occ <- sla_b$occ
+    bundle$b$pos <- sla_b$pos
     if (isTRUE(object$armspecific)) {
       # Arm-specific separate latents store no node map / weight on the bundle
       # block; the pointwise-loglik consumer runs over the fit's observations, so
@@ -167,6 +204,11 @@
   S <- as.integer(n.draws)
   B_occ <- .tobs_mvn_draws(mode_occ, V_occ, S)   # [S x p_occ]
   B_pos <- .tobs_mvn_draws(mode_pos, V_pos, S)   # [S x p_pos]
+  colnames(B_occ) <- colnames(X_occ)
+  colnames(B_pos) <- colnames(X_pos)
+  sla_b <- .tobs_cover_sla_arms(object, B_occ, B_pos)
+  B_occ <- sla_b$occ
+  B_pos <- sla_b$pos
   disp  <- if (positive %in% c("lognormal", "gaussian")) object$sigma_pos
            else object$phi_pos
   list(eta_occ = B_occ %*% t(X_occ), eta_pos = B_pos %*% t(X_pos), disp = disp)

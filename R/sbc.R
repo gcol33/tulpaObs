@@ -613,12 +613,6 @@
   rowSums(.tobs_pointwise_loglik(f, n.draws = nrow(Theta)))
 }
 
-# count()'s own simulate() handler (.tobs_simulate_count(), R/count_methods.R)
-# reads its beta draw from `f$draws`, which .tobs_sbc_sim_simple() has already
-# set to the one-row scored theta -- so it IS this family's replicate
-# generator, and reuses the field offset / link .tobs_count_eta() /
-# .tobs_count_mu() apply everywhere else, which this used to skip.
-.tobs_sbc_replicate_count <- function(f) as.numeric(.tobs_simulate_count(f, nsim = 1L))
 
 # One registry row. `state` / `det` name the arm formulas in the fitted model,
 # `resp` its response slot, `extra` any further arguments the family's front
@@ -2565,9 +2559,11 @@
   fp_occu       = .tobs_sbc_simple_entry(
     "psi", "p11",
     extra = function(m) list(p10 = m$formulas$p10, certainty = m$formulas$b)),
-  count         = .tobs_sbc_simple_entry(
-    "occ", resp = "y_count", y_vector = TRUE,
-    replicate = .tobs_sbc_replicate_count),
+  # `.tobs_simulate_count()` (R/count_methods.R) is registered as count()'s
+  # `simulate()` handler, so the default replicate (`stats::simulate(f, nsim =
+  # 1L)`, .tobs_sbc_simple_entry()'s fallback) already draws at the sampled
+  # theta row the SBC driver writes into `f$draws`.
+  count         = .tobs_sbc_simple_entry("occ", resp = "y_count", y_vector = TRUE),
   # Independent-observer double_observer(): both p1/p2 read ONE `detection`
   # formula slot (`fit$model$formulas$p`), same shape as every other simple
   # entry's site-level (state, det) pair. The dependent (`type =

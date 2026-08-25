@@ -173,7 +173,7 @@
   }
   pred <- .tobs_nmix_response_draws(object$draws, X.0, beta_off, p_arm,
                                     pi_list[[arm_idx]]$link %||% "log")
-  .tobs_quantile_df(pred, quantiles)
+  .tobs_quantile_df(pred, .tobs_check_quantiles(quantiles, n = 3L))
 }
 
 # A SAMPLED (NUTS) field is not among the coefficient columns the fit keeps, so

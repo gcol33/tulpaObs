@@ -44,6 +44,12 @@ cell-level occupancy predictor and MUST carry an areal field naming the
 per-plot cell column, \code{icar(graph = adj, group_var = "cell")}. \code{availability = ~ ...} is the plot-level theta predictor (default \code{~ 1}); \code{detection} the
 per-visit p predictor; \code{positive = ~ ...} the cover predictor (default the
 detection formula). \code{y_pos} is read only where \code{y == 1}.
+
+A detected visit (\code{y_cjv = 1}) with a missing cover (\code{y_pos_cjv = NA}) keeps
+its detection term but drops the \code{f_pos} factor: cover is taken
+missing-at-random, so the cover likelihood runs over the detected visits with
+an observed cover. This is the rule \code{\link[=occu_cover]{occu_cover()}} applies, and it holds on
+every engine below.
 }
 
 \section{Identifiability}{

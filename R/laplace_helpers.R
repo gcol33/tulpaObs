@@ -84,7 +84,7 @@
 # exact-marginal adaptive Gauss-Hermite likelihood (R/re_aghq.R), removing the
 # attenuation, with a default LKJ(re.lkj = 1.5) penalty regularizing a
 # weakly-identified RE correlation off the +-1 boundary.
-.validate_re_laplace <- function(re, model, spatial, approx) {
+.validate_re_laplace <- function(re, model, spatial) {
   re_list <- if (inherits(re, "tobs_re")) list(re) else re
 
   if (!identical(model$model_type, "single")) {
@@ -786,6 +786,12 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     } else {
       sla_status <- paste0("fallback_gaussian (", sla_res$reason, ")")
     }
+  } else if (identical(approx, "simplified_laplace")) {
+    # A random-effect fit asked for the correction and does not get it: the
+    # gamma derivation assumes a fixed-effect-only M-step. Record it as a
+    # decline, not as "off" -- "off" is the status print() suppresses, and it
+    # says the correction was never requested.
+    sla_status <- "fallback_gaussian (random-effect M-step)"
   }
 
   intercepts <- compute_intercepts(model, means)

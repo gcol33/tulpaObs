@@ -84,9 +84,9 @@
 #' skewness is
 #' computed via `.sla_compute_cover_hurdle_joint()` (mixture third-moment
 #' over the outer grid; per-grid FD of the joint inner log-lik along the
-#' constraint-corrected Sigma columns), and per-arm pseudo-draws are
-#' resampled from moment-matched skew-normals via
-#' [`.sla_build_cover_hurdle_draws()`].
+#' constraint-corrected Sigma columns) and stored with the grid-combined
+#' marginals it corrects, which `.tobs_cover_eta_draws()` reshapes the joint
+#' posterior draw bundle against.
 #'
 #' @keywords internal
 decode_cover_hurdle_joint <- function(fits, enc, family,
@@ -119,8 +119,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   # the fits list (computed once inside `fit_cover_hurdle_joint_nested`).
   skew_occ <- NULL
   skew_pos <- NULL
-  draws_occ <- NULL
-  draws_pos <- NULL
+  sla_ref  <- NULL
   sla_status <- "off"
   if (identical(approx, "simplified_laplace") && isTRUE(fits$mcar)) {
     # The simplified-Laplace marginal skew correction over a correlated MCAR
@@ -147,16 +146,19 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     enc_sla$..spi_pos  <- as.integer(fits$spi_pos  %||% integer(0))
     sla_res <- .sla_compute_cover_hurdle_joint(fits$joint, enc_sla,
                                                fits$positive)
-    sla_draws <- .sla_build_cover_hurdle_draws(
-      beta_occ, se_occ, beta_pos, se_pos, sla_res
-    )
-    draws_occ <- sla_draws$draws_occ
-    draws_pos <- sla_draws$draws_pos
-    sla_status <- sla_draws$sla_status
     if (isTRUE(sla_res$valid)) {
       skew_occ <- sla_res$gamma_occ
       skew_pos <- sla_res$gamma_pos
+      # The grid-combined marginals the gamma is a skewness of, in the joint
+      # latent's own (scaled) parameterization -- the coordinates the posterior
+      # draw bundle comes back in, so `.tobs_cover_eta_draws()` reshapes the
+      # bundle's arm blocks against them directly.
+      sla_ref <- list(
+        occ = list(mean = sla_res$mu_occ, sd = sla_res$sd_occ),
+        pos = list(mean = sla_res$mu_pos, sd = sla_res$sd_pos))
+      sla_status <- "simplified_laplace"
     } else {
+      sla_status <- paste0("fallback_gaussian (", sla_res$reason, ")")
       # The orchestrator may still return numeric (possibly non-finite)
       # gamma vectors alongside `valid = FALSE`; surface them only when
       # they are finite so downstream consumers can inspect them.
@@ -169,12 +171,22 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     }
   }
 
+  # Whether every outer-grid cell's inner Newton converged
+  # (.tobs_joint_ok_cells(), run inside .cover_joint_beta_moments() on every
+  # cover joint route). Defaults to TRUE only when a caller predates that
+  # field entirely, never to paper over a known partial failure.
+  converged <- isTRUE(fits$converged %||% TRUE)
+
   out <- structure(
     c(
     # Where the outer grid ended up, and why a "fixed" placement stayed fixed.
     # Spliced rather than named so a fit from an engine that carries no
     # placement record simply has no such fields.
     .tobs_promote_outer_grid(fits$joint),
+    # Outer Pareto-k diagnostic, when control$diagnose.k = TRUE requested it --
+    # the other three joint routes (occu_joint, occu_cover, occu_multiscale_cover)
+    # all splice this beside the outer-grid record; cover() was missing it.
+    .tobs_promote_pareto_k(fits$joint),
     list(
       occ          = fits$m_occ,
       pos          = fits$m_pos,
@@ -195,13 +207,13 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       family       = family,
       n_total      = enc$N,
       n_positive   = enc$oi$n_positive %||% length(enc$idx_pos),
-      converged    = TRUE,
+      converged    = converged,
       # Unified convergence record; see the non-spatial assembly above. The
       # joint nested-Laplace outer grid has no iteration count, so n_iter is
       # NA, matching the other joint paths.
-      convergence  = list(converged = TRUE, n_iter = NA_integer_,
+      convergence  = list(converged = converged, n_iter = NA_integer_,
                           sla_status = sla_status),
-      log_marginal = c(joint = max(fits$joint$log_marginal)),
+      log_marginal = c(joint = max(fits$joint$log_marginal, na.rm = TRUE)),
       joint        = fits$joint,
       spi_full     = fits$spi_full,
       spi_pos      = fits$spi_pos,
@@ -224,8 +236,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       sigma_armspecific = fits$sigma_armspecific,
       skew_occ     = skew_occ,
       skew_pos     = skew_pos,
-      draws_occ    = draws_occ,
-      draws_pos    = draws_pos,
+      sla_ref      = sla_ref,
       sla_status   = sla_status
     )),
     class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit")
