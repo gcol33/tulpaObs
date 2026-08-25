@@ -16,6 +16,11 @@
 # anything expensive into this table with the run id as its source. These
 # numbers are the input to a bin-packing problem, so they only have to be right
 # to within a factor of two; what they must not be is invented.
+#
+# The same job publishes tier3-tests.csv, one row per test block. Read it before
+# accepting an expensive file as expensive: a file whose cost sits in one block
+# has to be paid, and a file whose cost is spread evenly across its blocks is
+# usually rebuilding a fixture in each of them.
 file,seconds,isolate,source
 test-ms-distance.R,18422.6,yes,"beast serial 2026-07-30, before the issue 161 Louis-block speedup (2.3x on the community EM), so this is an upper bound"
 test-ms-occu-factor.R,6937.3,no,"beast serial 2026-07-30. 115.6 min, comparable to a pool's own makespan and well under the job cap, so it does not meet the isolate bar; was isolate = yes"

@@ -33,10 +33,12 @@ read_csv_or_null <- function(path) {
 
 summaries <- list()
 timings <- list()
+tests <- list()
 for (id in ids) {
   base <- file.path(art_dir, paste0("tier3-", id))
   summaries[[id]] <- read_csv_or_null(file.path(base, "summary.csv"))
   timings[[id]] <- read_csv_or_null(file.path(base, "timings.csv"))
+  tests[[id]] <- read_csv_or_null(file.path(base, "tests.csv"))
 }
 
 reported <- ids[!vapply(summaries[ids], is.null, logical(1))]
@@ -96,6 +98,30 @@ if (!is.null(all_timings) && nrow(all_timings)) {
   for (i in seq_len(min(20L, nrow(all_timings)))) {
     cat(sprintf("  %9.1fs  %-46s %s\n", all_timings$seconds[i],
                 all_timings$file[i], all_timings$shard[i]))
+  }
+}
+
+# Per-test durations, for reading an expensive file. A file's weight tells the
+# planner how much room to give it; which block inside it holds the cost tells
+# you whether that is one measurement that has to be paid or a fixture rebuilt
+# once per block.
+test_parts <- lapply(reported, function(id) {
+  x <- tests[[id]]
+  if (is.null(x)) return(NULL)
+  data.frame(shard = id, x, stringsAsFactors = FALSE)
+})
+test_parts <- test_parts[!vapply(test_parts, is.null, logical(1))]
+if (length(test_parts)) {
+  all_tests <- do.call(rbind, test_parts)
+  all_tests <- all_tests[order(-all_tests$seconds), , drop = FALSE]
+  utils::write.csv(all_tests, "tier3-tests.csv", row.names = FALSE)
+  cat("
+Slowest blocks this run (full table in tier3-tests.csv):
+")
+  for (i in seq_len(min(15L, nrow(all_tests)))) {
+    cat(sprintf("  %9.1fs  %-38s %s
+", all_tests$seconds[i],
+                all_tests$file[i], all_tests$test[i]))
   }
 }
 
