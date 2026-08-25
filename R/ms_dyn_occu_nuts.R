@@ -147,7 +147,7 @@
       g_gam <- g_gam + (fb$col_y - gamma * fb$col_n)
       g_eps <- g_eps + (fb$ext_y - eps   * fb$ext_n)
     } else {
-      lp <- lp + .ms_dyn_occu_fwd_ll_vec(psi1, p, gamma, eps, em,
+      lp <- lp + .ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em,
                                          n_sites, n_seasons)
     }
   }
@@ -226,7 +226,7 @@
   sp_ll <- function(s, theta, global) {
     e  <- eta_of(theta, global)
     em <- .ms_dyn_occu_emissions(e$p, em_stats[[s]]$nvalid, em_stats[[s]]$ndet)
-    .ms_dyn_occu_fwd_ll_vec(e$psi1, e$p, e$gam, e$eps, em, Ns, T)
+    .ms_dyn_occu_fwd_ll_vec(e$psi1, e$gam, e$eps, em, Ns, T)
   }
   sp_grad <- function(s, theta, global) {
     e  <- eta_of(theta, global)
@@ -379,7 +379,7 @@
     p    <- stats::plogis(as.numeric(pieces$X_p    %*% (mu_hat[lay$p]    + B_bar[s, lay$p])))
     em <- .ms_dyn_occu_emissions(p, pieces$em_stats[[s]]$nvalid,
                                  pieces$em_stats[[s]]$ndet)
-    ll_mean <- ll_mean + .ms_dyn_occu_fwd_ll_vec(psi1, p, gam, eps, em,
+    ll_mean <- ll_mean + .ms_dyn_occu_fwd_ll_vec(psi1, gam, eps, em,
                                                  pieces$Ns, pieces$T)
   }
 

@@ -76,11 +76,25 @@
 }
 
 
-# Vectorised forward-filter marginal log-likelihood (summed over sites) for one
-# species: psi1 seeds season 1, the transition matrix advances between seasons.
-# Equivalent to .ms_dyn_occu_forward_ll but O(n_seasons) vector ops, not a
-# per-site loop.
-.ms_dyn_occu_fwd_ll_vec <- function(psi1, p, gamma, eps, em, n_sites, n_seasons) {
+# The per-species HMM forward marginal log-likelihood, summed over sites: the
+# one kernel every ms_dyn_occu route evaluates (laplace, NUTS, spatial, SBC).
+# The latent occupancy path z integrates out by a scaled forward filter,
+# vectorised over sites. Season 1 starts from the prior c(1 - psi1, psi1); each
+# season multiplies by the emission (unoccupied: 1 if the season carries no
+# detection else 0; occupied: p^ndet (1 - p)^(nvalid - ndet), so a season with
+# no valid visits is uninformative at 1); between seasons the per-site
+# gamma_i / eps_i transition applies. The log of each season's forward
+# normalizer accumulates into the log-likelihood.
+#
+# psi1 / gamma / eps are per-site vectors (length n_sites); the detection
+# probability enters only through `em`, the emission pair from
+# .ms_dyn_occu_emissions().
+#
+# A site whose forward mass underflows to zero contributes -Inf and takes the
+# species with it. The likelihood is over every site it was handed: a step that
+# kills a site is one the EM line search must reject, not one it accepts on the
+# surviving subset (gcol33/tulpaObs#259).
+.ms_dyn_occu_fwd_ll_vec <- function(psi1, gamma, eps, em, n_sites, n_seasons) {
   psi1  <- pmin(pmax(psi1,  1e-12), 1 - 1e-12)
   gamma <- pmin(pmax(gamma, 1e-12), 1 - 1e-12)
   eps   <- pmin(pmax(eps,   1e-12), 1 - 1e-12)
@@ -89,7 +103,7 @@
   ct <- v0 + v1
   ll <- ifelse(ct > 0, log(ct), -Inf)
   a0 <- ifelse(ct > 0, v0 / ct, 0); a1 <- ifelse(ct > 0, v1 / ct, 0)
-  for (t in 2:n_seasons) {
+  for (t in seq_len(n_seasons - 1L) + 1L) {
     pr1 <- a1 * (1 - eps) + a0 * gamma
     pr0 <- a1 * eps       + a0 * (1 - gamma)
     v0 <- pr0 * em_unocc[, t]; v1 <- pr1 * em_occ[, t]
@@ -97,7 +111,7 @@
     ll <- ll + ifelse(ct > 0, log(ct), -Inf)
     a0 <- ifelse(ct > 0, v0 / ct, 0); a1 <- ifelse(ct > 0, v1 / ct, 0)
   }
-  sum(ll[is.finite(ll)])
+  sum(ll)
 }
 
 
@@ -261,7 +275,7 @@
     sp_ll <- function(s, theta, global) {
       e  <- eta_of(s, theta, global)
       em <- .ms_dyn_occu_emissions(e$p, em_stats[[s]]$nvalid, em_stats[[s]]$ndet)
-      .ms_dyn_occu_fwd_ll_vec(e$psi1, e$p, e$gam, e$eps, em, Ns, n_seasons)
+      .ms_dyn_occu_fwd_ll_vec(e$psi1, e$gam, e$eps, em, Ns, n_seasons)
     }
     sp_grad <- function(s, theta, global) {
       e  <- eta_of(s, theta, global)

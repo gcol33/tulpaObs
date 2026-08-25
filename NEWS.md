@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.0.242 (2026-08-25)
+
+* **One `ms_dyn_occu` forward marginal, and a dead site is refused rather than
+  dropped (#259).** `.ms_dyn_occu_fwd_ll_vec()` summed `ll[is.finite(ll)]`, so a
+  site whose forward mass underflowed left the species' log-likelihood finite
+  over the surviving sites -- a value the EM line search accepts. The scalar
+  `.ms_dyn_occu_forward_ll()` the `laplace` route used instead returned `-Inf`
+  for the same data, so the two kernels documented as equivalent disagreed on
+  exactly the step that matters. The vectorised kernel now sums every site, the
+  scalar one is deleted, and the `laplace` route and the SBC registry entry
+  drive the same kernel the NUTS, spatial and warm-start routes already did,
+  off the per-species detection sufficient statistics built once
+  (`.ms_dyn_occu_emit_stats()`) rather than rebuilt per call. The kernel is also
+  defined at one season, which the `2:n_seasons` loop was not.
+  `test-ms-dyn-occu.R` checks it against an independent per-site filter, at the
+  underflowing site and at `n_seasons = 1`.
+
 ## 0.0.241 (2026-08-25)
 
 * **`test-ms-abun-nb-rs.R`'s coverage gate asserts what is measured (#250

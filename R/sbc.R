@@ -2366,9 +2366,11 @@
 # `f$ms_community$coef_psi1`/`coef_p` (per-species) AND
 # `f$means[gamma_names]`/`f$means[eps_names]` (the shared globals that
 # handler reads directly off `object$means`, not `ms_community`).
-# `loglik_many()` sums each species' own `.ms_dyn_occu_forward_ll()` (the
-# exact HMM-forward marginal the fitter's `sp_ll` closure optimizes) at that
-# species' psi1/p slice plus the SAME shared gamma/eps every species uses.
+# `loglik_many()` sums each species' own `.ms_dyn_occu_fwd_ll_vec()` (the
+# exact HMM-forward marginal the fitter's `sp_ll` closure optimizes, the same
+# kernel on every route) at that species' psi1/p slice plus the SAME shared
+# gamma/eps every species uses. `setup` precomputes the per-species detection
+# sufficient statistics once, the way `ms_distance` precomputes its engine.
 # ---------------------------------------------------------------------------
 
 # Concatenate two 4D [n_sites x max_visits x n_seasons x n_species] response
@@ -2426,12 +2428,20 @@
        eps   = as.numeric(stats::plogis(m$X_eps   %*% g$eps)))
 }
 
+.tobs_sbc_setup_ms_dyn_occu <- function(fit) {
+  m <- fit$model
+  lapply(seq_len(m$n_species), function(s)
+    .ms_dyn_occu_emit_stats(m$y[, , , s], m$valid[, , , s],
+                            m$n_sites, m$n_seasons))
+}
+
 .tobs_sbc_ll_ms_dyn_occu <- function(m, s, b, g, aux, row) {
-  .ms_dyn_occu_forward_ll(
+  p <- as.numeric(stats::plogis(m$X_p %*% b$p))
+  .ms_dyn_occu_fwd_ll_vec(
     as.numeric(stats::plogis(m$X_psi1 %*% b$psi1)),
-    as.numeric(stats::plogis(m$X_p    %*% b$p)),
     row$gamma, row$eps,
-    m$y[, , , s], m$valid[, , , s], m$n_sites, m$n_seasons)
+    .ms_dyn_occu_emissions(p, aux[[s]]$nvalid, aux[[s]]$ndet),
+    m$n_sites, m$n_seasons)
 }
 
 
@@ -2830,6 +2840,7 @@
     globals = list(.tobs_sbc_global("gamma", "gamma_", 3L),
                    .tobs_sbc_global("eps",   "eps_",   4L)),
     ll      = .tobs_sbc_ll_ms_dyn_occu,
+    setup   = .tobs_sbc_setup_ms_dyn_occu,
     row     = .tobs_sbc_row_ms_dyn_occu,
     spec    = .tobs_sbc_spec_ms_dyn_occu,
     data    = .tobs_sbc_data_4d_species,

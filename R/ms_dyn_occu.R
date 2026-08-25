@@ -143,56 +143,6 @@
 
 
 # ---------------------------------------------------------------------------
-# Per-species HMM forward marginal log-likelihood
-# ---------------------------------------------------------------------------
-
-# Marginal log-likelihood for one species, summed over sites, with the latent
-# occupancy path z integrated out by a scaled HMM forward filter. Per site the
-# season-1 prior is c(1 - psi1, psi1); each season multiplies by the emission
-# (unoccupied: 1 if no detection that season else 0; occupied: prod over valid
-# visits of p^y (1-p)^(1-y)); between seasons the transition matrix Tr applies
-# (from-state columns) with the per-site gamma_i / eps_i. The log of each
-# season's forward normalizer accumulates into the log-likelihood. A season
-# with no valid visits has the uninformative emission c(1, 1).
-#
-# psi1 / p / gamma / eps are per-site vectors (length n_sites). ys / vs are the
-# species' 3D detection / validity arrays [n_sites x max_visits x n_seasons].
-.ms_dyn_occu_forward_ll <- function(psi1, p, gamma, eps, ys, vs,
-                                    n_sites, n_seasons) {
-  clamp <- function(x) pmin(pmax(x, 1e-12), 1 - 1e-12)
-  psi1 <- clamp(psi1); p <- clamp(p); gamma <- clamp(gamma); eps <- clamp(eps)
-  log1mp <- log(1 - p)
-  ll <- 0
-  for (i in seq_len(n_sites)) {
-    # Transition matrix Tr[a, b] = P(z_t = b-1 | z_{t-1} = a-1), so the predict
-    # step is t(Tr) %*% fwd (from-state in columns).
-    Tr <- matrix(c(1 - gamma[i], eps[i],
-                   gamma[i],     1 - eps[i]), 2L, 2L)
-    fwd <- c(1 - psi1[i], psi1[i])
-    log_ll_i <- 0
-    for (t in seq_len(n_seasons)) {
-      vis <- which(vs[i, , t])
-      if (length(vis)) {
-        det <- sum(ys[i, vis, t])
-        em_occ   <- exp(det * log(p[i]) + (length(vis) - det) * log1mp[i])
-        em_unocc <- if (det > 0) 0 else 1
-      } else {
-        em_occ <- 1; em_unocc <- 1
-      }
-      if (t > 1L) fwd <- as.vector(t(Tr) %*% fwd)
-      fwd <- fwd * c(em_unocc, em_occ)
-      sc <- sum(fwd)
-      if (sc <= 0) { log_ll_i <- -Inf; break }
-      fwd <- fwd / sc
-      log_ll_i <- log_ll_i + log(sc)
-    }
-    ll <- ll + log_ll_i
-  }
-  ll
-}
-
-
-# ---------------------------------------------------------------------------
 # Laplace-EM fitter (shared community engine)
 # ---------------------------------------------------------------------------
 
@@ -237,6 +187,12 @@
   ys_list <- lapply(seq_len(S), function(s) model$y[, , , s])
   vs_list <- lapply(seq_len(S), function(s) model$valid[, , , s])
 
+  # Per-(site, season) detection sufficient statistics, once per species: they
+  # carry no parameter, so the forward marginal's only per-step input is the
+  # emission built from them at the current p.
+  em_stats <- lapply(seq_len(S), function(s)
+    .ms_dyn_occu_emit_stats(ys_list[[s]], vs_list[[s]], n_sites, n_seasons))
+
   sp_ll <- function(s, theta, global) {
     beta_psi1 <- theta[psi1_idx]
     beta_p    <- theta[p_idx]
@@ -246,8 +202,8 @@
     p     <- stats::plogis(as.numeric(X_p     %*% beta_p))
     gamma <- stats::plogis(as.numeric(X_gamma %*% beta_gam))
     eps   <- stats::plogis(as.numeric(X_eps   %*% beta_eps))
-    .ms_dyn_occu_forward_ll(psi1, p, gamma, eps, ys_list[[s]], vs_list[[s]],
-                            n_sites, n_seasons)
+    em    <- .ms_dyn_occu_emissions(p, em_stats[[s]]$nvalid, em_stats[[s]]$ndet)
+    .ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em, n_sites, n_seasons)
   }
 
   # ---- warm start ----

@@ -269,3 +269,95 @@ test_that("ms_dyn_occu() + spatial SVC bar recovers intercept + trend fields", {
   expect_gt(stats::median(c0[c0 != 0], na.rm = TRUE), 0.75)
   expect_gt(stats::median(c1[c1 != 0], na.rm = TRUE), 0.70)
 })
+
+
+# ---------------------------------------------------------------------------
+# The HMM forward marginal (gcol33/tulpaObs#259)
+# ---------------------------------------------------------------------------
+
+# Independent per-site reference: the scaled forward filter written straight
+# from the model definition, one site at a time. The package evaluates the
+# marginal vectorised over sites on every route, so the arbiter has to be a
+# separate implementation rather than a second call into the same kernel.
+ref_ms_dyn_occu_fwd_ll <- function(psi1, p, gamma, eps, nvalid, ndet,
+                                   n_sites, n_seasons) {
+  site_ll <- vapply(seq_len(n_sites), function(i) {
+    fwd <- c(1 - psi1[i], psi1[i])
+    acc <- 0
+    for (t in seq_len(n_seasons)) {
+      if (t > 1L) {
+        fwd <- c(fwd[1] * (1 - gamma[i]) + fwd[2] * eps[i],
+                 fwd[1] * gamma[i]       + fwd[2] * (1 - eps[i]))
+      }
+      em_occ   <- p[i]^ndet[i, t] * (1 - p[i])^(nvalid[i, t] - ndet[i, t])
+      em_unocc <- if (ndet[i, t] > 0) 0 else 1
+      fwd <- fwd * c(em_unocc, em_occ)
+      sc  <- sum(fwd)
+      if (sc <= 0) return(-Inf)
+      fwd <- fwd / sc
+      acc <- acc + log(sc)
+    }
+    acc
+  }, numeric(1))
+  sum(site_ll)
+}
+
+
+test_that("the ms_dyn_occu forward marginal matches a per-site reference", {
+  set.seed(11)
+  n_sites <- 12L; n_seasons <- 4L
+  nvalid <- matrix(sample(0:3, n_sites * n_seasons, TRUE), n_sites, n_seasons)
+  ndet   <- matrix(vapply(as.integer(nvalid), function(k) sample(0:k, 1L),
+                          integer(1)), n_sites, n_seasons)
+  psi1  <- stats::runif(n_sites, 0.1, 0.9)
+  p     <- stats::runif(n_sites, 0.1, 0.9)
+  gamma <- stats::runif(n_sites, 0.05, 0.4)
+  eps   <- stats::runif(n_sites, 0.05, 0.4)
+
+  em <- tulpaObs:::.ms_dyn_occu_emissions(p, nvalid, ndet)
+  expect_equal(
+    tulpaObs:::.ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em, n_sites, n_seasons),
+    ref_ms_dyn_occu_fwd_ll(psi1, p, gamma, eps, nvalid, ndet,
+                           n_sites, n_seasons),
+    tolerance = 1e-10)
+
+  # one season is the degenerate case of the same filter, not an error
+  em1 <- tulpaObs:::.ms_dyn_occu_emissions(p, nvalid[, 1L, drop = FALSE],
+                                           ndet[, 1L, drop = FALSE])
+  expect_equal(
+    tulpaObs:::.ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em1, n_sites, 1L),
+    ref_ms_dyn_occu_fwd_ll(psi1, p, gamma, eps, nvalid[, 1L, drop = FALSE],
+                           ndet[, 1L, drop = FALSE], n_sites, 1L),
+    tolerance = 1e-10)
+})
+
+
+test_that("a site whose forward mass underflows takes the species to -Inf", {
+  n_sites <- 3L; n_seasons <- 2L
+  nvalid <- matrix(60L, n_sites, n_seasons)
+  ndet   <- matrix(1L,  n_sites, n_seasons)
+  ndet[2L, 1L] <- 60L                    # every visit a detection at site 2 ...
+  psi1  <- rep(0.5, n_sites)
+  p     <- c(0.4, 1e-12, 0.4)            # ... and a detection prob that underflows
+  gamma <- rep(0.2, n_sites)
+  eps   <- rep(0.2, n_sites)
+
+  em <- tulpaObs:::.ms_dyn_occu_emissions(p, nvalid, ndet)
+  expect_equal(em$occ[2L, 1L], 0)        # the emission really is zero
+  expect_equal(em$unocc[2L, 1L], 0)
+
+  ll <- tulpaObs:::.ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em,
+                                           n_sites, n_seasons)
+  expect_identical(ll, -Inf)
+  expect_identical(ll, ref_ms_dyn_occu_fwd_ll(psi1, p, gamma, eps, nvalid, ndet,
+                                              n_sites, n_seasons))
+
+  # the two live sites carry a finite mass of their own, so a policy that
+  # dropped the dead row would have handed the line search a step to accept
+  live <- tulpaObs:::.ms_dyn_occu_fwd_ll_vec(
+    psi1[-2L], gamma[-2L], eps[-2L],
+    tulpaObs:::.ms_dyn_occu_emissions(p[-2L], nvalid[-2L, , drop = FALSE],
+                                      ndet[-2L, , drop = FALSE]),
+    2L, n_seasons)
+  expect_true(is.finite(live))
+})
