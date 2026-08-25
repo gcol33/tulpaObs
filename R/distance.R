@@ -567,8 +567,10 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   # probabilities reuse the SAME Gauss-Legendre quadrature the distance
   # likelihood integrates against (src/distance_quad.h), not a separate
   # stats::integrate path, so the simulator draws from exactly the pi the model
-  # was fit against (one source of truth). The former .distance_pi (integrate)
-  # path is no longer used here.
+  # was fit against (one source of truth). That rule is
+  # (cutpoints, transect, quad_order), so the fit's own `quad_order` is passed
+  # rather than a constant. The former .distance_pi (integrate) path is no
+  # longer used here.
   is_nb <- !is.null(r_size) && is.finite(r_size)
   transect_code <- if (identical(model$transect, "point")) 1L else 0L
   ab <- .tobs_sim_arm_block(model, draws, 2L)
@@ -576,6 +578,7 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   res <- cpp_simulate_distance(ab$X[[1L]], ab$X[[2L]],
     ab$draws, as.numeric(model$cutpoints),
     .dist_key_code(model$key), transect_code,
+    as.integer(model$quad_order %||% 64L),
     if (is.null(shape)) 0 else as.numeric(shape),
     n_sites, n_bins, p_lam, p_sig, is_nb,
     if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))

@@ -1,5 +1,33 @@
 # tulpaObs NEWS
 
+## 0.0.239 (2026-08-25)
+
+* **Two simulators drew from a different model than the likelihood they mirror
+  (#257).** Both matter beyond `simulate()`, because SBC replicates route
+  through them.
+
+  `cpp_simulate_dyn_abun()` read the survival and recruitment designs at the
+  per-site row stride unconditionally. `omega` and `gamma` are INTERVAL-level --
+  the transition into season `t` uses interval `t-1`'s rate, and
+  `.tobs_interval_arm_design()` returns `n_sites * (T-1)` site-major rows
+  whenever the arm carries a season-varying covariate -- so every non-intercept
+  column was read from the wrong memory region and the interval variation the
+  forward HMM integrates was dropped, the rates coming out constant across
+  seasons. The reads stayed in bounds, so nothing errored. Both shapes are now
+  read exactly as `src/dyn_abun_laplace.cpp` reads them, and a design of neither
+  shape is refused rather than indexed on an assumption. The interval lookup
+  draws nothing, so a constant-rate fit simulates byte-identically.
+
+  `cpp_simulate_distance()` hardcoded a 64-node Gauss-Legendre rule and had no
+  `quad_order` parameter, while `quad.order` is a user-facing knob every
+  likelihood path reads from `model$quad_order`. A fit at any other order was
+  simulated from per-bin detection probabilities it was never fit against, and
+  an `ms_distance` SBC run at a non-default order compared ranks against a
+  different generative pi. The rule is `(cutpoints, transect, quad_order)`, so
+  the order is now an argument and each of the three call sites passes the one
+  its model carries; `simulate_ms_distance()` gains a `quad_order` argument
+  (default 64) for the same reason.
+
 ## 0.0.238 (2026-08-25)
 
 * **A failed per-group AGHQ solve is a field on the fit, not a warning to parse

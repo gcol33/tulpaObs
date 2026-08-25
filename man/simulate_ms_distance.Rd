@@ -20,6 +20,7 @@ simulate_ms_distance(
   n_factors = 0,
   load_sd = 0.5,
   field = NULL,
+  quad_order = 64L,
   seed = NULL
 )
 }
@@ -56,6 +57,12 @@ per-species loadings to \verb{log lambda} (the lfMsDS truth). Default 0.}
 \item{field}{Optional length-\code{N} shared spatial field added to every species'
 \verb{log lambda}. When given alongside \code{n_factors > 0} the loadings are centred
 across species, so the field owns the shared spatial mean.}
+
+\item{quad_order}{Gauss-Legendre nodes per bin used to integrate the per-bin
+detection probabilities (default 64, matching \code{\link[=ms_distance]{ms_distance()}}). Set it to
+the \code{quad_order} the model will be fit at: the rule is
+\verb{(cutpoints, transect, quad_order)}, so a different order integrates a
+different pi and the data would come from a model the fit does not use.}
 
 \item{seed}{Optional random seed.}
 }

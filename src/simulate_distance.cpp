@@ -47,13 +47,18 @@ inline void rmultinom_R(int N, const std::vector<double>& prob, std::vector<int>
 Rcpp::List cpp_simulate_distance(
     Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma,
     Rcpp::NumericMatrix draws, Rcpp::NumericVector cutpoints,
-    int key, int transect, double b_shape,
+    int key, int transect, int quad_order, double b_shape,
     int n_sites, int n_bins, int p_lam, int p_sig,
     bool is_nb, double r_size, int nsim
 ) {
   const int ndr = draws.nrow();
   std::vector<double> cut(cutpoints.begin(), cutpoints.end());
-  tulpaObs::DistQuad quad = tulpaObs::dist_build_quad(cut, transect, 64);
+  // The rule is (cutpoints, transect, quad_order); the order is the caller's
+  // `model$quad_order`, not a constant, or a fit at any other order is
+  // simulated from per-bin probabilities it was never fit against
+  // (gcol33/tulpaObs#257).
+  if (quad_order < 1) Rcpp::stop("quad_order must be a positive integer.");
+  tulpaObs::DistQuad quad = tulpaObs::dist_build_quad(cut, transect, quad_order);
   Rcpp::RNGScope scope;
   Rcpp::List out(nsim);
   const double* pXl = X_lambda.begin(); const double* pXs = X_sigma.begin();

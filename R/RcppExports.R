@@ -461,8 +461,8 @@ cpp_simulate_fp_occu <- function(X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_
     .Call(`_tulpaObs_cpp_simulate_fp_occu`, X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim)
 }
 
-cpp_simulate_distance <- function(X_lambda, X_sigma, draws, cutpoints, key, transect, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_distance`, X_lambda, X_sigma, draws, cutpoints, key, transect, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim)
+cpp_simulate_distance <- function(X_lambda, X_sigma, draws, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_distance`, X_lambda, X_sigma, draws, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim)
 }
 
 cpp_simulate_ms_nmix <- function(lambda, p, size_s, obs_mask, n_sites, max_v, n_species, nsim) {

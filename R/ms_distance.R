@@ -544,7 +544,9 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
       res <- cpp_simulate_distance(
         X_lambda, X_sigma,
         matrix(c(cm$coef_lambda[s, ], cm$coef_sigma[s, ]), nrow = 1L),
-        as.numeric(model$cutpoints), kc, tc, 0, n_sites, n_bins, p_lam, p_sig,
+        as.numeric(model$cutpoints), kc, tc,
+        as.integer(model$quad_order %||% 64L), 0,
+        n_sites, n_bins, p_lam, p_sig,
         FALSE, NA_real_, 1L)
       y[, , s] <- res[[1L]]
     }
@@ -588,6 +590,11 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
 #' @param field Optional length-`N` shared spatial field added to every species'
 #'   `log lambda`. When given alongside `n_factors > 0` the loadings are centred
 #'   across species, so the field owns the shared spatial mean.
+#' @param quad_order Gauss-Legendre nodes per bin used to integrate the per-bin
+#'   detection probabilities (default 64, matching [ms_distance()]). Set it to
+#'   the `quad_order` the model will be fit at: the rule is
+#'   `(cutpoints, transect, quad_order)`, so a different order integrates a
+#'   different pi and the data would come from a model the fit does not use.
 #' @param seed Optional random seed.
 #' @return A list with `y`, `data`, `species`, `cutpoints`, and `truth`
 #'   (community means / SDs, per-species coefficients, `lambda`, `sigma`, and --
@@ -603,7 +610,7 @@ simulate_ms_distance <- function(n_species = 10, N = 100,
                                  mu_lambda = NULL, mu_sigma = NULL,
                                  sd_lambda = 0.4, sd_sigma = 0.2,
                                  n_factors = 0, load_sd = 0.5,
-                                 field = NULL, seed = NULL) {
+                                 field = NULL, quad_order = 64L, seed = NULL) {
   transect <- match.arg(transect)
   key      <- match.arg(key)
   if (!is.null(seed)) set.seed(seed)
@@ -675,7 +682,8 @@ simulate_ms_distance <- function(n_species = 10, N = 100,
     res <- cpp_simulate_distance(
       Xl_s, X_sigma,
       matrix(c(beta_s, beta_sigma[s, ]), nrow = 1L),
-      as.numeric(cutpoints), kc, tc, as.numeric(shape),
+      as.numeric(cutpoints), kc, tc, as.integer(quad_order),
+      as.numeric(shape),
       N, B, ncol(Xl_s), p_sig, FALSE, NA_real_, 1L)
     y[, , s] <- res[[1L]]
     lambda[, s] <- exp(as.numeric(X_lambda %*% beta_lambda[s, ]) + off_s)

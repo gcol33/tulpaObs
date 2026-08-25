@@ -89,9 +89,17 @@ Rcpp::List cpp_simulate_removal(
 }
 
 // Open N-mixture (dyn_abun): per site, initial abundance then a survival +
-// recruitment HMM across seasons, observed by binomial detection. Arms are
-// per-site (constant across intervals). RNG order is site-major (draw N, then
-// per season the transition draws + the J detections), matching the R loop.
+// recruitment HMM across seasons, observed by binomial detection. The lambda
+// and p arms are site-level; omega and gamma are INTERVAL-level -- the
+// transition into season t uses interval (t-1)'s rate -- so their designs carry
+// either n_sites rows (constant rates) or n_sites * (T-1) rows in the
+// site-major layout .tobs_period_arm_design() builds. Both shapes and the row
+// index are read exactly as the likelihood reads them
+// (src/dyn_abun_laplace.cpp: `eta_omega[i * nIv + iv]` against `eta_omega[i]`),
+// which is what a simulator mirroring that likelihood has to do.
+// RNG order is site-major (draw N, then per season the transition draws + the J
+// detections), matching the R loop, and the interval lookup draws nothing: a
+// constant-rate fit simulates byte-identically.
 // [[Rcpp::export]]
 Rcpp::IntegerVector cpp_simulate_dyn_abun(
     Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p,
@@ -102,6 +110,19 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
 ) {
   const int ndr = draws.nrow();
   const int o_p = p_lam, o_om = p_lam + p_p, o_gm = p_lam + p_p + p_om;
+  // The two transition designs are accepted at the two shapes the likelihood
+  // accepts and refused at any other, rather than indexed on an assumption:
+  // read at the per-site stride, a season-varying design's non-intercept
+  // columns land in the wrong memory region and the interval variation is
+  // silently dropped (gcol33/tulpaObs#257).
+  const int nIv = T - 1;
+  const int nrow_om = X_omega.nrow(), nrow_gm = X_gamma.nrow();
+  const bool om_iv = (nIv > 0 && nrow_om == n_sites * nIv);
+  const bool gm_iv = (nIv > 0 && nrow_gm == n_sites * nIv);
+  if (!om_iv && nrow_om != n_sites)
+    Rcpp::stop("X_omega must have n_sites or n_sites*(T-1) rows.");
+  if (!gm_iv && nrow_gm != n_sites)
+    Rcpp::stop("X_gamma must have n_sites or n_sites*(T-1) rows.");
   Rcpp::RNGScope scope;
   // Output: nsim arrays [n_sites x J x T]; return one flat vector when nsim == 1
   // (dim set by R), else the caller reshapes. Here we always return nsim == 1's
@@ -117,11 +138,16 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
     for (int i = 0; i < n_sites; ++i) {
       double lambda = std::exp(row_draw_dot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam));
       double pdet = stable_plogis(row_draw_dot(pXp, n_sites, i, pd, ndr, idx, o_p, p_p));
-      double omega = stable_plogis(row_draw_dot(pXo, n_sites, i, pd, ndr, idx, o_om, p_om));
-      double gamma = std::exp(row_draw_dot(pXg, n_sites, i, pd, ndr, idx, o_gm, p_gm));
       int N = draw_latent_N(lambda, is_nb ? r_disp : R_PosInf);
       for (int t = 0; t < T; ++t) {
-        if (t > 0) N = (int) R::rbinom((double) N, omega) + (int) R::rpois(gamma);
+        if (t > 0) {
+          const int iv = t - 1;
+          double omega = stable_plogis(row_draw_dot(
+              pXo, nrow_om, om_iv ? i * nIv + iv : i, pd, ndr, idx, o_om, p_om));
+          double gamma = std::exp(row_draw_dot(
+              pXg, nrow_gm, gm_iv ? i * nIv + iv : i, pd, ndr, idx, o_gm, p_gm));
+          N = (int) R::rbinom((double) N, omega) + (int) R::rpois(gamma);
+        }
         for (int j = 0; j < J; ++j)
           base[(std::size_t) i + (std::size_t) j * n_sites + (std::size_t) t * n_sites * J] =
             (int) R::rbinom((double) N, pdet);

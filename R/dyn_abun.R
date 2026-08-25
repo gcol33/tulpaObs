@@ -890,10 +890,14 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
   is_nb <- identical(object$mixture %||% "poisson", "negbin")
   r_disp <- object$dispersion$r %||% NA_real_
-  # Per-site arms (omega / gamma constant across intervals); the draw selection
+  # lambda / p are site-level arms; omega / gamma are interval-level, and their
+  # designs reach the simulator at whichever of the two shapes
+  # .tobs_interval_arm_design() built -- n_sites rows under constant rates,
+  # n_sites * (T-1) site-major rows with a season-varying covariate. The
+  # simulator reads both exactly as the likelihood does. The draw selection
   # (R_unif_index), latent N (rpois; NB via rpois(rgamma)), and the survival /
-  # recruitment / detection draws run in cpp_simulate_dyn_abun from R's RNG stream
-  # in the former site-major order (byte-identical).
+  # recruitment / detection draws run in cpp_simulate_dyn_abun from R's RNG
+  # stream in the former site-major order (byte-identical).
   ab <- .tobs_sim_arm_block(model, draws, 4L)
   p <- ab$p
   res <- cpp_simulate_dyn_abun(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],

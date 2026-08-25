@@ -105,3 +105,85 @@ test_that("ms_distance()'s shared per-species engine quad matches a standalone b
   expect_identical(sw_engine$log_lik, sw_standalone$log_lik)
   expect_identical(sw_engine$grad_lam, sw_standalone$grad_lam)
 })
+
+
+# ---------------------------------------------------------------------------
+# The SIMULATOR builds the rule at the fit's own order (gcol33/tulpaObs#257).
+# cpp_simulate_distance had no quad_order parameter and hardcoded 64, while
+# quad.order is a user-facing knob every likelihood path reads from
+# model$quad_order -- so a fit at any other order was simulated from per-bin
+# detection probabilities it was never fit against, and an SBC run at a
+# non-default order compared ranks against a different generative pi.
+# dist_build_quad() is a pure function of (cutpoints, transect, quad_order), so
+# passing the order IS passing the rule.
+# ---------------------------------------------------------------------------
+
+# A detection scale well below the bin width, so g() has real curvature INSIDE
+# a bin. That is what a coarse rule cannot integrate: 2-node Gauss-Legendre is
+# exact for cubics, so a gently curved integrand (sigma at or above the bin
+# width) gives the same answer at every order from 2 up and separates nothing.
+.qsim_cuts <- c(0, 25, 50, 75, 100)
+.qsim_draws <- matrix(c(log(200), log(15)), nrow = 1L)
+
+test_that("the simulator's quadrature order is an argument, and it bites", {
+  n <- 40L; B <- length(.qsim_cuts) - 1L
+  X1 <- matrix(1, n, 1L)
+  sim <- function(order, seed = 5L) {
+    set.seed(seed)
+    tulpaObs:::cpp_simulate_distance(X1, X1, .qsim_draws, as.numeric(.qsim_cuts),
+                                     tulpaObs:::.dist_key_code("halfnorm"), 0L,
+                                     as.integer(order), 0,
+                                     n, B, 1L, 1L, FALSE, NA_real_, 1L)[[1L]]
+  }
+  # Same order, same rule, same stream: byte-identical.
+  expect_identical(sim(64L), sim(64L))
+  # A two-node rule does not integrate the same pi, so the allocation moves.
+  expect_false(identical(sim(2L), sim(64L)))
+  # And it converges by three nodes and stays there, which is what says the
+  # difference above is the coarse rule rather than the plumbing.
+  expect_identical(sim(3L), sim(64L))
+  expect_identical(sim(512L), sim(64L))
+})
+
+test_that("the simulator refuses a quadrature order below one", {
+  cuts <- c(0, 25, 50, 75, 100)
+  X1 <- matrix(1, 4L, 1L)
+  dr <- matrix(c(log(10), log(40)), nrow = 1L)
+  expect_error(
+    tulpaObs:::cpp_simulate_distance(X1, X1, dr, as.numeric(cuts),
+                                     tulpaObs:::.dist_key_code("halfnorm"), 0L,
+                                     0L, 0, 4L, 4L, 1L, 1L, FALSE, NA_real_, 1L),
+    "quad_order")
+})
+
+test_that("simulate() on a distance fit uses that fit's quad_order", {
+  cuts <- .qsim_cuts
+  n <- 40L; B <- length(cuts) - 1L
+  X1 <- matrix(1, n, 1L)
+  # The handler reads model$quad_order; everything else here is the smallest
+  # object it touches.
+  fake <- function(order) structure(list(
+    model = list(n_sites = n, n_bins = B, cutpoints = cuts, key = "halfnorm",
+                 transect = "line", quad_order = as.integer(order),
+                 X_processes = list(X1, X1),
+                 process_info = list(list(p = 1L), list(p = 1L))),
+    draws = .qsim_draws,
+    nmix_dispersion = list(r = NULL), distance_shape = list(shape = NULL)),
+    class = c("tobs_fit", "tulpa_fit"))
+  direct <- function(order, seed = 5L) {
+    set.seed(seed)
+    tulpaObs:::cpp_simulate_distance(X1, X1, .qsim_draws, as.numeric(cuts),
+                                     tulpaObs:::.dist_key_code("halfnorm"), 0L,
+                                     as.integer(order), 0,
+                                     n, B, 1L, 1L, FALSE, NA_real_, 1L)[[1L]]
+  }
+  for (order in c(2L, 64L)) {
+    set.seed(5L)
+    got <- tulpaObs:::.tobs_simulate_distance(fake(order), nsim = 1L)
+    expect_identical(got, direct(order),
+                     info = paste("quad_order", order))
+  }
+  # The two orders are genuinely different fits, so the loop above is not
+  # comparing one answer with itself.
+  expect_false(identical(direct(2L), direct(64L)))
+})
