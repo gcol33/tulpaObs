@@ -6,7 +6,7 @@ name: full-recovery
 # estimators recover simulated truth and the intervals cover at the nominal rate
 # -- as opposed to the smoke tier, which only proves the plumbing holds.
 #
-# Hours, so weekly and on demand rather than on push.
+# Hours, so on demand rather than on push.
 #
 # SHARDED (issue #178). As one job this tier was cancelled at the 350-minute cap
 # on both of its scheduled runs and reported nothing either time, because the
@@ -24,8 +24,6 @@ name: full-recovery
 # packing improves with every run.
 
 on:
-  schedule:
-    - cron: '0 3 * * 6'
   workflow_dispatch:
 
 permissions:

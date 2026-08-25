@@ -7,15 +7,14 @@ name: R-CMD-check
 # (issue #147: abun() shipped unexported in a tagged release).
 #
 # Push and pull requests check one platform. The three-platform matrix runs
-# weekly, because both engines compile from source and a cold matrix is long.
+# on manual dispatch, because both engines compile from source and a cold
+# matrix is long.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: '0 5 * * 1'
   workflow_dispatch:
 
 permissions:
