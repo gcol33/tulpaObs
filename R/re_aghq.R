@@ -198,6 +198,12 @@
   prod0 <- ifelse(any_det, 0, exp(n_valid * log1p(-p)))   # (1-p)^n
   w_ref <- ifelse(any_det, 1, psi * prod0 / (psi * prod0 + (1 - psi)))
 
+  # Per-group solve status: a group the engine could not solve has NA BLUP and
+  # BLUP-variance rows, which would otherwise replace the EM's finite values for
+  # that group. The caller declines the whole refinement on it
+  # (gcol33/tulpaObs#281).
+  gstat <- .tobs_aghq_group_status(ref)
+
   list(
     ok           = TRUE,
     arm          = arm,
@@ -211,6 +217,76 @@
     weights      = w_ref,
     n_quad       = ref$n_quad,
     lkj_eta      = ref$lkj_eta,
-    converged    = ref$converged
+    converged    = .tobs_aghq_converged(ref, gstat),
+    group_ok     = gstat$group_ok,
+    groups_failed = gstat$failed,
+    n_iter       = .tobs_aghq_n_iter(ref)
   )
+}
+
+
+# =============================================================================
+# Per-group solve status on an AGHQ fit (gcol33/tulpaObs#281).
+#
+# tulpa::tulpa_re_aghq() reports, per group, whether that group's posterior mode
+# search and precision factorization succeeded (`group_ok`, gcol33/tulpa#605).
+# A group it marks FALSE comes back with NA `blup` / `blup_var` / `blup_cov_g`
+# rows, so every per-group quantity read off it is NA and every community-level
+# quantity summing over groups is not a function of that group's data. The
+# engine also raises a warning naming the failures, but a warning is the one
+# channel a caller cannot read without parsing indices out of message text, so
+# every AGHQ consumer here reads the status through these two functions and
+# carries it onto the fit it returns.
+# =============================================================================
+
+# Normalize the engine's per-group status into the record a fit carries.
+# `group_names` labels the groups where the caller has names for them (species,
+# sites, observers); it is dropped when it does not match the group count rather
+# than guessing an alignment.
+.tobs_aghq_group_status <- function(ref, group_names = NULL) {
+  ok <- as.logical(ref$group_ok)
+  failed <- which(!ok)
+  named <- !is.null(group_names) && length(group_names) == length(ok)
+  list(group_ok     = ok,
+       n_groups     = length(ok),
+       failed       = failed,
+       failed_names = if (named) as.character(group_names)[failed] else NULL,
+       all_ok       = length(failed) == 0L)
+}
+
+# The verdict a fit reports. A fit carrying a failed group is not an estimate of
+# what that group contributes to, so it is not reported as converged even where
+# the optimizer itself stopped cleanly.
+.tobs_aghq_converged <- function(ref, status = .tobs_aghq_group_status(ref)) {
+  isTRUE(ref$converged) && isTRUE(status$all_ok)
+}
+
+# The effort behind an AGHQ fit, in the units the package's other optim-driven
+# fitters already report as `n_iter`: stats::optim's function-evaluation count
+# (the joint AGHQ driver is one BFGS call, which counts evaluations rather than
+# iterations).
+.tobs_aghq_n_iter <- function(ref) {
+  cnt <- ref$counts
+  if (is.null(cnt) || !length(cnt)) return(NA_integer_)
+  # optim names the entries; an unnamed vector still has the function count
+  # first. (`cnt[["function"]]` on a vector without that name is an error, not
+  # NULL, so the name is checked rather than defaulted.)
+  as.integer(if ("function" %in% names(cnt)) cnt[["function"]] else cnt[[1L]])
+}
+
+# The `fit$convergence` record for a family whose estimates came from the AGHQ
+# engine. One constructor, so a caller filters the same way whatever it fitted:
+# `converged`, `n_iter`, and the per-group solve status. `raw` carrying no
+# status (every non-AGHQ path) yields the two fields it always had.
+# `group_names` labels the failures where the family has names for its groups.
+.tobs_aghq_convergence_record <- function(raw, group_names = NULL,
+                                          converged = isTRUE(raw$converged)) {
+  failed <- raw$groups_failed
+  named  <- length(failed) && !is.null(group_names) &&
+    length(group_names) >= max(failed)
+  list(converged = converged,
+       n_iter    = raw$n_iter %||% NA_integer_,
+       group_ok  = raw$group_ok,
+       groups_failed = failed,
+       groups_failed_names = if (named) as.character(group_names)[failed] else NULL)
 }

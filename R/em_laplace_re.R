@@ -448,6 +448,15 @@
                 "Cause: ", conditionMessage(e), call. = FALSE)
         NULL
       })
+    # A group whose posterior solve failed comes back with NA BLUP and
+    # BLUP-variance rows. Adopting the refinement would replace this group's
+    # finite EM values with NA, so the pass declines exactly as it does on any
+    # other failure and records why (gcol33/tulpaObs#281).
+    if (!is.null(ref) && isTRUE(ref$ok) && length(ref$groups_failed)) {
+      aghq_status <- list(applied = FALSE, declined = "group_solve_failed",
+                          groups_failed = ref$groups_failed)
+      ref <- NULL
+    }
     if (!is.null(ref) && isTRUE(ref$ok)) {
       beta_occ <- ref$beta_occ; beta_det <- ref$beta_det
       Sigma_list <- ref$Sigma_list; b <- ref$b; b_var <- ref$b_var
@@ -460,7 +469,8 @@
       beta_occ_se <- ref$beta_occ_se
       det_fit$se  <- ref$det_se           # .se_from_laplace_fit reads $se first
       aghq_status <- list(applied = TRUE, arm = ref$arm, n_quad = ref$n_quad,
-                          lkj_eta = ref$lkj_eta, converged = ref$converged)
+                          lkj_eta = ref$lkj_eta, converged = ref$converged,
+                          group_ok = ref$group_ok)
     }
   }
 

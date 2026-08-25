@@ -356,7 +356,8 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
       mu_lambda = as.numeric(em$mu_lambda), mu_p = as.numeric(em$mu_p),
       vcov = em$vcov, Sigma_lambda = em$Sigma_lambda, Sigma_p = em$Sigma_p,
       b_lambda = em$b_lambda, b_p = em$b_p, log_lik = em$log_lik,
-      converged = isTRUE(em$converged), K_max = K_max,
+      converged = isTRUE(em$converged), n_iter = as.integer(em$n_iter),
+      K_max = K_max,
       n_quad = 1L, lkj_eta = lkj_eta, optimizer = "em", mixture = "P")
     class(out) <- c("nmix_re_fit", "list")
     out <- guard(out)
@@ -482,9 +483,25 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     max_iter = as.integer(max_iter))
 
   if (is.null(fit)) {
-    stop("Community N-mixture optimization failed (singular marginal Hessian ",
-         "or non-finite optimum). Try a different warm start or K_max.", call. = FALSE)
+    # The engine declines for three reasons and names the groups behind two of
+    # them in the warning it has just raised: a singular / non-finite optimum,
+    # an objective already undefined at the starting parameters, and an optimum
+    # whose value is the per-group failure sentinel rather than an attained
+    # marginal likelihood. Naming only the first sent a reader after a Hessian
+    # that was never the cause (gcol33/tulpaObs#281).
+    stop("Community N-mixture optimization failed: the AGHQ engine returned no ",
+         "fit (a singular or non-finite optimum, or a per-species posterior ",
+         "solve that failed -- the engine's warning names which species). Try a ",
+         "different warm start, K_max, or n_quad.", call. = FALSE)
   }
+
+  # Per-species solve status. A species the engine could not solve has NA BLUPs,
+  # so the community means, the covariance blocks and the dispersion block are
+  # not estimates of what it contributes; the fit carries the status and is not
+  # reported as converged (gcol33/tulpaObs#281).
+  # (Groups are species; this fitter is indexed, not named -- build_ms_nmix_fit()
+  # attaches the species names when it assembles the reported fit.)
+  gstat <- .tobs_aghq_group_status(fit)
 
   mu <- fit$theta
   out <- list(
@@ -507,7 +524,10 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     blup_cov_g   = fit$blup_cov_g,
     blup_cross_g = fit$blup_cross_g,
     log_lik      = fit$log_marginal,
-    converged    = fit$converged,
+    converged    = .tobs_aghq_converged(fit, gstat),
+    group_ok     = gstat$group_ok,
+    groups_failed = gstat$failed,
+    n_iter       = .tobs_aghq_n_iter(fit),
     K_max        = K_max,
     # Headline n_quad is the coefficient-block order; the scalar nuisance blocks
     # ran at n_quad_scalar (the full per-block vector is nq_vec).

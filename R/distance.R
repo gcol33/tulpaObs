@@ -149,6 +149,9 @@
     vcov        = ref$vcov,
     log_lik     = ref$log_marginal,
     converged   = ref$converged,
+    group_ok    = ref$group_ok,
+    groups_failed = ref$groups_failed,
+    n_iter      = ref$n_iter,
     key         = model$key,
     transect    = model$transect,
     hazard      = hazard,
@@ -484,8 +487,8 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
       list(arm = re_post$arm, n_quad = re_post$n_quad,
            lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
       else NULL,
-    convergence = list(converged = raw$converged %||% TRUE,
-                       n_iter = raw$n_iter %||% NA_integer_)
+    convergence = .tobs_aghq_convergence_record(
+      raw, converged = raw$converged %||% TRUE)
   )), class = c("tobs_fit", "tulpa_fit"))
 }
 

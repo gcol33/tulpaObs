@@ -105,27 +105,53 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   skip_on_cran()
   skip_if_fast()
   n_seed <- 20L
-  covered <- logical(n_seed)
+  covered <- logical(0)
+  refused <- integer(0)
+  unconverged <- integer(0)
   for (s in seq_len(n_seed)) {
+    seed <- 500L + s
     sim <- simulate_ms_abun(n_species = 18, N = 100, J = 5,
                             n_abund_covs = 1, n_det_covs = 1,
                             mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
                             sd_lambda = 0.4, sd_p = 0.35,
                             mixture = "negbin", size = 5, sigma_logr = 0.5,
-                            seed = 500 + s)
-    fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
-                family = ms_abun(mixture = "negbin"),
-                detection = ~ det_cov1,
-                species = sim$species, method = "laplace",
-                control = list(verbose = FALSE, n.quad = 3L))
+                            seed = seed)
+    fit <- tryCatch(
+      suppressWarnings(
+        tobs(~ abund_cov1, data = sim$data, y = sim$y,
+             family = ms_abun(mixture = "negbin"),
+             detection = ~ det_cov1,
+             species = sim$species, method = "laplace",
+             control = list(verbose = FALSE, n.quad = 3L))),
+      error = function(e) NULL)
+    # A seed whose per-species posterior solve fails delivers no interval at
+    # all: the engine refuses an optimum carrying its failure sentinel and this
+    # fitter errors. Before gcol33/tulpaObs#281 it returned the community
+    # dispersion block at the values it STARTED from -- `mu_log_r` a hair below
+    # `log(r_init)`, `sigma_log_r` exactly the initial 0.5, one `NA` in `r_s`,
+    # `converged = TRUE` and the tightest `log_r` SE of the twenty -- and this
+    # loop scored that as data, one seed carrying 74% of `sum(z^2)`.
+    #
+    # Neither of the two obvious gates catches such a fit: `converged` was
+    # `TRUE`, and a `sigma_log_r`-collapse detector keyed on sigma being small
+    # misses it because its `sigma_log_r` is exactly the initial value (#250
+    # item 3). What catches it is the engine declining, and the per-species
+    # solve status the fit now carries -- so both are read here, and both
+    # counted, so the denominator is visible rather than assumed.
+    if (is.null(fit)) { refused <- c(refused, seed); next }
+    if (!converged(fit)) { unconverged <- c(unconverged, seed); next }
     lr   <- fit$means[["log_r"]]
     selr <- fit$sds[["log_r"]]
     lo <- lr - 1.96 * selr; hi <- lr + 1.96 * selr
-    covered[s] <- sim$truth$mu_log_r >= lo && sim$truth$mu_log_r <= hi
+    covered <- c(covered, sim$truth$mu_log_r >= lo && sim$truth$mu_log_r <= hi)
   }
-  # Nominal 95%; allow Monte-Carlo slack over 20 seeds.
+  # A sweep that drops most of its seeds is not a coverage measurement any
+  # more, whatever rate the survivors show.
+  expect_gte(length(covered), n_seed - 3L)
+  # Nominal 95%; allow Monte-Carlo slack over the seeds that were scored.
   #
-  # This measures 0.800 and so does not pass. The threshold carries no
+  # This measured 0.800 (16 of 20) at 0.0.235 / 343f425, recorded in
+  # NOTES_measurements.md, and so does not pass. The threshold carries no
   # measurement (79e5eb7 recorded none) and the shortfall is understood rather
   # than mysterious: coverage here is conditional on the dispersion variance
   # being recovered. Across 39 fits at 8 and 36 species, those returning
@@ -138,7 +164,12 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   # What this assertion should be instead needs a decision about what the family
   # claims, and the conditional form needs sigma_log_r recorded at S = 18, which
   # this fixture's earlier runs did not keep. Left as-is deliberately rather than
-  # retuned to pass. See and NOTES_measurements.md.
+  # retuned to pass. See #250 and NOTES_measurements.md.
+  #
+  # The RATE is not the 0.800 above any more, because the denominator is no
+  # longer 20 wherever a seed is refused, and it has not been re-measured on
+  # this build -- one fit of this fixture ran 12-59 min when it last was. The
+  # threshold is untouched either way; #250 owns what it should be.
   expect_gt(mean(covered), 0.8)
 })
 

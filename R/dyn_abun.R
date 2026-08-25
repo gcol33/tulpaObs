@@ -521,6 +521,10 @@
   log_r_ref <- if (use_nb) ref$theta[i_logr] else NA_real_
   b_out    <- unlist(lapply(ref$blup,     function(M) as.numeric(t(M))), use.names = FALSE)
   bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))), use.names = FALSE)
+  # A group the engine could not solve carries NA BLUPs into `b` / `b_var`, so
+  # the fit is not reported as converged and says which groups failed
+  # (gcol33/tulpaObs#281).
+  gstat <- .tobs_aghq_group_status(ref)
 
   # Marginal fixed-effect covariance when the engine surfaces it, else the
   # diagonal of the per-coefficient marginal SEs (the make_site AGHQ path reports
@@ -553,7 +557,10 @@
     Sigma_list = ref$Sigma_list, b = b_out, b_var = bvar_out,
     theta_se = ref$theta_se, vcov = vcov,
     mean_N1 = ev$mean_N1, log_marginal = ref$log_marginal %||% NA_real_,
-    n_quad = ref$n_quad, lkj_eta = ref$lkj_eta, converged = ref$converged)
+    n_quad = ref$n_quad, lkj_eta = ref$lkj_eta,
+    converged = .tobs_aghq_converged(ref, gstat),
+    group_ok = gstat$group_ok, groups_failed = gstat$failed,
+    n_iter = .tobs_aghq_n_iter(ref))
 }
 
 
@@ -630,7 +637,9 @@
     log_r = ref$log_r, r = ref$r, mixture = ref$mixture,
     means = means, vcov = ref$vcov, log_lik = ref$log_marginal,
     mean_N1 = ref$mean_N1, K_max = model$K_max,
-    converged = ref$converged, n_iter = NA_integer_, coef_names = nms)
+    converged = ref$converged, n_iter = ref$n_iter %||% NA_integer_,
+    group_ok = ref$group_ok, groups_failed = ref$groups_failed,
+    coef_names = nms)
   re_post <- list(arm = ref$arm, design = design, Sigma_list = ref$Sigma_list,
                   b = ref$b, b_var = ref$b_var,
                   n_quad = ref$n_quad, lkj_eta = ref$lkj_eta)
@@ -829,8 +838,8 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
       list(arm = re_post$arm, n_quad = re_post$n_quad,
            lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
       else NULL,
-    convergence = list(converged = raw$converged %||% TRUE,
-                       n_iter = raw$n_iter %||% NA_integer_)
+    convergence = .tobs_aghq_convergence_record(
+      raw, converged = raw$converged %||% TRUE)
   )), class = c("tobs_fit", "tulpa_fit"))
 }
 

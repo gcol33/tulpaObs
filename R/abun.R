@@ -486,8 +486,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
            lkj_eta = re_post$lkj_eta,
            Sigma_list = re_post$Sigma_list)
       else NULL,
-    convergence = list(converged = raw$converged %||% TRUE,
-                       n_iter = raw$n_iter %||% NA_integer_)
+    convergence = .tobs_aghq_convergence_record(
+      raw, converged = raw$converged %||% TRUE)
   )), class = c("tobs_fit", "tulpa_fit"))
 }
 

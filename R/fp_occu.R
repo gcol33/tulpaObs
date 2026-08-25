@@ -383,6 +383,10 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   bp10 <- ref$theta[i_p10]; bb <- ref$theta[i_b]
   b_out    <- unlist(lapply(ref$blup,     function(M) as.numeric(t(M))), use.names = FALSE)
   bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))), use.names = FALSE)
+  # A group the engine could not solve carries NA BLUPs into `b` / `b_var`, so
+  # the fit is not reported as converged and says which groups failed
+  # (gcol33/tulpaObs#281).
+  gstat <- .tobs_aghq_group_status(ref)
 
   # Refreshed posterior occupancy w1 at the refined estimate (for fitted()); the
   # RE offset sits on whichever arm carries the term.
@@ -420,7 +424,10 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
     Sigma_list = ref$Sigma_list, b = b_out, b_var = bvar_out,
     theta_se = ref$theta_se, vcov = vcov, w1 = w1,
     log_marginal = ref$log_marginal %||% NA_real_,
-    n_quad = ref$n_quad, lkj_eta = ref$lkj_eta, converged = ref$converged)
+    n_quad = ref$n_quad, lkj_eta = ref$lkj_eta,
+    converged = .tobs_aghq_converged(ref, gstat),
+    group_ok = gstat$group_ok, groups_failed = gstat$failed,
+    n_iter = .tobs_aghq_n_iter(ref))
 }
 
 
@@ -481,7 +488,8 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
     means = c(ref$beta_psi, ref$beta_p11, ref$beta_p10, ref$beta_b),
     vcov = ref$vcov, theta_se = ref$theta_se,
     log_lik = ref$log_marginal, w1 = ref$w1,
-    converged = ref$converged, n_iter = NA_integer_,
+    converged = ref$converged, n_iter = ref$n_iter %||% NA_integer_,
+    group_ok = ref$group_ok, groups_failed = ref$groups_failed,
     coef_names = c(paste0("psi_", model$process_info[[1]]$coef_names),
                    paste0("p11_", model$process_info[[2]]$coef_names),
                    paste0("p10_", model$process_info[[3]]$coef_names),
@@ -544,8 +552,8 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
       list(arm = re_post$arm, n_quad = re_post$n_quad,
            lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
       else NULL,
-    convergence = list(converged = raw$converged %||% TRUE,
-                       n_iter = raw$n_iter %||% NA_integer_)
+    convergence = .tobs_aghq_convergence_record(
+      raw, converged = raw$converged %||% TRUE)
   )), class = c("tobs_fit", "tulpa_fit"))
 }
 

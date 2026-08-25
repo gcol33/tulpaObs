@@ -23,8 +23,15 @@ converged(object, ...)
 \value{
 \code{convergence()}: a list with \code{converged} (logical), \code{n_iter}
 (integer, \code{NA} for grid / closed-form fits with no iteration count), and
-\code{sla_status} (character, when present). \code{converged()}: a single \code{TRUE} /
-\code{FALSE}.
+\code{sla_status} (character, when present). A fit whose random effects were
+integrated by adaptive Gauss-Hermite quadrature also carries \code{group_ok}
+(logical, one entry per group: \code{FALSE} where that group's posterior solve
+failed and its estimates are \code{NA}), \code{groups_failed} (their indices) and
+\code{groups_failed_names} (their labels where the family names its groups --
+species, for the community models). \code{converged} is \code{FALSE} whenever any
+group failed, since the quantities that group contributes to are not
+estimates of anything; filter on these rather than on the text of the
+warning the engine raises. \code{converged()}: a single \code{TRUE} / \code{FALSE}.
 }
 \description{
 The public accessor for whether a fit converged, with one return shape across
@@ -32,8 +39,9 @@ every \code{tobs()} family. Each family stores its optimiser / EM / sampler verd
 under \code{fit$convergence}, but historically the cover hurdle (\code{cover()}) put the
 flag at \code{fit$converged} instead, so a consumer that read one location got \code{NA}
 for the other family. These accessors normalise both
-layouts: \code{convergence()} returns the full record (\code{converged}, \code{n_iter}, and
-\code{sla_status} when the simplified-Laplace marginals were used), and
+layouts: \code{convergence()} returns the full record (\code{converged}, \code{n_iter},
+\code{sla_status} when the simplified-Laplace marginals were used, and the
+per-group AGHQ solve status on the families fitted by that engine), and
 \code{converged()} returns the single logical.
 }
 \examples{

@@ -1,5 +1,40 @@
 # tulpaObs NEWS
 
+## 0.0.238 (2026-08-25)
+
+* **A failed per-group AGHQ solve is a field on the fit, not a warning to parse
+  (#281).** `tulpa::tulpa_re_aghq()` reports, per group, whether that group's
+  posterior mode search and precision factorization succeeded; a group it marks
+  failed comes back with `NA` BLUPs, so every per-group quantity read off it is
+  `NA` and every community-level quantity summing over groups is missing that
+  group's information. Every AGHQ consumer here took the result unconditionally,
+  which is how `ms_abun(mixture = "negbin")` returned its community dispersion
+  block at the values it STARTED from -- `mu_log_r` a hair below `log(r_init)`,
+  `sigma_log_r` exactly `sigma_logr_init`, one `NA` in `r_s`, `converged = TRUE`
+  and the tightest `log_r` standard error of twenty seeds -- with a runtime
+  warning as the only signal and the failing index recoverable only by parsing
+  its message text.
+
+  The status now travels on the fit. `convergence(fit)` carries `group_ok`,
+  `groups_failed` and `groups_failed_names` (species, for the community
+  models), and `converged` is `FALSE` whenever any group failed. One predicate
+  reads it (`.tobs_aghq_group_status()`), so occupancy, N-mixture, removal,
+  distance, `fp_occu()`, `dyn_abun()` and the community N-mixture answer the
+  same way. The occupancy EM declines the AGHQ refinement on a failed group and
+  keeps the EM result, which is what that pass already promised on any other
+  failure; the community spatial-Newton loop refuses the node rather than
+  handing `NA` coefficients to the shared-field solve.
+
+* `convergence(fit)$n_iter` is no longer `NA` on a community N-mixture fit
+  reported as converged: the EM path reports its iteration count and the joint
+  AGHQ path the optimizer's evaluation count (`tulpa` 0.1.23), which is what the
+  package's other `stats::optim`-driven fitters already report there.
+
+* The error raised when the AGHQ engine returns no community fit named a
+  singular Hessian as the cause. The engine declines for three reasons, and on
+  two of them the cause is a per-species solve that failed -- which its own
+  warning names. (#281)
+
 ## 0.0.237 (2026-08-22)
 
 * **The fitted field now reaches every post-fit door on the five count families

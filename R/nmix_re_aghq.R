@@ -134,6 +134,10 @@
                      use.names = FALSE)
   bvar_out <- unlist(lapply(ref$blup_var, function(M) as.numeric(t(M))),
                      use.names = FALSE)
+  # A group the engine could not solve carries NA BLUPs into `b` / `b_var`, so
+  # the fit is not reported as converged and says which groups failed
+  # (gcol33/tulpaObs#281).
+  gstat <- .tobs_aghq_group_status(ref)
 
   list(
     ok            = TRUE,
@@ -151,7 +155,10 @@
     log_marginal  = ref$log_marginal,
     n_quad        = ref$n_quad,
     lkj_eta       = ref$lkj_eta,
-    converged     = ref$converged,
+    converged     = .tobs_aghq_converged(ref, gstat),
+    group_ok      = gstat$group_ok,
+    groups_failed = gstat$failed,
+    n_iter        = .tobs_aghq_n_iter(ref),
     K_max         = K_max
   )
 }
@@ -322,6 +329,9 @@
     vcov        = ref$vcov,
     log_lik     = ref$log_marginal,
     converged   = ref$converged,
+    group_ok    = ref$group_ok,
+    groups_failed = ref$groups_failed,
+    n_iter      = ref$n_iter,
     K_max       = ref$K_max %||% K_max)
   re_post <- list(arm = ref$arm, design = design,
                   Sigma_list = ref$Sigma_list,
