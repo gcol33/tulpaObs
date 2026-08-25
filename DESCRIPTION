@@ -25,13 +25,11 @@ Imports:
     loo (>= 2.7.0)
 Suggests:
     testthat (>= 3.0.0),
-    bayesplot,
     betareg,
     dplyr,
     ggplot2,
     INLA,
     knitr,
-    MASS,
     ps,
     rmarkdown,
     spAbundance,

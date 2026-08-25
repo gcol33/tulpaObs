@@ -47,7 +47,6 @@ test_that(".tobs_ccd_outer_grid declines on a flat or single-axis problem", {
 test_that("areal fit: default grid and opt-in CCD both recover the field + slope", {
   skip_if_fast()
   skip_on_cran()
-  skip_if_not_installed("MASS")
   .adj <- function(side) {
     ng <- side*side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
     a <- matrix(0L, ng, ng)

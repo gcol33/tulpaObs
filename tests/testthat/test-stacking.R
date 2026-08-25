@@ -68,7 +68,6 @@ test_that("cover stacking errors on the nested-joint path", {
 })
 
 test_that("tobs_stack() returns weights that sum to 1 over named members", {
-  skip_if_not_installed("loo")
   sim <- sim_occu()
   f1 <- fit_lap(~ x,     sim)
   f2 <- fit_lap(~ x + w, sim)
@@ -83,7 +82,6 @@ test_that("tobs_stack() returns weights that sum to 1 over named members", {
 })
 
 test_that("tobs_stack() accepts a single list argument", {
-  skip_if_not_installed("loo")
   sim <- sim_occu()
   ens <- tobs_stack(list(fit_lap(~ x, sim), fit_lap(~ x + w, sim)))
   expect_s3_class(ens, "tobs_stack")
@@ -91,7 +89,6 @@ test_that("tobs_stack() accepts a single list argument", {
 })
 
 test_that("tobs_stack() rejects bad inputs", {
-  skip_if_not_installed("loo")
   sim <- sim_occu()
   f1 <- fit_lap(~ x, sim)
   expect_error(tobs_stack(f1), "at least two")
@@ -104,7 +101,6 @@ test_that("tobs_stack() rejects bad inputs", {
 })
 
 test_that("fitted.tobs_stack is the weight-combined member fitted values", {
-  skip_if_not_installed("loo")
   sim <- sim_occu()
   f1 <- fit_lap(~ x,     sim)
   f2 <- fit_lap(~ x + w, sim)
@@ -124,7 +120,6 @@ test_that("fitted.tobs_stack is the weight-combined member fitted values", {
 })
 
 test_that("predict.tobs_stack with X.0 needs matching member designs", {
-  skip_if_not_installed("loo")
   sim <- sim_occu()
   f1 <- fit_lap(~ x,     sim)   # 2 occ coefs
   f2 <- fit_lap(~ x + w, sim)   # 3 occ coefs
@@ -136,7 +131,6 @@ test_that("predict.tobs_stack with X.0 needs matching member designs", {
 test_that("n.seeds builds a tobs_stack of K members and predicts out-of-sample", {
   skip_on_cran()
   skip_if_fast()
-  skip_if_not_installed("loo")
   sim <- sim_occu()
   ens <- tobs(~ x, data = sim$data, y = sim$y, detection = ~ 1,
               family = occu(), method = "laplace_gibbs",
