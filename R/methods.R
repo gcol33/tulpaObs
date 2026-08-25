@@ -71,6 +71,7 @@ summary.tobs_fit <- function(object, ...) {
   gdistremoval    = "abundance",
   distsamp_open   = "abundance",
   dyn_int_occu    = "state",
+  t_occu          = "psi",
   vapply(.TOBS_MS_PREDICT_ARMS, function(a) names(a)[[1L]], character(1)))
 
 # Model types whose predictor has no `terms` argument. `distance` / `fp_occu` /
@@ -983,7 +984,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   # "sigma" (detection scale); route before the occupancy match.arg(type).
   if (identical(object$model$model_type, "distance")) {
     dist_type <- if (missing(type) || length(type) > 1L) "lambda" else type
-    return(.tobs_predict_distance(object, X.0 = X.0, type = dist_type))
+    return(.tobs_predict_distance(object, X.0 = X.0, type = dist_type,
+                                  quantiles = quantiles))
   }
   # False-positive occupancy: response types are "psi" (occupancy) and "p11"
   # (true detection); route before the standard occupancy match.arg(type).
@@ -991,14 +993,16 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     fp_type <- if (missing(type) || length(type) > 1L) "psi" else type
     if (identical(fp_type, "occupancy")) fp_type <- "psi"
     if (identical(fp_type, "detection")) fp_type <- "p11"
-    return(.tobs_predict_fp_occu(object, X.0 = X.0, type = fp_type))
+    return(.tobs_predict_fp_occu(object, X.0 = X.0, type = fp_type,
+                                 quantiles = quantiles))
   }
   # Open N-mixture: response types are "lambda" (initial abundance) and "gamma"
   # (recruitment); route before the standard occupancy match.arg(type).
   if (identical(object$model$model_type, "dyn_abun")) {
     da_type <- if (missing(type) || length(type) > 1L) "lambda" else type
     if (identical(da_type, "abundance")) da_type <- "lambda"
-    return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type))
+    return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type,
+                                  quantiles = quantiles))
   }
   # Families predicting from `newdata` with their own response types, all
   # through `.tobs_predict_<model_type>(object, newdata =, type =)`. Each
@@ -1033,7 +1037,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
            "\"cover\").", call. = FALSE)
     }
     oms_type <- if (missing(type) || length(type) > 1L) "state" else type
-    return(.tobs_predict_occu_multiscale_cover(object, oms_type))
+    return(.tobs_predict_occu_multiscale_cover(object, oms_type, level = level))
   }
   if (identical(object$model$model_type, "ms_occu_cover_spatial")) {
     # The latent fields are tied to the cell graph, so prediction is the

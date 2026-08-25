@@ -613,21 +613,12 @@
   rowSums(.tobs_pointwise_loglik(f, n.draws = nrow(Theta)))
 }
 
-# The Poisson / negative-binomial count GLMM has no latent state and so no
-# `simulate()` handler to borrow; its replicate is the response drawn at the
-# fitted mean, which is that handler's whole content for this family.
-.tobs_sbc_replicate_count <- function(f) {
-  m <- f$model
-  p <- m$process_info[[1L]]$p
-  mu <- exp(as.vector(m$X_occ %*% f$draws[1L, seq_len(p)]))
-  switch(m$response,
-         poisson = stats::rpois(length(mu), mu),
-         negbin  = stats::rnbinom(length(mu), mu = mu,
-                                  size = exp(f$draws[1L, p + 1L])),
-         stop("SBC on count() is registered for the poisson and negbin ",
-              "responses; this fit is ", sQuote(m$response), ".",
-              call. = FALSE))
-}
+# count()'s own simulate() handler (.tobs_simulate_count(), R/count_methods.R)
+# reads its beta draw from `f$draws`, which .tobs_sbc_sim_simple() has already
+# set to the one-row scored theta -- so it IS this family's replicate
+# generator, and reuses the field offset / link .tobs_count_eta() /
+# .tobs_count_mu() apply everywhere else, which this used to skip.
+.tobs_sbc_replicate_count <- function(f) as.numeric(.tobs_simulate_count(f, nsim = 1L))
 
 # One registry row. `state` / `det` name the arm formulas in the fitted model,
 # `resp` its response slot, `extra` any further arguments the family's front

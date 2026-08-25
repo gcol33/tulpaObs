@@ -191,10 +191,21 @@
   0
 }
 
-# predict(): in-sample posterior arm predictions. The areal field is tied to the
-# cell graph, so prediction at new covariates / cells (X.0 / newdata) is not
-# supported (no field at an unseen cell), matching ms_occu_cover_spatial().
-.tobs_predict_occu_multiscale_cover <- function(object, type = "state") {
+# predict(): in-sample posterior arm predictions, draw-based (mean/sd/interval
+# via .occu_cover_summ(), R/occu_cover_predict.R -- the occu_cover / cover
+# joint predictor's own summary table). Each arm's coefficient draws come from
+# `object$draws` (a Gaussian resample of the arm coefficients on every engine,
+# .rmvn(n, means, V) on the joint route), sliced by the same
+# process_info-ordered offsets .occu_mscale_cover_arm_betas() reads at the
+# posterior mean. The shared field / copy amplitude `alpha` are point
+# estimates -- not drawn per iteration on any of the three engines -- so they
+# enter as a fixed offset, the same way .tobs_fitted_occu_multiscale_cover()
+# and .tobs_count_arm_predict() (R/field_offset.R) treat a fitted field. The
+# areal field is tied to the cell graph, so prediction at new covariates /
+# cells (X.0 / newdata) is not supported (no field at an unseen cell),
+# matching ms_occu_cover_spatial().
+.tobs_predict_occu_multiscale_cover <- function(object, type = "state",
+                                                level = 0.95) {
   type <- switch(type,
                  state = "psi", occupancy = "psi", psi = "psi",
                  availability = "theta", theta = "theta",
@@ -204,8 +215,43 @@
                       "occu_multiscale_cover(). Use \"state\"/\"psi\", ",
                       "\"availability\"/\"theta\", \"detection\"/\"p\", or ",
                       "\"cover\"."), type), call. = FALSE))
-  fv <- .tobs_fitted_occu_multiscale_cover(object)
-  switch(type, psi = fv$psi, theta = fv$theta, p = fv$p, cover = fv$cover)
+  model   <- object$model
+  draws   <- object$draws
+  n_draws <- nrow(draws)
+  pi_list <- model$process_info
+  pp  <- vapply(pi_list, function(x) as.integer(x$p), integer(1))
+  off <- cumsum(c(0L, pp))
+  arm_cols <- function(k) off[k] + seq_len(pp[k])
+  field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))
+  alpha <- if ("alpha" %in% colnames(draws)) draws[, "alpha"]
+           else rep(0, n_draws)
+  pc    <- model$plot_cell
+
+  if (identical(type, "psi")) {
+    eta <- draws[, arm_cols(1L), drop = FALSE] %*% t(model$X_psi)
+    eta <- sweep(eta, 2L, field, "+")
+    return(.occu_cover_summ(t(stats::plogis(eta)), seq_len(model$n_cells), level))
+  }
+  if (identical(type, "theta")) {
+    eta <- draws[, arm_cols(2L), drop = FALSE] %*% t(model$X_theta)
+    return(.occu_cover_summ(t(stats::plogis(eta)), pc, level))
+  }
+  if (identical(type, "p")) {
+    eta <- draws[, arm_cols(3L), drop = FALSE] %*% t(model$X_p_site)
+    return(.occu_cover_summ(t(stats::plogis(eta)), pc, level))
+  }
+  # cover
+  eta <- draws[, arm_cols(4L), drop = FALSE] %*% t(model$X_pos_site)
+  eta <- eta + outer(alpha, field[pc])
+  mat <- if (identical(model$positive, "beta")) {
+    stats::plogis(eta)
+  } else if (identical(model$positive, "gaussian")) {
+    eta
+  } else {
+    sigma_pos <- .occu_mscale_cover_sigma_pos(object)
+    exp(eta + 0.5 * sigma_pos^2)
+  }
+  .occu_cover_summ(t(mat), pc, level)
 }
 
 

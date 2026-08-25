@@ -6,13 +6,14 @@
 # predictive distribution (simulate() replicates) and returns a tail p-value,
 # mirroring the single-season test_* return shape.
 
-.tobs_count_gof_families <- c("nmix", "removal", "distance", "dyn_abun")
+.tobs_count_gof_families <- c("nmix", "removal", "distance", "dyn_abun", "count")
 
 # Per-site total counts: observed vector [n_sites] and simulated [n_sites x nsim].
 # nmix / removal store long-form counts (y_long, site_idx); distance stores an
-# [n_sites x n_bins] matrix; dyn_abun an [n_sites x visits x seasons] array.
-# simulate() returns replicates in the family's native shape, reduced to a
-# per-site total the same way.
+# [n_sites x n_bins] matrix; dyn_abun an [n_sites x visits x seasons] array;
+# count() has no visits to pool -- one response value per site is already its
+# own total. simulate() returns replicates in the family's native shape,
+# reduced to a per-site total the same way.
 .tobs_count_gof_totals <- function(object, n.samples) {
   model <- object$model; mt <- model$model_type; n_sites <- model$n_sites
   obs <- switch(mt,
@@ -21,14 +22,18 @@
                 factor(model$site_idx, levels = seq_len(n_sites)), sum)),
     distance = rowSums(model$y, na.rm = TRUE),
     dyn_abun = apply(model$y, 1L, function(a) sum(a, na.rm = TRUE)),
+    count    = as.numeric(model$y_count),
     stop("Count goodness-of-fit is not defined for model_type = '", mt, "'.",
          call. = FALSE))
   obs[is.na(obs)] <- 0
 
   sims <- simulate(object, nsim = n.samples)
   if (n.samples == 1L) sims <- list(sims)
+  # count()'s replicate is already a plain per-site vector (no dim); every
+  # other family's is a matrix / array pooled across visits.
   site_total <- function(a) {
-    if (length(dim(a)) <= 2L) rowSums(a, na.rm = TRUE)
+    if (is.null(dim(a))) as.numeric(a)
+    else if (length(dim(a)) <= 2L) rowSums(a, na.rm = TRUE)
     else apply(a, 1L, function(x) sum(x, na.rm = TRUE))
   }
   list(obs = as.numeric(obs),

@@ -608,12 +608,15 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   list(occ = NULL, det = r_mat)
 }
 
-# predict() for distance: abundance lambda (density) at new X_lambda, or the
-# detection scale sigma at new X_sigma. Mirrors the nmix predictor's lambda mode.
-.tobs_predict_distance <- function(object, X.0 = NULL, type = c("lambda", "sigma")) {
-  type  <- match.arg(type)
-  exp(.tobs_predict_eta(object, X.0,
-                        if (identical(type, "lambda")) 1L else 2L))
+# predict() for distance: in-sample -> fitted()'s field-aware value (matching
+# .tobs_predict_nmix()); at a new X_lambda / X_sigma -> a posterior
+# mean/sd/quantile interval (.tobs_count_arm_predict()).
+.tobs_predict_distance <- function(object, X.0 = NULL, type = c("lambda", "sigma"),
+                                   quantiles = c(0.025, 0.5, 0.975)) {
+  type <- match.arg(type)
+  if (is.null(X.0)) return(fitted(object)[[type]])
+  .tobs_count_arm_predict(object, X.0, if (identical(type, "lambda")) 1L else 2L,
+                          quantiles)
 }
 
 

@@ -211,11 +211,27 @@ test_that("occu_multiscale_cover() fitted() / predict() (#53)", {
   expect_true(all(fv$cover > 0))                       # lognormal mean > 0
   expect_true(all(fv$p_marginal >= 0 & fv$p_marginal <= 1))
 
-  # predict() routes types to the matching arm; in-sample only.
-  expect_equal(predict(fit, type = "state"), fv$psi)
-  expect_equal(predict(fit, type = "availability"), fv$theta)
-  expect_equal(predict(fit, type = "detection"), fv$p)
-  expect_equal(predict(fit, type = "cover"), fv$cover)
+  # predict() routes types to the matching arm, draw-based (mean/sd/interval);
+  # in-sample only. Its mean is E[response(eta)] over the coefficient draws,
+  # NOT fitted()'s plug-in response(E[eta]) -- Jensen's inequality separates
+  # the two under a nonlinear link (most visibly on the lognormal cover mean),
+  # so they track each other only up to that gap, not to Monte Carlo noise
+  # alone; assert agreement on the (near-linear) logit arms and a loose
+  # correlation everywhere.
+  pr_psi   <- predict(fit, type = "state")
+  pr_theta <- predict(fit, type = "availability")
+  pr_p     <- predict(fit, type = "detection")
+  pr_cover <- predict(fit, type = "cover")
+  expect_true(all(c("cell", "mean", "sd", "lwr", "upr") %in% names(pr_psi)))
+  expect_equal(nrow(pr_psi), n_cells)
+  expect_equal(nrow(pr_theta), n_plots)
+  expect_equal(nrow(pr_p), n_plots)
+  expect_equal(nrow(pr_cover), n_plots)
+  expect_true(cor(pr_psi$mean, fv$psi) > 0.9)
+  expect_true(cor(pr_theta$mean, fv$theta) > 0.9)
+  expect_true(cor(pr_p$mean, fv$p) > 0.9)
+  expect_true(cor(pr_cover$mean, fv$cover) > 0.9)
+  expect_true(all(pr_psi$lwr <= pr_psi$mean & pr_psi$mean <= pr_psi$upr))
   expect_error(predict(fit, newdata = sim$data), "not supported")
   expect_error(predict(fit, type = "bogus"), "not supported")
 })

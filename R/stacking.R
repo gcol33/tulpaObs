@@ -202,6 +202,7 @@ fitted.tobs_stack <- function(object, ...) {
 predict.tobs_stack <- function(object, X.0 = NULL,
                                quantiles = c(0.025, 0.5, 0.975),
                                n.draws = 4000L, ...) {
+  quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
   # In-sample: weight-combine the member fitted() values (psi / p / z).
   if (is.null(X.0)) return(fitted(object))
 
@@ -230,12 +231,5 @@ predict.tobs_stack <- function(object, X.0 = NULL,
     pd[sample.int(nrow(pd), n_k, replace = TRUE), , drop = FALSE]
   })
   M <- do.call(rbind, pooled)
-
-  data.frame(
-    mean  = colMeans(M),
-    sd    = apply(M, 2, stats::sd),
-    q2.5  = apply(M, 2, stats::quantile, quantiles[1]),
-    q50   = apply(M, 2, stats::quantile, quantiles[2]),
-    q97.5 = apply(M, 2, stats::quantile, quantiles[3])
-  )
+  .tobs_quantile_df(M, quantiles)
 }

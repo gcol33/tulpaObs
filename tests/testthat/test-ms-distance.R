@@ -92,6 +92,22 @@ test_that("a small msDS fit wires the community S3 surface", {
   ft <- fitted(fit)
   expect_equal(dim(ft$lambda), c(25L, 3L))
   expect_true(is.finite(nobs(fit)))
+
+  # Pointwise log-likelihood (#271): waic() / loo() / dic() / cpo() all read
+  # .tobs_ploglik_ms_distance(), one column per (species, site).
+  ll <- tulpaObs:::.tobs_pointwise_loglik(fit, n.draws = 20L)
+  expect_true(is.matrix(ll))
+  expect_equal(ncol(ll), 3L * 25L)
+  expect_true(all(is.finite(ll)))
+  w <- waic(fit, n.draws = 20L)
+  expect_s3_class(w, "tulpa_criteria")
+  expect_true(is.finite(w$elpd_waic))
+  l <- suppressWarnings(loo(fit, n.draws = 20L))
+  expect_s3_class(l, "loo")
+  d <- dic(fit, n.draws = 20L)
+  expect_true(is.finite(d$dic))
+  cp <- suppressWarnings(cpo(fit, n.draws = 20L))
+  expect_s3_class(cp, "tulpa_criteria")
 })
 
 test_that("msDS recovers the community means and per-species structure", {

@@ -971,11 +971,16 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   list(occ = NULL, det = out)
 }
 
-# predict() for dyn_abun: initial abundance lambda at new X (default).
-.tobs_predict_dyn_abun <- function(object, X.0 = NULL, type = c("lambda", "gamma")) {
-  type  <- match.arg(type)
-  k <- if (identical(type, "lambda")) 1L else 4L
-  exp(.tobs_predict_eta(object, X.0, k))
+# predict() for dyn_abun: in-sample -> fitted()'s field-aware value (matching
+# .tobs_predict_nmix()); at a new X -> a posterior mean/sd/quantile interval
+# for initial abundance lambda (default) or recruitment gamma
+# (.tobs_count_arm_predict()).
+.tobs_predict_dyn_abun <- function(object, X.0 = NULL, type = c("lambda", "gamma"),
+                                   quantiles = c(0.025, 0.5, 0.975)) {
+  type <- match.arg(type)
+  if (is.null(X.0)) return(fitted(object)[[type]])
+  .tobs_count_arm_predict(object, X.0, if (identical(type, "lambda")) 1L else 4L,
+                          quantiles)
 }
 
 

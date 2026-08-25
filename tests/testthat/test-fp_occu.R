@@ -156,8 +156,9 @@ test_that("S3 surface works for fp_occu fits", {
   expect_true(all(fv$z >= 0 & fv$z <= 1))
 
   pr <- predict(fit, X.0 = cbind(1, c(-1, 0, 1)), type = "psi")
-  expect_length(pr, 3L)
-  expect_true(all(diff(pr) > 0))
+  expect_equal(nrow(pr), 3L)
+  expect_true(all(diff(pr$mean) > 0))
+  expect_true(all(pr$q2.5 <= pr$q97.5))
 
   ysim <- simulate(fit, seed = 1)
   expect_equal(dim(ysim), dim(sim$y))

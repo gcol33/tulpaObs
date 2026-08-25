@@ -150,19 +150,30 @@
   list(X = X, draws = do.call(cbind, blk), p = p)
 }
 
-# Linear predictor of process k for a predict() handler that rebuilds eta itself
-# rather than routing in-sample calls to fitted(). A NULL `X.0` means the fit's
-# own rows, which carry the field; a caller-supplied design is a new set of rows
-# with no field node of their own (interpolating the surface to new locations is
-# a separate concern, as on count() and on the sampled paths), so it does not.
-.tobs_predict_eta <- function(object, X.0, k) {
-  model <- object$model
-  p   <- vapply(model$process_info, function(pp) pp$p, integer(1))
-  off <- cumsum(c(0L, p))
-  X   <- X.0 %||% model$X_processes[[k]]
-  eta <- as.vector(X %*% object$means[off[k] + seq_len(p[k])])
-  if (is.null(X.0)) eta <- eta + (.tobs_eta_offset(model, k) %||% 0)
-  eta
+# A posterior interval for one arm's response-scale predictor at a NEW design,
+# shared by the observation families whose per-cell marginal thins a Poisson /
+# NegBin abundance (distance / fp_occu / dyn_abun -- R/distance.R,
+# R/fp_occu.R, R/dyn_abun.R). Design-matrix mode only -- a caller passing no
+# `X.0` gets fitted()'s in-sample, field-aware value instead (the
+# .tobs_predict_nmix() convention: a new row has no field node of its own, so
+# interpolating the surface to it is a separate concern, as on count() and on
+# the sampled paths). Design validated against the arm's coefficient count
+# (the same message .tobs_predict_nmix() raises), draws propagated through
+# .tobs_nmix_response_draws() (R/abun.R). Reports mean/sd/quantile columns via
+# .tobs_quantile_df() (R/methods.R), so the column names always match
+# `quantiles` rather than a hardcoded q2.5/q50/q97.5.
+.tobs_count_arm_predict <- function(object, X.0, arm_idx, quantiles) {
+  pi_list <- object$model$process_info
+  p       <- vapply(pi_list, function(pp) pp$p, integer(1))
+  beta_off <- if (arm_idx > 1L) sum(p[seq_len(arm_idx - 1L)]) else 0L
+  p_arm <- p[arm_idx]
+  if (ncol(X.0) != p_arm) {
+    stop(sprintf("X.0 has %d columns but the %s arm has %d coefficients",
+                 ncol(X.0), pi_list[[arm_idx]]$name, p_arm), call. = FALSE)
+  }
+  pred <- .tobs_nmix_response_draws(object$draws, X.0, beta_off, p_arm,
+                                    pi_list[[arm_idx]]$link %||% "log")
+  .tobs_quantile_df(pred, quantiles)
 }
 
 # A SAMPLED (NUTS) field is not among the coefficient columns the fit keeps, so

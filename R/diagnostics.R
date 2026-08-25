@@ -260,6 +260,12 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "ms_count")) {
     return(.tobs_ploglik_ms_count(object, nd))
   }
+  # Community binned distance sampling: per-(species, site) marginal, the
+  # latent N pieces read from cpp_distance_site_sweep via the fit's own
+  # per-species engine (R/ms_distance.R).
+  if (identical(object$model$model_type %||% "NULL", "ms_distance")) {
+    return(.tobs_ploglik_ms_distance(object, nd, n.threads = n.threads))
+  }
   # Royle-Nichols: the exact per-site Poisson-marginal over the posterior draws
   # (R/royle_nichols.R).
   if (identical(object$model$model_type %||% "NULL", "royle_nichols")) {
@@ -346,7 +352,7 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # posterior-mean evaluation hands it a fit whose `draws` is the single mean row.
 .TOBS_PLOGLIK_FIT_FAMILIES <- c(
   "royle_nichols", "occu_ttd", "occu_multi", "double_observer",
-  "gdistremoval", "distsamp_open", "dyn_int_occu")
+  "gdistremoval", "distsamp_open", "dyn_int_occu", "ms_distance")
 
 # Pointwise log-likelihood at the posterior mean of the parameters, the plug-in
 # DIC needs (length n_obs). The draw-matrix families evaluate their per-family

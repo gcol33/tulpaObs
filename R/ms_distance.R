@@ -495,6 +495,48 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
                       c(lambda = "blup_lambda", sigma = "blup_sigma"))
 }
 
+# Pointwise log-likelihood [n_draws x (n_species * n_sites)] for WAIC / LOO /
+# DIC / CPO: per species, the exact binned-distance marginal
+# (cpp_distance_site_sweep, via the SAME .tobs_ms_distance_engine() the fit
+# used) scored over the community-mean pseudo-draws with the per-species BLUP
+# plugged into both arms, the same shape .tobs_ploglik_community_occu_cover()
+# uses. K_max / headroom are rebuilt from the data at their fit-time defaults,
+# the convention .tobs_ploglik_distance() already uses for the single-species
+# family (the fit's own converged truncation is not carried on the model).
+.tobs_ploglik_ms_distance <- function(object, n.draws = 1000L, n.threads = 1L) {
+  model <- object$model
+  cm    <- object$ms_community
+  draws <- object$draws
+  if (!is.null(n.draws) && n.draws < nrow(draws)) {
+    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
+  }
+  eng    <- .tobs_ms_distance_engine(model)
+  hazard <- eng$hazard
+  p_lam  <- model$process_info[[1L]]$p; p_sig <- model$process_info[[2L]]$p
+  lam_cols <- seq_len(p_lam); sig_cols <- p_lam + seq_len(p_sig)
+  b_col  <- if (hazard) p_lam + p_sig + 1L else NA_integer_
+  X_lam  <- model$X_processes[[1L]]; X_sig <- model$X_processes[[2L]]
+  field_off  <- model$distance_field_offset
+  factor_off <- model$distance_factor_offset
+  M <- nrow(draws); n_sites <- model$n_sites
+  cols <- vector("list", model$n_species)
+  for (s in seq_len(model$n_species)) {
+    ll_s <- matrix(0, M, n_sites)
+    fo_s <- if (is.null(factor_off)) NULL else factor_off[, s]
+    for (m in seq_len(M)) {
+      eta_lam <- as.numeric(X_lam %*% (draws[m, lam_cols] + cm$blup_lambda[s, ]))
+      if (!is.null(field_off)) eta_lam <- eta_lam + as.numeric(field_off)
+      if (!is.null(fo_s))      eta_lam <- eta_lam + fo_s
+      eta_sig <- as.numeric(X_sig %*% (draws[m, sig_cols] + cm$blup_sigma[s, ]))
+      eta_b   <- if (hazard) draws[m, b_col] else 0
+      ll_s[m, ] <- eng$sweep(s, eta_lam, eta_sig, eta_b,
+                             value_only = TRUE)$log_lik
+    }
+    cols[[s]] <- ll_s
+  }
+  do.call(cbind, cols)
+}
+
 # Per-species site-level expected abundance lambda_{s,i} and detection scale
 # sigma_{s,i} at the posterior-mean (mu + BLUP) coefficients, each an
 # [n_sites x n_species] matrix. The field / factor offsets enter log lambda.

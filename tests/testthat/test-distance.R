@@ -294,8 +294,9 @@ test_that("S3 surface works for distance fits", {
 
   X0 <- cbind(1, c(-1, 0, 1), 0)
   pr <- predict(fit, X.0 = X0, type = "lambda")
-  expect_length(pr, 3L)
-  expect_true(all(pr > 0) && all(diff(pr) > 0))
+  expect_equal(nrow(pr), 3L)
+  expect_true(all(pr$mean > 0) && all(diff(pr$mean) > 0))
+  expect_true(all(pr$q2.5 <= pr$q97.5))
 
   ysim <- simulate(fit, seed = 1)
   expect_equal(dim(ysim), dim(sim$y))

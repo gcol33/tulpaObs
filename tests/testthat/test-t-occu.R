@@ -50,6 +50,29 @@ test_that("t_occu() gates + S3 surface", {
   # nobs() counts the surveyed (site, season, visit) cells, which is what the
   # per-(site, season) detection sufficient statistics sum over.
   expect_identical(nobs(fit), sum(!is.na(sim$y) & sim$y >= 0))
+
+  # fitted() / predict() / residuals() (#271): psi is per-(site, season),
+  # carrying the AR1 year effect; p is per-site; predict() (no newdata) must
+  # match fitted() exactly (same deterministic formula, no draws involved).
+  fv <- fitted(fit)
+  expect_named(fv, c("psi", "p", "z"))
+  expect_equal(dim(fv$psi), c(80L, 6L))
+  expect_length(fv$p, 80L)
+  expect_true(all(fv$psi > 0 & fv$psi < 1))
+  expect_true(all(fv$z >= 0 & fv$z <= 1))
+  expect_equal(predict(fit), fv$psi)
+  expect_equal(predict(fit, type = "p"), fv$p)
+  nd <- sim$data[1:5, , drop = FALSE]
+  pr_nd <- predict(fit, newdata = nd)
+  expect_equal(dim(pr_nd), c(5L, 6L))
+
+  for (ty in c("deviance", "pearson", "response")) {
+    r <- residuals(fit, type = ty)
+    expect_named(r, c("occ", "det"))
+    expect_equal(dim(r$occ), c(80L, 6L))
+    expect_equal(dim(r$det), dim(sim$y))
+    expect_true(all(is.finite(r$occ) | is.na(r$occ)))
+  }
 })
 
 test_that("t_occu() fits at the documented default method = 'auto'", {
