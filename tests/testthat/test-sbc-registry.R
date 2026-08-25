@@ -12,11 +12,11 @@
 #   driver reads, and every callback slot holds a function. A family cannot be
 #   added half-registered and discovered at the first run.
 #
-#   CONTRACT (skip_on_cran). Per family: the callbacks compose, the pooled data
-#   set carries both blocks under disjoint site labels, and refitting the
-#   observed data ALONE reproduces the observed fit -- which is what says the
-#   rebuilt formulas, family and method are the ones it came from. A fit
-#   carrying a structured term is refused rather than scored on its
+#   CONTRACT (skip_on_cran + skip_if_fast). Per family: the callbacks compose,
+#   the pooled data set carries both blocks under disjoint site labels, and
+#   refitting the observed data ALONE reproduces the observed fit -- which is
+#   what says the rebuilt formulas, family and method are the ones it came
+#   from. A fit carrying a structured term is refused rather than scored on its
 #   coefficients alone.
 #
 # The ACCEPTANCE tier -- the calibration measurement, the reported posterior
@@ -75,6 +75,7 @@ test_that("the roster in the error message names what is registered", {
 
 test_that("each registered family composes its callbacks end to end", {
   skip_on_cran()
+  skip_if_fast()
 
   for (fam in names(.SBC_REG_FIXTURES)) {
     fit <- .SBC_REG_FIXTURES[[fam]]()
@@ -166,6 +167,7 @@ test_that("each registered family composes its callbacks end to end", {
 
 test_that("a structured term is refused, not scored on the coefficients", {
   skip_on_cran()
+  skip_if_fast()
   fit <- .SBC_REG_FIXTURES$occu(N = 40L)
 
   # The field is a latent quantity shared across sites that theta does not
@@ -184,6 +186,7 @@ test_that("a structured term is refused, not scored on the coefficients", {
 
 test_that("a visit-level observation design is refused, not rebuilt", {
   skip_on_cran()
+  skip_if_fast()
 
   # The replicate comes from the family's own simulate() kernel, which builds
   # detection from the SITE-level design; a visit-level column would be scored
@@ -208,6 +211,7 @@ test_that("a visit-level observation design is refused, not rebuilt", {
 
 test_that("the replicate generator draws at the theta it is handed", {
   skip_on_cran()
+  skip_if_fast()
 
   # count(): the mean response has a closed form in theta alone, so the
   # generator can be checked against it rather than against itself. The band is
