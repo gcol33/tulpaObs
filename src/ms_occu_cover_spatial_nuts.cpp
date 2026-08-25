@@ -12,6 +12,7 @@
 // reusing nodet_mixture_block / LognormalPositive / BetaPositive from
 // occu_coupling_shared.h so the likelihood stays on one source of truth.
 
+#include "tobs_shape.h"
 #include "tobs_math.h"
 #include <Rcpp.h>
 #include <vector>
@@ -840,7 +841,7 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
 
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_ocs_full_grad, &m, m.total,
-        theta0, sigma_beta, inv_metric,
+        theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
         n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
         "ms_occu_cover_spatial", m.d.n_sites);
 }

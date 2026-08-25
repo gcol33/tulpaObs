@@ -6,6 +6,7 @@
 // [[Rcpp::export]] functions are thin wrappers that instantiate the shared
 // orchestration with the Royle per-site kernel.
 
+#include "tobs_shape.h"
 #include "nmix_count_spatial_driver.h"
 #include <Rcpp.h>
 
@@ -37,7 +38,8 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
     return tulpaObs::run_count_nested_laplace_icar(
         y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R,
         adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
-        tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init,
+        tau_grid, r_grid, beta_lambda_init, beta_p_init,
+        tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
         tulpaObs::NmixSiteKernel{});
@@ -70,7 +72,8 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
     return tulpaObs::run_count_nested_laplace_car_proper(
         y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R,
         adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
-        tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init,
+        tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init,
+        tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
         tulpaObs::NmixSiteKernel{});

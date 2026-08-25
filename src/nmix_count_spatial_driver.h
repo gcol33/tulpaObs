@@ -348,7 +348,7 @@ inline Rcpp::List run_count_nested_laplace_icar(
     Rcpp::IntegerVector n_neighbors, int n_spatial,
     Rcpp::NumericVector tau_grid, Rcpp::NumericVector r_grid,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,
-    Rcpp::Nullable<Rcpp::NumericVector> z_init,
+    const std::vector<double>& z_init,
     int K_max, int max_iter, double tol, bool verbose,
     bool progress, int progress_every, double progress_throttle,
     std::string progress_file, SiteFn site_fn
@@ -361,10 +361,9 @@ inline Rcpp::List run_count_nested_laplace_icar(
     Eigen::Map<Eigen::MatrixXd> Xp(REAL(X_p_R), pp.n_obs, p_p);
 
     Eigen::VectorXd z_default(n_spatial);
-    if (z_init.isNotNull()) {
-        Rcpp::NumericVector zi(z_init);
-        if ((int)zi.size() != n_spatial) Rcpp::stop("length(z_init) must equal n_spatial.");
-        for (int s = 0; s < n_spatial; ++s) z_default(s) = zi[s];
+    if (!z_init.empty()) {
+        if ((int)z_init.size() != n_spatial) Rcpp::stop("length(z_init) must equal n_spatial.");
+        for (int s = 0; s < n_spatial; ++s) z_default(s) = z_init[s];
     } else {
         z_default.setZero();
     }
@@ -618,8 +617,8 @@ inline Rcpp::List run_count_nested_laplace_bym2(
     Rcpp::NumericVector sigma_grid, Rcpp::NumericVector rho_grid,
     Rcpp::NumericVector r_grid, double scale_factor,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,
-    Rcpp::Nullable<Rcpp::NumericVector> v_init,
-    Rcpp::Nullable<Rcpp::NumericVector> w_init,
+    const std::vector<double>& v_init,
+    const std::vector<double>& w_init,
     int K_max, int max_iter, double tol, bool verbose,
     bool progress, int progress_every, double progress_throttle,
     std::string progress_file, SiteFn site_fn
@@ -633,15 +632,13 @@ inline Rcpp::List run_count_nested_laplace_bym2(
     Eigen::Map<Eigen::MatrixXd> Xp(REAL(X_p_R), pp.n_obs, p_p);
 
     Eigen::VectorXd v_default(n_spatial), w_default(n_spatial);
-    if (v_init.isNotNull()) {
-        Rcpp::NumericVector vi(v_init);
-        if ((int)vi.size() != n_spatial) Rcpp::stop("length(v_init) must equal n_spatial.");
-        for (int s = 0; s < n_spatial; ++s) v_default(s) = vi[s];
+    if (!v_init.empty()) {
+        if ((int)v_init.size() != n_spatial) Rcpp::stop("length(v_init) must equal n_spatial.");
+        for (int s = 0; s < n_spatial; ++s) v_default(s) = v_init[s];
     } else v_default.setZero();
-    if (w_init.isNotNull()) {
-        Rcpp::NumericVector wi(w_init);
-        if ((int)wi.size() != n_spatial) Rcpp::stop("length(w_init) must equal n_spatial.");
-        for (int s = 0; s < n_spatial; ++s) w_default(s) = wi[s];
+    if (!w_init.empty()) {
+        if ((int)w_init.size() != n_spatial) Rcpp::stop("length(w_init) must equal n_spatial.");
+        for (int s = 0; s < n_spatial; ++s) w_default(s) = w_init[s];
     } else w_default.setZero();
 
     const int n_sigma = sigma_grid.size(), n_rho = rho_grid.size(), n_r = r_grid.size();
@@ -707,7 +704,7 @@ inline Rcpp::List run_count_nested_laplace_car_proper(
     Rcpp::NumericVector tau_grid, Rcpp::NumericVector rho_grid,
     Rcpp::NumericVector r_grid,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,
-    Rcpp::Nullable<Rcpp::NumericVector> z_init,
+    const std::vector<double>& z_init,
     int K_max, int max_iter, double tol, bool verbose,
     bool progress, int progress_every, double progress_throttle,
     std::string progress_file, SiteFn site_fn
@@ -720,10 +717,9 @@ inline Rcpp::List run_count_nested_laplace_car_proper(
     Eigen::Map<Eigen::MatrixXd> Xp(REAL(X_p_R), pp.n_obs, p_p);
 
     Eigen::VectorXd z_default(n_spatial);
-    if (z_init.isNotNull()) {
-        Rcpp::NumericVector zi(z_init);
-        if ((int)zi.size() != n_spatial) Rcpp::stop("length(z_init) must equal n_spatial.");
-        for (int s = 0; s < n_spatial; ++s) z_default(s) = zi[s];
+    if (!z_init.empty()) {
+        if ((int)z_init.size() != n_spatial) Rcpp::stop("length(z_init) must equal n_spatial.");
+        for (int s = 0; s < n_spatial; ++s) z_default(s) = z_init[s];
     } else {
         z_default.setZero();
     }

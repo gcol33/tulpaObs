@@ -39,6 +39,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include "tobs_shape.h"
 #include "occu_coupling_shared.h"
 #include "nuts_field_hyper.h"
 #include "nuts_re_block.h"
@@ -417,5 +418,5 @@ Rcpp::List cpp_occu_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     m.sigma_logdisp = sigma_logdisp;
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::occu_cover_nuts_full_grad, &m, m.d.total, theta0, sigma_beta,
-        inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose);
+        tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose);
 }

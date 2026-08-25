@@ -196,7 +196,7 @@ inline void count_nuts_full_grad(const std::vector<double>& params,
 inline Rcpp::List count_nuts_run(const Rcpp::List& spec,
                                  const Rcpp::NumericVector& theta0,
                                  double sigma_beta, double sigma_logr,
-                                 Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
+                                 const std::vector<double>& inv_metric,
                                  int n_iter, int n_warmup, int max_treedepth,
                                  double adapt_delta, int seed, bool verbose,
                                  CountKernelFn kern) {

@@ -6,6 +6,7 @@
 // is its byte-for-byte cross-check before driving tulpa's NUTS engine.
 
 #include <Rcpp.h>
+#include "tobs_shape.h"
 #include "nmix_kernel.h"
 #include "marginal_count_nuts.h"
 
@@ -34,6 +35,8 @@ Rcpp::List cpp_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                          int n_iter, int n_warmup, int max_treedepth,
                          double adapt_delta, int seed, bool verbose) {
     return tulpaObs::count_nuts_run(
-        spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup,
+        spec, theta0, sigma_beta, sigma_logr,
+        tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
+        n_iter, n_warmup,
         max_treedepth, adapt_delta, seed, verbose, &tulpaObs::compute_nmix_site);
 }

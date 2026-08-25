@@ -13,6 +13,7 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include "tobs_shape.h"
 #include "distance_kernel.h"
 #include "nuts_engine.h"
 #include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
@@ -178,6 +179,6 @@ Rcpp::List cpp_distance_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     tulpaObs::DistNutsModel m = tulpaObs::dist_nuts_build(spec);
     m.sigma_beta = sigma_beta; m.sigma_shape = sigma_shape; m.sigma_logr = sigma_logr;
     return tulpaObs::run_tulpa_nuts(&tulpaObs::dist_nuts_full_grad, &m, m.total,
-                                    theta0, sigma_beta, inv_metric, n_iter, n_warmup,
+                                    theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup,
                                     max_treedepth, adapt_delta, seed, verbose);
 }

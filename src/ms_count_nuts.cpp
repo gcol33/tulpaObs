@@ -34,6 +34,7 @@
 #include <omp.h>
 #endif
 #include <tulpa/nuts_api.h>
+#include "tobs_shape.h"
 #include "community_chol.h"
 #include "tobs_math.h"
 
@@ -323,7 +324,7 @@ Rcpp::List cpp_ms_count_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
 
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_count_nuts_full_grad, &m, m.d.total,
-        theta0, sigma_beta, inv_metric,
+        theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
         n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
         "ms_count", m.d.n_sites);
 }

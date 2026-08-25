@@ -5,6 +5,7 @@
 // (shared with removal, #51); this is a thin wrapper instantiating it with the
 // Royle per-site kernel.
 
+#include "tobs_shape.h"
 #include "nmix_count_spatial_driver.h"
 #include <Rcpp.h>
 
@@ -40,7 +41,9 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
         y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R,
         adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
         sigma_grid, rho_grid, r_grid, scale_factor,
-        beta_lambda_init, beta_p_init, v_init, w_init,
+        beta_lambda_init, beta_p_init,
+        tulpaObs::shape::optional_numeric(v_init.get(), "v_init"),
+        tulpaObs::shape::optional_numeric(w_init.get(), "w_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
         tulpaObs::NmixSiteKernel{});

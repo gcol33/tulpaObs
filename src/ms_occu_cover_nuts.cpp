@@ -34,6 +34,7 @@
 #include <tulpa/param_layout.h>
 #include <tulpa/likelihood.h>
 #include <tulpa/nuts_api.h>
+#include "tobs_shape.h"
 #include "occu_coupling_shared.h"
 #include "community_chol.h"
 
@@ -538,7 +539,7 @@ Rcpp::List cpp_ms_occu_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
 
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_occu_cover_nuts_full_grad, &m, m.d.total,
-        theta0, sigma_beta, inv_metric,
+        theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
         n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
         "ms_occu_cover", m.d.n_sites);
 }

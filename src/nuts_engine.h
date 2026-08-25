@@ -23,7 +23,9 @@ namespace tulpaObs {
 // Run tulpa NUTS on a full-gradient target. `grad_fn` is the tulpa FullGradFn
 // (it reads its model through ModelData.model_response_data = `model_ptr`);
 // `n_params` the parameter dimension; `inv_metric` an optional diagonal inverse
-// mass matrix (length n_params). Returns draws + sampler diagnostics.
+// mass matrix, either empty (the engine adapts its own) or of length n_params.
+// The engine reads that pointer for n_params entries without checking how many
+// it was given, so a short one is rejected here. Returns draws + diagnostics.
 //
 // `spec_name` labels the LikelihoodSpec and `data_N` sets ModelData.N (the
 // observation count, which the community targets carry as their site count).
@@ -36,7 +38,7 @@ inline Rcpp::List run_tulpa_nuts(
     decltype(tulpa::LikelihoodSpec::gradient_fn) grad_fn,
     void* model_ptr, int n_params,
     const Rcpp::NumericVector& theta0, double sigma_beta,
-    Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
+    const std::vector<double>& inv_metric,
     int n_iter, int n_warmup, int max_treedepth, double adapt_delta,
     int seed, bool verbose,
     const char* spec_name = "tulpaobs_marginal",
@@ -65,13 +67,12 @@ inline Rcpp::List run_tulpa_nuts(
 
     tulpa::set_gradient_mode_str("H");
 
+    if (!inv_metric.empty() && (int) inv_metric.size() != n_params)
+        Rcpp::stop("inv_metric length %d != expected %d",
+                   (int) inv_metric.size(), n_params);
+
     std::vector<double> init(theta0.begin(), theta0.end());
-    std::vector<double> imv;
-    const double* im = nullptr;
-    if (inv_metric.isNotNull()) {
-        Rcpp::NumericVector v(inv_metric);
-        imv.assign(v.begin(), v.end()); im = imv.data();
-    }
+    const double* im = inv_metric.empty() ? nullptr : inv_metric.data();
 
     tulpa::NUTSFn run_nuts = tulpa::get_nuts_fn();
     tulpa::NUTSResult result = {};

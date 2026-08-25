@@ -18,6 +18,7 @@
 #define TULPAOBS_TOBS_SHAPE_H
 
 #include <Rcpp.h>
+#include <vector>
 
 namespace tulpaObs {
 namespace shape {
@@ -85,6 +86,22 @@ inline void check_index1(const Rcpp::IntegerVector& v, R_xlen_t n,
       Rcpp::stop("%s[%d] = %d is outside [1, %d].", what, k + 1, (int) v[k], n);
     }
   }
+}
+
+// An optional numeric argument, unwrapped at the .cpp export boundary.
+// Rcpp::Nullable<T> must not cross into a header helper -- it crashes MinGW --
+// so an export keeps the Nullable formal, hands this the SEXP behind it, and
+// passes the returned buffer inward. R_NilValue yields an empty vector, which
+// is how a header spells "argument absent"; `n`, when non-negative, is the
+// length a present argument is required to have.
+inline std::vector<double> optional_numeric(SEXP x, const char* what,
+                                            R_xlen_t n = -1) {
+  if (Rf_isNull(x)) return std::vector<double>();
+  Rcpp::NumericVector v(x);
+  if (n >= 0 && v.size() != n) {
+    Rcpp::stop("%s must have length %d; got %d.", what, n, (R_xlen_t) v.size());
+  }
+  return std::vector<double>(v.begin(), v.end());
 }
 
 }  // namespace shape

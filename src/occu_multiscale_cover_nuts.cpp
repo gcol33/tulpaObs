@@ -19,6 +19,7 @@
 #include <vector>
 #include <cmath>
 #include "occu_coupling_shared.h"   // sigmoid_ / Pos policies / nodet_mixture_block
+#include "tobs_shape.h"
 #include "nuts_engine.h"
 
 namespace tulpaObs {
@@ -371,6 +372,6 @@ Rcpp::List cpp_occu_mscale_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta
     tulpaObs::MscaleCoverNutsModel m = tulpaObs::mscale_cover_nuts_build(spec);
     m.sigma_beta = sigma_beta;
     return tulpaObs::run_tulpa_nuts(&tulpaObs::mscale_cover_nuts_full_grad, &m, m.total,
-                                    theta0, sigma_beta, inv_metric, n_iter, n_warmup,
+                                    theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup,
                                     max_treedepth, adapt_delta, seed, verbose);
 }

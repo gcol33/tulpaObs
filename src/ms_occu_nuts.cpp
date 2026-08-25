@@ -50,6 +50,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include "tobs_shape.h"
 #include "ms_occu_kernel.h"
 #include "community_chol.h"
 
@@ -340,7 +341,7 @@ Rcpp::List cpp_ms_occu_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
 
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_occu_nuts_full_grad, &m, m.d.total,
-        theta0, sigma_beta, inv_metric,
+        theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
         n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
         "ms_occu", m.d.n_sites);
 }
