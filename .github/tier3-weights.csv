@@ -22,7 +22,9 @@
 # has to be paid, and a file whose cost is spread evenly across its blocks is
 # usually rebuilding a fixture in each of them.
 file,seconds,isolate,source
-test-ms-abun-nb-rs.R,20623.4,yes,"windows serial 2026-08-20 at 343f425, 7 threads, 343.7 min, 6 min under the job cap. An earlier attempt ran 15.5h without finishing [not reached by run 32797335149; still the older figure] [not reached by run 32797335149; still the older figure]"
+test-ms-abun-nb-rs-coverage.R,19584,yes,"split out of the formerly-undivided test-ms-abun-nb-rs.R (20 fits, one per seed). Estimated at 20/21 of the undivided file's 20623.4s (windows serial 2026-08-20 at 343f425, 7 threads, 343.7 min, 6 min under the job cap; an earlier attempt on the undivided file ran 15.5h without finishing) minus test-ms-abun-nb-rs.R's small fixed cost. Per-file cost is NOT yet measured -- the first completed run publishes tier3-timings.csv per file, and this row is replaced from it."
+test-ms-abun-nb-rs-recovery.R,980,no,"split out of the formerly-undivided test-ms-abun-nb-rs.R (1 fit). Estimated at 1/21 of the undivided file's 20623.4s, same source as test-ms-abun-nb-rs-coverage.R. Per-file cost is NOT yet measured."
+test-ms-abun-nb-rs.R,60,no,"split out of the formerly-undivided test-ms-abun-nb-rs.R; the AGHQ-floor block alone, a single small fixed-size fit (N=12, J=2, S=3, max.iter=5). Placeholder, not yet measured."
 test-sbc-acceptance-ms_distance.R,5147.4,no,"github ubuntu runner 2026-08-25, run 32797335149"
 test-ms-abun-factor.R,4813.2,no,"windows serial 2026-08-20 at 343f425, 7 threads, 80.2 min. Was NA (isolate = yes); the 4.5-5h in CLAUDE.md predates factor.starts dropping to 1 for this family [not reached by run 32797335149; still the older figure] [not reached by run 32797335149; still the older figure]"
 test-occu-svc-nngp-recovery.R,3629.5,no,"github ubuntu runner 2026-08-25, run 32797335149"
