@@ -116,6 +116,16 @@ probability \code{P(delta > 0)} per cell. The result is a
 draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then
 \code{geom_tile(aes(x, y, fill = delta_p))} (or \code{geom_sf()} on polygon cells).
+\item \strong{Community families}: \code{ms_occu()}, \code{ms_dyn_occu()}, \code{ms_int_occu()},
+\code{ms_abun()}, \code{ms_distance()} and \code{ms_occu_cover()} predict per-species
+matrices \verb{[rows x species]}, in-sample from \code{fitted()} and at \code{newdata}
+from the per-species coefficients. Each family answers to its own response
+types: \code{"occupancy"} / \code{"detection"} (\code{ms_occu}, \code{ms_dyn_occu},
+\code{ms_int_occu}), \code{"abundance"} / \code{"detection"} (\code{ms_abun}),
+\code{"lambda"} / \code{"sigma"} (\code{ms_distance}), and \code{"occupancy"} /
+\code{"detection"} / \code{"cover_cond"} / \code{"cover_exp"} (\code{ms_occu_cover}). A
+fit carrying an areal field or a latent-factor loading is in-sample only,
+the field having no value at an unseen site.
 \item \strong{Spatial-factor community}: for a reduced-rank spatial-factor
 \code{ms_occu_cover()} fit, \code{predict(fit, type = "occupancy" | "cover_cond" | "cover_exp")} returns the per-species per-cell posterior as a long table
 (one row per cell x species): \code{"occupancy"} gives \code{psi}, \code{"cover_cond"} the

@@ -59,8 +59,10 @@ summary.tobs_fit <- function(object, ...) {
 }
 
 # Families whose predictor takes `newdata` and a family-specific response type,
-# with the type each reports by default. The three community occupancy families
-# share one predictor (`.tobs_predict_ms_community`).
+# with the type each reports by default. The community families share one
+# predictor (`.tobs_predict_ms_community`) and one arm table, so each reports
+# the first arm registered for it in `.TOBS_MS_PREDICT_ARMS` rather than
+# restating a default here.
 .TOBS_PREDICT_NEWDATA_TYPE <- c(
   royle_nichols   = "abundance",
   occu_ttd        = "state",
@@ -69,9 +71,7 @@ summary.tobs_fit <- function(object, ...) {
   gdistremoval    = "abundance",
   distsamp_open   = "abundance",
   dyn_int_occu    = "state",
-  ms_occu         = "occupancy",
-  ms_dyn_occu     = "occupancy",
-  ms_int_occu     = "occupancy")
+  vapply(.TOBS_MS_PREDICT_ARMS, function(a) names(a)[[1L]], character(1)))
 
 # Model types whose predictor has no `terms` argument. `distance` / `fp_occu` /
 # `dyn_abun` vary covariates through `X.0`; the `newdata` families above build
@@ -844,6 +844,16 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   draw matrices in `attr(, "draws")`; map it yourself, e.g.
 #'   `left_join(cents, pr, by = "cell")` then
 #'   `geom_tile(aes(x, y, fill = delta_p))` (or `geom_sf()` on polygon cells).
+#' - **Community families**: `ms_occu()`, `ms_dyn_occu()`, `ms_int_occu()`,
+#'   `ms_abun()`, `ms_distance()` and `ms_occu_cover()` predict per-species
+#'   matrices `[rows x species]`, in-sample from `fitted()` and at `newdata`
+#'   from the per-species coefficients. Each family answers to its own response
+#'   types: `"occupancy"` / `"detection"` (`ms_occu`, `ms_dyn_occu`,
+#'   `ms_int_occu`), `"abundance"` / `"detection"` (`ms_abun`),
+#'   `"lambda"` / `"sigma"` (`ms_distance`), and `"occupancy"` /
+#'   `"detection"` / `"cover_cond"` / `"cover_exp"` (`ms_occu_cover`). A
+#'   fit carrying an areal field or a latent-factor loading is in-sample only,
+#'   the field having no value at an unseen site.
 #' - **Spatial-factor community**: for a reduced-rank spatial-factor
 #'   `ms_occu_cover()` fit, `predict(fit, type = "occupancy" | "cover_cond" |
 #'   "cover_exp")` returns the per-species per-cell posterior as a long table
@@ -967,10 +977,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   # names the type it reports when the caller did not choose one.
   nd_default <- .TOBS_PREDICT_NEWDATA_TYPE[object$model$model_type %||% ""]
   if (!is.na(nd_default)) {
-    fn <- .tobs_s3_handler(
-      "predict", object$model$model_type,
-      c(ms_occu = "ms_community", ms_dyn_occu = "ms_community",
-        ms_int_occu = "ms_community"))
+    fn <- .tobs_s3_handler("predict", object$model$model_type,
+                           .TOBS_MS_PREDICT_ALIAS)
     return(fn(object,
               newdata = .tobs_resolve_newdata(newdata, X.0),
               type = if (missing(type) || length(type) > 1L) unname(nd_default)

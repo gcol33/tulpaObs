@@ -776,6 +776,16 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 # Per-species posterior-mean linear predictors: site-level occupancy psi
 # [n_sites x n_species], site-level detection p [n_sites x n_species], and the
 # expected positive cover on the response scale [n_sites x n_species].
+# Positive-arm cover on the response scale: beta -> plogis(eta), gaussian ->
+# eta, lognormal -> exp(eta + sigma^2 / 2) at the fit's own dispersion. One
+# reader, so fitted() and predict(newdata = ) cannot drift apart.
+.tobs_ms_cover_response <- function(eta, object) {
+  pos <- object$model$positive
+  if (identical(pos, "beta")) return(stats::plogis(eta))
+  if (identical(pos, "gaussian")) return(eta)
+  exp(eta + exp(object$means[[length(object$means)]])^2 / 2)
+}
+
 .tobs_fitted_ms_occu_cover <- function(object) {
   model <- object$model
   cm    <- object$ms_community
@@ -784,17 +794,11 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   X_pos_site <- model$X_pos_site
   p_det_site <- ncol(X_det_site)
   p_pos_site <- ncol(X_pos_site)
-  is_beta    <- identical(model$positive, "beta")
-  is_gauss   <- identical(model$positive, "gaussian")
-  disp       <- exp(object$means[[length(object$means)]])
-
   psi <- stats::plogis(X_occ %*% t(cm$coef_occ))
   p   <- stats::plogis(X_det_site %*%
                        t(cm$coef_p[, seq_len(p_det_site), drop = FALSE]))
   eta_pos <- X_pos_site %*% t(cm$coef_pos[, seq_len(p_pos_site), drop = FALSE])
-  cover <- if (is_beta) stats::plogis(eta_pos)
-           else if (is_gauss) eta_pos
-           else exp(eta_pos + disp^2 / 2)
+  cover <- .tobs_ms_cover_response(eta_pos, object)
   dimnames(psi) <- dimnames(p) <- dimnames(cover) <-
     list(NULL, model$species_names)
   list(psi = psi, p = p, cover = cover)

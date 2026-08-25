@@ -1,5 +1,33 @@
 # tulpaObs NEWS
 
+## 0.0.243 (2026-08-25)
+
+* **`ms_abun()`, `ms_distance()` and `ms_occu_cover()` have a real `newdata`
+  predictor (#256).** The three fell through `predict.tobs_fit()` to the generic
+  single-season occupancy path, which ignores `newdata` (returning the in-sample
+  `fitted()`) and, given `X.0`, reports `plogis()` of process 1. For `ms_abun()`
+  and `ms_distance()` process 1 is the LOG-link abundance arm, so
+  `predict(fit, X.0 = X)` returned `plogis(X b_lambda)` labelled as an occupancy
+  probability. Each now predicts its own arms: `"abundance"` / `"detection"`,
+  `"lambda"` / `"sigma"`, and `"occupancy"` / `"detection"` / `"cover_cond"` /
+  `"cover_exp"` -- the vocabulary the spatial-factor `ms_occu_cover()` twin
+  already answers to.
+* The six community families now share ONE arm table
+  (`.TOBS_MS_PREDICT_ARMS`): the design formula, coefficient block, `fitted()`
+  slot and inverse link of every response arm. The predictor, the default
+  response type, the shared-handler alias and the `terms` refusal are all read
+  off it, so a family gains the whole surface by gaining a row rather than by a
+  fourth near-duplicate handler.
+* A community fit whose sites carry a latent contribution now refuses
+  `newdata` for all six families, not only for `spatial_field`: a latent-factor
+  `ms_occu()` fit (`occu_factor_offset`) was predicting at new rows with the
+  factor contribution silently dropped.
+* The cover arm's response link (beta / gaussian / lognormal) is one helper both
+  `fitted()` and `predict()` read, rather than the same three-way branch twice.
+* Behaviour change: `predict()` on a non-spatial `ms_occu_cover()` fit returns
+  the requested arm's matrix (occupancy by default), where it used to return the
+  whole `fitted()` list. Every other community family already reported one arm.
+
 ## 0.0.242 (2026-08-25)
 
 * **One `ms_dyn_occu` forward marginal, and a dead site is refused rather than
