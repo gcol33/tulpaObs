@@ -1213,6 +1213,29 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_ms_occu_spatial_spde
+Rcpp::List cpp_ms_occu_spatial_spde(Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_p, Rcpp::IntegerMatrix n_valid, Rcpp::IntegerMatrix n_det, Rcpp::NumericMatrix A_R, Rcpp::List Q_list, Rcpp::NumericVector log_det_Q, Rcpp::NumericMatrix theta_grid_R, Rcpp::NumericVector mu_init, Rcpp::NumericMatrix Sigma_psi_init, Rcpp::NumericMatrix Sigma_p_init, int max_iter_em, bool verbose);
+RcppExport SEXP _tulpaObs_cpp_ms_occu_spatial_spde(SEXP X_psiSEXP, SEXP X_pSEXP, SEXP n_validSEXP, SEXP n_detSEXP, SEXP A_RSEXP, SEXP Q_listSEXP, SEXP log_det_QSEXP, SEXP theta_grid_RSEXP, SEXP mu_initSEXP, SEXP Sigma_psi_initSEXP, SEXP Sigma_p_initSEXP, SEXP max_iter_emSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_psi(X_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type n_valid(n_validSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type n_det(n_detSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type A_R(A_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type Q_list(Q_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type log_det_Q(log_det_QSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type theta_grid_R(theta_grid_RSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type mu_init(mu_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type Sigma_psi_init(Sigma_psi_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type Sigma_p_init(Sigma_p_initSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter_em(max_iter_emSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_ms_occu_spatial_spde(X_psi, X_p, n_valid, n_det, A_R, Q_list, log_det_Q, theta_grid_R, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_ms_ocs_ploglik
 Rcpp::NumericMatrix cpp_ms_ocs_ploglik(Rcpp::NumericMatrix draws, Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det_site, Rcpp::NumericMatrix X_det_visit, Rcpp::NumericMatrix X_pos_site, Rcpp::NumericMatrix X_pos_visit, Rcpp::IntegerVector y, Rcpp::NumericVector y_pos, Rcpp::IntegerVector valid, int N, int J, int S, int K, int P_occ, int P_p, int P_pos, int P_p_site, int P_pos_site, bool cover_factor, bool is_beta, int n_threads);
 RcppExport SEXP _tulpaObs_cpp_ms_ocs_ploglik(SEXP drawsSEXP, SEXP X_occSEXP, SEXP X_det_siteSEXP, SEXP X_det_visitSEXP, SEXP X_pos_siteSEXP, SEXP X_pos_visitSEXP, SEXP ySEXP, SEXP y_posSEXP, SEXP validSEXP, SEXP NSEXP, SEXP JSEXP, SEXP SSEXP, SEXP KSEXP, SEXP P_occSEXP, SEXP P_pSEXP, SEXP P_posSEXP, SEXP P_p_siteSEXP, SEXP P_pos_siteSEXP, SEXP cover_factorSEXP, SEXP is_betaSEXP, SEXP n_threadsSEXP) {
@@ -2530,6 +2553,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_ms_occu_spatial_icar", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_icar, 15},
     {"_tulpaObs_cpp_ms_occu_spatial_car_proper", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_car_proper, 17},
     {"_tulpaObs_cpp_ms_occu_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_bym2, 17},
+    {"_tulpaObs_cpp_ms_occu_spatial_spde", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_spde, 13},
     {"_tulpaObs_cpp_ms_ocs_ploglik", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_ploglik, 21},
     {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 20},

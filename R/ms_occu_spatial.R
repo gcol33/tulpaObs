@@ -213,52 +213,138 @@
   out
 }
 
+# ---------------------------------------------------------------------------
+# SPDE (continuous Matern field, shared across species)
+# ---------------------------------------------------------------------------
+
+# Shared continuous Matern field on the occupancy arm:
+#   logit psi_{s,i} = X_psi_i . (mu_psi + b_psi_s) + (A u)_i
+# with u ~ N(0, Q(range, sigma)^{-1}) on the FEM mesh and A (n_sites x n_mesh)
+# the projection shared across species. Mirrors nmix_community_laplace_spde()
+# (#239): the outer grid integrates (range, sigma); per grid point the proper
+# Matern precision Q (and log|Q|) is built once on the R side (the same FEM
+# assembly the single-species SPDE and the count community SPDE paths use) and
+# passed into the same community Laplace-EM driver as the areal fields. No CCD
+# mode-centred integration here (unlike the count family): occupancy's areal
+# fields stay on the fixed tensor grid too, so SPDE matches that convention.
+.ms_occu_community_spde <- function(model, spatial, range_grid = NULL,
+                                    sigma_grid = NULL, max_iter = 100L,
+                                    verbose = FALSE) {
+  X_psi <- model$X_occ; X_p <- model$X_det
+  p_psi <- ncol(X_psi); p_p <- ncol(X_p)
+  ts <- spatial$tulpa_spec
+  if (is.null(ts) || !identical(ts$type, "spde")) {
+    stop("ms_occu() spde() field requires an SPDE tulpa_spec.", call. = FALSE)
+  }
+  n_mesh  <- ts$n_mesh
+  A_dense <- as.matrix(ts$A)
+  if (nrow(A_dense) != model$n_sites) {
+    stop(sprintf("SPDE projection A has %d rows but the model has %d sites.",
+                 nrow(A_dense), model$n_sites), call. = FALSE)
+  }
+
+  prior_range <- ts$prior_range
+  prior_sigma <- ts$prior_sigma
+  # Coarser default grid than the single-species SPDE path (3 x 3): each
+  # community grid point is an n_species-fold-more-expensive EM, matching the
+  # rationale nmix_community_laplace_spde() uses.
+  if (is.null(range_grid)) {
+    r_med <- prior_range[1]
+    range_grid <- exp(seq(log(r_med * 0.4), log(r_med * 2.2), length.out = 3L))
+  }
+  if (is.null(sigma_grid)) {
+    s_scale <- prior_sigma[1]
+    sigma_grid <- exp(seq(log(s_scale * 0.4), log(s_scale * 1.8), length.out = 3L))
+  }
+  if (any(range_grid <= 0)) stop("range_grid must be strictly positive.", call. = FALSE)
+  if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
+
+  build_Q <- function(range_val, sigma_val) {
+    kappa    <- sqrt(8 * ts$nu) / range_val
+    tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
+    Q <- Matrix::forceSymmetric(tulpa:::.spde_precision_Q(ts, kappa, tau_spde))
+    list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
+  }
+
+  ws   <- .ms_occu_spatial_warm_start(model$summaries, p_psi, p_p)
+  mats <- .ms_occu_spatial_count_mats(model$summaries, model$n_sites, model$n_species)
+
+  grid <- expand.grid(range = range_grid, sigma = sigma_grid, KEEP.OUT.ATTRS = FALSE)
+  theta_grid <- as.matrix(grid[, c("range", "sigma")])
+  n <- nrow(theta_grid)
+  Q_list <- vector("list", n); log_dets <- numeric(n); pc_lp <- numeric(n)
+  cache <- list()
+  for (k in seq_len(n)) {
+    key <- paste0(theta_grid[k, 1L], "_", theta_grid[k, 2L])
+    if (is.null(cache[[key]])) cache[[key]] <- build_Q(theta_grid[k, 1L], theta_grid[k, 2L])
+    Q_list[[k]] <- cache[[key]]$Q; log_dets[k] <- cache[[key]]$log_det
+    pc_lp[k] <- tulpa:::pc_prior_log_density(theta_grid[k, 1L], theta_grid[k, 2L],
+                                             prior_range, prior_sigma)
+  }
+  colnames(theta_grid) <- c("range", "sigma")
+  raw <- cpp_ms_occu_spatial_spde(
+    X_psi = X_psi, X_p = X_p, n_valid = mats$n_valid, n_det = mats$n_det,
+    A_R = A_dense, Q_list = Q_list, log_det_Q = log_dets,
+    theta_grid_R = theta_grid,
+    mu_init = ws$mu, Sigma_psi_init = ws$Sigma_psi, Sigma_p_init = ws$Sigma_p,
+    max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
+  raw$log_marginal <- raw$log_marginal + pc_lp
+
+  .ms_occu_spatial_post(raw, p_psi, p_p, n_mesh, "spde", c("range", "sigma"))
+}
+
 
 # ---------------------------------------------------------------------------
 # Front-door fitter
 # ---------------------------------------------------------------------------
 
 # Fit the areal-spatial community occupancy model. `spatial` is the resolved
-# tobs_spatial spec on the occupancy formula (icar / bym2 / car_proper). Returns
-# a `tobs_fit` (via build_ms_occu_fit), with the spatial field + hyperparameters
-# attached.
+# tobs_spatial spec on the occupancy formula (icar / bym2 / car_proper / spde).
+# Returns a `tobs_fit` (via build_ms_occu_fit), with the spatial field +
+# hyperparameters attached.
 .tobs_fit_ms_occu_spatial <- function(model, spatial, max.iter = 100L,
                                       verbose = FALSE, ...) {
   .tobs_reject_weighted_spatial(spatial, "ms_occu() spatial")
   ptype <- spatial$type %||% "icar"
-  if (!ptype %in% c("icar", "bym2", "car_proper")) {
+  if (!ptype %in% c("icar", "bym2", "car_proper", "spde")) {
     stop(sprintf(
-      "ms_occu() areal field supports icar() / bym2() / car_proper(); got '%s'. ",
+      "ms_occu() areal field supports icar() / bym2() / car_proper() / spde(); got '%s'. ",
       ptype),
       "(car() is the improper non-intrinsic CAR; use icar() for the intrinsic ",
-      "field. spde() / gp() are not wired for community occupancy.)",
+      "field.)",
       call. = FALSE)
   }
-  csr   <- .ms_occu_spatial_csr(spatial)
-  n_spatial <- spatial$n_units %||%
-    (if (!is.null(spatial$graph)) nrow(spatial$graph) else length(csr$n_neighbors))
-  if (n_spatial != model$n_sites) {
-    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
-                        "spatial unit per site is required for the community ",
-                        "occupancy field."), n_spatial, model$n_sites), call. = FALSE)
+
+  if (identical(ptype, "spde")) {
+    fit <- .ms_occu_community_spde(model, spatial, max_iter = max.iter,
+                                   verbose = verbose)
+    n_spatial_report <- spatial$tulpa_spec$n_mesh
+  } else {
+    csr   <- .ms_occu_spatial_csr(spatial)
+    n_spatial <- spatial$n_units %||%
+      (if (!is.null(spatial$graph)) nrow(spatial$graph) else length(csr$n_neighbors))
+    if (n_spatial != model$n_sites) {
+      stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                          "spatial unit per site is required for the community ",
+                          "occupancy field."), n_spatial, model$n_sites), call. = FALSE)
+    }
+
+    # site -> spatial unit map: one unit per site (the areal occupancy field has
+    # one node per occupancy unit).
+    map_site_to_unit <- seq_len(model$n_sites)
+
+    fit <- switch(ptype,
+      icar = .ms_occu_community_icar(model, csr, n_spatial, map_site_to_unit,
+                                     max_iter = max.iter, verbose = verbose),
+      car_proper = .ms_occu_community_car_proper(
+        model, csr, n_spatial, map_site_to_unit, graph = spatial$graph,
+        max_iter = max.iter, verbose = verbose),
+      bym2 = .ms_occu_community_bym2(
+        model, csr, n_spatial, map_site_to_unit,
+        scale_factor = spatial$scale_factor %||% .bym2_scale(spatial$graph),
+        max_iter = max.iter, verbose = verbose))
+    n_spatial_report <- n_spatial
   }
-
-  # site -> spatial unit map: one unit per site (the areal occupancy field has
-  # one node per occupancy unit).
-  map_site_to_unit <- seq_len(model$n_sites)
-
-  fit <- switch(ptype,
-    icar = .ms_occu_community_icar(model, csr, n_spatial, map_site_to_unit,
-                                   max_iter = max.iter, verbose = verbose),
-    car_proper = .ms_occu_community_car_proper(
-      model, csr, n_spatial, map_site_to_unit, graph = spatial$graph,
-      max_iter = max.iter, verbose = verbose),
-    bym2 = .ms_occu_community_bym2(
-      model, csr, n_spatial, map_site_to_unit,
-      scale_factor = spatial$scale_factor %||% .bym2_scale(spatial$graph),
-      max_iter = max.iter, verbose = verbose),
-    stop(sprintf("ms_occu() areal field supports icar / bym2 / car_proper; got '%s'.",
-                 ptype), call. = FALSE))
 
   # Reshape into the .tobs_community_em fit shape build_ms_occu_fit consumes.
   arm_idx <- list(psi = seq_len(ncol(model$X_occ)),
@@ -274,8 +360,16 @@
   out <- build_ms_occu_fit(model, fit_em, arm_idx)
   out$method <- "nested_laplace"
   out$spatial <- list(type = ptype, field = fit$spatial_field,
-                      hyper = fit$hyper, n_spatial = n_spatial,
+                      hyper = fit$hyper, n_spatial = n_spatial_report,
                       scale_factor = fit$scale_factor)
+  if (identical(ptype, "spde")) {
+    # Unlike the areal kinds (field already lives one-per-site), the SPDE field
+    # lives on the mesh; a caller needs the projector to map it onto sites
+    # (as the single-species count()/occu() spde() fits already expose it via
+    # fit$spatial$tulpa_spec$A).
+    out$spatial$tulpa_spec <- spatial$tulpa_spec
+    out$spatial$n_units <- n_spatial_report
+  }
   out$spatial_field <- fit$spatial_field
   out
 }
