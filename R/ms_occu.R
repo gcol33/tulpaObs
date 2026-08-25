@@ -204,20 +204,11 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   )
   par_names <- beta_names
 
-  means <- fit$mu; names(means) <- par_names
-  V <- fit$Vf; dimnames(V) <- list(par_names, par_names)
-  V <- (V + t(V)) / 2
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
-
-  n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
   B <- do.call(rbind, fit$b_list)              # S x P
   arm_block <- function(arm) {
     idx  <- arm_idx[[arm]]
     blup <- B[, idx, drop = FALSE]
-    coef <- sweep(blup, 2L, means[idx], "+")
+    coef <- sweep(blup, 2L, fit$mu[idx], "+")
     rownames(blup) <- rownames(coef) <- model$species_names
     list(blup = blup, coef = coef)
   }
@@ -229,70 +220,57 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   dimnames(Sigma_occ) <- list(pi_list[[1L]]$coef_names, pi_list[[1L]]$coef_names)
   dimnames(Sigma_p)   <- list(pi_list[[2L]]$coef_names, pi_list[[2L]]$coef_names)
 
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(fit$logML, n_draws),
-    log_lik      = fit$logML,
-    N            = sum(model$valid)),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = pi_list,
-    model        = model,
-    spatial      = NULL,
-    method       = "laplace",
-    ms_community = list(
-      Sigma_psi = Sigma_occ, Sigma_p = Sigma_p,
-      sd_psi = sqrt(pmax(diag(Sigma_occ), 0)),
-      sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
-      coef_psi = occ_b$coef, coef_p = p_b$coef,
-      blup_psi = occ_b$blup, blup_p = p_b$blup,
-      # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
-      # community EM's own Newton solve, conditional on the converged
-      # community mean) -- what a per-species-coefficient consumer (SBC's
-      # "rank a fixed species set" design, a calibrated per-species CI) needs
-      # beyond the point BLUP; not previously exposed on the fit object. Bf =
-      # the mu-b_s cross-Hessian block from the same Newton solve: mu and b_s
-      # are NOT independent in the posterior, and Bf is what lets a consumer
-      # draw them jointly instead.
-      Cinv = fit$Cinv, Bf = fit$Bf,
-      # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
-      # community VARIANCE components (Sigma_psi/Sigma_p and their sd_*) carry
-      # Laplace small-cluster attenuation at small per-species n. When
-      # `debias_method == "aghq"` they (and Cinv) have been debiased by
-      # adaptive Gauss-Hermite quadrature of the exact per-species RE
-      # posterior; otherwise (large RE dim / re.aghq = FALSE) they remain the
-      # attenuated EM lower bound.
-      var_attenuation = if (identical(fit$debias_method, "aghq")) list(
-        affects = character(0),
-        means_affected = FALSE,
-        source = "laplace_small_cluster",
-        debias = "aghq",
-        note = paste0(
-          "Community variance components (and Cinv) debiased by adaptive ",
-          "Gauss-Hermite quadrature of the exact per-species RE posterior; ",
-          "community means are unaffected.")
-      ) else list(
-        affects = c("Sigma_psi", "Sigma_p", "sd_psi", "sd_p", "Cinv"),
-        means_affected = FALSE,
-        source = "laplace_small_cluster",
-        debias = "none",
-        note = paste0(
-          "Community variance components (and Cinv) carry the Laplace ",
-          "small-cluster attenuation lower bound; RE dimension exceeded ",
-          "control$re.aghq.maxdim or control$re.aghq = FALSE.")
-      )
-    ),
-    convergence  = list(converged = isTRUE(fit$converged), n_iter = fit$n_iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+  ms_community <- list(
+    Sigma_psi = Sigma_occ, Sigma_p = Sigma_p,
+    sd_psi = sqrt(pmax(diag(Sigma_occ), 0)),
+    sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
+    coef_psi = occ_b$coef, coef_p = p_b$coef,
+    blup_psi = occ_b$blup, blup_p = p_b$blup,
+    # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
+    # community EM's own Newton solve, conditional on the converged
+    # community mean) -- what a per-species-coefficient consumer (SBC's
+    # "rank a fixed species set" design, a calibrated per-species CI) needs
+    # beyond the point BLUP; not previously exposed on the fit object. Bf =
+    # the mu-b_s cross-Hessian block from the same Newton solve: mu and b_s
+    # are NOT independent in the posterior, and Bf is what lets a consumer
+    # draw them jointly instead.
+    Cinv = fit$Cinv, Bf = fit$Bf,
+    # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
+    # community VARIANCE components (Sigma_psi/Sigma_p and their sd_*) carry
+    # Laplace small-cluster attenuation at small per-species n. When
+    # `debias_method == "aghq"` they (and Cinv) have been debiased by
+    # adaptive Gauss-Hermite quadrature of the exact per-species RE
+    # posterior; otherwise they remain the attenuated EM lower bound.
+    var_attenuation = if (identical(fit$debias_method, "aghq")) list(
+      affects = character(0),
+      means_affected = FALSE,
+      source = "laplace_small_cluster",
+      debias = "aghq",
+      note = paste0(
+        "Community variance components (and Cinv) debiased by adaptive ",
+        "Gauss-Hermite quadrature of the exact per-species RE posterior; ",
+        "community means are unaffected.")
+    ) else list(
+      affects = c("Sigma_psi", "Sigma_p", "sd_psi", "sd_p", "Cinv"),
+      means_affected = FALSE,
+      source = "laplace_small_cluster",
+      debias = "none",
+      note = paste0(
+        "Community variance components (and Cinv) carry the Laplace ",
+        "small-cluster attenuation lower bound. AGHQ debiasing is not ",
+        "applied for this family: measured to make posterior calibration ",
+        "worse here (not just unhelpful), so .tobs_fit_ms_occu() never ",
+        "requests it -- control$re.aghq / control$re.aghq.maxdim have no ",
+        "effect on this fit.")
+    )
+  )
+
+  .tobs_cem_finalize_fit(
+    means = fit$mu, V = fit$Vf, par_names = par_names,
+    model = model, process_info = pi_list, N = sum(model$valid),
+    log_prob_val = fit$logML, converged = fit$converged, n_iter = fit$n_iter,
+    extra = list(ms_community = ms_community)
+  )
 }
 
 

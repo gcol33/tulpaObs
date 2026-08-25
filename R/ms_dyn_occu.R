@@ -267,14 +267,6 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
   )
   par_names <- beta_names
 
-  means <- c(mu, global); names(means) <- par_names
-  V <- res$Vf; dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
-
-  n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
   # Per-species community structure (mu + BLUP deviations) for the RE arms.
   B <- do.call(rbind, res$b_list)              # S x P
   arm_block <- function(arm) {
@@ -292,47 +284,30 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
   dimnames(Sigma_psi1) <- list(pi_list[[1L]]$coef_names, pi_list[[1L]]$coef_names)
   dimnames(Sigma_p)    <- list(pi_list[[2L]]$coef_names, pi_list[[2L]]$coef_names)
 
-  F_val <- res$logML
+  ms_community <- list(
+    Sigma_psi1 = Sigma_psi1, Sigma_p = Sigma_p,
+    sd_psi1 = sqrt(pmax(diag(Sigma_psi1), 0)),
+    sd_p    = sqrt(pmax(diag(Sigma_p),    0)),
+    coef_psi1 = psi1_b$coef, coef_p = p_b$coef,
+    blup_psi1 = psi1_b$blup, blup_p = p_b$blup,
+    # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
+    # community EM's own Newton solve, conditional on the converged
+    # community mean) -- what a per-species-coefficient consumer (SBC's
+    # "rank a fixed species set" design, a calibrated per-species CI) needs
+    # beyond the point BLUP; not previously exposed on the fit object. Bf =
+    # the (mu,global)-b_s cross-Hessian block from the same Newton solve:
+    # mu/global and b_s are NOT independent in the posterior, and Bf is
+    # what lets a consumer draw them jointly instead -- see
+    # .tobs_sbc_community_b_draws (R/sbc.R).
+    Cinv = res$Cinv, Bf = res$Bf
+  )
 
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(F_val, n_draws),
-    log_lik      = F_val,
-    N            = sum(model$valid)),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = pi_list,
-    model        = model,
-    spatial      = NULL,
-    method       = "laplace",
-    ms_community = list(
-      Sigma_psi1 = Sigma_psi1, Sigma_p = Sigma_p,
-      sd_psi1 = sqrt(pmax(diag(Sigma_psi1), 0)),
-      sd_p    = sqrt(pmax(diag(Sigma_p),    0)),
-      coef_psi1 = psi1_b$coef, coef_p = p_b$coef,
-      blup_psi1 = psi1_b$blup, blup_p = p_b$blup,
-      # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
-      # community EM's own Newton solve, conditional on the converged
-      # community mean) -- what a per-species-coefficient consumer (SBC's
-      # "rank a fixed species set" design, a calibrated per-species CI) needs
-      # beyond the point BLUP; not previously exposed on the fit object. Bf =
-      # the (mu,global)-b_s cross-Hessian block from the same Newton solve:
-      # mu/global and b_s are NOT independent in the posterior, and Bf is
-      # what lets a consumer draw them jointly instead -- see
-      # .tobs_sbc_community_b_draws (R/sbc.R).
-      Cinv = res$Cinv, Bf = res$Bf
-    ),
-    convergence  = list(converged = isTRUE(res$converged), n_iter = res$n_iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_cem_finalize_fit(
+    means = c(mu, global), V = res$Vf, par_names = par_names,
+    model = model, process_info = pi_list, N = sum(model$valid),
+    log_prob_val = res$logML, converged = res$converged, n_iter = res$n_iter,
+    extra = list(ms_community = ms_community)
+  )
 }
 
 

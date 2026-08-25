@@ -467,3 +467,54 @@
        Cinv = Cinv_out, Bf = res$Bf, Vf = Vf, logML = logML,
        converged = converged, n_iter = n_iter, debias_method = debias_method)
 }
+
+
+# ---------------------------------------------------------------------------
+# Shared tobs_fit skeleton
+# ---------------------------------------------------------------------------
+
+# Assemble the common `tobs_fit` skeleton for a Laplace-EM community fit
+# (`.tobs_community_em()` or a block-coordinate spatial-factor variant built on
+# top of it) -- the PG-Gibbs analogue of `.tobs_pg_finalize_fit()`
+# (R/pg_gibbs_shared.R). `means`/`V` are the raw (unnamed) community-mean point
+# estimate and covariance; naming, symmetrizing, `sds`, and the posterior draws
+# are done here so every caller does it once. `extra` carries the
+# family-specific tail (`ms_community`, `ms_dispersion`, `positive`, ...);
+# `spatial`/`method` override the single-species-Laplace defaults.
+.tobs_cem_finalize_fit <- function(means, V, par_names, model, process_info, N,
+                                   log_prob_val, converged, n_iter,
+                                   spatial = NULL, method = "laplace",
+                                   extra = list()) {
+  means <- as.numeric(means); names(means) <- par_names
+  V <- (V + t(V)) / 2
+  dimnames(V) <- list(par_names, par_names)
+  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+
+  n_draws <- 1000L
+  draws <- .rmvn(n_draws, means, V)
+  colnames(draws) <- par_names
+
+  structure(c(list(
+    draws        = draws,
+    means        = means,
+    sds          = sds,
+    vcov         = V,
+    n_samples    = n_draws,
+    n_params     = length(means),
+    log_prob     = rep(log_prob_val, n_draws),
+    log_lik      = log_prob_val,
+    N            = N),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names    = par_names,
+    param_names  = par_names,
+    n_fixed      = length(means),
+    fixed_names  = par_names,
+    process_info = process_info,
+    model        = model,
+    spatial      = spatial,
+    method       = method),
+    extra,
+    list(convergence = list(converged = isTRUE(converged), n_iter = n_iter))
+  ), class = c("tobs_fit", "tulpa_fit"))
+}

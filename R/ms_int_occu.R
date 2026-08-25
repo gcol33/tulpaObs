@@ -429,15 +429,6 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   }))
   par_names <- beta_names
 
-  means <- fit$mu; names(means) <- par_names
-  V <- fit$Vf; dimnames(V) <- list(par_names, par_names)
-  V <- (V + t(V)) / 2
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
-
-  n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
   # Per-species community structure (mu + BLUP deviations) per arm.
   B <- do.call(rbind, fit$b_list)          # S x P
   Sigma_list <- list(); sd_list <- list()
@@ -447,7 +438,7 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
     idx <- arm_idx[[arm]]
     cn  <- pi_list[[k]]$coef_names
     blup <- B[, idx, drop = FALSE]
-    coef <- sweep(blup, 2L, means[idx], "+")
+    coef <- sweep(blup, 2L, fit$mu[idx], "+")
     rownames(blup) <- rownames(coef) <- model$species_names
     colnames(blup) <- colnames(coef) <- cn
     Sig <- fit$Sigma[[arm]]
@@ -469,29 +460,13 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   ms_community <- c(Sigma_list, sd_list, coef_list, blup_list,
                     list(Cinv = fit$Cinv, Bf = fit$Bf))
 
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(fit$logML, n_draws),
-    log_lik      = fit$logML,
-    N            = sum(vapply(model$valid, sum, integer(1)))),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = pi_list,
-    model        = model,
-    spatial      = NULL,
-    method       = "laplace",
-    ms_community = ms_community,
-    convergence  = list(converged = isTRUE(fit$converged), n_iter = fit$n_iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+  .tobs_cem_finalize_fit(
+    means = fit$mu, V = fit$Vf, par_names = par_names,
+    model = model, process_info = pi_list,
+    N = sum(vapply(model$valid, sum, integer(1))),
+    log_prob_val = fit$logML, converged = fit$converged, n_iter = fit$n_iter,
+    extra = list(ms_community = ms_community)
+  )
 }
 
 

@@ -20,13 +20,17 @@
 # random effects. The positive-arm dispersion is a shared community parameter
 # (one log_disp), as in the single-species occu_cover().
 #
-# Fit: a Laplace-EM. Per EM iteration an arrowhead joint Newton finds the mode
-# of (mu, log_disp, {b_s}) -- the per-species RE blocks fold out by a Schur
-# complement -- with analytic per-species gradients (`.occu_cover_eta_grad`)
-# and a finite-difference-of-gradient observed-information block. The M-step is
-# the closed-form community-covariance update Sigma_arm = mean_s[b_s b_s' +
-# Cov(b_s | y)]. Community-mean SEs are the marginal observed information (the
-# Schur complement of the b-block, Louis 1982), read at the natural scale.
+# Fit: the shared community Laplace-EM engine (`.tobs_community_em()`,
+# R/community_em.R), with the occ/p/pos arms as `arm_idx` and the shared
+# log-dispersion as its one `global`. Per EM iteration the engine's arrowhead
+# joint Newton finds the mode of (mu, log_disp, {b_s}) -- the per-species RE
+# blocks fold out by a Schur complement -- from this family's per-species
+# gradients (`.occu_cover_eta_grad`, via `.occu_cover_sp_ll`/`_sp_grad`); the
+# observed-information block is the engine's own finite-difference-of-gradient
+# fallback (no analytic `sp_info` here). The M-step is the closed-form
+# community-covariance update Sigma_arm = mean_s[b_s b_s' + Cov(b_s | y)].
+# Community-mean SEs are the marginal observed information (the Schur
+# complement of the b-block, Louis 1982), read at the natural scale.
 #
 # This is the family wiring + the in-tree non-spatial fitter; it reuses the
 # single-species occu_cover() linear-predictor builder and per-cell marginal as
@@ -335,15 +339,18 @@
 }
 
 # AGHQ debias of the community covariance (the single-arm #47 fix generalised
-# to the joint community RE) now lives in R/community_em.R as the shared
-# `.tobs_cem_aghq_sigma()`/`.tobs_cem_reproject_cinv()` (generalized from this
-# file's own bespoke implementation) -- every `.tobs_community_em()` consumer
-# reads the same fix. `arm_idx` here is `list(occ=, p=, pos=)`, so the shared
+# to the joint community RE) lives in R/community_em.R as
+# `.tobs_cem_aghq_sigma()`/`.tobs_cem_reproject_cinv()`, run inside
+# `.tobs_community_em()` for every consumer of the shared engine, this family
+# included (#269). `arm_idx` here is `list(occ=, p=, pos=)`, so the shared
 # function's arm-agnostic `lapply()` returns exactly the `list(occ=, p=,
 # pos=)` this family's callers expect.
 
-# Fit the community joint occupancy-cover model. `model` is the bound
-# ms_occu_cover model. Returns a `tobs_fit` (via build_ms_occu_cover_fit).
+# Fit the community joint occupancy-cover model via the shared community
+# Laplace-EM engine (`.tobs_community_em()`, R/community_em.R): the RE arms
+# (occ, p, pos) live in `theta`, the shared cover log-dispersion is the one
+# `global`. `model` is the bound ms_occu_cover model. Returns a `tobs_fit`
+# (via build_ms_occu_cover_fit).
 .tobs_fit_ms_occu_cover <- function(model,
                                     priors     = NULL,
                                     max.iter   = 200L,
@@ -353,8 +360,6 @@
                                     ...) {
   dots <- list(...)
   newton.max <- as.integer(dots$newton.max %||% 30L)
-  em.max     <- as.integer(max.iter)
-  em.tol     <- as.numeric(tol)
 
   pi_list <- model$process_info
   P_occ <- pi_list[[1L]]$p
@@ -372,29 +377,17 @@
 
   split_theta <- function(theta) list(bo = theta[occ_idx], bp = theta[p_idx],
                                        bpos = theta[pos_idx])
-  sp_ll <- function(s, theta, ld) {
+  sp_ll <- function(s, theta, global) {
     th <- split_theta(theta)
-    .occu_cover_sp_ll(views[[s]], th$bo, th$bp, th$bpos, ld)
+    .occu_cover_sp_ll(views[[s]], th$bo, th$bp, th$bpos, global)
   }
-  sp_grad <- function(s, theta, ld) {
+  sp_grad <- function(s, theta, global) {
     th <- split_theta(theta)
-    .occu_cover_sp_grad(views[[s]], th$bo, th$bp, th$bpos, ld)
+    .occu_cover_sp_grad(views[[s]], th$bo, th$bp, th$bpos, global)
   }
-  # Observed-information block (P+1)x(P+1) over (theta, log_disp) by central
-  # difference of the analytic gradient.
-  sp_info <- function(s, theta, ld) {
-    u <- c(theta, ld); m <- P + 1L
-    h <- 1e-4
-    J <- matrix(0, m, m)
-    for (k in seq_len(m)) {
-      up <- u; up[k] <- up[k] + h
-      dn <- u; dn[k] <- dn[k] - h
-      gpf <- sp_grad(s, up[seq_len(P)], up[m])
-      gmf <- sp_grad(s, dn[seq_len(P)], dn[m])
-      J[, k] <- (gpf - gmf) / (2 * h)
-    }
-    -0.5 * (J + t(J))
-  }
+  # No analytic sp_info: leaves the engine's own FD-of-sp_grad path (byte-
+  # identical to this family's former bespoke copy of the same finite
+  # difference).
 
   # ---- warm start ----
   is_beta  <- identical(model$positive, "beta")
@@ -416,228 +409,31 @@
       ld <- log(stats::sd(log(pos_vals)) + 0.1)
     }
   }
-  b_list <- replicate(S, numeric(P), simplify = FALSE)
-  Sigma <- list(occ = diag(0.3^2, P_occ), p = diag(0.3^2, P_p),
-                pos = diag(0.3^2, P_pos))
 
-  # Weak Gaussian prior on the community means (the detection-arm intercept
-  # prior in particular keeps the occupancy mixture off the psi = 1 boundary at
-  # weak detection). Dispersion stays flat.
-  Pmu <- diag(0, P)
-  if (isTRUE(is.null(priors)) || !isFALSE(priors)) {
-    diag(Pmu) <- 1 / (sigma.beta^2)
-  }
+  # AGHQ variance-component debias is ON by default for this family (unlike
+  # ms_occu(): the joint 3-arm occ/p/pos community RE is where the shared
+  # engine's re_aghq / re_aghq_maxdim / init_b / init_Sigma hooks were
+  # developed and first validated). Disable with control$re.aghq = FALSE, set
+  # nodes with control$n.quad; larger RE dims keep the EM covariance + the
+  # attenuation flag.
+  re_aghq  <- !isFALSE(dots$re.aghq)
+  aghq_nq  <- as.integer(dots$n.quad %||% .tobs_n_quad("ms_occu_cover"))
+  aghq_cap <- as.integer(dots$re.aghq.maxdim %||% 4L)
 
-  blockdiag_inv <- function(Sig) {
-    out <- matrix(0, P, P)
-    out[occ_idx, occ_idx] <- solve(Sig$occ)
-    out[p_idx,   p_idx]   <- solve(Sig$p)
-    out[pos_idx, pos_idx] <- solve(Sig$pos)
-    out
-  }
+  fit <- .tobs_community_em(
+    S = S, P = P, arm_idx = arm_idx,
+    sp_ll = sp_ll, sp_grad = sp_grad,
+    init_mu = mu, init_global = ld,
+    penalize_global = FALSE, sigma_beta = sigma.beta, priors = priors,
+    sigma_init = 0.3, max_iter = as.integer(max.iter), tol = as.numeric(tol),
+    newton_max = newton.max, verbose = isTRUE(verbose),
+    re_aghq = re_aghq, n_quad = aghq_nq, re_aghq_maxdim = aghq_cap
+  )
 
-  logdet <- function(M) {
-    ch <- tryCatch(chol((M + t(M)) / 2), error = function(e) NULL)
-    if (is.null(ch)) {
-      ev <- eigen((M + t(M)) / 2, symmetric = TRUE, only.values = TRUE)$values
-      return(sum(log(pmax(ev, 1e-12))))
-    }
-    2 * sum(log(diag(ch)))
-  }
-
-  # Laplace approximation to the integrated (marginal) log-likelihood at fixed
-  # Sigma -- the quantity the EM increases monotonically. Per species the RE
-  # integral is exp(ll_s) N(b; 0, Sigma) integrated by Laplace at the mode b_hat:
-  #   logML_s = ll_s - 0.5 b' Sinv b - 0.5 log|Sigma| - 0.5 log|C_s|,
-  # with C_s = H_tt_s + Sinv the penalized observed information (Cinv_s = C_s^-1
-  # is the per-species posterior covariance from solve_mode).
-  compute_logML <- function(mu, ld, b_list, Cinv_list, Sigma, Sinv) {
-    logdet_Sigma <- logdet(Sigma$occ) + logdet(Sigma$p) + logdet(Sigma$pos)
-    acc <- 0
-    for (s in seq_len(S)) {
-      bs <- b_list[[s]]
-      acc <- acc + sp_ll(s, mu + bs, ld) -
-             0.5 * as.numeric(crossprod(bs, Sinv %*% bs)) +
-             0.5 * logdet(Cinv_list[[s]])          # -0.5 log|C_s| = +0.5 log|Cinv_s|
-    }
-    acc - 0.5 * S * logdet_Sigma -
-      0.5 * as.numeric(crossprod(mu, Pmu %*% mu))
-  }
-
-  total_F <- function(mu, ld, b_list, Sinv) {
-    ll <- 0
-    for (s in seq_len(S)) ll <- ll + sp_ll(s, mu + b_list[[s]], ld)
-    pen_b <- 0
-    for (s in seq_len(S)) pen_b <- pen_b + as.numeric(crossprod(b_list[[s]],
-                                                       Sinv %*% b_list[[s]]))
-    ll - 0.5 * pen_b - 0.5 * as.numeric(crossprod(mu, Pmu %*% mu))
-  }
-
-  # One joint-Newton mode-find of (mu, log_disp, {b_s}) at fixed Sigma. Returns
-  # the updated mode, the per-species posterior covariances Cinv (Cov(b_s|y)),
-  # and the marginal fixed-effect information Sf (Schur complement of the
-  # b-block) at the converged mode.
-  solve_mode <- function(mu, ld, b_list, Sinv) {
-    F_cur <- total_F(mu, ld, b_list, Sinv)
-    Cinv_list <- vector("list", S)
-    Sf <- NULL
-    for (it in seq_len(newton.max)) {
-      sumGth <- numeric(P); sumGld <- 0
-      A11 <- matrix(0, P, P); A12 <- numeric(P); A22 <- 0
-      Bf_list <- vector("list", S); gb_list <- vector("list", S)
-      for (s in seq_len(S)) {
-        theta <- mu + b_list[[s]]
-        g    <- sp_grad(s, theta, ld)
-        info <- sp_info(s, theta, ld)
-        Htt <- info[seq_len(P), seq_len(P), drop = FALSE]
-        htl <- info[seq_len(P), P + 1L]
-        hll <- info[P + 1L, P + 1L]
-        gth <- g[seq_len(P)]; gld <- g[P + 1L]
-        C_s  <- Htt + Sinv
-        Cinv <- tryCatch(solve(C_s), error = function(e) .tobs_cem_ginv(C_s))
-        Cinv_list[[s]] <- Cinv
-        Bf_list[[s]]   <- rbind(Htt, matrix(htl, 1L, P))     # (P+1) x P
-        gb_list[[s]]   <- gth - Sinv %*% b_list[[s]]
-        sumGth <- sumGth + gth; sumGld <- sumGld + gld
-        A11 <- A11 + Htt; A12 <- A12 + htl; A22 <- A22 + hll
-      }
-      gf <- c(sumGth - as.numeric(Pmu %*% mu), sumGld)
-      A  <- rbind(cbind(A11 + Pmu, A12), c(A12, A22))
-      Sf <- A; rhs <- gf
-      for (s in seq_len(S)) {
-        M <- Bf_list[[s]] %*% Cinv_list[[s]]
-        Sf  <- Sf  - M %*% t(Bf_list[[s]])
-        rhs <- rhs - as.numeric(M %*% gb_list[[s]])
-      }
-      df <- tryCatch(solve(Sf, rhs), error = function(e) {
-        solve(Sf + diag(1e-6, P + 1L), rhs)
-      })
-      db <- lapply(seq_len(S), function(s) {
-        as.numeric(Cinv_list[[s]] %*% (gb_list[[s]] -
-                     t(Bf_list[[s]]) %*% df))
-      })
-      # Backtracking line search on the penalized objective.
-      step <- 1; ok <- FALSE
-      for (ls in 1:25) {
-        mu_n <- mu + step * df[seq_len(P)]
-        ld_n <- ld + step * df[P + 1L]
-        b_n  <- lapply(seq_len(S), function(s) b_list[[s]] + step * db[[s]])
-        F_n  <- total_F(mu_n, ld_n, b_n, Sinv)
-        if (is.finite(F_n) && F_n >= F_cur - 1e-8) { ok <- TRUE; break }
-        step <- step / 2
-      }
-      if (!ok) break
-      delta <- max(abs(c(step * df, unlist(db) * step)))
-      mu <- mu_n; ld <- ld_n; b_list <- b_n; F_cur <- F_n
-      if (delta < 1e-7) break
-    }
-    list(mu = mu, ld = ld, b_list = b_list, Cinv = Cinv_list, Bf = Bf_list,
-         Sf = Sf, F = F_cur)
-  }
-
-  converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
-  # Progress + ETA for the community joint EM iterations; ON by default,
-  # reusing tulpa's shared reporter. ETA is the upper bound to em.max,
-  # finalised on convergence.
-  .prog <- tulpa:::.tulpa_iter_progress("ms-occu-cover-em", em.max, unit = "iter")
-  for (em in seq_len(em.max)) {
-    n_iter <- em
-    Sinv <- blockdiag_inv(Sigma)
-    res  <- solve_mode(mu, ld, b_list, Sinv)
-    mu <- res$mu; ld <- res$ld; b_list <- res$b_list
-
-    # Marginal log-likelihood at the current Sigma (after the E-step mode-find,
-    # before the M-step) -- the monotone EM ascent target.
-    logML <- compute_logML(mu, ld, b_list, res$Cinv, Sigma, Sinv)
-
-    # M-step: closed-form community covariance per arm.
-    for (arm in names(arm_idx)) {
-      idx <- arm_idx[[arm]]
-      acc <- matrix(0, length(idx), length(idx))
-      for (s in seq_len(S)) {
-        bs  <- b_list[[s]][idx]
-        cov <- res$Cinv[[s]][idx, idx, drop = FALSE]
-        acc <- acc + tcrossprod(bs) + cov
-      }
-      acc <- acc / S
-      acc <- (acc + t(acc)) / 2
-      ev  <- eigen(acc, symmetric = TRUE)
-      ev$values <- pmax(ev$values, 1e-4)        # floor off the singular boundary
-      Sigma[[arm]] <- ev$vectors %*% diag(ev$values, length(idx)) %*%
-                      t(ev$vectors)
-    }
-    rel <- abs(logML - logML_prev) / (abs(logML_prev) + 1)
-    if (isTRUE(verbose)) {
-      message(sprintf("[ms_occu_cover EM %d] logML=%.4f  rel_change=%.2e",
-                      em, logML, rel))
-    }
-    .prog$tick()
-    if (em > 1L && rel < em.tol) { converged <- TRUE; break }
-    logML_prev <- logML
-  }
-  .prog$finish()
-
-  # Final marginal fixed-effect information -> community-mean covariance.
-  Sinv <- blockdiag_inv(Sigma)
-  res  <- solve_mode(mu, ld, b_list, Sinv)
-  mu <- res$mu; ld <- res$ld; b_list <- res$b_list
-  Vf <- tryCatch(solve(res$Sf), error = function(e) .tobs_cem_ginv(res$Sf))
-  Vf <- (Vf + t(Vf)) / 2
-  logML <- compute_logML(mu, ld, b_list, res$Cinv, Sigma, Sinv)
-
-  # AGHQ variance-component debias. The community means and their covariance (mu,
-  # Vf) are unbiased; only the variance components Sigma carry the Laplace
-  # small-cluster attenuation, so debias Sigma by adaptive Gauss-Hermite
-  # quadrature of the exact per-species RE posterior. Gated to a small total RE
-  # dim (tensor AGHQ over the joint b couples the arms) and ON by default there;
-  # disable with control$re.aghq = FALSE, set nodes with control$n.quad. Larger
-  # RE dims keep the EM covariance + the attenuation flag.
-  re_aghq   <- !isFALSE(dots$re.aghq)
-  aghq_nq   <- as.integer(dots$n.quad %||% .tobs_n_quad("ms_occu_cover"))
-  aghq_cap  <- as.integer(dots$re.aghq.maxdim %||% 4L)
-  debias_method <- "none"
-  Cinv_out <- res$Cinv
-  if (re_aghq && P <= aghq_cap) {
-    Sinv_old <- Sinv
-    aghq_out <- tryCatch({
-      # Shared with every .tobs_community_em() consumer
-      # (R/community_em.R): Cov(b_s|y) rides Sigma through Sinv (C_s =
-      # Htt_s + Sinv), so AGHQ-debiasing Sigma alone leaves Cinv
-      # inconsistent unless that per-species block is reprojected too.
-      Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, ld, b_list, res$Cinv, Sinv,
-                                 arm_idx, P, n_quad = aghq_nq)
-      Sinv_new <- blockdiag_inv(Sd)
-      Cinv_new <- .tobs_cem_reproject_cinv(res$Cinv, Sinv_old, Sinv_new)
-      list(Sigma = Sd, Cinv = Cinv_new, ok = TRUE)
-    }, error = function(e) {
-      warning("ms_occu_cover AGHQ variance debias failed (", conditionMessage(e),
-              "); reporting the EM (Laplace) variance components.", call. = FALSE)
-      list(Sigma = Sigma, Cinv = res$Cinv, ok = FALSE)
-    })
-    Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
-    debias_method <- if (aghq_out$ok) "aghq" else "none"
-    if (aghq_out$ok) {
-      # Vf was computed under the PRE-debias Sinv; reprojecting Cinv without
-      # also updating Vf leaves Vf/Bf/Cinv mutually inconsistent (the joint
-      # (u, b_s) draw formula assumes all three come from the SAME Sigma --,
-      # same fix as R/community_em.R's shared engine). A_uu = Sf_old + sum_s
-      # Bf_s Cinv_s_old Bf_s' (Bf_s is pure likelihood curvature, unaffected
-      # by a Sigma change), so Sf_new = Sf_old + sum_s Bf_s (Cinv_s_old -
-      # Cinv_s_new) Bf_s' -- exact.
-      Sf_new <- res$Sf
-      for (s in seq_len(S)) {
-        dC <- res$Cinv[[s]] - Cinv_out[[s]]
-        Sf_new <- Sf_new + res$Bf[[s]] %*% dC %*% t(res$Bf[[s]])
-      }
-      Vf <- tryCatch(solve(Sf_new), error = function(e) .tobs_cem_ginv(Sf_new))
-      Vf <- (Vf + t(Vf)) / 2
-    }
-  }
-
-  build_ms_occu_cover_fit(model, mu, ld, b_list, Sigma, Cinv_out, res$Bf, Vf,
-                          arm_idx, F_val = logML,
-                          converged = converged, n_iter = n_iter,
-                          debias_method = debias_method)
+  build_ms_occu_cover_fit(model, fit$mu, fit$global, fit$b_list, fit$Sigma,
+                          fit$Cinv, fit$Bf, fit$Vf, arm_idx, F_val = fit$logML,
+                          converged = fit$converged, n_iter = fit$n_iter,
+                          debias_method = fit$debias_method)
 }
 
 # ---------------------------------------------------------------------------
@@ -662,14 +458,6 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   disp_name <- if (is_beta) "log_phi" else "log_sigma_pos"
   par_names <- c(beta_names, disp_name)
 
-  means <- c(mu, ld); names(means) <- par_names
-  V <- Vf; dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
-
-  n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
-
   # Per-species community structure (mu + BLUP deviations) per arm.
   B <- do.call(rbind, b_list)                 # S x P
   arm_block <- function(arm) {
@@ -689,28 +477,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   dimnames(Sigma_p)   <- list(pi_list[[2L]]$coef_names, pi_list[[2L]]$coef_names)
   dimnames(Sigma_pos) <- list(pi_list[[3L]]$coef_names, pi_list[[3L]]$coef_names)
 
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(F_val, n_draws),
-    log_lik      = F_val,
-    N            = sum(model$valid)),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = pi_list,
-    model        = model,
-    spatial      = NULL,
-    method       = "laplace",
-    positive     = model$positive,
-    ms_community = list(
+  ms_community <- list(
       Sigma_occ = Sigma_occ, Sigma_p = Sigma_p, Sigma_pos = Sigma_pos,
       sd_occ = sqrt(pmax(diag(Sigma_occ), 0)),
       sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
@@ -757,9 +524,14 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
           "unaffected. AGHQ debias applies for small RE dim; ",
           "this fit kept the EM variance (re.aghq = FALSE or RE dim too large).")
       )
-    ),
-    convergence  = list(converged = isTRUE(converged), n_iter = n_iter)
-  )), class = c("tobs_fit", "tulpa_fit"))
+  )
+
+  .tobs_cem_finalize_fit(
+    means = c(mu, ld), V = Vf, par_names = par_names,
+    model = model, process_info = pi_list, N = sum(model$valid),
+    log_prob_val = F_val, converged = converged, n_iter = n_iter,
+    extra = list(positive = model$positive, ms_community = ms_community)
+  )
 }
 
 

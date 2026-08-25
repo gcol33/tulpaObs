@@ -17,18 +17,12 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   par_names <- c(beta_names, disp_name)
 
   mu <- fit$mu; ld <- fit$ld
-  means <- c(mu, ld); names(means) <- par_names
+  means <- c(mu, ld)
 
   Cov  <- fit$cov
   npar <- length(fit$par)
   sel  <- c(seq_len(P), npar)                 # community means + log-dispersion
-  V <- Cov[sel, sel, drop = FALSE]; V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
-
-  n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
-  colnames(draws) <- par_names
+  V <- Cov[sel, sel, drop = FALSE]
 
   # Per-species community structure (mu + BLUP deviations) per arm.
   B <- do.call(rbind, fit$b)                  # S x P
@@ -103,66 +97,53 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     }
   }
 
-  structure(c(list(
-    draws        = draws,
-    means        = means,
-    sds          = sds,
-    vcov         = V,
-    n_samples    = n_draws,
-    n_params     = length(means),
-    log_prob     = rep(fit$logpen, n_draws),
-    log_lik      = fit$logpen,
-    N            = sum(model$valid)),
-    .tobs_na_nuts_diagnostics(n_draws),
+  spatial_val <- {
+    ft   <- fit$field_type %||% model$field_type %||% "icar"
+    hypr <- fit$field_hyper
     list(
-    col_names    = par_names,
-    param_names  = par_names,
-    n_fixed      = length(means),
-    fixed_names  = par_names,
-    process_info = pil,
-    model        = model,
-    method       = "laplace-em",
-    positive     = model$positive,
-    spatial      = {
-      ft   <- fit$field_type %||% model$field_type %||% "icar"
-      hypr <- fit$field_hyper
-      list(
-        type     = if (isTRUE(d$cover_factor)) paste0(ft, "+cover") else ft,
-        field_type = ft,
-        K        = K,
-        field    = fit$w,
-        field_sd = field_sd,
-        loadings = L,
-        loadings_cover = Lpos,
-        cover_factor   = isTRUE(d$cover_factor),
-        rotation = rot,
-        tau_w    = fit$tau_w,
-        # The field hyperparameter is reported under its conventional name: the
-        # CAR correlation rho or the BYM2 spatial-variance fraction phi.
-        rho_w    = if (identical(ft, "car_proper")) hypr else NULL,
-        phi_w    = if (identical(ft, "bym2"))       hypr else NULL,
-        # The Sorbye-Rue constant the BYM2 structured block is scaled by. It is
-        # a property of the graph alone, so it is the first thing to compare
-        # when the same fit reports a different variance fraction on another
-        # platform: a phi that moved with it and a phi that moved without it
-        # have nothing in common.
-        scale_factor = model$field_spec$scale_q,
-        sd_L     = fit$sd_L,
-        associations = .ms_ocs_associations(fit, d, model$species_names),
-        maps     = .ms_ocs_map_summary(model, fit)
-      )
-    },
-    ms_community = list(
-      Sigma_occ = Sigma_occ, Sigma_p = Sigma_p, Sigma_pos = Sigma_pos,
-      sd_occ = sqrt(pmax(diag(Sigma_occ), 0)),
-      sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
-      sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
-      coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
-      blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup
-    ),
-    convergence  = list(converged = identical(fit$convergence, 0L),
-                        n_iter = NA_integer_)
-  )), class = c("tobs_fit", "tulpa_fit"))
+      type     = if (isTRUE(d$cover_factor)) paste0(ft, "+cover") else ft,
+      field_type = ft,
+      K        = K,
+      field    = fit$w,
+      field_sd = field_sd,
+      loadings = L,
+      loadings_cover = Lpos,
+      cover_factor   = isTRUE(d$cover_factor),
+      rotation = rot,
+      tau_w    = fit$tau_w,
+      # The field hyperparameter is reported under its conventional name: the
+      # CAR correlation rho or the BYM2 spatial-variance fraction phi.
+      rho_w    = if (identical(ft, "car_proper")) hypr else NULL,
+      phi_w    = if (identical(ft, "bym2"))       hypr else NULL,
+      # The Sorbye-Rue constant the BYM2 structured block is scaled by. It is
+      # a property of the graph alone, so it is the first thing to compare
+      # when the same fit reports a different variance fraction on another
+      # platform: a phi that moved with it and a phi that moved without it
+      # have nothing in common.
+      scale_factor = model$field_spec$scale_q,
+      sd_L     = fit$sd_L,
+      associations = .ms_ocs_associations(fit, d, model$species_names),
+      maps     = .ms_ocs_map_summary(model, fit)
+    )
+  }
+
+  ms_community <- list(
+    Sigma_occ = Sigma_occ, Sigma_p = Sigma_p, Sigma_pos = Sigma_pos,
+    sd_occ = sqrt(pmax(diag(Sigma_occ), 0)),
+    sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
+    sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
+    coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
+    blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup
+  )
+
+  .tobs_cem_finalize_fit(
+    means = means, V = V, par_names = par_names,
+    model = model, process_info = pil, N = sum(model$valid),
+    log_prob_val = fit$logpen,
+    converged = identical(fit$convergence, 0L), n_iter = NA_integer_,
+    spatial = spatial_val, method = "laplace-em",
+    extra = list(positive = model$positive, ms_community = ms_community)
+  )
 }
 
 
