@@ -290,3 +290,97 @@
        groups_failed = failed,
        groups_failed_names = if (named) as.character(group_names)[failed] else NULL)
 }
+
+# =============================================================================
+# Is a scalar variance component distinguishable from its lower boundary?
+# =============================================================================
+# A collapsed variance component is not visible from the fit it comes on: the
+# optimizer converges, the point estimate is ordinary, and nothing warns. The
+# gate has to be the component's OWN uncertainty. An absolute cut on `sigma_hat`
+# is a number with nothing behind it and does not transfer between fixtures, so
+# it is not one (gcol33/tulpaObs#250 item 3).
+#
+# A 1x1 covariance block's integration coordinate IS log(sigma) -- the
+# log-Cholesky diagonal of a 1x1 factor, equivalently that block's single log-SD
+# -- so `tulpa_re_aghq()`'s `re_par_se` is SE(log sigma) with no transform, and
+# the delta method takes the Wald statistic for H0: sigma = 0 to
+#
+#   W = sigma_hat / SE(sigma_hat)
+#     = sigma_hat / (sigma_hat * SE(log sigma_hat))
+#     = 1 / SE(log sigma_hat)
+#
+# the reciprocal of the reported log-scale SE, with sigma_hat's own scale
+# cancelling out of it.
+#
+# The critical value is `qnorm(1 - alpha)`. sigma = 0 sits on the boundary of
+# the parameter space, where the one-sided statistic's null distribution is the
+# 50:50 mixture 0.5 chi^2_0 + 0.5 chi^2_1 rather than chi^2_1 (Self & Liang
+# 1987; Stram & Lee 1994); for W >= 0 that mixture gives P(W > c) = 1 - Phi(c),
+# so the boundary-aware value and the ordinary one-sided normal quantile
+# coincide. See `.TOBS_VC_BOUNDARY_ALPHA`.
+#
+# `re_par_se` is the block of the SAME joint inverse Hessian `theta_cov` is the
+# top-left block of, so this reads the fit's own curvature and costs no solve.
+# `re_par_se` / `re_par_layout` arrived in tulpa 12b641d, first released in
+# v0.1.18 (gcol33/tulpa#418); the DESCRIPTION engine floor is already above it.
+#
+# The record comes back in one shape whatever happened: `available = FALSE` plus
+# a `reason` where the engine returned no curvature for the block, so a caller
+# reads fields rather than branching on NULL.
+.tobs_aghq_variance_boundary <- function(ref, block,
+                                         alpha = .TOBS_VC_BOUNDARY_ALPHA) {
+  crit <- stats::qnorm(1 - alpha)
+  unavailable <- function(reason)
+    list(sigma = NA_real_, se_log = NA_real_, statistic = NA_real_,
+         critical = crit, alpha = alpha, distinguishable = NA,
+         available = FALSE, reason = reason)
+
+  lay <- ref$re_par_layout
+  if (is.null(lay) || length(lay) < block) return(unavailable("no_re_par_layout"))
+  bl <- lay[[block]]
+  # The identity above is a scalar-block one. A block carrying several
+  # coordinates has correlations in it and no single SD to test, so it declines
+  # rather than reporting one diagonal as though it stood alone.
+  if (!identical(as.integer(bl$nc), 1L)) return(unavailable("block_not_scalar"))
+
+  se  <- ref$re_par_se
+  idx <- bl$index
+  if (is.null(se) || length(idx) != 1L || idx > length(se))
+    return(unavailable("no_re_par_se"))
+
+  se_log <- as.numeric(se[[idx]])
+  sigma  <- sqrt(pmax(as.numeric(ref$Sigma_list[[block]])[1L], 0))
+  if (!is.finite(se_log) || se_log <= 0 || !is.finite(sigma))
+    return(unavailable("curvature_unavailable"))
+
+  W <- 1 / se_log
+  list(sigma = sigma, se_log = se_log, statistic = W, critical = crit,
+       alpha = alpha, distinguishable = W >= crit, available = TRUE,
+       reason = NULL)
+}
+
+# The user-facing half. `records` is a NAMED list of
+# `.tobs_aghq_variance_boundary()` returns, and one warning names every
+# component that failed, so a fit carrying two collapsed blocks raises one
+# warning rather than two a reader has to correlate. Returns the offending
+# records invisibly for a caller that wants to record them.
+.tobs_warn_variance_boundary <- function(records) {
+  hit <- Filter(function(r) isTRUE(r$available) &&
+                  identical(r$distinguishable, FALSE), records)
+  if (!length(hit)) return(invisible(list()))
+  parts <- vapply(names(hit), function(nm) sprintf(
+    "%s = %.4g (SE(log %s) = %.3g, Wald %.2f against %.2f)",
+    nm, hit[[nm]]$sigma, nm, hit[[nm]]$se_log,
+    hit[[nm]]$statistic, hit[[nm]]$critical), character(1L))
+  warning("community variance component",
+          if (length(hit) > 1L) "s" else "", " ",
+          paste(parts, collapse = "; "),
+          ": not distinguishable from zero at the ",
+          format(hit[[1L]]$alpha), " level. The reported SD is what the ",
+          "optimizer stopped at, and the community mean it scales carries an ",
+          "interval that shrinks with it, so read that interval as a lower ",
+          "bound on the width. A Penalized-Complexity prior on the block ",
+          "(`control$logr.sigma.prior`, `control$omega.sigma.prior`) adds ",
+          "curvature at the boundary.", call. = FALSE)
+  invisible(hit)
+}

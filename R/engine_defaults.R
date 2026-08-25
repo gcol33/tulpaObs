@@ -146,6 +146,16 @@
 # because nothing downstream can detect the collapse.
 .TOBS_MIN_SCALAR_NQUAD <- 3L
 
+# Level at which a scalar community variance component is tested against its
+# lower boundary (`.tobs_aghq_variance_boundary()`). A conventional 5%, and it
+# can be conventional because the test the statistic is read against is a
+# standard one: sigma = 0 is on the boundary of the parameter space, so the
+# one-sided null distribution is the 50:50 mixture 0.5 chi^2_0 + 0.5 chi^2_1
+# (Self & Liang 1987; Stram & Lee 1994), which for a one-sided W >= 0 gives
+# P(W > c) = 1 - Phi(c) and therefore the ordinary normal quantile
+# `qnorm(1 - alpha)`. Nothing here is fitted to a fixture.
+.TOBS_VC_BOUNDARY_ALPHA <- 0.05
+
 .TOBS_NQUAD_ROUTES <- list(
   # Formula random effect under method = "laplace": adaptive Gauss-Hermite over
   # the exact per-group marginal, debiasing the Laplace small-cluster

@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## 0.0.240 (2026-08-25)
+
+* **A scalar community variance component is now tested against its lower
+  boundary (#250 item 3).** A collapsed `sigma_log_r` / `sigma_omega` was
+  invisible from the fit: the optimizer converged, the point estimate was
+  ordinary, and the community mean the component scales reported an interval
+  that shrank with it. `.tobs_aghq_variance_boundary()` reads the component's
+  own curvature instead of cutting on `sigma_hat`, which is a number with
+  nothing behind it and does not transfer between fixtures. A 1x1 covariance
+  block's integration coordinate is `log(sigma)`, so `tulpa_re_aghq()`'s
+  `re_par_se` is `SE(log sigma)` directly and the delta method reduces the Wald
+  statistic for `H0: sigma = 0` to `1 / SE(log sigma)`, free of the component's
+  own scale. The critical value is `qnorm(1 - alpha)`: `sigma = 0` is a boundary
+  point, where the one-sided null is `0.5 chi^2_0 + 0.5 chi^2_1` (Self & Liang
+  1987; Stram & Lee 1994) and `P(W > c) = 1 - Phi(c)`, so the boundary-aware
+  value and the ordinary one-sided normal quantile coincide. `ms_abun()` fits
+  carry the record on `sigma_log_r_boundary` / `sigma_omega_boundary` and raise
+  one warning naming every component that failed. Unblocked by gcol33/tulpa#418,
+  which added `re_par_se` / `re_par_layout` in tulpa v0.1.18.
+
 ## 0.0.239 (2026-08-25)
 
 * **Two simulators drew from a different model than the likelihood they mirror

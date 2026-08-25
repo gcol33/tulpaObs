@@ -547,6 +547,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     th_i            <- th_i + 1L
     out$mu_log_r    <- unname(mu[th_i])
     out$sigma_log_r <- sqrt(pmax(as.numeric(fit$Sigma_list[[logr_blk]]), 0))
+    out$sigma_log_r_boundary <- .tobs_aghq_variance_boundary(fit, logr_blk)
     out$b_logr      <- as.numeric(fit$blup[[logr_blk]])
     out$r_s         <- exp(out$mu_log_r + out$b_logr)
     # Community-mean size (the LogNormal median; the report's headline r).
@@ -561,10 +562,18 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     th_i            <- th_i + 1L
     out$mu_omega    <- unname(mu[th_i])
     out$sigma_omega <- sqrt(pmax(as.numeric(fit$Sigma_list[[omega_blk]]), 0))
+    out$sigma_omega_boundary <- .tobs_aghq_variance_boundary(fit, omega_blk)
     out$b_omega     <- as.numeric(fit$blup[[omega_blk]])
     out$omega_s     <- stats::plogis(out$mu_omega + out$b_omega)
     out$omega       <- stats::plogis(out$mu_omega)
   }
+  # Both scalar blocks are one variance over species and either can settle at
+  # its lower boundary, where the fit still converges and the point estimate is
+  # still ordinary. Raised once, after both are attached, so a fit collapsing on
+  # both says so in one place (gcol33/tulpaObs#250 item 3).
+  .tobs_warn_variance_boundary(Filter(Negate(is.null), list(
+    sigma_log_r = out$sigma_log_r_boundary,
+    sigma_omega = out$sigma_omega_boundary)))
   class(out) <- c("nmix_re_fit", "list")
   guard(out)
 }
