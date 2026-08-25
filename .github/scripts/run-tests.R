@@ -10,13 +10,16 @@
 # a few thousand assertions and several hundred skips looks identical to a
 # broken full run unless the tier is on the record.
 #
-# Two environment variables shape a run:
+# Three environment variables shape a run:
 #
 #   TULPAOBS_SHARD     one shard id from .github/scripts/shard-tests.R. Unset
 #                      (the smoke job, and any local run) means the whole
 #                      directory, exactly as before.
 #   TULPAOBS_TEST_OUT  directory to write the machine-readable results into,
 #                      for the aggregate job to collect. Unset writes nothing.
+#   TULPAOBS_WORKERS   worker count. Unset takes every core under CI, and a
+#                      fraction of them elsewhere so a shared workstation keeps
+#                      a share of itself.
 
 library(testthat)
 library(tulpaObs)
@@ -31,81 +34,171 @@ tier <- if (fast) {
 shard <- Sys.getenv("TULPAOBS_SHARD", "")
 out_dir <- Sys.getenv("TULPAOBS_TEST_OUT", "")
 
-filter <- NULL
+test_path <- "tests/testthat"
 assigned <- NULL
 if (nzchar(shard)) {
   source(".github/scripts/shard-tests.R")
   plan <- tier3_plan()
   assigned <- tier3_shard_files(shard, plan)
-  filter <- tier3_filter_regex(assigned)
-  # Confirm the pattern selects exactly the assigned files BEFORE spending the
-  # run on the assumption. A filter that quietly selects the wrong set is the
-  # one failure mode of sharding that looks green.
-  tier3_check_filter(filter, assigned, plan$file)
+  # Longest known cost first. A pool's wall time is set by when its longest file
+  # starts, so a heavy file picked up last leaves every other worker idle while
+  # it finishes.
+  files <- assigned[order(-plan$seconds[match(assigned, plan$file)], assigned)]
+} else {
+  files <- sort(basename(list.files(test_path, pattern = "^test-.*[.][Rr]$")))
 }
+
+# One test file per worker, and the worker times its own file. testthat's own
+# parallel runner is not used here, and neither is its per-test `real` column:
+# that column is populated only for files run in this process, so under workers
+# it comes back 0 for every test and a shard that ran for four hours publishes
+# per-file costs summing to one second. Those costs feed the weights table the
+# shard planner packs against, so a tier that cannot be measured is a tier that
+# can only ever be packed against guesses. Owning the dispatch puts a clock
+# around each file rather than around each test, which is both measurable under
+# parallelism and the number the planner actually wants: a file's cost on its
+# own, not its share of a job it happened to share with others.
+n_workers <- local({
+  env <- suppressWarnings(as.integer(Sys.getenv("TULPAOBS_WORKERS", "")))
+  n <- if (!is.na(env) && env >= 1L) {
+    env
+  } else {
+    cores <- parallel::detectCores()
+    # A worker is not one thread: the fits inside it run OpenMP, so worker
+    # count and load are not proportional. Measured on the 32-processor box,
+    # 16 workers took it to 94% busy and 14 left about 30% free, which is the
+    # share the machine's owner is meant to keep -- hence a fraction well under
+    # one half rather than one core short of all of them. CI has no owner to
+    # leave room for.
+    if (is.na(cores)) 1L else if (nzchar(Sys.getenv("CI"))) cores else
+      max(1L, floor(0.45 * cores))
+  }
+  max(1L, min(n, length(files)))
+})
 
 cat("tier      :", tier, "\n")
 cat("tulpaObs  :", as.character(utils::packageVersion("tulpaObs")), "\n")
 cat("tulpa     :", as.character(utils::packageVersion("tulpa")), "\n")
-cat("parallel  :", Sys.getenv("TESTTHAT_PARALLEL", "<unset>"), "\n")
+cat("workers   :", n_workers, "\n")
 if (nzchar(shard)) {
   cat(sprintf("shard     : %s (%d of %d test files)\n", shard,
               length(assigned), length(plan$file)))
-  cat("files     :", paste(assigned, collapse = ", "), "\n")
+  cat("files     :", paste(sort(assigned), collapse = ", "), "\n")
 } else {
-  cat("shard     : <none: whole directory>\n")
+  cat(sprintf("shard     : <none: whole directory, %d files>\n", length(files)))
 }
 cat("\n")
 
+# load_package = "installed" (#151): a worker that loads the source tree instead
+# runs pkgload::load_all(), and this package compiles a large C++ backend, so N
+# workers each independently (re)compiling into the same src/ race on the shared
+# build artifacts and corrupt the DLL. This script already requires the package
+# to be installed (the library() call above), so telling every worker to just
+# library(tulpaObs) -- a read of one already-built DLL -- costs nothing and is
+# safe at any worker count.
+run_one <- function(file) {
+  started <- Sys.time()
+  cat(sprintf("[start] %s\n", file))
+  utils::flush.console()
+
+  crashed <- NULL
+  res <- NULL
+  text <- utils::capture.output(
+    res <- tryCatch(
+      testthat::test_file(file.path("tests/testthat", file),
+                          package = "tulpaObs",
+                          load_package = "installed",
+                          reporter = "summary"),
+      error = function(e) {
+        crashed <<- conditionMessage(e)
+        NULL
+      }))
+
+  seconds <- as.numeric(difftime(Sys.time(), started, units = "secs"))
+  df <- if (is.null(res)) NULL else as.data.frame(res)
+  if (!is.null(df) && nrow(df)) df$file <- file
+
+  cat(sprintf("[done ] %8.1fs  %s%s\n", seconds, file,
+              if (is.null(crashed)) "" else "  (ERRORED OUT)"))
+  utils::flush.console()
+
+  list(file = file, seconds = seconds, df = df, text = text, crashed = crashed)
+}
+
 started <- Sys.time()
 
-# load_package = "installed" (#151): under Config/testthat/parallel each
-# worker is a separate process that must load the package itself, and without
-# this argument testthat has every worker call pkgload::load_all() on the
-# source tree instead -- safe for a pure-R package, but this one compiles a
-# large C++ backend, so N workers each independently (re)compiling into the
-# same src/ race on the shared build artifacts and corrupt the DLL. This
-# script already requires the package to be installed (the library() call
-# above), so telling every worker to just library(tulpaObs) -- a read of one
-# already-built DLL -- costs nothing and is safe for any worker count.
-res <- test_dir("tests/testthat", package = "tulpaObs", filter = filter,
-                reporter = "summary", stop_on_failure = FALSE,
-                load_package = "installed")
+# outfile = "" forwards each worker's own output to this console, so the
+# [start]/[done] lines above arrive live rather than at the end of a job that
+# can run for hours. The test output itself is captured inside the worker and
+# replayed below, which keeps one file's failures in one block instead of
+# interleaved with whatever else was running at the time.
+if (n_workers > 1L) {
+  cl <- parallel::makeCluster(n_workers, outfile = "")
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  parallel::clusterExport(cl, "run_one", envir = environment())
+  parallel::clusterCall(cl, function(wd) {
+    setwd(wd)
+    library(testthat)
+    library(tulpaObs)
+    invisible(NULL)
+  }, wd = getwd())
+  results <- parallel::clusterApplyLB(cl, files, function(f) run_one(f))
+} else {
+  results <- lapply(files, run_one)
+}
 
 elapsed <- as.numeric(difftime(Sys.time(), started, units = "secs"))
 
-df <- as.data.frame(res)
-failed <- sum(df$failed)
-errors <- sum(df$error)
-
-# Per-file wall time, summed over the file's tests. Under parallel workers this
-# is each test's own elapsed time rather than the file's share of the job, which
-# is what the shard planner wants: a file's serial cost, independent of how many
-# workers happened to run alongside it.
-by_file <- data.frame(file = character(0), seconds = numeric(0),
-                      assertions = integer(0), skipped = integer(0),
-                      failed = integer(0), errors = integer(0),
-                      stringsAsFactors = FALSE)
-ran <- character(0)
-if (nrow(df)) {
-  df$file <- basename(as.character(df$file))
-  ran <- sort(unique(df$file))
-  split_by <- factor(df$file, levels = ran)
-  num <- function(col) as.numeric(tapply(col, split_by, sum))
-  by_file <- data.frame(
-    file = ran,
-    seconds = round(num(df$real), 3),
-    assertions = as.integer(num(df$passed)),
-    skipped = as.integer(num(as.integer(df$skipped))),
-    failed = as.integer(num(df$failed)),
-    errors = as.integer(num(as.integer(df$error))),
-    stringsAsFactors = FALSE)
-  by_file <- by_file[order(-by_file$seconds), , drop = FALSE]
+crashed <- vapply(results, function(r) !is.null(r$crashed), logical(1))
+df <- do.call(rbind, lapply(results, `[[`, "df"))
+if (is.null(df)) {
+  df <- data.frame(file = character(0), test = character(0), passed = numeric(0),
+                   skipped = logical(0), failed = numeric(0), error = logical(0),
+                   stringsAsFactors = FALSE)
 }
+
+failed <- sum(df$failed)
+errors <- sum(df$error) + sum(crashed)
+
+# Per-file wall time, measured by the worker that ran the file, alone.
+by_file <- data.frame(
+  file = vapply(results, `[[`, character(1), "file"),
+  seconds = round(vapply(results, `[[`, numeric(1), "seconds"), 3),
+  assertions = 0L, skipped = 0L, failed = 0L, errors = 0L,
+  stringsAsFactors = FALSE)
+if (nrow(df)) {
+  tally <- function(col) {
+    v <- tapply(as.numeric(col), factor(df$file, levels = by_file$file), sum)
+    as.integer(ifelse(is.na(v), 0L, v))
+  }
+  by_file$assertions <- tally(df$passed)
+  by_file$skipped <- tally(as.integer(df$skipped))
+  by_file$failed <- tally(df$failed)
+  by_file$errors <- tally(as.integer(df$error))
+}
+by_file$errors <- by_file$errors + as.integer(crashed)
+ran <- sort(by_file$file[by_file$assertions > 0L | by_file$skipped > 0L |
+                           by_file$failed > 0L | by_file$errors > 0L])
+by_file <- by_file[order(-by_file$seconds), , drop = FALSE]
 
 if (nzchar(out_dir)) {
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   utils::write.csv(by_file, file.path(out_dir, "timings.csv"), row.names = FALSE)
+  # Per-test durations as well as per-file. A worker runs its file in this
+  # process, so testthat's `real` column is populated here even though it is
+  # not under testthat's own parallel runner -- and an expensive file is worth
+  # nothing to the planner until you can see which block inside it is the cost.
+  if (nrow(df)) {
+    utils::write.csv(
+      data.frame(file = df$file, test = df$test,
+                 seconds = round(as.numeric(df$real), 3),
+                 assertions = as.integer(df$passed),
+                 skipped = as.integer(df$skipped),
+                 failed = as.integer(df$failed),
+                 errors = as.integer(df$error),
+                 stringsAsFactors = FALSE),
+      file.path(out_dir, "tests.csv"), row.names = FALSE)
+  }
   utils::write.csv(data.frame(
     shard = if (nzchar(shard)) shard else "all",
     tier = tier,
@@ -120,9 +213,24 @@ if (nzchar(out_dir)) {
     file.path(out_dir, "summary.csv"), row.names = FALSE)
 }
 
-cat(sprintf(
-  "\n%s\nassertions %d | skipped %d | failed %d | errors %d | %.1f min\n",
-  tier, sum(df$passed), sum(df$skipped), failed, errors, elapsed / 60))
+# The captured output, one block per file, for the files that need reading. A
+# green file's summary block says nothing its row in the table below does not.
+for (r in results) {
+  bad <- !is.null(r$crashed) ||
+    (!is.null(r$df) && nrow(r$df) &&
+       (sum(r$df$failed) > 0 || any(r$df$error)))
+  if (!bad) next
+  cat("\n", strrep("-", 70), "\n", r$file, "\n", strrep("-", 70), "\n", sep = "")
+  cat(r$text, sep = "\n")
+  if (!is.null(r$crashed)) {
+    cat("\nfile did not return results: ", r$crashed, "\n", sep = "")
+  }
+}
+
+cat(sprintf(paste0("\n%s\nassertions %d | skipped %d | failed %d | errors %d",
+                   " | %.1f min wall, %.1f min summed over files\n"),
+            tier, sum(df$passed), sum(df$skipped), failed, errors,
+            elapsed / 60, sum(by_file$seconds) / 60))
 
 if (nrow(by_file)) {
   cat("\nSlowest files:\n")
@@ -134,19 +242,21 @@ if (nrow(by_file)) {
 if (failed > 0 || errors > 0) {
   # One line per failing test rather than a printed data frame: the frame wraps
   # or drops the file column in a narrow log viewer, which is where this is read.
-  bad <- df[df$failed > 0 | df$error, ]
+  bad <- df[df$failed > 0 | df$error, , drop = FALSE]
   cat("\nFailing tests:\n")
   for (i in seq_len(nrow(bad))) {
     cat(sprintf("  %s :: %s  (failed %d%s)\n",
                 bad$file[i], bad$test[i], bad$failed[i],
                 if (bad$error[i]) ", errored" else ""))
   }
+  for (r in results[crashed]) {
+    cat(sprintf("  %s :: <whole file>  (errored: %s)\n", r$file, r$crashed))
+  }
 }
 
-# A shard must run the files it was given, all of them and nothing else. The
-# pre-flight above checks the pattern; this checks the outcome, so a file that
-# was selected but produced no results at all still surfaces instead of being
-# counted as covered by a green shard.
+# A shard must run the files it was given, all of them and nothing else. A file
+# that was dispatched but produced no results at all surfaces here instead of
+# being counted as covered by a green shard.
 if (!is.null(assigned)) {
   dropped <- setdiff(assigned, ran)
   extra <- setdiff(ran, assigned)

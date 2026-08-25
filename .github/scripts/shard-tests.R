@@ -184,43 +184,6 @@ tier3_shard_files <- function(shard, plan = tier3_plan()) {
   files
 }
 
-# Build the regex testthat's `filter` needs to select exactly `files`.
-#
-# testthat applies the filter to the file name with "test-" and the extension
-# stripped, but which name it strips depends on how it enumerated the directory
-# -- test_dir() currently passes full.names = FALSE, so the subject is a bare
-# stem, while the same helper called with full paths leaves the prefix in place.
-# Rather than depend on that, the pattern is anchored so it selects the same set
-# under either form, and tier3_check_filter() then confirms it does before an
-# hour of fitting is spent on the assumption.
-tier3_filter_regex <- function(files) {
-  stems <- tier3_stem(files)
-  bad <- stems[!grepl("^[A-Za-z0-9_-]+$", stems)]
-  if (length(bad)) {
-    stop("test file name(s) carry regex metacharacters and would need escaping ",
-         "before they can be turned into a filter: ",
-         paste(bad, collapse = ", "), call. = FALSE)
-  }
-  paste0("(^|/)(test[-_])?(", paste(stems, collapse = "|"), ")$")
-}
-
-tier3_check_filter <- function(regex, want, all_files) {
-  # testthat:::context_name, applied to each of the two forms it can be handed.
-  strip <- function(x) sub("[.][Rr]$", "", sub("^test[-_]", "", x))
-  subjects <- list(
-    basename = strip(all_files),
-    fullpath = strip(file.path("tests", "testthat", all_files)))
-  for (form in names(subjects)) {
-    got <- sort(all_files[grepl(regex, subjects[[form]])])
-    if (!identical(got, sort(want))) {
-      stop("shard filter does not select its assigned files (", form, " form). ",
-           "missing: ", paste(setdiff(want, got), collapse = ", "),
-           " | unexpected: ", paste(setdiff(got, want), collapse = ", "),
-           call. = FALSE)
-    }
-  }
-  invisible(TRUE)
-}
 
 tier3_json_array <- function(x) {
   paste0("[", paste0("\"", x, "\"", collapse = ","), "]")
