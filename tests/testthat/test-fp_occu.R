@@ -164,7 +164,8 @@ test_that("S3 surface works for fp_occu fits", {
   expect_true(all(ysim %in% 0:2))
 
   rr <- residuals(fit, type = "pearson")
-  expect_equal(dim(rr), dim(sim$y))
+  expect_null(rr$occ)
+  expect_equal(dim(rr$det), dim(sim$y))
 })
 
 test_that("fp_occu rejects invalid detection states", {

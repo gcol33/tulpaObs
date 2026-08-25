@@ -770,6 +770,28 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   list(lambda = lambda, p = p)
 }
 
+# residuals() for the community N-mixture. Per species the visit marginal is the
+# same Poisson-thinned count the single-species .tobs_residuals_nmix() scores --
+# y_ijs ~ Poisson(lambda_is p_is), or NB(r_s, lambda_is p_is) under a negbin fit
+# (NB is closed under binomial thinning with the same size) -- so each species'
+# slice is scored at its own size. Unsampled cells of y stay NA. A count family
+# has no state-level residual, so `occ` is NULL.
+.tobs_residuals_ms_nmix <- function(object, type) {
+  model  <- object$model
+  fitv   <- .tobs_fitted_ms_nmix(object)
+  y      <- model$y
+  J      <- dim(y)[2L]
+  size_s <- .tobs_ms_count_size(object, model$n_species)
+  out <- array(NA_real_, dim = dim(y),
+               dimnames = list(NULL, NULL, model$species_names))
+  for (s in seq_len(model$n_species)) {
+    mu <- pmax(matrix(fitv$lambda[, s] * fitv$p[, s], model$n_sites, J), 1e-10)
+    out[, , s] <- .tobs_count_residual(y[, , s], mu, type, size = size_s[[s]],
+                                       eps = 1e-10)
+  }
+  list(occ = NULL, det = out)
+}
+
 # simulate(): draw counts under the fitted per-species coefficients. Each draw
 # samples N_{s,i} ~ Poisson(lambda_{s,i}) (or NegBin(mu = lambda, size = r_s)
 # under mixture = "negbin") then y ~ Binomial(N, p) at the observed visit

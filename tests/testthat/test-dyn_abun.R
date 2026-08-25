@@ -150,7 +150,8 @@ test_that("S3 surface works for dyn_abun fits", {
   expect_true(all(ysim >= 0))
 
   rr <- residuals(fit, type = "pearson")
-  expect_equal(dim(rr), dim(sim$y))
+  expect_null(rr$occ)
+  expect_equal(dim(rr$det), dim(sim$y))
 })
 
 test_that("dyn_abun rejects single-season data", {

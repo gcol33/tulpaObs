@@ -804,6 +804,20 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   list(psi = psi, p = p, cover = cover)
 }
 
+# residuals() for the community occupancy-cover families (the spatial-factor
+# fit aliases onto this): the state-level residual of the fitted per-species
+# occupancy against the ever-detected indicator, the same surface the community
+# occupancy families report. The cover arm is observed only where the species
+# was detected, so its residual is not a per-site series and is not reported
+# here; `det` is NULL for the same reason it is on the community occupancy
+# families (no smoothed per-visit state is stored).
+.tobs_residuals_ms_occu_cover <- function(object, type) {
+  psi <- fitted(object)$psi
+  list(occ = .tobs_resid_binary(.tobs_community_ever_detected(object$model),
+                                psi, type),
+       det = NULL)
+}
+
 # Draw community joint occupancy-cover data under the fitted per-species
 # coefficients, at the observed visit pattern. Returns 3D arrays matching the
 # input y / y_pos.

@@ -186,7 +186,8 @@ test_that("S3 surface works for removal fits", {
   expect_true(all(rowSums(ysim) >= 0))
 
   rr <- residuals(fit, type = "pearson")
-  expect_equal(dim(rr), dim(sim$y))
+  expect_null(rr$occ)
+  expect_equal(dim(rr$det), dim(sim$y))
 })
 
 test_that("removal() requires complete pass sequences (no NA)", {

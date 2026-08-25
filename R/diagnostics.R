@@ -1076,15 +1076,22 @@ check_model.tobs_fit <- function(object, coords = NULL, n.samples = 250,
                                 unname(ks$statistic), ks$p.value))
 
   mi <- NULL
+  r_occ <- NULL
   if (!is.null(coords)) {
-    mi <- tryCatch(tulpa::moran_i(residuals(object)$occ, coords), error = function(e) NULL)
+    # A family with no state-level residual (or none registered) has no Moran's
+    # I to report; the panel below is keyed on the statistic rather than on the
+    # coordinates, so it is dropped rather than drawn from a residual that is
+    # not there.
+    r_occ <- tryCatch(residuals(object)$occ, error = function(e) NULL)
+    mi <- if (is.null(r_occ)) NULL else
+      tryCatch(tulpa::moran_i(r_occ, coords), error = function(e) NULL)
     if (!is.null(mi)) {
       cat(sprintf("\nMoran's I: %.3f (p = %.3f)\n", unname(mi$statistic), mi$p.value))
       if (mi$p.value < 0.05) cat("  WARNING: spatial autocorrelation\n")
     }
   }
   cat("\n")
-  if (isTRUE(plot)) .tobs_check_panel(object, pit, ks, pc, dp, coords)
+  if (isTRUE(plot)) .tobs_check_panel(object, pit, ks, pc, dp, coords, r_occ, mi)
   invisible(list(waic = w, dic = d, cpo = cp, ppc = pc, zero_inflation = zi,
                  dispersion = dp, pit = pit, uniformity = ks, moran = mi))
 }
@@ -1093,10 +1100,11 @@ check_model.tobs_fit <- function(object, coords = NULL, n.samples = 250,
 # report above, so nothing is simulated twice. A panel whose quantity could not
 # be computed for this family is dropped rather than drawn empty, and the layout
 # follows how many survive.
-.tobs_check_panel <- function(object, pit, ks, pc, dp, coords) {
+.tobs_check_panel <- function(object, pit, ks, pc, dp, coords, r_occ = NULL,
+                              mi = NULL) {
   have <- c(pit = !is.null(pit), ppc = !is.null(pc),
             disp = !is.null(dp) && !is.null(dp$sim),
-            moran = !is.null(coords))
+            moran = !is.null(mi))
   n <- sum(have)
   if (n == 0L) return(invisible(NULL))
   old_par <- par(mfrow = if (n >= 4L) c(2, 2) else c(1, n),
@@ -1130,7 +1138,7 @@ check_model.tobs_fit <- function(object, coords = NULL, n.samples = 250,
 
   if (have[["moran"]]) {
     xy <- as.matrix(coords)
-    r <- residuals(object)$occ
+    r <- r_occ
     ks_vals <- c(3, 5, 8, 12, 20)
     ks_vals <- ks_vals[ks_vals < nrow(xy)]
     mi <- lapply(ks_vals, function(k)

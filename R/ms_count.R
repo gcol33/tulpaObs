@@ -532,7 +532,7 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
       },
       gaussian = y - mu))
   dimnames(r) <- list(NULL, model$species_names)
-  list(mu = r)
+  list(occ = r, det = NULL)
 }
 
 # Draw community count data under the fitted per-species coefficients.

@@ -357,7 +357,7 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
                                  eps = 1e-10)
   out <- matrix(NA_real_, n_sites, n_pass)
   out[cbind(site_idx, visit_idx)] <- r_long
-  out
+  list(occ = NULL, det = out)
 }
 
 

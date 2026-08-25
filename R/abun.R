@@ -673,7 +673,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
                                  eps = 1e-10)
   out <- matrix(NA_real_, model$n_sites, model$max_visits)
   out[cbind(site_idx, visit_idx)] <- r_long
-  out
+  # A count family has no state-level residual: `occ` is the site-level slot of
+  # the residuals() contract and an N-mixture scores per visit.
+  list(occ = NULL, det = out)
 }
 
 

@@ -10,22 +10,40 @@
 .tobs_community_ever_detected <- function(model) {
   mt <- model$model_type; ns <- model$n_sites; nsp <- model$n_species
   z <- matrix(0L, ns, nsp)
-  if (identical(mt, "ms_occu")) {
-    for (s in seq_len(nsp))
-      z[, s] <- as.integer(rowSums(model$valid[, , s] & model$y[, , s] == 1L) > 0L)
-  } else if (identical(mt, "ms_int_occu")) {
+  if (identical(mt, "ms_int_occu")) {
     for (s in seq_len(nsp)) {
       det <- Reduce(`+`, lapply(seq_len(model$n_sources), function(d)
         rowSums(model$valid[[d]][, , s] & model$y[[d]][, , s] == 1L)))
       z[, s] <- as.integer(det > 0L)
     }
-  } else {                                    # ms_dyn_occu: season 1
+  } else if (identical(mt, "ms_dyn_occu")) {  # season 1, pairing with psi1
     for (s in seq_len(nsp))
       z[, s] <- as.integer(rowSums(model$valid[, , 1L, s] &
                                      model$y[, , 1L, s] == 1L) > 0L)
+  } else if (mt %in% c("ms_occu", "ms_occu_cover", "ms_occu_cover_spatial")) {
+    for (s in seq_len(nsp))
+      z[, s] <- as.integer(rowSums(model$valid[, , s] & model$y[, , s] == 1L) > 0L)
+  } else {
+    stop(sprintf(paste0("no ever-detected indicator is defined for model type ",
+                        "'%s'."), mt), call. = FALSE)
   }
   colnames(z) <- model$species_names
   z
+}
+
+# Per-species count size for a community count family: the per-species `r_s` of
+# a negbin fit, the pooled `r` where only one was estimated, and Inf (the
+# Poisson limit) otherwise -- the convention the community simulate() handlers
+# already read a non-finite size under.
+.tobs_ms_count_size <- function(object, n_species) {
+  if (!identical(object$mixture %||% "poisson", "negbin"))
+    return(rep(Inf, n_species))
+  d  <- object$ms_dispersion
+  rs <- d$r_s
+  out <- if (!is.null(rs) && length(rs) == n_species) as.numeric(rs)
+         else rep(as.numeric(d$r %||% Inf), n_species)
+  out[!is.finite(out)] <- Inf
+  out
 }
 
 # Binary residual (deviance / pearson / response) of an observed 0/1 matrix

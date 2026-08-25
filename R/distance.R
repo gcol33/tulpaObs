@@ -605,7 +605,7 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   r_mat <- .tobs_count_residual(y, mu_mat, type,
                                 size = object$nmix_dispersion$r %||% Inf,
                                 eps = 1e-10)
-  r_mat
+  list(occ = NULL, det = r_mat)
 }
 
 # predict() for distance: abundance lambda (density) at new X_lambda, or the

@@ -659,81 +659,109 @@ fitted.tobs_fit <- function(object, ...) {
 }
 
 #' Residuals from occupancy model
+#'
+#' One contract for every family: a list with `occ`, the STATE-level residual
+#' series (per site, or per site and season for a multi-season family), and
+#' `det`, the OBSERVATION-level series (per visit / pass / distance bin). A
+#' family carrying only one of the two levels fills that one and leaves the
+#' other `NULL`; nothing returns a bare matrix, so a caller reading `$occ` gets
+#' the state residual or `NULL`, never an error (gcol33/tulpaObs#261).
+#'
 #' @param object A `tobs_fit` object.
 #' @param type One of `"deviance"` (default), `"pearson"`, or `"response"`.
 #' @param ... Ignored.
-#' @return A list with `occ` (site-level) and `det` (visit-level) residuals.
+#' @return A list with `occ` (state-level) and `det` (observation-level)
+#'   residuals, either of which may be `NULL` for a family that has no such
+#'   level. A model type with no registered handler is an error naming it.
 #' @export
 residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response"), ...) {
   type <- match.arg(type)
-  # The three community occupancy families share one residual surface.
-  # (`ms_count` covers jsdm() too -- one model class, bernoulli response.)
-  fn <- .tobs_s3_handler(
-    "residuals", object$model$model_type,
-    c(ms_occu = "ms_community", ms_dyn_occu = "ms_community",
-      ms_int_occu = "ms_community"))
-  if (!is.null(fn)) return(fn(object, type))
+  mt   <- object$model$model_type %||% NA_character_
+  fn   <- if (!is.na(mt)) .tobs_s3_handler("residuals", mt, .TOBS_RESIDUALS_ALIAS)
+  if (is.null(fn)) {
+    stop(sprintf(paste0("residuals() has no handler registered for model type ",
+                        "'%s'. Register `.tobs_residuals_%s()` (or an alias in ",
+                        "`.TOBS_RESIDUALS_ALIAS` onto a family that scores its ",
+                        "response the same way)."),
+                 if (is.na(mt)) "<none>" else mt,
+                 if (is.na(mt)) "<type>" else mt), call. = FALSE)
+  }
+  res <- fn(object, type)
+  # The contract is checked at the one door every family passes through, so a
+  # handler returning the wrong shape fails here rather than downstream in a
+  # `tryCatch` that reads the failure as "this family has no residual".
+  if (!is.list(res) || !all(names(res) %in% c("occ", "det"))) {
+    stop(sprintf(paste0("`.tobs_residuals_%s()` must return list(occ = , det = ); ",
+                        "it returned %s."), mt,
+                 if (is.list(res)) paste0("a list named ",
+                                          paste(names(res), collapse = "/"))
+                 else paste0("a ", class(res)[[1L]])), call. = FALSE)
+  }
+  res
+}
+
+# Model types scored by another family's residual handler.
+.TOBS_RESIDUALS_ALIAS <- c(
+  # The community occupancy families share one state-level surface.
+  ms_occu = "ms_community", ms_dyn_occu = "ms_community",
+  ms_int_occu = "ms_community",
+  # The spatial-factor community cover fit is scored on the same arms as its
+  # non-spatial twin, off whichever fitted() surface the fit carries.
+  ms_occu_cover_spatial = "ms_occu_cover")
+
+# The state-level residual of an observed 0/1 occupancy indicator against a
+# fitted state probability is `.tobs_resid_binary()` (R/community_methods.R) --
+# the single-species families below score their state arm with the same three
+# forms the community families do.
+
+# residuals() for a single-season occupancy fit: the smoothed state posterior
+# against the ever-detected indicator (site level), and each visit's detection
+# against `z * p` (visit level).
+.tobs_residuals_single <- function(object, type) {
+  model    <- object$model
   fit_vals <- fitted(object)
-  model <- object$model
+  y        <- model$y
+  z_obs    <- apply(y, 1, function(row) as.integer(any(row[row >= 0] == 1)))
+  occ_resid <- .tobs_resid_binary(z_obs, fit_vals$z, type)
 
-  # Occupancy residuals (site-level; site-by-season for dynamic, matching the
-  # smoothed fitted()$z matrix). z_obs is the realized "ever-detected" indicator
-  # the smoothed state posterior is compared against (NA where the unit had no
-  # visits, so the state is unobserved).
-  z_obs <- if (identical(model$model_type, "single")) {
-    apply(model$y, 1, function(row) as.integer(any(row[row >= 0] == 1)))
-  } else if (identical(model$model_type, "dynamic")) {
-    y <- model$y
-    n_sites <- dim(y)[1]; T_seasons <- dim(y)[3]
-    zo <- matrix(NA_real_, n_sites, T_seasons)
-    for (i in seq_len(n_sites)) for (t in seq_len(T_seasons)) {
-      raw <- y[i, , t]; raw <- raw[!is.na(raw) & raw >= 0]
-      if (length(raw)) zo[i, t] <- as.numeric(any(raw == 1))
-    }
-    zo
-  } else {
-    rep(NA_real_, model$n_sites)
-  }
-
-  occ_resid <- switch(type,
-    response = z_obs - fit_vals$z,
-    pearson = (z_obs - fit_vals$z) / sqrt(fit_vals$z * (1 - fit_vals$z) + 1e-10),
-    deviance = {
-      sign(z_obs - fit_vals$z) * sqrt(2 * abs(
-        ifelse(z_obs == 1,
-               -log(fit_vals$z + 1e-10),
-               -log(1 - fit_vals$z + 1e-10))
-      ))
-    }
-  )
-
-  # Detection residuals (visit-level, single-season)
-  det_resid <- NULL
-  if (identical(model$model_type, "single")) {
-    y <- model$y
-    p_hat <- fit_vals$p
-    n_obs <- nrow(y)
-    max_visits <- ncol(y)
-    det_resid <- matrix(NA_real_, n_obs, max_visits)
-    for (i in seq_len(n_obs)) {
-      for (j in seq_len(max_visits)) {
-        if (y[i, j] >= 0) {
-          expected <- fit_vals$z[i] * p_hat[i]
-          det_resid[i, j] <- switch(type,
-            response = y[i, j] - expected,
-            pearson = (y[i, j] - expected) / sqrt(expected * (1 - expected) + 1e-10),
-            deviance = {
-              sign(y[i, j] - expected) * sqrt(2 * abs(
-                ifelse(y[i, j] == 1, -log(expected + 1e-10), -log(1 - expected + 1e-10))
-              ))
-            }
-          )
-        }
-      }
-    }
-  }
-
+  p_hat <- fit_vals$p
+  det_resid <- matrix(NA_real_, nrow(y), ncol(y))
+  seen <- !is.na(y) & y >= 0
+  expected <- matrix(fit_vals$z * p_hat, nrow(y), ncol(y))
+  det_resid[seen] <- .tobs_resid_binary(y[seen], expected[seen], type)
   list(occ = occ_resid, det = det_resid)
+}
+
+# residuals() for a dynamic (multi-season) occupancy fit: the per-(site, season)
+# smoothed state against that season's ever-detected indicator. A season with no
+# valid visit has no observed state, so it stays NA.
+.tobs_residuals_dynamic <- function(object, type) {
+  model <- object$model
+  y     <- model$y
+  n_sites <- dim(y)[1]; T_seasons <- dim(y)[3]
+  z_obs <- matrix(NA_real_, n_sites, T_seasons)
+  for (i in seq_len(n_sites)) for (t in seq_len(T_seasons)) {
+    raw <- y[i, , t]; raw <- raw[!is.na(raw) & raw >= 0]
+    if (length(raw)) z_obs[i, t] <- as.numeric(any(raw == 1))
+  }
+  list(occ = .tobs_resid_binary(z_obs, fitted(object)$z, type), det = NULL)
+}
+
+# residuals() for an int_occu() fit: the multi-source state posterior against
+# the indicator that ANY source detected the site at ANY visit -- the same event
+# `fitted()`'s own z branch conditions on. Detection residuals are per source
+# with their own designs and site maps, so they are not one visit-level matrix
+# and are left NULL.
+.tobs_residuals_integrated <- function(object, type) {
+  model <- object$model
+  z_obs <- numeric(model$n_sites)
+  for (s in seq_along(model$y_sources)) {
+    ys  <- model$y_sources[[s]]
+    map <- model$site_maps[[s]] + 1L
+    det <- apply(ys, 1, function(row) any(row[row >= 0] == 1))
+    for (r in seq_along(map)) if (isTRUE(det[[r]])) z_obs[map[[r]]] <- 1
+  }
+  list(occ = .tobs_resid_binary(z_obs, fitted(object)$z, type), det = NULL)
 }
 
 #' Simulate replicate datasets from posterior

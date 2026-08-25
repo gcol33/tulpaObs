@@ -73,7 +73,7 @@ test_that("abun() residuals: Poisson unchanged, negbin at its own variance", {
     fv <- .tobs_fitted_nmix(fit)
     pmax(fv$lambda[fit$model$site_idx] * fv$p, 1e-10)
   }
-  flat <- function(fit, ty) residuals(fit, type = ty)[
+  flat <- function(fit, ty) residuals(fit, type = ty)$det[
     cbind(fit$model$site_idx, fit$model$visit_idx)]
 
   sim <- do.call(simulate_abun, args)
@@ -105,7 +105,7 @@ test_that("removal() residuals: Poisson unchanged, negbin at its own variance", 
     mu <- fv$lambda * t(apply(pm, 1, .removal_pi))
     pmax(mu[cbind(m$site_idx, m$visit_idx)], 1e-10)
   }
-  flat <- function(fit, ty) residuals(fit, type = ty)[
+  flat <- function(fit, ty) residuals(fit, type = ty)$det[
     cbind(fit$model$site_idx, fit$model$visit_idx)]
 
   sim <- simulate_removal(N = 90, K = 3, n_abund_covs = 1, n_det_covs = 1,
@@ -153,7 +153,7 @@ test_that("dyn_abun() residuals: Poisson unchanged, negbin at the recursion", {
   f   <- .tobs_fitted_dyn_abun(fp)
   mu_t <- f$EN * f$p
   for (ty in c("response", "pearson", "deviance")) {
-    got <- residuals(fp, type = ty)
+    got <- residuals(fp, type = ty)$det
     for (t in seq_len(fp$model$n_seasons)) {
       mu <- pmax(matrix(mu_t[, t], fp$model$n_sites, fp$model$max_visits), 1e-10)
       expect_identical(got[, , t], old_pois(sim$y[, , t], mu, ty))
@@ -166,7 +166,7 @@ test_that("dyn_abun() residuals: Poisson unchanged, negbin at the recursion", {
              control = ctl)
   vt <- exact_var(fn); fvn <- .tobs_fitted_dyn_abun(fn)
   mun_t <- fvn$EN * fvn$p
-  got <- residuals(fn, type = "pearson")
+  got <- residuals(fn, type = "pearson")$det
   nsi <- fn$model$n_sites; nvi <- fn$model$max_visits
   for (t in seq_len(fn$model$n_seasons)) {
     mu <- pmax(matrix(mun_t[, t], nsi, nvi), 1e-10)
@@ -184,8 +184,7 @@ test_that("count() residuals are unchanged by the shared helper", {
     fit <- tobs(~ x, data = sim$data, y = sim$y, family = count(response = resp),
                 method = "laplace", control = ctl)
     y <- as.numeric(fit$model$y_count); mu <- fitted(fit)$mu
-    grab <- function(ty) { r <- residuals(fit, type = ty)
-                           if (is.list(r)) r$mu else r }
+    grab <- function(ty) residuals(fit, type = ty)$occ
     expect_identical(grab("response"), y - mu)
     if (identical(resp, "poisson")) {
       mup <- pmax(mu, 1e-8)

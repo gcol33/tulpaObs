@@ -453,8 +453,14 @@ test_that("families whose predictor has no terms= argument say so", {
   expect_length(predict(fit_fp), nrow(sim_fp$y))
 
   # Every model type named in the no-terms set is a real dispatch target, so
-  # the set cannot drift into naming a family that does honour `terms`.
-  expect_true(all(.TOBS_PREDICT_NO_TERMS %in% names(.tobs_family_methods)))
+  # the set cannot drift into naming a family that does honour `terms`. The
+  # target is the predictor the type dispatches to: a model type need not be
+  # spelled like the family constructor that builds it (ms_abun() builds
+  # `ms_nmix`), so the family list is not what says a type is reachable.
+  for (mt in .TOBS_PREDICT_NO_TERMS) {
+    expect_false(is.null(.tobs_s3_handler("predict", mt, .TOBS_MS_PREDICT_ALIAS)),
+                 info = mt)
+  }
   expect_false(any(c("nmix", "removal") %in% .TOBS_PREDICT_NO_TERMS))
 })
 

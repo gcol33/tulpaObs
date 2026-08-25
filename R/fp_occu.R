@@ -598,13 +598,14 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   y_any <- (model$y >= 1) * 1
   mu_mat <- matrix(mu, model$n_sites, model$max_visits)
   mu_mat <- pmin(pmax(mu_mat, 1e-10), 1 - 1e-10)
-  switch(type,
+  det <- switch(type,
     response = y_any - mu_mat,
     pearson  = (y_any - mu_mat) / sqrt(mu_mat * (1 - mu_mat)),
     deviance = {
       d <- 2 * (ifelse(y_any == 1, log(1 / mu_mat), log(1 / (1 - mu_mat))))
       sign(y_any - mu_mat) * sqrt(pmax(d, 0))
     })
+  list(occ = NULL, det = det)
 }
 
 # predict() for fp_occu: occupancy psi (default) or true detection p11 at new X.

@@ -969,7 +969,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
         sign(yt - mu) * sqrt(pmax(d, 0))
       })
   }
-  out
+  list(occ = NULL, det = out)
 }
 
 # predict() for dyn_abun: initial abundance lambda at new X (default).

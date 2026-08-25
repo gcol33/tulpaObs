@@ -14,8 +14,15 @@
 \item{...}{Ignored.}
 }
 \value{
-A list with \code{occ} (site-level) and \code{det} (visit-level) residuals.
+A list with \code{occ} (state-level) and \code{det} (observation-level)
+residuals, either of which may be \code{NULL} for a family that has no such
+level. A model type with no registered handler is an error naming it.
 }
 \description{
-Residuals from occupancy model
+One contract for every family: a list with \code{occ}, the STATE-level residual
+series (per site, or per site and season for a multi-season family), and
+\code{det}, the OBSERVATION-level series (per visit / pass / distance bin). A
+family carrying only one of the two levels fills that one and leaves the
+other \code{NULL}; nothing returns a bare matrix, so a caller reading \verb{$occ} gets
+the state residual or \code{NULL}, never an error (gcol33/tulpaObs#261).
 }

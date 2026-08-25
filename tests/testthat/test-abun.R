@@ -99,7 +99,8 @@ test_that("S3 surface works for N-mixture fits", {
   expect_true(all(ysim >= 0))
 
   rr <- residuals(fit, type = "pearson")
-  expect_equal(dim(rr), dim(sim$y))
+  expect_null(rr$occ)
+  expect_equal(dim(rr$det), dim(sim$y))
 })
 
 test_that("negbin N-mixture recovers truth, surfaces dispersion, covers CIs", {

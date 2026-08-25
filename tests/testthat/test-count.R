@@ -68,7 +68,7 @@ test_that("count() S3 surface works (fitted / predict / residuals / WAIC)", {
   expect_length(fitted(fit)$mu, 250)
   expect_true(all(fitted(fit)$mu > 0))
   for (ty in c("deviance", "pearson", "response")) {
-    r <- residuals(fit, type = ty)$mu
+    r <- residuals(fit, type = ty)$occ
     expect_length(r, 250)
     expect_true(all(is.finite(r)))
   }
@@ -194,7 +194,7 @@ test_that("count() S3 surface works for the binomial response", {
   expect_length(fv, 250)
   expect_true(all(fv >= 0 & fv <= 12))
   for (ty in c("deviance", "pearson", "response")) {
-    r <- residuals(fit, type = ty)$mu
+    r <- residuals(fit, type = ty)$occ
     expect_length(r, 250)
     expect_true(all(is.finite(r)))
   }

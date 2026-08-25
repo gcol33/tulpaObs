@@ -515,6 +515,31 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
   list(lambda = lambda, sigma = sigma)
 }
 
+# residuals() for the community distance sampling fit. Per species the bin-b
+# count is marginally y_ibs ~ Poisson(lambda_is pi_ibs) under Poisson abundance
+# (NB(r_s, lambda pi) under negbin), the same marginal the single-species
+# .tobs_residuals_distance() scores, with the detection scale sigma_is driving
+# each site's own bin probabilities. A count family has no state-level residual,
+# so `occ` is NULL.
+.tobs_residuals_ms_distance <- function(object, type) {
+  model  <- object$model
+  fitv   <- .tobs_fitted_ms_distance(object)
+  shape  <- object$distance_shape$shape
+  y      <- model$y
+  size_s <- .tobs_ms_count_size(object, model$n_species)
+  out <- array(NA_real_, dim = dim(y),
+               dimnames = list(NULL, NULL, model$species_names))
+  for (s in seq_len(model$n_species)) {
+    pi_mat <- t(vapply(fitv$sigma[, s], function(sg)
+      .distance_pi(sg, model$cutpoints, model$key, model$transect, shape),
+      numeric(model$n_bins)))
+    mu <- pmax(fitv$lambda[, s] * pi_mat, 1e-10)
+    out[, , s] <- .tobs_count_residual(y[, , s], mu, type, size = size_s[[s]],
+                                       eps = 1e-10)
+  }
+  list(occ = NULL, det = out)
+}
+
 # Posterior replicate binned-count arrays: per species, draw the latent N and
 # allocate detections to distance bins through `cpp_simulate_distance` -- the
 # SAME kernel the likelihood integrates against (as `simulate_ms_distance()`'s

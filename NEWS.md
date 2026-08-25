@@ -1,5 +1,37 @@
 # tulpaObs NEWS
 
+## 0.0.244 (2026-08-25)
+
+* **`residuals()` has one return shape, and an unregistered family is an error
+  rather than an empty answer (#261).** Three shapes were in use against one
+  documented contract: `list(occ = , det = )`, a bare matrix (`abun()`,
+  `removal()`, `distance()`, `dyn_abun()`, `fp_occu()`, where `$occ` ERRORED),
+  and `list(mu = , det = )` (`count()`, `ms_count()`, where `$occ` was NULL).
+  Every family now returns `list(occ = , det = )`: `occ` the state-level series,
+  `det` the observation-level one, either `NULL` where the family has no such
+  level. The count families fill `det` (or `occ` for the one-row-per-observation
+  GLMMs) and no longer answer `$occ` with an error.
+* Eight model types had no handler and fell to a generic tail that differenced
+  the observed state against a `z` their `fitted()` does not carry -- `NA` for
+  every site on an `int_occu()` fit, and `list(occ = numeric(0), det = NULL)`
+  returned as a SUCCESS for `ms_nmix` / `ms_distance` / `ms_occu_cover`. Four of
+  them are now registered: `integrated` (the multi-source ever-detected
+  indicator its own `fitted()` z branch conditions on), `ms_nmix` and
+  `ms_distance` (the per-species Poisson / negbin marginal their single-species
+  siblings score), and `ms_occu_cover` with `ms_occu_cover_spatial` aliased onto
+  it (the community state-level surface). `t_occu`, `occu_cover` and
+  `occu_multiscale_cover` now raise the "no handler registered for model type"
+  error `nobs()` already raised, instead of returning an empty vector.
+* The single-season and dynamic branches moved out of the generic into
+  registered handlers, so the generic is a lookup and a contract check. The
+  extraction is behaviour-preserving: the reported residual is equal to the
+  previous formulas at all three types, checked in `test-residuals-contract.R`.
+* `check_model(fit, coords = )` keys its Moran's I panel on the computed
+  statistic rather than on `coords` being supplied, and passes the residual it
+  already computed into the panel instead of recomputing it. A fit whose
+  `residuals()` throws no longer prints the whole report and then errors,
+  losing the plot and the invisible return.
+
 ## 0.0.243 (2026-08-25)
 
 * **`ms_abun()`, `ms_distance()` and `ms_occu_cover()` have a real `newdata`

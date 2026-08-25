@@ -84,7 +84,8 @@
 }
 
 # residuals(): deviance (default), Pearson, or response (raw y - mu), per the
-# family. Poisson / negbin deviance uses the standard GLM saturated-model form;
+# family. A count GLMM has one series, one value per response row: it fills the
+# unit-level `occ` slot of the residuals() contract and leaves `det` NULL. Poisson / negbin deviance uses the standard GLM saturated-model form;
 # the Gaussian deviance residual is the raw y - mu.
 .tobs_residuals_count <- function(object, type = c("deviance", "pearson",
                                                    "response")) {
@@ -123,5 +124,5 @@
         t2 <- ifelse(fy > 0, fy * log(fy / fmu), 0)
         sign(y - mu) * sqrt(pmax(2 * (t1 + t2), 0))
       }))
-  list(mu = r, det = NULL)
+  list(occ = r, det = NULL)
 }

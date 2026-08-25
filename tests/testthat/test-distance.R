@@ -302,7 +302,8 @@ test_that("S3 surface works for distance fits", {
   expect_true(all(ysim >= 0))
 
   rr <- residuals(fit, type = "pearson")
-  expect_equal(dim(rr), dim(sim$y))
+  expect_null(rr$occ)
+  expect_equal(dim(rr$det), dim(sim$y))
 })
 
 test_that("distance() validates cutpoints and rejects NA", {
