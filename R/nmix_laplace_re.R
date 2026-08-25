@@ -133,10 +133,25 @@
 #'   effect SD (`mixture = "NB"` / `"ZINB"` only; default `NULL`, pure ML).
 #'   `sigma_log_r` is the same shape of parameter as `sigma_omega` -- one scalar
 #'   variance over species -- and settles near its lower boundary the same way at
-#'   few species, taking the `mu_log_r` interval with it: at 8 and 36 species with
-#'   a simulated `sigma_logr = 0.5`, `n_quad = 3` and `n_quad_scalar = 3`, fits
-#'   recovering `sigma_log_r >= 0.30` covered `mu_log_r` 33/34 while those below
-#'   covered 2/5.
+#'   few species. At 8 and 36 species with a simulated `sigma_logr = 0.5`,
+#'   `n_quad = 3` and `n_quad_scalar = 3`, fits recovering `sigma_log_r >= 0.30`
+#'   covered `mu_log_r` 33/34 while those below covered 2/5.
+#'
+#'   That split is a property of those two group counts and does not carry to a
+#'   third. Re-measured at 18 species on the same fixture and seeds (19 fits),
+#'   one fit sits below 0.30, the point-estimate error is uncorrelated with the
+#'   recovered SD (Spearman -0.08), and the reported SE is very nearly a
+#'   deterministic multiple of it (Spearman +0.98, `se = 0.2887 * sigma`,
+#'   R^2 = 0.99). So what a threshold split picks up at 18 species is the SE
+#'   side alone: a low recovered SD buys a proportionally narrower interval
+#'   around an error that did not shrink with it. Both halves moving together is
+#'   what the 8-and-36 pool showed and what is absent there. The `mu_log_r`
+#'   interval at that group count is separately about 1.28x too narrow whatever
+#'   the recovered SD (gcol33/tulpaObs#280).
+#'
+#'   A fit now says whether its dispersion variance is distinguishable from zero
+#'   at all: `fit$ms_dispersion$sigma_log_r_boundary` carries the boundary test
+#'   and a fit that fails it warns (gcol33/tulpaObs#250).
 #'
 #'   What the penalty reaches on this block appears to be the boundary rather
 #'   than the calibration. Measured on 20 seeds of that fixture at 8 species with
@@ -439,6 +454,9 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # simulated sigma_logr = 0.5, the fits recovering sigma_log_r >= 0.30 cover
   # mu_log_r 33/34 while those below cover 2/5, with the point estimate 2.2x
   # further out and the interval 28% narrower (#235, NOTES_measurements.md).
+  # At 18 species that joint movement is absent -- the error is uncorrelated
+  # with the recovered SD there and only the interval tracks it -- so the pooled
+  # split is not a property of the family at every group count (#280, #250).
   #
   # The penalty is graded by proximity to zero, and on that block it reaches the
   # boundary rather than the calibration: at c(1, 0.05) a sigma_log_r of 0.01-0.06

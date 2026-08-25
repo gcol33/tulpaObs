@@ -1,5 +1,29 @@
 # tulpaObs NEWS
 
+## 0.0.241 (2026-08-25)
+
+* **`test-ms-abun-nb-rs.R`'s coverage gate asserts what is measured (#250
+  item 1).** `expect_gt(mean(covered), 0.8)` carried no measurement and did not
+  pass. #250's preferred replacement was coverage conditional on the dispersion
+  variance being recovered, from a 39-fit pool at 8 and 36 species where fits
+  returning `sigma_log_r >= 0.30` covered 33/34 against 2/5 below. Re-measured
+  at the 18 species the fixture actually uses (19 fits, same seeds): one fit
+  sits below 0.30, `cor(|err|, sigma_log_r)` is -0.08 and `cor(se, sigma_log_r)`
+  is +0.98, so the error does not grow as the SD shrinks and only the interval
+  does. The conditional form has nothing to condition on there and is not what
+  is asserted. What is: the estimator is unbiased (+0.017, 0.42 SE of the mean),
+  `z` is normal (Shapiro p = 0.515), and the interval scale is the whole of the
+  miss (15/19 at the reported SE, 19/19 at 1.28x). The last assertion pins the
+  defect and so goes red when gcol33/tulpaObs#280 lands, which is when the block
+  should be rewritten as a nominal-coverage gate.
+* **`?ms_abun` and `NOTES_measurements.md` no longer state the conditional
+  account as general.** Both recorded the 8-and-36-species split without the
+  group count it belongs to. The measurement is kept and scoped, and the S = 18
+  re-measurement is recorded beside it.
+* Seed 506 of that fixture is now refused by the engine rather than scored: it
+  returned its initial values with `converged = TRUE` before #281, which is the
+  difference between the 16/20 previously recorded and 15/19 now.
+
 ## 0.0.240 (2026-08-25)
 
 * **A scalar community variance component is now tested against its lower

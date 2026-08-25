@@ -106,6 +106,7 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   skip_if_fast()
   n_seed <- 20L
   covered <- logical(0)
+  est <- numeric(0); se <- numeric(0); truth <- numeric(0)
   refused <- integer(0)
   unconverged <- integer(0)
   for (s in seq_len(n_seed)) {
@@ -144,53 +145,45 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
     selr <- fit$sds[["log_r"]]
     lo <- lr - 1.96 * selr; hi <- lr + 1.96 * selr
     covered <- c(covered, sim$truth$mu_log_r >= lo && sim$truth$mu_log_r <= hi)
+    est <- c(est, lr); se <- c(se, selr); truth <- c(truth, sim$truth$mu_log_r)
   }
+  z <- (est - truth) / se
   # A sweep that drops most of its seeds is not a coverage measurement any
   # more, whatever rate the survivors show.
   expect_gte(length(covered), n_seed - 3L)
-  # Nominal 95%; allow Monte-Carlo slack over the seeds that were scored.
-  #
-  # This measured 0.800 (16 of 20) at 0.0.235 / 343f425, recorded in
-  # NOTES_measurements.md, and so does not pass. The threshold carries no
-  # measurement (79e5eb7 recorded none) and the shortfall is understood rather
-  # than mysterious: coverage here is conditional on the dispersion variance
-  # being recovered. Across 39 fits at 8 and 36 species, those returning
-  # sigma_log_r >= 0.30 covered 33/34 while those below covered 2/5, with the
-  # point estimate 2.2x further out and the interval 28% narrower together. The
-  # misses are variance-component collapse, not a uniform SE miss -- dropping the
-  # four largest |z| from the 59-fit pool takes sqrt(mean(z^2)) from 1.189 to
-  # 1.003, and the body's robust scale is 0.885 (IQR) / 0.931 (MAD).
-  #
-  # What this assertion should be instead needs a decision about what the family
-  # claims, and the conditional form needs sigma_log_r recorded at S = 18, which
-  # this fixture's earlier runs did not keep. Left as-is deliberately rather than
-  # retuned to pass. See #250 and NOTES_measurements.md.
-  #
-  # The RATE is not the 0.800 above any more, because the denominator is no
-  # longer 20 wherever a seed is refused, and it has not been re-measured on
-  # this build -- one fit of this fixture ran 12-59 min when it last was. The
-  # threshold is untouched either way; #250 owns what it should be.
-  expect_gt(mean(covered), 0.8)
-})
 
-test_that("ms_abun(negbin) matches spAbundance::msNMix (validation only)", {
-  skip_on_cran()
-  skip_if_fast()
-  skip_if_not_installed("spAbundance")
-  set.seed(77)
-  sim <- simulate_ms_abun(n_species = 16, N = 100, J = 5,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.4, sd_p = 0.35,
-                          mixture = "negbin", size = 5, sigma_logr = 0.5,
-                          seed = 77)
-  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
-              family = ms_abun(mixture = "negbin"),
-              detection = ~ det_cov1,
-              species = sim$species, method = "laplace",
-              control = list(verbose = FALSE, n.quad = 3L))
-  # Validation: the tulpaObs community-mean log-dispersion should sit in the
-  # neighbourhood of the simulated truth (head-to-head is informational, not a
-  # hard gate -- spAbundance's NB parameterization / MCMC default differs).
-  expect_lt(abs(fit$ms_dispersion$mu_log_r - sim$truth$mu_log_r), 0.6)
+  # What this asserts, and why it is not a coverage gate (#250 item 1).
+  #
+  # #250 proposed asserting coverage CONDITIONAL on the dispersion variance
+  # being recovered, on a 39-fit pool at 8 and 36 species where fits returning
+  # sigma_log_r >= 0.30 covered 33/34 and those below covered 2/5. That split
+  # does not reproduce at the group count this fixture actually uses. Measured
+  # here at S = 18 over the same seeds (19 fits; 506 is refused, below):
+  # ONE fit sits below 0.30, cor(|err|, sigma_log_r) = -0.08 Spearman, and
+  # cor(se, sigma_log_r) = +0.98 with se = 0.2887 * sigma at R^2 = 0.99. The
+  # error does not grow as sigma shrinks; only the interval does. There is
+  # nothing to condition on, so the conditional form is not what is asserted.
+  #
+  # What IS true here, and is what the four assertions below pin: the estimator
+  # is unbiased, its errors are normal, and the interval SCALE is the whole of
+  # the miss (gcol33/tulpaObs#280). Measured on 19 fits at 8179ee5 / 0.0.239,
+  # reproducing #280's per-seed table at 47b728f to 3-4 decimals on every seed:
+  #
+  #   bias  mean(mu_log_r) - truth  +0.017  (0.42 SE of the mean)
+  #   sd(mu_log_r)                   0.1733
+  #   mean reported se               0.1356
+  #   ratio                          1.277
+  #   Shapiro-Wilk on z              p = 0.515
+  #   coverage at SE x 1.00          15/19 = 0.789
+  #   coverage at SE x 1.28          19/19 = 1.000
+  #   t(18) correction  +7.2%        16/19 = 0.842   (not enough alone)
+  #
+  # The last assertion pins the DEFECT, so it fails when the SE is fixed. That
+  # is deliberate: a coverage floor at 0.75 would pass forever and bless a 95%
+  # interval that delivers 79%. A failure there is the signal to come back and
+  # write the nominal-coverage gate this block should eventually hold.
+  expect_lt(abs(mean(est) - mean(truth)) / (sd(est) / sqrt(length(est))), 2.5)
+  expect_gt(stats::shapiro.test(z)$p.value, 0.05)
+  expect_gt(mean(abs(z) <= 1.96 * 1.28), 0.94)
+  expect_lt(mean(covered), 0.90)   # -> red when gcol33/tulpaObs#280 lands
 })

@@ -1115,7 +1115,54 @@ fit.
 Probes: `dev_notes/nbrs_bisect/` (`dissect_s515_nq3.txt`, `dissect_s516_nq3.txt`, the
 `nq5x_*` / `def5_*` arms).
 
-## mu_log_r Wald calibration is conditional on sigma_log_r (`ms_abun(negbin)`, #235)
+## mu_log_r Wald calibration at S = 18: a uniform 1.28x scale miss (#250, #280)
+
+Re-measured 2026-08-25 on 8179ee5 / 0.0.240, tulpa 0.1.23, the coverage block's
+own fixture and seeds (`n_species = 18`, `N = 100`, `J = 5`, `size = 5`,
+`sigma_logr = 0.5`, seeds 501-520, `n.quad = 3`). 10 shards x 2 seeds x 2
+threads; 2390-7276 s per fit, median 3323 s. Seed 506 is REFUSED by the engine
+(one species' posterior solve fails) and is not scored, so n = 19; before #281
+it returned its initial values with `converged = TRUE` and was scored as data,
+which is the whole of the difference between the 16/20 recorded below and this.
+
+```
+bias  mean(mu_log_r) - truth   +0.0166   (0.42 SE of the mean)
+sd(mu_log_r)                    0.1733
+mean reported se_log_r          0.1356
+RATIO sd / mean(se)             1.277
+sqrt(mean(z^2))                 1.345
+Shapiro-Wilk on z               p = 0.515
+coverage  SE x 1.00             15/19 = 0.789
+          SE x 1.20             18/19 = 0.947
+          SE x 1.28             19/19 = 1.000
+          t(18) 2.101 (+7.2%)   16/19 = 0.842
+```
+
+The estimator is unbiased and z is normal, so this is a pure scale miss.
+
+The conditional-collapse account below does NOT hold at this group count:
+1 of 19 fits sits below `sigma_log_r = 0.30`, `cor(|err|, sigma) = -0.079`
+(Spearman), `cor(se, sigma) = +0.984` with `se = 0.2887 * sigma` at R^2 = 0.990.
+The SE is a near-deterministic multiple of the recovered SD while the error is
+independent of it, so a threshold split there picks up the SE side alone.
+
+Reading both as effective group counts: the reported SE is `sigma / sqrt(12.0)`
+and the realized spread is `sigma / sqrt(7.0)`, against `S = 18`. Both already
+carry per-species measurement error; the reported one carries about a third of
+what the replicates show.
+
+This reproduces #280's per-seed table (taken at 47b728f, tulpa 0.1.20) to 3-4
+decimals on every arbiter seed -- 501, 507, 515, 520 -- so `c5f3a14`'s
+`nmix_community_oracle.cpp` refactor was a numerical no-op on this path.
+
+NOT the mechanism: `tulpa_re_aghq()` does not hold `sigma_log_r` at its estimate
+when it builds the `mu_log_r` SE. It optimizes over `c(theta, log-Cholesky
+Sigma)` with `hessian = TRUE` and returns `V[1:n_theta, 1:n_theta]` of the joint
+inverse (`tulpa/R/re_aghq.R:399,423,521`), which IS the marginalization, and
+tulpaObs reads that block (`R/nmix_laplace_re.R:510`). What remains open is what
+the per-species marginal contributes. Owned by #280.
+
+## mu_log_r Wald calibration is conditional on sigma_log_r (`ms_abun(negbin)`, #235; superseded above at S = 18)
 
 The residual after #234's quadrature floor. Filed as a ~24% understatement of the
 `mu_log_r` SE; it is not that, and the correction matters because a uniform

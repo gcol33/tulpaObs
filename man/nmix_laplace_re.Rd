@@ -148,10 +148,25 @@ restores pure ML on the structural-zero variance. Ignored for Poisson / NB.}
 effect SD (\code{mixture = "NB"} / \code{"ZINB"} only; default \code{NULL}, pure ML).
 \code{sigma_log_r} is the same shape of parameter as \code{sigma_omega} -- one scalar
 variance over species -- and settles near its lower boundary the same way at
-few species, taking the \code{mu_log_r} interval with it: at 8 and 36 species with
-a simulated \code{sigma_logr = 0.5}, \code{n_quad = 3} and \code{n_quad_scalar = 3}, fits
-recovering \code{sigma_log_r >= 0.30} covered \code{mu_log_r} 33/34 while those below
-covered 2/5.
+few species. At 8 and 36 species with a simulated \code{sigma_logr = 0.5},
+\code{n_quad = 3} and \code{n_quad_scalar = 3}, fits recovering \code{sigma_log_r >= 0.30}
+covered \code{mu_log_r} 33/34 while those below covered 2/5.
+
+That split is a property of those two group counts and does not carry to a
+third. Re-measured at 18 species on the same fixture and seeds (19 fits),
+one fit sits below 0.30, the point-estimate error is uncorrelated with the
+recovered SD (Spearman -0.08), and the reported SE is very nearly a
+deterministic multiple of it (Spearman +0.98, \code{se = 0.2887 * sigma},
+R^2 = 0.99). So what a threshold split picks up at 18 species is the SE
+side alone: a low recovered SD buys a proportionally narrower interval
+around an error that did not shrink with it. Both halves moving together is
+what the 8-and-36 pool showed and what is absent there. The \code{mu_log_r}
+interval at that group count is separately about 1.28x too narrow whatever
+the recovered SD (gcol33/tulpaObs#280).
+
+A fit now says whether its dispersion variance is distinguishable from zero
+at all: \code{fit$ms_dispersion$sigma_log_r_boundary} carries the boundary test
+and a fit that fails it warns (gcol33/tulpaObs#250).
 
 What the penalty reaches on this block appears to be the boundary rather
 than the calibration. Measured on 20 seeds of that fixture at 8 species with
