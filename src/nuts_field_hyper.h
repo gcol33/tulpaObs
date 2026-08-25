@@ -1,11 +1,17 @@
 // nuts_field_hyper.h
-// Non-centered areal field block whose HYPERPARAMETERS are sampled alongside the
-// whitened field. The sibling header nuts_field_block.h carries the same field
-// with the hypers pinned at a nested-Laplace point estimate; here the field
-// marginal SD (sigma), the mixing / spatial-correlation parameter (rho) and the
-// cross-arm copy amplitude (alpha) are coordinates of the sampled vector, so the
-// sampler integrates the outer hyperparameter layer itself instead of
-// conditioning on the deterministic backend's summary of it.
+// Non-centered areal field block for every NUTS target that carries one. The
+// field marginal SD (sigma), the mixing / spatial-correlation parameter (rho)
+// and the cross-arm copy amplitude (alpha) may each be a coordinate of the
+// sampled vector, so the sampler integrates the outer hyperparameter layer
+// itself instead of conditioning on the deterministic backend's summary of it.
+//
+// Pinning every hyper is the degenerate configuration of this same block, not a
+// second implementation: sigma = 1 with a constant column scaling and no iid
+// block reduces the forward to z = B1 raw and the backward to
+// grad += B1' grad_z - raw, lp -= 0.5 ||raw||^2, term for term and in the same
+// summation order. That is what the count / observation families use, with the
+// loading carrying their nested-Laplace tau Q(rho) already baked into its
+// columns.
 //
 // The field is
 //

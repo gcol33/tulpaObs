@@ -19,7 +19,7 @@
 // This is the arithmetic the N-mixture / removal (marginal_count_nuts.h), open
 // N-mixture (dyn_abun_nuts.cpp), distance (distance_nuts.cpp), and false-positive
 // occupancy (fp_occu_nuts.cpp) samplers each carried inline. It is the companion
-// of nuts_field_block.h and follows the same build / forward / backward shape:
+// of nuts_field_hyper.h and follows the same build / forward / backward shape:
 //   ReBlock rb = re_block_build(spec, base, n_rows);   // base = first free coord
 //   const double s_re = re_block_sigma(rb, theta);
 //   ... per row:  eta_arm += re_block_offset(rb, s_re, theta, row);

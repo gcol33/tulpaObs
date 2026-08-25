@@ -12,7 +12,7 @@
 #include "tobs_shape.h"
 #include "fp_occu_kernel.h"
 #include "nuts_engine.h"
-#include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
+#include "nuts_field_hyper.h"   // HyperFieldBlock (shared areal field)
 #include "nuts_re_block.h"      // ReBlock (shared non-centered grouped RE)
 
 namespace tulpaObs {
@@ -30,9 +30,9 @@ struct FpNutsModel {
     int n_pre_re = 0;
     ReBlock re;
     // Optional fixed-hyper areal field on the occupancy (psi) arm: the shared
-    // non-centered field z = Linv %*% raw added to eta_psi (nuts_field_block.h).
+    // non-centered field z = Linv %*% raw added to eta_psi (nuts_field_hyper.h).
     // Field XOR RE (gated upstream).
-    FieldBlock field;
+    HyperFieldBlock field;
 };
 
 inline FpNutsModel fp_nuts_build(const Rcpp::List& spec) {
@@ -51,8 +51,8 @@ inline FpNutsModel fp_nuts_build(const Rcpp::List& spec) {
     m.n_pre_re = m.total;                                 // coords under the beta prior
     m.re = re_block_build(spec, m.total, m.n_sites);       // psi arm only
     m.total += re_block_size(m.re);
-    m.field = field_block_build(spec, m.total, m.n_sites);
-    m.total += field_block_size(m.field);
+    m.field = hyper_field_build(spec, m.total, m.n_sites);
+    m.total += hyper_field_size(m.field);
     m.y.assign(y.begin(), y.end());
     m.obs_by_site.assign(m.n_sites, std::vector<int>());
     for (int o = 0; o < m.n_obs; ++o) {
@@ -71,9 +71,10 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
     double grad_re_logsig = 0.0;
 
     const bool has_field = m.field.active();
-    std::vector<double> zfield, grad_z;
-    field_block_forward(m.field, theta, zfield);
-    field_block_init_grad(m.field, grad_z);
+    HyperFieldState fstate;
+    std::vector<double> grad_z;
+    hyper_field_forward(m.field, theta, fstate);
+    if (has_field) grad_z.assign(m.field.n_units, 0.0);
 
     std::vector<int> y_site;
     double lp = 0.0;
@@ -84,7 +85,7 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         for (int k = 0; k < p_p10; ++k) eta_p10 += m.X_p10(s, k) * theta[o_p10 + k];
         for (int k = 0; k < p_b;   ++k) eta_b   += m.X_b(s, k)   * theta[o_b + k];
         eta_psi += re_block_offset(m.re, sigma_re, theta, s);
-        if (has_field) eta_psi += zfield[m.field.field_map[s]];
+        if (has_field) eta_psi += hyper_field_site_value(m.field, fstate, s);
         const std::vector<int>& idx = m.obs_by_site[s];
         const int J = (int)idx.size();
         y_site.resize(J);
@@ -106,7 +107,8 @@ inline double fp_nuts_eval(const FpNutsModel& m, const double* theta, double* gr
         grad[k] -= ib2 * theta[k];
     }
     lp += re_block_backward(m.re, theta, grad_re_logsig, grad);
-    lp += field_block_backward(m.field, theta, grad_z, grad);
+    lp += hyper_field_backward(m.field, theta, fstate, grad_z,
+                              /*g_alpha_data=*/0.0, grad);
     return lp;
 }
 

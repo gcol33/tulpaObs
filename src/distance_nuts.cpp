@@ -16,7 +16,7 @@
 #include "tobs_shape.h"
 #include "distance_kernel.h"
 #include "nuts_engine.h"
-#include "nuts_field_block.h"   // FieldBlock (shared fixed-hyper areal field)
+#include "nuts_field_hyper.h"   // HyperFieldBlock (shared areal field)
 #include "nuts_re_block.h"      // ReBlock (shared non-centered grouped RE)
 
 namespace tulpaObs {
@@ -49,8 +49,8 @@ struct DistNutsModel {
     ReBlock re;
     // Optional fixed-hyper areal field on the abundance (log lambda) arm:
     // the shared non-centered field z = Linv %*% raw added to eta_lambda
-    // (nuts_field_block.h). Field XOR RE (gated upstream).
-    FieldBlock field;
+    // (nuts_field_hyper.h). Field XOR RE (gated upstream).
+    HyperFieldBlock field;
 };
 
 inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
@@ -72,8 +72,8 @@ inline DistNutsModel dist_nuts_build(const Rcpp::List& spec) {
     int base = m.p_lam + m.p_sig + (m.hazard ? 1 : 0) + (m.is_nb ? 1 : 0);
     m.re = re_block_build(spec, base, m.n_sites);      // lambda arm only
     base += re_block_size(m.re);
-    m.field = field_block_build(spec, base, m.n_sites);
-    base += field_block_size(m.field);
+    m.field = hyper_field_build(spec, base, m.n_sites);
+    base += hyper_field_size(m.field);
     m.total = base;
     m.comb_table = dist_build_comb_table(m.K_max);
     return m;
@@ -93,9 +93,10 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
     const double sigma_re = re_block_sigma(m.re, theta);
     double grad_logsig = 0.0;
     const bool has_field = m.field.active();
-    std::vector<double> zfield, grad_z;
-    field_block_forward(m.field, theta, zfield);
-    field_block_init_grad(m.field, grad_z);
+    HyperFieldState fstate;
+    std::vector<double> grad_z;
+    hyper_field_forward(m.field, theta, fstate);
+    if (has_field) grad_z.assign(m.field.n_units, 0.0);
 
     std::vector<int> y_site(m.n_bins);
     double lp = 0.0;
@@ -104,7 +105,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         for (int k = 0; k < p_lam; ++k) eta_lambda += m.X_lambda(s, k) * theta[k];
         for (int k = 0; k < p_sig; ++k) eta_sigma  += m.X_sigma(s, k) * theta[p_lam + k];
         eta_lambda += re_block_offset(m.re, sigma_re, theta, s);
-        if (has_field) eta_lambda += zfield[m.field.field_map[s]];
+        if (has_field) eta_lambda += hyper_field_site_value(m.field, fstate, s);
         for (int b = 0; b < m.n_bins; ++b) y_site[b] = m.y(s, b);
         const DistSiteResult res = compute_distance_site(
             y_site.data(), m.n_bins, eta_lambda, eta_sigma, eta_b, m.key,
@@ -136,7 +137,8 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         lp -= 0.5 * il2 * lr * lr;
         grad[lr_idx] -= il2 * lr;
     }
-    lp += field_block_backward(m.field, theta, grad_z, grad);
+    lp += hyper_field_backward(m.field, theta, fstate, grad_z,
+                              /*g_alpha_data=*/0.0, grad);
     return lp;
 }
 
