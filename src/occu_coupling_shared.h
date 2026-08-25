@@ -528,6 +528,108 @@ inline double occu_nodet_block(double                     psi,
     return cell_ll;
 }
 
+// ---------------------------------------------------------------------------
+// Three-level (cell -> plot -> visit) no-detection cell.
+//
+// A cell with no detection anywhere is the multiscale analogue of the
+// MacKenzie mixture above, with a second latent layer in the middle:
+//
+//   L   = psi * M + (1 - psi)          cell occupied, or not
+//   M   = prod_j m_j                   over the cell's plots
+//   m_j = theta_j * P0_j + (1 - theta_j)   plot available, or not
+//   P0_j = prod_v (1 - p_jv)           no visit of plot j detected
+//
+// Two layouts evaluate this: the cell-coupling spec, whose plot / visit etas
+// arrive through CellEtas accessors and whose Hessian needs every intermediate,
+// and the NUTS target, which holds a padded [n_plots x J] grid behind a valid
+// mask and needs only the value and the scores. They are the same derivation,
+// so it lives here once and each supplies its own accessors.
+//
+// Visits are addressed CSR: plot j owns flat rows [visit_off[j], visit_off[j] +
+// visit_size[j]). `eta_theta(j)` and `eta_p(row)` return the linear predictors.
+// Accumulation order is the one both callers already used, so neither moves.
+struct MscaleNoDetCell {
+    int    M_c = 0, n_visits = 0;
+    double M = 0.0, logM = 0.0, L = 0.0, inv_L = 0.0, psi_d = 0.0,
+           log_lik = 0.0;
+
+    // Per plot [M_c]. A_j = dm_j / d eta_theta_j; Mmj_j = M_{-j}, in (0, 1].
+    std::vector<double> theta, theta_d, P0, m, logm, A, Mmj;
+    // Per visit [n_visits]. B_row = dm_j / d eta_p_jv; plot_of maps a flat
+    // visit row back to its plot, which the (p, p) cross-Hessian needs.
+    std::vector<double> p_val, B;
+    std::vector<int>    plot_of;
+
+    // Scores. s_psi is the cell's; s_theta / s_p are per plot / per visit.
+    double              s_psi = 0.0;
+    std::vector<double> s_theta, s_p;
+};
+
+template <class EtaTheta, class EtaP>
+inline MscaleNoDetCell mscale_nodet_cell(double psi, int M_c,
+                                         EtaTheta eta_theta,
+                                         const int* visit_off,
+                                         const int* visit_size,
+                                         EtaP eta_p) {
+    MscaleNoDetCell c;
+    c.M_c = M_c;
+    c.n_visits = 0;
+    for (int j = 0; j < M_c; j++) c.n_visits += visit_size[j];
+
+    c.theta.assign(M_c, 0.0);   c.theta_d.assign(M_c, 0.0);
+    c.P0.assign(M_c, 0.0);      c.m.assign(M_c, 0.0);
+    c.logm.assign(M_c, 0.0);    c.A.assign(M_c, 0.0);
+    c.Mmj.assign(M_c, 0.0);     c.s_theta.assign(M_c, 0.0);
+    c.p_val.assign(c.n_visits, 0.0); c.B.assign(c.n_visits, 0.0);
+    c.s_p.assign(c.n_visits, 0.0);   c.plot_of.assign(c.n_visits, 0);
+
+    double logM = 0.0;
+    for (int j = 0; j < M_c; j++) {
+        const int sz = visit_size[j];
+        c.theta[j]   = sigmoid_(eta_theta(j));
+        c.theta_d[j] = c.theta[j] * (1.0 - c.theta[j]);
+        double logP0 = 0.0;
+        for (int v = 0; v < sz; v++) {
+            const int row = visit_off[j] + v;
+            const double pv = sigmoid_(eta_p(row));
+            c.p_val[row]   = pv;
+            c.plot_of[row] = j;
+            logP0 += log_safe(1.0 - pv);
+        }
+        c.P0[j]   = std::exp(logP0);
+        c.m[j]    = c.theta[j] * c.P0[j] + (1.0 - c.theta[j]);
+        c.logm[j] = log_safe(c.m[j]);
+        c.A[j]    = -c.theta_d[j] * (1.0 - c.P0[j]);
+        for (int v = 0; v < sz; v++) {
+            const int row = visit_off[j] + v;
+            c.B[row] = -c.theta[j] * c.P0[j] * c.p_val[row];
+        }
+        logM += c.logm[j];
+    }
+
+    c.M     = std::exp(logM);
+    c.logM  = logM;
+    c.L     = psi * c.M + (1.0 - psi);
+    c.inv_L = (c.L > 0.0) ? (1.0 / c.L) : 0.0;
+    c.psi_d = psi * (1.0 - psi);
+    for (int j = 0; j < M_c; j++) c.Mmj[j] = std::exp(logM - c.logm[j]);
+
+    c.s_psi = c.psi_d * (c.M - 1.0) * c.inv_L;
+    for (int j = 0; j < M_c; j++)
+        c.s_theta[j] = psi * c.Mmj[j] * c.A[j] * c.inv_L;
+    for (int j = 0; j < M_c; j++) {
+        const int sz = visit_size[j];
+        for (int v = 0; v < sz; v++) {
+            const int row = visit_off[j] + v;
+            c.s_p[row] = psi * c.Mmj[j] * c.B[row] * c.inv_L;
+        }
+    }
+
+    c.log_lik = log_safe(c.L);
+    return c;
+}
+
+
 } // namespace tulpaObs
 
 #endif // TULPAOBS_OCCU_COUPLING_SHARED_H

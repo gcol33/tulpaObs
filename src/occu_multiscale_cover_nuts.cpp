@@ -249,49 +249,35 @@ inline double mscale_cover_nuts_eval(const MscaleCoverNutsModel& m, const double
                 }
             }
         } else {
-            // Branch B: no detection anywhere in the cell.
-            // L = psi M + (1 - psi), M = prod_j m_j, m_j = theta_j P0_j + (1-theta_j).
-            std::vector<double> theta_j(M_c), theta_d(M_c), P0(M_c), m_j(M_c),
-                                logm(M_c), A(M_c);
-            std::vector<std::vector<int>>    vrows(M_c);
-            std::vector<std::vector<double>> p_val(M_c);
-            double logM = 0.0;
+            // Branch B: no detection anywhere in the cell. The mixture and
+            // its scores are the same derivation the cell-coupling spec
+            // evaluates, so both read it from occu_coupling_shared.h; this
+            // layout gathers its padded [n_plots x J] grid into the CSR the
+            // block takes, and scatters the scores back through the mask.
+            std::vector<int> visit_off(M_c), visit_size(M_c), rows;
+            rows.reserve((std::size_t) M_c * J);
             for (int jj = 0; jj < M_c; ++jj) {
                 const int pi = plots[jj];
-                theta_j[jj] = sigmoid_(eta_theta[pi]);
-                theta_d[jj] = theta_j[jj] * (1.0 - theta_j[jj]);
-                double logP0 = 0.0;
+                visit_off[jj] = (int) rows.size();
                 for (int v = 0; v < J; ++v) {
                     const int row = pi * J + v;
-                    if (!m.valid[row]) continue;
-                    const double pv = sigmoid_(eta_p[row]);
-                    vrows[jj].push_back(row);
-                    p_val[jj].push_back(pv);
-                    logP0 += log_safe(1.0 - pv);
+                    if (m.valid[row]) rows.push_back(row);
                 }
-                P0[jj]   = std::exp(logP0);
-                m_j[jj]  = theta_j[jj] * P0[jj] + (1.0 - theta_j[jj]);
-                logm[jj] = log_safe(m_j[jj]);
-                A[jj]    = -theta_d[jj] * (1.0 - P0[jj]);   // dm_j / d eta_theta_j
-                logM    += logm[jj];
+                visit_size[jj] = (int) rows.size() - visit_off[jj];
             }
-            const double Mc    = std::exp(logM);
-            const double L     = psi * Mc + (1.0 - psi);
-            const double inv_L = (L > 0.0) ? (1.0 / L) : 0.0;
-            const double psi_d = psi * (1.0 - psi);
-            lp += log_safe(L);
 
-            ge_psi[c] += psi_d * (Mc - 1.0) * inv_L;
-            for (int jj = 0; jj < M_c; ++jj) {
-                const int pi = plots[jj];
-                const double Mmj = std::exp(logM - logm[jj]);   // M_{-j}
-                ge_theta[pi] += psi * Mmj * A[jj] * inv_L;
-                const int nv = (int) vrows[jj].size();
-                for (int t = 0; t < nv; ++t) {
-                    const double B = -theta_j[jj] * P0[jj] * p_val[jj][t]; // dm_j / d eta_p
-                    ge_p[vrows[jj][t]] += psi * Mmj * B * inv_L;
-                }
-            }
+            const MscaleNoDetCell cell = mscale_nodet_cell(
+                psi, M_c,
+                [&](int jj) { return eta_theta[plots[jj]]; },
+                visit_off.data(), visit_size.data(),
+                [&](int t)  { return eta_p[rows[t]]; });
+
+            lp += cell.log_lik;
+            ge_psi[c] += cell.s_psi;
+            for (int jj = 0; jj < M_c; ++jj)
+                ge_theta[plots[jj]] += cell.s_theta[jj];
+            for (int t = 0; t < cell.n_visits; ++t)
+                ge_p[rows[t]] += cell.s_p[t];
         }
     }
 

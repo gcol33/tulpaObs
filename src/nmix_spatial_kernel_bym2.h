@@ -154,22 +154,11 @@ inline void nmix_add_bym2_prior_to_grad_and_H(
     const int v_start = p_lam + p_p;
     const int w_start = v_start + n_spatial;
 
-    // v block: ICAR precision Q (rho = 1.0, tau = 1.0).
-    for (int s = 0; s < n_spatial; ++s) {
-        const int idx_vs = v_start + s;
-        const double q_diag = static_cast<double>(n_neighbors[s]);
-        H(idx_vs, idx_vs) += q_diag;
-        double neighbor_sum = 0.0;
-        for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
-            int t = adj_col_idx[kk];
-            neighbor_sum += v(t);
-            if (t > s) {
-                H(idx_vs, v_start + t) -= 1.0;
-                H(v_start + t, idx_vs) -= 1.0;
-            }
-        }
-        grad(idx_vs) -= (q_diag * v(s) - neighbor_sum);
-    }
+    // v block: the intrinsic case of the CAR precision, tau = rho = 1. Its
+    // z-block starts at p_lam + p_p, which is v_start.
+    nmix_add_car_to_spatial_block(p_lam, p_p, n_spatial, /*tau=*/1.0,
+                                  /*rho=*/1.0, adj_row_ptr, adj_col_idx,
+                                  n_neighbors, v, grad, H);
 
     // w block: identity (iid N(0, I)).
     for (int s = 0; s < n_spatial; ++s) {
@@ -187,20 +176,10 @@ inline void nmix_add_bym2_prior_to_H_only(
     const Rcpp::IntegerVector& n_neighbors,
     Eigen::MatrixXd& H /* in/out [n_x x n_x] */
 ) {
-    const int v_start = p_lam + p_p;
-    const int w_start = v_start + n_spatial;
+    const int w_start = p_lam + p_p + n_spatial;
 
-    for (int s = 0; s < n_spatial; ++s) {
-        const int idx_vs = v_start + s;
-        H(idx_vs, idx_vs) += static_cast<double>(n_neighbors[s]);
-        for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
-            int t = adj_col_idx[kk];
-            if (t > s) {
-                H(idx_vs, v_start + t) -= 1.0;
-                H(v_start + t, idx_vs) -= 1.0;
-            }
-        }
-    }
+    nmix_add_car_to_H_only(p_lam, p_p, n_spatial, /*tau=*/1.0, /*rho=*/1.0,
+                           adj_row_ptr, adj_col_idx, n_neighbors, H);
     for (int s = 0; s < n_spatial; ++s) {
         H(w_start + s, w_start + s) += 1.0;
     }

@@ -44,6 +44,7 @@
 #include "occu_coupling_shared.h"  // sigmoid_ / PosPolicy / nodet_mixture_block
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tulpaObs {
@@ -58,6 +59,19 @@ public:
         : cell_plot_sizes_(std::move(cell_plot_sizes)) {}
 
     std::vector<int> arm_ids() const override { return {0, 1, 2, 3}; }
+
+    // The blocks this spec actually writes: (psi, theta), (psi, p),
+    // (theta, theta), (theta, p) and the dense (p, p). The cover arm (3)
+    // enters only the factorized detected-plot terms, which carry no cross, so
+    // every (., pos) block stays zero -- stated at the write site below and
+    // enforced here. The engine's default allocates every kk <= ll pair, which
+    // for four arms means four slabs this spec never touches, two of them
+    // Jc x Jc. There is no rank-1 self-cross path here: (p, p) is written
+    // densely either way, so the list does not depend on the flag.
+    std::vector<std::pair<int, int>> dense_cross_pairs(
+            int /*n_coupled*/, bool /*rank1_self_supported*/) const override {
+        return {{0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}};
+    }
 
     double evaluate_cell(int                        cell_idx,
                          const tulpa::CellEtas&     etas,
@@ -218,58 +232,40 @@ private:
                         bool want_hess, bool expected,
                         const tulpa::CellEtas& etas,
                         tulpa::CellDerivs&     out) const {
-        // Per-plot quantities.
-        std::vector<double> theta(M_c), theta_d(M_c), P0(M_c), logm(M_c),
-                            m(M_c), A(M_c), Mmj(M_c);
-        // Per-visit quantities (flat, length Jc), with plot membership.
-        std::vector<double> p_val(Jc), B(Jc);
-        std::vector<int>    plot_of(Jc);
+        // The cell mixture, its intermediates and its scores are the same
+        // derivation the NUTS target evaluates over its own layout, so it is
+        // computed once in occu_coupling_shared.h and read here through the
+        // CellEtas accessors. Everything below is this layout's own business:
+        // writing the scores into the arm buffers, and the curvature.
+        const MscaleNoDetCell cell = mscale_nodet_cell(
+            psi, M_c,
+            [&](int j)   { return etas.eta(1, j); },
+            off.data(), sizes.data(),
+            [&](int row) { return etas.eta(2, row); });
 
-        double logM = 0.0;
-        for (int j = 0; j < M_c; j++) {
-            const int sz = sizes[j];
-            theta[j]   = sigmoid_(etas.eta(1, j));
-            theta_d[j] = theta[j] * (1.0 - theta[j]);
-            double logP0 = 0.0;
-            for (int v = 0; v < sz; v++) {
-                const int row = off[j] + v;
-                const double pv = sigmoid_(etas.eta(2, row));
-                p_val[row]   = pv;
-                plot_of[row] = j;
-                logP0 += log_safe(1.0 - pv);
-            }
-            P0[j]   = std::exp(logP0);
-            m[j]    = theta[j] * P0[j] + (1.0 - theta[j]);
-            logm[j] = log_safe(m[j]);
-            A[j]    = -theta_d[j] * (1.0 - P0[j]);          // dm_j/d eta_theta_j
-            for (int v = 0; v < sz; v++) {
-                const int row = off[j] + v;
-                B[row] = -theta[j] * P0[j] * p_val[row];    // dm_j/d eta_p_jv
-            }
-            logM += logm[j];
-        }
-        const double M     = std::exp(logM);
-        const double L     = psi * M + (1.0 - psi);
-        const double inv_L = (L > 0.0) ? (1.0 / L) : 0.0;
-        const double psi_d = psi * (1.0 - psi);
-        for (int j = 0; j < M_c; j++) Mmj[j] = std::exp(logM - logm[j]); // M_{-j} in (0,1]
+        const double  M      = cell.M;
+        const double  logM   = cell.logM;
+        const double  L      = cell.L;
+        const double  inv_L  = cell.inv_L;
+        const double  psi_d  = cell.psi_d;
+        const double  s_psi  = cell.s_psi;
+        const std::vector<double>& theta   = cell.theta;
+        const std::vector<double>& theta_d = cell.theta_d;
+        const std::vector<double>& P0      = cell.P0;
+        const std::vector<double>& m       = cell.m;
+        const std::vector<double>& logm    = cell.logm;
+        const std::vector<double>& A       = cell.A;
+        const std::vector<double>& Mmj     = cell.Mmj;
+        const std::vector<double>& p_val   = cell.p_val;
+        const std::vector<double>& B       = cell.B;
+        const std::vector<double>& s_theta = cell.s_theta;
+        const std::vector<double>& s_p     = cell.s_p;
+        const std::vector<int>&    plot_of = cell.plot_of;
 
-        // Scores (identical in both curvature modes).
-        const double s_psi = psi_d * (M - 1.0) * inv_L;
         out.arm_grad[0][0] = s_psi;
-        std::vector<double> s_theta(M_c), s_p(Jc);
-        for (int j = 0; j < M_c; j++) {
-            s_theta[j] = psi * Mmj[j] * A[j] * inv_L;
-            out.arm_grad[1][j] = s_theta[j];
-        }
-        for (int j = 0; j < M_c; j++) {
-            const int sz = sizes[j];
-            for (int v = 0; v < sz; v++) {
-                const int row = off[j] + v;
-                s_p[row] = psi * Mmj[j] * B[row] * inv_L;
-                out.arm_grad[2][row] = s_p[row];
-            }
-        }
+        for (int j = 0; j < M_c; j++) out.arm_grad[1][j] = s_theta[j];
+        for (int row = 0; row < Jc; row++) out.arm_grad[2][row] = s_p[row];
+
         if (!want_hess) return log_safe(L);
 
         if (expected) {

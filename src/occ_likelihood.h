@@ -21,6 +21,7 @@
 #include <vector>
 #include <type_traits>
 #include "occ_data.h"
+#include "occu_coupling_shared.h"  // nodet_mixture_block (the canonical mixture)
 #include <tulpa/likelihood.h>
 #include <tulpa/model_data.h>
 #include <tulpa/param_layout.h>
@@ -182,57 +183,59 @@ inline void occ_residual(
         return;
     }
 
-    // Compute detection probabilities and sum_log1m_p. p_ij is kept because the
-    // undetected branch below needs every visit's probability a second time.
-    double prod_1m_p = 1.0;
+    // Detection logits for this site's valid visits, compact (one entry per
+    // valid visit) so the undetected branch can hand them straight to the
+    // shared no-detection mixture.
+    double  eta_p_stack[64];
+    std::vector<double> eta_p_heap;
+    double* eta_p = eta_p_stack;
+    if (occ->max_visits > 64) {
+        eta_p_heap.assign(occ->max_visits, 0.0);
+        eta_p = eta_p_heap.data();
+    }
+
+    int nv = 0;
     double d_logit_p_sum = 0.0;
-    std::vector<double> p_visit(occ->max_visits, 0.0);
 
     for (int j = 0; j < occ->max_visits; j++) {
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;
 
         double logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j);
-
-        double p_ij = 1.0 / (1.0 + std::exp(-logit_p_ij));
-        p_visit[j] = p_ij;
-        prod_1m_p *= (1.0 - p_ij);
+        eta_p[nv++] = logit_p_ij;
 
         // d(ll_det)/d(logit_p_ij) = y_ij - p_ij (for the part that goes through eta[1])
         // Only site-level part (visit-level betas have separate gradient)
-        d_logit_p_sum += (y_ij - p_ij);
+        d_logit_p_sum += (y_ij - 1.0 / (1.0 + std::exp(-logit_p_ij)));
     }
 
     if (occ->any_detected[i]) {
         // d log(psi) / d logit_psi = 1 - psi
         resid_out[0] = 1.0 - psi;
         resid_out[1] = d_logit_p_sum;
-    } else {
-        // ll = log(psi * prod(1-p) + (1-psi))
-        double denom = psi * prod_1m_p + (1.0 - psi);
-
-        // d(ll)/d(logit_psi) = psi*(1-psi) * (prod(1-p) - 1) / denom
-        resid_out[0] = psi * (1.0 - psi) * (prod_1m_p - 1.0) / denom;
-
-        // d(ll)/d(logit_p) is more complex — via prod(1-p) derivative
-        // d prod(1-p)/d logit_p_j = -p_j*(1-p_j) * prod_{k!=j}(1-p_k)
-        // For site-level logit_p (all visits share eta[1]):
-        // d(ll)/d eta[1] = psi / denom * d(prod(1-p))/d(eta[1])
-        // = psi / denom * sum_j [-p_j * prod_{k!=j}(1-p_k)]
-        // For uniform p: = psi / denom * K * (-p*(1-p)^{K-1})
-        // General case: per-visit, off the probabilities the first pass kept
-        double d_prod_d_eta1 = 0.0;
-        for (int j = 0; j < occ->max_visits; j++) {
-            int y_ij = occ->y[i * occ->max_visits + j];
-            if (y_ij < 0) continue;
-
-            double p_ij = p_visit[j];
-            double prod_others = (1.0 - p_ij) > 1e-300 ? prod_1m_p / (1.0 - p_ij) : 0.0;
-            d_prod_d_eta1 += -p_ij * (1.0 - p_ij) * prod_others;
-        }
-
-        resid_out[1] = psi * d_prod_d_eta1 / denom;
+        return;
     }
+
+    // No detection here: the likelihood is the MacKenzie mixture
+    // psi * prod(1 - p) + (1 - psi). That object belongs to
+    // occu_coupling_shared.h, which accumulates prod(1 - p) in log space; this
+    // branch used to re-derive it and recover each visit's contribution by
+    // dividing (1 - p_j) back out of the product, hard-zeroing the quotient
+    // below 1e-300. resid_out[1] is the site-level detection score, so the
+    // block's per-visit scores are summed.
+    double  g_psi = 0.0, nh_psi = 0.0;
+    double  g_p_stack[64];
+    std::vector<double> g_p_heap;
+    double* g_p = g_p_stack;
+    if (nv > 64) { g_p_heap.assign(nv, 0.0); g_p = g_p_heap.data(); }
+
+    nodet_mixture_block(psi, eta_p, nv, /*want_hess=*/false, /*expected=*/false,
+                        g_psi, nh_psi, g_p, nullptr, nullptr, nullptr);
+
+    resid_out[0] = g_psi;
+    double g_p_sum = 0.0;
+    for (int v = 0; v < nv; v++) g_p_sum += g_p[v];
+    resid_out[1] = g_p_sum;
 }
 
 } // namespace tulpaObs

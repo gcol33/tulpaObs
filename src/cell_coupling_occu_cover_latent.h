@@ -33,6 +33,7 @@
 #include "occu_coupling_shared.h"   // sigmoid_ / occu_det_psi_p_block / occu_nodet_block
 #include "occu_cover_latent.h"      // LognormalLatent / BetaLatent / LatentMarginal
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tulpaObs {
@@ -55,6 +56,19 @@ public:
     }
 
     std::vector<int> arm_ids() const override { return {0, 1, 2}; }
+
+    // Same cross usage as the non-latent occu_cover spec: the shared occupancy
+    // blocks write the (psi, p) cross and, where the engine offers no rank-1
+    // self-cross, the dense (p, p). The pos arm carries a per-row score and a
+    // diagonal curvature only -- its latent is integrated per unit -- so no
+    // (., pos) block is ever written. Without this override the engine's
+    // default allocates every kk <= ll pair, so an all-undetected cell
+    // allocates a J x J (p, p) slab it never writes.
+    std::vector<std::pair<int, int>> dense_cross_pairs(
+            int /*n_coupled*/, bool rank1_self_supported) const override {
+        if (rank1_self_supported) return {{0, 1}};
+        return {{0, 1}, {1, 1}};
+    }
 
     double evaluate_cell(int                       /*cell_idx*/,
                          const tulpa::CellEtas&     etas,
