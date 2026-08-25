@@ -127,11 +127,12 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
       error = function(e) NULL)
     # A seed whose per-species posterior solve fails delivers no interval at
     # all: the engine refuses an optimum carrying its failure sentinel and this
-    # fitter errors. Before gcol33/tulpaObs#281 it returned the community
-    # dispersion block at the values it STARTED from -- `mu_log_r` a hair below
-    # `log(r_init)`, `sigma_log_r` exactly the initial 0.5, one `NA` in `r_s`,
-    # `converged = TRUE` and the tightest `log_r` SE of the twenty -- and this
-    # loop scored that as data, one seed carrying 74% of `sum(z^2)`.
+    # fitter errors, rather than returning the community dispersion block at
+    # the values it STARTED from -- `mu_log_r` a hair below `log(r_init)`,
+    # `sigma_log_r` exactly the initial 0.5, one `NA` in `r_s`,
+    # `converged = TRUE` and the tightest `log_r` SE of the twenty -- which is
+    # what let one such seed carry 74% of `sum(z^2)` into a coverage loop that
+    # scored it as data.
     #
     # Neither of the two obvious gates catches such a fit: `converged` was
     # `TRUE`, and a `sigma_log_r`-collapse detector keyed on sigma being small
@@ -166,8 +167,8 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   #
   # What IS true here, and is what the four assertions below pin: the estimator
   # is unbiased, its errors are normal, and the interval SCALE is the whole of
-  # the miss (gcol33/tulpaObs#280). Measured on 19 fits at 8179ee5 / 0.0.239,
-  # reproducing #280's per-seed table at 47b728f to 3-4 decimals on every seed:
+  # the miss. Measured on 19 fits at 8179ee5 / 0.0.239, reproducing the
+  # per-seed table at 47b728f to 3-4 decimals on every seed:
   #
   #   bias  mean(mu_log_r) - truth  +0.017  (0.42 SE of the mean)
   #   sd(mu_log_r)                   0.1733
@@ -185,5 +186,5 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   expect_lt(abs(mean(est) - mean(truth)) / (sd(est) / sqrt(length(est))), 2.5)
   expect_gt(stats::shapiro.test(z)$p.value, 0.05)
   expect_gt(mean(abs(z) <= 1.96 * 1.28), 0.94)
-  expect_lt(mean(covered), 0.90)   # -> red when gcol33/tulpaObs#280 lands
+  expect_lt(mean(covered), 0.90)   # pins the miss; goes green once the SE is fixed
 })
