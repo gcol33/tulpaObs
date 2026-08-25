@@ -1518,3 +1518,51 @@ the block at 40 seeds: `max|bias|` 0.085 against 0.30, `max|NUTS - Laplace|`
 0.95 is excluded, 0.80 is not. It is the cell-level occupancy slope competing
 with the one-node-per-cell field the model fits whether or not the truth carries
 one, the same confounding spPGOcc documents. Reported, not tuned away.
+
+## Divergence rate on the spatial-factor K = 2 NUTS path (`ms_occu_cover`)
+
+`test-ms-occu-cover-spatial.R`, "NUTS recovers the community means under the
+constrained K = 2 path", asserts one fit's divergence fraction below 0.25. The
+first full-recovery run that ever reached the block returned 0.271 on the Linux
+runner. The same seeds on Windows return 0.016, so the assertion was not
+reproducible locally and the number could not be read as a regression without
+measuring what the quantity does.
+
+Fixture: 6x6 grid ICAR, S = 8, J = 4, K = 2, `sd_occ` 0.5, `sd_load` 1.1,
+`sigma_pos` 0.4; sampler 2 chains x 500 kept after 300 warmup. 8 seeds per arm,
+Windows, tulpaObs 0.0.237 / tulpa 0.1.20, about 70 s a fit.
+
+**The rate is a property of the data draw, not the sampler seed.**
+
+| varied | n | mean | sd | median | range | over 0.25 |
+|---|---|---|---|---|---|---|
+| sampler seed (data seed 4) | 8 | 0.027 | 0.018 | 0.019 | 0.009-0.049 | 0 |
+| simulation seed (sampler seed 7) | 8 | 0.112 | 0.167 | 0.058 | 0.018-0.515 | 1 |
+
+Holding the data and moving the sampler moves the fraction by a factor of 5;
+holding the sampler and moving the data moves it by a factor of 29, with a right
+tail that crosses 0.25 on its own. A single fit against a fixed band is therefore
+scoring the draw, and the platform shifts it by about as much as a change of
+data seed does.
+
+**The step size is the cause, and raising it is a correctness fix rather than a
+threshold move.** Same fixture, `adapt.delta` swept on the test's own data seed
+and the two worst draws of the sweep:
+
+| data seed | 0.95 | 0.99 | 0.999 |
+|---|---|---|---|
+| 4 (the test's) | 0.016 | 0.018 | 0.012 |
+| 104 | **0.515** | 0.043 | 0.007 |
+| 105 | 0.134 | 0.032 | 0.003 |
+
+The community-mean correlation rises with it on the draws that were diverging --
+seed 104 goes 0.915 -> 0.970 and seed 105 0.962 -> 0.968 -- so at 0.95 the
+divergences were biasing the posterior, not just counting against a band. Cost
+on the test's own seed is 75 s -> 83 s at 0.99 and 137 s at 0.999, which is what
+puts the block at 0.99 rather than 0.999: 0.99 already clears the band by a
+factor of six on the worst draw measured.
+
+The 0.25 band is untouched. Whether 0.99 also clears the Linux 0.271 is a
+prediction from the mechanism and from the 12x reduction it produces on the
+Windows draws in the same regime, not a measurement -- the next full-recovery
+run is what tests it.

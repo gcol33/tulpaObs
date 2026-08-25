@@ -525,12 +525,19 @@ test_that("NUTS recovers the community means under the constrained K = 2 path", 
           sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 4L)
   # n.factors = 2 auto-selects the identified (triangular) parameterisation, so
   # this exercises the constrained C++ adapter end to end under sampling.
+  # adapt.delta is 0.99 here, not the 0.95 its neighbours use: the divergence
+  # rate on this path is set by the data draw rather than the sampler seed,
+  # and at 0.95 it ranges 0.018 to 0.515 across simulation seeds while the
+  # sampler seed moves it only 0.009 to 0.049. At 0.99 the two worst draws
+  # fall to 0.043 and 0.032, and their community-mean correlation rises
+  # (0.915 -> 0.970), so the step size was biasing the posterior and not
+  # merely counting against it. See NOTES_measurements.md.
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
               positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 2L, sd.load = 1.1, n.chains = 2L,
-                             n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
+                             n.iter = 500L, n.warmup = 300L, adapt.delta = 0.99,
                              seed = 7L))
   expect_identical(fit$method, "nuts")
   expect_true(all(is.finite(fit$nuts$draws)))
