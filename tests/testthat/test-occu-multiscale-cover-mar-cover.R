@@ -135,7 +135,7 @@ test_that("multiscale NUTS target drops missing cover and matches the R oracle",
     # The oracle runs .occu_mscale_cover_nonspatial_ll, the Laplace path's own
     # marginal, so agreement here pins all three kernels to one gate.
     lp_R <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb)
-    cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb)
+    cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb, sb)
     expect_true(is.finite(lp_R))
     expect_equal(cpp$lp, lp_R, tolerance = 1e-9)
 

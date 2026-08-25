@@ -131,7 +131,14 @@
 # Per-arm weakly-informative fixed-effect priors for the four coupled arms.
 # psi / theta / p carry the occu_priors() defaults (the detection-arm intercept
 # prior in particular keeps the coupled occupancy mixture off the psi = 1
-# boundary); pos carries cover_priors() only when supplied. theta reuses the
+# boundary); pos always carries the cover_priors() default unless a supplied
+# cover_priors object narrows it -- the twin occu_cover() joint route
+# (.occu_cover_coupled_arm_priors()) keeps this load-bearing: the cover arm
+# sees the shared field only at detected visits, so its intercept trades off
+# against the field level over those cells, a direction the sum-to-zero field
+# constraint does not pin when low-occupancy cells carry no cover. Left at the
+# engine's flat 1e-4 default, that intercept floats to a huge posterior SD,
+# which blows up predict()'s conditional cover via Jensen. theta reuses the
 # detection-arm prior shape (a logit-scale availability gate).
 .occu_mscale_cover_arm_priors <- function(priors, responses) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
@@ -144,7 +151,7 @@
   occ_spec <- if (inherits(priors, "occu_priors")) priors
               else if (inherits(priors, "cover_priors")) occu_priors()
               else .resolve_occu_priors(priors)
-  cover_spec <- if (inherits(priors, "cover_priors")) priors else NULL
+  cover_spec <- if (inherits(priors, "cover_priors")) priors else cover_priors()
 
   list(
     psi   = to_prec(.prior_for_submodel(occ_spec, "psi", colnames(responses$psi$X))),

@@ -43,11 +43,17 @@
 # the log-density and a finite-difference-free analytic gradient is supplied by
 # the C++ side; here we numerically check the value and gradient via the C++
 # joint-logpost cross-check, so the oracle only needs the (penalised) log-density.
-.tobs_occu_mscale_cover_nuts_logpost <- function(theta, model, idx, sigma.beta = 5) {
+#
+# `sigma.logdisp` keeps log_disp proper, matching the two sibling NUTS targets
+# (occu_cover_nuts.cpp, cover_nuts.cpp), which both sample it under this prior;
+# this target used to leave it flat.
+.tobs_occu_mscale_cover_nuts_logpost <- function(theta, model, idx, sigma.beta = 5,
+                                                 sigma.logdisp = 5) {
   ll  <- .occu_mscale_cover_nonspatial_ll(theta, model, idx)
   ib2 <- 1 / sigma.beta^2
   beta_idx <- setdiff(seq_len(idx$total), idx$disp)
-  ll - 0.5 * ib2 * sum(theta[beta_idx]^2)
+  ild2 <- 1 / sigma.logdisp^2
+  ll - 0.5 * ib2 * sum(theta[beta_idx]^2) - 0.5 * ild2 * theta[idx$disp]^2
 }
 
 
@@ -87,6 +93,7 @@
 # real NUTS draws / diagnostics.
 .tobs_fit_occu_multiscale_cover_nuts <- function(model, priors = NULL,
                                                  sigma.beta = NULL,
+                                                 sigma.logdisp = 5,
                                                  n.iter = NULL, n.warmup = NULL,
                                                  n.chains = NULL, n.thin = NULL,
                                                  n.threads = NULL,
@@ -119,7 +126,8 @@
 
   run_chain <- function(ch) {
     cpp_occu_mscale_cover_nuts(
-      spec, theta0 = theta0, sigma_beta = sigma.beta, inv_metric = inv_metric,
+      spec, theta0 = theta0, sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp,
+      inv_metric = inv_metric,
       n_iter = as.integer(n.iter + n.warmup), n_warmup = as.integer(n.warmup),
       max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
       seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
@@ -169,7 +177,7 @@
                 treedepth = treedepth, epsilon = epsilon,
                 n_chains = as.integer(n.chains),
                 divergent_total = sum(divergent, na.rm = TRUE),
-                sigma_beta = sigma.beta),
+                sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp),
     convergence  = list(converged = NA, n_iter = as.integer(n.iter))
   )), class = c("tobs_fit", "tulpa_fit"))
 

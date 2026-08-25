@@ -49,16 +49,17 @@ test_that("occu_multiscale_cover NUTS C++ FullGradFn matches the R oracle", {
     set.seed(3)
     theta <- stats::rnorm(lay$total) * 0.3
     theta[lay$disp] <- log(if (positive == "beta") 12 else 0.35)
-    sb <- 5
+    sb  <- 5
+    sld <- 5
 
-    lp_R <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb)
-    cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb)
+    lp_R <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb, sld)
+    cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb, sld)
 
     # Value byte-exact.
     expect_equal(cpp$lp, lp_R, tolerance = 1e-9)
     # C++ analytic gradient vs finite differences of the R oracle.
     f_lp <- function(th)
-      tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(th, model, lay, sb)
+      tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(th, model, lay, sb, sld)
     num <- .omcn_fd_grad(f_lp, theta)
     expect_lt(max(abs(cpp$grad - num)), 1e-5)
   }
@@ -198,7 +199,9 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
 
   fv <- fitted(fit)
   expect_named(fv, c("psi", "theta", "p", "cover", "field", "p_marginal"))
-  expect_length(predict(fit, type = "state"), fit$model$n_cells)
+  pr_psi <- predict(fit, type = "state")
+  expect_equal(nrow(pr_psi), fit$model$n_cells)
+  expect_true(all(c("mean", "sd", "q2.5", "q50", "q97.5") %in% names(pr_psi)))
 
   # Calibrated WAIC from the per-cell draws (the point of the NUTS path).
   w <- waic(fit)

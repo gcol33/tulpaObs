@@ -36,6 +36,7 @@ struct MscaleCoverNutsModel {
     int o_psi = 0, o_theta = 0, o_p = 0, o_pos = 0, o_disp = 0, total = 0;
     int positive = 0;   // 0 = lognormal, 3 = beta, 4 = gaussian
     double sigma_beta = 5.0;
+    double sigma_logdisp = 5.0;
 
     Rcpp::NumericMatrix X_psi;        // n_cells   x p_psi
     Rcpp::NumericMatrix X_theta;      // n_plots   x p_theta
@@ -303,14 +304,20 @@ inline double mscale_cover_nuts_eval(const MscaleCoverNutsModel& m, const double
             }
     grad[m.o_disp] += ge_logdisp;
 
-    // Weak Gaussian priors on the coefficient blocks (dispersion stays flat),
-    // matching the non-spatial Laplace path.
+    // Weak Gaussian priors: N(0, sigma_beta^2) on every coefficient (matching
+    // the non-spatial Laplace path's default) and a broad N(0, sigma_logdisp^2)
+    // on log_disp to keep the dispersion proper -- the two sibling NUTS targets
+    // (occu_cover_nuts.cpp, cover_nuts.cpp) both sample log_disp under this
+    // prior; this target used to leave it flat.
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
     const int n_beta = m.o_disp;   // all coords before log_disp
     for (int k = 0; k < n_beta; ++k) {
         lp      -= 0.5 * ib2 * theta[k] * theta[k];
         grad[k] -= ib2 * theta[k];
     }
+    const double ild2 = 1.0 / (m.sigma_logdisp * m.sigma_logdisp);
+    lp             -= 0.5 * ild2 * theta[m.o_disp] * theta[m.o_disp];
+    grad[m.o_disp] -= ild2 * theta[m.o_disp];
     return lp;
 }
 
@@ -332,9 +339,11 @@ using namespace Rcpp;
 // [[Rcpp::export]]
 Rcpp::List cpp_occu_mscale_cover_nuts_joint_logpost(Rcpp::List spec,
                                                 Rcpp::NumericVector theta,
-                                                double sigma_beta) {
+                                                double sigma_beta,
+                                                double sigma_logdisp) {
     tulpaObs::MscaleCoverNutsModel m = tulpaObs::mscale_cover_nuts_build(spec);
     m.sigma_beta = sigma_beta;
+    m.sigma_logdisp = sigma_logdisp;
     if ((int) theta.size() != m.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), m.total);
     Rcpp::NumericVector grad(m.total);
@@ -344,12 +353,13 @@ Rcpp::List cpp_occu_mscale_cover_nuts_joint_logpost(Rcpp::List spec,
 
 // [[Rcpp::export]]
 Rcpp::List cpp_occu_mscale_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
-                                  double sigma_beta,
+                                  double sigma_beta, double sigma_logdisp,
                                   Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                                   int n_iter, int n_warmup, int max_treedepth,
                                   double adapt_delta, int seed, bool verbose) {
     tulpaObs::MscaleCoverNutsModel m = tulpaObs::mscale_cover_nuts_build(spec);
     m.sigma_beta = sigma_beta;
+    m.sigma_logdisp = sigma_logdisp;
     return tulpaObs::run_tulpa_nuts(&tulpaObs::mscale_cover_nuts_full_grad, &m, m.total,
                                     theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup,
                                     max_treedepth, adapt_delta, seed, verbose);

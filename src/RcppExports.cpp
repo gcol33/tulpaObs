@@ -1995,27 +1995,29 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_occu_mscale_cover_nuts_joint_logpost
-Rcpp::List cpp_occu_mscale_cover_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta);
-RcppExport SEXP _tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP) {
+Rcpp::List cpp_occu_mscale_cover_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta, double sigma_beta, double sigma_logdisp);
+RcppExport SEXP _tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost(SEXP specSEXP, SEXP thetaSEXP, SEXP sigma_betaSEXP, SEXP sigma_logdispSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
     Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sigma_beta));
+    Rcpp::traits::input_parameter< double >::type sigma_logdisp(sigma_logdispSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sigma_beta, sigma_logdisp));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_occu_mscale_cover_nuts
-Rcpp::List cpp_occu_mscale_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, double sigma_beta, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose);
-RcppExport SEXP _tulpaObs_cpp_occu_mscale_cover_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP sigma_betaSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+Rcpp::List cpp_occu_mscale_cover_nuts(Rcpp::List spec, Rcpp::NumericVector theta0, double sigma_beta, double sigma_logdisp, Rcpp::Nullable<Rcpp::NumericVector> inv_metric, int n_iter, int n_warmup, int max_treedepth, double adapt_delta, int seed, bool verbose);
+RcppExport SEXP _tulpaObs_cpp_occu_mscale_cover_nuts(SEXP specSEXP, SEXP theta0SEXP, SEXP sigma_betaSEXP, SEXP sigma_logdispSEXP, SEXP inv_metricSEXP, SEXP n_iterSEXP, SEXP n_warmupSEXP, SEXP max_treedepthSEXP, SEXP adapt_deltaSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::List >::type spec(specSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta0(theta0SEXP);
     Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_logdisp(sigma_logdispSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type inv_metric(inv_metricSEXP);
     Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
     Rcpp::traits::input_parameter< int >::type n_warmup(n_warmupSEXP);
@@ -2023,7 +2025,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type adapt_delta(adapt_deltaSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_occu_mscale_cover_nuts(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
+    rcpp_result_gen = Rcpp::wrap(cpp_occu_mscale_cover_nuts(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2586,8 +2588,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_occu_integrated_ploglik", (DL_FUNC) &_tulpaObs_cpp_occu_integrated_ploglik, 6},
     {"_tulpaObs_cpp_occu_fit", (DL_FUNC) &_tulpaObs_cpp_occu_fit, 1},
     {"_tulpaObs_cpp_occu_mscale_cover_ploglik", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_ploglik, 26},
-    {"_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost, 3},
-    {"_tulpaObs_cpp_occu_mscale_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_nuts, 10},
+    {"_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost, 4},
+    {"_tulpaObs_cpp_occu_mscale_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_nuts, 11},
     {"_tulpaObs_cpp_removal_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_removal_laplace_fixed, 13},
     {"_tulpaObs_cpp_removal_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_removal_total_log_lik, 6},
     {"_tulpaObs_cpp_removal_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_removal_nuts_joint_logpost, 4},

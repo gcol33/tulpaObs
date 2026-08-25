@@ -1,5 +1,32 @@
 # tulpaObs NEWS
 
+## 0.0.246 (2026-08-26)
+
+* **`occu_multiscale_cover()`'s remaining two divergences from its `occu_cover()`
+  twin (#262).** The MAR-cover divergence closed in 0.0.245 was one of three the
+  issue filed together; these two were still open:
+  - *The joint fit dropped the cover-arm intercept prior its twin calls
+    load-bearing.* `.occu_cover_coupled_arm_priors()` defaults the cover arm to
+    `cover_priors()` even with no explicit spec, because the cover intercept
+    trades off against the shared field's level over the cells it can see (only
+    the detected ones) and the field's sum-to-zero constraint does not pin that
+    direction -- left at the engine's flat 1e-4 ridge, the intercept SD runs
+    away and blows up `predict()`'s conditional cover through Jensen.
+    `.occu_mscale_cover_arm_priors()` resolved a `NULL` cover spec instead of
+    the default, so every multiscale joint fit ran the cover arm at that flat
+    ridge unconditionally. It now resolves `cover_priors()` the same way.
+  - *The NUTS target sampled `log_disp` under no prior at all.* Both sibling
+    NUTS targets (`occu_cover_nuts.cpp`, `cover_nuts.cpp`) add a weak
+    `N(0, sigma_logdisp^2)` prior to keep the sampled dispersion proper;
+    `occu_multiscale_cover_nuts.cpp` left it flat -- `sigma_logdisp` appeared
+    nowhere in the file. `mscale_cover_nuts_eval()` now takes the same prior
+    term, `sigma.logdisp = 5` is threaded through
+    `.tobs_fit_occu_multiscale_cover_nuts()` /
+    `.tobs_occu_mscale_cover_nuts_logpost()` and the two exported entry points
+    (`cpp_occu_mscale_cover_nuts`, `cpp_occu_mscale_cover_nuts_joint_logpost`,
+    both now require the extra argument), and reported in `fit$nuts` like its
+    siblings.
+
 ## 0.0.245 (2026-08-26)
 
 * **Three joint routes each bypassed part of the shared joint-postprocess
