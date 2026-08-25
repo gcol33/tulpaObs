@@ -53,22 +53,37 @@ inline double count_car_log_prior_dispatch(
         adj_row_ptr, adj_col_idx, n_neighbors, z);
 }
 
-// Coefficient covariance for an intrinsic (rank-deficient, sum-to-zero) field
-// such as ICAR: a large quadratic penalty on (sum of the field block)^2 (the
-// penalty-method sum-to-zero constraint) so the beta-block of the inverse is the
-// constrained covariance. Shared `nmix_constrained_top_cov` is the single source.
-inline Eigen::MatrixXd count_spatial_beta_cov(Eigen::MatrixXd H, int n_x,
-                                              int p_beta, int field_start,
-                                              int field_len, bool constrain) {
-    return nmix_constrained_top_cov(std::move(H), n_x, p_beta,
-                                    field_start, field_len, constrain);
-}
+// Which parameterisation the latent field carries. The two enter eta_lambda
+// differently and carry different priors; nothing else about the inner solve
+// depends on the choice.
+//
+//   CAR   one block z of n_spatial coordinates, eta += z[unit(s)], prior
+//         tau Q(rho) (ICAR is rho = 1, and pins the flat direction by centering).
+//   BYM2  two blocks [v | w] of n_spatial each, eta += a v[unit] + b w[unit],
+//         prior v ~ ICAR(1), w ~ N(0, I) (Riebler 2016). The structured block v
+//         carries the same flat direction, so it centers too.
+enum class CountFieldKind { CAR, BYM2 };
 
-// Per-grid-point inner solve result.
+struct CountFieldSpec {
+    CountFieldKind kind = CountFieldKind::CAR;
+    CarPriorKind   car  = CarPriorKind::ICAR;      // CAR only
+    double tau = 1.0, rho = 1.0, log_det_Q_rho = 0.0;  // CAR only
+    double a = 0.0, b = 0.0;                       // BYM2 loadings
+
+    int  n_blocks() const { return kind == CountFieldKind::BYM2 ? 2 : 1; }
+    // Whether the field carries a flat direction the prior does not pin. Both
+    // the intrinsic CAR and the BYM2 structured block do.
+    bool centers() const {
+        return kind == CountFieldKind::BYM2 || car == CarPriorKind::ICAR;
+    }
+};
+
+// Per-grid-point inner solve result. `field` is the whole latent field: the CAR
+// block z, or the BYM2 pair [v | w] laid out back to back.
 struct CountSpatialInnerResult {
     Eigen::VectorXd beta_lambda;
     Eigen::VectorXd beta_p;
-    Eigen::VectorXd z;
+    Eigen::VectorXd field;
     Eigen::MatrixXd cov_beta;    // (p_lam+p_p) marginal coefficient covariance
     double log_lik;
     double log_marginal;
@@ -78,12 +93,18 @@ struct CountSpatialInnerResult {
     double boundary_max;
 };
 
-// Shared inner Newton for ICAR (rho = 1, sum-to-zero centering, rank-deficient
-// log-prior) and CAR_proper (rho < 1, no centering, full-rank log-prior with
-// precomputed log_det_Q_rho). `site_fn` is the per-site count marginal.
+// Inner Newton for one outer grid point: joint mode of (beta_lambda, beta_p,
+// field) under the count marginal and the field prior, then the Laplace log
+// marginal at that mode.
+//
+// The loop is one solve for both field kinds. Every step that depends on the
+// parameterisation goes through the small lambdas below -- how the field enters
+// eta_lambda, how its score scatters, how its prior enters the gradient, the
+// observed information and the complete-data Fisher, and what its log prior is
+// -- so a third kind is those five lambdas, not a third copy of the loop.
 template <class SiteFn>
-CountSpatialInnerResult inner_newton_count_spatial_car(
-    CarPriorKind kind,
+CountSpatialInnerResult inner_newton_count_field(
+    const CountFieldSpec& fs,
     int p_lam, int p_p, int n_sites, int n_spatial, int n_obs,
     const Eigen::Map<Eigen::MatrixXd>& Xl,
     const Eigen::Map<Eigen::MatrixXd>& Xp,
@@ -93,28 +114,118 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
     const Rcpp::IntegerVector& adj_row_ptr,
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
-    double tau, double rho, double log_det_Q_rho,
     double r,                          // NB size; +Inf for Poisson
     int K_max,
     int max_iter,
     double tol,
     const Eigen::VectorXd& beta_lam_init,
     const Eigen::VectorXd& beta_p_init,
-    const Eigen::VectorXd& z_init,
+    const Eigen::VectorXd& field_init,
     bool verbose,
     SiteFn site_fn
 ) {
     using Eigen::MatrixXd;
     using Eigen::VectorXd;
 
+    const bool bym2    = (fs.kind == CountFieldKind::BYM2);
+    const int  n_field = fs.n_blocks() * n_spatial;
+    const int  f_start = p_lam + p_p;
+    const int  w_start = f_start + n_spatial;      // BYM2 only
+    const int  n_x     = f_start + n_field;
+
     CountSpatialInnerResult res;
     res.beta_lambda = beta_lam_init;
     res.beta_p      = beta_p_init;
-    res.z           = z_init;
+    res.field       = field_init;
     res.converged   = false;
     res.n_iter      = 0;
 
-    const int n_x = p_lam + p_p + n_spatial;
+    // --- the five field-kind-dependent steps -------------------------------
+    auto eta_lambda_of = [&](const VectorXd& bl, const VectorXd& f,
+                             VectorXd& out) {
+        if (bym2) {
+            compute_eta_lambda_bym2(Xl, bl, f.head(n_spatial), f.tail(n_spatial),
+                                    fs.a, fs.b, map_site_to_unit, out);
+        } else {
+            compute_eta_lambda_spatial(Xl, bl, f, map_site_to_unit, out);
+        }
+    };
+    auto scatter_field_score = [&](const VectorXd& grad_eta_lam, VectorXd& grad) {
+        for (int s = 0; s < n_sites; ++s) {
+            const int u = map_site_to_unit[s];
+            if (bym2) {
+                grad(f_start + u) += fs.a * grad_eta_lam(s);
+                grad(w_start + u) += fs.b * grad_eta_lam(s);
+            } else {
+                grad(f_start + u) += grad_eta_lam(s);
+            }
+        }
+    };
+    auto add_obs_info = [&](const VectorXd& eta_p_long,
+                            const VectorXd& info_eta_lam,
+                            const VectorXd& info_eta_p,
+                            const VectorXd& var_N,
+                            const VectorXd& score_wt_lambda, MatrixXd& H) {
+        if (bym2) {
+            nmix_assemble_obs_info_bym2(p_lam, p_p, n_spatial, fs.a, fs.b,
+                Xl, Xp, eta_p_long, obs_by_site, map_site_to_unit,
+                info_eta_lam, info_eta_p, var_N, score_wt_lambda, H);
+        } else {
+            nmix_assemble_obs_info_spatial(p_lam, p_p, n_spatial,
+                Xl, Xp, eta_p_long, obs_by_site, map_site_to_unit,
+                info_eta_lam, info_eta_p, var_N, score_wt_lambda, H);
+        }
+    };
+    auto add_complete_fisher = [&](const VectorXd& info_eta_lam,
+                                   const VectorXd& info_eta_p, MatrixXd& H_f) {
+        if (bym2) {
+            nmix_assemble_complete_fisher_bym2(p_lam, p_p, n_spatial, fs.a, fs.b,
+                Xl, Xp, obs_by_site, map_site_to_unit,
+                info_eta_lam, info_eta_p, H_f);
+        } else {
+            nmix_assemble_complete_fisher_spatial(p_lam, p_p, n_spatial,
+                Xl, Xp, obs_by_site, map_site_to_unit,
+                info_eta_lam, info_eta_p, H_f);
+        }
+    };
+    auto add_prior_grad_H = [&](const VectorXd& f, VectorXd& grad, MatrixXd& H) {
+        if (bym2) {
+            nmix_add_bym2_prior_to_grad_and_H(p_lam, p_p, n_spatial,
+                adj_row_ptr, adj_col_idx, n_neighbors,
+                f.head(n_spatial), f.tail(n_spatial), grad, H);
+        } else {
+            nmix_add_car_to_spatial_block(p_lam, p_p, n_spatial, fs.tau, fs.rho,
+                adj_row_ptr, adj_col_idx, n_neighbors, f, grad, H);
+        }
+    };
+    auto add_prior_H = [&](MatrixXd& H) {
+        if (bym2) {
+            nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
+                adj_row_ptr, adj_col_idx, n_neighbors, H);
+        } else {
+            nmix_add_car_to_H_only(p_lam, p_p, n_spatial, fs.tau, fs.rho,
+                adj_row_ptr, adj_col_idx, n_neighbors, H);
+        }
+    };
+    auto field_log_prior = [&](const VectorXd& f) {
+        return bym2
+            ? nmix_bym2_log_prior(n_spatial, adj_row_ptr, adj_col_idx,
+                                  n_neighbors, f.head(n_spatial), f.tail(n_spatial))
+            : count_car_log_prior_dispatch(fs.car, n_spatial, fs.tau, fs.rho,
+                                           fs.log_det_Q_rho, adj_row_ptr,
+                                           adj_col_idx, n_neighbors, f);
+    };
+    // Pin the flat field direction by centering the structured block, moving
+    // its level into the intercept the coefficient block already carries.
+    auto center = [&](const VectorXd& bl, const VectorXd& bp, VectorXd& f) {
+        if (!fs.centers()) return;
+        VectorXd x_holder(n_x);
+        x_holder.segment(0, p_lam)   = bl;
+        x_holder.segment(p_lam, p_p) = bp;
+        x_holder.segment(f_start, n_field) = f;
+        nmix_center_field(p_lam, p_p, n_spatial, x_holder);
+        f.head(n_spatial) = x_holder.segment(f_start, n_spatial);
+    };
 
     VectorXd grad_eta_lam(n_sites), info_eta_lam(n_sites);
     VectorXd mean_N(n_sites), var_N(n_sites), boundary_weight(n_sites);
@@ -125,11 +236,12 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
 
     double log_lik = R_NegInf;
     double grad_norm = R_PosInf;
-    const std::string grid_label = newton_grid_label("tau", tau, "rho", rho);
+    const std::string grid_label = bym2
+        ? newton_grid_label("a", fs.a, "b", fs.b)
+        : newton_grid_label("tau", fs.tau, "rho", fs.rho);
 
     for (int iter = 0; iter < max_iter; ++iter) {
-        compute_eta_lambda_spatial(Xl, res.beta_lambda, res.z,
-                                   map_site_to_unit, eta_lam);
+        eta_lambda_of(res.beta_lambda, res.field, eta_lam);
         eta_p_long.noalias() = Xp * res.beta_p;
 
         log_lik = count_kernel_sweep_spatial(
@@ -139,23 +251,14 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
         );
 
         VectorXd grad = VectorXd::Zero(n_x);
-        grad.segment(0, p_lam)         = Xl.transpose() * grad_eta_lam;
-        grad.segment(p_lam, p_p)       = Xp.transpose() * grad_eta_p;
-        for (int s = 0; s < n_sites; ++s) {
-            grad(p_lam + p_p + map_site_to_unit[s]) += grad_eta_lam(s);
-        }
+        grad.segment(0, p_lam)   = Xl.transpose() * grad_eta_lam;
+        grad.segment(p_lam, p_p) = Xp.transpose() * grad_eta_p;
+        scatter_field_score(grad_eta_lam, grad);
 
         MatrixXd H = MatrixXd::Zero(n_x, n_x);
-        nmix_assemble_obs_info_spatial(
-            p_lam, p_p, n_spatial,
-            Xl, Xp, eta_p_long, obs_by_site, map_site_to_unit,
-            info_eta_lam, info_eta_p, var_N, score_wt_lambda, H
-        );
-        nmix_add_car_to_spatial_block(
-            p_lam, p_p, n_spatial, tau, rho,
-            adj_row_ptr, adj_col_idx, n_neighbors,
-            res.z, grad, H
-        );
+        add_obs_info(eta_p_long, info_eta_lam, info_eta_p, var_N,
+                     score_wt_lambda, H);
+        add_prior_grad_H(res.field, grad, H);
 
         grad_norm = grad.norm();
         if (verbose) {
@@ -176,62 +279,40 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
             H, grad,
             [&]() {
                 MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-                nmix_assemble_complete_fisher_spatial(
-                    p_lam, p_p, n_spatial,
-                    Xl, Xp, obs_by_site, map_site_to_unit,
-                    info_eta_lam, info_eta_p, H_f
-                );
-                nmix_add_car_to_H_only(
-                    p_lam, p_p, n_spatial, tau, rho,
-                    adj_row_ptr, adj_col_idx, n_neighbors, H_f
-                );
+                add_complete_fisher(info_eta_lam, info_eta_p, H_f);
+                add_prior_H(H_f);
                 nmix_add_diagonal_ridge(H_f);
                 return H_f;
             },
             grid_label, iter, verbose, delta);
         if (!solved) break;
 
-        VectorXd delta_lam = delta.segment(0, p_lam);
-        VectorXd delta_p   = delta.segment(p_lam, p_p);
-        VectorXd delta_z   = delta.segment(p_lam + p_p, n_spatial);
+        VectorXd delta_lam   = delta.segment(0, p_lam);
+        VectorXd delta_p     = delta.segment(p_lam, p_p);
+        VectorXd delta_field = delta.segment(f_start, n_field);
 
-        VectorXd beta_lam_try, beta_p_try, z_try;
+        VectorXd beta_lam_try, beta_p_try, field_try;
         VectorXd eta_lam_try(n_sites), eta_p_try(n_obs);
-        const double obj_cur = log_lik + count_car_log_prior_dispatch(
-            kind, n_spatial, tau, rho, log_det_Q_rho,
-            adj_row_ptr, adj_col_idx, n_neighbors, res.z
-        );
+        const double obj_cur = log_lik + field_log_prior(res.field);
         const bool stepped = newton_backtrack(
             obj_cur,
             [&](double step) {
                 beta_lam_try = res.beta_lambda + step * delta_lam;
                 beta_p_try   = res.beta_p      + step * delta_p;
-                z_try        = res.z           + step * delta_z;
+                field_try    = res.field       + step * delta_field;
 
-                compute_eta_lambda_spatial(Xl, beta_lam_try, z_try,
-                                           map_site_to_unit, eta_lam_try);
+                eta_lambda_of(beta_lam_try, field_try, eta_lam_try);
                 eta_p_try.noalias() = Xp * beta_p_try;
                 double ll_try = count_kernel_log_lik_only_spatial(
                     obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r, site_fn
                 );
-                double lp_try = count_car_log_prior_dispatch(
-                    kind, n_spatial, tau, rho, log_det_Q_rho,
-                    adj_row_ptr, adj_col_idx, n_neighbors, z_try
-                );
-                return ll_try + lp_try;
+                return ll_try + field_log_prior(field_try);
             },
             [&](double) {
                 res.beta_lambda = beta_lam_try;
                 res.beta_p      = beta_p_try;
-                res.z           = z_try;
-                if (kind == CarPriorKind::ICAR) {
-                    VectorXd x_holder(n_x);
-                    x_holder.segment(0, p_lam) = res.beta_lambda;
-                    x_holder.segment(p_lam, p_p) = res.beta_p;
-                    x_holder.segment(p_lam + p_p, n_spatial) = res.z;
-                    nmix_center_field(p_lam, p_p, n_spatial, x_holder);
-                    res.z = x_holder.segment(p_lam + p_p, n_spatial);
-                }
+                res.field       = field_try;
+                center(res.beta_lambda, res.beta_p, res.field);
             });
         if (!stepped) {
             if (verbose) Rcpp::Rcout << "    (step halving exhausted)\n";
@@ -241,50 +322,36 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
     }
 
     // ----- log marginal at the converged mode -----
-    compute_eta_lambda_spatial(Xl, res.beta_lambda, res.z,
-                               map_site_to_unit, eta_lam);
+    eta_lambda_of(res.beta_lambda, res.field, eta_lam);
     eta_p_long.noalias() = Xp * res.beta_p;
     double log_lik_final = count_kernel_sweep_spatial(
         obs_by_site, y_R, eta_lam, eta_p_long, K_max, r,
         grad_eta_lam, info_eta_lam, grad_eta_p, info_eta_p,
         mean_N, var_N, boundary_weight, score_wt_lambda, site_fn
     );
-    double log_prior_z_final = count_car_log_prior_dispatch(
-        kind, n_spatial, tau, rho, log_det_Q_rho,
-        adj_row_ptr, adj_col_idx, n_neighbors, res.z
-    );
+    double log_prior_final = field_log_prior(res.field);
 
     MatrixXd H_final = MatrixXd::Zero(n_x, n_x);
-    nmix_assemble_obs_info_spatial(
-        p_lam, p_p, n_spatial,
-        Xl, Xp, eta_p_long, obs_by_site, map_site_to_unit,
-        info_eta_lam, info_eta_p, var_N, score_wt_lambda, H_final
-    );
-    nmix_add_car_to_H_only(
-        p_lam, p_p, n_spatial, tau, rho,
-        adj_row_ptr, adj_col_idx, n_neighbors, H_final
-    );
+    add_obs_info(eta_p_long, info_eta_lam, info_eta_p, var_N, score_wt_lambda,
+                 H_final);
+    add_prior_H(H_final);
     nmix_add_diagonal_ridge(H_final);
+
     const int p_beta = p_lam + p_p;
+    // The constrained block is the structured field: the whole CAR block, or
+    // BYM2's v alone (w is proper and carries no flat direction).
+    const bool constrain_field = fs.centers();
     Eigen::LLT<MatrixXd> chol(H_final);
     double log_det_H;
-    const bool constrain_field = (kind == CarPriorKind::ICAR);
     if (chol.info() == Eigen::Success) {
         log_det_H = 2.0 * chol.matrixL().toDenseMatrix().diagonal()
                               .array().log().sum();
-        res.cov_beta = count_spatial_beta_cov(H_final, n_x, p_beta,
-                                              p_beta, n_spatial, constrain_field);
+        res.cov_beta = nmix_constrained_top_cov(H_final, n_x, p_beta, f_start,
+                                                n_spatial, constrain_field);
     } else {
         MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-        nmix_assemble_complete_fisher_spatial(
-            p_lam, p_p, n_spatial,
-            Xl, Xp, obs_by_site, map_site_to_unit,
-            info_eta_lam, info_eta_p, H_f
-        );
-        nmix_add_car_to_H_only(
-            p_lam, p_p, n_spatial, tau, rho,
-            adj_row_ptr, adj_col_idx, n_neighbors, H_f
-        );
+        add_complete_fisher(info_eta_lam, info_eta_p, H_f);
+        add_prior_H(H_f);
         nmix_add_diagonal_ridge(H_f);
         Eigen::LLT<MatrixXd> chol_f(H_f);
         if (chol_f.info() != Eigen::Success) {
@@ -297,12 +364,12 @@ CountSpatialInnerResult inner_newton_count_spatial_car(
         }
         log_det_H = 2.0 * chol_f.matrixL().toDenseMatrix().diagonal()
                                 .array().log().sum();
-        res.cov_beta = count_spatial_beta_cov(H_f, n_x, p_beta,
-                                              p_beta, n_spatial, constrain_field);
+        res.cov_beta = nmix_constrained_top_cov(H_f, n_x, p_beta, f_start,
+                                                n_spatial, constrain_field);
     }
 
     res.log_lik = log_lik_final;
-    res.log_marginal = log_lik_final + log_prior_z_final - 0.5 * log_det_H;
+    res.log_marginal = log_lik_final + log_prior_final - 0.5 * log_det_H;
     res.grad_norm = grad_norm;
     res.boundary_max = boundary_weight.maxCoeff();
     return res;
@@ -388,12 +455,14 @@ inline Rcpp::List run_count_nested_laplace_icar(
         Eigen::VectorXd beta_lam = pp.beta_lam_default;
         Eigen::VectorXd beta_p   = pp.beta_p_default;
         Eigen::VectorXd z        = z_default;
-        CountSpatialInnerResult ir = inner_newton_count_spatial_car(
-            CarPriorKind::ICAR,
-            p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
+        CountFieldSpec fs;
+        fs.kind = CountFieldKind::CAR;
+        fs.car  = CarPriorKind::ICAR;
+        fs.tau  = tau_k[k];
+        CountSpatialInnerResult ir = inner_newton_count_field(
+            fs, p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
             Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
-            adj_row_ptr, adj_col_idx, n_neighbors,
-            tau_k[k], /*rho=*/1.0, /*log_det_Q_rho=*/0.0, r_k[k],
+            adj_row_ptr, adj_col_idx, n_neighbors, r_k[k],
             pp.K_max, max_iter, tol, beta_lam, beta_p, z, verbose, site_fn);
         NmixSpatialPoint pt;
         pt.log_marginal = ir.log_marginal; pt.n_iter = ir.n_iter;
@@ -402,7 +471,7 @@ inline Rcpp::List run_count_nested_laplace_icar(
         pt.coef = Eigen::VectorXd(p_lam + p_p);
         pt.coef.head(p_lam) = ir.beta_lambda;
         pt.coef.tail(p_p)   = ir.beta_p;
-        pt.field = ir.z;
+        pt.field = ir.field;
         pt.cov_beta = ir.cov_beta;
         return pt;
     };
@@ -416,195 +485,6 @@ inline Rcpp::List run_count_nested_laplace_icar(
     out["n_tau"]    = n_tau;
     out["n_r"]      = n_r;
     return out;
-}
-
-// ---------------------------------------------------------------------------
-// BYM2 (Riebler 2016) field: phi = sigma (sqrt(rho/scale) v + sqrt(1-rho) w),
-// the ICAR component v scaled by a and the iid component w by b. The inner Newton
-// and grid orchestration mirror the ICAR / proper-CAR path; only the field has
-// two blocks (v, w) and the prior / eta-loading differ (the bym2 helpers in
-// nmix_spatial_kernel_bym2.h). Family-agnostic via SiteFn.
-// ---------------------------------------------------------------------------
-
-struct CountBYM2InnerResult {
-    Eigen::VectorXd beta_lambda, beta_p, v, w, cov_beta_holder;
-    Eigen::MatrixXd cov_beta;
-    double log_lik, log_marginal, grad_norm, boundary_max;
-    int n_iter;
-    bool converged;
-};
-
-template <class SiteFn>
-CountBYM2InnerResult inner_newton_count_bym2(
-    int p_lam, int p_p, int n_sites, int n_spatial, int n_obs,
-    double a, double b,
-    const Eigen::Map<Eigen::MatrixXd>& Xl,
-    const Eigen::Map<Eigen::MatrixXd>& Xp,
-    const Rcpp::IntegerVector& y_R,
-    const std::vector<std::vector<int>>& obs_by_site,
-    const std::vector<int>& map_site_to_unit,
-    const Rcpp::IntegerVector& adj_row_ptr,
-    const Rcpp::IntegerVector& adj_col_idx,
-    const Rcpp::IntegerVector& n_neighbors,
-    double r, int K_max, int max_iter, double tol,
-    const Eigen::VectorXd& beta_lam_init, const Eigen::VectorXd& beta_p_init,
-    const Eigen::VectorXd& v_init, const Eigen::VectorXd& w_init,
-    bool verbose, SiteFn site_fn
-) {
-    using Eigen::MatrixXd;
-    using Eigen::VectorXd;
-
-    CountBYM2InnerResult res;
-    res.beta_lambda = beta_lam_init; res.beta_p = beta_p_init;
-    res.v = v_init; res.w = w_init;
-    res.converged = false; res.n_iter = 0;
-
-    const int n_x = p_lam + p_p + 2 * n_spatial;
-    const int v_start = p_lam + p_p, w_start = v_start + n_spatial;
-
-    VectorXd grad_eta_lam(n_sites), info_eta_lam(n_sites);
-    VectorXd mean_N(n_sites), var_N(n_sites), boundary_weight(n_sites);
-    VectorXd score_wt_lambda(n_sites);
-    VectorXd grad_eta_p(n_obs), info_eta_p(n_obs);
-    VectorXd eta_lam(n_sites), eta_p_long(n_obs);
-
-    double log_lik = R_NegInf, grad_norm = R_PosInf;
-    const std::string grid_label = newton_grid_label("a", a, "b", b);
-
-    for (int iter = 0; iter < max_iter; ++iter) {
-        compute_eta_lambda_bym2(Xl, res.beta_lambda, res.v, res.w, a, b,
-                                map_site_to_unit, eta_lam);
-        eta_p_long.noalias() = Xp * res.beta_p;
-        log_lik = count_kernel_sweep_spatial(
-            obs_by_site, y_R, eta_lam, eta_p_long, K_max, r,
-            grad_eta_lam, info_eta_lam, grad_eta_p, info_eta_p,
-            mean_N, var_N, boundary_weight, score_wt_lambda, site_fn);
-
-        VectorXd grad = VectorXd::Zero(n_x);
-        grad.segment(0, p_lam)   = Xl.transpose() * grad_eta_lam;
-        grad.segment(p_lam, p_p) = Xp.transpose() * grad_eta_p;
-        for (int s = 0; s < n_sites; ++s) {
-            const int u = map_site_to_unit[s];
-            grad(v_start + u) += a * grad_eta_lam(s);
-            grad(w_start + u) += b * grad_eta_lam(s);
-        }
-
-        MatrixXd H = MatrixXd::Zero(n_x, n_x);
-        nmix_assemble_obs_info_bym2(p_lam, p_p, n_spatial, a, b,
-            Xl, Xp, eta_p_long, obs_by_site, map_site_to_unit,
-            info_eta_lam, info_eta_p, var_N, score_wt_lambda, H);
-        nmix_add_bym2_prior_to_grad_and_H(p_lam, p_p, n_spatial,
-            adj_row_ptr, adj_col_idx, n_neighbors, res.v, res.w, grad, H);
-
-        grad_norm = grad.norm();
-        if (verbose) Rcpp::Rcout << "  iter " << iter << "  log_lik " << log_lik
-                                 << "  grad_norm " << grad_norm << "\n";
-        if (grad_norm < tol) { res.converged = true; res.n_iter = iter + 1; break; }
-
-        nmix_add_diagonal_ridge(H);
-        VectorXd delta;
-        const bool solved = solve_with_fisher_fallback(
-            H, grad,
-            [&]() {
-                MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-                nmix_assemble_complete_fisher_bym2(p_lam, p_p, n_spatial, a, b,
-                    Xl, Xp, obs_by_site, map_site_to_unit,
-                    info_eta_lam, info_eta_p, H_f);
-                nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
-                    adj_row_ptr, adj_col_idx, n_neighbors, H_f);
-                nmix_add_diagonal_ridge(H_f);
-                return H_f;
-            },
-            grid_label, iter, verbose, delta);
-        if (!solved) break;
-
-        VectorXd delta_lam = delta.segment(0, p_lam);
-        VectorXd delta_p   = delta.segment(p_lam, p_p);
-        VectorXd delta_v   = delta.segment(v_start, n_spatial);
-        VectorXd delta_w   = delta.segment(w_start, n_spatial);
-
-        VectorXd beta_lam_try, beta_p_try, v_try, w_try;
-        VectorXd eta_lam_try(n_sites), eta_p_try(n_obs);
-        const double obj_cur = log_lik + nmix_bym2_log_prior(n_spatial, adj_row_ptr,
-            adj_col_idx, n_neighbors, res.v, res.w);
-        const bool stepped = newton_backtrack(
-            obj_cur,
-            [&](double step) {
-                beta_lam_try = res.beta_lambda + step * delta_lam;
-                beta_p_try   = res.beta_p      + step * delta_p;
-                v_try        = res.v           + step * delta_v;
-                w_try        = res.w           + step * delta_w;
-                compute_eta_lambda_bym2(Xl, beta_lam_try, v_try, w_try, a, b,
-                                        map_site_to_unit, eta_lam_try);
-                eta_p_try.noalias() = Xp * beta_p_try;
-                double ll_try = count_kernel_log_lik_only_spatial(
-                    obs_by_site, y_R, eta_lam_try, eta_p_try, K_max, r, site_fn);
-                double lp_try = nmix_bym2_log_prior(n_spatial, adj_row_ptr,
-                    adj_col_idx, n_neighbors, v_try, w_try);
-                return ll_try + lp_try;
-            },
-            [&](double) {
-                res.beta_lambda = beta_lam_try; res.beta_p = beta_p_try;
-                res.v = v_try; res.w = w_try;
-                VectorXd x_holder(n_x);
-                x_holder.segment(0, p_lam) = res.beta_lambda;
-                x_holder.segment(p_lam, p_p) = res.beta_p;
-                x_holder.segment(v_start, n_spatial) = res.v;
-                x_holder.segment(w_start, n_spatial) = res.w;
-                nmix_center_field(p_lam, p_p, n_spatial, x_holder);
-                res.v = x_holder.segment(v_start, n_spatial);
-            });
-        if (!stepped) { if (verbose) Rcpp::Rcout << "    (step halving exhausted)\n"; break; }
-        res.n_iter = iter + 1;
-    }
-
-    compute_eta_lambda_bym2(Xl, res.beta_lambda, res.v, res.w, a, b,
-                            map_site_to_unit, eta_lam);
-    eta_p_long.noalias() = Xp * res.beta_p;
-    double log_lik_final = count_kernel_sweep_spatial(
-        obs_by_site, y_R, eta_lam, eta_p_long, K_max, r,
-        grad_eta_lam, info_eta_lam, grad_eta_p, info_eta_p,
-        mean_N, var_N, boundary_weight, score_wt_lambda, site_fn);
-    double log_prior_final = nmix_bym2_log_prior(n_spatial, adj_row_ptr,
-        adj_col_idx, n_neighbors, res.v, res.w);
-
-    MatrixXd H_final = MatrixXd::Zero(n_x, n_x);
-    nmix_assemble_obs_info_bym2(p_lam, p_p, n_spatial, a, b,
-        Xl, Xp, eta_p_long, obs_by_site, map_site_to_unit,
-        info_eta_lam, info_eta_p, var_N, score_wt_lambda, H_final);
-    nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
-        adj_row_ptr, adj_col_idx, n_neighbors, H_final);
-    nmix_add_diagonal_ridge(H_final);
-    const int p_beta = p_lam + p_p;
-    Eigen::LLT<MatrixXd> chol(H_final);
-    double log_det_H;
-    if (chol.info() == Eigen::Success) {
-        log_det_H = 2.0 * chol.matrixL().toDenseMatrix().diagonal().array().log().sum();
-        res.cov_beta = nmix_constrained_top_cov(H_final, n_x, p_beta, v_start,
-                                                n_spatial, /*constrain=*/true);
-    } else {
-        MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
-        nmix_assemble_complete_fisher_bym2(p_lam, p_p, n_spatial, a, b,
-            Xl, Xp, obs_by_site, map_site_to_unit, info_eta_lam, info_eta_p, H_f);
-        nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
-            adj_row_ptr, adj_col_idx, n_neighbors, H_f);
-        nmix_add_diagonal_ridge(H_f);
-        Eigen::LLT<MatrixXd> chol_f(H_f);
-        if (chol_f.info() != Eigen::Success) {
-            res.cov_beta = MatrixXd::Constant(p_beta, p_beta, R_NaN);
-            res.log_marginal = R_NegInf; res.log_lik = log_lik_final;
-            res.grad_norm = grad_norm; res.boundary_max = boundary_weight.maxCoeff();
-            return res;
-        }
-        log_det_H = 2.0 * chol_f.matrixL().toDenseMatrix().diagonal().array().log().sum();
-        res.cov_beta = nmix_constrained_top_cov(H_f, n_x, p_beta, v_start,
-                                                n_spatial, /*constrain=*/true);
-    }
-    res.log_lik = log_lik_final;
-    res.log_marginal = log_lik_final + log_prior_final - 0.5 * log_det_H;
-    res.grad_norm = grad_norm;
-    res.boundary_max = boundary_weight.maxCoeff();
-    return res;
 }
 
 template <class SiteFn>
@@ -667,19 +547,24 @@ inline Rcpp::List run_count_nested_laplace_bym2(
         if (!valid_k[k]) { pt.skipped = true; return pt; }
         Eigen::VectorXd beta_lam = pp.beta_lam_default;
         Eigen::VectorXd beta_p   = pp.beta_p_default;
-        Eigen::VectorXd v = v_default, w = w_default;
-        CountBYM2InnerResult ir = inner_newton_count_bym2(
-            p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs, a_k[k], b_k[k],
+        Eigen::VectorXd field0(2 * n_spatial);
+        field0.head(n_spatial) = v_default;
+        field0.tail(n_spatial) = w_default;
+        CountFieldSpec fs;
+        fs.kind = CountFieldKind::BYM2;
+        fs.a = a_k[k];
+        fs.b = b_k[k];
+        CountSpatialInnerResult ir = inner_newton_count_field(
+            fs, p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
             Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
-            adj_row_ptr, adj_col_idx, n_neighbors,
-            r_k[k], pp.K_max, max_iter, tol, beta_lam, beta_p, v, w, verbose, site_fn);
+            adj_row_ptr, adj_col_idx, n_neighbors, r_k[k],
+            pp.K_max, max_iter, tol, beta_lam, beta_p, field0, verbose, site_fn);
         pt.log_marginal = ir.log_marginal; pt.n_iter = ir.n_iter;
         pt.converged = ir.converged;       pt.grad_norm = ir.grad_norm;
         pt.log_lik = ir.log_lik;           pt.boundary_max = ir.boundary_max;
         pt.coef = Eigen::VectorXd(p_lam + p_p);
         pt.coef.head(p_lam) = ir.beta_lambda; pt.coef.tail(p_p) = ir.beta_p;
-        pt.field = Eigen::VectorXd(2 * n_spatial);
-        pt.field.head(n_spatial) = ir.v; pt.field.tail(n_spatial) = ir.w;
+        pt.field = ir.field;
         pt.cov_beta = ir.cov_beta;
         return pt;
     };
@@ -756,12 +641,16 @@ inline Rcpp::List run_count_nested_laplace_car_proper(
         Eigen::VectorXd beta_lam = pp.beta_lam_default;
         Eigen::VectorXd beta_p   = pp.beta_p_default;
         Eigen::VectorXd z        = z_default;
-        CountSpatialInnerResult ir = inner_newton_count_spatial_car(
-            CarPriorKind::CAR_PROPER,
-            p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
+        CountFieldSpec fs;
+        fs.kind = CountFieldKind::CAR;
+        fs.car  = CarPriorKind::CAR_PROPER;
+        fs.tau  = tau_k[k];
+        fs.rho  = rho_k[k];
+        fs.log_det_Q_rho = logdet_k[k];
+        CountSpatialInnerResult ir = inner_newton_count_field(
+            fs, p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
             Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
-            adj_row_ptr, adj_col_idx, n_neighbors,
-            tau_k[k], rho_k[k], logdet_k[k], r_k[k],
+            adj_row_ptr, adj_col_idx, n_neighbors, r_k[k],
             pp.K_max, max_iter, tol, beta_lam, beta_p, z, verbose, site_fn);
         pt.log_marginal = ir.log_marginal; pt.n_iter = ir.n_iter;
         pt.converged = ir.converged;       pt.grad_norm = ir.grad_norm;
@@ -769,7 +658,7 @@ inline Rcpp::List run_count_nested_laplace_car_proper(
         pt.coef = Eigen::VectorXd(p_lam + p_p);
         pt.coef.head(p_lam) = ir.beta_lambda;
         pt.coef.tail(p_p)   = ir.beta_p;
-        pt.field = ir.z;
+        pt.field = ir.field;
         pt.cov_beta = ir.cov_beta;
         return pt;
     };
