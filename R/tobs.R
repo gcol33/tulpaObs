@@ -294,7 +294,7 @@
 #'     occupancy-cover fit (default 1). The auto-rank ladder selects `K` by
 #'     marginal evidence under this prior, so the selection fit and the final
 #'     fit necessarily read the same value.
-#'   * `inner_solver` — for a spatial community N-mixture (`ms_abun()` with an
+#'   * `inner.solver` — for a spatial community N-mixture (`ms_abun()` with an
 #'     `icar()` / `bym2()` / `car_proper()` field on the abundance arm), the
 #'     inner solver integrating the shared field given the community: `"em"`
 #'     (default) the closed-form Laplace-EM M-step, or `"newton"` the exact-

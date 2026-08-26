@@ -453,7 +453,7 @@
   laplace_em = c("max.iter", "tol", "damping", "sigma.beta",
                  "re.aghq", "n.quad", "n.quad.scalar", "re.lkj", "optimizer",
                  "omega.sigma.prior", "logr.sigma.prior",
-                 "hessian", "inner_solver", "integration"),
+                 "hessian", "inner.solver", "integration"),
   # The community latent routes -- a shared areal field and/or latent() factors
   # on a community family -- fit by block coordinate ascent between the
   # community Laplace-EM and the field / factor updates (R/community_latent.R).
@@ -502,7 +502,7 @@
                  # chains. 0 leaves the count to OpenMP.
                  "n.threads.grad",
                  "adapt.delta", "max.treedepth", "seed", "sigma.beta",
-                 "sigma.re.scale", "n.seeds",
+                 "n.seeds",
                  # Community-mean prior SD on the log-dispersion mu_log_r, for
                  # the negative-binomial NUTS paths that carry one
                  # (ms_abun(), ms_count(), jsdm()). Ignored by a family or

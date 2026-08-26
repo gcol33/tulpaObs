@@ -629,10 +629,14 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
       "re.sigma.grid", "re.sigma.grid.p", "re.sigma.grid.pos",
+      "re.logchol.grid.p", "re.logchol.grid.pos",
       # Condition the NUTS + areal sampler on the warm nested-Laplace fit's
       # (sigma, rho, alpha) instead of sampling them.
       "fixed.hyper",
-      "checkpoint"
+      "checkpoint",
+      # Diagnostic-parallelism thread count for the outer-grid Pareto-k pass
+      # (control$diagnose.k), separate from n.threads.outer's inner-Newton use.
+      "k.threads"
     )
   )
 }
@@ -779,7 +783,8 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
     status         = "working",
     params         = list(positive = positive),
     control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load",
-                       "n.factors", "n.factors.max", "constrain")
+                       "n.factors", "n.factors.max", "constrain",
+                       "re.aghq.maxdim")
   )
 }
 
@@ -874,7 +879,7 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
-      "checkpoint"
+      "checkpoint", "k.threads"
     )
   )
 }

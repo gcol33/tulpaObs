@@ -259,10 +259,12 @@
 .tobs_bfgs_marginal_fit <- function(nll, init, par_names, model, N,
                                     gr = NULL,
                                     extra = function(means) list(),
-                                    control = list(maxit = 500L),
+                                    max.iter = NULL, tol = NULL,
                                     n_draws = 1000L) {
+  ctrl <- list(maxit = max.iter %||% 500L)
+  if (!is.null(tol)) ctrl$reltol <- tol
   opt <- stats::optim(init, nll, gr = gr, method = "BFGS",
-                      hessian = is.null(gr), control = control)
+                      hessian = is.null(gr), control = ctrl)
 
   means <- opt$par; names(means) <- par_names
   info <- if (is.null(gr)) opt$hessian

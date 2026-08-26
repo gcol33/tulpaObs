@@ -145,7 +145,8 @@
 # Fitter for the alternative-dynamics path: numeric-gradient BFGS over the exact
 # forward-HMM + band marginal, with a numeric-Hessian observed-information vcov.
 # `model` carries the active-arm designs + `dyn_meta` (built by the binder).
-.tobs_fit_distsamp_open_dyn <- function(model, verbose = TRUE, ...) {
+.tobs_fit_distsamp_open_dyn <- function(model, verbose = TRUE,
+                                        max.iter = NULL, tol = NULL, ...) {
   meta <- model$dyn_meta
   ps   <- vapply(model$process_info, function(pp) pp$p, integer(1))
   # Moment init: detected-total scale for lambda / sigma; neutral for the rest.
@@ -167,7 +168,7 @@
   .tobs_bfgs_marginal_fit(
     function(theta) .dso_dyn_negll(theta, model),
     init, par_names, model, N = model$n_sites,
-    control = list(maxit = 500L, reltol = 1e-9),
+    max.iter = max.iter %||% 500L, tol = tol %||% 1e-9,
     extra = function(means) list(mixture = "poisson",
                                  dynamics = model$dynamics,
                                  zero_inflated = FALSE))
@@ -414,7 +415,8 @@
 # Fitter
 # ---------------------------------------------------------------------------
 
-.tobs_fit_distsamp_open <- function(model, verbose = TRUE, ...) {
+.tobs_fit_distsamp_open <- function(model, verbose = TRUE,
+                                    max.iter = NULL, tol = NULL, ...) {
   use_nb <- .dso_use_nb(model)
   ps <- vapply(model$process_info, function(pp) pp$p, integer(1))
   # Moment init: mean detected total seeds lambda given a rough detection; the
@@ -441,6 +443,7 @@
     function(theta) .dso_negll(theta, model), init, par_names, model,
     N = model$n_sites,
     gr = function(theta) -.dso_grad(theta, model),
+    max.iter = max.iter, tol = tol,
     extra = function(means) list(
       mixture       = model$mixture,
       log_r         = if (use_nb) unname(means[["log_r"]]) else NULL,
@@ -466,7 +469,8 @@
 # Scope (v1): non-spatial laplace only, intercept-only zi. The additive marginal
 # and its per-site gradient are shared verbatim with the .dso_negll / .dso_grad
 # base fitter (weighted by the structural-zero posterior w_i).
-.tobs_fit_distsamp_open_zip <- function(model, verbose = TRUE, ...) {
+.tobs_fit_distsamp_open_zip <- function(model, verbose = TRUE,
+                                        max.iter = NULL, tol = NULL, ...) {
   is_nb <- identical(model$mixture, "zinb")
   Xl <- model$X_processes[[1L]]; Xs <- model$X_processes[[2L]]
   Xo <- model$X_processes[[3L]]; Xg <- model$X_processes[[4L]]
@@ -578,7 +582,7 @@
 
   .tobs_bfgs_marginal_fit(
     neg_ll, theta0, par_names, model, N = model$n_sites, gr = neg_grad,
-    control = list(maxit = 500L, reltol = 1e-8),
+    max.iter = max.iter %||% 500L, tol = tol %||% 1e-8,
     extra = function(means) list(
       mixture       = model$mixture,
       zero_inflated = TRUE,
@@ -630,11 +634,14 @@
     hint = paste0("the open-population distance marginal is fitted on fixed ",
                   "effects only, so drop the term"))
   if (!identical(dynamics, "constant"))
-    .tobs_fit_distsamp_open_dyn(model, verbose = isTRUE(control$verbose))
+    .tobs_fit_distsamp_open_dyn(model, verbose = isTRUE(control$verbose),
+                               max.iter = control$max.iter, tol = control$tol)
   else if (mixture %in% c("zip", "zinb"))
-    .tobs_fit_distsamp_open_zip(model, verbose = isTRUE(control$verbose))
+    .tobs_fit_distsamp_open_zip(model, verbose = isTRUE(control$verbose),
+                               max.iter = control$max.iter, tol = control$tol)
   else
-    .tobs_fit_distsamp_open(model, verbose = isTRUE(control$verbose))
+    .tobs_fit_distsamp_open(model, verbose = isTRUE(control$verbose),
+                            max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------

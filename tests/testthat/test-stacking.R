@@ -130,8 +130,12 @@ test_that("predict.tobs_stack with X.0 needs matching member designs", {
 
 test_that("predict.tobs_stack names columns for the requested quantiles", {
   sim <- sim_occu()
-  f1 <- fit_lap(~ x,     sim)
-  f2 <- fit_lap(~ x + w, sim)
+  # Both members must share the occupancy design for predict(X.0=) to run at
+  # all (see the mismatched-design test above); the detection formula differs
+  # so the two members are not byte-identical fits.
+  f1 <- fit_lap(~ x, sim)
+  f2 <- tobs(~ x, data = sim$data, y = sim$y, detection = ~ w,
+             family = occu(), method = "laplace", control = list(verbose = FALSE))
   ens <- tobs_stack(f1, f2)
   X0 <- model.matrix(~ x, sim$data)[1:5, , drop = FALSE]
 

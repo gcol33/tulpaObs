@@ -900,7 +900,7 @@
   # routes to the shared-field community N-mixture. The fit is driven directly
   # by the in-tree community-spatial C++ grid driver, so it reads the dotted
   # controls here (mirroring the non-spatial community path below).
-  # control$inner_solver picks the inner method: "em" (default, the closed-form
+  # control$inner.solver picks the inner method: "em" (default, the closed-form
   # Laplace-EM) or "newton" (the exact-Newton shared-field solve + AGHQ
   # community debias; areal Poisson only).
   structs <- .tobs_structures_from_model(model)
@@ -967,7 +967,7 @@
       mixture      = family$params$mixture %||% "poisson",
       K_max        = family$params$K_max,
       max_iter     = control[["max.iter"]] %||% 100L,
-      inner_solver = control[["inner_solver"]] %||% "em",
+      inner_solver = control[["inner.solver"]] %||% "em",
       n_quad       = as.integer(control[["n.quad"]] %||% .tobs_n_quad("ms_nmix")),
       lkj_eta      = control[["re.lkj"]] %||% .tobs_default("laplace", "re.lkj"),
       integration  = control[["integration"]] %||% "grid",

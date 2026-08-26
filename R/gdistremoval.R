@@ -176,7 +176,8 @@
 # Fitter (called from .dispatch_gdistremoval)
 # ---------------------------------------------------------------------------
 
-.tobs_fit_gdistremoval <- function(model, verbose = TRUE, ...) {
+.tobs_fit_gdistremoval <- function(model, verbose = TRUE,
+                                   max.iter = NULL, tol = NULL, ...) {
   Xl <- model$X_processes[[1L]]; Xs <- model$X_processes[[2L]]
   Xr <- model$X_processes[[3L]]
   pl <- ncol(Xl); ps <- ncol(Xs); pr <- ncol(Xr)
@@ -209,7 +210,8 @@
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
 
-  .tobs_bfgs_marginal_fit(nll, init, par_names, model, N = model$n_sites)
+  .tobs_bfgs_marginal_fit(nll, init, par_names, model, N = model$n_sites,
+                          max.iter = max.iter, tol = tol)
 }
 
 # ---------------------------------------------------------------------------
@@ -245,7 +247,8 @@
     model, "gdistremoval()",
     hint = paste0("the joint distance-removal marginal is fitted on fixed ",
                   "effects only, so drop the term"))
-  .tobs_fit_gdistremoval(model, verbose = isTRUE(control$verbose))
+  .tobs_fit_gdistremoval(model, verbose = isTRUE(control$verbose),
+                         max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------

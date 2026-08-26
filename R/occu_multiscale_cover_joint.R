@@ -132,8 +132,13 @@
 # psi / theta / p carry the occu_priors() defaults (the detection-arm intercept
 # prior in particular keeps the coupled occupancy mixture off the psi = 1
 # boundary); pos carries cover_priors() only when supplied. theta reuses the
-# detection-arm prior shape (a logit-scale availability gate).
-.occu_mscale_cover_arm_priors <- function(priors, responses) {
+# detection-arm prior shape (a logit-scale availability gate). `sigma.beta`,
+# when the caller supplied one, overrides every occu_priors() SD uniformly
+# (mean 0), matching the flat N(0, sigma.beta^2) the non-spatial (laplace)
+# route puts on every fixed-effect coefficient -- otherwise a fit that moves
+# from laplace to the default nested_laplace engine has its explicit
+# control$sigma.beta silently stop applying.
+.occu_mscale_cover_arm_priors <- function(priors, responses, sigma.beta = NULL) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
     return(list(psi = NULL, theta = NULL, p = NULL, pos = NULL))
   }
@@ -143,7 +148,11 @@
   }
   occ_spec <- if (inherits(priors, "occu_priors")) priors
               else if (inherits(priors, "cover_priors")) occu_priors()
-              else .resolve_occu_priors(priors)
+              else if (!is.null(sigma.beta)) {
+                sd0 <- list(mean = 0, sd = sigma.beta)
+                occu_priors(p_intercept = sd0, p_slope = sd0,
+                           beta_occ_intercept = sd0, beta_occ_slope = sd0)
+              } else .resolve_occu_priors(priors)
   cover_spec <- if (inherits(priors, "cover_priors")) priors else NULL
 
   list(
@@ -164,6 +173,7 @@
                                                           max.iter  = 200L,
                                                           tol       = 1e-6,
                                                           verbose   = TRUE,
+                                                          sigma.beta = NULL,
                                                           ...) {
   adj <- fields[[1L]]$graph
   is_beta  <- identical(model$positive, "beta")
@@ -231,7 +241,7 @@
   responses <- arms_out$responses
 
   # Attach per-arm fixed-effect priors.
-  arm_priors <- .occu_mscale_cover_arm_priors(priors, responses)
+  arm_priors <- .occu_mscale_cover_arm_priors(priors, responses, sigma.beta)
   for (nm in c("psi", "theta", "p", "pos")) {
     ap <- arm_priors[[nm]]
     if (!is.null(ap)) {

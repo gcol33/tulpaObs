@@ -124,15 +124,38 @@
 # Fit: Bernoulli presence + multinomial class, assembled into a tobs_fit
 # ---------------------------------------------------------------------------
 
+# Presence-arm `beta_prior` for tulpa_laplace(): an explicit occu_priors()
+# object read on its "psi" role (beta_occ_intercept / beta_occ_slope), or --
+# absent one -- sigma.beta applied uniformly as N(0, sigma.beta^2). NULL when
+# neither is supplied, leaving tulpa_laplace()'s own flat default untouched.
+.occu_categorical_presence_prior <- function(priors, sigma.beta, coef_names) {
+  if (identical(priors, FALSE) || identical(priors, "none")) return(NULL)
+  if (is.null(priors) && is.null(sigma.beta)) return(NULL)
+  spec <- if (inherits(priors, "occu_priors")) priors
+          else if (!is.null(sigma.beta)) {
+            sd0 <- list(mean = 0, sd = sigma.beta)
+            occu_priors(p_intercept = sd0, p_slope = sd0,
+                       beta_occ_intercept = sd0, beta_occ_slope = sd0)
+          } else .resolve_occu_priors(priors)
+  .prior_for_submodel(spec, "psi", coef_names)
+}
+
 fit_occu_categorical <- function(enc, class_labels, priors, control, family) {
   max_iter   <- control$max.iter  %||% 100L
   tol        <- control$tol       %||% 1e-8
   prior_prec <- control$prior.prec %||% 1e-4
 
-  # Presence arm: a plain binomial Laplace on (y > 0) ~ X.
+  # Presence arm: a plain binomial Laplace on (y > 0) ~ X. `beta_prior` is NULL
+  # (tulpa_laplace()'s own flat default, byte-identical to before) unless the
+  # caller supplied `priors` (an occu_priors() object, read on its "psi" role)
+  # or `control$sigma.beta` (applied uniformly as N(0, sigma.beta^2), matching
+  # every other laplace route's use of that knob).
+  occ_bp <- .occu_categorical_presence_prior(priors, control$sigma.beta,
+                                             colnames(enc$X_occ))
   m_occ <- tulpa::tulpa_laplace(
     y = enc$present, n_trials = rep(1L, enc$N), X = enc$X_occ,
-    family = "binomial", max_iter = max_iter, tol = tol)
+    family = "binomial", max_iter = max_iter, tol = tol,
+    beta_prior = occ_bp)
   p_occ    <- ncol(enc$X_occ)
   beta_occ <- m_occ$mode[seq_len(p_occ)]
   V_occ    <- tryCatch(solve(m_occ$H_beta), error = function(e) NULL)

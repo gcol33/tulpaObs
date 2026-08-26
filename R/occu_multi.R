@@ -185,7 +185,8 @@
 # Fitter
 # ---------------------------------------------------------------------------
 
-.tobs_fit_occu_multi <- function(model, verbose = TRUE, ...) {
+.tobs_fit_occu_multi <- function(model, verbose = TRUE,
+                                 max.iter = NULL, tol = NULL, ...) {
   S <- model$S; pairs <- model$pairs
   p_state <- ncol(model$X_state); p_det <- ncol(model$X_det)
   n_theta <- (S + length(pairs)) * p_state + S * p_det
@@ -219,7 +220,7 @@
     paste0(pp$name, "_", pp$coef_names)))
 
   .tobs_bfgs_marginal_fit(nll, init, par_names, model, N = model$n_sites,
-                          control = list(maxit = 800L))
+                          max.iter = max.iter %||% 800L, tol = tol)
 }
 
 # ---------------------------------------------------------------------------
@@ -242,7 +243,8 @@
   model <- .tobs_build_occu_multi(
     state_formula = formula, det_formula = detection, data = data, y = y,
     species = species)
-  .tobs_fit_occu_multi(model, verbose = isTRUE(control$verbose))
+  .tobs_fit_occu_multi(model, verbose = isTRUE(control$verbose),
+                       max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------
