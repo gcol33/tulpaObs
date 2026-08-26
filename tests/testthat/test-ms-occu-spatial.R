@@ -16,25 +16,13 @@
 
 # --- shared fixtures -------------------------------------------------------
 
-.msocs_grid_graph <- function(side) {
-  N <- side * side
-  A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # Community occupancy with a smooth shared field on the occupancy arm.
 .msocs_sim <- function(side = 8L, J = 4L, n_species = 14L,
                        mu_psi = c(0, 0.5), mu_p = 0.2,
                        sd_psi = c(0.5, 0.3), sd_p = 0.4,
                        field_sd = 0.8, seed = 1L) {
   set.seed(seed)
-  A <- .msocs_grid_graph(side); N <- nrow(A)
+  A <- rook_adj(side); N <- nrow(A)
   coord <- expand.grid(r = seq_len(side), c = seq_len(side))
   f <- field_sd * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
   f <- f - mean(f)

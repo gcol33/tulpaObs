@@ -142,6 +142,9 @@ test_that("the coupled intercept+trend || bar recovers both field amplitudes + o
     co[r]  <- abs(fit$beta_occ[2] - 0.3) <= 1.96 * fit$se_occ[2]
   }
   expect_lt(abs(mean(bo2) - 0.3), 0.12)          # occurrence slope recovers
+  # Coverage measured 0.833 (5/6 seeds 701-706). The gate sits below the
+  # measurement so a real regression still trips without riding this
+  # estimand's own Monte Carlo noise.
   expect_gte(mean(co), 0.6)                       # occurrence-slope CI coverage
 
   # Relative amplitude of the two fields: convention-free, so this is the

@@ -70,21 +70,13 @@ simulate_separate_beta_for_recovery <- function(N = 400,
        truth = list(beta_occ = beta_occ, beta_pos = beta_pos, phi = phi))
 }
 
-chain_adj_for_test <- function(n_s) {
-  adj <- matrix(0L, n_s, n_s)
-  for (s in seq_len(n_s)) {
-    for (j in setdiff(c(s - 1L, s + 1L), c(0L, n_s + 1L))) adj[s, j] <- 1L
-  }
-  adj
-}
-
 test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds", {
   skip_on_cran()
   skip_if_fast()
   truth_sigma <- 0.4
   n_seeds <- 10L
   n_s     <- 30L
-  adj     <- chain_adj_for_test(n_s)
+  adj     <- chain_adj(n_s)
   sigma_hats <- numeric(n_seeds)
   for (r in seq_len(n_seeds)) {
     sim <- simulate_joint_lognormal_for_recovery(
@@ -132,7 +124,7 @@ test_that("joint areal cover hurdle recovers the betas + slope CIs, calibrated (
   skip_if_fast()
   n_seeds <- 15L
   n_s     <- 30L
-  adj     <- chain_adj_for_test(n_s)
+  adj     <- chain_adj(n_s)
   covered <- logical(0)
   bo2 <- bp2 <- numeric(n_seeds)
   for (r in seq_len(n_seeds)) {
@@ -236,7 +228,7 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
   truth_phi <- 30
   n_seeds   <- 10L
   n_s       <- 30L
-  adj       <- chain_adj_for_test(n_s)
+  adj       <- chain_adj(n_s)
   phi_hats  <- numeric(n_seeds)
   for (r in seq_len(n_seeds)) {
     sim <- simulate_joint_beta_for_recovery(
@@ -279,7 +271,7 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
   skip_if_fast()
   truth_phi <- 30
   n_s       <- 25L
-  adj       <- chain_adj_for_test(n_s)
+  adj       <- chain_adj(n_s)
   sim <- simulate_joint_beta_for_recovery(
     N = 600, n_s = n_s, phi = truth_phi, seed = 3001L
   )

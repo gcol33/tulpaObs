@@ -353,6 +353,9 @@ test_that("spatial N-mixture expected-count (lambda*p) CI is calibrated", {
     ci <- quantile(mu_draws, c(0.025, 0.975))
     covered[s] <- ci[1] <= mu_true && mu_true <= ci[2]
   }
+  # Coverage measured 0.9 (18/20 seeds 501-520). The gate sits below the
+  # measurement so a real regression still trips without riding this
+  # estimand's own Monte Carlo noise.
   expect_gte(mean(covered), 0.8)
 })
 

@@ -6,22 +6,10 @@
 # as the byte-for-byte exact diagnostic, and (2) that k-hat agrees with the
 # reference loo::psis on the diagnostic's actual importance ratios.
 
-grid_adj_sq <- function(side) {
-  n <- side * side; adj <- matrix(0L, n, n)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    s <- idx(r, c)
-    if (r > 1L)   adj[s, idx(r - 1L, c)] <- 1L
-    if (r < side) adj[s, idx(r + 1L, c)] <- 1L
-    if (c > 1L)   adj[s, idx(r, c - 1L)] <- 1L
-    if (c < side) adj[s, idx(r, c + 1L)] <- 1L
-  }
-  adj
-}
 
 .pk_occu_cover_fit <- function(side = 12L, seed = 100L) {
   N <- side * side
-  adj <- grid_adj_sq(side)
+  adj <- rook_adj(side)
   sim <- simulate_occu_cover(N = N, J = 3L, positive = "beta", phi = 25,
                              adj = adj, sigma = 0.8, alpha = 1.0, seed = 1L)
   long <- data.frame(site_id = rep(seq_len(N), each = 3L),
@@ -84,7 +72,6 @@ test_that("fast Pareto-k diagnostic matches the byte-for-byte exact k-hat", {
 test_that("occu_cover Pareto-k agrees with loo::psis on the real importance ratios", {
   skip_if_fast()
   skip_on_cran()
-  skip_if_not_installed("loo")
   cap <- new.env()
   withr::local_options(tulpa.kdiag.capture = cap)   # fast defaults otherwise
   k_tulpa <- .pk_extract(.pk_occu_cover_fit(seed = 100L))

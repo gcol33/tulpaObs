@@ -16,13 +16,7 @@
 
 # Rook-adjacency for a g x g grid.
 .pg_grid_adj <- function(g) {
-  co <- expand.grid(r = seq_len(g), c = seq_len(g))
-  n  <- g * g; adj <- matrix(0L, n, n)
-  for (i in seq_len(n)) for (k in seq_len(n)) {
-    if (i < k && abs(co$r[i] - co$r[k]) + abs(co$c[i] - co$c[k]) == 1L)
-      adj[i, k] <- adj[k, i] <- 1L
-  }
-  list(adj = adj, co = co)
+  list(adj = rook_adj(g), co = expand.grid(r = seq_len(g), c = seq_len(g)))
 }
 
 # Simulate intercept + ICAR-field occupancy with site-level detection.

@@ -4,18 +4,6 @@
 # breaking).
 
 # Build a grid ICAR adjacency.
-.grid_adj <- function(g) {
-  n <- g * g
-  co <- expand.grid(r = seq_len(g), c = seq_len(g))
-  adj <- matrix(0L, n, n)
-  for (i in seq_len(n)) for (j in seq_len(n)) {
-    if (i < j && abs(co$r[i] - co$r[j]) + abs(co$c[i] - co$c[j]) == 1L) {
-      adj[i, j] <- 1L; adj[j, i] <- 1L
-    }
-  }
-  adj
-}
-
 # Simulate a two-field cover hurdle: a shared intercept ICAR field plus a
 # time-weighted spatially-varying trend field, both copied onto the cover arm.
 simulate_cover_trend <- function(g = 5L, N = 2500L,
@@ -26,7 +14,7 @@ simulate_cover_trend <- function(g = 5L, N = 2500L,
                                   sd_pos = 0.4, seed = 7) {
   set.seed(seed)
   n_cells <- g * g
-  adj <- .grid_adj(g)
+  adj <- rook_adj(g)
   smooth_field <- function() {
     z <- rnorm(n_cells)
     for (it in 1:40) {
@@ -120,7 +108,7 @@ test_that("spatial(model='icar', weight=) resolves identically to icar(weight=)"
 # ---- control$trend is removed (breaking) ------------------------------------
 
 test_that("control$trend errors with a migration pointer", {
-  adj <- .grid_adj(4L)
+  adj <- rook_adj(4L)
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L),
                     time = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
@@ -136,7 +124,7 @@ test_that("control$trend errors with a migration pointer", {
 # ---- New parser guards on the weighted areal term ---------------------------
 
 test_that("a weighted areal term without an intercept field errors", {
-  adj <- .grid_adj(4L)
+  adj <- rook_adj(4L)
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L),
                     time = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
@@ -149,7 +137,7 @@ test_that("a weighted areal term without an intercept field errors", {
 })
 
 test_that("a weighted trend term requires method = 'nested_laplace'", {
-  adj <- .grid_adj(4L)
+  adj <- rook_adj(4L)
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L),
                     time = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
@@ -163,7 +151,7 @@ test_that("a weighted trend term requires method = 'nested_laplace'", {
 })
 
 test_that("two unweighted areal terms error (one intercept field only)", {
-  adj <- .grid_adj(4L)
+  adj <- rook_adj(4L)
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L),
                     time = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)

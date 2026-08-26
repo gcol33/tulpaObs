@@ -420,14 +420,6 @@ test_that("dyn_abun() RE is one arm at a time (lambda OR p, not both)", {
 
 # --- areal spatial (ICAR / proper-CAR) on the initial-abundance arm (#51) ------
 
-.da_grid_adj <- function(side) {
-  ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i,j] <- 1L
-  adj
-}
-
 .sim_da_spatial <- function(adj, Tn = 3L, J = 2L, sd_phi = 0.5, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   ng <- nrow(adj)
@@ -453,7 +445,7 @@ test_that("dyn_abun() areal ICAR recovers the initial-abundance slope + field", 
   # The field on log lambda_1 is fit by BFGS over the exact forward-HMM marginal
   # (cpp_dyn_abun_total_log_lik gradient) + the ICAR prior, with an FD-Hessian
   # observed-info Laplace marginal integrated over tau.
-  adj <- .da_grid_adj(5L)   # 25 sites
+  adj <- rook_adj(5L)   # 25 sites
   slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
   for (s in 1:2) {
     sim <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 500 + s)
@@ -481,7 +473,7 @@ test_that("dyn_abun() areal ICAR recovers the initial-abundance slope + field", 
 test_that("dyn_abun() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .da_grid_adj(4L)
+  adj <- rook_adj(4L)
   s <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 3)
   fit <- tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = s$data,
               family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y,
@@ -506,7 +498,7 @@ test_that("dyn_abun() bym2 + proper-CAR recover the initial-abundance field + sl
   # over the exact forward-HMM marginal; proper-CAR (absent from the dyn_abun
   # suite before #131) a full-rank precision. Same 25-site fixture as the icar
   # recovery above; the forward-HMM marginal keeps this to two seeds.
-  adj <- .da_grid_adj(5L)
+  adj <- rook_adj(5L)
   for (term in c("bym2", "car_proper")) {
     tf <- if (term == "bym2") (~ abund_cov1 + bym2(graph = adj)) else
                               (~ abund_cov1 + car_proper(graph = adj))
@@ -609,7 +601,7 @@ test_that("dyn_abun() NUTS + temporal field samples the AR1 field, 0 divergences
 test_that("dyn_abun() NUTS + temporal + areal errors (temporal-only under NUTS, #114)", {
   # NUTS + temporal runs the fixed-hyper temporal field ON ITS OWN; a simultaneous
   # areal field composes with temporal only under nested_laplace.
-  adj <- .da_grid_adj(4L); ng <- nrow(adj)
+  adj <- rook_adj(4L); ng <- nrow(adj)
   set.seed(9); period <- rep(1:4, length.out = ng)
   y <- array(rpois(ng * 2L * 3L, 3), c(ng, 2L, 3L))
   expect_error(

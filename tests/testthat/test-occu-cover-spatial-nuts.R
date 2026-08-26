@@ -438,6 +438,9 @@ test_that("occu_cover spatial NUTS recovers betas, field, coverage (lognormal)",
   cover <- abs(est[ok, c(2, 4, 6), drop = FALSE] -
                matrix(truth[c(2, 4, 6)], sum(ok), 3, byrow = TRUE)) <
            1.96 * se[ok, c(2, 4, 6), drop = FALSE]
+  # Coverage measured 1.0 (all cells, 5 seeds 2001-2005). The gate sits below
+  # the measurement so a real regression still trips without riding this
+  # estimand's own Monte Carlo noise.
   expect_gte(mean(cover), 0.75)
 })
 
@@ -478,6 +481,9 @@ test_that("occu_cover spatial NUTS + icar coupled field recovers betas + field (
   cover <- abs(est[ok, c(2, 4, 6), drop = FALSE] -
                matrix(truth[c(2, 4, 6)], sum(ok), 3, byrow = TRUE)) <
            1.96 * se[ok, c(2, 4, 6), drop = FALSE]
+  # Coverage measured 1.0 (all cells, 5 seeds 3001-3005). The gate sits below
+  # the measurement so a real regression still trips without riding this
+  # estimand's own Monte Carlo noise.
   expect_gte(mean(cover), 0.70)
 })
 

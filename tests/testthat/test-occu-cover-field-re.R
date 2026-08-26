@@ -4,22 +4,13 @@
 # prior block whose variance integrates on the outer grid alongside the field
 # sigma / alpha.
 
-.ocfr_grid_adj <- function(side) {
-  ng <- side * side
-  co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
-
 # Simulate occu_cover with a shared smoothed field on psi (+ alpha coupling onto
 # cover) and a per-group random intercept on occupancy.
 .ocfr_sim <- function(seed, side = 8L, J = 5L, n_g = 10L,
                       psi0 = 0.0, psi_x = 0.7, p0 = 0.3, pos0 = log(25),
                       sigma_u = 0.7, alpha = 0.5, sigma_cov = 0.4) {
   set.seed(seed)
-  adj <- .ocfr_grid_adj(side); n <- nrow(adj)
+  adj <- rook_adj(side); n <- nrow(adj)
   phi <- as.numeric(scale(rnorm(n)))
   for (r in 1:4) { pn <- phi; for (i in seq_len(n)) {
     nb <- which(adj[i, ] == 1L); pn[i] <- 0.5*phi[i] + 0.5*mean(phi[nb]) }; phi <- pn }

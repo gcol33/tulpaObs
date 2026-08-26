@@ -500,14 +500,6 @@ test_that("distance() Laplace AGHQ recovers a hazard-key grouped RE + shape (#11
 
 # --- areal spatial (ICAR / proper-CAR) on the abundance arm -----
 
-.dist_grid_adj <- function(side) {
-  ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i,j] <- 1L
-  adj
-}
-
 # Binned distance data with a smoothed ICAR-like field on log lambda. `key` /
 # `shape` select the half-normal or hazard-rate detection function (the hazard
 # scalar log-shape is recovered by the spatial path).
@@ -536,7 +528,7 @@ test_that("distance() areal ICAR recovers the abundance slope + field, calibrate
   # The abundance-arm field reuses the exact per-site distance moments
   # (cpp_distance_site_sweep); the inner Newton assembles the marginal observed
   # info diag(info_lam, info_sig) - var_N v v', v = (score_wt_lambda, vN_sigma).
-  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(7L)
+  cuts <- seq(0, 1, length.out = 6); adj <- rook_adj(7L)
   b_lambda <- c(log(40), 0.5); b_sigma <- c(log(0.4), 0.2)
   slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
   for (s in 1:3) {
@@ -568,7 +560,7 @@ test_that("distance() areal ICAR recovers the abundance slope + field, calibrate
 test_that("distance() areal spatial: proper-CAR + bym2 fit; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
-  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(6L)
+  cuts <- seq(0, 1, length.out = 6); adj <- rook_adj(6L)
   sim <- .sim_dist_spatial(adj, cuts, c(log(35), 0.4), c(log(0.4), 0.2), seed = 7)
   for (term in c("car_proper", "bym2")) {
     f <- if (term == "car_proper") (~ abund_cov1 + car_proper(graph = adj)) else
@@ -598,7 +590,7 @@ test_that("distance() bym2 recovers the abundance field + slope (#131)", {
   # (a distinct path from the icar recovery above). proper-CAR under distance is
   # already recovered via the hazard-key variant below (#79); here bym2 is the
   # gap. Same half-normal fixture as the icar recovery.
-  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(7L)
+  cuts <- seq(0, 1, length.out = 6); adj <- rook_adj(7L)
   b_lambda <- c(log(40), 0.5); b_sigma <- c(log(0.4), 0.2)
   slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
   for (s in 1:3) {
@@ -624,7 +616,7 @@ test_that("distance() hazard-rate key under areal spatial recovers slope, shape 
   # areal-BFGS fixed block (cpp_distance_site_sweep returns the summed shape
   # score grad_b). The areal field still loads on log lambda exactly as for the
   # half-normal key.
-  cuts <- seq(0, 1, length.out = 6); adj <- .dist_grid_adj(7L)
+  cuts <- seq(0, 1, length.out = 6); adj <- rook_adj(7L)
   shape_true <- 3
   slope_ok <- shape_ok <- field_cor <- logical(0)
   for (s in 1:3) {

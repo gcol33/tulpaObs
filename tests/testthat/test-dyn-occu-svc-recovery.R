@@ -30,15 +30,6 @@
 # ~0.97, coverage 0.58).
 # =============================================================================
 
-.svcr_chain_adj <- function(N) {
-  a <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) a[s, s - 1L] <- 1L
-    if (s < N)  a[s, s + 1L] <- 1L
-  }
-  a
-}
-
 .svcr_smooth_field <- function(N, sd_target, phase) {
   f <- sin(2 * pi * (seq_len(N) / N) + phase)
   f <- f - mean(f)
@@ -52,7 +43,7 @@
                            n_seasons = 5L, sigma_f0 = 1.0, sigma_f1 = 0.8,
                            b_x = 0.5) {
   set.seed(seed)
-  adj <- .svcr_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   f0 <- .svcr_smooth_field(n_cells, sigma_f0, phase = 0.7)
   f1 <- .svcr_smooth_field(n_cells, sigma_f1, phase = 2.3)
   n_sites <- n_cells * reps

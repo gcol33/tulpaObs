@@ -10,13 +10,6 @@
 # spatially-varying abundance where a spatially-varying detection was asked for
 # (#255); every such fitter rejects it through one shared check.
 
-.cffo_adj <- function(side) {
-  ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
 .cffo_field <- function(adj, sd_phi = 0.7, seed = 1L) {
   set.seed(seed); ng <- nrow(adj); phi <- as.numeric(scale(stats::rnorm(ng)))
   for (r in 1:3) { pn <- phi
@@ -39,7 +32,7 @@
 
 
 test_that("a detection-formula areal field is rejected, not fitted on the state arm (#255)", {
-  adj <- .cffo_adj(4L)
+  adj <- rook_adj(4L)
   d   <- .cffo_nmix_data(adj, .cffo_field(adj, seed = 11L), J = 4L)
 
   # abun() routes no arm on EITHER method, so both reject rather than loading a
@@ -71,7 +64,7 @@ test_that("a detection-formula areal field is rejected, not fitted on the state 
 test_that("abun() areal field enters fitted() and the pointwise log-likelihood (#254)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .cffo_adj(5L)
+  adj <- rook_adj(5L)
   phi <- .cffo_field(adj, seed = 11L)
   d   <- .cffo_nmix_data(adj, phi)
 
@@ -116,7 +109,7 @@ test_that("abun() areal field enters fitted() and the pointwise log-likelihood (
 test_that("a detection-arm field lands on the detection arm's own row layout (#254)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .cffo_adj(6L); ng <- nrow(adj)
+  adj <- rook_adj(6L); ng <- nrow(adj)
   phi <- .cffo_field(adj, sd_phi = 0.7, seed = 41L)
   set.seed(41L); x <- as.numeric(scale(stats::rnorm(ng)))
   lambda <- exp(log(9) + 0.5 * x)                    # abundance: no field
@@ -154,7 +147,7 @@ test_that("a detection-arm field lands on the detection arm's own row layout (#2
 test_that("a sampled (NUTS) field enters fitted() and the criteria too (#254)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .cffo_adj(5L)
+  adj <- rook_adj(5L)
   phi <- .cffo_field(adj, seed = 11L)
   d   <- .cffo_nmix_data(adj, phi)
 
@@ -187,7 +180,7 @@ test_that("a sampled (NUTS) field enters fitted() and the criteria too (#254)", 
 test_that("predict() adds the field in sample and not at a new design (#254)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .cffo_adj(6L); ng <- nrow(adj)
+  adj <- rook_adj(6L); ng <- nrow(adj)
   phi <- .cffo_field(adj, sd_phi = 0.7, seed = 80L)
   set.seed(80L); x <- as.numeric(scale(stats::rnorm(ng)))
   psi <- stats::plogis(0.4 + 0.6 * x)                 # occupancy: field
@@ -248,7 +241,7 @@ test_that("a temporal-only field rides the same offset, mapped by period (#254)"
 test_that("a fit with no field carries no offset and is unchanged (#254)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .cffo_adj(5L)
+  adj <- rook_adj(5L)
   d   <- .cffo_nmix_data(adj, .cffo_field(adj, seed = 11L))
   fit <- tobs(~ abund_cov1, data = d$data, family = abun(),
               detection = ~ det_cov1, y = d$y, method = "laplace",

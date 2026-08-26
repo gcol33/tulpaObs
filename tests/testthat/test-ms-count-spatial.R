@@ -5,23 +5,11 @@
 # shared field is well identified (informed by every species at each site), so it
 # recovers cleanly alongside the community means.
 
-.msc_grid_graph <- function(side) {
-  N <- side * side
-  A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # Community-spatial Poisson counts: log mu_{s,i} = X_i (mu + b_s) + f_i.
 .msc_sim <- function(side = 10L, S = 12L, beta = c(1, 0.5),
                      beta_sd = c(0.4, 0.3), field_sd = 0.7, seed = 1L) {
   set.seed(seed)
-  A <- .msc_grid_graph(side); Ns <- nrow(A)
+  A <- rook_adj(side); Ns <- nrow(A)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f <- field_sd * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   f <- f - mean(f)
@@ -109,7 +97,7 @@ test_that("community-spatial count recovers community means + field over seeds",
 # log mu_{s,i} = X_i (mu + b_s) + f0_i + w_i * f1_i, two independent ICAR fields.
 .msc_svc_sim <- function(side = 10L, S = 14L, seed = 1L) {
   set.seed(seed)
-  A <- .msc_grid_graph(side); Ns <- nrow(A)
+  A <- rook_adj(side); Ns <- nrow(A)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f0 <- 0.6 * scale(sin(co$r/side*pi) + cos(co$c/side*pi))[, 1]; f0 <- f0 - mean(f0)
   f1 <- 0.6 * scale(cos(co$r/side*pi*1.3) + sin(co$c/side*pi*0.7))[, 1]; f1 <- f1 - mean(f1)
@@ -159,7 +147,7 @@ test_that("community field recovers under bym2 (scaled structured + iid)", {
 test_that("community field recovers under group_var (sites > cells)", {
   skip_on_cran()
   set.seed(8)
-  side <- 8L; Acell <- .msc_grid_graph(side); Ncell <- nrow(Acell)
+  side <- 8L; Acell <- rook_adj(side); Ncell <- nrow(Acell)
   R <- 2L; Ns <- Ncell * R; S <- 12L
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   fcell <- 0.7 * scale(sin(co$r/side*pi) + cos(co$c/side*pi))[, 1]; fcell <- fcell - mean(fcell)

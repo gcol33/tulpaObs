@@ -177,6 +177,9 @@ test_that("95% Wald CI covers the detection slope at the nominal rate", {
 
 test_that("occu_priors() validates its arguments", {
   expect_s3_class(occu_priors(), "occu_priors")
+  expect_output(print(occu_priors()),
+                "occu_priors (weakly-informative for method='laplace'):",
+                fixed = TRUE)
 
   expect_error(
     occu_priors(p_intercept = list(mean = 0, sd = -1)),

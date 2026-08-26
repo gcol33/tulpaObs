@@ -186,21 +186,10 @@ test_that("lfMsPGOcc recovers the residual correlation over seeds", {
 # min 0.774), which is where these thresholds are set. The field itself recovers
 # throughout (>= 0.95).
 
-.msosf_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # logit psi_{s,i} = X_i (mu + b_s) + f_i + sum_q lambda_{s,q} zeta_{q,i}
 .msosf_sim <- function(side = 16L, S = 30L, Q = 2L, J = 10L, seed = 1L) {
   set.seed(seed)
-  A <- .msosf_grid_graph(side); Ns <- nrow(A)
+  A <- rook_adj(side); Ns <- nrow(A)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f  <- scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   f  <- f - mean(f)

@@ -14,19 +14,10 @@
 # =============================================================================
 
 
-.cfa_adj <- function(N) {
-  adj <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < N)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 # Build a small occu_cover dataset (optionally with a per-cell trend covariate)
 # in the shape the joint path consumes.
 .cfa_data <- function(N = 30L, J = 4L, trend = FALSE, seed = 12345L) {
-  adj <- .cfa_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     sigma = 0.8, alpha = 1.0,
@@ -148,7 +139,7 @@ test_that("copy(spatial()) inside a positive formula parses without a name", {
 })
 
 test_that("spatial(name =) is optional; a bar and a single term still take it", {
-  adj <- .cfa_adj(4L)
+  adj <- chain_adj(4L)
   dat <- data.frame(cell_idx = 1:4, time.sc = c(-1, 0, 1, 2))
   of <- ~ spatial(~ 1 + time.sc || cell_idx, graph = adj)
   op <- tulpaObs:::.tobs_parse_formula(of, data = dat)

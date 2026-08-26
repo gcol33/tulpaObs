@@ -199,6 +199,9 @@ test_that("95% CI coverage of beta_lambda at nominal rate (lambda-arm RE)", {
     cov_slope[s] <- lo["lambda_x1"]          <= beta_lambda[2] &&
                     hi["lambda_x1"]          >= beta_lambda[2]
   }
+  # Coverage measured 8/8 on both (fixed seeds 2001-2008). The gate sits well
+  # below the measurement so it still trips on a real regression without
+  # riding the estimand's own Monte Carlo noise at this seed count.
   expect_gte(mean(cov_int),   0.75)
   expect_gte(mean(cov_slope), 0.75)
 })

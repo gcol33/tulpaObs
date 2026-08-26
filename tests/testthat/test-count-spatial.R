@@ -13,23 +13,11 @@
 
 # --- fixtures --------------------------------------------------------------
 
-.count_grid_graph <- function(side) {
-  N <- side * side
-  A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # Poisson counts with a smooth sum-to-zero areal field: log mu_i = X_i beta + f_i.
 .count_sim_areal <- function(side = 10L, beta = c(0.5, 0.5), field_sd = 0.7,
                              seed = 1L) {
   set.seed(seed)
-  A <- .count_grid_graph(side); N <- nrow(A)
+  A <- rook_adj(side); N <- nrow(A)
   coord <- expand.grid(r = seq_len(side), c = seq_len(side))
   f <- field_sd * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
   f <- f - mean(f)
@@ -75,7 +63,7 @@ test_that("areal count() gates the unsupported forms", {
 
   # An AGGREGATING group_var (sites > cells) is not yet reconstructed here.
   expect_error(
-    tobs(~ x + icar(graph = .count_grid_graph(3L), group_var = "cell"),
+    tobs(~ x + icar(graph = rook_adj(3L), group_var = "cell"),
          data = cbind(d$data, cell = rep(seq_len(9L), length.out = d$N)),
          y = d$y, family = count(), method = "nested_laplace"),
     "group_var|sites > cells|one field node per site")
@@ -211,7 +199,7 @@ test_that("areal count recovers the field + slope under bym2", {
 .count_sim_areal_binom <- function(side = 12L, beta = c(0.2, 0.6),
                                     field_sd = 0.8, trials = 10L, seed = 1L) {
   set.seed(seed)
-  A <- .count_grid_graph(side); N <- nrow(A)
+  A <- rook_adj(side); N <- nrow(A)
   coord <- expand.grid(r = seq_len(side), c = seq_len(side))
   f <- field_sd * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
   f <- f - mean(f)

@@ -10,12 +10,6 @@
 # field shapes + arm coefficients recover the generative truth.
 # =============================================================================
 
-.gv_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) { if (s > 1L) adj[s, s-1L] <- 1L; if (s < n) adj[s, s+1L] <- 1L }
-  adj
-}
-
 # Simulate sites = cells x periods sharing a per-cell ICAR field, with a per-site
 # time weight driving the trend on psi (and, via alpha_trend, on cover).
 .gv_sim <- function(n_cells, n_per, J, adj, seed,
@@ -84,7 +78,7 @@
 test_that("occu_cover group_var runs with more sites than field nodes", {
   skip_if_fast()
   n_cells <- 16L; n_per <- 4L; J <- 12L
-  adj <- .gv_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   sim <- .gv_sim(n_cells, n_per, J, adj, seed = 4242L)
   expect_gt(sim$n_sites, sim$n_cells)            # 64 sites, 16 cells
 
@@ -171,7 +165,7 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
   skip_on_cran()
   skip_if_fast()
   n_cells <- 16L
-  adj <- .gv_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   sim <- .gv_sim_unequal(n_cells, adj, seed = 521L)
   expect_gt(sim$n_sites, sim$n_cells)
   expect_gt(length(unique(table(sim$site$cell_idx))), 1L)   # genuinely unequal
@@ -206,7 +200,7 @@ test_that("occu_cover group_var recovers fields and slopes (multi-seed)", {
   skip_on_cran()
   skip_if_fast()
   n_cells <- 20L; n_per <- 6L; J <- 15L
-  adj <- .gv_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   seeds <- c(101L, 202L, 303L, 404L, 505L)
 
   fcor_i <- fcor_t <- numeric(0)

@@ -8,20 +8,6 @@
 # and the quantity `tulpa::compute_bym2_scale()` already reported. These assert
 # the settled definition and both live spellings of the loading.
 
-lattice_adj <- function(n_row, n_col) {
-  n <- n_row * n_col
-  adj <- matrix(0, n, n)
-  for (s in seq_len(n)) {
-    r <- ((s - 1L) %/% n_col) + 1L
-    cc <- ((s - 1L) %% n_col) + 1L
-    if (r > 1L)     adj[s, s - n_col] <- 1
-    if (r < n_row)  adj[s, s + n_col] <- 1
-    if (cc > 1L)    adj[s, s - 1L] <- 1
-    if (cc < n_col) adj[s, s + 1L] <- 1
-  }
-  adj
-}
-
 # diag(Q^+) the long way round, from an explicit pseudo-inverse.
 icar_marginal_var <- function(adj) {
   Q <- diag(rowSums(adj)) - adj
@@ -33,7 +19,7 @@ icar_marginal_var <- function(adj) {
 
 test_that("the scale factor is the geometric mean of the MARGINAL VARIANCES", {
   for (dim in list(c(4, 4), c(5, 5), c(10, 10), c(4, 25))) {
-    adj <- lattice_adj(dim[1], dim[2])
+    adj <- rook_adj(dim[1], dim[2])
     expect_equal(.bym2_scale(adj), exp(mean(log(icar_marginal_var(adj)))),
                  tolerance = 1e-10)
   }
@@ -51,7 +37,7 @@ test_that("it is NOT the geometric mean of the eigenvalues", {
     exp(mean(log(ev[ev > 1e-10])))
   }
   dims <- list(c(5, 5), c(10, 10), c(20, 20))
-  adjs <- lapply(dims, function(d) lattice_adj(d[1], d[2]))
+  adjs <- lapply(dims, function(d) rook_adj(d[1], d[2]))
   s  <- vapply(adjs, .bym2_scale, numeric(1))
   em <- vapply(adjs, eig_mean, numeric(1))
 
@@ -77,7 +63,7 @@ test_that("it matches tulpa's implementation through the engine spelling", {
   # constant. Internal upstream, hence the triple colon.
   ref <- getFromNamespace("compute_bym2_scale", "tulpa")
   for (dim in list(c(4, 4), c(5, 5), c(10, 10), c(3, 12))) {
-    adj <- lattice_adj(dim[1], dim[2])
+    adj <- rook_adj(dim[1], dim[2])
     expect_equal(.bym2_engine_scale(.bym2_scale(adj)), ref(adj),
                  tolerance = 1e-10)
   }
@@ -87,13 +73,13 @@ test_that("the engine spelling is the reciprocal square root", {
   expect_equal(.bym2_engine_scale(0.25), 2)
   expect_equal(.bym2_engine_scale(4), 0.5)
   # A field loaded either way carries the same variance: sigma^2 rho / s.
-  s <- .bym2_scale(lattice_adj(5, 5))
+  s <- .bym2_scale(rook_adj(5, 5))
   expect_equal((1 / sqrt(s))^2, 1 / s)
 })
 
 test_that("the dense, Q and CSR doors return the same value to the bit", {
   for (dim in list(c(4, 4), c(6, 6), c(10, 10))) {
-    adj <- lattice_adj(dim[1], dim[2])
+    adj <- rook_adj(dim[1], dim[2])
     csr <- adjacency_to_csr(adj)
     expect_identical(.bym2_scale_csr(csr$row_ptr, csr$col_idx, nrow(adj)),
                      .bym2_scale(adj))
@@ -103,7 +89,7 @@ test_that("the dense, Q and CSR doors return the same value to the bit", {
 })
 
 test_that("a disconnected graph drops one null eigenvalue per component", {
-  b <- lattice_adj(5, 5)
+  b <- rook_adj(5, 5)
   n <- nrow(b)
   adj <- matrix(0, 2 * n, 2 * n)
   adj[seq_len(n), seq_len(n)] <- b
@@ -145,14 +131,14 @@ test_that("an isolated node is an error, not a floored variance", {
   # It carries no ICAR prior at all, so its marginal variance is zero and the
   # geometric mean over the graph is zero. Flooring it (what the community
   # copy of this function did) turns that into a huge finite loading instead.
-  adj <- lattice_adj(3, 3)
+  adj <- rook_adj(3, 3)
   adj <- rbind(cbind(adj, 0), 0)     # one extra node, no neighbours
   expect_error(.bym2_scale(adj), "zero marginal variance")
   expect_error(.bym2_scale(adj), "isolated")
 })
 
 test_that(".bym2_resolve_scale computes when absent and validates when given", {
-  adj <- lattice_adj(5, 5)
+  adj <- rook_adj(5, 5)
   csr <- adjacency_to_csr(adj)
   expect_identical(
     .bym2_resolve_scale(NULL, csr$row_ptr, csr$col_idx, nrow(adj)),
@@ -179,7 +165,7 @@ test_that("the term carries s and the engine boundary converts it", {
   # `bym2()` puts the Riebler constant on the term, because tulpaObs's own
   # kernels read it directly. Only the sites that hand it to the tulpa engine
   # convert.
-  adj <- lattice_adj(4, 4)
+  adj <- rook_adj(4, 4)
   tm  <- .tobs_term_bym2(adj)
   expect_equal(tm$scale_factor, .bym2_scale(adj))
   expect_equal(.bym2_engine_scale(tm$scale_factor),

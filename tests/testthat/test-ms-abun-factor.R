@@ -16,17 +16,6 @@
 # judged on the residual species correlation (Sigma_res = lambda lambda'), which
 # IS identified -- as for every other community factor family.
 
-.msaf_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 .msaf_sim <- function(N = 120L, S = 12L, J = 4L, Q = 2L, load_sd = 0.5,
                       field = NULL, seed = 1L) {
   set.seed(seed)
@@ -127,7 +116,7 @@ test_that("spatial-factor community N-mixture recovers the field and the factors
   skip_if_fast()
   skip_on_cran()
   side <- 10L
-  A  <- .msaf_grid_graph(side)
+  A  <- rook_adj(side)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f  <- 0.6 * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   f  <- f - mean(f)

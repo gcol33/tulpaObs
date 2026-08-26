@@ -1,15 +1,6 @@
 # DIC / CPO / LPML via the engine criteria layer, and family-specific PIT + PPC
 # for the cover hurdle and occu_cover.
 
-.cc_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < n)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 .cc_occu_cover_long <- function(sim, N, J) {
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -79,7 +70,7 @@ test_that("cover() nested-joint: PIT + PPC project the shared field", {
   set.seed(103)
   N <- 200L; n_s <- 25L
   spatial_idx <- sample.int(n_s, N, replace = TRUE)
-  adj <- .cc_chain_adj(n_s)
+  adj <- chain_adj(n_s)
   phi <- rnorm(n_s); theta <- rnorm(n_s)
   w_s <- 0.6 * (sqrt(0.7) * phi + sqrt(0.3) * theta)
   x <- rnorm(N)

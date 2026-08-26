@@ -60,14 +60,6 @@ simulate_d3_like <- function(seed, alpha_true,
   )
 }
 
-chain_adj_for_test <- function(n_s) {
-  adj <- matrix(0L, n_s, n_s)
-  for (s in seq_len(n_s)) {
-    for (j in setdiff(c(s - 1L, s + 1L), c(0L, n_s + 1L))) adj[s, j] <- 1L
-  }
-  adj
-}
-
 # The copy-axis coordinates the fit actually integrated. `theta_grid` carries
 # its axis labels in `theta_names` on this path, so read the column through
 # them rather than by position.
@@ -108,7 +100,7 @@ test_that("adaptive refinement leaves the copy axis at the upper boundary", {
   truth_alpha <- 1.5
   n_seeds <- 20L
   n_s     <- 25L
-  adj     <- chain_adj_for_test(n_s)
+  adj     <- chain_adj(n_s)
 
   results <- vapply(seq_len(n_seeds), function(r) {
     sim <- simulate_d3_like(seed = 3400L + r, alpha_true = truth_alpha,
@@ -152,7 +144,7 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
   truth_alpha <- 1.5
   n_seeds <- 20L
   n_s     <- 25L
-  adj     <- chain_adj_for_test(n_s)
+  adj     <- chain_adj(n_s)
 
   # Pin the 13-point phi axis. On the 7-point package default the adaptive pass
   # also densifies `phi_pos`, so the two arms would differ on two axes at once;
@@ -229,7 +221,7 @@ test_that("adaptive refinement is a no-op on the copy axis when the integrand ha
   # proposed extension point is clipped away, so nothing is added there either.
   sim <- simulate_d3_like(seed = 3101L, alpha_true = 0.0)
   n_s <- nlevels(sim$data$region)
-  adj <- chain_adj_for_test(n_s)
+  adj <- chain_adj(n_s)
   fit <- fit_d3_like(sim, adj, list(
     sigma.grid     = c(0.3, 0.6, 0.9),
     rho.grid       = c(0.5, 0.7, 0.9),
@@ -262,7 +254,7 @@ test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
   # negligible weight (the mode is never pruned). Nothing here depends on where
   # the truth sits relative to a node; the copy axis is pinned so the grid this
   # runs on is stated rather than inherited from the package default.
-  n_s <- 25L; adj <- chain_adj_for_test(n_s)
+  n_s <- 25L; adj <- chain_adj(n_s)
   sim <- simulate_d3_like(seed = 101L, alpha_true = 1.0, N = 400L, n_s = n_s)
   ctrl_grid <- list(
     sigma.grid     = exp(seq(log(0.2), log(1.5), length.out = 5)),

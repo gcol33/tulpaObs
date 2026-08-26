@@ -69,4 +69,5 @@ test_that("NA visits handled correctly", {
   mod <- .tobs_build_model(occ_formula = ~ 1, det_formula = ~ 1,
                            data = site_data, y = y)
   expect_true(all(mod$y[, 3] == -1L))
+  expect_output(print(mod), "Single-season occupancy model")
 })

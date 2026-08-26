@@ -14,20 +14,6 @@
 # Each fit warm-starts from the sfMsNMix nested Laplace-EM (S species x an EM x an
 # outer grid) then runs the sampler, so every block is skip_on_cran() + skip_if_fast().
 
-# Dense rook (4-neighbour) adjacency for a g x g grid.
-.man_rook_adj <- function(g) {
-  n <- g * g
-  A <- matrix(0L, n, n)
-  idx <- function(r, c) (r - 1L) * g + c
-  for (r in seq_len(g)) for (c in seq_len(g)) {
-    i <- idx(r, c)
-    if (r > 1) A[i, idx(r - 1L, c)] <- 1L
-    if (r < g) A[i, idx(r + 1L, c)] <- 1L
-    if (c > 1) A[i, idx(r, c - 1L)] <- 1L
-    if (c < g) A[i, idx(r, c + 1L)] <- 1L
-  }
-  A
-}
 
 # Fit a shared-field ms_abun() under NUTS via the front door; returns the fit.
 .man_fit_nuts <- function(sim, adj, field_kind, seed = 1L,
@@ -47,7 +33,7 @@
 test_that("ms_abun() NUTS + car_proper shared field recovers means + field (#73)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .man_rook_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_ms_abun(n_species = 12, J = 5, n_abund_covs = 1, n_det_covs = 1,
                           mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
                           sd_lambda = 0.5, sd_p = 0.4,
@@ -75,7 +61,7 @@ test_that("ms_abun() NUTS + car_proper shared field recovers means + field (#73)
 test_that("ms_abun() NUTS + icar shared field samples clean + centred (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .man_rook_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_ms_abun(n_species = 12, J = 5, n_abund_covs = 1, n_det_covs = 1,
                           mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
                           sd_lambda = 0.5, sd_p = 0.4,
@@ -100,7 +86,7 @@ test_that("ms_abun() NUTS + icar shared field samples clean + centred (#113)", {
 test_that("ms_abun() NUTS + bym2 shared field samples clean + recovers field (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .man_rook_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_ms_abun(n_species = 12, J = 5, n_abund_covs = 1, n_det_covs = 1,
                           mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
                           sd_lambda = 0.5, sd_p = 0.4,

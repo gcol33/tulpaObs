@@ -7,17 +7,8 @@
 # = 1 (so the iid block scatters) while the shared field is still skipped on
 # detection by its 0-node sentinel.
 
-.ocor_grid_adj <- function(side) {
-  ng <- side * side
-  co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
-
 .ocor_sim <- function(seed, side = 7L, J = 6L, n_g = 6L, sigma_re_p = 0.8) {
-  adj <- .ocor_grid_adj(side)
+  adj <- rook_adj(side)
   simulate_occu_cover(
     N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -28,7 +19,7 @@
 # intercept on the positive-cover predictor (re_pos_groups), so a fit with
 # `positive = ~ ... + (1 | habitat)` under cover_aggregate = "none" recovers it.
 .ocor_sim_pos <- function(seed, side = 8L, J = 8L, n_g = 6L, sigma_re_pos = 0.8) {
-  adj <- .ocor_grid_adj(side)
+  adj <- rook_adj(side)
   simulate_occu_cover(
     N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -38,7 +29,7 @@
 test_that("occu_cover() detection RE: fit runs and reports the RE on the p arm", {
   skip_on_cran()
   sim <- .ocor_sim(1L, side = 6L, n_g = 6L)
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (1 | habitat), positive = ~ pos_cov1,
@@ -66,7 +57,7 @@ test_that("occu_cover() detection RE: fit runs and reports the RE on the p arm",
 test_that("occu_cover() detection RE: a no-RE fit is unchanged (no fit$re)", {
   skip_on_cran()
   sim <- .ocor_sim(2L, side = 6L, n_g = 6L)
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   fit0 <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
                family = occu_cover("lognormal"),
                detection = ~ det_cov1, positive = ~ pos_cov1,
@@ -80,7 +71,7 @@ test_that("occu_cover() detection RE: a no-RE fit is unchanged (no fit$re)", {
 test_that("occu_cover() detection RE: predict() handles seen and unseen levels", {
   skip_on_cran()
   sim <- .ocor_sim(3L, side = 6L, n_g = 6L)
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   N   <- nrow(adj)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
@@ -106,7 +97,7 @@ test_that("occu_cover() detection RE: predict() handles seen and unseen levels",
 test_that("occu_cover() positive-cover RE: fit runs and reports the RE on the pos arm", {
   skip_on_cran()
   sim <- .ocor_sim(4L, side = 6L, n_g = 6L)
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal", cover_aggregate = "none"),
               detection = ~ det_cov1, positive = ~ pos_cov1 + (1 | habitat),
@@ -124,7 +115,7 @@ test_that("occu_cover() detection RE recovers BLUPs and detects the variance", {
   seeds <- 1:6
   res <- t(vapply(seeds, function(s) {
     sim <- .ocor_sim(s, side = 9L, J = 8L, n_g = 6L, sigma_re_p = 0.8)
-    adj <- .ocor_grid_adj(9L)
+    adj <- rook_adj(9L)
     fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
                 family = occu_cover("lognormal"),
                 detection = ~ det_cov1 + (1 | habitat),
@@ -153,7 +144,7 @@ test_that("occu_cover() cover RE recovers BLUPs and the variance", {
   res <- t(vapply(seeds, function(s) {
     sim <- .ocor_sim_pos(s, side = 8L, J = 8L, n_g = 6L,
                          sigma_re_pos = sigma_re_pos)
-    adj <- .ocor_grid_adj(8L)
+    adj <- rook_adj(8L)
     fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
                 family = occu_cover("lognormal", cover_aggregate = "none"),
                 detection = ~ det_cov1, positive = ~ pos_cov1 + (1 | habitat),
@@ -176,7 +167,7 @@ test_that("occu_cover() cover RE recovers BLUPs and the variance", {
 test_that("occu_cover() observation RE gates the unsupported configurations", {
   skip_on_cran()
   sim <- .ocor_sim(5L, side = 5L, n_g = 5L)
-  adj <- .ocor_grid_adj(5L)
+  adj <- rook_adj(5L)
   base <- list(data = sim$data, family = occu_cover("lognormal"),
                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
                control = list(progress = FALSE))
@@ -202,7 +193,7 @@ test_that("occu_cover() observation RE gates the unsupported configurations", {
 
 test_that("occu_cover() crossed detection RE: two groupings fit and report", {
   skip_on_cran()
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
     N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -237,7 +228,7 @@ test_that("occu_cover() crossed detection RE: two groupings fit and report", {
 
 test_that("occu_cover() nested detection RE: (1 | region/site) fits two terms", {
   skip_on_cran()
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
     N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -263,7 +254,7 @@ test_that("occu_cover() nested detection RE: (1 | region/site) fits two terms", 
 
 test_that("occu_cover() crossed RE: predict sums both groupings, unseen shrinks", {
   skip_on_cran()
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   N   <- nrow(adj)
   sim <- simulate_occu_cover(
     N = N, J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
@@ -321,7 +312,7 @@ test_that("occu_cover() crossed detection RE recovers both variances + BLUPs", {
   skip_if_fast()
   seeds <- 1:5
   res <- t(vapply(seeds, function(s) {
-    adj <- .ocor_grid_adj(9L)
+    adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
       N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -359,7 +350,7 @@ test_that("occu_cover() nested detection RE recovers both levels' BLUPs", {
   skip_if_fast()
   seeds <- 1:20
   res <- t(vapply(seeds, function(s) {
-    adj <- .ocor_grid_adj(9L)
+    adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
       N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -404,7 +395,7 @@ test_that("occu_cover() nested detection RE recovers both levels' BLUPs", {
 
 test_that("occu_cover() uncorrelated random slope: weighted iid block fits + reports", {
   skip_on_cran()
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
     N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -429,7 +420,7 @@ test_that("occu_cover() uncorrelated random slope: weighted iid block fits + rep
 
 test_that("occu_cover() correlated random slope: miid block fits + reports Sigma", {
   skip_on_cran()
-  adj <- .ocor_grid_adj(6L)
+  adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
     N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -460,7 +451,7 @@ test_that("occu_cover() correlated random slope: miid block fits + reports Sigma
 
 test_that("occu_cover() random slope: predict weights the slope covariate", {
   skip_on_cran()
-  adj <- .ocor_grid_adj(6L); N <- nrow(adj)
+  adj <- rook_adj(6L); N <- nrow(adj)
   sim <- simulate_occu_cover(
     N = N, J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -493,7 +484,7 @@ test_that("occu_cover() correlated random slope recovers Sigma + BLUPs", {
   skip_if_fast()
   seeds <- 1:5
   res <- t(vapply(seeds, function(s) {
-    adj <- .ocor_grid_adj(9L)
+    adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
       N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -532,7 +523,7 @@ test_that("occu_cover() uncorrelated random slope recovers slope SD + BLUPs", {
   seeds <- 1:5
   sigma_slope <- 0.6
   res <- t(vapply(seeds, function(s) {
-    adj <- .ocor_grid_adj(9L)
+    adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
       N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -570,7 +561,7 @@ test_that("occu_cover() random slope recovers on a NON-unit covariate scale", {
   # back-transformed to the natural (raw) units, recovering ~0.08.
   seeds <- 1:5
   res <- t(vapply(seeds, function(s) {
-    adj <- .ocor_grid_adj(9L)
+    adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
       N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,

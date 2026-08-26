@@ -168,3 +168,13 @@ test_that("edge cases: empty-visit site and inadmissible K_max", {
   expect_equal(ev_floor$n_K_inadmissible, 0L)
   expect_true(all(is.finite(ev_floor$log_lik_site)))
 })
+
+test_that("print.nmix_marginal reports mixture / site / K_max summary", {
+  dat <- simulate_nmix_panel(seed = 505, mixture = "P", n_sites = 10, J = 3)
+  marg <- nmix_site_marginal(
+    y = dat$y, site_idx = dat$site_idx,
+    X_lambda = dat$X_lambda, X_p = dat$X_p, mixture = "P"
+  )
+  expect_output(print(marg), "tulpa N-mixture per-site marginal (mixture = P)",
+                fixed = TRUE)
+})

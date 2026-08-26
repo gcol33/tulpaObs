@@ -19,23 +19,12 @@
 
 # --- fixtures --------------------------------------------------------------
 
-.svca_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # Two distinct smooth sum-to-zero surfaces: f0 (intercept) and f1 (the
 # coefficient on w, so it enters eta weighted by w_i).
 .svca_sim <- function(side = 12L, beta = c(0.6, 0.4), f0_sd = 0.6, f1_sd = 0.5,
                       seed = 1L) {
   set.seed(seed)
-  A  <- .svca_grid_graph(side); N <- nrow(A)
+  A  <- rook_adj(side); N <- nrow(A)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f0 <- f0_sd * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   f0 <- f0 - mean(f0)

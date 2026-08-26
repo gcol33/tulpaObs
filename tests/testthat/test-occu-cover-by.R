@@ -100,6 +100,8 @@ test_that("by = (occu_cover) equals the multi-response list batch and independen
   expect_s3_class(fit_by, "tobs_batch")
   expect_identical(fit_by$species, c("a", "b"))
   expect_identical(fit_by$n_species, 2L)
+  expect_output(print(fit_by), "<tobs_batch> 2 species, family = occu_cover",
+                fixed = TRUE)
 
   # (2) hand-built multi-response `y` list on the same shared design.
   cell_dat <- data.frame(occ_cov1 = cell_cov)

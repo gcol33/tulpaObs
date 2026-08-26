@@ -12,13 +12,6 @@
 # abundance / occupancy arm); that gate is asserted too.
 
 # Smoothed ICAR-like field on a side x side grid, demeaned (sum-to-zero).
-.odf_grid_adj <- function(side) {
-  ng <- side * side; co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i]-co$x[j]) + abs(co$y[i]-co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
 .odf_field <- function(adj, sd_phi = 0.7, seed = 1L) {
   set.seed(seed); ng <- nrow(adj); phi <- as.numeric(scale(stats::rnorm(ng)))
   for (r in 1:3) { pn <- phi
@@ -31,7 +24,7 @@
 test_that("removal() detection-arm ICAR field recovers the capture surface (#114)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .odf_grid_adj(7L); ng <- nrow(adj); n_seeds <- 6L
+  adj <- rook_adj(7L); ng <- nrow(adj); n_seeds <- 6L
   fcor <- slope <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {
     phi <- .odf_field(adj, sd_phi = 0.7, seed = 40L + s)
@@ -60,7 +53,7 @@ test_that("removal() detection-arm ICAR field recovers the capture surface (#114
 test_that("fp_occu() detection-arm (p11) ICAR field recovers the surface (#114)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .odf_grid_adj(8L); ng <- nrow(adj); n_seeds <- 6L
+  adj <- rook_adj(8L); ng <- nrow(adj); n_seeds <- 6L
   fcor <- slope <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {
     phi <- .odf_field(adj, sd_phi = 0.7, seed = 80L + s)
@@ -95,7 +88,7 @@ test_that("dyn_abun() detection-arm ICAR field recovers the surface (#114)", {
   skip_if_fast()
   # dyn_abun's forward-HMM marginal over an areal grid is costly; a compact grid
   # and a few seeds validate the per-site detection-arm routing.
-  adj <- .odf_grid_adj(5L); ng <- nrow(adj); n_seeds <- 4L
+  adj <- rook_adj(5L); ng <- nrow(adj); n_seeds <- 4L
   fcor <- slope <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {
     phi <- .odf_field(adj, sd_phi = 0.7, seed = 90L + s)
@@ -124,7 +117,7 @@ test_that("dyn_abun() detection-arm ICAR field recovers the surface (#114)", {
 
 
 test_that("detection-arm areal field under NUTS stays gated (#114)", {
-  adj <- .odf_grid_adj(4L); ng <- nrow(adj)
+  adj <- rook_adj(4L); ng <- nrow(adj)
   set.seed(1); x <- stats::rnorm(ng); y <- matrix(stats::rpois(ng * 4L, 3), ng, 4L)
   expect_error(
     suppressWarnings(tobs(~ x, data = data.frame(x = x), family = removal(),

@@ -16,15 +16,6 @@
 # composition runs and recovers the fixed slope + the spatial field, with the
 # temporal block estimated (length T) but not held to a tight truth correlation.
 
-.cts_grid_adj <- function(side) {
-  ng <- side * side
-  co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
-
 # Smoothed, demeaned ICAR-like field on the grid.
 .cts_field <- function(adj, sd_phi = 0.7, seed = 1L) {
   set.seed(seed); ng <- nrow(adj); phi <- as.numeric(scale(rnorm(ng)))
@@ -54,7 +45,7 @@
 test_that("removal() areal field + AR1 temporal recovers the slope + both fields", {
   skip_on_cran()
   skip_if_fast()
-  side <- 6L; adj <- .cts_grid_adj(side); nsite <- nrow(adj)
+  side <- 6L; adj <- rook_adj(side); nsite <- nrow(adj)
   slope <- numeric(5); sp_cor <- numeric(5); tmp_cor <- numeric(5); rho_hat <- numeric(5)
   for (sd in 1:5) {
     phi <- .cts_field(adj, sd_phi = 0.7, seed = 10L + sd)
@@ -84,7 +75,7 @@ test_that("removal() areal field + AR1 temporal recovers the slope + both fields
 test_that("distance() areal field + AR1 temporal recovers the slope + both fields", {
   skip_on_cran()
   skip_if_fast()
-  side <- 6L; adj <- .cts_grid_adj(side); nsite <- nrow(adj)
+  side <- 6L; adj <- rook_adj(side); nsite <- nrow(adj)
   cut <- c(0, 10, 20, 30, 40); B <- 4L; sig <- exp(3.0)
   g_mid <- exp(-((head(cut, -1) + tail(cut, -1)) / 2)^2 / (2 * sig^2))
   pi_b  <- g_mid * diff(cut) / 40 * 0.6
@@ -120,7 +111,7 @@ test_that("fp_occu() areal field + AR1 temporal composes and recovers the psi sl
   # The occupancy field is weakly identified (one binary site per node), so the
   # invariant is that the temporal block composes (length T) and the fixed psi
   # slope + spatial field recover -- not a tight temporal-truth correlation.
-  side <- 7L; adj <- .cts_grid_adj(side); nsite <- nrow(adj)
+  side <- 7L; adj <- rook_adj(side); nsite <- nrow(adj)
   slope <- numeric(3); sp_cor <- numeric(3)
   for (sd in 1:3) {
     phi <- .cts_field(adj, sd_phi = 0.8, seed = 30L + sd)
@@ -151,7 +142,7 @@ test_that("dyn_abun() areal field + AR1 temporal composes and recovers the lambd
   # The open-population forward-HMM marginal identifies the temporal component
   # only weakly at an affordable grid, so the invariant is composition (length T)
   # + recovery of the fixed initial-abundance slope and the spatial field.
-  side <- 4L; adj <- .cts_grid_adj(side); nsite <- nrow(adj)
+  side <- 4L; adj <- rook_adj(side); nsite <- nrow(adj)
   slope <- numeric(3); sp_cor <- numeric(3)
   for (sd in 1:3) {
     phi <- .cts_field(adj, sd_phi = 0.6, seed = 40L + sd)

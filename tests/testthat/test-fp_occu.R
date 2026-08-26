@@ -380,14 +380,6 @@ test_that("fp_occu RE is on the psi OR p11 arm, never p10/b or both at once", {
 
 # --- areal spatial (ICAR / proper-CAR) on the occupancy (psi) arm (#51) --------
 
-.fp_grid_adj <- function(side) {
-  ng <- side*side; co <- expand.grid(x=seq_len(side), y=seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i!=j && abs(co$x[i]-co$x[j])+abs(co$y[i]-co$y[j])==1L) adj[i,j] <- 1L
-  adj
-}
-
 # Multistate false-positive data with a smoothed ICAR-like field on logit(psi).
 .sim_fp_spatial <- function(adj, J = 12L, p11 = 0.75, p10 = 0.05, bcert = 0.5,
                             beta0 = qlogis(0.45), b1 = 0.6, sd_phi = 0.8, seed = NULL) {
@@ -412,7 +404,7 @@ test_that("fp_occu() areal ICAR recovers the occupancy slope + field", {
   # (cpp_fp_occu_total_log_lik gradient) + the ICAR prior, FD-Hessian Laplace.
   # Occupancy fields are more weakly identified than count fields (one binary
   # site per node), so the field correlation bar is lower than removal/distance.
-  adj <- .fp_grid_adj(7L)
+  adj <- rook_adj(7L)
   slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
   for (s in 1:3) {
     sim <- .sim_fp_spatial(adj, seed = 600 + s)
@@ -440,7 +432,7 @@ test_that("fp_occu() areal ICAR recovers the occupancy slope + field", {
 test_that("fp_occu() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .fp_grid_adj(5L)
+  adj <- rook_adj(5L)
   s <- .sim_fp_spatial(adj, J = 10L, seed = 3)
   fit <- tobs(formula = ~ x + bym2(graph = adj), data = s$data, family = fp_occu(),
               detection = ~ 1, y = s$y, method = "nested_laplace",
@@ -464,7 +456,7 @@ test_that("fp_occu() bym2 + proper-CAR recover the occupancy field + slope (#131
   # field-correlation bar is lower than the count families. bym2 fits the
   # rho-mixed unit field; proper-CAR (absent from the fp_occu suite before #131)
   # a full-rank precision. Same fixture as the icar recovery above.
-  adj <- .fp_grid_adj(7L)
+  adj <- rook_adj(7L)
   for (term in c("bym2", "car_proper")) {
     tf <- if (term == "bym2") (~ x + bym2(graph = adj)) else
                               (~ x + car_proper(graph = adj))

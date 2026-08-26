@@ -23,15 +23,6 @@
 # =============================================================================
 
 
-.ocnl_grid_adj <- function(side) {
-  ng <- side * side
-  co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
-
 # sigma_re is 2.0, not the 0.9 a recovery fixture would use. Every claim below
 # rests on the fit having FOUND a substantial random effect, and the grid
 # returns 0.30 to 1.57 across seeds when the truth is 0.9 -- so the premise
@@ -42,7 +33,7 @@
 # See NOTES_measurements.md.
 .ocnl_sim <- function(seed, arm = "p", side = 6L, J = 6L, n_g = 6L,
                       sigma_re = 2.0) {
-  adj <- .ocnl_grid_adj(side)
+  adj <- rook_adj(side)
   simulate_occu_cover(
     N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
@@ -91,7 +82,7 @@ test_that("the grid-integrated components carry the per-visit RE offset", {
   skip_if_fast()
   for (arm in c("p", "pos")) {
     sim <- .ocnl_sim(if (identical(arm, "p")) 1L else 3L, arm = arm)
-    adj <- .ocnl_grid_adj(6L)
+    adj <- rook_adj(6L)
     fit <- .ocnl_fit(sim, adj, arm)
 
     # 1500 draws, not 400: the comparison below is a per-group mean over draws
@@ -124,7 +115,7 @@ test_that("the criteria move with the detection RE and reduce to it at zero", {
   skip_on_cran()
   skip_if_fast()
   sim <- .ocnl_sim(1L, arm = "p")
-  adj <- .ocnl_grid_adj(6L)
+  adj <- rook_adj(6L)
   fit <- .ocnl_fit(sim, adj, "p")
   expect_gt(fit$means[["sigma_re_p"]], 0.4)
 
@@ -157,7 +148,7 @@ test_that("the criteria move with the cover-arm RE", {
   skip_on_cran()
   skip_if_fast()
   sim <- .ocnl_sim(3L, arm = "pos", side = 7L, J = 8L)
-  adj <- .ocnl_grid_adj(7L)
+  adj <- rook_adj(7L)
   fit <- .ocnl_fit(sim, adj, "pos")
   expect_gt(fit$means[["sigma_re_pos"]], 0.4)
 
@@ -182,7 +173,7 @@ test_that("a fit with no random effect keeps the no-offset arithmetic", {
   skip_on_cran()
   skip_if_fast()
   sim <- .ocnl_sim(2L, arm = "none")
-  adj <- .ocnl_grid_adj(6L)
+  adj <- rook_adj(6L)
   fit <- .ocnl_fit(sim, adj, "none")
   expect_null(fit$re)
   expect_null(fit$model$re_psi)
@@ -210,7 +201,7 @@ test_that("a fit with no random effect keeps the no-offset arithmetic", {
 # surface on psi (copied onto cover by alpha) plus a per-region deviation.
 .ocnl_psi_sim <- function(seed, side = 7L, J = 5L, n_g = 7L, sigma_u = 1.6) {
   set.seed(seed)
-  adj <- .ocnl_grid_adj(side); n <- nrow(adj)
+  adj <- rook_adj(side); n <- nrow(adj)
   phi <- as.numeric(scale(stats::rnorm(n)))
   for (r in 1:4) { pn <- phi; for (i in seq_len(n)) {
     nb <- which(adj[i, ] == 1L); pn[i] <- 0.5*phi[i] + 0.5*mean(phi[nb]) }; phi <- pn }

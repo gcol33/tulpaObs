@@ -18,17 +18,6 @@
 
 .msds_cut <- c(0, 25, 50, 75, 100)
 
-.msds_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 
 test_that("simulate_ms_distance() returns a well-formed community design", {
   d <- simulate_ms_distance(n_species = 5, N = 30, cutpoints = .msds_cut,
@@ -198,7 +187,7 @@ test_that("sfMsDS recovers the shared field alongside the factors", {
   skip_if_fast()
   skip_on_cran()
   side <- 9L
-  A  <- .msds_grid_graph(side)
+  A  <- rook_adj(side)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f  <- 0.5 * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   f  <- f - mean(f)

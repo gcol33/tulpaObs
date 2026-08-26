@@ -21,18 +21,10 @@ simulate_beta_cover_pp <- function(N = 240, n_s = 25, sigma = 0.5, rho = 0.7,
     list(data = data.frame(x = x, region = factor(spatial_idx)), y = y)
 }
 
-.chain_adj_cover <- function(n_s) {
-    nbr <- lapply(seq_len(n_s),
-                  function(s) setdiff(c(s - 1L, s + 1L), c(0L, n_s + 1L)))
-    adj <- matrix(0L, n_s, n_s)
-    for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
-    adj
-}
-
 test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
   skip_if_fast()
     sim <- simulate_beta_cover_pp(N = 240, n_s = 25, phi = 30, seed = 27)
-    adj <- .chain_adj_cover(nlevels(sim$data$region))
+    adj <- chain_adj(nlevels(sim$data$region))
     phi_grid <- c(5, 15, 40, 100, 250)
 
     fit_one <- function(prior_phi) tobs(

@@ -16,27 +16,6 @@
 # bit-for-bit here.
 # =============================================================================
 
-.aoc_chain_adj <- function(N) {
-  adj <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < N)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
-.aoc_grid2x2_adj <- function() {
-  n_s <- 4L; g <- 2L; adj <- matrix(0L, n_s, n_s)
-  for (i in 1:g) for (j in 1:g) {
-    s <- (i - 1L) * g + j
-    if (i > 1L) adj[s, (i - 2L) * g + j]       <- 1L
-    if (i < g)  adj[s, i * g + j]              <- 1L
-    if (j > 1L) adj[s, (i - 1L) * g + (j - 1L)] <- 1L
-    if (j < g)  adj[s, (i - 1L) * g + (j + 1L)] <- 1L
-  }
-  adj
-}
-
 .aoc_icar_f <- function(adj) {
   Q   <- tulpaObs:::.occu_cover_icar_Q(adj)
   eig <- eigen(Q, symmetric = TRUE); keep <- eig$values > 1e-8
@@ -113,7 +92,7 @@ test_that(".cover_aggregate_occ collapses exchangeable rows to exact sufficient 
 
 .aoc_sim_single <- function(n_s = 16L, n_per = 6L, seed = 11L,
                             sigma = 0.7, alpha = 1.0, sd_pos = 0.4) {
-  set.seed(seed); adj <- .aoc_chain_adj(n_s); f1 <- .aoc_icar_f(adj)
+  set.seed(seed); adj <- chain_adj(n_s); f1 <- .aoc_icar_f(adj)
   cell <- rep(seq_len(n_s), each = n_per); N <- length(cell)
   x <- as.numeric(scale(stats::rnorm(n_s)))[cell]      # cell-level occ covariate
   eta_o <- -0.3 + 0.7 * x + sigma * f1[cell]
@@ -156,7 +135,7 @@ test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
 .aoc_sim_trend <- function(n_s = 16L, n_per = 6L, seed = 7L,
                            sigma = 0.8, alpha = 1.0,
                            sigma_tr = 0.6, alpha_tr = 0.9, sd_pos = 0.4) {
-  set.seed(seed); adj <- .aoc_chain_adj(n_s)
+  set.seed(seed); adj <- chain_adj(n_s)
   f1 <- .aoc_icar_f(adj); f2 <- .aoc_icar_f(adj)
   cell  <- rep(seq_len(n_s), each = n_per); N <- length(cell)
   x     <- as.numeric(scale(stats::rnorm(n_s)))[cell]
@@ -203,7 +182,7 @@ test_that("aggregate.occ reduces and preserves the coupled-trend cover() fit", {
 .aoc_sim_multi <- function(seed = 7001L, n_s = 4L, n_years = 3L, n_obs = 3L, N = 140L,
                            sigma = 0.6, rho = 0.7, alpha = 1.1, sigma_year = 0.3,
                            sigma_obs = 0.25, rho_ar = 0.6, phi_b = 30) {
-  set.seed(seed); adj <- .aoc_grid2x2_adj()
+  set.seed(seed); adj <- rook_adj(2, 2)
   s_idx <- sample.int(n_s, N, TRUE)
   t_idx <- sample.int(n_years, N, TRUE)
   o_idx <- sample.int(n_obs, N, TRUE)

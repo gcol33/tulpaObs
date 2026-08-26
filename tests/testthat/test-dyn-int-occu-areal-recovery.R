@@ -10,16 +10,6 @@
 # never sigma -- the null-field trap) plus the transition rates.
 # =============================================================================
 
-.dio_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
 .dio_field <- function(side, sd = 0.9) {
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f  <- sd * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
@@ -28,7 +18,7 @@
 
 test_that("dyn_int_occu() nested_laplace field is registered and gated", {
   expect_true("nested_laplace" %in% tulpaObs:::.tobs_family_methods$dyn_int_occu)
-  side <- 5L; A <- .dio_grid_graph(side)
+  side <- 5L; A <- rook_adj(side)
   sim <- simulate_dyn_int_occu(N = side * side, T_seasons = 4, S = 2, J = 3,
                                field = .dio_field(side), seed = 1)
   # a field needs nested_laplace; plain laplace with a field errors with a pointer
@@ -50,7 +40,7 @@ test_that("dyn_int_occu() + icar recovers the shared field + transitions", {
   skip_on_cran()
   # stIntPGOcc: the field is the new object; assert field recovery by cor on an
   # INTERIOR field, plus the transition rates in aggregate.
-  side <- 9L; N <- side * side; A <- .dio_grid_graph(side)
+  side <- 9L; N <- side * side; A <- rook_adj(side)
   ftrue <- .dio_field(side, sd = 0.9)
   n_seed <- 12L
   fcor <- rep(NA_real_, n_seed)
@@ -95,7 +85,7 @@ test_that("dyn_int_occu() + SVC bar recovers intercept + trend fields", {
   # flows through the same multi-block areal-BFGS driver as stIntPGOcc; the psi1
   # score w1 - psi1 scatters to each block (weighted by the covariate for the trend
   # block). Assert BOTH interior fields recover by cor (never sigma; null-field trap).
-  side <- 9L; N <- side * side; A <- .dio_grid_graph(side)
+  side <- 9L; N <- side * side; A <- rook_adj(side)
   f0 <- .dio_field(side, sd = 0.9); f1 <- .dio_field2(side, sd = 0.9)
   n_seed <- 12L
   c0 <- c1 <- rep(NA_real_, n_seed)

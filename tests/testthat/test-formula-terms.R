@@ -14,12 +14,6 @@ make_dat <- function(n = 20L) {
   )
 }
 
-chain_adj <- function(n = 20L) {
-  a <- matrix(0L, n, n)
-  for (i in seq_len(n - 1L)) { a[i, i + 1L] <- 1L; a[i + 1L, i] <- 1L }
-  a
-}
-
 test_that("plain formula has no structured terms and keeps fixed effects", {
   dat <- make_dat()
   p <- tulpaObs:::.tobs_parse_formula(~ elev + forest, data = dat)
@@ -131,6 +125,26 @@ test_that("re() and temporal() resolve grouping/time columns to codes", {
   expect_s3_class(pt$terms[[1]], "tobs_temporal")
   expect_identical(pt$terms[[1]]$type, "rw1")
   expect_identical(pt$terms[[1]]$n_times, 5L)
+})
+
+test_that("print methods on structured-term specs emit their term summaries", {
+  dat <- make_dat()
+  adj <- chain_adj(20L)
+
+  p_icar <- tulpaObs:::.tobs_parse_formula(~ elev + icar(graph = adj), data = dat)
+  expect_output(print(p_icar$terms[[1]]), "tobs spatial term: icar (20 units)",
+                fixed = TRUE)
+
+  p_re <- tulpaObs:::.tobs_parse_formula(~ re(observer), data = dat)
+  expect_output(print(p_re$terms[[1]]), "tobs re term: intercept (iid, 4 groups)",
+                fixed = TRUE)
+
+  p_temp <- tulpaObs:::.tobs_parse_formula(~ temporal(year, type = "rw1"), data = dat)
+  expect_output(print(p_temp$terms[[1]]), "tobs temporal term: rw1 (5 times)",
+                fixed = TRUE)
+
+  p_copy <- tulpaObs:::.tobs_parse_formula(~ elev + copy("u"), data = dat)
+  expect_output(print(p_copy$terms[[1]]), "tobs copy term: -> u")
 })
 
 test_that("non-registered calls stay in the fixed-effects design", {

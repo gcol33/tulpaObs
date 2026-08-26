@@ -19,26 +19,12 @@
 # =============================================================================
 
 
-.ocsvc_grid_adj <- function(side) {
-  N <- side * side
-  adj <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r > 1L)    adj[i, idx(r - 1L, c)] <- 1L
-    if (r < side)  adj[i, idx(r + 1L, c)] <- 1L
-    if (c > 1L)    adj[i, idx(r, c - 1L)] <- 1L
-    if (c < side)  adj[i, idx(r, c + 1L)] <- 1L
-  }
-  adj
-}
-
 # A simulated intercept field PLUS a time-weighted trend field, both coupled
 # onto the cover arm with their own amplitudes.
 .ocsvc_inputs <- function(side = 6L, J = 5L, seed = 1L, sigma = 0.8, alpha = 1.0,
                           sigma_trend = 0.7, alpha_trend = 0.9) {
   N   <- side * side
-  adj <- .ocsvc_grid_adj(side)
+  adj <- rook_adj(side)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", beta_occ = c(stats::qlogis(0.5), 0.8),
     beta_p = c(0.3, 0.5), beta_pos = c(log(0.12), -0.4), sigma_pos = 0.4,

@@ -21,18 +21,6 @@
 # specific fit recovers the arm the shared (copied) fit must miss.
 
 # Rook-adjacency on a g x g grid (self-contained so the file runs in isolation).
-.as_grid_adj <- function(g) {
-  n <- g * g
-  co <- expand.grid(r = seq_len(g), c = seq_len(g))
-  adj <- matrix(0L, n, n)
-  for (i in seq_len(n)) for (j in seq_len(n)) {
-    if (i < j && abs(co$r[i] - co$r[j]) + abs(co$c[i] - co$c[j]) == 1L) {
-      adj[i, j] <- 1L; adj[j, i] <- 1L
-    }
-  }
-  adj
-}
-
 # A smooth, mean-zero, unit-SD ICAR-like field over the grid graph.
 .as_smooth_field <- function(adj) {
   n <- nrow(adj); z <- rnorm(n)
@@ -68,7 +56,7 @@ test_that("a positive-only single-arm field recovers, presence shows none", {
   skip_on_cran()
   set.seed(3)
   g <- 6L; n_cells <- g * g
-  adj <- .as_grid_adj(g)
+  adj <- rook_adj(g)
   z_pos <- .as_smooth_field(adj)
   N <- 4000L
   cell <- sample.int(n_cells, N, replace = TRUE)
@@ -114,7 +102,7 @@ test_that("two independent single-arm fields both recover, no cross-arm copy", {
   skip_on_cran()
   set.seed(21)
   g <- 8L; n_cells <- g * g
-  adj <- .as_grid_adj(g)
+  adj <- rook_adj(g)
   z_pre <- .as_smooth_field(adj)
   # Orthogonalize the positive field against presence -> genuinely independent
   # realizations (cor ~ 0), so a copied field could not fit both arms.
@@ -171,7 +159,7 @@ test_that("arm-specific fit recovers an arm the shared copied fit must miss", {
   skip_on_cran()
   set.seed(21)
   g <- 8L; n_cells <- g * g
-  adj <- .as_grid_adj(g)
+  adj <- rook_adj(g)
   z_pre <- .as_smooth_field(adj)
   z_raw <- .as_smooth_field(adj)
   z_pos <- z_raw - sum(z_raw * z_pre) / sum(z_pre * z_pre) * z_pre
@@ -234,7 +222,7 @@ test_that("arm-specific predict() projects each per-arm field (not flat)", {
   skip_on_cran()
   set.seed(7)
   g <- 6L; n_cells <- g * g
-  adj <- .as_grid_adj(g)
+  adj <- rook_adj(g)
   z_pre <- .as_smooth_field(adj)
   z_raw <- .as_smooth_field(adj)
   z_pos <- z_raw - sum(z_raw * z_pre) / sum(z_pre * z_pre) * z_pre
@@ -280,7 +268,7 @@ test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
   skip_if_fast()
   skip_on_cran()
   set.seed(11)
-  adj <- .as_grid_adj(4L)
+  adj <- rook_adj(4L)
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L), x = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
   fit <- suppressWarnings(tobs(
@@ -301,7 +289,7 @@ test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
 # ---- Scope gates (no fit, always run) --------------------------------------
 
 .as_small <- function() {
-  adj <- .as_grid_adj(4L)
+  adj <- rook_adj(4L)
   df  <- data.frame(cell = rep(seq_len(16L), length.out = 64L), x = rnorm(64L))
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
   list(adj = adj, df = df, y = y)
@@ -374,7 +362,7 @@ test_that("a positive-only BYM2 single-arm field recovers the rho-mixed field", 
   skip_on_cran()
   set.seed(7)
   g <- 6L; n_cells <- g * g
-  adj <- .as_grid_adj(g)
+  adj <- rook_adj(g)
   z_pos <- .as_smooth_field(adj)          # mostly structured -> high rho
   N <- 4000L
   cell <- sample.int(n_cells, N, replace = TRUE)

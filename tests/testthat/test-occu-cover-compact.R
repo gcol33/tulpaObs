@@ -32,12 +32,6 @@
   do.call(rbind, rows)
 }
 
-.line_graph <- function(nc) {
-  adj <- matrix(0L, nc, nc)
-  for (i in seq_len(nc - 1L)) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
-  adj
-}
-
 .fit_occu_cover <- function(dd, adj, compact) {
   od <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",
                   type = "occurrence", occ.covs = c("cell_idx", "time.sc"),
@@ -80,7 +74,7 @@ test_that("tobs_data(compact = TRUE) builds an aligned ragged carrier", {
 test_that("compact == dense: byte-identical fit on uncapped data", {
   skip_on_cran()
   nc <- 12L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 3)
 
   fit_d <- .fit_occu_cover(dd, adj, compact = FALSE)
@@ -113,7 +107,7 @@ test_that("compact == dense: byte-identical fit on uncapped data", {
 test_that("compact removes the per-site visit cap", {
   skip_on_cran()
   nc <- 10L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   # One site holds 4000 visits: the dense grid would be n_sites x 4000, the
   # compact build only carries the ~4000 + few-hundred actual observations.
   dd <- .mk_occu_cover_long(nc, 3L,
@@ -130,7 +124,7 @@ test_that("compact removes the per-site visit cap", {
 test_that("compact == dense with an observation-arm random effect (reHab)", {
   skip_on_cran()
   nc  <- 12L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 8)
 
   fit_re <- function(compact) {
@@ -170,7 +164,7 @@ test_that("compact == dense with an observation-arm random effect (reHab)", {
 test_that("WAIC draw-chunking is exact (chunk size does not change the result)", {
   skip_on_cran()
   nc  <- 10L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 9)
   fit <- .fit_occu_cover(dd, adj, compact = TRUE)
 
@@ -204,7 +198,7 @@ test_that("WAIC draw-chunking is exact (chunk size does not change the result)",
 test_that(".occu_cover_visit_view is identical for a dense and a compact fit", {
   skip_on_cran()
   nc  <- 8L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 21)
   vd <- tulpaObs:::.occu_cover_visit_view(.fit_occu_cover(dd, adj, FALSE)$model)
   vc <- tulpaObs:::.occu_cover_visit_view(.fit_occu_cover(dd, adj, TRUE)$model)
@@ -230,7 +224,7 @@ test_that(".occu_cover_visit_view is identical for a dense and a compact fit", {
 test_that("compact == dense for cpo() / ppc() / PIT (#185)", {
   skip_on_cran()
   nc  <- 10L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 22)
   fit_d <- .fit_occu_cover(dd, adj, compact = FALSE)
   fit_c <- .fit_occu_cover(dd, adj, compact = TRUE)
@@ -265,7 +259,7 @@ test_that("compact == dense for cpo() / ppc() / PIT (#185)", {
 test_that("compact == dense for the per-visit RE offsets (#211)", {
   skip_on_cran()
   nc  <- 10L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 8)
 
   fit_re <- function(compact) {
@@ -312,7 +306,7 @@ test_that("compact == dense for the per-visit RE offsets (#211)", {
 test_that("a detected visit with a missing cover carries no cover term (#185)", {
   skip_on_cran()
   nc  <- 8L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 23)
   # Drop the cover value (keeping the detection) at a few detected visits. The
   # likelihood gates the cover density on `detected AND finite`, so the PPC has
@@ -346,7 +340,7 @@ test_that("a compact `by =` batch scores cpo() / ppc() per species (#185)", {
   # default, so every per-species fit in a batch hit the dense-grid read. This is
   # the shape the per-species `_loo.csv` is written from.
   nc  <- 8L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:5, 1), seed = 51)
   d2  <- rbind(transform(dd, sp = "spA"), transform(dd, sp = "spB"))
   set.seed(9)
@@ -436,7 +430,7 @@ test_that(".occu_cover_compress_nodet_visits groups exchangeable nodet visits", 
 test_that("detection-pattern compression == uncompressed fit (exact)", {
   skip_on_cran()
   nc  <- 10L
-  adj <- .line_graph(nc)
+  adj <- chain_adj(nc)
   # Low-cardinality detection design (rounded x1 + 3-level hab) so many
   # all-undetected visits within a site share a detection row and compress.
   dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(8:16, 1), seed = 3)

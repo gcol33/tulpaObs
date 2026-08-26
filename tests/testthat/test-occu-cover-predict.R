@@ -8,20 +8,11 @@
 # Fixture mirrors test-occu-cover-joint-coupled.R: occupancy is cell-level
 # (formula on cell_dat), detection + cover are visit-level (od$det.covs).
 
-.ocp_chain_adj <- function(N) {
-    adj <- matrix(0L, N, N)
-    for (s in seq_len(N)) {
-        if (s > 1L) adj[s, s - 1L] <- 1L
-        if (s < N)  adj[s, s + 1L] <- 1L
-    }
-    adj
-}
-
 # Build + fit a spatial occu_cover through the joint engine. A cell-level
 # `year` covariate is added to the occupancy arm so type = "change" between two
 # years moves occupancy (and, through the shared field, expected cover).
 .ocp_build_fit <- function(N = 40L, J = 5L, seed = 202L) {
-    adj <- .ocp_chain_adj(N)
+    adj <- chain_adj(N)
     sim <- simulate_occu_cover(
         N = N, J = J, positive = "lognormal",
         adj = adj, sigma = 0.8, alpha = 0.6, seed = seed
@@ -141,7 +132,7 @@ test_that("in-sample occurrence tracks the plug-in predictor", {
 # Trend (time-varying field) fit: the change map moves cover over time THROUGH
 # the spatially-varying trend field, the collaborator's headline use case.
 .ocp_build_trend_fit <- function(N = 36L, J = 5L, seed = 303L) {
-    adj <- .ocp_chain_adj(N)
+    adj <- chain_adj(N)
     sim <- simulate_occu_cover(
         N = N, J = J, positive = "lognormal", adj = adj,
         sigma = 0.8, alpha = 0.6, trend = TRUE,
@@ -227,7 +218,7 @@ test_that("trend fit errors clearly when time_col is unavailable", {
 # first and rejected: it moved the correlation barely and cost the coverage.
 # See NOTES_measurements.md.
 .ocp_build_trend_fit_truth <- function(N = 120L, J = 10L, seed = 202L) {
-    adj <- .ocp_chain_adj(N)
+    adj <- chain_adj(N)
     sim <- simulate_occu_cover(
         N = N, J = J, positive = "lognormal", adj = adj,
         sigma = 0.8, alpha = 0.6, trend = TRUE,

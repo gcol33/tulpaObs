@@ -13,12 +13,6 @@
 # =============================================================================
 
 
-.aop_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) { if (s > 1L) adj[s, s - 1L] <- 1L; if (s < n) adj[s, s + 1L] <- 1L }
-  adj
-}
-
 .aop_icar_f <- function(adj) {
   Q  <- tulpaObs:::.occu_cover_icar_Q(adj)
   sc <- tulpaObs:::.occu_cover_icar_scale(adj)
@@ -32,7 +26,7 @@
 # within a cell share the full positive linear predictor and the grouped collapse
 # actually fires.
 .aop_sim <- function(seed, n_s = 16L, n_per = 12L, trend = TRUE) {
-  set.seed(seed); adj <- .aop_chain_adj(n_s)
+  set.seed(seed); adj <- chain_adj(n_s)
   f1 <- .aop_icar_f(adj); f2 <- .aop_icar_f(adj)
   cell <- rep(seq_len(n_s), each = n_per); N <- length(cell)
   x    <- as.numeric(scale(stats::rnorm(n_s)))[cell]
@@ -164,7 +158,7 @@ test_that("aggregate.pos reduces and preserves the coupled-trend beta cover() fi
 # grouped collapse fires only when plots share ALL of them; replicate plots per
 # (cell, year, obs) combo with a cell-level positive design make that happen.
 .aop_sim_multi <- function(seed, n_s = 6L, n_year = 2L, n_obs = 2L, reps = 4L) {
-  set.seed(seed); adj <- .aop_chain_adj(n_s); f1 <- .aop_icar_f(adj)
+  set.seed(seed); adj <- chain_adj(n_s); f1 <- .aop_icar_f(adj)
   combos <- expand.grid(cell = seq_len(n_s), year = seq_len(n_year), obs = seq_len(n_obs))
   combos <- combos[rep(seq_len(nrow(combos)), each = reps), ]
   cell <- combos$cell; N <- length(cell)

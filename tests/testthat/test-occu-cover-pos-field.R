@@ -11,19 +11,6 @@
 # alpha copy, delta_cover_exp.
 # =============================================================================
 
-.pf_grid_adj <- function(side) {
-  N <- side * side
-  adj <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    if (r > 1L)   adj[idx(r, c), idx(r - 1L, c)] <- 1L
-    if (r < side) adj[idx(r, c), idx(r + 1L, c)] <- 1L
-    if (c > 1L)   adj[idx(r, c), idx(r, c - 1L)] <- 1L
-    if (c < side) adj[idx(r, c), idx(r, c + 1L)] <- 1L
-  }
-  adj
-}
-
 .pf_fit <- function(sim, occurrence, positive = ~ 1, integration = "ccd") {
   suppressWarnings(tobs(
     occurrence = occurrence,
@@ -43,7 +30,7 @@
 .pf_arm <- function(call, arm) list(list(call = call, arm = arm))
 
 test_that("a positive-arm placed bar resolves to an arm-specific cover field", {
-  adj  <- .pf_grid_adj(4L)
+  adj  <- rook_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n),
                      time = as.numeric(scale(rnorm(n))))
@@ -62,7 +49,7 @@ test_that("a positive-arm placed bar resolves to an arm-specific cover field", {
 })
 
 test_that("a single-arm \"presence\" placement is rejected", {
-  adj  <- .pf_grid_adj(4L)
+  adj  <- rook_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
   f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
@@ -73,7 +60,7 @@ test_that("a single-arm \"presence\" placement is rejected", {
 })
 
 test_that("a detection-arm spatial bar resolves onto the detection (p) arm", {
-  adj  <- .pf_grid_adj(4L)
+  adj  <- rook_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
   f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
@@ -90,7 +77,7 @@ test_that("detection-arm field recovers once the substrate scatters onto p", {
   # detection RE uses.
   skip_if_fast()
   skip_on_cran()
-  adj <- .pf_grid_adj(8L); N <- nrow(adj); truth <- 0.7
+  adj <- rook_adj(8L); N <- nrow(adj); truth <- 0.7
   rec <- vapply(1:6, function(s) {
     sim <- simulate_occu_cover(
       N = N, J = 8L, positive = "lognormal",
@@ -111,7 +98,7 @@ test_that("detection-arm field recovers once the substrate scatters onto p", {
 })
 
 test_that("an arm-specific cover field does not compose with the `|` MCAR field", {
-  adj  <- .pf_grid_adj(4L)
+  adj  <- rook_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n),
                      time = as.numeric(scale(rnorm(n))))
@@ -129,7 +116,7 @@ test_that("occu_cover cover-arm field fits and yields a non-constant delta_cover
   skip_if_fast()
   skip_on_cran()
 
-  adj <- .pf_grid_adj(8L)
+  adj <- rook_adj(8L)
   N   <- nrow(adj)
   sim <- simulate_occu_cover(
     N = N, J = 5L, positive = "lognormal",
@@ -171,7 +158,7 @@ test_that("occu_cover cover-arm trend field SD recovers across seeds", {
   skip_if_fast()
   skip_on_cran()
 
-  adj <- .pf_grid_adj(8L)
+  adj <- rook_adj(8L)
   N   <- nrow(adj)
   truth <- 0.7
   seeds <- 1:6
@@ -210,7 +197,7 @@ test_that("occu_cover cover-arm intercept field SD recovers across seeds", {
   skip_if_fast()
   skip_on_cran()
 
-  adj <- .pf_grid_adj(8L)
+  adj <- rook_adj(8L)
   N   <- nrow(adj)
   truth <- 0.6
   seeds <- 1:6
@@ -255,7 +242,7 @@ test_that("a spatial field in the positive formula is the arm-specific cover fie
   skip_if_fast()
   skip_on_cran()
 
-  adj <- .pf_grid_adj(8L)
+  adj <- rook_adj(8L)
   N   <- nrow(adj)
   sim <- simulate_occu_cover(
     N = N, J = 5L, positive = "lognormal",
@@ -288,7 +275,7 @@ test_that("control$sigma.grid.pos.field is accepted and sets the cover-field gri
   skip_if_fast()
   skip_on_cran()
 
-  adj <- .pf_grid_adj(8L)
+  adj <- rook_adj(8L)
   N   <- nrow(adj)
   sim <- simulate_occu_cover(
     N = N, J = 5L, positive = "lognormal",

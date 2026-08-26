@@ -152,16 +152,6 @@ test_that("ms_dyn_occu() capability gates", {
 
 # --- shared areal field on the first-season occupancy arm (stMsPGOcc, #123) ---
 
-.msdyn_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
 .msdyn_field <- function(side, sd = 0.9) {
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f  <- sd * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
@@ -170,7 +160,7 @@ test_that("ms_dyn_occu() capability gates", {
 
 test_that("ms_dyn_occu() nested_laplace is registered and gated", {
   expect_true("nested_laplace" %in% tulpaObs:::.tobs_family_methods$ms_dyn_occu)
-  side <- 5L; A <- .msdyn_grid_graph(side)
+  side <- 5L; A <- rook_adj(side)
   sim <- simulate_ms_dyn_occu(N = side * side, J = 3, n_species = 4,
                               n_seasons = 3, field = .msdyn_field(side), seed = 1)
   # a field needs nested_laplace; plain laplace with a field errors with a pointer
@@ -193,7 +183,7 @@ test_that("ms_dyn_occu() + icar recovers the shared field + community means", {
   # stMsPGOcc: a shared areal field on the first-season occupancy arm. The field
   # is the new object; assert field recovery by cor on an INTERIOR field (the
   # null-field trap: never assert on sigma), plus community-mean coverage.
-  side <- 8L; N <- side * side; A <- .msdyn_grid_graph(side)
+  side <- 8L; N <- side * side; A <- rook_adj(side)
   ftrue <- .msdyn_field(side, sd = 0.9)
   n_seed <- 12L
   fcor <- numeric(n_seed)
@@ -242,7 +232,7 @@ test_that("ms_dyn_occu() + spatial SVC bar recovers intercept + trend fields", {
   # count SVC (svcMsAbund); the psi1 oracle already returns per-site/per-species
   # score+curv, so the weighted bar flows through unchanged. Assert BOTH interior
   # fields recover by cor (never on sigma; the null-field trap).
-  side <- 8L; N <- side * side; A <- .msdyn_grid_graph(side)
+  side <- 8L; N <- side * side; A <- rook_adj(side)
   f0 <- .msdyn_field(side, sd = 0.9); f1 <- .msdyn_field2(side, sd = 0.9)
   n_seed <- 10L
   c0 <- c1 <- numeric(n_seed)

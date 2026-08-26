@@ -139,3 +139,31 @@ test_that("type = 'positive' compact carrier matches the dense build", {
   expect_setequal(stats::na.omit(as.vector(dense$y)),
                   stats::na.omit(ragged$y$values))
 })
+
+test_that("print.tobs_data() reports the dense layout (#276)", {
+  od <- tobs_data(make_long(c(1, 0, 1, 1, 0, 0)), y = "y",
+                  site = "site", visit = "visit")
+  expect_output(print(od), "tobs_data: 3 sites, 2 visits")
+})
+
+test_that("print.tobs_ragged() reports the compact layout (#276)", {
+  od <- tobs_data(make_long(c(1, 0, 1, 1, 0, 0)), y = "y",
+                  site = "site", visit = "visit", compact = TRUE)
+  expect_output(print(od$y),
+                "tobs_ragged (occurrence): 3 sites, 6 valid visits (max 2 / site)",
+                fixed = TRUE)
+})
+
+test_that("summary.tobs_data() / print.tobs_data_summary() report detection stats (#276)", {
+  od <- tobs_data(make_long(c(1, 0, 1, 1, 0, 0)), y = "y",
+                  site = "site", visit = "visit")
+  expect_output(print(summary(od)), "Occupancy data summary")
+})
+
+test_that("plot.tobs_data() draws the detection-history panels (#276)", {
+  od <- tobs_data(make_long(c(1, 0, 1, 1, 0, 0)), y = "y",
+                  site = "site", visit = "visit")
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_no_error(plot(od))
+})

@@ -35,13 +35,6 @@
   do.call(rbind, rows)
 }
 
-.line_graph_eq <- function(nc) {
-  adj <- matrix(0L, nc, nc)
-  for (i in seq_len(nc - 1L)) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
-  adj
-}
-
-
 # ---- fast tier: the builder's shape + alignment, no fit ---------------------
 
 test_that("occu_cover_inputs() builds aligned arms + a per-site design", {
@@ -94,7 +87,7 @@ test_that("occu_cover_inputs() / long-frame tobs() reject bad keys", {
     "single column name")
 
   # response= signals long-frame mode; supplying y too is contradictory.
-  adj <- .line_graph_eq(4L)
+  adj <- chain_adj(4L)
   expect_error(
     tobs(occurrence = ~ time.sc + spatial(~ 1 || cell_idx, graph = adj),
          data = dd, family = occu_cover(response = "beta", cover_aggregate = "none"),
@@ -109,7 +102,7 @@ test_that("occu_cover_inputs() / long-frame tobs() reject bad keys", {
 test_that("single long-frame occu_cover fit == the hand-built tobs_data route", {
   skip_on_cran()
   nc  <- 12L
-  adj <- .line_graph_eq(nc)
+  adj <- chain_adj(nc)
   dd  <- .mk_oc_long_eq(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 3)
 
   ctrl <- list(engine = "joint", n.threads = 1L, n.threads.outer = 1L,

@@ -29,12 +29,6 @@
   do.call(rbind, rows)
 }
 
-.pc_line_graph <- function(nc) {
-  adj <- matrix(0L, nc, nc)
-  for (i in seq_len(nc - 1L)) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
-  adj
-}
-
 .fit_pc <- function(dd, adj, n_out) {
   od  <- tobs_data(dd, y = "occur", site = "site_key", visit = "visit",
                    type = "occurrence", occ.covs = c("cell_idx", "time.sc"),
@@ -59,7 +53,7 @@ test_that("parallel coupled-cell scatter is reproducible and matches serial", {
   skip_on_cran()
   nc <- 120L
   dd  <- .mk_pc_long(nc, 3L, seed = 5)
-  adj <- .pc_line_graph(nc)
+  adj <- chain_adj(nc)
   n_out <- max(2L, min(8L, parallel::detectCores()))
 
   fit_serial <- .fit_pc(dd, adj, 1L)      # serial reference (no coupling chunking)

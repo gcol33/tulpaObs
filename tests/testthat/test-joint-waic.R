@@ -2,15 +2,6 @@
 # occu_cover() (non-spatial Laplace + spatial nested Laplace) and the
 # nested-joint cover() shared-field fit.
 
-.jw_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < n)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 .jw_occu_cover_long <- function(sim, N, J) {
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -73,7 +64,7 @@ test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
   skip_if_fast()
   set.seed(13)
   N <- 30L; J <- 5L
-  adj <- .jw_chain_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
                              adj = adj, sigma = 0.8, alpha = 0.6, seed = 23L)
   od <- .jw_occu_cover_long(sim, N, J)
@@ -104,7 +95,7 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
   set.seed(14)
   N <- 200L; n_s <- 25L
   spatial_idx <- sample.int(n_s, N, replace = TRUE)
-  adj <- .jw_chain_adj(n_s)
+  adj <- chain_adj(n_s)
   phi <- rnorm(n_s); theta <- rnorm(n_s)
   w_s <- 0.6 * (sqrt(0.7) * phi + sqrt(0.3) * theta)
   x <- rnorm(N)

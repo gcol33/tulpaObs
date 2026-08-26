@@ -8,22 +8,6 @@
 # block here is skip_on_cran(), and the multi-seed / extra-engine blocks add
 # skip_if_fast().
 
-# Dense rook (4-neighbour) adjacency for a g x g grid.
-rook_adj <- function(g) {
-  n <- g * g
-  A <- matrix(0L, n, n)
-  idx <- function(r, c) (r - 1L) * g + c
-  for (r in seq_len(g)) for (c in seq_len(g)) {
-    i <- idx(r, c)
-    if (r > 1) A[i, idx(r - 1L, c)] <- 1L
-    if (r < g) A[i, idx(r + 1L, c)] <- 1L
-    if (c > 1) A[i, idx(r, c - 1L)] <- 1L
-    if (c < g) A[i, idx(r, c + 1L)] <- 1L
-  }
-  A
-}
-
-
 test_that("spatial ms_abun (ICAR) recovers community means and the shared field", {
   skip_on_cran()
   skip_if_fast()

@@ -14,6 +14,7 @@ test_that("removal() family is wired and reports its supported methods", {
   expect_identical(f$status, "working")
   expect_identical(f$params$mixture, "poisson")
   expect_true(all(c("laplace", "nuts") %in% tulpaObs:::.tobs_family_methods$removal))
+  expect_output(print(f), "<tobs_family: removal sampling>", fixed = TRUE)
 })
 
 test_that("removal marginal equals independent Poissons (Poisson abundance)", {
@@ -304,16 +305,6 @@ test_that("removal() NUTS RE rejects slopes / both-arm", {
 
 # --- areal spatial (ICAR / proper-CAR) on the abundance arm -----
 
-# Rook-adjacency on a side x side grid (one spatial unit per site).
-.rem_grid_adj <- function(side) {
-  ng <- side * side
-  co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
-
 # Spatial removal-sampling data: log lambda_i = b0 + b1 x_i + phi_i with a
 # smoothed, demeaned ICAR-like field phi; N_i ~ Poisson(lambda_i) depleted over
 # K removal passes at detection p_i.
@@ -345,7 +336,7 @@ test_that("removal() areal ICAR recovers the abundance slope + field, calibrated
   skip_if_fast()
   # The abundance-arm field reuses the shared count-marginal nested-Laplace driver
   # (the removal per-site marginal supplies the same moments as the N-mixture).
-  adj <- .rem_grid_adj(7L)             # 49 sites / spatial units
+  adj <- rook_adj(7L)             # 49 sites / spatial units
   b_lambda <- c(log(8), 0.5); b_p <- c(0.2, 0.4)
   slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
   for (s in 1:3) {
@@ -382,7 +373,7 @@ test_that("removal() areal-spatial coefficient SEs are calibrated", {
   # not anti-conservative: on field-free data the icar fit's SEs must match the
   # kernel-correct non-spatial removal SEs (pass 1 dominates the detection info,
   # so the binomial cross-arm is calibrated; coverage is at/above nominal).
-  adj <- .rem_grid_adj(8L)             # 64 sites
+  adj <- rook_adj(8L)             # 64 sites
   set.seed(101)
   ng <- nrow(adj); x_ab <- rnorm(ng); x_det <- rnorm(ng)
   lambda <- exp(log(10) + 0.5 * x_ab); p <- plogis(0.2 + 0.4 * x_det)  # no field
@@ -406,7 +397,7 @@ test_that("removal() areal-spatial coefficient SEs are calibrated", {
 test_that("removal() areal spatial: proper-CAR + bym2 fit; nuts+icar samples (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .rem_grid_adj(6L)
+  adj <- rook_adj(6L)
   sim <- .sim_spatial_removal(adj, c(log(7), 0.4), c(0.2, 0.3), K = 4L, seed = 7)
   for (term in c("car_proper", "bym2")) {
     f <- if (term == "car_proper") (~ abund_cov1 + car_proper(graph = adj)) else
@@ -438,7 +429,7 @@ test_that("removal() bym2 + proper-CAR recover the abundance field + slope (#131
   # exercises the mixture the icar recovery never touches. proper-CAR uses a
   # full-rank precision. Both still track a structured (icar-simulated) field and
   # recover the abundance slope on the shared count-marginal driver.
-  adj <- .rem_grid_adj(7L)
+  adj <- rook_adj(7L)
   b_lambda <- c(log(8), 0.5); b_p <- c(0.2, 0.4)
   for (term in c("bym2", "car_proper")) {
     tf <- if (term == "bym2") (~ abund_cov1 + bym2(graph = adj)) else

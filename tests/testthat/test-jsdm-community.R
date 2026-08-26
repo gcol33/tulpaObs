@@ -16,17 +16,6 @@
 # information per (site, species) than a detection history, so these sit above
 # the ms_occu factor thresholds.
 
-.jsdmc_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 .jsdmc_sim <- function(N = 300L, S = 16L, Q = 2L, load_sd = 0.8, field = NULL,
                        seed = 1L) {
   set.seed(seed)
@@ -209,7 +198,7 @@ test_that("sfJSDM recovers BOTH the shared field and the factors", {
   skip_if_fast()
   skip_on_cran()
   side <- 16L
-  A  <- .jsdmc_grid_graph(side)
+  A  <- rook_adj(side)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   fl <- scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   fl <- fl - mean(fl)

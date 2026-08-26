@@ -11,18 +11,6 @@
 # threads it through each cover path.
 
 # Rook-adjacency on a g x g grid (self-contained).
-.by_grid_adj <- function(g) {
-  n <- g * g
-  co <- expand.grid(r = seq_len(g), c = seq_len(g))
-  adj <- matrix(0L, n, n)
-  for (i in seq_len(n)) for (j in seq_len(n)) {
-    if (i < j && abs(co$r[i] - co$r[j]) + abs(co$c[i] - co$c[j]) == 1L) {
-      adj[i, j] <- 1L; adj[j, i] <- 1L
-    }
-  }
-  adj
-}
-
 # A captured bar spec, exactly as the tobs formula machinery builds it: the bar
 # defaults to both arms, and the arm tag (spec$to) is set afterwards the way
 # placement does.
@@ -39,7 +27,7 @@
 # ---- capture: `by` is taken as a string column name ------------------------
 
 test_that("spatial(<bar>, by=) captures the factor column name", {
-  adj <- .by_grid_adj(3L)
+  adj <- rook_adj(3L)
   spec <- .by_spec(~ 1 + x || cell, adj, by = "grp")
   expect_identical(spec$by_var, "grp")
   # Absent by is NULL (the no-replication identity).
@@ -47,7 +35,7 @@ test_that("spatial(<bar>, by=) captures the factor column name", {
 })
 
 test_that("spatial(<bar>, by=) rejects a non-string `by`", {
-  adj <- .by_grid_adj(3L)
+  adj <- rook_adj(3L)
   expect_error(.by_spec(~ 1 || cell, adj, by = 1L),
                "must be a single replication-factor column name")
   expect_error(.by_spec(~ 1 || cell, adj, by = c("a", "b")),
@@ -59,7 +47,7 @@ test_that("spatial(<bar>, by=) rejects a non-string `by`", {
 
 test_that("arm-specific `||` + by builds the I_L (x) Q graph and offset index", {
   g <- 3L; n <- g * g; L <- 2L
-  adj <- .by_grid_adj(g)
+  adj <- rook_adj(g)
   N <- 40L
   d <- data.frame(cell = rep_len(seq_len(n), N),
                   grp  = rep_len(c("a", "b"), N),
@@ -85,7 +73,7 @@ test_that("arm-specific `||` + by builds the I_L (x) Q graph and offset index", 
 
 test_that("correlated `|` + by builds the replicated MCAR graph + offset index", {
   g <- 3L; n <- g * g; L <- 2L
-  adj <- .by_grid_adj(g)
+  adj <- rook_adj(g)
   N <- 40L
   d <- data.frame(cell = rep_len(seq_len(n), N),
                   grp  = rep_len(c("a", "b"), N),
@@ -103,7 +91,7 @@ test_that("correlated `|` + by builds the replicated MCAR graph + offset index",
 })
 
 test_that("shared `||` + by carries by_var onto the desugared + tulpa specs", {
-  adj <- .by_grid_adj(3L)
+  adj <- rook_adj(3L)
   d <- data.frame(cell = rep_len(seq_len(9L), 30L),
                   grp  = rep_len(c("a", "b"), 30L), x = rnorm(30L))
   spec <- .by_spec(~ 1 + x || cell, adj, by = "grp")
@@ -123,7 +111,7 @@ test_that("shared `||` + by recovers independent per-level fields", {
   skip_if_fast()
   set.seed(11)
   g <- 6L; n <- g * g
-  adj <- .by_grid_adj(g)
+  adj <- rook_adj(g)
   # Two genuinely different per-level fields over the same graph; one shared
   # amplitude. A by fit must recover BOTH (a single non-replicated field cannot).
   smooth <- function(seed) {

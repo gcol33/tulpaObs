@@ -87,3 +87,36 @@ test_that("cover(response='beta') matches a separate-fit pipeline mirroring the 
   expect_lt(abs(fit$beta_pos[2] - coef(m_pos)[2]), 0.05)
   expect_lt(abs(fit$phi_pos / coef(m_pos)[3] - 1), 0.05)
 })
+
+test_that("Laplace cover_fit S3 surface: vcov/confint/logLik/tidy/summary (#276)", {
+  # The only prior suite calls to these on a multiarm fit were on the NUTS
+  # route (which has $draws and defers via NextMethod()); this exercises the
+  # arm-block path itself (.tobs_arm_blocks_cover()) on a plain Laplace fit.
+  sim <- simulate_beta_cover(N = 200, seed = 3)
+  fit <- tobs(formula = ~ x, data = sim$data, family = cover("beta"), y = sim$y)
+  expect_null(fit[["draws"]])
+
+  V <- vcov(fit)
+  expect_true(is.matrix(V))
+  expect_true(all(c("presence:(Intercept)", "positive:(Intercept)") %in%
+                    rownames(V)))
+
+  ci <- confint(fit)
+  expect_true(all(ci[, 1] <= ci[, 2]))
+
+  ll <- logLik(fit)
+  expect_true(is.finite(as.numeric(ll)))
+
+  td <- tidy(fit)
+  expect_true(all(c("arm", "term", "estimate", "std.error",
+                    "conf.low", "conf.high") %in% names(td)))
+  expect_setequal(unique(td$arm), c("presence", "positive"))
+
+  expect_output(print(summary(fit)), "Presence:")
+})
+
+test_that("print.cover_fit() reports the fitted arms (#276)", {
+  sim <- simulate_beta_cover(N = 100, seed = 4)
+  fit <- tobs(formula = ~ x, data = sim$data, family = cover("beta"), y = sim$y)
+  expect_output(print(fit), "<cover_fit (beta positive part)>", fixed = TRUE)
+})

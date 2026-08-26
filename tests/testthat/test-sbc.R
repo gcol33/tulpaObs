@@ -21,15 +21,6 @@
 #   ~13 min at n.sim = 100.
 # =============================================================================
 
-.sbc_chain_adj <- function(n) {
-  a <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) a[s, s - 1L] <- 1L
-    if (s < n)  a[s, s + 1L] <- 1L
-  }
-  a
-}
-
 # The dispersion grid the fixture puts phi_pos on. Without it the joint engine
 # holds the cover dispersion at a value it sets per data set, so the replicate
 # would be generated at one value and refitted under another.
@@ -60,7 +51,7 @@
 # copied onto the cover arm, dispersion on the outer grid.
 .sbc_fixture <- function(N = 30L, J = 4L, seed = 707L, sigma = 0.8,
                          alpha = 1.0, phi.grid = .SBC_PHI_GRID) {
-  adj <- .sbc_chain_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5),

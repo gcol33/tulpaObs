@@ -17,18 +17,6 @@ suppressPackageStartupMessages({
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Chain adjacency matrix on n_s spatial units (1-2-3-...-n_s).
-chain_adj <- function(n_s) {
-    adj <- matrix(0L, n_s, n_s)
-    if (n_s < 2L) return(adj)
-    for (s in seq_len(n_s - 1L)) {
-        adj[s, s + 1L] <- 1L
-        adj[s + 1L, s] <- 1L
-    }
-    adj
-}
-
-
 # Simulate a small cover-hurdle dataset with a BYM2 spatial field on a
 # chain graph. The phi / theta fields are demeaned so they live in the
 # sum-to-zero subspace assumed by the model's prior — this keeps the

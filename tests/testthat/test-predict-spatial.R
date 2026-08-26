@@ -335,19 +335,10 @@ test_that("a fit without a spatial component is refused", {
 
 # --- end to end, on a fitted model -------------------------------------------
 
-.tps_chain_adj <- function(N) {
-  a <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) a[s, s - 1L] <- 1L
-    if (s < N)  a[s, s + 1L] <- 1L
-  }
-  a
-}
-
 # 20 chain-linked cells x 3 sites, J = 3, with a smooth field on the cells.
 .tps_fixture <- function(seed = 11L, n_cells = 20L, reps = 3L, J = 3L) {
   set.seed(seed)
-  adj <- .tps_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   f0 <- sin(2 * pi * seq_len(n_cells) / n_cells)
   f0 <- f0 - mean(f0)
   n_sites <- n_cells * reps

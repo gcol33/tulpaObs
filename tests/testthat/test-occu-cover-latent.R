@@ -32,12 +32,6 @@
 
 
 # ---- simulation / fit helpers (shared field + per-unit cover latent) --------
-.lat_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) { if (s > 1L) adj[s, s-1L] <- 1L; if (s < n) adj[s, s+1L] <- 1L }
-  adj
-}
-
 # Cell-level positive design + shared field; a per-site cover latent u_i drives
 # the within-cell cover spread the latent path is meant to absorb.
 .lat_sim <- function(seed, family = "lognormal", n_cells = 25L, n_per = 5L,
@@ -45,7 +39,7 @@
                      sigma_eps = 0.4, phi = 30, b_pos = c(-0.7, 0.6),
                      b_occ1 = 0.7) {
   set.seed(seed)
-  adj <- .lat_chain_adj(n_cells); n_sites <- n_cells * n_per
+  adj <- chain_adj(n_cells); n_sites <- n_cells * n_per
   Q  <- tulpaObs:::.occu_cover_icar_Q(adj)
   sq <- tulpaObs:::.occu_cover_icar_scale(adj)
   eig <- eigen(Q, symmetric = TRUE); keep <- eig$values > 1e-8
@@ -236,7 +230,7 @@ test_that("family carries the latent choice and dispatcher gates it", {
   expect_identical(occu_cover("lognormal", cover_aggregate = "latent")$params$cover_aggregate,
                    "latent")
 
-  adj <- .lat_chain_adj(10L)
+  adj <- chain_adj(10L)
   sim <- .lat_sim(seed = 7L, family = "lognormal", n_cells = 10L, n_per = 3L,
                   J = 6L)
 

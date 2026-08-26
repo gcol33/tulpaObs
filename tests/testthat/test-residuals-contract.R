@@ -179,6 +179,42 @@ test_that("ms_occu_cover scores its state arm like its community siblings", {
 })
 
 
+test_that("occu_cover() scores its state arm like its community sibling", {
+  skip_on_cran()
+  sim <- simulate_occu_cover(N = 30, J = 3, n_occ_covs = 1L, n_det_covs = 1L,
+                             n_pos_covs = 1L, positive = "lognormal", seed = 1)
+  fit <- tobs(occurrence = ~ occ_cov1, data = sim$data,
+             family = occu_cover("lognormal"), detection = ~ det_cov1,
+             positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+             visits = sim$visit_data, method = "laplace", control = ctl_res)
+  expect_residual_contract(fit)
+  r <- residuals(fit, type = "response")
+  expect_null(r$det)
+  expect_length(r$occ, fit$model$n_sites)
+  expect_true(all(is.finite(r$occ)))
+
+  any_det <- tulpaObs:::.occu_cover_visit_view(fit$model)$any_det
+  expect_length(any_det, fit$model$n_sites)
+  expect_true(all(any_det %in% c(0L, 1L)))
+})
+
+
+test_that("occu_multiscale_cover() scores the cell, not the plot", {
+  skip_on_cran()
+  sim <- simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
+                                        visits_per_plot = 2L, seed = 1L)
+  fit <- tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+             data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
+             detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+             y = sim$y, y_pos = sim$y_pos, method = "laplace", control = ctl_res)
+  expect_residual_contract(fit)
+  r <- residuals(fit, type = "response")
+  expect_null(r$det)
+  expect_length(r$occ, fit$model$n_cells)
+  expect_true(all(is.finite(r$occ)))
+})
+
+
 test_that("check_model() drops Moran's I rather than throwing on it", {
   skip_on_cran()
   sim <- simulate_abun(N = 40, J = 3, seed = 1)

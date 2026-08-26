@@ -104,6 +104,26 @@ test_that("auto cell-size ladder is proposed when cell_sizes is NULL", {
   expect_equal(nrow(res$candidates), length(res$cell_sizes))
 })
 
+test_that("print.tobs_aggregation_scan() reports the scan summary (#276)", {
+  d <- make_plot_data()
+  res <- occu_aggregation_scan(
+    d, response = "y_det", coords = c("x", "y"), year = "year",
+    plot = "plot", cell_sizes = 0.9, block_lengths = c(1L, 3L),
+    score = "info")
+  expect_output(print(res), "Occupancy aggregation scan")
+})
+
+test_that("plot.tobs_aggregation_scan() draws the identifiability heatmap (#276)", {
+  d <- make_plot_data()
+  res <- occu_aggregation_scan(
+    d, response = "y_det", coords = c("x", "y"), year = "year",
+    plot = "plot", cell_sizes = 0.9, block_lengths = c(1L, 3L),
+    score = "info")
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_no_error(plot(res))
+})
+
 test_that("input validation rejects bad response and missing columns", {
   d <- make_plot_data()
   d$bad <- d$y_det + 1L

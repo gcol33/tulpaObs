@@ -123,7 +123,6 @@ test_that("a single-node component shows in the sizes and is not pinned to zero"
   # Where such a node IS accepted it keeps a proper N(0, 1/tau) effect: the
   # identification augments the precision, so the charge for value v on a size-1
   # component is -0.5 * tau * v^2. A hard sum-to-zero would pin it to exactly 0.
-  skip_if_not_installed("tulpa")
   csr <- tulpaObs:::adjacency_to_csr(adj)
   lp <- function(x, tau) {
     tulpa:::cpp_test_log_prior_icar(x, nrow(adj), tau, csr$row_ptr,
@@ -136,7 +135,6 @@ test_that("a single-node component shows in the sizes and is not pinned to zero"
 })
 
 test_that("the engine pins one sum-to-zero per component, not one globally", {
-  skip_if_not_installed("tulpa")
   chain <- function(n) {
     a <- matrix(0L, n, n)
     for (s in seq_len(n)) {

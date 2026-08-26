@@ -10,15 +10,6 @@
 # =============================================================================
 
 
-.trend_chain_adj <- function(N) {
-  adj <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < N)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 .trend_data <- function(sim, N, J) {
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -67,7 +58,7 @@
 test_that("occu_cover trend smoke fit runs end-to-end and exposes both fields", {
   skip_if_fast()
   N <- 30L; J <- 4L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     sigma = 0.8, alpha = 1.0, trend = TRUE,
@@ -111,7 +102,7 @@ test_that("occu_cover trend smoke fit runs end-to-end and exposes both fields", 
 test_that("trend field via a weighted formula term matches the control$trend route", {
   skip_if_fast()
   N <- 30L; J <- 4L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     sigma = 0.8, alpha = 1.0, trend = TRUE,
@@ -160,7 +151,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
 test_that("a weighted areal term fits standalone occu() on the nested-Laplace path", {
   skip_if_fast()
   N <- 12L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
   cell_dat <- data.frame(site_id = seq_len(N), x = rnorm(N))
   long <- data.frame(site_id = rep(seq_len(N), each = 2L),
                      visit = rep(1:2, N), y = rbinom(2L * N, 1L, 0.4),
@@ -195,7 +186,7 @@ test_that("a weighted areal term fits standalone occu() on the nested-Laplace pa
 test_that("predict propagates a positive-arm covariate from newdata", {
   skip_if_fast()
   N <- 30L; J <- 4L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", adj = adj,
                              sigma = 0.8, alpha = 1.0, seed = 31337L)
   d <- .trend_data(sim, N, J)
@@ -244,7 +235,7 @@ test_that("occu_cover trend recovers slopes, both couplings, both fields (10 see
 
   n_seeds <- 10L
   N <- 100L; J <- 6L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
 
   beta_occ_truth <- c(stats::qlogis(0.4), 0.7)
   beta_p_truth   <- c(0.0,                0.8)
@@ -310,7 +301,7 @@ test_that("occu_cover change reports start/end CI + directional P(delta>0)", {
   skip_on_cran()
   skip_if_fast()
   N <- 60L; J <- 5L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
   # Strong positive occupancy slope on occ_cov1 -> raising it lifts psi in every
   # cell, so the change is positive and its direction is near-certain everywhere.
   sim <- simulate_occu_cover(
@@ -369,7 +360,7 @@ test_that("standalone occu() change reports psi start/end CI + P(delta>0)", {
   skip_on_cran()
   skip_if_fast()
   N <- 20L
-  adj <- .trend_chain_adj(N)
+  adj <- chain_adj(N)
   cell_dat <- data.frame(site_id = seq_len(N), x = rnorm(N))
   long <- data.frame(site_id = rep(seq_len(N), each = 3L),
                      visit = rep(1:3, N), y = rbinom(3L * N, 1L, 0.4),

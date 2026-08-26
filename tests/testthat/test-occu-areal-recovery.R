@@ -45,15 +45,6 @@
 # Thresholds are set from those MEDIANS with margin, never from one seed.
 # =============================================================================
 
-.sar_chain_adj <- function(N) {
-  a <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) a[s, s - 1L] <- 1L
-    if (s < N)  a[s, s + 1L] <- 1L
-  }
-  a
-}
-
 .sar_smooth_field <- function(N, sd_target, phase) {
   f <- sin(2 * pi * (seq_len(N) / N) + phase)
   f <- f - mean(f)
@@ -64,7 +55,7 @@
 .sar_simulate <- function(seed, sigma_f, n_cells = 40L, reps = 6L, J = 4L,
                           b_x = 0.5) {
   set.seed(seed)
-  adj <- .sar_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   f0 <- if (sigma_f > 0) .sar_smooth_field(n_cells, sigma_f, phase = 0.7)
         else rep(0, n_cells)
   n_sites <- n_cells * reps

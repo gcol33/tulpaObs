@@ -1,22 +1,13 @@
 # predict() for the cover() hurdle on the nested-Laplace shared-field path
 # and the unified joint-fit substrate it shares with occu_cover().
 
-.cjp_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < n)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 # Joint lognormal cover hurdle with a shared field over `n_s` regions.
 .cjp_build_fit <- function(N = 220L, n_s = 24L, prior = c("bym2", "icar"),
                            seed = 41L) {
   prior <- match.arg(prior)
   set.seed(seed)
   spatial_idx <- sample.int(n_s, N, replace = TRUE)
-  adj <- .cjp_chain_adj(n_s)
+  adj <- chain_adj(n_s)
   phi <- rnorm(n_s); theta <- rnorm(n_s)
   w_s <- 0.6 * (sqrt(0.7) * phi + sqrt(0.3) * theta)
   x   <- rnorm(N)

@@ -43,15 +43,6 @@
 # 0.5095, coverage 0.92, field cor 0.942 / 0.916 over 12 seeds).
 # =============================================================================
 
-.dar_chain_adj <- function(N) {
-  a <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) a[s, s - 1L] <- 1L
-    if (s < N)  a[s, s + 1L] <- 1L
-  }
-  a
-}
-
 .dar_smooth_field <- function(N, sd_target, phase) {
   f <- sin(2 * pi * (seq_len(N) / N) + phase)
   f <- f - mean(f)
@@ -64,7 +55,7 @@
 .dar_simulate <- function(seed, field, n_cells = 40L, reps = 6L, J = 4L,
                           n_seasons = 5L, sigma_f = 1.0, b_x = 0.5) {
   set.seed(seed)
-  adj <- .dar_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   f0 <- if (field) .dar_smooth_field(n_cells, sigma_f, phase = 0.7) else rep(0, n_cells)
   n_sites <- n_cells * reps
   cell <- rep(seq_len(n_cells), each = reps)

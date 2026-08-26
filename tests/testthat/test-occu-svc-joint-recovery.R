@@ -21,15 +21,6 @@
 # =============================================================================
 
 
-.svcj_chain_adj <- function(N) {
-  adj <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < N)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 .svcj_smooth_field <- function(N, sd_target, phase) {
   f <- sin(2 * pi * (seq_len(N) / N) + phase)
   f <- f - mean(f)
@@ -44,7 +35,7 @@
 .svcj_simulate <- function(n_cells, reps, J, p_int, sigma_truth,
                            sigma_trend_truth, seed) {
   set.seed(seed)
-  adj <- .svcj_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   f1  <- .svcj_smooth_field(n_cells, sigma_truth,       phase = 0.7)
   f2  <- .svcj_smooth_field(n_cells, sigma_trend_truth, phase = 2.3)
 

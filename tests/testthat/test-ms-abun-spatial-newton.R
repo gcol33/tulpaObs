@@ -8,19 +8,6 @@
 # equivalence block is skip_if_fast() and drives the internal driver with a coarse
 # grid to stay affordable in CI.
 
-rook_adj <- function(g) {
-  n <- g * g; A <- matrix(0L, n, n)
-  idx <- function(r, c) (r - 1L) * g + c
-  for (r in seq_len(g)) for (c in seq_len(g)) {
-    i <- idx(r, c)
-    if (r > 1) A[i, idx(r - 1L, c)] <- 1L
-    if (r < g) A[i, idx(r + 1L, c)] <- 1L
-    if (c > 1) A[i, idx(r, c - 1L)] <- 1L
-    if (c < g) A[i, idx(r, c + 1L)] <- 1L
-  }
-  A
-}
-
 test_that("inner_solver = \"newton\" is a recognized control with regime guards", {
   skip_on_cran()
   skip_if_fast()

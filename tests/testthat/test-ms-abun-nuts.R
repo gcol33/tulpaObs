@@ -320,22 +320,11 @@ test_that("ms_abun NUTS S3 methods + WAIC work", {
 
 # --- (7) shared areal field (proper-CAR) recovery -------------
 
-.msan_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # The shared-field block leaves the non-spatial eval byte-identical at raw = 0.
 test_that("ms_abun NUTS shared-field block is a no-op at raw = 0", {
   skip_on_cran()
   P <- .msan_pieces("poisson")
-  side <- 6L; A <- .msan_grid_graph(side)   # n_sites = 36 != the fixture's 30
+  side <- 6L; A <- rook_adj(side)   # n_sites = 36 != the fixture's 30
   # Build a matched-size field for the fixture's n_sites by mapping each site to
   # its own unit and an identity Linv (so f = raw); at raw = 0 there is no field.
   N <- P$spec$n_sites
@@ -379,7 +368,7 @@ test_that("ms_abun NUTS + car_proper() recovers community means + the field", {
   skip_if_fast()
   side <- 7L; N <- side * side; J <- 4L; nsp <- 8L
   set.seed(7)
-  A <- .msan_grid_graph(side)
+  A <- rook_adj(side)
   coord <- expand.grid(r = seq_len(side), c = seq_len(side))
   f_true <- 0.6 * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
   f_true <- f_true - mean(f_true)
@@ -422,7 +411,7 @@ test_that("ms_abun NUTS + icar() shared field recovers community means + field (
   # the non-square loading flows through the generalized in-tree field block.
   side <- 7L; N <- side * side; J <- 4L; nsp <- 8L
   set.seed(13)
-  A <- .msan_grid_graph(side)
+  A <- rook_adj(side)
   coord <- expand.grid(r = seq_len(side), c = seq_len(side))
   f_true <- 0.6 * scale(sin(coord$r / side * pi) + cos(coord$c / side * pi))[, 1]
   f_true <- f_true - mean(f_true)

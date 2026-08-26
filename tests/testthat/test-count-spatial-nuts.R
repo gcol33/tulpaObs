@@ -13,15 +13,6 @@
 # tests drive the family spatial-NUTS fitters directly; the one-line dispatch
 # rewiring is the occu_fit.R follow-up.
 
-.csn_grid_adj <- function(side) {
-  ng <- side * side
-  co <- expand.grid(x = seq_len(side), y = seq_len(side))
-  adj <- matrix(0L, ng, ng)
-  for (i in seq_len(ng)) for (j in seq_len(ng))
-    if (i != j && abs(co$x[i] - co$x[j]) + abs(co$y[i] - co$y[j]) == 1L) adj[i, j] <- 1L
-  adj
-}
-
 # Smoothed, demeaned ICAR-like field on the grid.
 .csn_field <- function(adj, sd_phi = 0.6, seed = 1L) {
   set.seed(seed); ng <- nrow(adj); phi <- as.numeric(scale(rnorm(ng)))
@@ -60,7 +51,7 @@
 test_that("removal() NUTS + car_proper field recovers + calibrates to nested-Laplace", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
   set.seed(11); xab <- .csn_orth_cov(phi)
   lambda <- exp(log(8) + 0.6 * xab + phi); p <- 0.45; K <- 4L
   N <- rpois(ng, lambda); y <- matrix(0L, ng, K); rem <- N
@@ -86,7 +77,7 @@ test_that("removal() NUTS + car_proper field recovers + calibrates to nested-Lap
 test_that("distance() NUTS + car_proper field recovers + calibrates to nested-Laplace", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
   set.seed(22); xab <- .csn_orth_cov(phi); cut <- c(0, 10, 20, 30, 40); B <- 4L
   sig <- exp(3.0); lamd <- exp(log(40) + 0.5 * xab + phi)
   g_mid <- exp(-((head(cut, -1) + tail(cut, -1)) / 2)^2 / (2 * sig^2))
@@ -118,7 +109,7 @@ test_that("fp_occu() NUTS + car_proper field reproduces the nested-Laplace field
   # invariant is that NUTS reproduces the integrated nested-Laplace field and
   # samples cleanly -- not that the field tracks the latent truth tightly (the
   # nested-Laplace field itself only weakly does at this replication).
-  adj <- .csn_grid_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
+  adj <- rook_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
   set.seed(33); xab <- .csn_orth_cov(phi); psi <- plogis(0.3 + 0.7 * xab + phi)
   z <- rbinom(ng, 1, psi); J <- 6L; yf <- integer(ng * J); idx <- 1L
   for (i in seq_len(ng)) for (j in 1:J) {
@@ -148,7 +139,7 @@ test_that("dyn_abun() NUTS + car_proper field reproduces the nested-Laplace fiel
   # The forward-HMM NUTS is the slowest per leapfrog, so a small grid with a
   # bounded tree depth keeps the recovery affordable while still exercising the
   # fixed-hyper field block on the initial-abundance arm.
-  adj <- .csn_grid_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
+  adj <- rook_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
   set.seed(44); xab <- .csn_orth_cov(phi); Td <- 3L; Jd <- 3L
   N1 <- rpois(ng, exp(log(7) + 0.5 * xab + phi)); ya <- array(0L, c(ng, Jd, Td)); Ncur <- N1
   for (t in 1:Td) {
@@ -182,7 +173,7 @@ test_that("dyn_abun() NUTS + car_proper field reproduces the nested-Laplace fiel
 test_that("removal() NUTS + icar field recovers + reproduces the nested-Laplace field (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
   set.seed(11); xab <- .csn_orth_cov(phi)
   lambda <- exp(log(8) + 0.6 * xab + phi); p <- 0.45; K <- 4L
   N <- rpois(ng, lambda); y <- matrix(0L, ng, K); rem <- N
@@ -207,7 +198,7 @@ test_that("removal() NUTS + icar field recovers + reproduces the nested-Laplace 
 test_that("distance() NUTS + icar field recovers + reproduces the nested-Laplace field (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
   set.seed(22); xab <- .csn_orth_cov(phi); cut <- c(0, 10, 20, 30, 40); B <- 4L
   sig <- exp(3.0); lamd <- exp(log(40) + 0.5 * xab + phi)
   g_mid <- exp(-((head(cut, -1) + tail(cut, -1)) / 2)^2 / (2 * sig^2))
@@ -234,7 +225,7 @@ test_that("distance() NUTS + icar field recovers + reproduces the nested-Laplace
 test_that("fp_occu() NUTS + icar field reproduces the nested-Laplace field, 0 divergences (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
+  adj <- rook_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
   set.seed(33); xab <- .csn_orth_cov(phi); psi <- plogis(0.3 + 0.7 * xab + phi)
   z <- rbinom(ng, 1, psi); J <- 6L; yf <- integer(ng * J); idx <- 1L
   for (i in seq_len(ng)) for (j in 1:J) {
@@ -260,7 +251,7 @@ test_that("fp_occu() NUTS + icar field reproduces the nested-Laplace field, 0 di
 test_that("dyn_abun() NUTS + icar field reproduces the nested-Laplace field, 0 divergences (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
+  adj <- rook_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
   set.seed(44); xab <- .csn_orth_cov(phi); Td <- 3L; Jd <- 3L
   N1 <- rpois(ng, exp(log(7) + 0.5 * xab + phi)); ya <- array(0L, c(ng, Jd, Td)); Ncur <- N1
   for (t in 1:Td) {
@@ -293,7 +284,7 @@ test_that("dyn_abun() NUTS + icar field reproduces the nested-Laplace field, 0 d
 test_that("removal() NUTS + bym2 field recovers + reproduces the nested-Laplace field (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 11L); ng <- nrow(adj)
   set.seed(11); xab <- .csn_orth_cov(phi)
   lambda <- exp(log(8) + 0.6 * xab + phi); p <- 0.45; K <- 4L
   N <- rpois(ng, lambda); y <- matrix(0L, ng, K); rem <- N
@@ -317,7 +308,7 @@ test_that("removal() NUTS + bym2 field recovers + reproduces the nested-Laplace 
 test_that("distance() NUTS + bym2 field recovers + reproduces the nested-Laplace field (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 22L); ng <- nrow(adj)
   set.seed(22); xab <- .csn_orth_cov(phi); cut <- c(0, 10, 20, 30, 40); B <- 4L
   sig <- exp(3.0); lamd <- exp(log(40) + 0.5 * xab + phi)
   g_mid <- exp(-((head(cut, -1) + tail(cut, -1)) / 2)^2 / (2 * sig^2))
@@ -343,7 +334,7 @@ test_that("distance() NUTS + bym2 field recovers + reproduces the nested-Laplace
 test_that("fp_occu() NUTS + bym2 field reproduces the nested-Laplace field, 0 divergences (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
+  adj <- rook_adj(7L); phi <- .csn_field(adj, sd_phi = 0.8, seed = 33L); ng <- nrow(adj)
   set.seed(33); xab <- .csn_orth_cov(phi); psi <- plogis(0.3 + 0.7 * xab + phi)
   z <- rbinom(ng, 1, psi); J <- 6L; yf <- integer(ng * J); idx <- 1L
   for (i in seq_len(ng)) for (j in 1:J) {
@@ -368,7 +359,7 @@ test_that("fp_occu() NUTS + bym2 field reproduces the nested-Laplace field, 0 di
 test_that("dyn_abun() NUTS + bym2 field reproduces the nested-Laplace field, 0 divergences (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
+  adj <- rook_adj(4L); phi <- .csn_field(adj, seed = 44L); ng <- nrow(adj)
   set.seed(44); xab <- .csn_orth_cov(phi); Td <- 3L; Jd <- 3L
   N1 <- rpois(ng, exp(log(7) + 0.5 * xab + phi)); ya <- array(0L, c(ng, Jd, Td)); Ncur <- N1
   for (t in 1:Td) {
@@ -400,7 +391,7 @@ test_that("dyn_abun() NUTS + bym2 field reproduces the nested-Laplace field, 0 d
 test_that("removal() NUTS + icar field: abundance-slope 95% coverage over 20 seeds (#113)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); ng <- nrow(adj)
+  adj <- rook_adj(6L); ng <- nrow(adj)
   n_seeds <- 20L; beta_truth <- 0.6
   covered <- logical(n_seeds); diverg <- numeric(n_seeds)
   for (s in seq_len(n_seeds)) {
@@ -440,7 +431,7 @@ test_that("removal() NUTS + icar field: abundance-slope 95% coverage over 20 see
 test_that("distance() hazard-key NUTS + car_proper recovers field + shape (#114)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 7L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 7L); ng <- nrow(adj)
   set.seed(7); xab <- .csn_orth_cov(phi); cut <- c(0, 10, 20, 30, 40); W <- 40
   sigma <- 18; shape <- 3.5; B <- 4L
   lam <- exp(log(45) + 0.5 * xab + phi); pib <- .csn_haz_pi(cut, sigma, shape, W)
@@ -465,7 +456,7 @@ test_that("distance() hazard-key NUTS + car_proper recovers field + shape (#114)
 test_that("distance() hazard-key NUTS + icar recovers field + shape (#114)", {
   skip_on_cran()
   skip_if_fast()
-  adj <- .csn_grid_adj(6L); phi <- .csn_field(adj, seed = 7L); ng <- nrow(adj)
+  adj <- rook_adj(6L); phi <- .csn_field(adj, seed = 7L); ng <- nrow(adj)
   set.seed(7); xab <- .csn_orth_cov(phi); cut <- c(0, 10, 20, 30, 40); W <- 40
   sigma <- 18; shape <- 3.5; B <- 4L
   lam <- exp(log(45) + 0.5 * xab + phi); pib <- .csn_haz_pi(cut, sigma, shape, W)

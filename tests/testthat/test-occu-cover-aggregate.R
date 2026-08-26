@@ -10,18 +10,12 @@
 # and multi-seed recovery of the field / occupancy / cover coefficients.
 # =============================================================================
 
-.agg_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) { if (s > 1L) adj[s, s-1L] <- 1L; if (s < n) adj[s, s+1L] <- 1L }
-  adj
-}
-
 # group_var occu_cover with a CELL-level positive covariate + shared field.
 .agg_sim <- function(seed, n_cells = 30L, n_per = 5L, J = 12L,
                      b_pos = c(stats::qlogis(0.3), 0.6), b_occ1 = 0.7,
                      sigma = 0.8, alpha = 1.2, phi = 30) {
   set.seed(seed)
-  adj <- .agg_chain_adj(n_cells); n_sites <- n_cells * n_per
+  adj <- chain_adj(n_cells); n_sites <- n_cells * n_per
   Q  <- tulpaObs:::.occu_cover_icar_Q(adj)
   sq <- tulpaObs:::.occu_cover_icar_scale(adj)
   eig <- eigen(Q, symmetric = TRUE); keep <- eig$values > 1e-8

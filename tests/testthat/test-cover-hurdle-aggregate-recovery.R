@@ -27,12 +27,6 @@
 # =============================================================================
 
 
-.acr_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) { if (s > 1L) adj[s, s - 1L] <- 1L; if (s < n) adj[s, s + 1L] <- 1L }
-  adj
-}
-
 .acr_icar_f <- function(adj) {
   Q  <- tulpaObs:::.occu_cover_icar_Q(adj)
   sc <- tulpaObs:::.occu_cover_icar_scale(adj)
@@ -49,7 +43,7 @@
 # Beta cover hurdle, two coupled fields. Occurrence eta carries both fields;
 # the cover (positive) eta carries each field scaled by its own alpha.
 .acr_sim <- function(seed, n_s = 18L, n_per = 10L) {
-  set.seed(seed); adj <- .acr_chain_adj(n_s)
+  set.seed(seed); adj <- chain_adj(n_s)
   f1 <- .acr_icar_f(adj); f2 <- .acr_icar_f(adj)
   cell <- rep(seq_len(n_s), each = n_per); N <- length(cell)
   x    <- as.numeric(scale(stats::rnorm(n_s)))[cell]

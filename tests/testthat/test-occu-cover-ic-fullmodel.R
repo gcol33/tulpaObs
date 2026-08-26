@@ -13,20 +13,12 @@
 
 # Chain adjacency (a 1-D lattice); the package simulator draws the shared ICAR
 # field on this graph so the field matches the fitter's parameterisation.
-.icfm_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < n)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
 
 # Simulate a strong-field occu_cover dataset with the package's own generator
 # (matched field parameterisation) and fit it with the joint engine.
 .icfm_sim_and_fit <- function(seed, N = 100L, J = 6L, sigma_true = 2.0,
                               alpha_true = 1.0, positive = "lognormal") {
-  adj <- .icfm_chain_adj(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, beta_occ = c(stats::qlogis(0.4), 0.7),
     beta_p = c(0.0, 0.8), beta_pos = c(log(0.20), -0.4),

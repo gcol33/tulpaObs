@@ -450,7 +450,9 @@ test_that("families whose predictor has no terms= argument say so", {
   # The guard is keyed on the model type, so it must not disturb a predict()
   # that passed no `terms` at all -- both still return their in-sample fit.
   expect_length(predict(fit_rn), nrow(sim_rn$y))
-  expect_length(predict(fit_fp), nrow(sim_fp$y))
+  # fp_occu's in-sample predict() is a list of named quantities (psi, p11,
+  # p10, b, z), not a bare vector -- check the shape of one of them.
+  expect_length(predict(fit_fp)$psi, nrow(sim_fp$y))
 
   # Every model type named in the no-terms set is a real dispatch target, so
   # the set cannot drift into naming a family that does honour `terms`. The

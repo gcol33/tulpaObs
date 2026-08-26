@@ -78,6 +78,8 @@ test_that("tobs_stack() returns weights that sum to 1 over named members", {
   expect_equal(sum(ens$weights), 1, tolerance = 1e-6)
   expect_true(all(ens$weights >= 0))
   expect_setequal(ens$comparison$model, c("simple", "full"))
+  expect_output(print(ens), "<tobs_stack: 2 members, stacking weights>",
+                fixed = TRUE)
   expect_length(ens$fits, 2L)
 })
 
@@ -129,9 +131,12 @@ test_that("predict.tobs_stack with X.0 needs matching member designs", {
 })
 
 test_that("predict.tobs_stack names columns for the requested quantiles", {
+  # Members must share one occupancy design for X.0 prediction (the dedicated
+  # mismatch check is the test right above); use two same-design fits so this
+  # one isolates the quantile-naming behaviour instead.
   sim <- sim_occu()
-  f1 <- fit_lap(~ x,     sim)
-  f2 <- fit_lap(~ x + w, sim)
+  f1 <- fit_lap(~ x, sim)
+  f2 <- fit_lap(~ x, sim_occu(seed = 2))
   ens <- tobs_stack(f1, f2)
   X0 <- model.matrix(~ x, sim$data)[1:5, , drop = FALSE]
 

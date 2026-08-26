@@ -159,15 +159,6 @@ test_that(".tobs_loglik_fold_group leaves an ungrouped matrix untouched", {
 # End-to-end: the loo::loo / loo::loo_compare dispatch on a fitted tobs_fit.
 # ---------------------------------------------------------------------------
 
-.clu_chain_adj <- function(n) {
-  adj <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < n)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 # Non-spatial cover() hurdle: x drives both arms, z is noise. Both fits score the
 # same N plots, which is what loo_compare() requires of its members.
 .clu_cover_data <- function(seed = 501L, N = 150L) {
@@ -190,7 +181,7 @@ test_that(".tobs_loglik_fold_group leaves an ungrouped matrix untouched", {
 # is not the identity.
 .clu_cover_cell_fit <- function(seed = 502L, n_s = 8L, n_per = 15L) {
   set.seed(seed)
-  adj  <- .clu_chain_adj(n_s)
+  adj  <- chain_adj(n_s)
   cell <- rep(seq_len(n_s), each = n_per)
   N    <- length(cell)
   w_s  <- 0.6 * (sqrt(0.7) * stats::rnorm(n_s) + sqrt(0.3) * stats::rnorm(n_s))

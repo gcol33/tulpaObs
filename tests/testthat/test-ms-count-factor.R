@@ -184,22 +184,11 @@ test_that("latent-factor count recovers the residual correlation over seeds", {
 
 # --- spatial-factor composition: a shared field AND latent factors together ----
 
-.mscsf_grid_graph <- function(side) {
-  N <- side * side; A <- matrix(0L, N, N)
-  idx <- function(r, c) (r - 1L) * side + c
-  for (r in seq_len(side)) for (c in seq_len(side)) {
-    i <- idx(r, c)
-    if (r < side) { j <- idx(r + 1L, c); A[i, j] <- 1L; A[j, i] <- 1L }
-    if (c < side) { j <- idx(r, c + 1L); A[i, j] <- 1L; A[j, i] <- 1L }
-  }
-  A
-}
-
 # log mu_{s,i} = X_i (mu + b_s) + f_i + sum_q lambda_{s,q} eta_{q,i}, with a shared
 # ICAR field f AND Q centred-loading factors (residual co-occurrence).
 .mscsf_sim <- function(side = 11L, S = 16L, Q = 2L, seed = 1L) {
   set.seed(seed)
-  A <- .mscsf_grid_graph(side); Ns <- nrow(A)
+  A <- rook_adj(side); Ns <- nrow(A)
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f <- 0.6 * scale(sin(co$r/side*pi) + cos(co$c/side*pi))[, 1]; f <- f - mean(f)
   d <- data.frame(x = stats::rnorm(Ns))

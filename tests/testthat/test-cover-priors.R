@@ -8,6 +8,8 @@ test_that("cover_priors() constructs and validates", {
   expect_s3_class(cp, "cover_priors")
   expect_s3_class(cp, "tobs_priors_spec")
   expect_named(cp, c("occ_intercept", "occ_slope", "pos_intercept", "pos_slope"))
+  expect_output(print(cp), "cover_priors (opt-in, for cover() Laplace fits):",
+                fixed = TRUE)
 
   expect_error(cover_priors(occ_slope = list(mean = 0, sd = -1)), "positive")
   expect_error(cover_priors(pos_intercept = list(mean = 0)), "mean")

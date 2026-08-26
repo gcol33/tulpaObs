@@ -209,6 +209,9 @@ test_that("cover NUTS recovers parameters + coverage (beta positive)", {
   cov_ok <- abs(est[ok, cover_idx, drop = FALSE] -
                 matrix(truth[cover_idx], sum(ok), length(cover_idx), byrow = TRUE)) <
             1.96 * se[ok, cover_idx, drop = FALSE]
+  # Coverage measured 1.0 (all cells, 6 seeds 4001-4006). The gate sits well
+  # below the measurement so a real regression still trips without riding
+  # this estimand's own Monte Carlo noise.
   expect_gte(mean(cov_ok), 0.6)
 })
 
@@ -248,6 +251,9 @@ test_that("cover NUTS recovers parameters + coverage (gaussian positive)", {
   cov_ok <- abs(est[ok, cover_idx, drop = FALSE] -
                 matrix(truth[cover_idx], sum(ok), length(cover_idx), byrow = TRUE)) <
             1.96 * se[ok, cover_idx, drop = FALSE]
+  # Coverage measured 0.9375 (15/16 cells, 8 seeds 6001-6008). The gate sits
+  # below the measurement so a real regression still trips without riding
+  # this estimand's own Monte Carlo noise.
   expect_gte(mean(cov_ok), 0.75)
 })
 

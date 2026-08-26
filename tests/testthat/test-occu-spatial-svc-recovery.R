@@ -19,15 +19,6 @@
 # =============================================================================
 
 
-.svc_chain_adj <- function(N) {
-  adj <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < N)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
 # A smooth mean-zero field over the chain (a low-frequency sine), scaled to a
 # target SD. Deterministic given the phase so the truth is known.
 .svc_smooth_field <- function(N, sd_target, phase) {
@@ -45,7 +36,7 @@
 .svc_simulate <- function(n_cells, reps, J, b0, b_xocc, p,
                           sigma_truth, sigma_trend_truth, seed) {
   set.seed(seed)
-  adj <- .svc_chain_adj(n_cells)
+  adj <- chain_adj(n_cells)
   f1  <- .svc_smooth_field(n_cells, sigma_truth,       phase = 0.7)
   f2  <- .svc_smooth_field(n_cells, sigma_trend_truth, phase = 2.3)
 

@@ -14,7 +14,7 @@
 # that reshapes a defaulted grid has to re-apply it on the reshaped vector.
 
 skip_if_no_auto_grid <- function() {
-  skip_if_not(is.function(getExportedValue("tulpa", "auto_grid")),
+  skip_if_not(exists("auto_grid", envir = asNamespace("tulpa"), inherits = FALSE),
               "tulpa::auto_grid() not available")
 }
 
@@ -194,17 +194,8 @@ test_that("cover() multi-block carries the copy axis's mark through as.numeric()
 # cover() arm-specific block: the 0.2-2.5 axis that never matched the engine    #
 # --------------------------------------------------------------------------- #
 
-.agp_graph <- function(n = 6L) {
-  g <- matrix(0L, n, n)
-  for (s in seq_len(n)) {
-    if (s > 1L) g[s, s - 1L] <- 1L
-    if (s < n)  g[s, s + 1L] <- 1L
-  }
-  g
-}
-
 .agp_block <- function(type, control) {
-  g <- .agp_graph()
+  g <- chain_adj(6L)
   tulpaObs:::.cover_armspecific_block(
     type = type, graph = g, slot = 2L, idx_active = rep_len(1:6, 12L),
     n_occ = 12L, n_pos = 12L, svc_weight = NULL, control = control,
@@ -298,7 +289,7 @@ test_that("occu_cover() declines to recenter a PINNED axis but not a defaulted o
   skip_if_no_auto_grid()
 
   N <- 40L; J <- 5L
-  adj <- .agp_graph(N)
+  adj <- chain_adj(N)
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
                              adj = adj, sigma = 1, alpha = 1, seed = 186L)
   long <- data.frame(site_id = rep(seq_len(N), each = J),

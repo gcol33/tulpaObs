@@ -13,11 +13,6 @@
 # correlation, not a tight point match. All heavy -> skip_if_fast()-gated.
 # =============================================================================
 
-.chain_adj <- function(N) {
-  a <- matrix(0L, N, N)
-  for (s in 1:N) { if (s > 1) a[s, s - 1] <- 1L; if (s < N) a[s, s + 1] <- 1L }
-  a
-}
 .smooth_field <- function(N, sd, ph) {
   f <- sin(2 * pi * seq_len(N) / N + ph); f <- f - mean(f); f / sd(f) * sd
 }
@@ -27,7 +22,7 @@ test_that("occu() + icar NUTS exposes and recovers the areal field", {
   cors <- numeric(0)
   for (s in seq_len(6L)) {
     set.seed(100 + s)
-    n <- 50L; adj <- .chain_adj(n); f <- .smooth_field(n, 1.0, 0.7)
+    n <- 50L; adj <- chain_adj(n); f <- .smooth_field(n, 1.0, 0.7)
     J <- 6L; psi <- plogis(0.2 + f); z <- rbinom(n, 1, psi)
     y <- matrix(0L, n, J)
     for (i in 1:n) y[i, ] <- if (z[i]) rbinom(J, 1, 0.55) else 0L
@@ -52,7 +47,7 @@ test_that("occu() + icar NUTS exposes and recovers the areal field", {
 test_that("occu() + bym2 NUTS names every field and hyperparameter column", {
   skip_on_cran(); skip_if_fast()
   set.seed(101)
-  n <- 40L; adj <- .chain_adj(n); f <- .smooth_field(n, 1.0, 0.7)
+  n <- 40L; adj <- chain_adj(n); f <- .smooth_field(n, 1.0, 0.7)
   J <- 6L; psi <- plogis(0.2 + f); z <- rbinom(n, 1, psi)
   y <- matrix(0L, n, J)
   for (i in 1:n) y[i, ] <- if (z[i]) rbinom(J, 1, 0.55) else 0L

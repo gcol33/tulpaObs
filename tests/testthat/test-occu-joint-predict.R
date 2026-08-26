@@ -62,16 +62,6 @@
              habitat = factor(paste0("h", c(1L, 2L, 3L, 1L, 2L, 3L))))
 }
 
-.ojp_chain_adj <- function(N) {
-  adj <- matrix(0L, N, N)
-  for (s in seq_len(N)) {
-    if (s > 1L) adj[s, s - 1L] <- 1L
-    if (s < N)  adj[s, s + 1L] <- 1L
-  }
-  adj
-}
-
-
 test_that("occupancy-only joint predict adds the psi-arm RE offset", {
   fit  <- .ojp_fit()
   n    <- 5L
@@ -185,7 +175,7 @@ test_that("occu() SVC joint fit predicts occupancy, detection and change", {
 
   set.seed(246L)
   N   <- 20L
-  adj <- .ojp_chain_adj(N)
+  adj <- chain_adj(N)
   cell_dat <- data.frame(site_id = seq_len(N), x = rnorm(N))
   long <- data.frame(site_id = rep(seq_len(N), each = 3L),
                      visit = rep(1:3, N), y = rbinom(3L * N, 1L, 0.4),
