@@ -551,8 +551,11 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
       list(arm = re_post$arm, n_quad = re_post$n_quad,
            lkj_eta = re_post$lkj_eta, Sigma_list = re_post$Sigma_list)
       else NULL,
+    # Checked on the fixed-effect block only: an RE variance component's SD is
+    # deliberately left NA above when the marginal-Hessian path cannot surface
+    # it (not a fit failure), so it must not trip this gate.
     convergence = .tobs_aghq_convergence_record(
-      raw, converged = raw$converged %||% TRUE)
+      raw, converged = raw$converged %||% TRUE, sds = sds[fixed_names])
   )), class = c("tobs_fit", "tulpa_fit"))
 }
 

@@ -719,7 +719,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     # `converged` is FALSE and every community-level quantity on the fit --
     # including the dispersion block -- is missing that species' information.
     # A caller filters on this instead of on the text of the engine's warning.
-    convergence = .tobs_aghq_convergence_record(raw, model$species_names)
+    convergence = .tobs_aghq_convergence_record(raw, model$species_names, sds = sds)
   ), class = c("tobs_fit", "tulpa_fit"))
 }
 

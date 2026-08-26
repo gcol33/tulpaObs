@@ -278,11 +278,19 @@
 # `converged`, `n_iter`, and the per-group solve status. `raw` carrying no
 # status (every non-AGHQ path) yields the two fields it always had.
 # `group_names` labels the failures where the family has names for its groups.
+# `sds`, when supplied, is the fit's own reported coefficient SDs: an optimum
+# whose reported curvature is not finite is not an optimum (#286), so a
+# non-finite entry there forces `converged` FALSE even though the AGHQ solve
+# itself reported success -- the caller only ever sees a nonsense point
+# estimate (e.g. sigma_log_r orders of magnitude off truth) paired with an SE
+# it cannot compute, which the boundary/failure gates above do not see.
 .tobs_aghq_convergence_record <- function(raw, group_names = NULL,
-                                          converged = isTRUE(raw$converged)) {
+                                          converged = isTRUE(raw$converged),
+                                          sds = NULL) {
   failed <- raw$groups_failed
   named  <- length(failed) && !is.null(group_names) &&
     length(group_names) >= max(failed)
+  if (length(sds) && !all(is.finite(sds))) converged <- FALSE
   list(converged = converged,
        n_iter    = raw$n_iter %||% NA_integer_,
        group_ok  = raw$group_ok,
