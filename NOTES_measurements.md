@@ -1680,3 +1680,86 @@ More data is what identifies it:
 | N=120 J=10 | 0.851 | **0.532** | **16/16** | 0.527 | 16/16 |
 
 The file runs in 6 s at the larger fixture.
+
+## `ms_abun(negbin)` `mu_log_r` interval scale across group count (#280, #284)
+
+#284 asked for a Kenward-Roger small-sample correction to the AGHQ
+community-mean covariance, gated on #280's 1.28x SE understatement shrinking
+with the group count. It does not shrink, so the correction is not built; but
+the miss at `S = 18` is real and replicates, so #280 is not noise either.
+
+Fixture throughout is #280's own: `N = 100`, `J = 5`, one abundance and one
+detection covariate, `mu_lambda = c(log 5, 0.4)`, `mu_p = c(0.3, -0.3)`,
+`sd_lambda = 0.4`, `sd_p = 0.35`, `size = 5`, `sigma_logr = 0.5`,
+`method = "laplace"`, `n.quad = 3`, `n.quad.scalar = 3`, truth
+`mu_log_r = log 5`. `k := sd(mu_log_r) / mean(se_log_r)`.
+
+97 fits: stored seeds 501-520 (`nbrs_bisect`, 343f425 / 8179ee5) plus fresh
+seeds 521-540 run on cf6c952 / tobs 0.0.246 / tulpa 0.1.23.
+
+| S | n | k | 95% boot | p | rms z | coverage | mean sigma (truth 0.5) |
+|---|---|---|---|---|---|---|---|
+| 8 | 38 | 1.066 | [0.818, 1.287] | 0.52 | 1.250 | 0.895 | 0.418 |
+| 18 | 39 | **1.265** | **[1.012, 1.470]** | **0.022** | 1.325 | 0.846 | 0.448 |
+| 36 | 39 | 0.981 | [0.750, 1.181] | 0.93 | 1.032 | 0.949 | 0.487 |
+
+**KR is refuted by the ordering.** A scale bias in the plug-in observed
+information is largest where the groups are fewest; the observed order is
+`S=18 (1.265) > S=8 (1.066) > S=36 (0.981)`. In each arm's own null sd
+(`1/sqrt(2(n-1))`, 0.115): `z = +0.57`, `+2.31`, `-0.17`. The smallest group
+count is calibrated. No monotone-in-S mechanism produces that.
+
+**The `S = 18` miss is real, and replicates out of sample.** The two disjoint
+seed blocks give `k = 1.277` (501-520, n=19) and `k = 1.278` (521-540, n=20),
+individually `p = 0.088` and `p = 0.081`, Fisher-combined `p = 0.042`, pooled
+`p = 0.022`. It is not one or two seeds: leave-one-out spans [1.219, 1.287]
+(dropping the three most influential does take it to 1.139). Bonferroni over
+the three arms puts the pooled value at 0.065, so read it as real but modest --
+its strength is the out-of-sample replication at the same magnitude, not the
+p-value.
+
+**Read at n = 19 alone it was not distinguishable from noise, and that reading
+was wrong.** With a correctly calibrated SE, `sd` over n seeds is
+chi-distributed, so `k ~ sqrt(chi2_{n-1}/(n-1))` -- a 95% range of [0.68, 1.32]
+at n = 19, which contains 1.28. Doubling the sample is what separated them.
+
+**The SE side is well behaved; the spread side is where `S = 18` departs.**
+With `eff_n := (sigma_hat / .)^2`, the group count each quantity behaves as:
+
+| S | eff_n(se)/S | eff_n(sd)/S |
+|---|---|---|
+| 8 | 0.546 | 0.481 |
+| 18 | 0.595 | 0.372 |
+| 36 | 0.630 | 0.655 |
+
+The reported interval is a smooth, monotone fraction of `sigma/sqrt(S)` across a
+factor of 4.5 in S. The realized spread is not, and `S = 18` is its outlier. So
+this is not the SE formula misbehaving at one group count.
+
+**There is no conditional miss beyond Jensen.** `rms_z` exceeds `k` in every
+arm, but that is free: `z_i = err_i / se_i` and `E[1/se^2] >= 1/E[se]^2`.
+Permuting the error-to-se pairing while keeping both marginals reproduces the
+observed `rms_z` at `p = 0.24 / 0.30 / 0.24`, so intervals are not narrow
+specifically where the error is not.
+
+**The one mechanism that is real is boundary collapse of `sigma_log_r`, and the
+shipped remedy handles it.** At `S = 8`, 2 of 19 fits collapse (0.012, 0.061).
+`control$logr.sigma.prior = c(1, 0.05)` on the same seeds lifts the minimum to
+0.175 and `rms_z` from 1.182 to 1.126 at identical coverage.
+
+Continuity, so the two pools may be combined: the current build reproduces the
+stored arms at `max |dlr|` 1.6e-04 (S=8) and 3.0e-04 (S=18), with `k` unchanged
+(0.970 -> 0.970, 1.277 -> 1.278). The fresh arms ran in WSL, licensed by a
+paired measurement: `mu_log_r` agrees Windows-to-WSL at 8e-08 - 2e-07 on S=8
+seeds 521-523, six orders below the effect. See
+`dev/_wsl_setup/README.md`.
+
+Three seeds returned no interval and are counted, not dropped silently: 502 and
+531 at `S = 8` are refused by the engine (the tulpa#606 sentinel refusal), and
+526 at `S = 36` converges to `mu_log_r = -31.5`, `sigma_log_r = 409.5` with an
+`NaN` SE while reporting `converged = TRUE` after 6 iterations -- filed
+separately.
+
+Scripts (gitignored): `dev_notes/_kr284_probe.R`, `_kr284_launch.ps1`,
+`_kr284_analyse.R`; data `dev_notes/kr284/`, Windows cross-arm
+`dev_notes/kr284_win_partial/`.
