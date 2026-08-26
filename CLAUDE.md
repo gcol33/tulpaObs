@@ -511,21 +511,26 @@ S3).
   / SBC rank inheriting a collapsed SE. Converged at 3, so a floor NOT a clamp -- and
   the floor beats a smaller `n_quad` (a coefficient block may run at plain Laplace, a
   block whose marginal SE is REPORTED may not). Also a bias fix, not just a seed
-  rescue. Does NOT turn `test-ms-abun-nb-rs.R:94` green on its own -- see #235.
-- **`mu_log_r` Wald calibration is CONDITIONAL on `sigma_log_r` (#235).** NOT a
-  uniform SE miss -- the filed "~24% too small" is wrong: a handful of fits carry a
-  third of `sum(z^2)`, and with those dropped the pooled `k_hat` is ~1 while the body's
-  robust scale sits BELOW 1. Conditioned on the recovered variance component, fits with
-  a healthy `sigma_log_r` cover at nominal and fits near the boundary do not (mean
-  |err| worse AND the SE narrower, which is why pooled stats read as a clean scale
-  miss); threshold-free, the rank correlations against sigma are negative and
-  significant, so NOT an SE artefact = the `sigma_omega` boundary collapse on the
-  sibling block that keeps pure ML. REFUTED en route: finite-sample-in-S, t(S-1) df.
-  **No gate ships**: it needs `SE(log sigma)`, which `tulpa_re_aghq()` discards ->
-  `gcol33/tulpa#418`; anything else = an invented absolute cut on `sigma_hat`. Measured
-  conditioning documented on `?ms_abun` instead. Threshold at `:94` deliberately
-  UNTOUCHED (what it should assert depends on fix-vs-report, a claim decision).
-  Evidence: `NOTES_families.md`, numbers: `NOTES_measurements.md`.
+  rescue.
+- **Scalar community variance components GATED against their boundary (#250).** A
+  collapsed component is invisible on its own fit (converged, no warning) and the
+  community mean it scales inherits a shrinking interval. Gate = the component's OWN
+  uncertainty, NEVER a cut on `sigma_hat`: `.tobs_aghq_variance_boundary()`
+  (`R/re_aghq.R`) = boundary-aware Wald `1/SE(log sigma)` off tulpa `re_par_se`,
+  declining on a non-scalar block; `.tobs_warn_variance_boundary()` = ONE warning per
+  fit, wired `nmix_laplace_re.R` (`sigma_log_r`, `sigma_omega`). Opt-in PC prior
+  (`control$logr.sigma.prior` / `omega.sigma.prior`); default pure ML. NOT the whole
+  guard: a failed solve leaves sigma at its INITIAL value, caught by the solve status
+  (#281).
+- **`mu_log_r` Wald calibration (#235/#280/#285).** "~24% too narrow" does NOT survive:
+  put the seed block's realized draw at its expectation AND rebuild the SE at the
+  simulated sigma -> calibrated at EVERY group count; the `S = 18` spike is the DRAW,
+  not the estimator. Real: `sigma_hat` attenuates (monotone in S), SE built on it ->
+  `?ms_abun`. A coverage floor here CANNOT be a tripwire (the SE at TRUE sigma still
+  misses -- draw excess untouched), so `test-ms-abun-nb-rs-coverage.R` asserts
+  unbiasedness, normality, a gross floor + a WIDE draw-corrected scale band. Evidence
+  (+ what was refuted en route) + numbers: `NOTES_families.md` /
+  `NOTES_measurements.md`.
 - **NUTS** (`method="nuts"`, #14; `R/ms_abun_nuts.R`, `src/ms_abun_nuts.cpp`): samples
   EXACT joint posterior over closed-form Royle marginal -> calibrated intervals +
   per-(species,site) WAIC/LOO (`.tobs_ploglik_ms_nmix`). NON-CENTERED: per-species block

@@ -1330,6 +1330,11 @@ argument, "U;alpha"), comparison `_nbrs_pcprior_compare.R`.
 
 ## Scalar nuisance AGHQ node floor (`ms_abun(mixture="negbin")` / ZI, #234)
 
+Pointers below to `test-ms-abun-nb-rs.R:94` are dead: that file was split by shard
+weight and the coverage arm now lives in `test-ms-abun-nb-rs-coverage.R`, which does
+NOT assert a coverage floor -- see the #285 resolution above for why one cannot be a
+defect tripwire here. The measurements themselves stand.
+
 Rule is in `CLAUDE.md` under "Community / multispecies N-mixture". Measurements:
 
 - **The collapse.** A 2-node rule on `mu_log_r` gave SE 0.0110 against 0.1886 at
@@ -1342,7 +1347,12 @@ Rule is in `CLAUDE.md` under "Community / multispecies N-mixture". Measurements:
 - **Not sufficient for the gate.** `test-ms-abun-nb-rs.R:94` still reads 16/20 =
   0.800 against `> 0.8`; see the #235 note below.
 
-## `mu_log_r` Wald calibration conditions on `sigma_log_r` (#235)
+## `mu_log_r` Wald calibration conditions on `sigma_log_r` (#235; the "no gate" item superseded)
+
+The "why no gate ships" item below is out of date: `gcol33/tulpa#418` shipped
+(`re_par_se` / `re_par_layout` / `joint_cov`, tulpa `12b641d`, released v0.1.18), so
+the `SE(log sigma)` a detector needs is on the fit and the boundary test DOES ship
+(`.tobs_aghq_variance_boundary()`, #250). The measurements themselves stand.
 
 Rule is in `CLAUDE.md` under "Community / multispecies N-mixture". Measurements
 (n = 59 fits pooled; conditioning subset n = 39, S = 8 + 36, truth `sigma` 0.5):

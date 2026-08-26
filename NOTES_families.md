@@ -198,24 +198,82 @@ score that NA and returned `fit.y = NA` for every draw.
 
 **Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Factor update holds zeta at its joint mode -> `(zeta, lambda)` is a joint-likelihood estimate with `Ns*Q` incidental params growing with the sample = Neyman-Scott, inconsistent. Site factors' estimation error lands in the fitted co-occurrence and lambda absorbs it, over-fit growing with Q/S. Fix = `.tobs_latent_factor_mmle()`: EM on the SAME joint site marginal over all S*Q loadings (E-step = posterior `p(z_i|y_i)` off `.tobs_latent_joint_grid()`; M-step = per-species Qk-dim weighted Newton, backtracked on expected complete-data ll). Numbers in `NOTES_measurements.md`.
 
-## ms_abun(negbin): what the mu_log_r Wald miss actually is (#235)
+## ms_abun(negbin): the mu_log_r interval, and the variance-component gate (#235/#250/#280/#285)
 
-- **`mu_log_r` Wald calibration is CONDITIONAL on `sigma_log_r` (#235).** NOT a
-  uniform SE miss -- the filed "~24% too small" is wrong: a handful of fits carry a
-  third of `sum(z^2)`, and with those dropped the pooled `k_hat` is ~1 while the
-  body's robust scale sits BELOW 1. Conditioning on the recovered variance component,
-  fits with a healthy `sigma_log_r` cover at nominal and fits near the boundary do
-  not, with mean |err| worse AND the SE narrower (both fire together, which is why
-  pooled stats read as a clean scale miss); threshold-free, the rank correlation of
-  |z| and of |err| against sigma is negative and significant, so NOT an SE artefact.
-  = the `sigma_omega` boundary collapse on the sibling block that keeps pure ML.
-  REFUTED en route: finite-sample-in-S, t(S-1) df correction. **No gate ships**: it
-  needs `SE(log sigma)`, and `tulpa_re_aghq()` discards the joint inverse's
-  variance-component block -> `gcol33/tulpa#418`; anything else = an invented absolute
-  cut on `sigma_hat`. Measured conditioning documented on `?ms_abun` instead.
-  Threshold at `:94` deliberately UNTOUCHED (what it should assert depends on
-  fix-vs-report, a claim decision). Numbers in `NOTES_measurements.md`.
+**The interval is calibrated; the filed miss was the seed block's DRAW (#280 -> #235 ->
+#285).** `mu_log_r` is a POPULATION mean. Each seed draws `S` log-dispersions around it
+and the fit sees only those, so the error splits `est - mu = (est - mu_real) +
+(mu_real - mu)` with `mu_real` the seed's own realized species mean. The second term is
+`N(0, sigma_logr^2 / S)`, belongs inside the interval, and the SE does carry it -- but
+measured over ~20 seeds it carries most of the spread, so an ordinary fluctuation in the
+DRAW reads as a miscalibrated SE. Put the draw at its expectation AND rebuild the SE at
+the simulated sigma and the interval scale is calibrated at EVERY group count (`S = 8 /
+18 / 36`); the `S = 18` spike #280/#285 filed is that seed block drawing its species
+means ~18.5% wide, not the estimator. Numbers in `NOTES_measurements.md`.
 
+Two readings this replaces, both from the same data. #280's "~24% too narrow, uniformly"
+is wrong: a handful of fits carried a third of `sum(z^2)`. #235's successor reading --
+that the miss is CONDITIONAL on `sigma_log_r`, healthy-sigma fits covering at nominal and
+near-boundary fits not -- is the right shape for the boundary phenomenon the gate below
+addresses, but it is not what drives the pooled `k_hat` at `S = 18` either. REFUTED en
+route, each against the same fits: finite-sample-in-`S`, a `t(S-1)` df correction, and
+heavy tails at `S = 18` (top-3 share of `sum(z^2)` came in BELOW what a normal expects).
+
+**What IS real: `sigma_hat` attenuates and the SE is built on it.** Monotone in `S`, so it
+shrinks with group count rather than indicating a defect at any one. Documented on
+`?ms_abun`; not gated.
+
+**Why the coverage test asserts what it does.** A coverage floor cannot be a defect
+tripwire here: rebuilding the SE at the TRUE sigma -- strictly better than any estimator
+delivers -- still misses on those seeds, because their draw excess is untouched by it. So
+`test-ms-abun-nb-rs-coverage.R` asserts unbiasedness, normal `z`, a gross floor, and the
+draw-corrected interval scale in a deliberately WIDE band (its own null is `[0.81, 1.19]`
+at 19 seeds). Tightening it needs MORE SEEDS, not a smaller number: separating `1.28` from
+noise takes `n >= 40`, and any future arm needs its realized draw reported beside its
+`k_hat`.
+
+**The boundary gate (#250).** A collapsed variance component is invisible on the fit it
+comes on -- the optimizer converges, the point estimate is ordinary, nothing warns -- while
+the community mean it scales carries an interval that shrinks with it. So the gate has to
+be the component's OWN uncertainty; an absolute cut on `sigma_hat` is a number with nothing
+behind it and does not transfer between fixtures.
+
+A 1x1 covariance block's integration coordinate IS `log(sigma)` -- the log-Cholesky diagonal
+of a 1x1 factor -- so `tulpa_re_aghq()`'s `re_par_se` is `SE(log sigma)` with no transform,
+and the delta method gives
+
+    W = sigma_hat / SE(sigma_hat) = sigma_hat / (sigma_hat * SE(log sigma_hat))
+      = 1 / SE(log sigma_hat)
+
+with `sigma_hat`'s own scale cancelling out. `sigma = 0` sits on the boundary of the
+parameter space, where the one-sided null is the 50:50 mixture `0.5 chi^2_0 + 0.5 chi^2_1`
+(Self & Liang 1987; Stram & Lee 1994) rather than `chi^2_1`; for `W >= 0` that mixture gives
+`P(W > c) = 1 - Phi(c)`, so the boundary-aware critical value and the ordinary one-sided
+normal quantile coincide at `qnorm(1 - alpha)` (`.TOBS_VC_BOUNDARY_ALPHA` = 0.05). Nothing
+here is fitted to a fixture. `re_par_se` is a block of the SAME joint inverse Hessian
+`theta_cov` is the top-left block of, so this reads the fit's own curvature and costs no
+solve. A block carrying several coordinates has correlations in it and no single SD to
+test, so `.tobs_aghq_variance_boundary()` declines (`available = FALSE` + a `reason`)
+rather than reporting one diagonal as though it stood alone -- the record comes back in
+ONE shape whatever happened, so a caller reads fields rather than branching on NULL.
+`.tobs_warn_variance_boundary()` raises ONE warning naming every failing component, so a
+fit with two collapsed blocks does not raise two warnings a reader has to correlate.
+
+Upstream: `re_par_se` / `re_par_layout` / `joint_cov` arrived in tulpa `12b641d`
+(gcol33/tulpa#418), first released v0.1.18; the DESCRIPTION engine floor is already above
+it, so there is no availability gate to write.
+
+**The gate is NOT the whole guard.** A failed per-species posterior solve returns the
+community dispersion block at the values it STARTED from -- `sigma_log_r` exactly the
+initial 0.5, `mu_log_r` a hair below `log(r_init)`, `converged = TRUE`, and the tightest
+`log_r` SE of the sweep. A small-sigma detector reads that as healthy, precisely because
+the initial value is not small. What catches it is the engine refusing an optimum carrying
+its failure sentinel plus the per-species solve status the fit now carries (#281) -- both
+read in the coverage loop, and both counted, so the denominator is visible rather than
+assumed.
+
+**The PC prior is opt-in.** `control$logr.sigma.prior` / `control$omega.sigma.prior` add
+curvature at the boundary; the DEFAULT stays pure ML, so no fit changes unless asked.
 ## occu_multiscale_cover(): MAR cover + the shared detected-plot score (#262/#270)
 
 **MAR cover, same rule as the twin** (#262): a detected visit (`y=1`) w/ NA cover keeps
