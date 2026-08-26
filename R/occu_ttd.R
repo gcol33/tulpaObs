@@ -117,7 +117,8 @@
 # Fitter: maximise the closed-form marginal, observed-information vcov
 # ---------------------------------------------------------------------------
 
-.tobs_fit_occu_ttd <- function(model, verbose = TRUE, ...) {
+.tobs_fit_occu_ttd <- function(model, verbose = TRUE,
+                               max.iter = NULL, tol = NULL, ...) {
   X_psi  <- model$X_processes[[1L]]
   X_rate <- model$X_processes[[2L]]
   p_psi  <- ncol(X_psi); p_rate <- ncol(X_rate)
@@ -146,6 +147,7 @@
 
   .tobs_bfgs_marginal_fit(
     nll, init, par_names, model, N = model$n_sites,
+    max.iter = max.iter, tol = tol,
     extra = function(means) list(intercepts = list(
       psi  = stats::setNames(means[1L], par_names[1L]),
       rate = stats::setNames(means[p_psi + 1L], par_names[p_psi + 1L]))))
@@ -175,7 +177,8 @@
   model <- .tobs_build_occu_ttd(
     state_formula = formula, rate_formula = detection, data = data, y = y,
     surveyLength = family$params$surveyLength %||% 1)
-  .tobs_fit_occu_ttd(model, verbose = isTRUE(control$verbose))
+  .tobs_fit_occu_ttd(model, verbose = isTRUE(control$verbose),
+                    max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 # Opt-in exact-Newton inner solver for the areal shared-field community N-mixture
-# (control$inner_solver = "newton"). Same model as the default Laplace-EM path --
+# (control$inner.solver = "newton"). Same model as the default Laplace-EM path --
 # the field hyperparameter is outer-grid integrated either way -- but the inner
 # step alternates a tulpa AGHQ community solve with an exact-Newton shared-field
 # solve. The two solvers must produce the same fit (community means, shared field,
@@ -8,7 +8,7 @@
 # equivalence block is skip_if_fast() and drives the internal driver with a coarse
 # grid to stay affordable in CI.
 
-test_that("inner_solver = \"newton\" is a recognized control with regime guards", {
+test_that("inner.solver = \"newton\" is a recognized control with regime guards", {
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(3L)
@@ -19,14 +19,14 @@ test_that("inner_solver = \"newton\" is a recognized control with regime guards"
   expect_error(
     tobs(~ abund_cov1 + icar(graph = adj), detection = ~ det_cov1,
          family = ms_abun(), data = sim$data, y = sim$y, species = sim$species,
-         method = "nested_laplace", control = list(inner_solver = "nope")),
+         method = "nested_laplace", control = list(inner.solver = "nope")),
     "should be one of|'arg'")
   # Newton is Poisson-only: negbin + newton errors clearly.
   expect_error(
     tobs(~ abund_cov1 + icar(graph = adj), detection = ~ det_cov1,
          family = ms_abun(mixture = "negbin"), data = sim$data, y = sim$y,
          species = sim$species, method = "nested_laplace",
-         control = list(verbose = FALSE, inner_solver = "newton")),
+         control = list(verbose = FALSE, inner.solver = "newton")),
     "Poisson-only")
 })
 

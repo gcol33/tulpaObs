@@ -242,15 +242,15 @@
   inner_solver <- match.arg(inner_solver, c("em", "newton"))
   if (identical(inner_solver, "newton")) {
     if (!spatial$type %in% c("icar", "bym2", "car_proper")) {
-      stop("control$inner_solver = \"newton\" (the exact-Newton shared-field ",
+      stop("control$inner.solver = \"newton\" (the exact-Newton shared-field ",
            "solver) supports the areal terms icar() / bym2() / car_proper() ",
            "only; '", spatial$type, "' is integrated by the default EM solver. ",
-           "Drop control$inner_solver.", call. = FALSE)
+           "Drop control$inner.solver.", call. = FALSE)
     }
     if (identical(mixture, "negbin")) {
-      stop("control$inner_solver = \"newton\" is Poisson-only; ",
+      stop("control$inner.solver = \"newton\" is Poisson-only; ",
            "negative-binomial abundance with a shared field uses the EM solver ",
-           "(drop control$inner_solver).", call. = FALSE)
+           "(drop control$inner.solver).", call. = FALSE)
     }
     return(.tobs_fit_ms_nmix_spatial_newton(
       model, spatial, K_max = K_max, max_iter = max_iter,
@@ -312,7 +312,7 @@
 
 
 # Exact-Newton inner solver for the areal shared-field community N-mixture
-# (control$inner_solver = "newton"). Same model as the EM path: the field
+# (control$inner.solver = "newton"). Same model as the EM path: the field
 # hyperparameter (tau for ICAR; (tau, rho) for proper CAR; BYM2 as its intrinsic
 # ICAR limit) is integrated on the outer grid; at each node a profile loop
 # alternates (a) the community solve -- tulpa::tulpa_re_aghq() over the per-

@@ -71,6 +71,7 @@ summary.tobs_fit <- function(object, ...) {
   gdistremoval    = "abundance",
   distsamp_open   = "abundance",
   dyn_int_occu    = "state",
+  t_occu          = "psi",
   vapply(.TOBS_MS_PREDICT_ARMS, function(a) names(a)[[1L]], character(1)))
 
 # Model types whose predictor has no `terms` argument. `distance` / `fp_occu` /
@@ -1036,8 +1037,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
            "\"cover\").", call. = FALSE)
     }
     oms_type <- if (missing(type) || length(type) > 1L) "state" else type
-    return(.tobs_predict_occu_multiscale_cover(object, oms_type,
-                                               quantiles = quantiles))
+    return(.tobs_predict_occu_multiscale_cover(object, oms_type, level = level))
   }
   if (identical(object$model$model_type, "ms_occu_cover_spatial")) {
     # The latent fields are tied to the cell graph, so prediction is the

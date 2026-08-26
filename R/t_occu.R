@@ -284,6 +284,26 @@ t_occu <- function() {
     verbose  = isTRUE(control[["verbose"]]))
 }
 
+# predict(): psi (occupancy, default; a [nrow x n_seasons] matrix carrying the
+# fitted AR1 year effect at each season, matching fitted()$psi) or p
+# (detection, per row) at the fitted or new design, on the response scale.
+.tobs_predict_t_occu <- function(object, newdata = NULL, type = c("psi", "p")) {
+  type  <- match.arg(type)
+  model <- object$model
+  means <- object$means
+  p_psi <- model$process_info[[1L]]$p
+  if (identical(type, "p")) {
+    X <- if (is.null(newdata)) model$X_det
+         else stats::model.matrix(model$formulas$det, newdata)
+    return(as.vector(stats::plogis(
+      X %*% means[p_psi + seq_len(model$process_info[[2L]]$p)])))
+  }
+  X <- if (is.null(newdata)) model$X_occ
+       else stats::model.matrix(model$formulas$occ, newdata)
+  eta_site <- as.vector(X %*% means[seq_len(p_psi)])
+  stats::plogis(outer(eta_site, object$temporal_field, "+"))
+}
+
 #' Simulate multi-season occupancy with an AR1 year effect (tPGOcc)
 #'
 #' @param N Number of sites (default 150).

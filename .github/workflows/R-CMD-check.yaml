@@ -81,11 +81,11 @@ jobs:
       - name: Verify floor availability
         run: Rscript .github/scripts/check-floor-served.R
 
-      # tulpa resolves from gcol33.r-universe.dev as a prebuilt binary, by
-      # Imports floor alone -- no Remotes tag, because r-universe builds
-      # default-branch HEAD and a tag publishes nothing there. The window that
-      # opens between an engine release and the next r-universe build is covered
-      # by the floor availability gate above, not by a pin.
+      # DESCRIPTION pins tulpa to an exact Remotes tag, so this resolves and
+      # compiles it from that GitHub tag rather than taking r-universe's
+      # prebuilt default-branch binary -- CI tests exactly the engine version
+      # the package declares (issue #150). tulpaMesh carries no such tag and
+      # still resolves from gcol33.r-universe.dev by Imports floor alone.
       # The action caches the built library, which is where the expensive
       # third-party compiles (RcppEigen) are amortised.
       - uses: r-lib/actions/setup-r-dependencies@v2
@@ -111,9 +111,7 @@ jobs:
       - name: Verify engine pin
         run: Rscript .github/scripts/check-engine-pin.R
 
-      # --no-manual: the Rd sources carry non-ASCII that breaks the LaTeX PDF
-      # manual, matching the repo's own devtools::check(args = "--no-manual").
       - uses: r-lib/actions/check-r-package@v2
         with:
-          args: 'c("--no-manual")'
+          args: 'c("--no-manual", "--as-cran")'
           upload-snapshots: true

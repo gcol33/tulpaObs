@@ -27,3 +27,5 @@
 ^deliverables\.md$
 ^data-raw$
 ^todo\.md$
+^vignettes/.*\.html$
+^vignettes/.*_files$

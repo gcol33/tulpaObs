@@ -319,7 +319,7 @@ on intercept / uncorrelated terms.
 occupancy-cover fit (default 1). The auto-rank ladder selects \code{K} by
 marginal evidence under this prior, so the selection fit and the final
 fit necessarily read the same value.
-\item \code{inner_solver} — for a spatial community N-mixture (\code{ms_abun()} with an
+\item \code{inner.solver} — for a spatial community N-mixture (\code{ms_abun()} with an
 \code{icar()} / \code{bym2()} / \code{car_proper()} field on the abundance arm), the
 inner solver integrating the shared field given the community: \code{"em"}
 (default) the closed-form Laplace-EM M-step, or \code{"newton"} the exact-

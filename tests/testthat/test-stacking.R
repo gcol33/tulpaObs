@@ -135,8 +135,12 @@ test_that("predict.tobs_stack names columns for the requested quantiles", {
   # mismatch check is the test right above); use two same-design fits so this
   # one isolates the quantile-naming behaviour instead.
   sim <- sim_occu()
+  # Both members must share the occupancy design for predict(X.0=) to run at
+  # all (see the mismatched-design test above); the detection formula differs
+  # so the two members are not byte-identical fits.
   f1 <- fit_lap(~ x, sim)
-  f2 <- fit_lap(~ x, sim_occu(seed = 2))
+  f2 <- tobs(~ x, data = sim$data, y = sim$y, detection = ~ w,
+             family = occu(), method = "laplace", control = list(verbose = FALSE))
   ens <- tobs_stack(f1, f2)
   X0 <- model.matrix(~ x, sim$data)[1:5, , drop = FALSE]
 
@@ -171,6 +175,26 @@ test_that("n.seeds builds a tobs_stack of K members and predicts out-of-sample",
   expect_equal(nrow(pr), 5L)
   expect_true(all(c("mean", "sd", "q2.5", "q50", "q97.5") %in% names(pr)))
   expect_true(all(pr$mean >= 0 & pr$mean <= 1))
+})
+
+test_that("predict.tobs_stack(X.0=) names columns for the requested quantiles (#271)", {
+  sim <- sim_occu()
+  f1 <- fit_lap(~ x, sim)
+  f2 <- fit_lap(~ x, sim)
+  ens <- tobs_stack(f1, f2)
+  X0 <- model.matrix(~ x, sim$data)[1:5, , drop = FALSE]
+
+  pr <- predict(ens, X.0 = X0, quantiles = c(0.1, 0.5, 0.9))
+  expect_true(all(c("mean", "sd", "q10", "q50", "q90") %in% names(pr)))
+  expect_false(any(c("q2.5", "q97.5") %in% names(pr)))
+  # q10 is actually the 10th percentile of the pooled draws, not silently the
+  # default 2.5th -- narrower than the default 95% interval at the same draws.
+  pr_default <- predict(ens, X.0 = X0)
+  expect_true(all(pr$q10 >= pr_default$q2.5))
+  expect_true(all(pr$q90 <= pr_default$q97.5))
+
+  expect_error(predict(ens, X.0 = X0, quantiles = c(0.9, 0.1, 0.5)),
+              "increasing")
 })
 
 test_that("n.seeds is rejected on the deterministic Laplace route", {

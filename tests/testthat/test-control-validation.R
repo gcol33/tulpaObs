@@ -11,7 +11,7 @@ check <- function(control, method) {
 
 test_that("Laplace rejects sampler controls", {
   for (key in c("n.chains", "n.iter", "n.warmup", "n.thin", "n.threads",
-                "adapt.delta", "max.treedepth", "sigma.re.scale")) {
+                "adapt.delta", "max.treedepth")) {
     ctrl <- setNames(list(1L), key)
     expect_error(check(ctrl, "laplace"), key, fixed = TRUE)
   }
@@ -57,7 +57,7 @@ test_that("valid controls pass for each engine family", {
   expect_silent(check(list(n.chains = 4L, n.iter = 2000L, n.warmup = 1000L,
                            n.thin = 2L, n.threads = 2L, adapt.delta = 0.9,
                            max.treedepth = 12L, seed = 7L, sigma.beta = 5,
-                           sigma.re.scale = 1, verbose = FALSE), "nuts"))
+                           verbose = FALSE), "nuts"))
   expect_silent(check(list(), "laplace"))
 })
 

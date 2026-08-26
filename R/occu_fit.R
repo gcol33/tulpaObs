@@ -19,7 +19,7 @@
                             method = c("laplace", "nested_laplace", "nuts",
                                        "pg_gibbs"),
                             priors = NULL,
-                            sigma.beta = NULL, sigma.re.scale = 1,
+                            sigma.beta = NULL,
                             max.iter = 100L, tol = 1e-4, damping = 0.7,
                             n.iter = NULL, n.warmup = NULL, n.thin = NULL,
                             n.chains = NULL, n.threads = NULL,

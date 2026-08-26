@@ -88,6 +88,28 @@ test_that("count() S3 surface works (fitted / predict / residuals / WAIC)", {
   expect_true(w$p_waic > 0 && w$p_waic < 6)   # ~2 fixed effects
 })
 
+test_that("count() simulate() drives its GOF doors (#271)", {
+  skip_if_fast()
+  sim <- simulate_count(N = 200, beta = c(0.8, 0.6), response = "poisson",
+                        seed = 6)
+  fit <- tobs(~ x, data = sim$data, family = count("poisson"), y = sim$y,
+              control = list(progress = FALSE))
+
+  s1 <- simulate(fit, seed = 1)
+  expect_length(s1, 200L)
+  expect_true(all(s1 >= 0))
+  s3 <- simulate(fit, nsim = 3L, seed = 1)
+  expect_length(s3, 3L)
+  expect_length(s3[[1L]], 200L)
+
+  td <- test_dispersion(fit, n.samples = 40L)
+  expect_true(is.finite(td$p.value))
+  tz <- test_zero_inflation(fit, n.samples = 40L)
+  expect_true(is.finite(tz$p.value))
+  to <- test_outliers(fit, n.samples = 40L)
+  expect_true(is.finite(to$p.value))
+})
+
 test_that("Poisson count fit recovers truth + 95% CI coverage", {
   skip_if_fast()
   skip_on_cran()

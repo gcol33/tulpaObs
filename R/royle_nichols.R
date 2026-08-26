@@ -185,7 +185,8 @@
   pmin(pmax(r, 1e-8), 1 - 1e-8)
 }
 
-.tobs_fit_royle_nichols <- function(model, verbose = TRUE, ...) {
+.tobs_fit_royle_nichols <- function(model, verbose = TRUE,
+                                    max.iter = NULL, tol = NULL, ...) {
   X_lambda <- model$X_processes[[1L]]
   X_r      <- model$X_processes[[2L]]
   p_lam    <- ncol(X_lambda); p_rs <- ncol(X_r)
@@ -224,6 +225,7 @@
 
   .tobs_bfgs_marginal_fit(
     nll, init, par_names, model, N = sum(nn > 0L),
+    max.iter = max.iter, tol = tol,
     extra = function(means) list(intercepts = list(
       lambda = stats::setNames(means[1L], par_names[1L]),
       r      = stats::setNames(means[p_lam + 1L], par_names[p_lam + 1L]))))
@@ -258,7 +260,8 @@
     hint = paste0("the Royle-Nichols marginal is fitted on fixed effects only ",
                   "(abundance-induced detection heterogeneity is the only ",
                   "latent structure), so drop the term"))
-  .tobs_fit_royle_nichols(model, verbose = isTRUE(control$verbose))
+  .tobs_fit_royle_nichols(model, verbose = isTRUE(control$verbose),
+                          max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------

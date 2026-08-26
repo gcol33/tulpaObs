@@ -149,7 +149,8 @@
 # Fitter
 # ---------------------------------------------------------------------------
 
-.tobs_fit_double_observer <- function(model, verbose = TRUE, ...) {
+.tobs_fit_double_observer <- function(model, verbose = TRUE,
+                                      max.iter = NULL, tol = NULL, ...) {
   X_lambda <- model$X_processes[[1L]]; X_det <- model$X_processes[[2L]]
   p_lam <- ncol(X_lambda); p_det <- ncol(X_det)
   dependent <- identical(model$type, "dependent")
@@ -185,7 +186,8 @@
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
 
-  .tobs_bfgs_marginal_fit(nll, init, par_names, model, N = model$n_sites)
+  .tobs_bfgs_marginal_fit(nll, init, par_names, model, N = model$n_sites,
+                          max.iter = max.iter, tol = tol)
 }
 
 # ---------------------------------------------------------------------------
@@ -217,7 +219,8 @@
     model, "double_observer()",
     hint = paste0("the double-observer marginal is fitted on fixed effects ",
                   "only, so drop the term"))
-  .tobs_fit_double_observer(model, verbose = isTRUE(control$verbose))
+  .tobs_fit_double_observer(model, verbose = isTRUE(control$verbose),
+                            max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------

@@ -26,13 +26,10 @@ _*.R
 _*.txt
 _*/
 
-# dev_notes/ contains math derivations and probe scripts referenced from
-# R/, man/, vignettes, and tests — override the global gitignore rule
-# (including overriding *.log etc. for files inside dev_notes/).
-!dev_notes/
-!dev_notes/**
-
-# Ad-hoc probes, reproducers, build/test logs (kept in-tree, not committed)
+# dev_notes/ holds ad-hoc probes, reproducers, and math derivations that stay
+# local and never reach the remote (a handful of tracked exceptions predate
+# this rule). A comment in R/, man/, vignettes, or tests must not cite a
+# dev_notes/ path as its backing -- inline the content instead.
 dev_notes/
 
 # Local output of the sharded full-recovery tier (.github/scripts/run-tests.R
@@ -41,3 +38,7 @@ dev_notes/
 tier3-out/
 tier3-artifacts/
 tier3-timings.csv
+
+# knitr's own build output -- regenerated every vignette build, not the source.
+vignettes/*_files/
+vignettes/*.html

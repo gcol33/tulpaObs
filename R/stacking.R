@@ -202,9 +202,9 @@ fitted.tobs_stack <- function(object, ...) {
 predict.tobs_stack <- function(object, X.0 = NULL,
                                quantiles = c(0.025, 0.5, 0.975),
                                n.draws = 4000L, ...) {
+  quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
   # In-sample: weight-combine the member fitted() values (psi / p / z).
   if (is.null(X.0)) return(fitted(object))
-  quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
 
   fits <- object$fits
   w    <- object$weights

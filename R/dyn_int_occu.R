@@ -206,7 +206,8 @@
        g_eta_eps = g_eta_eps, g_eta_p = g_eta_p, w1 = w1)
 }
 
-.tobs_fit_dyn_int_occu <- function(model, verbose = TRUE, ...) {
+.tobs_fit_dyn_int_occu <- function(model, verbose = TRUE,
+                                   max.iter = NULL, tol = NULL, ...) {
   S <- model$S; T_s <- model$n_seasons; n_sites <- model$n_sites
   p_psi <- ncol(model$X_psi); p_gam <- ncol(model$X_gam)
   p_eps <- ncol(model$X_eps); p_det <- ncol(model$X_det)
@@ -248,8 +249,9 @@
     init[o + 1L] <- stats::qlogis(min(max(ph, 0.05), 0.95)); o <- o + p_det
   }
 
-  opt <- stats::optim(init, nll, ngr, method = "BFGS",
-                      control = list(maxit = 800L))
+  ctrl <- list(maxit = max.iter %||% 800L)
+  if (!is.null(tol)) ctrl$reltol <- tol
+  opt <- stats::optim(init, nll, ngr, method = "BFGS", control = ctrl)
   converged <- opt$convergence == 0L
   # Observed-information vcov from the FD-Jacobian of the analytic gradient
   # (O(p) marginal evals; no numeric Hessian over the forward-backward). `ngr` is
@@ -428,7 +430,8 @@
     stop("dyn_int_occu() supports method = \"laplace\" (non-spatial) or ",
          "\"nested_laplace\" (with an icar() field on the occupancy formula).",
          call. = FALSE)
-  .tobs_fit_dyn_int_occu(model, verbose = isTRUE(control$verbose))
+  .tobs_fit_dyn_int_occu(model, verbose = isTRUE(control$verbose),
+                        max.iter = control$max.iter, tol = control$tol)
 }
 
 # ---------------------------------------------------------------------------
