@@ -179,6 +179,26 @@
   0
 }
 
+# residuals() for occu_multiscale_cover(): the CELL-level residual of the
+# fitted psi against the ever-detected indicator (any plot in the cell, at
+# any visit) -- occupancy is a cell-level state that gates plot availability,
+# not something observed at the plot. Availability / detection / cover are
+# each observed at a different unit (plot, visit, detected-visit), so none of
+# them is a per-cell series and only the state residual is reported; `det` is
+# NULL for the same reason it is on occu_cover().
+.tobs_residuals_occu_multiscale_cover <- function(object, type) {
+  model <- object$model
+  y_masked <- model$y
+  y_masked[!model$valid] <- NA_integer_
+  plot_det <- apply(y_masked, 1, function(row) as.integer(any(row == 1L, na.rm = TRUE)))
+  pc <- model$plot_cell
+  cell_det <- vapply(seq_len(model$n_cells),
+                     function(c) as.integer(any(plot_det[pc == c] == 1L)),
+                     integer(1))
+  psi <- .tobs_fitted_occu_multiscale_cover(object)$psi
+  list(occ = .tobs_resid_binary(cell_det, psi, type), det = NULL)
+}
+
 # predict(): in-sample posterior arm predictions. The areal field is tied to the
 # cell graph, so prediction at new covariates / cells (X.0 / newdata) is not
 # supported (no field at an unseen cell), matching ms_occu_cover_spatial().

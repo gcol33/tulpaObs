@@ -100,6 +100,23 @@
        off_det = off$p, off_pos = off$pos)
 }
 
+# residuals() for occu_cover(): the state-level residual of the fitted
+# per-site occupancy against the ever-detected indicator, marginalised over
+# the same posterior draws .tobs_occu_cover_components() assembles for WAIC /
+# PPC -- so a field, a sampled random effect, or the joint grid-integrated
+# posterior all reach it the way they reach every other diagnostic, on every
+# engine. The cover arm is observed only where the site was detected, so it
+# is not a per-site series and is not reported; `det` is NULL for the same
+# reason it is on ms_occu_cover().
+.tobs_residuals_occu_cover <- function(object, type) {
+  model <- object$model
+  comp  <- .tobs_occu_cover_components(object)
+  eta   <- as.matrix(model$X_occ %*% t(comp$b_occ)) + comp$field_occ
+  psi   <- rowMeans(stats::plogis(eta))
+  any_det <- .occu_cover_visit_view(model)$any_det
+  list(occ = .tobs_resid_binary(any_det, psi, type), det = NULL)
+}
+
 # Per-draw coupled-field contributions for a fit that SAMPLED the field(s)
 # jointly with the coefficients: each block's `z` draws hold its per-cell field
 # and `hyper_draws` its copy amplitude, so the occupancy arm reads the block's
