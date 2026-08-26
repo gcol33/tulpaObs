@@ -1117,6 +1117,14 @@ Probes: `dev_notes/nbrs_bisect/` (`dissect_s515_nq3.txt`, `dissect_s516_nq3.txt`
 
 ## mu_log_r Wald calibration at S = 18: a uniform 1.28x scale miss (#250, #280)
 
+**Superseded on the reading, not the numbers.** The 1.28 is mostly these seeds'
+own species draw: they drew their 18 log-dispersions 18.5% wider than
+`sigma_logr / sqrt(18)`, and that draw supplies 65% of `Var(est - mu)`. Put it
+at its expectation and the scale is 1.188; rebuild the SE at the simulated sigma
+too and it is 1.130, pooling to 1.035 over 39 fits at this group count. See
+"What the `S = 18` spike actually is (#285, resolved)" below. Everything in this
+section reproduces; it is not a uniform scale miss.
+
 Re-measured 2026-08-25 on 8179ee5 / 0.0.240, tulpa 0.1.23, the coverage block's
 own fixture and seeds (`n_species = 18`, `N = 100`, `J = 5`, `size = 5`,
 `sigma_logr = 0.5`, seeds 501-520, `n.quad = 3`). 10 shards x 2 seeds x 2
