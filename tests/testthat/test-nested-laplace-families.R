@@ -18,8 +18,8 @@
 #   test-dyn-occu-areal-recovery.R, test-dyn-occu-svc-recovery.R
 
 chain_adj <- function(n) {
-  adj <- matrix(0, n, n)
-  for (i in seq_len(n - 1)) { adj[i, i + 1] <- 1; adj[i + 1, i] <- 1 }
+  adj <- matrix(0L, n, n)
+  for (i in seq_len(n - 1)) { adj[i, i + 1] <- 1L; adj[i + 1, i] <- 1L }
   adj
 }
 

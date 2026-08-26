@@ -14,7 +14,7 @@
 # that reshapes a defaulted grid has to re-apply it on the reshaped vector.
 
 skip_if_no_auto_grid <- function() {
-  skip_if_not(is.function(getExportedValue("tulpa", "auto_grid")),
+  skip_if_not(exists("auto_grid", envir = asNamespace("tulpa"), mode = "function"),
               "tulpa::auto_grid() not available")
 }
 

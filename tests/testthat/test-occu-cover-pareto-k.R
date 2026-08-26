@@ -84,7 +84,6 @@ test_that("fast Pareto-k diagnostic matches the byte-for-byte exact k-hat", {
 test_that("occu_cover Pareto-k agrees with loo::psis on the real importance ratios", {
   skip_if_fast()
   skip_on_cran()
-  skip_if_not_installed("loo")
   cap <- new.env()
   withr::local_options(tulpa.kdiag.capture = cap)   # fast defaults otherwise
   k_tulpa <- .pk_extract(.pk_occu_cover_fit(seed = 100L))

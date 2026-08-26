@@ -20,7 +20,6 @@
 ^experimental$
 ^.*\.tar\.gz$
 ^src/.*\.gch$
-^tests/benchmark.*\.R$
 ^API\.md$
 ^api\.md$
 ^PLAN_tulpaObs\.md$
@@ -28,3 +27,5 @@
 ^deliverables\.md$
 ^data-raw$
 ^todo\.md$
+^vignettes/.*\.html$
+^vignettes/.*_files$

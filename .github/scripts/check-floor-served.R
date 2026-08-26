@@ -24,11 +24,12 @@
 # the package declares. This one needs nothing installed, and asks whether the
 # declaration is installable at all.
 #
-# Policy this encodes: tulpaObs pins its engines by Imports floor alone and
-# carries no Remotes tag. The alternative -- Remotes: gcol33/tulpa@v<ver> --
-# closes the same window by installing a tag directly, at the price of binding
-# floor and tag together in every release from then on. The floor stays the one
-# declaration, and this gate covers the window.
+# Policy this encodes: DESCRIPTION currently pins tulpa by an exact Remotes tag
+# (gcol33/tulpa@v<ver>) as well as an Imports floor, so a resolver that honours
+# Remotes installs the tag directly and never hits this window for tulpa itself.
+# The gate still matters for every OTHER hard dependency (tulpaMesh, loo, ...),
+# none of which carry a Remotes tag, and for tulpa on a resolver that ignores
+# Remotes and falls back to the Imports floor served from r-universe.
 #
 # Repositories come from DESCRIPTION rather than from options("repos"), so the
 # gate measures what a user installing this package resolves, not what a

@@ -48,6 +48,9 @@ test_that("distance NUTS coefficient 95% CIs cover at the nominal rate", {
                     error = function(e) NULL)
     if (!is.null(fit)) covered <- c(covered, .nuts_ci_cover(fit, truth))
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })
 
@@ -66,6 +69,9 @@ test_that("removal NUTS coefficient 95% CIs cover at the nominal rate", {
                     error = function(e) NULL)
     if (!is.null(fit)) covered <- c(covered, .nuts_ci_cover(fit, truth))
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })
 
@@ -84,6 +90,9 @@ test_that("fp_occu NUTS coefficient 95% CIs cover at the nominal rate", {
                     error = function(e) NULL)
     if (!is.null(fit)) covered <- c(covered, .nuts_ci_cover(fit, truth))
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })
 
@@ -103,6 +112,9 @@ test_that("dyn_abun NUTS coefficient 95% CIs cover at the nominal rate", {
                     error = function(e) NULL)
     if (!is.null(fit)) covered <- c(covered, .nuts_ci_cover(fit, truth))
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })
 
@@ -122,6 +134,9 @@ test_that("abun NUTS coefficient 95% CIs cover at the nominal rate", {
                     error = function(e) NULL)
     if (!is.null(fit)) covered <- c(covered, .nuts_ci_cover(fit, truth))
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })
 
@@ -152,6 +167,9 @@ test_that("dyn_occu NUTS transition-parameter 95% CIs cover at the nominal rate"
                     error = function(e) NULL)
     if (!is.null(fit)) covered <- c(covered, .nuts_ci_cover_draws(fit, truth))
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })
 
@@ -173,5 +191,8 @@ test_that("int_occu NUTS occupancy 95% CIs cover at the nominal rate", {
       covered <- c(covered, .nuts_ci_cover_draws(fit, truth, cols = cols))
     }
   }
+  # A regression that errors on most seeds must not read as a clean pass on
+  # the one seed left; each surviving seed contributes length(truth) entries.
+  expect_gte(length(covered), floor(0.8 * 20 * length(truth)))
   expect_gte(mean(covered), 0.85)
 })

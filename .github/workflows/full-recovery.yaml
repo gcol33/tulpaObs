@@ -115,6 +115,7 @@ jobs:
             any::ggplot2
             any::unmarked
             any::spAbundance
+            any::spOccupancy
 
       # Every shard checks the pin. A shard is a full fit of the engine, so a
       # skew that only one job would have caught is no guard at all -- and the
