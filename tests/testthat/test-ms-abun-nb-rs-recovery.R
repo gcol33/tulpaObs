@@ -36,6 +36,18 @@ test_that("ms_abun(negbin) recovers mu_log_r, sigma_log_r, and per-species r_s",
   z_mu <- abs(d$mu_log_r - sim$truth$mu_log_r) / fit$sds[["log_r"]]
   expect_lt(z_mu, 2.5)
   # And in absolute terms within ~0.4 on the log scale at this fixture size.
+  #
+  # Scored against the population constant, and about 0.107 of that 0.4 is the
+  # seed's own species draw rather than estimator error: `mu_log_r` is a
+  # population mean, this seed's 22 log-dispersions average `sigma_logr /
+  # sqrt(22)` away from it, and `simulate_ms_abun()` reports that realized mean
+  # as `truth$mu_log_r_real` (0.083 above the constant here). The constant is
+  # kept anyway. At ONE seed the realized target is not the better one -- both
+  # are a single realization, and on this fixture the draw offset partly
+  # cancels the estimator error (|err| 0.021 against the constant, 0.062
+  # against the realized mean). Its advantage is a variance one and only pays
+  # across seeds, so a multi-seed version of this gate scores against
+  # `mu_log_r_real` and tightens; this one is a gross-regression guard.
   expect_lt(abs(d$mu_log_r - sim$truth$mu_log_r), 0.4)
 
   # sigma_log_r: recovered in the right ballpark (per-species variance components
