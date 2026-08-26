@@ -1036,7 +1036,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
            "\"cover\").", call. = FALSE)
     }
     oms_type <- if (missing(type) || length(type) > 1L) "state" else type
-    return(.tobs_predict_occu_multiscale_cover(object, oms_type))
+    return(.tobs_predict_occu_multiscale_cover(object, oms_type,
+                                               quantiles = quantiles))
   }
   if (identical(object$model$model_type, "ms_occu_cover_spatial")) {
     # The latent fields are tied to the cell graph, so prediction is the

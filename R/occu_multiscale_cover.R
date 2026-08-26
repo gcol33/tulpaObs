@@ -124,55 +124,67 @@
 # S3 helpers (routed from methods.R by model_type == "occu_multiscale_cover")
 # ---------------------------------------------------------------------------
 
-# Posterior-mean arm coefficients, split by process block.
-.occu_mscale_cover_arm_betas <- function(object) {
-  m  <- object$means
-  pp <- vapply(object$model$process_info, function(x) as.integer(x$p), integer(1))
+# Arm coefficients, split by process block, from a flat coefficient vector in
+# the SAME layout as object$means / one row of object$draws -- so this reads
+# either the posterior mean or one posterior draw.
+.occu_mscale_cover_split_beta <- function(beta, pi_list) {
+  pp  <- vapply(pi_list, function(x) as.integer(x$p), integer(1))
   off <- cumsum(c(0L, pp))
-  list(psi   = m[off[1] + seq_len(pp[1])],
-       theta = m[off[2] + seq_len(pp[2])],
-       p     = m[off[3] + seq_len(pp[3])],
-       pos   = m[off[4] + seq_len(pp[4])])
+  list(psi   = beta[off[1] + seq_len(pp[1])],
+       theta = beta[off[2] + seq_len(pp[2])],
+       p     = beta[off[3] + seq_len(pp[3])],
+       pos   = beta[off[4] + seq_len(pp[4])])
 }
 
-# fitted(): per-unit posterior-mean predictions for each level of the hierarchy.
-# psi is per cell (the areal field is added with coefficient 1); theta / p / cover
-# are per plot (site-level designs; the visit-level part of p / cover is constant
-# across visits at the posterior mean and so reads off the site design). The cover
-# arm carries the shared field with the copy coefficient `alpha`. Lognormal cover
-# reports the conditional MEAN E[cover | detected] = exp(eta + sigma_pos^2 / 2);
-# beta cover reports the conditional mean plogis(eta). `p_marginal` is the
-# per-plot marginal detection probability psi_cell * theta * p (a single visit).
+# The per-unit hierarchy surface at an arbitrary coefficient vector `beta` (the
+# posterior mean for fitted(), or one posterior draw for predict()'s interval).
+# psi is per cell (the areal field is added with coefficient 1); theta / p /
+# cover are per plot (site-level designs; the visit-level part of p / cover is
+# constant across visits at the posterior mean and so reads off the site
+# design). The cover arm carries the shared field with the copy coefficient
+# `alpha`. Lognormal cover reports the conditional MEAN
+# E[cover | detected] = exp(eta + sigma_pos^2 / 2); beta cover reports the
+# conditional mean plogis(eta). `field` and `alpha` are handed in separately
+# since a draw does not carry its own field realization (see
+# .tobs_predict_occu_multiscale_cover()).
+.occu_mscale_cover_surface_at <- function(model, beta, field, alpha, sigma_pos) {
+  b   <- .occu_mscale_cover_split_beta(beta, model$process_info)
+  pc  <- model$plot_cell
+
+  eta_psi  <- as.numeric(model$X_psi %*% b$psi) + field                  # per cell
+  psi_cell <- stats::plogis(eta_psi)
+  theta    <- stats::plogis(as.numeric(model$X_theta %*% b$theta))       # per plot
+  pdet     <- stats::plogis(as.numeric(model$X_p_site %*% b$p))          # per plot
+  eta_pos  <- as.numeric(model$X_pos_site %*% b$pos) + alpha * field[pc] # per plot
+  cover <- if (identical(model$positive, "beta")) {
+    stats::plogis(eta_pos)
+  } else if (identical(model$positive, "gaussian")) {
+    eta_pos
+  } else {
+    exp(eta_pos + 0.5 * sigma_pos^2)
+  }
+  list(psi = psi_cell, theta = theta, p = pdet, cover = cover)
+}
+
+# fitted(): per-unit posterior-mean predictions for each level of the
+# hierarchy. `p_marginal` is the per-plot marginal detection probability
+# psi_cell * theta * p (a single visit).
 .tobs_fitted_occu_multiscale_cover <- function(object) {
   model <- object$model
-  b     <- .occu_mscale_cover_arm_betas(object)
   field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))   # per cell
   alpha <- unname(object$means["alpha"]); if (!is.finite(alpha)) alpha <- 0
-  pc    <- model$plot_cell
-
-  eta_psi   <- as.numeric(model$X_psi %*% b$psi) + field                 # per cell
-  psi_cell  <- stats::plogis(eta_psi)
-  theta     <- stats::plogis(as.numeric(model$X_theta %*% b$theta))      # per plot
-  pdet      <- stats::plogis(as.numeric(model$X_p_site %*% b$p))         # per plot
-  eta_pos   <- as.numeric(model$X_pos_site %*% b$pos) + alpha * field[pc] # per plot
-  if (identical(model$positive, "beta")) {
-    cover <- stats::plogis(eta_pos)
-  } else if (identical(model$positive, "gaussian")) {
-    cover <- eta_pos
-  } else {
-    sigma_pos <- .occu_mscale_cover_sigma_pos(object)
-    cover <- exp(eta_pos + 0.5 * sigma_pos^2)
-  }
-  list(psi = psi_cell, theta = theta, p = pdet, cover = cover,
-       field = field, p_marginal = psi_cell[pc] * theta * pdet)
+  sigma_pos <- .occu_mscale_cover_sigma_pos(object$means)
+  s  <- .occu_mscale_cover_surface_at(model, object$means, field, alpha, sigma_pos)
+  pc <- model$plot_cell
+  c(s, list(field = field, p_marginal = s$psi[pc] * s$theta * s$p))
 }
 
-# Posterior-mean lognormal-cover residual SD, robust to the dispersion naming:
-# the spatial path reports `phi_pos` (already sigma_pos on the natural scale),
-# the non-spatial path a log-scale `log_sigma_pos`. Returns 0 if neither (beta
-# arm / unavailable), giving the conditional median exp(eta).
-.occu_mscale_cover_sigma_pos <- function(object) {
-  m <- object$means
+# Lognormal-cover residual SD at a named coefficient vector (object$means, or
+# one row of object$draws), robust to the dispersion naming: the spatial path
+# reports `phi_pos` (already sigma_pos on the natural scale), the non-spatial
+# path a log-scale `log_sigma_pos`. Returns 0 if neither (beta arm /
+# unavailable), giving the conditional median exp(eta).
+.occu_mscale_cover_sigma_pos <- function(m) {
   if ("phi_pos" %in% names(m) && is.finite(m[["phi_pos"]])) return(unname(m[["phi_pos"]]))
   if ("log_sigma_pos" %in% names(m) && is.finite(m[["log_sigma_pos"]]))
     return(exp(unname(m[["log_sigma_pos"]])))
@@ -199,10 +211,19 @@
   list(occ = .tobs_resid_binary(cell_det, psi, type), det = NULL)
 }
 
-# predict(): in-sample posterior arm predictions. The areal field is tied to the
-# cell graph, so prediction at new covariates / cells (X.0 / newdata) is not
-# supported (no field at an unseen cell), matching ms_occu_cover_spatial().
-.tobs_predict_occu_multiscale_cover <- function(object, type = "state") {
+# predict(): per-unit posterior predictions with an interval from the
+# coefficient posterior (.tobs_quantile_df(), at the caller's own quantiles),
+# in place of the single point .tobs_fitted_occu_multiscale_cover() reports.
+# The areal field is a FIXED per-cell point estimate on every draw -- the joint
+# nested-Laplace route does not store per-draw field realizations, matching
+# .tobs_ploglik_count()'s field-fixed convention -- so the interval is
+# coefficient-marginalised (beta, and the copy amplitude `alpha` / dispersion
+# when the fit carries them as draw coordinates), not field-marginalised. The
+# areal field is tied to the cell graph, so prediction at new covariates /
+# cells (X.0 / newdata) is not supported (no field at an unseen cell), matching
+# ms_occu_cover_spatial().
+.tobs_predict_occu_multiscale_cover <- function(object, type = "state",
+                                                quantiles = c(0.025, 0.5, 0.975)) {
   type <- switch(type,
                  state = "psi", occupancy = "psi", psi = "psi",
                  availability = "theta", theta = "theta",
@@ -212,8 +233,21 @@
                       "occu_multiscale_cover(). Use \"state\"/\"psi\", ",
                       "\"availability\"/\"theta\", \"detection\"/\"p\", or ",
                       "\"cover\"."), type), call. = FALSE))
-  fv <- .tobs_fitted_occu_multiscale_cover(object)
-  switch(type, psi = fv$psi, theta = fv$theta, p = fv$p, cover = fv$cover)
+  quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
+  model  <- object$model
+  draws  <- object$draws
+  field  <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))
+  has_alpha <- "alpha" %in% colnames(draws)
+  n_units <- if (identical(type, "psi")) model$n_cells else model$n_plots
+  M <- matrix(NA_real_, nrow(draws), n_units)
+  for (m in seq_len(nrow(draws))) {
+    beta_m  <- draws[m, ]
+    alpha_m <- if (has_alpha) beta_m[["alpha"]] else 0
+    s <- .occu_mscale_cover_surface_at(model, beta_m, field, alpha_m,
+                                       .occu_mscale_cover_sigma_pos(beta_m))
+    M[m, ] <- s[[type]]
+  }
+  .tobs_quantile_df(M, quantiles)
 }
 
 
