@@ -883,6 +883,27 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   per-species coefficients, lambda, p, latent N, the shared `field` when
 #'   `graph` is given, and -- under `negbin` -- `mu_log_r`, `sigma_log_r`, the
 #'   per-species `b_logr` / `r_s`).
+#'
+#'   `truth` carries each community mean twice. `mu_lambda`, `mu_p`,
+#'   `mu_log_r` and `mu_omega` are the POPULATION constants the per-species
+#'   values were drawn around. `mu_lambda_real`, `mu_p_real`, `mu_log_r_real`
+#'   and `mu_omega_real` are the mean of the values this seed actually drew,
+#'   which sits `sd / sqrt(n_species)` from the constant -- 0.12 on
+#'   `mu_log_r` at `sigma_logr = 0.5` and 18 species.
+#'
+#'   Which one to score against follows from the question. An interval for a
+#'   community mean targets the POPULATION constant and its width includes that
+#'   `sd^2 / n_species` term, so a coverage measurement scores against
+#'   `mu_log_r`. A point-recovery or interval-SCALE measurement scores against
+#'   `mu_log_r_real`: against the constant, the draw carries about two thirds
+#'   of the spread across seeds, and a seed block that happens to draw wide
+#'   reads as a miscalibrated interval. That is what
+#'   `gcol33/tulpaObs#280` and `#285` measured -- the 18-species block behind
+#'   both drew its species means 18-21% wider than `sigma_logr / sqrt(18)`,
+#'   and both arms calibrate once the draw is put at its expectation. The
+#'   `_real` entries are supplied so the split does not have to be rebuilt at
+#'   each call site; `tests/testthat/helper-community-mean.R` is the assertion
+#'   that consumes them.
 #' @export
 simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
                              n_abund_covs = 1, n_det_covs = 1,
@@ -979,17 +1000,25 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
     truth = list(
       mu_lambda = mu_lambda, mu_p = mu_p,
       sd_lambda = sd_lambda, sd_p = sd_p,
+      # The mean of what this seed drew, beside the constant it drew around.
+      # The two differ by sd / sqrt(n_species), which is not small: at
+      # sigma_logr = 0.5 and 18 species it is 0.12 on mu_log_r, about two
+      # thirds of the across-seed spread of the fitted community mean.
+      mu_lambda_real = colMeans(beta_lambda),
+      mu_p_real      = colMeans(beta_p),
       beta_lambda = beta_lambda, beta_p = beta_p,
       lambda = lambda, p = p_arr, N = Nlat,
       field = if (!is.null(graph)) field else NULL,
       mixture = mixture,
       size = if (is_nb) size else NA_real_,
       mu_log_r = mu_log_r,
+      mu_log_r_real = if (is_nb) mu_log_r + mean(b_logr) else NA_real_,
       sigma_log_r = if (is_nb) sigma_logr else NA_real_,
       b_logr = b_logr,
       r_s = r_s,
       omega = if (is_zi) omega else NA_real_,
       mu_omega = mu_omega,
+      mu_omega_real = if (is_zi) mu_omega + mean(b_omega) else NA_real_,
       sigma_omega = if (is_zi) sigma_omega else NA_real_,
       b_omega = b_omega,
       omega_s = omega_s)

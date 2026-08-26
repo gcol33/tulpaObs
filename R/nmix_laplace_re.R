@@ -141,13 +141,31 @@
 #'   third. Re-measured at 18 species on the same fixture and seeds (19 fits),
 #'   one fit sits below 0.30, the point-estimate error is uncorrelated with the
 #'   recovered SD (Spearman -0.08), and the reported SE is very nearly a
-#'   deterministic multiple of it (Spearman +0.98, `se = 0.2887 * sigma`,
-#'   R^2 = 0.99). So what a threshold split picks up at 18 species is the SE
-#'   side alone: a low recovered SD buys a proportionally narrower interval
-#'   around an error that did not shrink with it. Both halves moving together is
-#'   what the 8-and-36 pool showed and what is absent there. The `mu_log_r`
-#'   interval at that group count is separately about 1.28x too narrow whatever
-#'   the recovered SD.
+#'   deterministic multiple of it (Spearman +0.98, R^2 = 0.99). So what a
+#'   threshold split picks up at 18 species is the SE side alone: a low
+#'   recovered SD buys a proportionally narrower interval around an error that
+#'   did not shrink with it. Both halves moving together is what the 8-and-36
+#'   pool showed and what is absent there.
+#'
+#'   The SE itself is
+#'   \eqn{\mathrm{se}^2 = (\hat\sigma_{\log r}^2 + c) / S}, with `c` the
+#'   per-species inverse information for `log_r_s`. Measured over 97 fits at 8 /
+#'   18 / 36 species, `c` is 0.130 / 0.133 / 0.141 -- one constant across a
+#'   factor of 4.5 in `S` -- so the shape is right and `sigma_hat` is the input
+#'   that is off. Its attenuation (0.418 / 0.448 / 0.487 against a simulated
+#'   0.5) is monotone in `S` and passes straight into the interval.
+#'
+#'   A 1.28x-too-narrow `mu_log_r` interval at 18 species was reported on this
+#'   fixture (`gcol33/tulpaObs#280`, `#285`) and is mostly the seed block, not
+#'   the estimator. `mu_log_r` is a population mean and each seed draws `S`
+#'   log-dispersions around it, so the across-seed error carries a
+#'   `sigma_logr^2 / S` term that the SE includes and that is itself measured on
+#'   ~19 seeds: it supplies about two thirds of the spread, and the 18-species
+#'   blocks drew it 18-21% wide (chi-square p = 0.12 and 0.03). Putting that
+#'   draw at its expectation and rebuilding the SE at the simulated sigma gives
+#'   a scale of 0.990 / 1.035 / 0.963 at 8 / 18 / 36 species. Use
+#'   `simulate_ms_abun()`'s `truth$mu_log_r_real` to score against the seed's
+#'   own realized species mean and keep the two apart.
 #'
 #'   A fit now says whether its dispersion variance is distinguishable from zero
 #'   at all: `fit$ms_dispersion$sigma_log_r_boundary` carries the boundary test
@@ -457,6 +475,10 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # At 18 species that joint movement is absent -- the error is uncorrelated
   # with the recovered SD there and only the interval tracks it -- so the pooled
   # split is not a property of the family at every group count (#280, #250).
+  # The separate report of a 1.28x-narrow mu_log_r interval at 18 species is
+  # mostly that seed block's own species draw rather than the SE: se^2 is
+  # (sigma_hat^2 + c)/S with one c across 8/18/36 species, and putting the draw
+  # at its expectation leaves a scale of 0.990/1.035/0.963 (#285).
   #
   # The penalty is graded by proximity to zero, and on that block it reaches the
   # boundary rather than the calibration: at c(1, 0.05) a sigma_log_r of 0.01-0.06

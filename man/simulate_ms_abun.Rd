@@ -87,6 +87,27 @@ A list with \code{y} (3D count array), \code{data} (site covariate frame),
 per-species coefficients, lambda, p, latent N, the shared \code{field} when
 \code{graph} is given, and -- under \code{negbin} -- \code{mu_log_r}, \code{sigma_log_r}, the
 per-species \code{b_logr} / \code{r_s}).
+
+\code{truth} carries each community mean twice. \code{mu_lambda}, \code{mu_p},
+\code{mu_log_r} and \code{mu_omega} are the POPULATION constants the per-species
+values were drawn around. \code{mu_lambda_real}, \code{mu_p_real}, \code{mu_log_r_real}
+and \code{mu_omega_real} are the mean of the values this seed actually drew,
+which sits \code{sd / sqrt(n_species)} from the constant -- 0.12 on
+\code{mu_log_r} at \code{sigma_logr = 0.5} and 18 species.
+
+Which one to score against follows from the question. An interval for a
+community mean targets the POPULATION constant and its width includes that
+\code{sd^2 / n_species} term, so a coverage measurement scores against
+\code{mu_log_r}. A point-recovery or interval-SCALE measurement scores against
+\code{mu_log_r_real}: against the constant, the draw carries about two thirds
+of the spread across seeds, and a seed block that happens to draw wide
+reads as a miscalibrated interval. That is what
+\code{gcol33/tulpaObs#280} and \verb{#285} measured -- the 18-species block behind
+both drew its species means 18-21\% wider than \code{sigma_logr / sqrt(18)},
+and both arms calibrate once the draw is put at its expectation. The
+\verb{_real} entries are supplied so the split does not have to be rebuilt at
+each call site; \code{tests/testthat/helper-community-mean.R} is the assertion
+that consumes them.
 }
 \description{
 Per-species Royle (2004) N-mixture with Gaussian community hyperpriors:

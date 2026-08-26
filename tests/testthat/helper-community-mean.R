@@ -16,7 +16,22 @@
 #
 # `tol` is per coefficient and is NOT transferable between families: it has to
 # come from that family's own multi-seed deviation spread, recorded at the call
-# site. Each family's simulator supplies the realized mean as `beta_real`.
+# site.
+#
+# Where the realized mean comes from: a simulator that reports it names it after
+# the constant it belongs to, so `mu_lambda` is paired with `mu_lambda_real`
+# (`simulate_ms_abun()` reports `mu_lambda_real`, `mu_p_real`, `mu_log_r_real`,
+# `mu_omega_real`). The single-arm fixtures built inside test files keep the
+# older `beta_real` spelling for the one mean they carry.
+#
+# The same split governs INTERVALS, in the opposite direction. An interval for a
+# community mean targets the population constant and its width already carries
+# the `sd^2 / n_species` draw term, so coverage is scored against the constant.
+# Interval SCALE is not: `sd(est - constant) / mean(se)` charges the estimator
+# for a draw measured on however many seeds the sweep ran, which at ~20 seeds
+# has a 95% range of about +-22% on its own. #280 and #285 read an 18-species
+# block that drew 18-21% wide as a 1.28x-narrow SE; it calibrates against
+# `mu_log_r_real` (NOTES_measurements.md).
 expect_community_mean <- function(fit, real, tol) {
   est <- unname(fit$means[seq_along(real)])
   stopifnot(length(tol) == length(real))

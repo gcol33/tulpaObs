@@ -1681,12 +1681,18 @@ More data is what identifies it:
 
 The file runs in 6 s at the larger fixture.
 
-## `ms_abun(negbin)` `mu_log_r` interval scale across group count (#280, #284)
+## `ms_abun(negbin)` `mu_log_r` interval scale across group count (#280, #284, #285)
 
 #284 asked for a Kenward-Roger small-sample correction to the AGHQ
 community-mean covariance, gated on #280's 1.28x SE understatement shrinking
 with the group count. It does not shrink, so the correction is not built; but
 the miss at `S = 18` is real and replicates, so #280 is not noise either.
+
+**Resolved below** ("What the `S = 18` spike actually is"): the spike is the
+18-species seed blocks' own species draw, and the intervals calibrate at every
+group count once that draw is put at its expectation. Everything between here
+and that subsection is the measurement as it stood when #285 was filed; the
+numbers hold, the reading of them does not.
 
 Fixture throughout is #280's own: `N = 100`, `J = 5`, one abundance and one
 detection covariate, `mu_lambda = c(log 5, 0.4)`, `mu_p = c(0.3, -0.3)`,
@@ -1760,6 +1766,88 @@ Three seeds returned no interval and are counted, not dropped silently: 502 and
 `NaN` SE while reporting `converged = TRUE` after 6 iterations -- filed
 separately.
 
+### What the `S = 18` spike actually is (#285, resolved)
+
+Read off the same 97 fits plus the simulator's own realized draw. No refits.
+
+`mu_log_r` is a POPULATION mean. Each seed draws `S` log-dispersions around it
+and the fit sees only those, so
+
+```
+est - mu  =  (est - mu_real)  +  (mu_real - mu),     mu_real = mu + mean(b_logr)
+```
+
+The second term is `N(0, sigma_logr^2 / S)`. It belongs inside the interval --
+the estimand is the constant -- and the SE does carry it. It is also measured
+on ~39 seeds, and it supplies **68% of `Var(est - mu)` in all three arms**
+(`cor(err, mbar_dev)` = 0.82 / 0.84 / 0.84). So an ordinary fluctuation in the
+DRAW moves `k` at nearly full weight.
+
+The 18-species block drew wide and the other two did not:
+
+| S | n | realized `sd(mu_real - mu)` | nominal `sigma/sqrt(S)` | ratio | chi-square p |
+|---|---|---|---|---|---|
+| 8  | 38 | 0.1771 | 0.1768 | 1.002 | 0.46 |
+| 18 | 39 | 0.1425 | 0.1179 | **1.209** | **0.033** |
+| 36 | 39 | 0.0826 | 0.0833 | 0.991 | 0.50 |
+
+Exact, not bootstrapped: `b_logr` is `rnorm(S, 0, sigma_logr)`, so
+`(n-1) s^2 S / sigma^2 ~ chi^2_{n-1}`. Worst of three arms `p = 0.096`.
+
+Putting the draw at its expectation, then additionally rebuilding the SE at the
+simulated sigma while keeping each fit's own per-species information
+(`c := se^2 S - sigma_hat^2`):
+
+| S | k_raw | k_corr | 95% | k_att | 95% |
+|---|---|---|---|---|---|
+| 8  | 1.066 | 1.077 | [1.00, 1.16] | 0.990 | [0.92, 1.06] |
+| 18 | **1.265** | 1.101 | [1.01, 1.20] | 1.035 | [0.95, 1.13] |
+| 36 | 0.981 | 0.977 | [0.91, 1.04] | 0.963 | [0.90, 1.03] |
+
+`k_corr` is flat in `S` and the spike is gone; `k_att` is 1 at every group
+count. `c` = 0.130 / 0.133 / 0.141 across a factor of 4.5 in `S`, so
+`se^2 = (sigma_hat^2 + c)/S` is the SE's actual form -- the shape is right and
+the attenuated `sigma_hat` (0.418 / 0.448 / 0.487 against 0.5) is the only
+input that is off. That attenuation is monotone in `S` and is the whole of the
+residual above.
+
+**#285's replication argument is the draw replicating, not the estimator.** It
+rests on the two seed blocks agreeing at `k = 1.277` (501-520) and `k = 1.278`
+(521-540). Both drew wide -- ratios 1.185 and 1.230. Corrected they read 1.188
+and 1.021, an ordinary spread at n ~ 20. In the other two arms the correction
+moves the blocks TOGETHER (S=8: 0.970/1.183 -> 1.064/1.100; S=36:
+0.895/1.007 -> 0.919/1.044).
+
+Refuted en route, from the same data: heavy tails at `S = 18` (#285 open item
+2). Every scale estimator agrees there -- sd 1.342, mad 1.294, Sn 1.353, IQR
+1.209, 10%-trimmed 1.439 -- excess kurtosis is **negative** (-0.66) and the
+top-3 share of `sum(z^2)` is 0.285 against the 0.354 a normal expects. The
+excess is in the body. (`S = 8` is the arm that is tail-driven: top-3 share
+0.445 vs 0.360, `k` 1.066 -> 0.906 without them, mad only 1.021 -- which is the
+#235 mechanism, measured where #235 measured it.) `sigma_log_r >= 0.30`
+conditioning likewise does not touch `S = 18` (`k` 1.265 -> 1.236) while it
+resolves `S = 8` (1.066 -> 0.866).
+
+Consequences, all shipped:
+
+- `simulate_ms_abun()` returns `truth$mu_lambda_real`, `mu_p_real`,
+  `mu_log_r_real`, `mu_omega_real` -- the mean of what the seed drew, beside
+  the constant it drew around. The fixture is byte-identical (verified against
+  HEAD on seeds 501/507/520/533), so no stored fit is invalidated. This is the
+  #155 `beta_real` convention that `helper-community-mean.R` already documents
+  and that this family did not supply.
+- `test-ms-abun-nb-rs-coverage.R` no longer asserts `mean(covered) < 0.90` as a
+  defect tripwire. It could not be one: rebuilding the SE at the true sigma --
+  better than any estimator can deliver -- still covers 16/19 = 0.842 on those
+  seeds, because their draw excess survives it. The block now asserts the
+  draw-corrected interval scale, which is the estimator's own property.
+- `?ms_abun`'s "1.28x too narrow whatever the recovered SD" is corrected.
+
+Any future arm here needs `n >= 40` (#285's own finding) **and** its realized
+draw reported beside `k`. At `n ~ 20` the draw ratio's own 95% range is roughly
++-22%, which is the entire effect being chased.
+
 Scripts (gitignored): `dev_notes/_kr284_probe.R`, `_kr284_launch.ps1`,
-`_kr284_analyse.R`; data `dev_notes/kr284/`, Windows cross-arm
+`_kr284_analyse.R`, and for the resolution `_i285_tails.R`, `_i285_draw.R`,
+`_i285_confirm.R`, `_i285_fixture.R`; data `dev_notes/kr284/`, Windows cross-arm
 `dev_notes/kr284_win_partial/`.

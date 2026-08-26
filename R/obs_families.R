@@ -1220,6 +1220,26 @@ dyn_int_occu <- function() {
 #' Those thresholds are the ones this fixture separated on and are not a general
 #' rule; what transfers is the conditioning, not the number.
 #'
+#' Away from that boundary the interval is calibrated, and calibrated at every
+#' group count measured. Over 97 fits at 8 / 18 / 36 species the scale
+#' `sd(mu_log_r) / mean(se)` reads 1.066 / 1.265 / 0.981, and the middle figure
+#' is the seed block rather than the estimator: `mu_log_r` is a POPULATION mean,
+#' each seed draws `S` log-dispersions around it, and that draw supplies about
+#' two thirds of the across-seed spread. The 18-species blocks drew theirs
+#' 18-21% wider than `sigma_logr / sqrt(S)`. Put the draw at its expectation and
+#' the scale is 1.077 / 1.101 / 0.977; rebuild the SE at the simulated sigma as
+#' well and it is 0.990 / 1.035 / 0.963 (`gcol33/tulpaObs#285`,
+#' NOTES_measurements.md). The residual there is the attenuation of
+#' `sigma_log_r` itself (0.418 / 0.448 / 0.487 against 0.5), which shrinks as
+#' species are added and which the SE inherits, since
+#' `se^2 = (sigma_log_r^2 + c) / S`.
+#'
+#' A simulation study measuring this needs `simulate_ms_abun()`'s
+#' `truth$mu_log_r_real` -- the mean of the log-dispersions that seed actually
+#' drew -- beside `truth$mu_log_r`. Score coverage of a community mean against
+#' the constant; score point recovery and interval SCALE against the realized
+#' mean, or the draw is charged to the estimator.
+#'
 #' `control$logr.sigma.prior` puts a Penalized-Complexity prior on that variance,
 #' which adds curvature at `sigma_log_r -> 0`. Measured on the same fixture at
 #' `c(1, 0.05)`, it is worth reaching for when a fit reports a `sigma_log_r` near

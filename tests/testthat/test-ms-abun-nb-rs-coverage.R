@@ -6,19 +6,21 @@
 test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   skip_on_cran()
   skip_if_fast()
+  S <- 18L
+  SIGMA_LOGR <- 0.5
   n_seed <- 20L
   covered <- logical(0)
-  est <- numeric(0); se <- numeric(0); truth <- numeric(0)
+  est <- numeric(0); se <- numeric(0); truth <- numeric(0); real <- numeric(0)
   refused <- integer(0)
   unconverged <- integer(0)
   for (s in seq_len(n_seed)) {
     seed <- 500L + s
-    sim <- simulate_ms_abun(n_species = 18, N = 100, J = 5,
+    sim <- simulate_ms_abun(n_species = S, N = 100, J = 5,
                             n_abund_covs = 1, n_det_covs = 1,
                             mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
                             sd_lambda = 0.4, sd_p = 0.35,
-                            mixture = "negbin", size = 5, sigma_logr = 0.5,
-                            seed = seed)
+                            mixture = "negbin", size = 5,
+                            sigma_logr = SIGMA_LOGR, seed = seed)
     fit <- tryCatch(
       suppressWarnings(
         tobs(~ abund_cov1, data = sim$data, y = sim$y,
@@ -48,45 +50,77 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
     selr <- fit$sds[["log_r"]]
     lo <- lr - 1.96 * selr; hi <- lr + 1.96 * selr
     covered <- c(covered, sim$truth$mu_log_r >= lo && sim$truth$mu_log_r <= hi)
-    est <- c(est, lr); se <- c(se, selr); truth <- c(truth, sim$truth$mu_log_r)
+    est <- c(est, lr); se <- c(se, selr)
+    truth <- c(truth, sim$truth$mu_log_r)
+    # The mean of the 18 log-dispersions this seed actually drew. The interval
+    # targets the population constant, so `truth` is what coverage is scored
+    # against; `real` is what separates the estimator from the draw, below.
+    real <- c(real, sim$truth$mu_log_r_real)
   }
   z <- (est - truth) / se
   # A sweep that drops most of its seeds is not a coverage measurement any
   # more, whatever rate the survivors show.
   expect_gte(length(covered), n_seed - 3L)
 
-  # What this asserts, and why it is not a coverage gate (#250 item 1).
+  # WHY THIS BLOCK DOES NOT ASSERT NOMINAL COVERAGE, and why the assertion it
+  # used to carry was not the tripwire it advertised itself as (#285).
   #
-  # #250 proposed asserting coverage CONDITIONAL on the dispersion variance
-  # being recovered, on a 39-fit pool at 8 and 36 species where fits returning
-  # sigma_log_r >= 0.30 covered 33/34 and those below covered 2/5. That split
-  # does not reproduce at the group count this fixture actually uses. Measured
-  # here at S = 18 over the same seeds (19 fits; 506 is refused, below):
-  # ONE fit sits below 0.30, cor(|err|, sigma_log_r) = -0.08 Spearman, and
-  # cor(se, sigma_log_r) = +0.98 with se = 0.2887 * sigma at R^2 = 0.99. The
-  # error does not grow as sigma shrinks; only the interval does. There is
-  # nothing to condition on, so the conditional form is not what is asserted.
+  # mu_log_r is a POPULATION mean. Each seed draws 18 log-dispersions around it
+  # and the fit sees only those, so the error splits
   #
-  # What IS true here, and is what the four assertions below pin: the estimator
-  # is unbiased, its errors are normal, and the interval SCALE is the whole of
-  # the miss. Measured on 19 fits at 8179ee5 / 0.0.239, reproducing the
-  # per-seed table at 47b728f to 3-4 decimals on every seed:
+  #     est - mu  =  (est - mu_real)  +  (mu_real - mu)
   #
-  #   bias  mean(mu_log_r) - truth  +0.017  (0.42 SE of the mean)
-  #   sd(mu_log_r)                   0.1733
-  #   mean reported se               0.1356
-  #   ratio                          1.277
-  #   Shapiro-Wilk on z              p = 0.515
-  #   coverage at SE x 1.00          15/19 = 0.789
-  #   coverage at SE x 1.28          19/19 = 1.000
-  #   t(18) correction  +7.2%        16/19 = 0.842   (not enough alone)
+  # with `mu_real` the seed's own realized species mean. The second term is
+  # N(0, sigma_logr^2 / S) = N(0, 0.118^2) here and belongs inside the interval
+  # -- the SE does carry it, as `se^2 = (sigma_hat^2 + c) / S` with one c across
+  # a factor of 4.5 in S. But it is measured over only 19 seeds, and it carries
+  # 65% of the spread, so an ordinary fluctuation in the DRAW reads as a
+  # miscalibrated SE. On seeds 501-520 that is what happened: they drew their
+  # species means 18.5% wider than sigma_logr / sqrt(18) (chi^2_18 = 25.3,
+  # p = 0.12), which is most of the k = 1.277 that #280 and #285 report.
   #
-  # The last assertion pins the DEFECT, so it fails when the SE is fixed. That
-  # is deliberate: a coverage floor at 0.75 would pass forever and bless a 95%
-  # interval that delivers 79%. A failure there is the signal to come back and
-  # write the nominal-coverage gate this block should eventually hold.
+  # Measured on these 19 fits (dev_notes/_i285_*.R over the 97-fit sweep behind
+  # #285; NOTES_measurements.md):
+  #
+  #   bias  mean(est) - mu                +0.017  (0.42 SE of the mean)
+  #   sd(est)                              0.1733
+  #   mean reported se                     0.1356
+  #   k_raw = sd(est) / mean(se)           1.277
+  #   coverage                             15/19 = 0.789
+  #   realized draw sd(mu_real - mu)       0.1397  vs nominal 0.1179
+  #   k with the draw at its expectation   1.188   (null band [0.81, 1.19])
+  #   the same, SE rebuilt at sigma = 0.5  1.130
+  #
+  # Pooled over 97 fits at 8 / 18 / 36 species, putting the draw at its
+  # expectation AND rebuilding the SE at the simulated sigma gives 0.990 /
+  # 1.035 / 0.963 -- calibrated at every group count, and the S = 18 spike
+  # #285 filed is the seed block's draw, not the estimator.
+  #
+  # What IS left is that `sigma_hat` is attenuated (0.458 here against a
+  # simulated 0.5) and the SE is built on it. That is monotone in S
+  # (0.418 / 0.448 / 0.487 at 8 / 18 / 36) and is documented on `?ms_abun`.
+  #
+  # So a coverage floor here cannot be a defect tripwire: rebuilding the SE at
+  # the true sigma -- a strictly better interval than any estimator can deliver
+  # -- still covers only 16/19 = 0.842 on these seeds, because their draw
+  # excess is untouched by it. The old `expect_lt(mean(covered), 0.90)` was
+  # advertised as going green once the SE was fixed and would not have.
+  #
+  # The four assertions below are therefore: unbiased, normal errors, a gross
+  # floor on the raw rate, and -- the estimator property -- the interval scale
+  # once the draw is put at its expectation.
   expect_lt(abs(mean(est) - mean(truth)) / (sd(est) / sqrt(length(est))), 2.5)
   expect_gt(stats::shapiro.test(z)$p.value, 0.05)
-  expect_gt(mean(abs(z) <= 1.96 * 1.28), 0.94)
-  expect_lt(mean(covered), 0.90)   # pins the miss; goes green once the SE is fixed
+  expect_gt(mean(covered), 0.70)
+
+  # Interval scale with the realized draw replaced by its expectation. This is
+  # the one statistic here that is a property of the estimator rather than of
+  # the seed block, so it is the one worth a band. Wide on purpose: at 19 seeds
+  # its own null is [0.81, 1.19] at +-2.5 SE, so this is a gross-regression
+  # guard (observed 1.19), not a calibration gate. Tightening it needs more
+  # seeds, not a smaller number -- #285 measured that separating 1.28 from
+  # noise here takes n >= 40.
+  k_corr <- sqrt(stats::var(est - real) + SIGMA_LOGR^2 / S) / mean(se)
+  expect_gt(k_corr, 0.70)
+  expect_lt(k_corr, 1.45)
 })
