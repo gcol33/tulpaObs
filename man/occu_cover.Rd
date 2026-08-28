@@ -65,12 +65,18 @@ non-spatial route errors from the dispatcher with a pointer to it.
 the bar \code{spatial(~ 1 || cell, graph = adj)}, TOGETHER WITH their
 hyperparameters: the field SD, the mixing (\code{bym2}) or spatial-correlation
 (\code{car_proper}) parameter, and - where the formula asks for one - the cover-arm
-copy amplitude. Their priors are
-flat over the same outer-grid span the \code{nested_laplace} path integrates
-against, in that grid's own coordinate, and the same \code{control$sigma.grid} /
-\code{alpha.grid} / \code{rho.car.grid} knobs set it on both routes - so the sampler is
+copy amplitude. Each is bounded to the same outer-grid span the
+\code{nested_laplace} path evaluates that axis over, in that grid's own
+coordinate, and the same \code{control$sigma.grid} / \code{alpha.grid} /
+\code{rho.car.grid} knobs set it on both routes - so the sampler is
 an independent reference for the hyperparameter layer rather than a fit
-conditioned on that layer's point estimate. \code{fit$nuts$sampled_hyper} and
+conditioned on that layer's point estimate. The measure over that span is
+flat in the grid's coordinate, except that \code{control$copy.slab = "exponential"} gives the copy amplitude the penalized-complexity
+Exponential slab the outer grid declares. The grid weighs that slab against
+a point mass at \code{alpha = 0} ("no coupling"), which a gradient sampler cannot
+visit, so the sampled copy amplitude is the posterior conditional on a
+coupled field; the point mass's share of the prior is read on the
+\code{nested_laplace} route. \code{fit$nuts$sampled_hyper} and
 \code{fit$nuts$fixed_hyper} name which is which per fit (\code{icar} pins \code{rho} at 1:
 the intrinsic precision has no mixing parameter; a field with no \code{copy()} pins
 the copy amplitude at 0), \code{fit$hyper_draws} carries

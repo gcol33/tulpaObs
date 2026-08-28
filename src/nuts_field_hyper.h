@@ -42,11 +42,25 @@
 //   t = t_lo + (t_hi - t_lo) * expit(u),   value = inv_link(t)
 //
 // with `t` the axis's own coordinate (log for sigma / alpha, logit for rho) and
-// [t_lo, t_hi] its bounds. The prior is FLAT in t over those bounds -- the
-// measure the nested-Laplace outer grid integrates against, which weights its
-// log-spaced sigma / alpha and logit-spaced rho nodes equally. Flat prior plus
-// change-of-variables leaves a normalised log-density of log(e) + log(1 - e),
-// e = expit(u), per sampled hyper.
+// [t_lo, t_hi] its bounds. Each coordinate carries a DECLARED prior, and the
+// sampler's log-density is that prior carried to u,
+//
+//   log p(u) = log p_t(t) + log(dt/du),
+//   dt/du = (t_hi - t_lo) e (1 - e),   e = expit(u).
+//
+// Flat in t over [t_lo, t_hi] is the measure a grid axis with no declared
+// density integrates against, and leaves the normalised log(e) + log(1 - e).
+// An Exponential(rate) declared on the NATURAL scale of a log-link coordinate
+// carries the log-link Jacobian as well, p_t(t) = rate exp(-rate v) v, so its
+// log-density is
+//
+//   log(e) + log(1 - e) + log(rate) - rate v + log(v) + log(t_hi - t_lo),
+//
+// and its natural-scale score 1/v - rate joins the data score in the chain
+// rule. That is the copy scale's penalized-complexity slab: the outer grid
+// weighs the same Exponential against a point mass at v = 0, which a gradient
+// sampler cannot visit, so a sampled copy scale carries the continuum alone and
+// is the posterior conditional on a coupled field.
 //
 // A block may carry a per-site design WEIGHT, which is what makes it a
 // spatially-varying coefficient rather than a second intercept field: site i
@@ -75,15 +89,26 @@ enum HyperFieldScale {
     HF_SCALE_CAR      = 3    // s_j = (1 - rho lambda_j)^{-1/2}
 };
 
+// Declared prior on a sampled hyper. HF_PRIOR_FLAT is flat in the coordinate
+// the outer grid spaces its nodes in; HF_PRIOR_EXP is an Exponential on the
+// natural scale, which needs the coordinate's own link Jacobian and is
+// therefore declared only on a log-link one.
+enum HyperPrior {
+    HF_PRIOR_FLAT = 0,
+    HF_PRIOR_EXP  = 1
+};
+
 // One bounded, sampled (or pinned) hyperparameter. `link` is 0 for log (sigma,
 // alpha) and 1 for logit (rho): the coordinate the outer grid spaces its nodes
-// in, hence the coordinate the flat prior is flat in. `coord < 0` marks a pinned
+// in, hence the coordinate a flat prior is flat in. `coord < 0` marks a pinned
 // hyper, whose value is `fixed` and which contributes nothing to the gradient.
 struct HyperCoord {
     int coord = -1;          // index in theta, or < 0 when pinned
     int link = 0;            // 0 = log, 1 = logit
     double fixed = 0.0;      // value when pinned
     double t_lo = 0.0, t_hi = 0.0;
+    int prior = HF_PRIOR_FLAT;
+    double rate = 0.0;       // Exponential rate, HF_PRIOR_EXP only
 
     bool sampled() const { return coord >= 0; }
 };
@@ -116,13 +141,24 @@ inline HyperValue hyper_coord_value(const HyperCoord& h, const double* theta) {
 }
 
 // Add one sampled hyper's contribution to `grad` from d log p / d value, and
-// return its (normalised) flat-prior-plus-Jacobian log-density. Pinned: no-op.
+// return its prior-plus-Jacobian log-density. A declared natural-scale prior
+// enters through the SAME chain rule as the data score -- its natural-scale
+// derivative (here 1/v - rate, the Exponential plus the log-link Jacobian
+// log(v)) is added to `dlp_dvalue` -- so the transform's own (1 - 2e) term is
+// written once. Pinned: no-op.
 inline double hyper_coord_backward(const HyperCoord& h, const HyperValue& hv,
                                    double dlp_dvalue, double* grad) {
     if (!h.sampled()) return 0.0;
-    grad[h.coord] += dlp_dvalue * hv.dvalue_dt * hv.dt_du + (1.0 - 2.0 * hv.e);
     const double e = hv.e;
-    return std::log(e) + std::log(1.0 - e);
+    double lp = std::log(e) + std::log(1.0 - e);
+    if (h.prior == HF_PRIOR_EXP) {
+        const double v = hv.value;
+        dlp_dvalue += 1.0 / v - h.rate;
+        lp += std::log(h.rate) - h.rate * v + std::log(v) +
+              std::log(h.t_hi - h.t_lo);
+    }
+    grad[h.coord] += dlp_dvalue * hv.dvalue_dt * hv.dt_du + (1.0 - 2.0 * hv.e);
+    return lp;
 }
 
 // Marshalled field block. n_units == 0 => inactive (every helper is a no-op and
@@ -224,13 +260,19 @@ inline HyperFieldBlock hyper_field_build(const Rcpp::List& spec, int base,
 
     // Hyper coordinates. A `<name>_lo` / `<name>_hi` pair marks the hyper as
     // sampled between those bounds in its own link coordinate; otherwise it is
-    // pinned at `<name>_fixed`.
-    struct Slot { const char* fixed; const char* lo; const char* hi; int link;
+    // pinned at `<name>_fixed`. A sampled hyper is flat in that coordinate
+    // unless `<name>_prior` declares another density, whose parameters ride
+    // their own entries (`<name>_rate` for HF_PRIOR_EXP).
+    struct Slot { const char* fixed; const char* lo; const char* hi;
+                  const char* prior; const char* rate; int link;
                   HyperCoord* h; double dflt; };
     const Slot slots[3] = {
-        {"field_sigma_fixed", "field_sigma_lo", "field_sigma_hi", 0, &fb.sigma, 1.0},
-        {"field_rho_fixed",   "field_rho_lo",   "field_rho_hi",   1, &fb.rho,   1.0},
-        {"field_alpha_fixed", "field_alpha_lo", "field_alpha_hi", 0, &fb.alpha, 0.0}
+        {"field_sigma_fixed", "field_sigma_lo", "field_sigma_hi",
+         "field_sigma_prior", "field_sigma_rate", 0, &fb.sigma, 1.0},
+        {"field_rho_fixed",   "field_rho_lo",   "field_rho_hi",
+         "field_rho_prior",   "field_rho_rate",   1, &fb.rho,   1.0},
+        {"field_alpha_fixed", "field_alpha_lo", "field_alpha_hi",
+         "field_alpha_prior", "field_alpha_rate", 0, &fb.alpha, 0.0}
     };
     for (int s = 0; s < 3; ++s) {
         const Slot& sl = slots[s];
@@ -241,6 +283,25 @@ inline HyperFieldBlock hyper_field_build(const Rcpp::List& spec, int base,
             sl.h->t_lo = Rcpp::as<double>(spec[sl.lo]);
             sl.h->t_hi = Rcpp::as<double>(spec[sl.hi]);
             sl.h->coord = k++;
+            if (spec.containsElementNamed(sl.prior)) {
+                const int pr = Rcpp::as<int>(spec[sl.prior]);
+                if (pr == HF_PRIOR_EXP) {
+                    if (sl.link != 0)
+                        Rcpp::stop("%s: an Exponential prior is declared on a "
+                                   "hyper's natural scale, which needs a "
+                                   "log-link coordinate.", sl.prior);
+                    if (!spec.containsElementNamed(sl.rate))
+                        Rcpp::stop("%s declares an Exponential prior but %s is "
+                                   "absent.", sl.prior, sl.rate);
+                    const double rate = Rcpp::as<double>(spec[sl.rate]);
+                    if (!(rate > 0.0) || !R_finite(rate))
+                        Rcpp::stop("%s must be a positive rate.", sl.rate);
+                    sl.h->prior = HF_PRIOR_EXP;
+                    sl.h->rate  = rate;
+                } else if (pr != HF_PRIOR_FLAT) {
+                    Rcpp::stop("%s: unknown hyper prior code.", sl.prior);
+                }
+            }
         }
     }
     // The legacy pinned spec carries the copy amplitude under `field_alpha`.

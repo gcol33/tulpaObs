@@ -266,6 +266,174 @@ test_that("occu_cover spatial NUTS hyper prior is flat on the grid's axis (#204)
 })
 
 
+
+
+test_that("occu_cover spatial NUTS copy slab carries the declared Exponential (#204)", {
+  # `control$copy.slab = "exponential"` gives the sampled copy amplitude the
+  # penalized-complexity density the outer grid declares for it, instead of the
+  # flat-in-log-alpha measure the other axes carry. The density is written on
+  # alpha's NATURAL scale, so the coordinate's log-link Jacobian rides with it:
+  #   log p(u) = log(e) + log(1 - e) + log(rate) - rate a + log(a)
+  #              + log(t_hi - t_lo),   a = exp(t).
+  inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+    model, adj, NULL, type = "car_proper", max.iter = 60L,
+    copy.slab = "exponential")
+  fb_flat <- tulpaObs:::.occu_cover_nuts_field_block(
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE)
+  fb_exp  <- tulpaObs:::.occu_cover_nuts_field_block(
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
+    copy.slab = "exponential")
+  expect_true("alpha" %in% fb_exp$sampled)
+
+  # The rate is the one tulpa declares for this grid -- 5 % of the prior above
+  # its largest copy node -- so the two backends weigh the same slab.
+  rate <- fb_exp$entries$field_alpha_rate
+  expect_identical(fb_exp$entries$field_alpha_prior, 1L)
+  expect_equal(rate, -log(0.05) / warm$blocks[[1L]]$alpha_upper,
+               tolerance = 1e-12)
+  # Everything but the two prior entries is the flat block.
+  expect_identical(fb_exp$entries[names(fb_flat$entries)], fb_flat$entries)
+
+  spec <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+  spec[names(fb_exp$entries)] <- fb_exp$entries
+
+  n_base <- length(lap$means)
+  n_tot  <- n_base + fb_exp$n_raw + length(fb_exp$sampled)
+  set.seed(19)
+  theta <- c(as.numeric(lap$means) + stats::rnorm(n_base, 0, 0.1),
+             stats::rnorm(fb_exp$n_raw, 0, 0.3),
+             stats::rnorm(length(fb_exp$sampled), 0, 0.6))
+
+  rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                 field = fb_exp$entries)
+  cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
+  expect_equal(rr$lp, cc$lp, tolerance = 1e-10)
+  expect_equal(rr$grad, as.numeric(cc$grad), tolerance = 1e-10)
+
+  fd <- numeric(n_tot); h <- 1e-5
+  for (k in seq_len(n_tot)) {
+    tp <- theta; tp[k] <- tp[k] + h
+    tm <- theta; tm[k] <- tm[k] - h
+    fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(
+                tp, model, 5, 5, field = fb_exp$entries)$lp -
+              tulpaObs:::.tobs_occu_cover_nuts_logpost(
+                tm, model, 5, 5, field = fb_exp$entries)$lp) / (2 * h)
+  }
+  expect_equal(rr$grad, fd, tolerance = 1e-4)
+  hy <- (n_base + fb_exp$n_raw + 1L):n_tot
+  expect_equal(rr$grad[hy], fd[hy], tolerance = 1e-5)
+
+  # The slab shows up ONLY on the copy coordinate: against the flat block, lp
+  # differs by the declared density plus the log-link Jacobian, and the gradient
+  # by that density's own natural-scale score 1/a - rate carried to u.
+  j_alpha <- match("alpha", fb_exp$sampled)
+  k_alpha <- n_base + fb_exp$n_raw + j_alpha
+  hv <- tulpaObs:::.ochf_value(
+    tulpaObs:::.ochf_views(fb_exp$entries, n_base)[[1L]]$alpha, theta)
+  rf <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                 field = fb_flat$entries)
+  span <- fb_exp$entries$field_alpha_hi - fb_exp$entries$field_alpha_lo
+  expect_equal(rr$lp - rf$lp,
+               log(rate) - rate * hv$value + log(hv$value) + log(span),
+               tolerance = 1e-9)
+  d_grad <- rr$grad - rf$grad
+  expect_equal(d_grad[k_alpha],
+               (1 / hv$value - rate) * hv$dvalue_dt * hv$dt_du,
+               tolerance = 1e-9)
+  expect_equal(d_grad[-k_alpha], numeric(n_tot - 1L), tolerance = 1e-10)
+
+  # At raw = 0 the field is identically zero, so the target reduces to the hyper
+  # prior alone. Transformed back to the axis coordinate the outer grid spaces
+  # its nodes in, the copy axis's density is the declared Exponential times the
+  # log-link Jacobian, rate exp(-rate a) a. A missing Jacobian is invisible in
+  # the gradient check above and shows up here.
+  base   <- c(as.numeric(lap$means), numeric(fb_exp$n_raw))
+  n_h    <- length(fb_exp$sampled)
+  u_grid <- c(-2, -1, -0.4, 0, 0.7, 1.5)
+  lo <- fb_exp$entries$field_alpha_lo; hi <- fb_exp$entries$field_alpha_hi
+  lp <- vapply(u_grid, function(u) {
+    th <- c(base, numeric(n_h)); th[length(base) + j_alpha] <- u
+    tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, th, 5, 5)$lp
+  }, numeric(1))
+  e      <- stats::plogis(u_grid)
+  a      <- exp(lo + (hi - lo) * e)
+  dens_t <- exp(lp - max(lp)) / (e * (1 - e))
+  ratio  <- dens_t / (rate * exp(-rate * a) * a)
+  expect_lt(stats::sd(ratio) / mean(ratio), 1e-8)
+})
+
+
+test_that("occu_cover spatial NUTS copy slab defaults to flat in the grid's axis", {
+  # The default declares no density, so the block builder attaches none and the
+  # target is the flat-in-t one a fit without `copy.slab` runs. Checked as an
+  # identity, not a tolerance: a declared prior leaking into the default would
+  # move every existing fit.
+  inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+    model, adj, NULL, type = "car_proper", max.iter = 60L)
+  fb_default <- tulpaObs:::.occu_cover_nuts_field_block(
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE)
+  fb_flat <- tulpaObs:::.occu_cover_nuts_field_block(
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
+    copy.slab = "flat")
+  expect_identical(fb_default$entries, fb_flat$entries)
+  expect_false(any(grepl("_prior$|_rate$", names(fb_default$entries))))
+
+  # An explicit flat code is the same target as no code at all, in the R oracle
+  # and in the compiled one.
+  ent_code <- c(fb_default$entries, list(field_alpha_prior = 0L))
+  spec0 <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+  spec0[names(fb_default$entries)] <- fb_default$entries
+  spec1 <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+  spec1[names(ent_code)] <- ent_code
+
+  n_base <- length(lap$means)
+  set.seed(23)
+  theta <- c(as.numeric(lap$means) + stats::rnorm(n_base, 0, 0.1),
+             stats::rnorm(fb_default$n_raw, 0, 0.3),
+             stats::rnorm(length(fb_default$sampled), 0, 0.6))
+
+  r0 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                 field = fb_default$entries)
+  r1 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                                 field = ent_code)
+  expect_identical(r0$lp, r1$lp)
+  expect_identical(r0$grad, r1$grad)
+
+  c0 <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec0, theta, 5, 5)
+  c1 <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec1, theta, 5, 5)
+  expect_identical(c0$lp, c1$lp)
+  expect_identical(as.numeric(c0$grad), as.numeric(c1$grad))
+  expect_equal(r0$lp, c0$lp, tolerance = 1e-10)
+  expect_equal(r0$grad, as.numeric(c0$grad), tolerance = 1e-10)
+
+  expect_error(tulpaObs:::.occu_cover_nuts_copy_slab("pc"), "copy\\.slab")
+  # The Exponential is written on a natural scale, so it is refused on the
+  # logit-coordinate mixing parameter.
+  ent_bad <- c(fb_default$entries,
+               list(field_rho_prior = 1L, field_rho_rate = 1))
+  expect_error(
+    tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5, field = ent_bad),
+    "log-link")
+  spec_bad <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+  spec_bad[names(ent_bad)] <- ent_bad
+  expect_error(
+    tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec_bad, theta, 5, 5),
+    "log-link")
+})
 test_that("occu_cover spatial NUTS field-off path is byte-identical to non-spatial", {
   inp   <- .ocsn_inputs(side = 5L, J = 4L, seed = 21L)
   lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,

@@ -636,6 +636,10 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       # Shape of the prior on the cross-arm copy scale: the continuum measure
       # ("exponential" or "flat" in log alpha over the `alpha.grid` span) and
       # the prior probability of the no-coupling point mass at alpha = 0.
+      # `copy.slab` declares the same continuum measure on the NUTS + areal
+      # sampler's own copy coordinate, where it defaults to "flat"; that
+      # sampler has no way to visit the point mass, so `copy.atom.mass` reaches
+      # only its warm nested-Laplace fit.
       "copy.slab", "copy.atom.mass",
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
@@ -644,10 +648,6 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       # Condition the NUTS + areal sampler on the warm nested-Laplace fit's
       # (sigma, rho, alpha) instead of sampling them.
       "fixed.hyper",
-      # Measure the NUTS + areal sampler's copy amplitude carries over its span:
-      # "flat" in log alpha (default) or the "exponential" penalized-complexity
-      # slab the outer grid declares.
-      "copy.slab",
       "checkpoint",
       # Diagnostic-parallelism thread count for the outer-grid Pareto-k pass
       # (control$diagnose.k), separate from n.threads.outer's inner-Newton use.

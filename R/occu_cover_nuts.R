@@ -31,9 +31,22 @@
 #   t = t_lo + (t_hi - t_lo) * plogis(u),   value = inv_link(t),
 # with `t` the coordinate the nested-Laplace outer grid spaces its nodes in
 # (log for sigma / alpha, logit for rho) and [t_lo, t_hi] that grid's own span.
-# The prior is flat in t, which is the measure the grid integrates against
-# (equal weight per cell); flat prior + change of variables leaves the
-# normalised log-density log(e) + log(1 - e), e = plogis(u).
+#
+# Each coordinate carries a DECLARED prior, and the sampler's log-density is
+# that prior carried to u,
+#   log p(u) = log p_t(t) + log(dt/du),   dt/du = (t_hi - t_lo) e (1 - e),
+# with e = plogis(u). Flat in t over [t_lo, t_hi] is the measure a grid axis
+# with no declared density integrates against, and leaves the normalised
+# log(e) + log(1 - e). An Exponential(rate) declared on the NATURAL scale of a
+# log-link coordinate carries the log-link Jacobian too, p_t(t) = rate
+# exp(-rate v) v, so its log-density is
+#   log(e) + log(1 - e) + log(rate) - rate v + log(v) + log(t_hi - t_lo)
+# and its natural-scale score 1/v - rate joins the data score in the chain rule.
+# That is the copy scale's penalized-complexity slab (tulpa's
+# .hyper_copy_slab_density): the outer grid weighs the same Exponential against
+# a point mass at v = 0, which a gradient sampler cannot visit, so a sampled
+# copy scale carries the continuum alone and is the posterior conditional on a
+# coupled field.
 #
 # A block may carry a per-site design WEIGHT, which is what makes it a
 # spatially-varying coefficient rather than a second intercept field: site i
@@ -43,6 +56,35 @@
 # ---------------------------------------------------------------------------
 
 .OCHF_CONST <- 0L; .OCHF_BYM2_STR <- 1L; .OCHF_BYM2_IID <- 2L; .OCHF_CAR <- 3L
+
+# Declared prior codes, mirroring HyperPrior in src/nuts_field_hyper.h.
+.OCHF_PRIOR_FLAT <- 0L; .OCHF_PRIOR_EXP <- 1L
+
+# Rate of the copy scale's penalized-complexity slab for a declared alpha grid
+# whose largest node is `upper`. Read off tulpa's own declared density rather
+# than restated, so the sampler's slab cannot drift from the measure the outer
+# grid integrates: that density is log p(x) = log(rate) - rate x, so
+# p(0) - p(1) on the log scale IS the rate. NULL when the grid declares no
+# positive node to anchor it.
+.ochf_copy_slab_rate <- function(upper) {
+  if (length(upper) != 1L || !is.finite(upper) || upper <= 0) return(NULL)
+  d <- tulpa:::.hyper_copy_slab_density(upper)
+  if (is.null(d)) return(NULL)
+  as.numeric(d(0) - d(1))
+}
+
+# `control$copy.slab` for the sampled copy amplitude. The sampler is bounded to
+# the copy grid's span, so "flat" (flat in log alpha over that span) is a proper
+# prior on its own and is the default; "exponential" declares the
+# penalized-complexity slab instead.
+.occu_cover_nuts_copy_slab <- function(x) {
+  if (is.null(x)) return("flat")
+  if (!is.character(x) || length(x) != 1L || is.na(x) ||
+      !x %in% c("flat", "exponential")) {
+    stop("control$copy.slab must be \"flat\" or \"exponential\".", call. = FALSE)
+  }
+  x
+}
 
 .ochf_inv_link <- function(t, link) if (link == 1L) stats::plogis(t) else exp(t)
 .ochf_link     <- function(v, link) if (link == 1L) stats::qlogis(v) else log(v)
@@ -72,18 +114,33 @@
   has_iid <- isTRUE(as.logical(field$field_has_iid %||% FALSE))
   n_raw   <- m1 + if (has_iid) n_units else 0L
   k       <- total + n_raw
-  slot <- function(fixed_key, lo_key, hi_key, link, dflt) {
-    h <- list(link = link, fixed = field[[fixed_key]] %||% dflt, coord = NULL)
-    lo <- field[[lo_key]]; hi <- field[[hi_key]]
+  slot <- function(nm, link, dflt) {
+    key <- function(suffix) field[[paste0("field_", nm, "_", suffix)]]
+    h <- list(link = link, fixed = key("fixed") %||% dflt, coord = NULL,
+              prior = .OCHF_PRIOR_FLAT, rate = 0)
+    lo <- key("lo"); hi <- key("hi")
     if (!is.null(lo) && !is.null(hi)) {
       k <<- k + 1L
       h$t_lo <- lo; h$t_hi <- hi; h$coord <- k
+      pr <- key("prior")
+      if (!is.null(pr) && as.integer(pr) == .OCHF_PRIOR_EXP) {
+        if (link != 0L)
+          stop(sprintf(paste0(
+            "field_%s_prior: an Exponential prior is declared on a hyper's ",
+            "natural scale, which needs a log-link coordinate."), nm),
+            call. = FALSE)
+        rate <- key("rate")
+        if (is.null(rate) || !is.finite(rate) || rate <= 0)
+          stop(sprintf("field_%s_rate must be a positive rate.", nm),
+               call. = FALSE)
+        h$prior <- .OCHF_PRIOR_EXP; h$rate <- as.numeric(rate)
+      }
     }
     h
   }
-  sigma <- slot("field_sigma_fixed", "field_sigma_lo", "field_sigma_hi", 0L, 1)
-  rho   <- slot("field_rho_fixed",   "field_rho_lo",   "field_rho_hi",   1L, 1)
-  alpha <- slot("field_alpha_fixed", "field_alpha_lo", "field_alpha_hi", 0L, 0)
+  sigma <- slot("sigma", 0L, 1)
+  rho   <- slot("rho",   1L, 1)
+  alpha <- slot("alpha", 0L, 0)
   if (is.null(alpha$coord) && is.null(field$field_alpha_fixed))
     alpha$fixed <- field$field_alpha %||% field$alpha %||% 0
   list(n_units = n_units, m1 = m1, B1 = B1,
@@ -164,10 +221,18 @@
     g_rho <- g_rho + sum(sigma * fs$ds2 * fs$raw2 * g_z)
   }
   g_hyper <- numeric(0)
+  # A declared natural-scale prior enters through the SAME chain rule as the
+  # data score -- its natural-scale derivative is added to `dlp_dvalue` -- so
+  # the transform's own (1 - 2e) term is written once.
   add <- function(h, hv, dlp_dvalue) {
     if (is.null(h$coord)) return(invisible(NULL))
-    g_hyper <<- c(g_hyper, dlp_dvalue * hv$dvalue_dt * hv$dt_du + (1 - 2 * hv$e))
     lp <<- lp + log(hv$e) + log(1 - hv$e)
+    if (h$prior == .OCHF_PRIOR_EXP) {
+      v <- hv$value
+      dlp_dvalue <- dlp_dvalue + 1 / v - h$rate
+      lp <<- lp + log(h$rate) - h$rate * v + log(v) + log(h$t_hi - h$t_lo)
+    }
+    g_hyper <<- c(g_hyper, dlp_dvalue * hv$dvalue_dt * hv$dt_du + (1 - 2 * hv$e))
   }
   add(fv$sigma, fs$sigma, if (sigma > 0) sum(g_z * fs$z) / sigma else 0)
   add(fv$rho,   fs$rho,   g_rho)
@@ -847,7 +912,9 @@
                                                  rho.car.grid = NULL,
                                                  alpha.grid = NULL,
                                                  trends = list(),
-                                                 alpha.grid.trend = NULL) {
+                                                 alpha.grid.trend = NULL,
+                                                 copy.slab = NULL,
+                                                 copy.atom.mass = NULL) {
   is_beta   <- identical(model$positive, "beta")
   spec_name <- switch(model$positive,
                       beta     = "occu_cover_beta",
@@ -975,6 +1042,16 @@
         list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend)))
   }
 
+  # Largest positive node of the alpha axis each block hands the engine. The
+  # copy scale's declared slab is anchored on it (tulpa's
+  # .hyper_copy_slab_density), so the sampler reads its rate off the same node
+  # set the outer grid's density is declared over.
+  alpha_upper <- function(b) {
+    g <- as.numeric(if (multi && b > 1L) alpha_grid_trend else alpha_grid)
+    pos <- g[is.finite(g) & g > 0]
+    if (length(pos) == 0L) NA_real_ else max(pos)
+  }
+
   fit_call <- list(
     responses = responses, prior = prior_arg, cell_coupling = spec_name,
     control = list(max_iter = as.integer(max.iter), tol = as.numeric(tol),
@@ -989,6 +1066,13 @@
   # One field never reaches that threshold, so the request is made only where it
   # changes something.
   if (multi) fit_call$control$integration <- "grid"
+  # A declared copy-scale slab is the measure BOTH backends integrate, so the
+  # warm fit's outer grid carries the shape the sampler is given. The point mass
+  # at alpha = 0 is the warm fit's alone -- a gradient sampler cannot visit it --
+  # so its declared share rides here and nowhere else.
+  if (!is.null(copy.slab)) fit_call$control$copy_slab <- copy.slab
+  if (!is.null(copy.atom.mass))
+    fit_call$control$copy_atom_mass <- copy.atom.mass
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
 
@@ -1027,6 +1111,7 @@
          sigma = pick("sigma", b), alpha = pick("alpha", b),
          rho   = if (identical(type, "car_proper")) pick("rho_car", b)
                  else if (identical(type, "bym2")) pick("rho", b) else 1.0,
+         alpha_upper = alpha_upper(b),
          weight = if (b == 1L) NULL else trends[[b - 1L]]$weight,
          label  = if (b == 1L) "intercept" else trends[[b - 1L]]$label)
   })
@@ -1035,6 +1120,7 @@
   list(beta_psi = beta_psi, beta_p = beta_p, beta_pos = beta_pos,
        log_disp = log(sigma_pos_init), field = b1$field, type = type,
        sigma = b1$sigma, rho = b1$rho, alpha = b1$alpha,
+       alpha_upper = b1$alpha_upper,
        blocks = blocks, joint_fit = fit)
 }
 
@@ -1075,12 +1161,13 @@
 }
 
 # Bounds for each sampled hyper, read off the warm nested-Laplace fit's OWN
-# outer grid. That grid IS the measure the deterministic backend integrates
-# against -- equal weight per cell over log-spaced sigma / alpha nodes and
-# logit-spaced rho nodes -- so taking its span as the support of a flat prior in
-# the same coordinate makes the two backends integrate the same hyper prior, and
-# makes the same `control$sigma.grid` / `alpha.grid` / `rho.car.grid` knob move
-# both. An axis the grid pinned to one node (or that the fit does not carry)
+# outer grid: the span its nodes reach in the coordinate the axis is spaced in
+# (log for sigma / alpha, logit for rho). The nodes are where the deterministic
+# backend evaluates that axis, so bounding the sampled coordinate to their span
+# holds both backends over the same region and makes the same
+# `control$sigma.grid` / `alpha.grid` / `rho.car.grid` knob move both. The
+# measure ON that span is the axis's declared prior, which the block builder
+# attaches. An axis the grid pinned to one node (or that the fit does not carry)
 # returns NULL and the hyper stays pinned.
 .occu_cover_nuts_hyper_bounds <- function(warm, type, block = 1L) {
   tg <- warm$joint_fit$theta_grid
@@ -1112,10 +1199,17 @@
 # `block` names which of the warm fit's coupled fields this is, so its hypers and
 # its outer-grid axes are read off that block; `weight` is the per-site design
 # column of a varying-coefficient field (NULL = the unweighted intercept field).
+#
+# `copy.slab` declares the measure the sampled copy amplitude carries over its
+# span: "flat" in log alpha, or "exponential" for the penalized-complexity slab
+# the outer grid weighs against its point mass at alpha = 0. The sampler has no
+# way to visit that point mass, so under "exponential" it targets the coupled
+# component of the engine's mixture prior, not the mixture.
 .occu_cover_nuts_field_block <- function(adj, type, n_cells, site_cell, warm,
                                          scale_factor = NULL,
                                          sample_hyper = TRUE,
-                                         block = 1L, weight = NULL) {
+                                         block = 1L, weight = NULL,
+                                         copy.slab = "flat") {
   wh <- if (length(warm$blocks) >= block) warm$blocks[[block]] else warm
   wt <- if (is.null(weight)) NULL else as.numeric(weight)
   if (!sample_hyper) {
@@ -1182,6 +1276,16 @@
   if (identical(type, "icar")) { entries$field_rho_fixed <- 1; pinned[["rho"]] <- 1 }
   else add("rho", wh$rho, bnd$rho, 1L, 1)
   add("alpha", wh$alpha, bnd$alpha, 0L, 0)
+  # The copy amplitude's declared slab, anchored on the same alpha node set the
+  # engine's own density is declared over.
+  if ("alpha" %in% sampled && identical(copy.slab, "exponential")) {
+    rate <- .ochf_copy_slab_rate(wh$alpha_upper)
+    if (is.null(rate))
+      stop("occu_cover NUTS spatial: copy.slab = \"exponential\" needs a copy ",
+           "grid with a positive node to anchor its rate.", call. = FALSE)
+    entries$field_alpha_prior <- .OCHF_PRIOR_EXP
+    entries$field_alpha_rate  <- rate
+  }
 
   list(entries = entries, n_raw = n_raw, theta0_hyper = theta0_hyper,
        sampled = sampled, pinned = pinned, tau = NA_real_, rho = wh$rho)
@@ -1276,12 +1380,15 @@
                                               sigma.grid = NULL, rho.car.grid = NULL,
                                               alpha.grid = NULL,
                                               alpha.grid.trend = NULL,
-                                              fixed.hyper = FALSE, ...) {
+                                              fixed.hyper = FALSE,
+                                              copy.slab = NULL,
+                                              copy.atom.mass = NULL, ...) {
   # Sampler defaults come from the one engine table. This path carries its own
   # adaptation target there (the sampled proper-CAR rho reaches the
   # near-intrinsic boundary; see .TOBS_FAMILY_DEFAULTS).
   .tobs_fill_sampler(environment(), "nuts", "occu_cover_spatial")
 
+  slab <- .occu_cover_nuts_copy_slab(copy.slab)
   .tobs_reject_weighted_spatial(spatial, "occu_cover NUTS psi spatial")
   if (!spatial$type %in% c("icar", "car_proper", "bym2")) {
     stop(sprintf(paste0(
@@ -1313,7 +1420,8 @@
   warm <- .tobs_occu_cover_nuts_carproper_warm(
     model, adj, priors, type = spatial$type, max.iter = max.iter, tol = tol,
     sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid,
-    trends = trends, alpha.grid.trend = alpha.grid.trend)
+    trends = trends, alpha.grid.trend = alpha.grid.trend, copy.slab = copy.slab,
+    copy.atom.mass = copy.atom.mass)
 
   # One block per coupled field: the unweighted intercept field, then one per
   # varying-coefficient weight column. Each reads its own warm hypers and its own
@@ -1333,7 +1441,8 @@
     .occu_cover_nuts_field_block(
       adj, spatial$type, n_cells, site_cell, warm,
       scale_factor = spatial$scale_factor,
-      sample_hyper = !isTRUE(fixed.hyper), block = b, weight = weights[[b]]))
+      sample_hyper = !isTRUE(fixed.hyper), block = b, weight = weights[[b]],
+      copy.slab = slab))
   n_raw   <- vapply(fbs, `[[`, numeric(1), "n_raw")
   n_hyper <- vapply(fbs, function(f) length(f$sampled), numeric(1))
   # Suffix per block, matching the hyper table's own column spelling.
