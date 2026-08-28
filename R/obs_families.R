@@ -275,12 +275,19 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' the bar `spatial(~ 1 || cell, graph = adj)`, TOGETHER WITH their
 #' hyperparameters: the field SD, the mixing (`bym2`) or spatial-correlation
 #' (`car_proper`) parameter, and - where the formula asks for one - the cover-arm
-#' copy amplitude. Their priors are
-#' flat over the same outer-grid span the `nested_laplace` path integrates
-#' against, in that grid's own coordinate, and the same `control$sigma.grid` /
-#' `alpha.grid` / `rho.car.grid` knobs set it on both routes - so the sampler is
+#' copy amplitude. Each is bounded to the same outer-grid span the
+#' `nested_laplace` path evaluates that axis over, in that grid's own
+#' coordinate, and the same `control$sigma.grid` / `alpha.grid` /
+#' `rho.car.grid` knobs set it on both routes - so the sampler is
 #' an independent reference for the hyperparameter layer rather than a fit
-#' conditioned on that layer's point estimate. `fit$nuts$sampled_hyper` and
+#' conditioned on that layer's point estimate. The measure over that span is
+#' flat in the grid's coordinate, except that `control$copy.slab =
+#' "exponential"` gives the copy amplitude the penalized-complexity
+#' Exponential slab the outer grid declares. The grid weighs that slab against
+#' a point mass at `alpha = 0` ("no coupling"), which a gradient sampler cannot
+#' visit, so the sampled copy amplitude is the posterior conditional on a
+#' coupled field; the point mass's share of the prior is read on the
+#' `nested_laplace` route. `fit$nuts$sampled_hyper` and
 #' `fit$nuts$fixed_hyper` name which is which per fit (`icar` pins `rho` at 1:
 #' the intrinsic precision has no mixing parameter; a field with no `copy()` pins
 #' the copy amplitude at 0), `fit$hyper_draws` carries
@@ -626,6 +633,10 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "var.of.means.consistency", "var.of.means.tolerance",
+      # Shape of the prior on the cross-arm copy scale: the continuum measure
+      # ("exponential" or "flat" in log alpha over the `alpha.grid` span) and
+      # the prior probability of the no-coupling point mass at alpha = 0.
+      "copy.slab", "copy.atom.mass",
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
       "re.sigma.grid", "re.sigma.grid.p", "re.sigma.grid.pos",
@@ -633,6 +644,10 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       # Condition the NUTS + areal sampler on the warm nested-Laplace fit's
       # (sigma, rho, alpha) instead of sampling them.
       "fixed.hyper",
+      # Measure the NUTS + areal sampler's copy amplitude carries over its span:
+      # "flat" in log alpha (default) or the "exponential" penalized-complexity
+      # slab the outer grid declares.
+      "copy.slab",
       "checkpoint",
       # Diagnostic-parallelism thread count for the outer-grid Pareto-k pass
       # (control$diagnose.k), separate from n.threads.outer's inner-Newton use.

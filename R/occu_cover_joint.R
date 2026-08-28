@@ -665,6 +665,13 @@
       # the fused batch driver requires for per-species bit-identity.
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
       var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
+      # Prior on the cross-arm copy scale. The engine defaults to an exponential
+      # continuum ("exponential") plus a point mass at alpha = 0 carrying half
+      # the prior. `copy.slab = "flat"` makes the continuum flat in log alpha
+      # over the span `alpha.grid` declares, and `copy.atom.mass = 0` drops the
+      # point mass; NULL leaves both at the engine defaults.
+      copy_slab       = dots$copy.slab,
+      copy_atom_mass  = dots$copy.atom.mass,
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF. It draws `k_samples`
       # extra hyperparameter points and re-solves the inner Laplace at each on the
       # full areal field, so it dominates the runtime -- ~200 re-solves vs the
