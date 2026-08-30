@@ -272,7 +272,7 @@ For community fits, `tobs_richness()` returns posterior species richness and
 ```r
 install.packages("pak")
 pak::pak("gcol33/tulpaObs")            # latest from GitHub
-pak::pak("gcol33/tulpaObs@v0.0.176")   # a specific tagged release
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
 ```
 
 Tagged releases are listed at <https://github.com/gcol33/tulpaObs/releases>.

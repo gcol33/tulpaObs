@@ -496,7 +496,11 @@
       if (!is.null(r)) { recs[[k]] <- r; z_prev <- r$z }
     }
     lm <- vapply(recs, function(r) if (is.null(r)) -Inf else r$log_marg, 0.0)
-    packed <- pack(recs, tulpa:::.nl_normalise_weights_safe(lm))
+    # `recs` is filled tau-fastest, so the grid it indexes is that product.
+    tg <- cbind(tau = rep(tau_grid, times = length(rho_grid)),
+                rho = rep(rho_grid, each = length(tau_grid)))
+    packed <- pack(recs, .tobs_grid_weights(list(theta_grid = tg),
+                                            log_marginal = lm))
   }
 
   log_marg <- packed$log_marg; weights <- packed$weights

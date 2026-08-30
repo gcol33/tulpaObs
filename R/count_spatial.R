@@ -28,7 +28,7 @@
 # out); the marginal covariance is the law of total covariance over the outer
 # grid: V = sum_k w_k [C_k + (m_k - beta)(m_k - beta)'], C_k = solve(H_k).
 .count_spatial_fe_moments <- function(res, p) {
-  w  <- tulpa:::.nl_normalise_weights_safe(res$log_marginal)
+  w  <- .tobs_grid_weights(res)
   ok <- is.finite(w) & w > 0
   if (!any(ok)) {
     stop("Areal count: every grid point produced a non-finite log-marginal. ",

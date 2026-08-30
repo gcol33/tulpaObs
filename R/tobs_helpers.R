@@ -487,7 +487,7 @@
                            "n.threads", "n.threads.outer",
                            "adaptive.grid", "adaptive.grid.edge.thresh",
                            "adaptive.grid.max.passes", "var.of.means.consistency",
-                           "var.of.means.tolerance", "diagnose.k", "diagnose.draws",
+                           "var.of.means.min.ess", "diagnose.k", "diagnose.draws",
                            "k.samples", "k.bootstrap", "k.tail.points", "k.conf.bands",
                            "force.sparse", "inner.refresh", "checkpoint",
                            # Regularizing hyperpriors on the outer grid axes,

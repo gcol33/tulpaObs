@@ -177,9 +177,6 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
 
     hi_fixed[r] <- fit_fix$joint$theta_ci_hi["alpha"]
     hi_adapt[r] <- fit_ad$joint$theta_ci_hi["alpha"]
-    # The adaptive arm reports a strictly higher upper edge on every seed
-    # (measured ratio >= 1.05 over 20/20).
-    expect_gt(hi_adapt[r], hi_fixed[r])
 
     cover_fixed[r] <- fit_fix$joint$theta_ci_lo["alpha"] <= truth_alpha &&
       truth_alpha <= fit_fix$joint$theta_ci_hi["alpha"]
@@ -190,13 +187,21 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
   # What separates the two reads at the boundary is where the upper edge comes
   # from. The fixed arm's 97.5% point is set by the axis's own outer-cell
   # geometry: it lands at essentially the same place on every seed (measured
-  # mean 1.733, SD 0.011, full range 1.689-1.738 over 20 seeds). The adaptive
+  # mean 1.733, SD 0.011, full range 1.689-1.737 over 20 seeds). The adaptive
   # arm places real cells past the pin and its upper edge follows the data
-  # (mean 2.270, SD 0.373, range 1.825-3.226). Assert the separation in spread
+  # (mean 2.03, SD 0.327, range 1.662-2.752). Assert the separation in spread
   # rather than a fixed threshold, so the check does not encode this fixture's
   # absolute scale.
   expect_lt(sd(hi_fixed), 0.10)
   expect_gt(sd(hi_adapt), 5 * sd(hi_fixed))
+
+  # The extra cells the adaptive pass places past the pin carry the copy axis's
+  # declared Exponential slab, which damps the far ones, so a higher upper edge
+  # is where the data lead and not an identity: measured 19 of 20 seeds, and on
+  # the exception the adaptive interval still covers the truth. Read the spread
+  # above as the statement about the two arms; this is the direction it moves.
+  expect_gt(mean(hi_adapt), mean(hi_fixed))
+  expect_gte(sum(hi_adapt > hi_fixed), 0.8 * n_seeds)
 
   # Coverage does NOT separate the two arms at this placement, and the file no
   # longer claims it does. Both arms cover 20/20 here. With the truth exactly ON

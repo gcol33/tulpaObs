@@ -664,7 +664,7 @@
       # (`adaptive.grid = FALSE` AND `var.of.means.consistency = FALSE`), which
       # the fused batch driver requires for per-species bit-identity.
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
-      var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
+      var_of_means_min_ess      = dots$var.of.means.min.ess,
       # Prior on the cross-arm copy scale. The engine defaults to an exponential
       # continuum ("exponential") plus a point mass at alpha = 0 carrying half
       # the prior. `copy.slab = "flat"` makes the continuum flat in log alpha

@@ -294,7 +294,7 @@
       adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
       adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
-      var_of_means_tolerance    = dots$var.of.means.tolerance    %||% 0.7,
+      var_of_means_min_ess      = dots$var.of.means.min.ess,
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF on this path. At EVA
       # scale it importance-samples the hyperparameter posterior with `k_samples`
       # extra inner solves on the full areal field, which dominates the runtime

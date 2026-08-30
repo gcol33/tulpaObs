@@ -17,6 +17,20 @@
 # =============================================================================
 
 
+# Outer-grid weights for a driver result that carries a `theta_grid` but no
+# reconciled `weights` of its own (or whose `log_marginal` a caller has since
+# adjusted). Each cell carries the prior mass of the node it sits at, the same
+# rule the engine weights its own grids with, so a post-processor never falls
+# back to weighing every node equally: on an evenly spaced grid the two agree,
+# and on an uneven one the spacing is what differs.
+.tobs_grid_weights <- function(fit, what = "outer grid", log_marginal = NULL) {
+  lm <- if (is.null(log_marginal)) fit$log_marginal else log_marginal
+  lq <- tulpa:::.nl_grid_log_quad(fit$theta_grid)
+  if (!is.null(lq) && length(lq) != length(lm)) lq <- NULL
+  tulpa:::.nl_normalise_weights_safe(lm, what, log_quad = lq)
+}
+
+
 # Outer-grid cells whose inner Newton converged, their softmax weights, and the
 # reconciled `fit$weights`.
 #
@@ -42,8 +56,22 @@
                     label, n_bad, length(fit$log_marginal)),
             "whose inner Newton did not converge.", call. = FALSE)
   }
-  w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
-  w     <- w_raw / sum(w_raw)
+  # The engine's cell weights carry the outer-grid quadrature: node spacing and
+  # the declared hyperparameter prior, not the likelihood alone. Posterior
+  # summaries are built by renormalising THOSE over the converged cells. A
+  # softmax of `log_marginal` would weigh every node equally and so report a
+  # posterior against a measure the fit never integrated.
+  ew <- fit$weights
+  ew_ok <- !is.null(ew) && length(ew) == length(fit$log_marginal) &&
+           any(is.finite(ew[ok_cells]) & ew[ok_cells] > 0)
+  if (ew_ok) {
+    w <- ew[ok_cells]
+    w[!is.finite(w) | w < 0] <- 0
+    w <- w / sum(w)
+  } else {
+    w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
+    w     <- w_raw / sum(w_raw)
+  }
 
   if (!any(is.finite(fit$weights) & fit$weights > 0)) {
     w_full <- numeric(length(fit$log_marginal))

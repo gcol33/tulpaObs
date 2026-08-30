@@ -73,12 +73,12 @@
   as.numeric(d(0) - d(1))
 }
 
-# `control$copy.slab` for the sampled copy amplitude. The sampler is bounded to
-# the copy grid's span, so "flat" (flat in log alpha over that span) is a proper
-# prior on its own and is the default; "exponential" declares the
-# penalized-complexity slab instead.
+# `control$copy.slab` for the sampled copy amplitude. Unset, the sampler takes
+# the measure the outer grid declares for that axis, so both engines target the
+# same model unless the caller says otherwise; "flat" asks for the alternative
+# the grid also accepts, flat in log alpha over the span its nodes tile.
 .occu_cover_nuts_copy_slab <- function(x) {
-  if (is.null(x)) return("flat")
+  if (is.null(x)) return(tulpa:::.hyper_check_copy_slab(NULL))
   if (!is.character(x) || length(x) != 1L || is.na(x) ||
       !x %in% c("flat", "exponential")) {
     stop("control$copy.slab must be \"flat\" or \"exponential\".", call. = FALSE)
@@ -1076,12 +1076,13 @@
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
 
-  ok <- which(is.finite(fit$log_marginal))
-  if (length(ok) == 0L)
-    stop("occu_cover NUTS spatial: warm car_proper fit failed at every grid ",
-         "cell. Bump control$max.iter or tighten control$tol.", call. = FALSE)
-  w_raw <- exp(fit$log_marginal[ok] - max(fit$log_marginal[ok]))
-  w     <- w_raw / sum(w_raw)
+  # Through the shared reconciliation so the warm start is read against the same
+  # outer-grid measure the fit integrated, declared slab and node spacing
+  # included, rather than a flat weight per cell.
+  oc  <- .tobs_joint_ok_cells(fit, "occu_cover NUTS spatial: warm car_proper fit")
+  ok  <- oc$ok_cells
+  w   <- oc$w
+  fit <- oc$fit
 
   layout <- fit$arm_layout
   p_psi  <- layout$p[1L]; p_p <- layout$p[2L]; p_pos <- layout$p[3L]
@@ -1174,15 +1175,30 @@
   # The single-block warm grid names its axes bare (`sigma`); the multi-block one
   # prefixes each block (`b2.sigma`), so a block reads its own axis under either
   # spelling.
+  sup <- warm$joint_fit$axis_support
   ax <- function(nm, positive_only = FALSE) {
     if (is.null(tg) || is.null(colnames(tg))) return(NULL)
-    j <- match(sprintf("b%d.%s", block, nm), colnames(tg))
-    if (is.na(j) && block == 1L) j <- match(nm, colnames(tg))
+    a <- sprintf("b%d.%s", block, nm)
+    j <- match(a, colnames(tg))
+    if (is.na(j) && block == 1L) { a <- nm; j <- match(a, colnames(tg)) }
     if (is.na(j)) return(NULL)
     v <- as.numeric(tg[, j]); v <- v[is.finite(v)]
     if (positive_only) v <- v[v > 0]
     if (length(v) < 2L) return(NULL)
-    r <- range(v)
+    # The span the outer quadrature integrates over, which reaches half a node
+    # step past the outermost node rather than stopping on it. The fit records
+    # it; recompute from the settled grid through the same helper when an older
+    # fit object does not carry one.
+    r <- sup[[a]]
+    if (is.null(r)) {
+      specs <- tulpa:::.joint_axis_specs_from_grid(tg)
+      k <- match(a, vapply(specs, function(z) z$name, character(1)))
+      if (is.na(k)) return(NULL)
+      r <- tulpa:::.hyper_axis_support(v, specs[[k]])
+    }
+    if (is.null(r)) return(NULL)
+    r <- sort(as.numeric(r))
+    if (!all(is.finite(r)) || r[1L] <= 0 && positive_only) return(NULL)
     if (r[2L] <= r[1L] * (1 + 1e-8)) return(NULL)
     r
   }
@@ -1209,7 +1225,8 @@
                                          scale_factor = NULL,
                                          sample_hyper = TRUE,
                                          block = 1L, weight = NULL,
-                                         copy.slab = "flat") {
+                                         copy.slab = NULL) {
+  copy.slab <- .occu_cover_nuts_copy_slab(copy.slab)
   wh <- if (length(warm$blocks) >= block) warm$blocks[[block]] else warm
   wt <- if (is.null(weight)) NULL else as.numeric(weight)
   if (!sample_hyper) {

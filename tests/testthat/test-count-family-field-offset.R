@@ -204,9 +204,16 @@ test_that("predict() adds the field in sample and not at a new design (#254)", {
   expect_equal(stats::qlogis(predict(fit, type = "psi")),
                as.vector(cbind(1, x) %*% fit$means[1:2]) + off)
   # A caller-supplied design is new rows with no field node, so it does not.
+  # That door reports an interval, and the median is the column a monotone link
+  # carries through unchanged, so it is the one holding the linear predictor.
   X0 <- cbind(1, x)
-  expect_equal(stats::qlogis(predict(fit, X.0 = X0, type = "psi")),
-               as.vector(X0 %*% fit$means[1:2]))
+  pred <- predict(fit, X.0 = X0, type = "psi")
+  expect_named(pred, c("mean", "sd", "q2.5", "q50", "q97.5"))
+  eta0      <- as.vector(X0 %*% fit$means[1:2])
+  d_nofield <- max(abs(stats::qlogis(pred$q50) - eta0))
+  d_field   <- max(abs(stats::qlogis(pred$q50) - (eta0 + off)))
+  expect_lt(d_nofield, 0.2)
+  expect_lt(d_nofield, d_field)
 })
 
 

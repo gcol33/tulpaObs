@@ -44,7 +44,7 @@
   # Default: flat design weights over the fixed tensor grid. The mode-centred CCD
   # path passes its own corrected R-INLA design weights.
   if (is.null(weights))
-    weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
+    weights <- .tobs_grid_weights(fit)
   ok <- is.finite(weights) & weights > 0
   if (!any(ok)) {
     stop("Spatial community N-mixture: every grid point produced a non-finite ",

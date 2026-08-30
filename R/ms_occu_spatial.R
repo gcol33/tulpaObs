@@ -29,7 +29,7 @@
 .ms_occu_spatial_post <- function(fit, p_psi, p_p, n_spatial, prior_type,
                                   theta_cols, phi_loadings = NULL) {
   d <- p_psi + p_p
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
+  weights <- .tobs_grid_weights(fit)
   ok <- is.finite(weights) & weights > 0
   if (!any(ok)) {
     stop("Spatial community occupancy: every grid point produced a non-finite ",

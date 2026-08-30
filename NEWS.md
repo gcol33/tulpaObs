@@ -1,5 +1,61 @@
 # tulpaObs NEWS
 
+## 0.1.1 (2026-08-30)
+
+* **Every outer-grid weight this package rebuilds carries the grid's own
+  quadrature element.** A post-processor that renormalised
+  `exp(log_marginal - max)` weighs each node equally, which is the measure the
+  engine integrated only when the nodes are evenly spaced and the axis carries
+  no declared prior. tulpa 0.2.1 makes the outer grid a quadrature rule for a
+  declared prior, so the two parted. `.tobs_grid_weights()`
+  (`R/joint_postprocess_shared.R`) is the one place a consumer weight is now
+  formed: it reads the fit's own cell widths through `tulpa:::.nl_grid_log_quad()`
+  and normalises through `tulpa:::.nl_normalise_weights_safe()`, falling back to
+  the softmax only where a driver result carries no `theta_grid` to measure.
+  Callers moved: the areal count post-processor, `ms_abun()`'s
+  `(tau, rho)` product grid, `ms_occu_spatial()`,
+  `nmix_laplace_re_spatial()`, `nmix_laplace_spatial()` (both the `tau` and the
+  `(sigma, rho)` reads), `nmix_laplace_spde()`'s `(range, sigma)` grid with its
+  PC prior, and the `occu_cover()` NUTS warm start, which now reconciles through
+  the shared `.tobs_joint_ok_cells()` rather than its own flat softmax.
+  `test-outer-grid-weight-arithmetic.R` recomputes both weights from the raw
+  nodes rather than from the code that produced them, so a consumer that
+  rebuilds them its own way and drops the prior doing it fails there.
+
+* **`occu_cover()`'s NUTS route takes the measure the grid declares, and the
+  span it integrates.** `control$copy.slab` left unset resolved to `"flat"`,
+  which was the grid's measure before the engine let an axis declare one; it now
+  resolves through `tulpa:::.hyper_check_copy_slab()`, so both engines target the
+  same model on that axis unless the caller asks otherwise and `"flat"` is the
+  alternative rather than the default. The sampler's axis bounds read the fit's
+  `axis_support` — the span the outer quadrature integrates, which reaches half a
+  node step past the outermost node — instead of the range of the nodes
+  themselves, recomputing it through `tulpa:::.hyper_axis_support()` for a fit
+  that does not carry one.
+
+* **`control$copy.slab` and `control$copy.atom.mass` are forwarded, and the
+  sampler declares its own hyperpriors.** The cross-arm copy scale's continuum
+  measure and the prior probability of the no-coupling point mass at `alpha = 0`
+  were fixed at the engine defaults. `HyperCoord` now carries a prior code and
+  its parameters, and `hyper_coord_backward` writes
+  `log p(u) = log p_t(t) + log(dt/du)` for either shape; the exponential is
+  declared on `alpha`'s natural scale and so carries the log-link Jacobian, with
+  its natural-scale score joining the data score in the same chain rule. A
+  gradient sampler cannot visit the point mass, so the sampled copy amplitude is
+  the posterior conditional on a coupled field and `copy.atom.mass` reaches only
+  the warm nested-Laplace fit.
+
+* **`control$var.of.means.tolerance` is `control$var.of.means.min.ess`.** The
+  joint fitters forwarded a `var_of_means_tolerance` the engine no longer
+  carries: tulpa 0.2.1 triggers the post-integration consistency pass off the
+  axis marginal's quadrature effective sample size rather than off one SD
+  estimator's ratio to another, so every joint `occu_cover()` and `occu()` fit
+  died in `tulpa_check_control()` on an unknown knob. Unset now means the
+  engine's own default instead of a copy of it restated here.
+
+* **Engine pin moved to tulpa 0.2.1** (`Imports` floor and the `Remotes` tag
+  together), which is where the declared-prior quadrature these paths read lives.
+
 ## 0.0.246 (2026-08-26)
 
 * **`occu_multiscale_cover()`'s remaining two divergences from its `occu_cover()`

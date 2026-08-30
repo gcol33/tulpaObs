@@ -233,7 +233,10 @@ test_that("occu_cover spatial NUTS hyper prior is flat on the grid's axis (#204)
   # that the sampler integrates the same flat-over-cells measure the
   # nested-Laplace grid does. A missing Jacobian is invisible in the gradient
   # check above (lp and grad would agree with each other and both be wrong) and
-  # shows up here.
+  # shows up here. Every sampled axis is taken at the measure that declares no
+  # density, `copy.slab = "flat"` for the copy amplitude included, so what is
+  # left in the target is the transform's own Jacobian; the declared Exponential
+  # is checked against its density below.
   inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
   N     <- inp$N; adj <- inp$adj
   lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
@@ -245,7 +248,8 @@ test_that("occu_cover spatial NUTS hyper prior is flat on the grid's axis (#204)
     warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
       model, adj, NULL, type = ty, max.iter = 60L)
     fb <- tulpaObs:::.occu_cover_nuts_field_block(adj, ty, N, seq_len(N), warm,
-                                                  sample_hyper = TRUE)
+                                                  sample_hyper = TRUE,
+                                                  copy.slab = "flat")
     spec <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
     spec[names(fb$entries)] <- fb$entries
     base <- c(as.numeric(lap$means), numeric(fb$n_raw))
@@ -286,7 +290,8 @@ test_that("occu_cover spatial NUTS copy slab carries the declared Exponential (#
     model, adj, NULL, type = "car_proper", max.iter = 60L,
     copy.slab = "exponential")
   fb_flat <- tulpaObs:::.occu_cover_nuts_field_block(
-    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE)
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
+    copy.slab = "flat")
   fb_exp  <- tulpaObs:::.occu_cover_nuts_field_block(
     adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
     copy.slab = "exponential")
@@ -370,11 +375,12 @@ test_that("occu_cover spatial NUTS copy slab carries the declared Exponential (#
 })
 
 
-test_that("occu_cover spatial NUTS copy slab defaults to flat in the grid's axis", {
-  # The default declares no density, so the block builder attaches none and the
-  # target is the flat-in-t one a fit without `copy.slab` runs. Checked as an
-  # identity, not a tolerance: a declared prior leaking into the default would
-  # move every existing fit.
+test_that("occu_cover spatial NUTS copy slab defaults to the engine's own", {
+  # Unset, the sampler takes the measure the outer grid declares for the copy
+  # axis, so the two engines target the same model and a NUTS-vs-nested-Laplace
+  # comparison is about the approximation and not about two different priors.
+  # Checked as an identity against the engine's declared default rather than
+  # against the string "exponential", so the two cannot drift apart.
   inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
   N     <- inp$N; adj <- inp$adj
   lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
@@ -382,32 +388,41 @@ test_that("occu_cover spatial NUTS copy slab defaults to flat in the grid's axis
   model <- lap$model
   model$site_cell <- seq_len(N)
 
+  expect_identical(tulpaObs:::.occu_cover_nuts_copy_slab(NULL),
+                   tulpa:::.hyper_check_copy_slab(NULL))
+
   warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
     model, adj, NULL, type = "car_proper", max.iter = 60L)
   fb_default <- tulpaObs:::.occu_cover_nuts_field_block(
     adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE)
+  fb_declared <- tulpaObs:::.occu_cover_nuts_field_block(
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
+    copy.slab = tulpa:::.hyper_check_copy_slab(NULL))
+  expect_identical(fb_default$entries, fb_declared$entries)
+
+  # `copy.slab = "flat"` is the alternative the grid also accepts: it declares
+  # no density, so the block builder attaches none and the target is flat in t.
   fb_flat <- tulpaObs:::.occu_cover_nuts_field_block(
     adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
     copy.slab = "flat")
-  expect_identical(fb_default$entries, fb_flat$entries)
-  expect_false(any(grepl("_prior$|_rate$", names(fb_default$entries))))
+  expect_false(any(grepl("_prior$|_rate$", names(fb_flat$entries))))
 
   # An explicit flat code is the same target as no code at all, in the R oracle
   # and in the compiled one.
-  ent_code <- c(fb_default$entries, list(field_alpha_prior = 0L))
+  ent_code <- c(fb_flat$entries, list(field_alpha_prior = 0L))
   spec0 <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
-  spec0[names(fb_default$entries)] <- fb_default$entries
+  spec0[names(fb_flat$entries)] <- fb_flat$entries
   spec1 <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
   spec1[names(ent_code)] <- ent_code
 
   n_base <- length(lap$means)
   set.seed(23)
   theta <- c(as.numeric(lap$means) + stats::rnorm(n_base, 0, 0.1),
-             stats::rnorm(fb_default$n_raw, 0, 0.3),
-             stats::rnorm(length(fb_default$sampled), 0, 0.6))
+             stats::rnorm(fb_flat$n_raw, 0, 0.3),
+             stats::rnorm(length(fb_flat$sampled), 0, 0.6))
 
   r0 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
-                                                 field = fb_default$entries)
+                                                 field = fb_flat$entries)
   r1 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                  field = ent_code)
   expect_identical(r0$lp, r1$lp)
@@ -423,7 +438,7 @@ test_that("occu_cover spatial NUTS copy slab defaults to flat in the grid's axis
   expect_error(tulpaObs:::.occu_cover_nuts_copy_slab("pc"), "copy\\.slab")
   # The Exponential is written on a natural scale, so it is refused on the
   # logit-coordinate mixing parameter.
-  ent_bad <- c(fb_default$entries,
+  ent_bad <- c(fb_flat$entries,
                list(field_rho_prior = 1L, field_rho_rate = 1))
   expect_error(
     tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5, field = ent_bad),
@@ -1057,4 +1072,54 @@ test_that("occu_cover: control$alpha.grid overrides the amplitude on both engine
   expect_gt(nl_band$spatial$alpha_mean, 0)
   expect_false(isTRUE(all.equal(nl_band$spatial$alpha_mean,
                                 nl_pin$spatial$alpha_mean)))
+})
+
+
+test_that("occu_cover spatial NUTS bounds are the engine's own declared support", {
+  # The outer quadrature integrates each axis over the span its nodes tile,
+  # which reaches half a node step past the outermost node rather than stopping
+  # on it. A sampler bounded at the node range would target a prior truncated
+  # two half-cells short of the one the grid integrates, so the comparison
+  # between the two engines would carry a support difference as well as an
+  # approximation difference. Asserted as an identity against what the fit
+  # recorded, so the two cannot drift apart.
+  inp   <- .ocsn_inputs(side = 4L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+    model, adj, NULL, type = "car_proper", max.iter = 60L)
+  sup <- warm$joint_fit$axis_support
+  expect_true(is.list(sup) && length(sup) > 0L)
+
+  bnd <- tulpaObs:::.occu_cover_nuts_hyper_bounds(warm, "car_proper", block = 1L)
+  tg  <- warm$joint_fit$theta_grid
+  # `bnd` names a hyper of the sampled block; `sup` names the grid axis it was
+  # read off.
+  pairs <- list(c("sigma", "sigma"), c("alpha", "alpha"), c("rho", "rho_car"))
+  seen  <- 0L
+  for (pr in pairs) {
+    a <- pr[1L]; nm <- pr[2L]
+    if (is.null(bnd[[a]]) || is.null(sup[[nm]])) next
+    seen <- seen + 1L
+    expect_identical(as.numeric(bnd[[a]]), as.numeric(sup[[nm]]))
+    # Strictly wider than the node range, on both ends: the half node step.
+    v <- as.numeric(tg[, nm]); v <- v[is.finite(v)]
+    if (nm %in% c("sigma", "alpha")) v <- v[v > 0]
+    expect_lt(sup[[nm]][1L], min(v))
+    expect_gt(sup[[nm]][2L], max(v))
+  }
+  expect_gt(seen, 0L)
+
+  # The same helper the engine weights its cells with produces those spans, so
+  # a fit written before the support was recorded reads the same interval.
+  specs <- tulpa:::.joint_axis_specs_from_grid(tg)
+  for (sp in specs) {
+    r <- tulpa:::.hyper_axis_support(tg[, sp$name], sp)
+    if (is.null(r) || is.null(sup[[sp$name]])) next
+    expect_equal(as.numeric(r), as.numeric(sup[[sp$name]]), tolerance = 1e-12)
+  }
 })

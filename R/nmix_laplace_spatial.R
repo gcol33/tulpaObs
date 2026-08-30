@@ -611,7 +611,7 @@ print.nmix_spatial_fit <- function(x, ...) {
 # source of truth. Returns the common block the wrappers splice into `out`.
 .count_spatial_pack_common <- function(fit, p_lam, p_p, n_spatial,
                                        X_lambda, X_p, mixture) {
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal, "tau_grid / data")
+  weights <- .tobs_grid_weights(fit, "tau_grid / data")
   tau  <- .tobs_weighted_moment(weights, fit$theta_grid[, "tau"])
   disp <- .nmix_dispersion_summary(mixture, fit$theta_grid, weights)
 
@@ -650,7 +650,7 @@ print.nmix_spatial_fit <- function(x, ...) {
 # Single source of truth for the N-mixture and removal BYM2 wrappers.
 .count_spatial_pack_bym2_common <- function(fit, p_lam, p_p, n_spatial,
                                             X_lambda, X_p, mixture, scale_factor) {
-  weights <- tulpa:::.nl_normalise_weights_safe(fit$log_marginal)
+  weights <- .tobs_grid_weights(fit)
   sigma_vec <- fit$theta_grid[, "sigma"]; rho_vec <- fit$theta_grid[, "rho"]
   sigma <- .tobs_weighted_moment(weights, sigma_vec)
   rho   <- .tobs_weighted_moment(weights, rho_vec)

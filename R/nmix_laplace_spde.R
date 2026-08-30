@@ -157,9 +157,12 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
     tol = as.numeric(tol), verbose = isTRUE(verbose)
   )
 
-  # Add the PC prior to each grid log-marginal, then normalise.
+  # Add the PC prior to each grid log-marginal, then integrate: the PC density
+  # is the measure on (range, sigma) and the grid's cell widths are the
+  # quadrature element it is integrated with.
   lm_post <- fit$log_marginal + pc_lp
-  weights <- tulpa:::.nl_normalise_weights_safe(lm_post, "range / sigma grid")
+  weights <- .tobs_grid_weights(list(theta_grid = theta_grid),
+                                "range / sigma grid", lm_post)
 
   rng   <- .tobs_weighted_moment(weights, theta_grid[, "range"])
   sigma <- .tobs_weighted_moment(weights, theta_grid[, "sigma"])

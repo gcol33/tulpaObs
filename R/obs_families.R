@@ -275,19 +275,19 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' the bar `spatial(~ 1 || cell, graph = adj)`, TOGETHER WITH their
 #' hyperparameters: the field SD, the mixing (`bym2`) or spatial-correlation
 #' (`car_proper`) parameter, and - where the formula asks for one - the cover-arm
-#' copy amplitude. Each is bounded to the same outer-grid span the
-#' `nested_laplace` path evaluates that axis over, in that grid's own
-#' coordinate, and the same `control$sigma.grid` / `alpha.grid` /
-#' `rho.car.grid` knobs set it on both routes - so the sampler is
-#' an independent reference for the hyperparameter layer rather than a fit
-#' conditioned on that layer's point estimate. The measure over that span is
-#' flat in the grid's coordinate, except that `control$copy.slab =
-#' "exponential"` gives the copy amplitude the penalized-complexity
-#' Exponential slab the outer grid declares. The grid weighs that slab against
-#' a point mass at `alpha = 0` ("no coupling"), which a gradient sampler cannot
-#' visit, so the sampled copy amplitude is the posterior conditional on a
-#' coupled field; the point mass's share of the prior is read on the
-#' `nested_laplace` route. `fit$nuts$sampled_hyper` and
+#' copy amplitude. Each is bounded to the span the `nested_laplace` path's
+#' outer quadrature integrates that axis over, in that grid's own coordinate,
+#' and the same `control$sigma.grid` / `alpha.grid` / `rho.car.grid` knobs set
+#' it on both routes - so the sampler is an independent reference for the
+#' hyperparameter layer rather than a fit conditioned on that layer's point
+#' estimate. The measure over that span is the one the outer grid declares for
+#' the axis: flat in the grid's coordinate for the field SD and the mixing
+#' parameter, and for the copy amplitude the penalized-complexity Exponential
+#' slab, with `control$copy.slab = "flat"` asking for the flat alternative the
+#' grid also accepts. The grid weighs that slab against a point mass at
+#' `alpha = 0` ("no coupling"), which a gradient sampler cannot visit, so the
+#' sampled copy amplitude is the posterior conditional on a coupled field; the
+#' point mass's share of the prior is read on the `nested_laplace` route. `fit$nuts$sampled_hyper` and
 #' `fit$nuts$fixed_hyper` name which is which per fit (`icar` pins `rho` at 1:
 #' the intrinsic precision has no mixing parameter; a field with no `copy()` pins
 #' the copy amplitude at 0), `fit$hyper_draws` carries
@@ -632,7 +632,7 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
-      "var.of.means.consistency", "var.of.means.tolerance",
+      "var.of.means.consistency", "var.of.means.min.ess",
       # Shape of the prior on the cross-arm copy scale: the continuum measure
       # ("exponential" or "flat" in log alpha over the `alpha.grid` span) and
       # the prior probability of the no-coupling point mass at alpha = 0.
