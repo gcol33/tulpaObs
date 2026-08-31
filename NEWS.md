@@ -7,7 +7,9 @@
   `pkgbuild::build(vignettes = TRUE)` alongside it; 26 rounds without a
   concurrent build -- 10 full-tier parallel, one at 8 workers, 7 reduced, 8
   whole-tier serial runs in shuffled file order -- never crashed, and all three
-  crashes on record had one. So the clean serial control was never evidence that
+  crashes on record had one. Necessity is NOT established -- the rate is about
+  one crash per 25 minutes of tier/build overlap, so 26 crash-free rounds are too
+  few to exclude it happening without a build. So the clean serial control was never evidence that
   serial is safe and parallel is not; it is evidence that the tier is clean when
   nothing is building. Not resource exhaustion (38.6 GB RAM and 1.36 TB disk free
   while reproducing) and not the binaries (the install preceded both original

@@ -161,12 +161,15 @@ aborts the run, and leaves every unreached file unrun. Intermittent, different
 file each time. #151 established only that a worker no longer recompiles the
 DLL.
 
-**It needs a concurrent BUILD, and that is the rule to follow: never run the
+**Every crash on record had a concurrent BUILD; rule meanwhile: do not run the
 parallel tier while anything is building the package.** Reproduced at 36s with
-`pkgbuild::build(vignettes = TRUE)` alongside it; 26 rounds without a concurrent
-build (10 full-tier parallel, 1 at 8 workers, 7 reduced, 8 shuffled serial) never
-crashed, and all three crashes on record had one. Asking for a tarball and a
-smoke run in one go is what produces it. NOT resource exhaustion (38.6 GB RAM /
+`pkgbuild::build(vignettes = TRUE)` alongside it, which is how both original
+crashes were produced (a tarball build and a smoke run asked for in one go). NOT
+established as necessary: the rate is roughly one crash per ~25 min of
+tier/build overlap, so the 26 crash-free rounds without a build (10 full-tier
+parallel, 1 at 8 workers, 7 reduced, 8 shuffled serial) are too few to exclude
+it happening without one. Treat the build as the known trigger, not as the
+mechanism. NOT resource exhaustion (38.6 GB RAM /
 1.36 TB disk free while reproducing) and NOT the binaries (the install preceded
 both original crashes). Mechanism still open; a `-UNDEBUG -D_GLIBCXX_ASSERTIONS`
 build of both packages runs the whole tier with 0 assertions, so it is not an
