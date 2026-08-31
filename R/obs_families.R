@@ -368,6 +368,15 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' other axis tracks the request (measured engine-side, `NOTES_measurements.md`).
 #' One block takes one of the two spellings; giving both is an error.
 #'
+#' Set it when the fit's hyperparameter intervals are reported. On the coupled
+#' SBC fixture the declared resolution leaves the field SD miscalibrated once
+#' the data are informative -- at 10 visits per site its uniformity p-value is
+#' 9.1e-05, against 0.17 at 3 visits -- and `control$alpha.n = 21` returns every
+#' scored quantity to nominal at both. Thirteen slab nodes do not (the field SD
+#' still reads 4.5e-03), and the price is a 2.3-3x longer fit, since the outer
+#' grid is a tensor. Point estimates are not affected the way the intervals are;
+#' the measurement is in `NOTES_measurements.md`.
+#'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engines (`method = "nested_laplace"`, default
 #' `control$engine = "joint"`, and `method = "nuts"`) share one areal field (the
@@ -1859,6 +1868,15 @@ occu_categorical <- function(classes = NULL) {
 #' quadrature effective sample size saturates on the copy amplitude while every
 #' other axis tracks the request (measured engine-side, `NOTES_measurements.md`).
 #' One block takes one of the two spellings; giving both is an error.
+#'
+#' Set it when the fit's hyperparameter intervals are reported. On the coupled
+#' SBC fixture the declared resolution leaves the field SD miscalibrated once
+#' the data are informative -- at 10 visits per site its uniformity p-value is
+#' 9.1e-05, against 0.17 at 3 visits -- and `control$alpha.n = 21` returns every
+#' scored quantity to nominal at both. Thirteen slab nodes do not (the field SD
+#' still reads 4.5e-03), and the price is a 2.3-3x longer fit, since the outer
+#' grid is a tensor. Point estimates are not affected the way the intervals are;
+#' the measurement is in `NOTES_measurements.md`.
 #'
 #' @section Varying-coefficient spatial bar (the compact single-term form):
 #' The intercept field plus its weighted trend field can also be written as one

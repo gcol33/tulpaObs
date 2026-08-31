@@ -473,15 +473,62 @@ size is 1.7 / 3.1 / 4.3. Raising the alpha resolution alongside gives
 2.3 / 6.8 / 12.5. The saturation is in the PLACEMENT, not in the prune:
 `prune = TRUE` reproduces the same node counts and the same ESS to the digit.
 
-The consequence this was found through is on SBC, and is NOT settled by the
-pass-through. At `n.sim = 300` the three field hyperparameters get more
-overconfident as visits per site rise -- rank dispersion for `sigma`,
-`sigma_pos_field` and `alpha` moving 0.259 / 0.253 / 0.249 to
-0.282 / 0.292 / 0.299 against 0.250 under uniformity -- while every coefficient
-stays calibrated. Whether a raised alpha resolution restores that calibration is
-open: the pass-through removes the reason the axis could not be raised, and the
-re-measurement is the thing to run against it. The MOTIVATE cut this model is
-applied to has a median of 151 visits per site, on the wrong side of the effect.
+The consequence this was found through is on SBC: at `n.sim = 300` the field
+hyperparameters get more overconfident as visits per site rise, while every
+coefficient stays calibrated. Raising the resolution RESTORES that calibration
+-- measured below.
+
+### Does the resolution restore the calibration? Yes, at 21 slab nodes (#288)
+
+Posterior SBC (`sbc.tobs_fit()`, `n.sim = 300`, `n.draws = 1000`, `n.ref = 200`,
+seed 20260820, wide/narrow controls) on the coupled `occu_cover` fixture of
+`tests/testthat/test-sbc.R` -- chain ICAR graph, `N = 30`, lognormal cover,
+shared field copied onto the cover arm. The donor field-SD (21 nodes) and cover
+dispersion (17) axes are pinned in every cell, so the copy axis is the only
+thing that moves. Eight cells, `J` in {3, 10} x {default, `alpha.n = 13`,
+`alpha.n = 21`, a STATED 22-node axis}, all premises `verified`. tulpa 0.2.6,
+Windows, R 4.6.0. Full tables: `dev_notes/issue288/RESULTS288.md`.
+
+Smallest uniformity p over the scored set (`log_lik` excluded, as `test-sbc.R`
+gates it), against its 1e-3 gate:
+
+| J | default | alpha.n = 13 | alpha.n = 21 |
+|---|---|---|---|
+| 3 | 1.3e-03 | 2.2e-03 | 0.138 |
+| 10 | 9.1e-05 | 4.5e-03 | 0.107 |
+
+Rank dispersion (`mean(abs(u - 0.5))`, 0.250 under uniformity, above it = too
+narrow) at `J = 10`: `sigma` 0.293 -> 0.253 -> 0.243, `alpha` 0.262 -> 0.238 ->
+0.240. The default's `sigma` reads p = 9.1e-05 at `J = 10` against 0.17 at
+`J = 3`: more informative data, a worse-calibrated field SD. At 21 slab nodes
+every scored quantity is calibrated at both visit counts. The mis-scaled
+controls fail everywhere (p <= 1e-4 on all three field quantities in all eight
+cells), so a pass is not the read being unable to fail.
+
+Three things the run settles beyond the headline:
+
+* **13 is not enough** -- `sigma` still reads 4.5e-03 at `J = 10`. The declared
+  5 slab nodes are about four times too coarse for this read, not slightly.
+* **It is not only the copy amplitude that the copy axis decides.** `disp` fails
+  at the default at `J = 3` (1.3e-03) and passes at both raised settings, and
+  `sigma`'s failure is on an axis already pinned at 21 nodes. Same mechanism
+  `test-sbc.R` documents for its own axes: an outer axis IS the support of the
+  predictive the truth is ranked against, so a coarse axis anywhere in the
+  tensor coarsens the grid-marginalized read of everything riding it.
+* **The stated-axis control arm could not separate placement from resolution.**
+  A stated 22-node axis reproduces `alpha.n = 21` to every digit -- same 25
+  surviving nodes, same 8925 cells, same ESS, same p-values. The two spellings
+  AGREE, which is worth having; what the measurement identifies is the
+  resolution.
+
+Cost, and where the knob bites: observed-fit grid ESS 22.1 -> 652.3 at `J = 3`
+and 45.3 -> 211.1 at `J = 10`, for a 2.3-3x longer fit (13.3 -> 39.4 min and
+20.3 -> 60.9 min per 300-simulation cell). Surviving alpha nodes are 11-15 at
+the default, 17 at `n13`, 25 at `n21` -- auto placement expands the declared 6 /
+14 / 22. That cost is why the default is left where it is and the resolution is
+asked for per fit; the MOTIVATE cut this model is applied to has a median of 151
+visits per site, on the wrong side of the effect, so a calibration claim there
+should carry `control$alpha.n = 21`.
 
 ## Posterior SBC on the coupled `occu_cover` (`R/sbc.R`, #207)
 
