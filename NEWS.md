@@ -2,6 +2,20 @@
 
 ## 0.1.2 (2026-08-31)
 
+* **The parallel-tier worker crash needs a concurrent package build
+  (gcol33/tulpaObs#289).** Reproduced in 36 s by running the tier with
+  `pkgbuild::build(vignettes = TRUE)` alongside it; 26 rounds without a
+  concurrent build -- 10 full-tier parallel, one at 8 workers, 7 reduced, 8
+  whole-tier serial runs in shuffled file order -- never crashed, and all three
+  crashes on record had one. So the clean serial control was never evidence that
+  serial is safe and parallel is not; it is evidence that the tier is clean when
+  nothing is building. Not resource exhaustion (38.6 GB RAM and 1.36 TB disk free
+  while reproducing) and not the binaries (the install preceded both original
+  crashes). A `-UNDEBUG -D_GLIBCXX_ASSERTIONS` build of both packages runs the
+  whole 282-file tier with zero assertions, so it is not an out-of-range vector
+  or Eigen index either. Mechanism still open; the rule meanwhile is not to run
+  the parallel tier while anything is building the package.
+
 * **The two parallel test mechanisms are not the same one, and only one of them
   has shown a worker crash (gcol33/tulpaObs#289).** `test_dir()` reads
   `Config/testthat/parallel` and dispatches files to testthat's own callr worker

@@ -159,9 +159,19 @@ established for it.** A worker exits `0xC0000005`; testthat reports `R session
 crashed with exit code -1073741819` against whatever file that worker held,
 aborts the run, and leaves every unreached file unrun. Intermittent, different
 file each time. #151 established only that a worker no longer recompiles the
-DLL. What IS clean is the SERIAL route (`TESTTHAT_PARALLEL=false`); the
-`makeCluster` route is neither implicated nor cleared. A clean tier read while
-this stands means running serially.
+DLL.
+
+**It needs a concurrent BUILD, and that is the rule to follow: never run the
+parallel tier while anything is building the package.** Reproduced at 36s with
+`pkgbuild::build(vignettes = TRUE)` alongside it; 26 rounds without a concurrent
+build (10 full-tier parallel, 1 at 8 workers, 7 reduced, 8 shuffled serial) never
+crashed, and all three crashes on record had one. Asking for a tarball and a
+smoke run in one go is what produces it. NOT resource exhaustion (38.6 GB RAM /
+1.36 TB disk free while reproducing) and NOT the binaries (the install preceded
+both original crashes). Mechanism still open; a `-UNDEBUG -D_GLIBCXX_ASSERTIONS`
+build of both packages runs the whole tier with 0 assertions, so it is not an
+out-of-range vector or Eigen index. The SERIAL route (`TESTTHAT_PARALLEL=false`)
+is clean; the `makeCluster` route is neither implicated nor cleared.
 
 Slow test -> pair `skip_if_fast()` + `skip_on_cran()` atop any multi-seed fit /
 NUTS block (`tests/testthat/helper-speed.R`). C++ recompiles ccache-backed; only
