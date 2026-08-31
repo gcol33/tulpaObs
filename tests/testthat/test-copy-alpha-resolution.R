@@ -246,11 +246,20 @@ test_that("a bare copy() takes the resolution; a copy() with nodes refuses it", 
   }
 
   # `copy(spatial())` names no amplitude: it asks for the engine's own axis, and
-  # the resolution says how finely to read it. This fit does not expose its
-  # outer grid, so the axis is read off what it integrated: at `alpha.n = 1` the
-  # slab collapses to its lower bound (0.1), so a truth of alpha = 1.0 cannot be
-  # reached, while the default axis reaches it. The knob is what moves.
-  dflt   <- fit_at(~ pos_cov1 + copy(spatial()), list())
+  # the resolution says how finely to read it. The outer grid this fit
+  # integrated is `fit$joint_fit`, and auto placement may EXPAND the axis, so
+  # what is asserted is the node count it carries rather than the node values.
+  alpha_axis_size <- function(fit) {
+    tg <- fit$joint_fit$theta_grid
+    length(unique(as.numeric(tg[, which(colnames(tg) == "alpha")])))
+  }
+  dflt <- fit_at(~ pos_cov1 + copy(spatial()), list())
+  fine <- fit_at(~ pos_cov1 + copy(spatial()), list(alpha.n = 11))
+  expect_gt(alpha_axis_size(fine), alpha_axis_size(dflt))
+
+  # At `alpha.n = 1` the slab collapses to its lower bound, so a truth of
+  # alpha = 1.0 is off the axis and cannot be reached -- the knob reaches the
+  # likelihood, not just the grid's shape.
   narrow <- fit_at(~ pos_cov1 + copy(spatial()), list(alpha.n = 1))
   expect_lte(narrow$means[["alpha"]], max(engine_alpha_axis(1)))
   expect_gt(dflt$means[["alpha"]], narrow$means[["alpha"]])
