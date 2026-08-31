@@ -2,30 +2,32 @@
 
 ## 0.1.2 (2026-08-31)
 
-* **`callr (>= 3.8.0)` floored in Suggests, as a precaution rather than a fix
-  (gcol33/tulpaObs#289).** callr owns the lifetime of the workers that die, and
-  the machine that reproduces the crash was running 3.7.6 while the machine that
-  does not was running 3.8.0. That is suggestive and it is NOT the explanation:
-  forcing callr back to 3.7.6 on the second machine did not make it crash, so the
-  two machines differ in something else as well (R 4.6.0 against 4.6.1, and 32
-  logical processors against 16). The floor costs nothing, removes one variable
-  from any future bisect, and should not be read as identifying the cause.
+* **The parallel test-worker crash is an R bug, not one of ours
+  (gcol33/tulpaObs#289).** A testthat parallel worker died with `0xC0000005` in
+  a different file each run, aborting the tier. The fault was captured from
+  inside the worker with a vectored exception handler -- Windows Error Reporting
+  writes nothing for processx children and `LocalDumps` does not override that,
+  verified with admin -- and lands in `wcsstr`, reading a page-aligned address,
+  called from R with no tulpaObs or tulpa frame anywhere on the stack.
 
-* **The parallel-tier worker crash needs a concurrent package build
-  (gcol33/tulpaObs#289).** Reproduced in 36 s by running the tier with
-  `pkgbuild::build(vignettes = TRUE)` alongside it; 26 rounds without a
-  concurrent build -- 10 full-tier parallel, one at 8 workers, 7 reduced, 8
-  whole-tier serial runs in shuffled file order -- never crashed, and all three
-  crashes on record had one. Necessity is NOT established -- the rate is about
-  one crash per 25 minutes of tier/build overlap, so 26 crash-free rounds are too
-  few to exclude it happening without a build. So the clean serial control was never evidence that
-  serial is safe and parallel is not; it is evidence that the tier is clean when
-  nothing is building. Not resource exhaustion (38.6 GB RAM and 1.36 TB disk free
-  while reproducing) and not the binaries (the install preceded both original
-  crashes). A `-UNDEBUG -D_GLIBCXX_ASSERTIONS` build of both packages runs the
-  whole 282-file tier with zero assertions, so it is not an out-of-range vector
-  or Eigen index either. Mechanism still open; the rule meanwhile is not to run
-  the parallel tier while anything is building the package.
+  R has exactly three `wcsstr` calls, all in `R_is_redirection_tty()`
+  (`src/main/sysutils.c`), all on `FILE_NAME_INFO.FileName`, which is documented
+  as NOT NUL-terminated -- R's own comment says so and passes it to `wcsstr`
+  regardless, so the search runs past the name and faults when it crosses into
+  an unmapped page. Its one caller asks whether fd 0 and fd 1 are msys/cygwin
+  ptys during Windows startup, and a testthat worker is `Rterm` with both wired
+  to processx pipes, which is why workers die at the very start of their file,
+  why the file varies, and why serial runs never show it.
+
+  Fixed upstream 2026-08-11, r-source `a2066dd40`, "Applied buffer overread patch
+  from PR19104". NO released R carries it yet: 4.6.1 is 2026-06-24 and 4.6.0 is
+  2026-04-24. Until the next release, do not run the parallel tier while
+  anything is building the package -- that is what takes the rate from rare to
+  roughly one run in five (4 crashes in 18 build-concurrent rounds against 0 in
+  40 without) -- or run serially. Ruled out en route, each by measurement rather
+  than argument: the binaries, resource exhaustion, out-of-range vector or Eigen
+  indexing (both packages rebuilt with `-UNDEBUG -D_GLIBCXX_ASSERTIONS`, whole
+  tier, zero assertions), file ordering, and callr.
 
 * **The two parallel test mechanisms are not the same one, and only one of them
   has shown a worker crash (gcol33/tulpaObs#289).** `test_dir()` reads

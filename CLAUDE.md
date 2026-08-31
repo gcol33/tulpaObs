@@ -161,15 +161,20 @@ aborts the run, and leaves every unreached file unrun. Intermittent, different
 file each time. #151 established only that a worker no longer recompiles the
 DLL.
 
-**Every crash on record had a concurrent BUILD; rule meanwhile: do not run the
-parallel tier while anything is building the package.** Reproduced at 36s with
-`pkgbuild::build(vignettes = TRUE)` alongside it, which is how both original
-crashes were produced (a tarball build and a smoke run asked for in one go). NOT
-established as necessary: the rate is roughly one crash per ~25 min of
-tier/build overlap, so the 26 crash-free rounds without a build (10 full-tier
-parallel, 1 at 8 workers, 7 reduced, 8 shuffled serial) are too few to exclude
-it happening without one. Treat the build as the known trigger, not as the
-mechanism. NOT resource exhaustion (38.6 GB RAM /
+**It is an R bug, NOT ours -- do not debug the package for it.** The fault is
+`wcsstr` reading past a non-NUL-terminated `FILE_NAME_INFO.FileName` in R's
+`R_is_redirection_tty()` (`src/main/sysutils.c`); no tulpaObs/tulpa frame is on
+the stack. Its caller asks whether fd 0/1 are msys/cygwin ptys at Windows
+startup, and a testthat worker is `Rterm` with both wired to processx pipes ->
+workers die at the very START of a file, the file varies, serial never shows it.
+Fixed upstream 2026-08-11 (r-source `a2066dd40`, PR19104); NO released R has it
+(4.6.1 = 2026-06-24, 4.6.0 = 2026-04-24). **Until the next R release: never run
+the parallel tier while anything is BUILDING the package** -- that takes it from
+rare to ~1 run in 5 (4 crashes / 18 build-concurrent rounds vs 0 / 40 without)
+-- or run serially. Ruled out by measurement, do not re-chase: the binaries,
+resource exhaustion, out-of-range vector / Eigen indexing (both packages rebuilt
+`-UNDEBUG -D_GLIBCXX_ASSERTIONS`, whole tier, zero assertions), file ordering,
+callr. NOT resource exhaustion (38.6 GB RAM /
 1.36 TB disk free while reproducing) and NOT the binaries (the install preceded
 both original crashes). Mechanism still open; a `-UNDEBUG -D_GLIBCXX_ASSERTIONS`
 build of both packages runs the whole tier with 0 assertions, so it is not an

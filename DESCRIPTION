@@ -26,7 +26,6 @@ Imports:
 Suggests:
     testthat (>= 3.0.0),
     betareg,
-    callr (>= 3.8.0),
     dplyr,
     ggplot2,
     INLA,
