@@ -2,6 +2,15 @@
 
 ## 0.1.2 (2026-08-31)
 
+* **`callr (>= 3.8.0)` floored in Suggests, as a precaution rather than a fix
+  (gcol33/tulpaObs#289).** callr owns the lifetime of the workers that die, and
+  the machine that reproduces the crash was running 3.7.6 while the machine that
+  does not was running 3.8.0. That is suggestive and it is NOT the explanation:
+  forcing callr back to 3.7.6 on the second machine did not make it crash, so the
+  two machines differ in something else as well (R 4.6.0 against 4.6.1, and 32
+  logical processors against 16). The floor costs nothing, removes one variable
+  from any future bisect, and should not be read as identifying the cause.
+
 * **The parallel-tier worker crash needs a concurrent package build
   (gcol33/tulpaObs#289).** Reproduced in 36 s by running the tier with
   `pkgbuild::build(vignettes = TRUE)` alongside it; 26 rounds without a
