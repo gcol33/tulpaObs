@@ -1,5 +1,53 @@
 # tulpaObs NEWS
 
+## 0.1.2 (2026-08-31)
+
+* **The cross-arm copy axis takes a resolution, not a set of nodes
+  (gcol33/tulpaObs#287).** The copy coefficient's outer axis carries prior
+  structure -- the atom at `alpha = 0` that gives the no-coupling model
+  posterior mass, and the log-spaced slab above it -- so stating its nodes
+  restates that structure, and a fit that only wanted the axis integrated more
+  finely had no way to ask. It was also the one outer axis a coupled fit could
+  not raise: it does not densify when the donor `sigma` axis does, so on
+  informative data the outer grid's quadrature effective sample size saturates
+  on it while every other axis tracks the request. `control$alpha.n` (and
+  `alpha.n.trend` for the weighted blocks) states a RESOLUTION instead: the
+  engine re-reads its own axis with that many slab nodes, atom and slab bounds
+  unchanged, through the `alpha_n` field tulpa 0.2.6 added. One resolver,
+  `.tobs_alpha_axis()` (`R/joint_substrate.R`), feeds every joint route --
+  `cover()`, `occu_cover()`, `occu_multiscale_cover()`, MCAR and coupled-trend
+  blocks included -- and the NUTS warm fit takes the axis's realised nodes,
+  since the sampled `alpha`'s flat prior takes their span as its support. A
+  block takes one spelling: `alpha.grid` beside `alpha.n`, or a `copy()`
+  stating an amplitude beside `alpha.n`, is refused in the dispatcher where the
+  message can name the knobs as typed; a bare `copy(spatial())` composes with
+  it, since that copy asks for the default axis.
+
+* **21 slab nodes on that axis restore a coupled fit's calibration
+  (gcol33/tulpaObs#288).** Posterior SBC on the coupled `occu_cover()` fixture,
+  `n.sim = 300`, at two visit counts and three copy-axis resolutions, donor
+  field-SD and cover-dispersion axes pinned so the copy axis is the only thing
+  moving. At the engine's declared resolution the field SD goes from calibrated
+  at 3 visits per site (uniformity p = 0.17) to clearly too narrow at 10
+  (9.1e-05), and the copy amplitude with it; at `control$alpha.n = 21` every
+  scored quantity is calibrated at both, smallest p 0.138 and 0.107 against a
+  1e-3 gate, with the mis-scaled controls still failing everywhere. Thirteen
+  slab nodes are not enough -- the field SD still reads 4.5e-03 -- so the
+  declared five are about four times too coarse, not slightly. The axis's
+  resolution does not only decide the copy amplitude: the cover dispersion
+  fails at the default too. And resolution is what is identified, not
+  placement: a stated 22-node axis reproduces `alpha.n = 21` to every digit.
+  The default is left where it is -- the price is a 2.3-3x longer fit, the
+  outer grid being a tensor, and a point estimate is not affected the way an
+  interval is -- so `?occu_cover` and `?cover` now say when to set it.
+
+* **Issue references dropped from user-facing help.** The community-mean and
+  dispersion-interval notes on `ms_abun()`, `simulate_ms_abun()` and
+  `nmix_laplace_re()` cited tracker numbers for measurements the text already
+  states in full. The rendered help names the fixture and the measurement
+  instead.
+
+
 ## 0.1.1 (2026-08-30)
 
 * **Every outer-grid weight this package rebuilds carries the grid's own
