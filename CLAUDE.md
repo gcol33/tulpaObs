@@ -130,9 +130,9 @@ silent 10-min hang w/ zero output = the same race landing differently: a partial
 load blocks in the loader w/o emitting its startup handshake -> `queue$poll(Inf)`
 waits forever.
 
-Safe recipe = what `.github/scripts/run-tests.R` does, works locally too: install
-ONCE, then call testthat directly (never via `devtools::test()`), every worker
-loading the built package instead of recompiling:
+Recipe = install ONCE, then call testthat directly (never via
+`devtools::test()`), every worker loading the built package instead of
+recompiling:
 
 ```r
 devtools::install(quick = TRUE)
@@ -140,10 +140,28 @@ testthat::test_dir("tests/testthat", package = "tulpaObs",
                    load_package = "installed")
 ```
 
-`load_package = "installed"` runs multi-file parallel in seconds, warm or cold
-`src/` -- each worker's `library(tulpaObs)` = one read of one built DLL, safe at any
-worker count. CI runs `smoke.yaml` + `full-recovery.yaml` w/ `TESTTHAT_PARALLEL:
-true` for this reason.
+`load_package = "installed"` is what closes #151: each worker's
+`library(tulpaObs)` = one read of one built DLL, warm or cold `src/`, so no
+worker recompiles into the shared tree.
+
+**TWO different parallel mechanisms; neither is evidence about the other.**
+`test_dir()` reads `Config/testthat/parallel` and dispatches files to testthat's
+own **callr worker pool** -- and `test_check()` IS `test_dir(load_package =
+"installed")`, so `R CMD check` takes that pool too. `.github/scripts/run-tests.R`
+takes NEITHER: it holds a `parallel::makeCluster` pool and hands each worker ONE
+file via `test_file()`, whose `parallel` formal defaults FALSE -> serial inside
+the worker. So `TESTTHAT_PARALLEL: true` in `smoke.yaml` / `full-recovery.yaml`
+reaches nothing (only `find_parallel()` reads it, and nothing on their path calls
+it), and `R-CMD-check.yaml` sets it `false` on push/PR deliberately.
+
+**The callr pool is where #289 lands, and `safe at any worker count` is NOT
+established for it.** A worker exits `0xC0000005`; testthat reports `R session
+crashed with exit code -1073741819` against whatever file that worker held,
+aborts the run, and leaves every unreached file unrun. Intermittent, different
+file each time. #151 established only that a worker no longer recompiles the
+DLL. What IS clean is the SERIAL route (`TESTTHAT_PARALLEL=false`); the
+`makeCluster` route is neither implicated nor cleared. A clean tier read while
+this stands means running serially.
 
 Slow test -> pair `skip_if_fast()` + `skip_on_cran()` atop any multi-seed fit /
 NUTS block (`tests/testthat/helper-speed.R`). C++ recompiles ccache-backed; only
@@ -153,13 +171,14 @@ killed/partial build needs `pkgbuild::clean_dll()`.
 
 `.github/workflows/`:
 
-- `R-CMD-check.yaml` -- push/PR + weekly. Checks a **built tarball**, not
-  `load_all()`, so a missing NAMESPACE export surfaces (#147 shipped `abun()`
-  unexported precisely because `load_all()` resolves internals regardless).
-  `--no-manual` (dev non-ASCII in Rd). ubuntu on push; ubuntu+windows+macOS on
-  weekly cron + `workflow_dispatch`. Serial; parallel here goes via R's own
-  `test_check()`, which already hardcodes `load_package = "installed"` -> not
-  subject to #151. Left alone: this job = tarball correctness, not speed.
+- `R-CMD-check.yaml` -- push/PR + `workflow_dispatch`, NO cron. Checks a **built
+  tarball**, not `load_all()`, so a missing NAMESPACE export surfaces (#147
+  shipped `abun()` unexported precisely because `load_all()` resolves internals
+  regardless). `--no-manual` (dev non-ASCII in Rd). ubuntu on push;
+  ubuntu+windows+macOS on `workflow_dispatch`. `TESTTHAT_PARALLEL` is `false` on
+  push/PR so the gate is deterministic and `true` on dispatch, which is the ONLY
+  place CI reaches testthat's callr worker pool (#289); `test_check()` hardcodes
+  `load_package = "installed"` -> not subject to #151 either way.
 - `smoke.yaml` -- push/PR, tier 2 (`TULPAOBS_FAST=1`) vs INSTALLED package.
   Catches #148-class breakage the day it lands. `TESTTHAT_PARALLEL: true`
   (#151, safe here).

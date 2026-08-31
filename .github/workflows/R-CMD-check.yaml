@@ -58,7 +58,16 @@ jobs:
       # -- NAMESPACE, examples, vignettes, Rd -- so it takes the smoke tier and
       # leaves the calibration evidence to full-recovery.yaml.
       TULPAOBS_FAST: '1'
-      TESTTHAT_PARALLEL: 'false'
+      # test_check() is test_dir(load_package = "installed"), so with this unset
+      # it dispatches files to testthat's own callr worker pool -- the only path
+      # in CI that reaches that pool, since run-tests.R (smoke, full-recovery)
+      # never calls test_dir/test_local and so never reads TESTTHAT_PARALLEL at
+      # all. That pool is where a worker has been seen to exit 0xC0000005
+      # (gcol33/tulpaObs#289), intermittently and in a different file each time,
+      # which aborts the run. Push and pull requests keep it off so the gate
+      # stays deterministic; the dispatch run, which is the deliberate
+      # three-platform one, turns it on so the path is exercised on request.
+      TESTTHAT_PARALLEL: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
       # Keep the per-fit progress bars out of the check log, so a check failure
       # is not buried under them.
       TULPAOBS_PROGRESS: '0'

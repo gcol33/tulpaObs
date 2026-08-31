@@ -2,6 +2,24 @@
 
 ## 0.1.2 (2026-08-31)
 
+* **The two parallel test mechanisms are not the same one, and only one of them
+  has shown a worker crash (gcol33/tulpaObs#289).** `test_dir()` reads
+  `Config/testthat/parallel` and dispatches files to testthat's own callr worker
+  pool, and `test_check()` is `test_dir(load_package = "installed")`, so
+  `R CMD check` takes that pool too. `.github/scripts/run-tests.R` takes neither:
+  it holds a `parallel::makeCluster` pool and hands each worker one file via
+  `test_file()`, whose `parallel` formal defaults `FALSE`. `TESTTHAT_PARALLEL`
+  is read only by `find_parallel()`, which nothing on that script's path calls,
+  so the variable set in `smoke.yaml` and `full-recovery.yaml` reaches nothing
+  and `R-CMD-check.yaml` was the only job that could reach the callr pool -- with
+  the variable pinned `false`, which is why no CI job ever has. It is now `false`
+  on push and pull request, so the gate stays deterministic, and `true` on
+  `workflow_dispatch`, which is the deliberate three-platform run. CLAUDE.md's
+  claim that the recipe is "what run-tests.R does" and that it is "safe at any
+  worker count" is corrected: what gcol33/tulpaObs#151 established is that a
+  worker no longer recompiles the DLL, not that the pool is sound. A clean tier
+  read while gcol33/tulpaObs#289 stands means running serially.
+
 * **The cross-arm copy axis takes a resolution, not a set of nodes
   (gcol33/tulpaObs#287).** The copy coefficient's outer axis carries prior
   structure -- the atom at `alpha = 0` that gives the no-coupling model
