@@ -462,6 +462,27 @@ Thinned on the mark, every areal kind fits at defaults on a 16-cell fixture:
 icar 1.4 s, bym2 1.6 s, car_proper 0.8 s. An axis the caller chose
 (`alpha = grid(c(...))`, `control$sigma.grid`) keeps its nodes.
 
+## Copy-axis resolution (`control$alpha.n`, #287, tulpa 0.2.6)
+
+Measured engine-side on an ICAR chain with a gaussian copy arm
+(`dev_notes/issue633/RESULTS633B.md` in `gcol33/tulpa`), so the numbers describe
+the axis, not this package's wrapper. Raising the DONOR axis alone does not
+raise the copy axis: at `sigma_grid` 13 / 21 / 29 nodes the alpha axis stays at
+its declared 6 at every setting and the outer grid's quadrature effective sample
+size is 1.7 / 3.1 / 4.3. Raising the alpha resolution alongside gives
+2.3 / 6.8 / 12.5. The saturation is in the PLACEMENT, not in the prune:
+`prune = TRUE` reproduces the same node counts and the same ESS to the digit.
+
+The consequence this was found through is on SBC, and is NOT settled by the
+pass-through. At `n.sim = 300` the three field hyperparameters get more
+overconfident as visits per site rise -- rank dispersion for `sigma`,
+`sigma_pos_field` and `alpha` moving 0.259 / 0.253 / 0.249 to
+0.282 / 0.292 / 0.299 against 0.250 under uniformity -- while every coefficient
+stays calibrated. Whether a raised alpha resolution restores that calibration is
+open: the pass-through removes the reason the axis could not be raised, and the
+re-measurement is the thing to run against it. The MOTIVATE cut this model is
+applied to has a median of 151 visits per site, on the wrong side of the effect.
+
 ## Posterior SBC on the coupled `occu_cover` (`R/sbc.R`, #207)
 
 `sbc()` runs the posterior experiment of `tulpa::sbc()` (gcol33/tulpa#380,

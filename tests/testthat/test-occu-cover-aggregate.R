@@ -137,11 +137,13 @@ test_that("aggregated cover arm holds one row per detected occupancy unit", {
   site_cell <- as.integer(sim$site$cell_idx)
 
   arms_mean <- tulpaObs:::.occu_cover_build_joint_arms(
-    model, sigma_pos_init = 10, alpha_grid = c(0, 1), positive = "beta",
+    model, sigma_pos_init = 10, positive = "beta",
+    alpha_axis = tulpaObs:::.tobs_alpha_axis(c(0, 1)),
     multi = FALSE, n_cells = sim$n_cells, site_cell = site_cell,
     cover_aggregate = "mean")
   arms_none <- tulpaObs:::.occu_cover_build_joint_arms(
-    model, sigma_pos_init = 10, alpha_grid = c(0, 1), positive = "beta",
+    model, sigma_pos_init = 10, positive = "beta",
+    alpha_axis = tulpaObs:::.tobs_alpha_axis(c(0, 1)),
     multi = FALSE, n_cells = sim$n_cells, site_cell = site_cell,
     cover_aggregate = "none")
 

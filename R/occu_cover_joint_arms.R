@@ -139,7 +139,7 @@
 }
 
 .occu_cover_build_joint_arms <- function(model, sigma_pos_init,
-                                                  alpha_grid,
+                                                  alpha_axis,
                                                   positive = "lognormal",
                                                   multi = FALSE,
                                                   n_cells = NULL,
@@ -347,7 +347,7 @@
     cell_obs_map = as.integer(pos_site)
   )
   if (!multi) {
-    arm_pos$field_coef <- list(name = "alpha", grid = alpha_grid)
+    arm_pos$field_coef <- .tobs_alpha_field_coef(alpha_axis)
   }
 
   list(responses      = list(psi = arm_psi, p = arm_p, pos = arm_pos),

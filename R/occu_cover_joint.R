@@ -208,7 +208,7 @@
   # A defaulted axis arrives already marked from the helper and reaches its block
   # unsorted, so the mark survives; the pos-arm amplitude below re-derives
   # through `sort()` and is marked again there.
-  alpha_grid <- dots$alpha.grid %||% .tobs_default_alpha_grid()
+  alpha_axis <- .tobs_alpha_axis_base(dots)
   sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields: each is a per-cell-weighted areal field that
@@ -238,7 +238,7 @@
   arms_out <- .occu_cover_build_joint_arms(
     model           = model,
     sigma_pos_init  = sigma_pos_init,
-    alpha_grid      = alpha_grid,
+    alpha_axis      = alpha_axis,
     positive        = model$positive,
     multi           = has_trend || has_any_re || has_armspec,
     n_cells         = n_cells,
@@ -538,7 +538,7 @@
         list(as.numeric(w), rep(1.0, n_v), as.numeric(w[pos_site])))
     )
     prior_arg <- list(mcar_block)
-    copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
+    copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
     # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky Sigma +
     # alpha), so the outer grid uses the mode-centred CCD by default rather than
     # a dense tensor (the same recipe the cover-hurdle MCAR path uses).
@@ -573,15 +573,15 @@
         svc_weight  = list(w_psi, rep(1.0, n_v), w_pos)
       ))
     }
-    alpha_grid_trend <- dots$alpha.grid.trend %||% alpha_grid
+    alpha_axis_trend <- .tobs_alpha_axis_trend(dots, alpha_axis)
     prior_arg <- c(
       list(make_block(NULL)),
       lapply(coupled_trends, function(tf) make_block(tf$weight))
     )
     copy_arg <- c(
-      list(list(arm = "pos", block = 1L, alpha_grid = alpha_grid)),
+      list(.tobs_alpha_copy_spec("pos", 1L, alpha_axis)),
       lapply(seq_len(n_trend), function(j)
-        list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend))
+        .tobs_alpha_copy_spec("pos", j + 1L, alpha_axis_trend))
     )
     # The arm-specific cover fields (non-copied, pos arm only) trail the occupancy
     # field blocks, then the RE blocks; the copy indices above name occupancy
@@ -595,7 +595,7 @@
     field_block <- icar_template(list(
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
     prior_arg <- c(list(field_block), pos_armspec_blocks, re_blocks)
-    copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
+    copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
   } else if (isTRUE(.batch_collect)) {
     # Single-field, batched fused path: run the MULTI-block driver so the alpha
     # axis is an explicit copy spec and the per-arm field-node map is an explicit
@@ -605,7 +605,7 @@
     # grid (dev_notes/_probe_mb_vs_sb_occucover.R).
     prior_arg <- icar_template(list(
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
-    copy_arg  <- list(arm = "pos", block = 1L, alpha_grid = alpha_grid)
+    copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
   } else {
     prior_arg <- icar_template()
     copy_arg  <- NULL

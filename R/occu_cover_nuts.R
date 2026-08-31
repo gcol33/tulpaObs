@@ -911,8 +911,10 @@
                                                  sigma.grid = NULL,
                                                  rho.car.grid = NULL,
                                                  alpha.grid = NULL,
+                                                 alpha.n = NULL,
                                                  trends = list(),
                                                  alpha.grid.trend = NULL,
+                                                 alpha.n.trend = NULL,
                                                  copy.slab = NULL,
                                                  copy.atom.mass = NULL) {
   is_beta   <- identical(model$positive, "beta")
@@ -941,7 +943,11 @@
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }
 
-  alpha_grid <- alpha.grid %||% .tobs_default_alpha_grid()
+  # The sampler reads the axis's NODES -- their span is the support of alpha's
+  # flat prior -- so the resolution knob is resolved to nodes here rather than
+  # handed to the engine as `alpha_n`, the way the grid-integrated routes do.
+  alpha_axis <- .tobs_alpha_axis(alpha.grid, alpha.n)
+  alpha_grid <- .tobs_alpha_nodes(alpha_axis)
   sigma_grid <- sigma.grid %||% .tobs_default_sigma_grid()
   rho_car_grid <- rho.car.grid %||% .tobs_default_rho_car_grid()
 
@@ -981,7 +987,8 @@
   # coefficient field the fit takes the multi-block driver instead, where each
   # block's amplitude is an explicit copy spec.
   arms_out <- .occu_cover_build_joint_arms(
-    model = model, sigma_pos_init = sigma_pos_init, alpha_grid = alpha_grid,
+    model = model, sigma_pos_init = sigma_pos_init,
+    alpha_axis = .tobs_alpha_axis(grid = alpha_grid),
     positive = model$positive, multi = multi, n_cells = n_cells,
     site_cell = site_cell, cover_aggregate = "none")
   responses <- arms_out$responses
@@ -1032,7 +1039,10 @@
         spatial_idx = spatial_idx,
         svc_weight  = list(w, rep(1.0, n_v), w[pos_site])))
     }
-    alpha_grid_trend <- thin(alpha.grid.trend %||% alpha_grid)
+    alpha_axis_trend <- .tobs_alpha_axis_trend(
+      list(alpha.grid.trend = alpha.grid.trend, alpha.n.trend = alpha.n.trend),
+      alpha_axis)
+    alpha_grid_trend <- thin(.tobs_alpha_nodes(alpha_axis_trend))
     prior_arg <- c(list(field_block(NULL, sigma_grid)),
                    lapply(trends, function(tf)
                      field_block(tf$weight, sigma_grid)))
@@ -1396,7 +1406,9 @@
                                               verbose = FALSE,
                                               sigma.grid = NULL, rho.car.grid = NULL,
                                               alpha.grid = NULL,
+                                              alpha.n = NULL,
                                               alpha.grid.trend = NULL,
+                                              alpha.n.trend = NULL,
                                               fixed.hyper = FALSE,
                                               copy.slab = NULL,
                                               copy.atom.mass = NULL, ...) {
@@ -1437,7 +1449,8 @@
   warm <- .tobs_occu_cover_nuts_carproper_warm(
     model, adj, priors, type = spatial$type, max.iter = max.iter, tol = tol,
     sigma.grid = sigma.grid, rho.car.grid = rho.car.grid, alpha.grid = alpha.grid,
-    trends = trends, alpha.grid.trend = alpha.grid.trend, copy.slab = copy.slab,
+    alpha.n = alpha.n, trends = trends, alpha.grid.trend = alpha.grid.trend,
+    alpha.n.trend = alpha.n.trend, copy.slab = copy.slab,
     copy.atom.mass = copy.atom.mass)
 
   # One block per coupled field: the unweighted intercept field, then one per

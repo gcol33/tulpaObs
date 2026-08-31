@@ -38,7 +38,8 @@
   pos_vals  <- model$y_pos[model$valid & model$y == 1L]
   sigma_pos <- max(stats::sd(log(pos_vals)), 0.05) + 0.05
   arms_out  <- tulpaObs:::.occu_cover_build_joint_arms(
-    model = model, sigma_pos_init = sigma_pos, alpha_grid = c(0, 1.0),
+    model = model, sigma_pos_init = sigma_pos,
+    alpha_axis = tulpaObs:::.tobs_alpha_axis(c(0, 1.0)),
     positive = "lognormal", multi = FALSE, n_cells = N,
     site_cell = seq_len(N), cover_aggregate = "none")
   responses <- arms_out$responses

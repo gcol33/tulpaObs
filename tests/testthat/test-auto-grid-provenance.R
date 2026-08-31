@@ -182,7 +182,7 @@ test_that("cover() multi-block carries the copy axis's mark through as.numeric()
       prior_spatial = sp, spi_full = rep_len(1:4, 10L),
       spi_pos = rep_len(1:4, 5L), idx_pos = 1:5,
       temporal = NULL, re = NULL, control = list(),
-      alpha_grid = alpha_grid)
+      alpha_axis = tulpaObs:::.tobs_alpha_axis(alpha_grid))
   }
   auto <- build(tulpaObs:::.tobs_default_alpha_grid())
   expect_true(tulpa::is_auto_grid(auto$copy$alpha_grid))

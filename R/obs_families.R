@@ -355,6 +355,19 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' likewise sets it on both engines; set the amplitude with `copy()` or with
 #' `control$alpha.grid`, not both.
 #'
+#' The axis the amplitude rides carries prior structure -- a point mass at
+#' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
+#' in one of two ways. `control$alpha.grid` and `copy(alpha = grid(...))` STATE
+#' its nodes, and with them that structure. `control$alpha.n` states a
+#' RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
+#' mass and slab bounds unchanged (`control$alpha.n.trend` does the same for the
+#' weighted trend blocks, defaulting to `control$alpha.n`). The resolution is the
+#' only way to raise this axis, because it does not densify when the donor
+#' `control$sigma.grid` does: on an informative data set the outer grid's
+#' quadrature effective sample size saturates on the copy amplitude while every
+#' other axis tracks the request (measured engine-side, `NOTES_measurements.md`).
+#' One block takes one of the two spellings; giving both is an error.
+#'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engines (`method = "nested_laplace"`, default
 #' `control$engine = "joint"`, and `method = "nuts"`) share one areal field (the
@@ -627,6 +640,11 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
+      # Resolution of the copy coefficient's own outer axis: the engine re-reads
+      # its declared axis -- the atom at alpha = 0 plus the log-spaced slab --
+      # with this many slab nodes. `alpha.grid` states nodes instead, so a block
+      # takes one of the two.
+      "alpha.n", "alpha.n.trend",
       "rho.car.grid",
       "phi.grid.pos", "sigma.grid.pos.field", "sigma.u.grid", "n.quad",
       "n.threads", "inner.refresh", "hessian",
@@ -866,6 +884,13 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' `fit$trend_fields`. The coupled / trend field is not sampled, so
 #' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
+#' The copy amplitude's axis carries prior structure -- a point mass at
+#' `alpha = 0` and a log-spaced slab above it -- so `control$alpha.grid`
+#' (`control$alpha.grid.trend` for the weighted fields) STATES its nodes, while
+#' `control$alpha.n` (`control$alpha.n.trend`) states a RESOLUTION: the engine
+#' re-reads its own axis with that many slab nodes, point mass and bounds
+#' unchanged. One block takes one of the two.
+#'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
 #'   identity-link Gaussian magnitude, the delta-normal hurdle; for a
@@ -889,7 +914,8 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
     params         = list(positive = positive),
     control_keys   = c(
       "max.iter", "tol", "sigma.beta",
-      "sigma.grid", "alpha.grid", "alpha.grid.trend", "phi.grid.pos", "n.threads",
+      "sigma.grid", "alpha.grid", "alpha.grid.trend",
+      "alpha.n", "alpha.n.trend", "phi.grid.pos", "n.threads",
       "inner.refresh", "hessian", "n.threads.outer", "force.sparse",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
@@ -1821,6 +1847,19 @@ occu_categorical <- function(classes = NULL) {
 #' trend cannot currently combine with `temporal()` / `re()` blocks in the same
 #' fit.
 #'
+#' The axis the amplitude rides carries prior structure -- a point mass at
+#' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
+#' in one of two ways. `control$alpha.grid` and `copy(alpha = grid(...))` STATE
+#' its nodes, and with them that structure. `control$alpha.n` states a
+#' RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
+#' mass and slab bounds unchanged (`control$alpha.n.trend` does the same for the
+#' weighted trend blocks, defaulting to `control$alpha.n`). The resolution is the
+#' only way to raise this axis, because it does not densify when the donor
+#' `control$sigma.grid` does: on an informative data set the outer grid's
+#' quadrature effective sample size saturates on the copy amplitude while every
+#' other axis tracks the request (measured engine-side, `NOTES_measurements.md`).
+#' One block takes one of the two spellings; giving both is an error.
+#'
 #' @section Varying-coefficient spatial bar (the compact single-term form):
 #' The intercept field plus its weighted trend field can also be written as one
 #' `spatial()` term carrying an lme4-style coefficient formula:
@@ -2023,7 +2062,8 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
       "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",
       "rho.car.grid", "tau.temporal.grid", "rho.temporal.grid",
       "sigma.temporal.grid", "sigma.re.grid",
-      "trend", "alpha.grid", "alpha.grid.trend", "integration",
+      "trend", "alpha.grid", "alpha.grid.trend", "alpha.n", "alpha.n.trend",
+      "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "prune", "prune.tol", "hessian", "aggregate.occ", "aggregate.pos",
       "progress", "progress.every", "progress.throttle", "progress.file",

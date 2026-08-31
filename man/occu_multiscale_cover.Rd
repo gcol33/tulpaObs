@@ -81,6 +81,13 @@ spatially-varying-coefficient trend fields, each coupled onto the cover arm
 with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field} /
 \code{fit$trend_fields}. The coupled / trend field is not sampled, so
 \code{method = "nuts"} takes a single cell-declaring areal term only.
+
+The copy amplitude's axis carries prior structure -- a point mass at
+\code{alpha = 0} and a log-spaced slab above it -- so \code{control$alpha.grid}
+(\code{control$alpha.grid.trend} for the weighted fields) STATES its nodes, while
+\code{control$alpha.n} (\code{control$alpha.n.trend}) states a RESOLUTION: the engine
+re-reads its own axis with that many slab nodes, point mass and bounds
+unchanged. One block takes one of the two.
 }
 
 \seealso{

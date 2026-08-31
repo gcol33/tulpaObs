@@ -145,6 +145,19 @@ sampled over its span on the \code{nuts} path; a scalar \verb{alpha =} pins it o
 \code{control$alpha.grid} is the lower-level spelling of the same coupling and
 likewise sets it on both engines; set the amplitude with \code{copy()} or with
 \code{control$alpha.grid}, not both.
+
+The axis the amplitude rides carries prior structure -- a point mass at
+\code{alpha = 0} ("no coupling") and a log-spaced slab above it -- so it is set
+in one of two ways. \code{control$alpha.grid} and \code{copy(alpha = grid(...))} STATE
+its nodes, and with them that structure. \code{control$alpha.n} states a
+RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
+mass and slab bounds unchanged (\code{control$alpha.n.trend} does the same for the
+weighted trend blocks, defaulting to \code{control$alpha.n}). The resolution is the
+only way to raise this axis, because it does not densify when the donor
+\code{control$sigma.grid} does: on an informative data set the outer grid's
+quadrature effective sample size saturates on the copy amplitude while every
+other axis tracks the request (measured engine-side, \code{NOTES_measurements.md}).
+One block takes one of the two spellings; giving both is an error.
 }
 
 \section{Coupled fields and spatially-varying trends}{

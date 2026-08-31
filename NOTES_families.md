@@ -338,3 +338,24 @@ case. `.tobs_nuts_rhat_ess()` (`list(rhat, ess)`
 accessor for the `fit$nuts` full-coordinate block + PG-Gibbs summariser) reads
 the same table. PG-Gibbs still keeps rhat/ess at `fit$rhat`/`fit$ess` ONLY,
 where summary/print do not look.
+
+## Copy-axis resolution (`control$alpha.n`, #287, tulpa >= 0.2.6)
+
+The alpha axis carries prior structure (atom at 0 + log slab over [0.1, 3]), so
+`control$alpha.grid` / `copy(alpha = grid(...))` STATE its nodes and restate that
+structure with them; `control$alpha.n[.trend]` states a RESOLUTION -- the engine
+re-reads its OWN axis w/ n SLAB nodes (axis length n+1), atom + bounds unchanged.
+Needed because the alpha axis does NOT densify when the donor `sigma.grid` does, so
+outer-grid quadrature ESS saturates on it (`NOTES_measurements.md`). ONE resolver
+`.tobs_alpha_axis()` (`R/joint_substrate.R`) -> the two engine-facing fields
+(`alpha_grid`, `alpha_n`), shaped by `.tobs_alpha_copy_spec()` (multi-block driver) /
+`.tobs_alpha_field_coef()` (single-block pos arm); EVERY joint route reads it --
+cover, occu_cover, occu_multiscale_cover, MCAR + coupled-trend blocks included. Both
+spellings on ONE block = error (`.tobs_check_alpha_control()`, raised in the
+DISPATCHER so the message names the knob typed); a `copy()` that STATES nodes beside
+`alpha.n` = error (`.tobs_check_alpha_copy()`), a bare `copy(spatial())` composes (it
+asks for the default axis, and on occu_cover now records NULL rather than resolving
+the default nodes, so the resolution reaches it). A block with no `copy()` is pinned
+`alpha = 0` and has no axis to resolve -- stated nodes win there. NUTS resolves the
+axis to NODES instead (`.tobs_alpha_nodes()`): the sampled alpha's flat prior takes
+the realised node set's span as its support.

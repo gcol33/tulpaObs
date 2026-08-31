@@ -69,8 +69,134 @@
 # is the belt that still classifies the axis as ours after a reshape has
 # dropped the marker, which is the failure filed, and a restated copy loses the
 # belt the moment the engine moves the nodes the way moved `bym2_rho`.
-.tobs_default_alpha_grid <- function() {
-  tulpa::auto_grid(tulpa:::.nl_grid_axis("copy_alpha"))
+.tobs_default_alpha_grid <- function(n = NULL) {
+  ax <- tulpa:::.nl_grid_axis("copy_alpha", n = n)
+  # `n` is the caller naming the axis, so only the unresolved read carries the
+  # "nothing was named here" mark.
+  if (is.null(n)) tulpa::auto_grid(ax) else ax
+}
+
+# ---- the copy coefficient's outer axis ------------------------------------
+#
+# Two spellings, and they are different requests. `control$alpha.grid` STATES
+# the axis's nodes, and with them the prior structure the axis carries: the
+# atom at alpha = 0 that gives the no-coupling model posterior mass, and the
+# log-spaced slab above it. `control$alpha.n` states a RESOLUTION -- the engine
+# re-reads its OWN axis with `n` slab nodes, atom and slab bounds unchanged, so
+# the axis comes back `n + 1` nodes long. The engine refuses both on one block;
+# a fit that wrote both is refused earlier, in the dispatcher, where the knobs
+# still carry the names the user typed (`.tobs_check_alpha_control()`).
+#
+# The resolution is the only way to raise this axis: it does not densify when
+# the donor `sigma.grid` does, so on informative data the outer grid's
+# quadrature effective sample size saturates on the copy amplitude while every
+# other axis tracks the request (`NOTES_measurements.md`).
+#
+# A grid-integrated fit hands the ENGINE the axis rather than its nodes, so a
+# fit raising the resolution never restates the structure: `alpha_n` is resolved
+# against the engine's own declaration. `.tobs_alpha_axis()` returns the two
+# fields a copy spec and a `field_coef` carry, exactly one of them non-NULL.
+# `.tobs_default_alpha_grid(n)` is the read for the one consumer that has to
+# hold the nodes itself -- the NUTS warm fit, whose sampled alpha takes the
+# axis's realised span as the support of its flat prior.
+#
+# Stated nodes win over a resolution here: a field block with no `copy()` is
+# pinned (`grid = 0`, decoupled) and reaches this with the fit's `n` alongside,
+# and a pinned block has no axis to resolve.
+.tobs_alpha_n <- function(n) {
+  n <- suppressWarnings(as.integer(n))
+  if (length(n) != 1L || is.na(n) || n < 1L) {
+    stop("control$alpha.n[.trend] must be a single integer >= 1: it is the ",
+         "number of slab nodes on the copy coefficient's axis (the atom at ",
+         "alpha = 0 is carried alongside them).", call. = FALSE)
+  }
+  n
+}
+
+.tobs_alpha_axis <- function(grid = NULL, n = NULL) {
+  if (!is.null(grid)) {
+    return(list(alpha_grid = .tobs_num_auto(grid), alpha_n = NULL))
+  }
+  if (!is.null(n)) {
+    return(list(alpha_grid = NULL, alpha_n = .tobs_alpha_n(n)))
+  }
+  list(alpha_grid = .tobs_num_auto(.tobs_default_alpha_grid()), alpha_n = NULL)
+}
+
+# The axis a fit's intercept field block reads off `control`, and the axis its
+# weighted-trend block reads: either trend knob replaces the base axis for that
+# block, and with neither the trend block rides the base axis.
+#
+# `[[` (exact), never `$`: `$` prefix-matches on a list, so `control$alpha.n`
+# resolves to `alpha.n.trend` on a fit that sets only the trend knob.
+.tobs_alpha_axis_base <- function(control) {
+  .tobs_alpha_axis(control[["alpha.grid"]], control[["alpha.n"]])
+}
+
+.tobs_alpha_axis_trend <- function(control, base) {
+  g <- control[["alpha.grid.trend"]]
+  n <- control[["alpha.n.trend"]]
+  if (is.null(g) && is.null(n)) base else .tobs_alpha_axis(g, n)
+}
+
+# The two engine-facing shapes of one resolved axis: one copy spec's fields on
+# the multi-block driver, and the pos arm's `field_coef` on the single-block
+# path.
+.tobs_alpha_copy_spec <- function(arm, block, axis) {
+  list(arm = arm, block = as.integer(block),
+       alpha_grid = axis$alpha_grid, alpha_n = axis$alpha_n)
+}
+
+.tobs_alpha_field_coef <- function(axis) {
+  list(name = "alpha", grid = axis$alpha_grid, n = axis$alpha_n)
+}
+
+# A resolved axis's realised NODES. The grid-integrated routes hand the engine
+# the axis and never need these; the NUTS warm fit does, because the sampled
+# alpha takes the node set's span as the support of its flat prior and anchors
+# its declared slab on the largest positive node.
+.tobs_alpha_nodes <- function(axis) {
+  axis$alpha_grid %||% .tobs_default_alpha_grid(axis$alpha_n)
+}
+
+# Does this `copy()` STATE the axis's nodes? `alpha = grid(c(...))` and a bare
+# scalar `alpha =` both do (the second pins a one-node axis); `copy(spatial())`
+# with no amplitude does not, and asks for the default axis.
+.tobs_copy_states_nodes <- function(cp) {
+  if (!is.null(cp$copy_terms)) {
+    return(any(vapply(cp$copy_terms,
+                      function(res) !isTRUE(is.na(res$integrate)), logical(1))))
+  }
+  !isTRUE(is.na(cp$alpha_integrate))
+}
+
+# A `copy()` that states nodes and `control$alpha.n[.trend]` are the same axis
+# written twice; a `copy()` that states none composes with the resolution knob.
+.tobs_check_alpha_copy <- function(states_nodes, control, what) {
+  n_keys <- c("alpha.n", "alpha.n.trend")
+  n_set  <- n_keys[vapply(n_keys, function(k) !is.null(control[[k]]), logical(1))]
+  if (!isTRUE(states_nodes) || length(n_set) == 0L) return(invisible(TRUE))
+  stop(what, ": copy(alpha = ) states the copy axis's nodes and control$",
+       n_set[1L], " states how many nodes the engine's own axis is read at. ",
+       "Give one: drop the amplitude from copy() to keep the resolution, or ",
+       "drop control$", n_set[1L], " to keep the stated nodes.", call. = FALSE)
+}
+
+# `alpha.grid` states the axis's nodes, `alpha.n` a resolution for the engine's
+# own axis; one block takes one of them. Refused here, in the dispatcher, so the
+# message names the knobs as the user spelled them.
+.tobs_check_alpha_control <- function(control, what) {
+  pairs <- list(c("alpha.grid", "alpha.n"),
+                c("alpha.grid.trend", "alpha.n.trend"))
+  for (p in pairs) {
+    if (!is.null(control[[p[1L]]]) && !is.null(control[[p[2L]]])) {
+      stop(what, ": set the copy amplitude axis with control$", p[1L],
+           " (which states its nodes) OR control$", p[2L],
+           " (which states how many nodes the engine's own axis is read at), ",
+           "not both.", call. = FALSE)
+    }
+  }
+  invisible(TRUE)
 }
 
 .tobs_default_sigma_grid <- function() {

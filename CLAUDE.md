@@ -750,6 +750,9 @@ cover scores one cover row per detected UNIT, so a per-visit offset errors there
 pointer. The grid-integrated (`nested_laplace`) route reaches the same criteria; an
 occupancy-arm RE (#56) is per SITE, so its group codes sit on `model$re_psi` and the
 builder adds the per-group draw to `field_occ`.
+**Copy axis (#287):** `control$alpha.n[.trend]` = RESOLUTION of the engine's alpha
+axis; `alpha.grid` STATES nodes. One per block. See `NOTES_families.md`.
+
 **A SECOND (SVC / trend) field samples too (#214)**: the block is a LIST, each field
 carrying its own basis, site->node map, per-site design WEIGHT (`field_weight`; absent
 = the intercept field) and its own sampled `(sigma, rho, alpha)` -- two fields share no

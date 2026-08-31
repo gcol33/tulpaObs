@@ -106,6 +106,13 @@
     stop("occu_cover(): set the cross-arm coupling with copy() in the positive ",
          "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
   }
+  # `control$alpha.n[.trend]` is a RESOLUTION for the engine's own axis, so it
+  # composes with a copy() that names no amplitude -- that copy asks for the
+  # default axis, and the resolution says how finely to read it. A copy() that
+  # STATES nodes is the same request spelled twice, and is refused.
+  .tobs_check_alpha_copy(
+    any(vapply(copies, .tobs_copy_states_nodes, logical(1))),
+    control, "occu_cover()")
   # control$alpha.grid is the low-level amplitude knob: when set (and no copy())
   # the engine reads the grids as given.
   if (has_control_alpha) return(control)
@@ -132,7 +139,11 @@
   node       <- spatial_info$group_var
 
   # Default to decoupled: every block pinned at alpha = 0. A copy() then sets the
-  # amplitude axis on the block(s) it names.
+  # amplitude axis on the block(s) it names -- to the nodes it states, or to NULL
+  # for a copy() naming no amplitude, which leaves the block on the engine's own
+  # axis (at `control$alpha.n`'s resolution when one is asked for). NULL is also
+  # what removes the key below, so a bare copy() reaches the fitter exactly as an
+  # unset knob does.
   alpha_int   <- 0
   alpha_trend <- if (has_trend) 0 else NULL
 
@@ -141,12 +152,12 @@
   # field. `cp_label` names the copy() in any error.
   apply_component <- function(comp, g, cp_label) {
     if (is.null(comp)) {
-      alpha_int <<- g %||% .tobs_default_alpha_grid()
-      if (has_trend) alpha_trend <<- g %||% .tobs_default_alpha_grid()
+      alpha_int <<- g
+      if (has_trend) alpha_trend <<- g
       return(c("intercept", if (has_trend) "trend"))
     }
     if (identical(comp, "intercept")) {
-      alpha_int <<- g %||% .tobs_default_alpha_grid()
+      alpha_int <<- g
       return("intercept")
     }
     if (identical(comp, "trend") ||
@@ -156,7 +167,7 @@
           "%s: the spatial field has no trend component (it is a single ",
           "intercept field)."), cp_label), call. = FALSE)
       }
-      alpha_trend <<- g %||% .tobs_default_alpha_grid()
+      alpha_trend <<- g
       return("trend")
     }
     avail <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
@@ -285,6 +296,9 @@
     stop("occu_cover() requires `y_pos` (N x J positive-cover matrix; ",
          "values used only where y == 1).", call. = FALSE)
   }
+  # `alpha.grid` states the copy axis's nodes, `alpha.n` how many nodes the
+  # engine's own axis is read at; one block takes one of them.
+  .tobs_check_alpha_control(control, "occu_cover()")
 
   # Compact (ragged) input: `y` is a tobs_ragged carrier (tobs_data(compact =
   # TRUE)). It feeds the joint nested-Laplace engine one valid visit at a time,

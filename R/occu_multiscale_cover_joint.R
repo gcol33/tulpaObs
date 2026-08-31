@@ -27,7 +27,7 @@
 # visits and laid PLOT-MAJOR within each cell (plot 1's visits, plot 2's, ...),
 # the order build_cell_rows_from_arms reproduces from input row order so the
 # spec's per-cell `cell_plot_sizes` partition aligns with arm 2/3's flat rows.
-.occu_mscale_cover_build_arms <- function(model, sigma_pos_init, alpha_grid,
+.occu_mscale_cover_build_arms <- function(model, sigma_pos_init, alpha_axis,
                                       positive = "lognormal", multi = FALSE) {
   n_cells   <- model$n_cells
   n_plots   <- model$n_plots
@@ -106,7 +106,7 @@
   # block. Multi-block (trend) path: each coupled field's copy spec carries its
   # own alpha axis, so the pos arm carries NO field_coef (the engine rejects
   # copy + field_coef together) -- mirrors occu_cover's joint-coupled arms.
-  if (!multi) arm_pos$field_coef <- list(name = "alpha", grid = alpha_grid)
+  if (!multi) arm_pos$field_coef <- .tobs_alpha_field_coef(alpha_axis)
 
   # Per-cell plot structure for the spec: plots grouped cell-major, ascending
   # plot index within cell (order(plot_cell) is a stable radix sort on the
@@ -215,7 +215,7 @@
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }
 
-  alpha_grid <- dots$alpha.grid %||% .tobs_default_alpha_grid()
+  alpha_axis <- .tobs_alpha_axis_base(dots)
   sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields: every weighted areal term in the psi formula
@@ -244,7 +244,7 @@
 
   arms_out  <- .occu_mscale_cover_build_arms(
     model = model, sigma_pos_init = phi_pos_init,
-    alpha_grid = alpha_grid, positive = model$positive, multi = has_trend)
+    alpha_axis = alpha_axis, positive = model$positive, multi = has_trend)
   responses <- arms_out$responses
 
   # Attach per-arm fixed-effect priors.
@@ -289,13 +289,13 @@
                            as.numeric(w_cell)[arms_out$p_cell],
                            as.numeric(w_cell)[arms_out$pos_cell])))
     }
-    alpha_grid_trend <- dots$alpha.grid.trend %||% alpha_grid
+    alpha_axis_trend <- .tobs_alpha_axis_trend(dots, alpha_axis)
     prior_arg <- c(list(make_block(NULL)),
                    lapply(coupled_trends, function(tf) make_block(tf$weight)))
     copy_arg  <- c(
-      list(list(arm = "pos", block = 1L, alpha_grid = alpha_grid)),
+      list(.tobs_alpha_copy_spec("pos", 1L, alpha_axis)),
       lapply(seq_len(n_trend), function(j)
-        list(arm = "pos", block = j + 1L, alpha_grid = alpha_grid_trend)))
+        .tobs_alpha_copy_spec("pos", j + 1L, alpha_axis_trend)))
   } else {
     prior_arg <- icar_block()
     copy_arg  <- NULL

@@ -260,7 +260,7 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 # offset on both arms.
 .cover_build_multi_prior <- function(prior_spatial, spi_full, spi_pos,
                                      idx_pos, temporal, re,
-                                     control, alpha_grid) {
+                                     control, alpha_axis) {
   # Spatial block — fill missing grids with defaults and attach per-arm
   # spatial_idx vectors. (Single-block path stores spi inside the arms;
   # multi-block puts it in the block.)
@@ -289,14 +289,13 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     }
   }
 
-  # The copy coefficient rides `alpha_grid`, the one field tulpa's
-  # `.resolve_one_copy_spec()` reads a grid off; the cover arm's field
+  # The copy coefficient rides its own axis, the one tulpa's
+  # `.resolve_one_copy_spec()` reads off the spec; the cover arm's field
   # amplitude is `alpha * sigma`, with `sigma` the spatial block's own
   # `sigma_grid` above.
   list(
     prior = blocks,
-    copy  = list(block = 1L, arm = "pos",
-                 alpha_grid = .tobs_num_auto(alpha_grid))
+    copy  = .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
   )
 }
 

@@ -639,10 +639,7 @@
   )
 
   copy_spec <- if (both_arm) {
-    alpha_grid <- control$alpha.grid %||%
-      .tobs_default_alpha_grid()
-    list(arm = "pos", block = 1L,
-         alpha_grid = .tobs_num_auto(alpha_grid))
+    .tobs_alpha_copy_spec("pos", 1L, .tobs_alpha_axis_base(control))
   } else NULL
 
   # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky + alpha), so
@@ -961,8 +958,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # amplitude alpha * sigma_donor. The single-block path declares alpha on the
   # pos arm via field_coef (the engine takes no single-block `copy`); the
   # multi-block branches carry it on their copy spec(s).
-  alpha_grid <- control$alpha.grid %||%
-    .tobs_default_alpha_grid()
+  alpha_axis <- .tobs_alpha_axis_base(control)
 
   # Outer joint-grid integration controls, shared by the multi-block and
   # single-block dispatch. The dense outer tensor (sigma x [rho] x alpha x
@@ -1072,16 +1068,12 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       trend_block <- blocks[[2L]]
     }
 
-    alpha_grid_base  <- control$alpha.grid %||%
-      .tobs_default_alpha_grid()
-    alpha_grid_trend <- control$alpha.grid.trend %||% alpha_grid_base
+    alpha_axis_trend <- .tobs_alpha_axis_trend(control, alpha_axis)
 
     prior_coupled <- list(base_block, trend_block)
     copy_coupled  <- list(
-      list(arm = "pos", block = 1L,
-           alpha_grid = .tobs_num_auto(alpha_grid_base)),
-      list(arm = "pos", block = 2L,
-           alpha_grid = .tobs_num_auto(alpha_grid_trend))
+      .tobs_alpha_copy_spec("pos", 1L, alpha_axis),
+      .tobs_alpha_copy_spec("pos", 2L, alpha_axis_trend)
     )
     arm_occ$spatial_idx <- NULL
     arm_pos$spatial_idx <- NULL
@@ -1104,7 +1096,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
       temporal      = temporal,
       re            = re,
       control       = control,
-      alpha_grid    = alpha_grid
+      alpha_axis    = alpha_axis
     )
     # Strip spatial_idx from the arms — it lives inside the spatial
     # block's per-arm spatial_idx list in the multi-block prior.
@@ -1155,9 +1147,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # under-coverage fix in INLAabun D3. Pass `control$adaptive.grid
     # = FALSE` to recover the legacy fixed-grid behaviour for
     # reproducibility checks.
-    arm_pos$field_coef <- list(
-      name = "alpha",
-      grid = .tobs_num_auto(alpha_grid))
+    arm_pos$field_coef <- .tobs_alpha_field_coef(alpha_axis)
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),
       prior     = prior_for_joint,

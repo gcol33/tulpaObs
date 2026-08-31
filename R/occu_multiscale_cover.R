@@ -555,6 +555,9 @@
     stop("occu_multiscale_cover() requires `y_pos` (n_plots x max_visits; ",
          "values used only where y == 1).", call. = FALSE)
   }
+  # `alpha.grid` states the copy axis's nodes, `alpha.n` how many nodes the
+  # engine's own axis is read at; one block takes one of them.
+  .tobs_check_alpha_control(control, "occu_multiscale_cover()")
 
   # Identifiability surfaced. The availability (theta) and detection (p) levels
   # separate only with replicate visits WITHIN a plot. With at most one observed

@@ -77,6 +77,9 @@
   # axis was retired, so nothing has read the knob on any cover() route: a fit
   # pinning it integrated the default coupling axis and reported a bit-identical
   # log-marginal. `[[` (exact), never `$`.
+  # `alpha.grid` states the copy axis's nodes, `alpha.n` how many nodes the
+  # engine's own axis is read at; one block takes one of them.
+  .tobs_check_alpha_control(control, "cover()")
   if (!is.null(control[["sigma.pos.grid"]])) {
     stop("control$sigma.pos.grid is no longer supported for cover hurdle ",
          "models.\nThe joint engine integrates the copy coefficient `alpha`, ",
@@ -111,6 +114,13 @@
       stop("cover(): set the cross-arm coupling with copy() in the positive ",
            "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
     }
+    # `control$alpha.n[.trend]` is a RESOLUTION for the engine's own axis, so it
+    # composes with a copy() naming no amplitude -- that copy asks for the
+    # default axis, and the resolution says how finely to read it. A copy() that
+    # STATES nodes is the same request written twice.
+    states_nodes <- !is.null(enc$copy_alpha) ||
+      any(!vapply(enc$copy_terms %||% list(), is.null, logical(1)))
+    .tobs_check_alpha_copy(states_nodes, control, "cover()")
   }
   if (!is.null(enc$copy_terms)) {
     control <- .cover_apply_copy_terms(enc$copy_terms, enc$trend, control)

@@ -46,7 +46,8 @@ test_that("occu_cover rank-1 s2z log-det matches densify above the 256-node fiel
   model$site_cell <- seq_len(N); model$n_cells <- N
   pv <- model$y_pos[model$valid & model$y == 1L]; spp <- max(stats::sd(log(pv)), 0.05) + 0.05
   arms_out <- tulpaObs:::.occu_cover_build_joint_arms(
-    model = model, sigma_pos_init = spp, alpha_grid = c(0, 1.0), positive = "lognormal",
+    model = model, sigma_pos_init = spp, positive = "lognormal",
+    alpha_axis = tulpaObs:::.tobs_alpha_axis(c(0, 1.0)),
     multi = FALSE, n_cells = N, site_cell = seq_len(N), cover_aggregate = "none")
   responses <- arms_out$responses
   csr <- tulpaObs:::.occu_cover_adj_to_csr(adj)
