@@ -901,10 +901,10 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   `mu_log_r`. A point-recovery or interval-SCALE measurement scores against
 #'   `mu_log_r_real`: against the constant, the draw carries about two thirds
 #'   of the spread across seeds, and a seed block that happens to draw wide
-#'   reads as a miscalibrated interval. That is what
-#'   `gcol33/tulpaObs#280` and `#285` measured -- the 18-species block behind
-#'   both drew its species means 18-21% wider than `sigma_logr / sqrt(18)`,
-#'   and both arms calibrate once the draw is put at its expectation. The
+#'   reads as a miscalibrated interval. That is what the 18-species fixture
+#'   measured -- its seed block drew the species means 18-21% wider than
+#'   `sigma_logr / sqrt(18)`, and both arms calibrate once the draw is put at
+#'   its expectation. The
 #'   `_real` entries are supplied so the split does not have to be rebuilt at
 #'   each call site; `tests/testthat/helper-community-mean.R` is the assertion
 #'   that consumes them.

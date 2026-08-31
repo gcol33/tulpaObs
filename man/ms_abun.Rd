@@ -56,8 +56,8 @@ each seed draws \code{S} log-dispersions around it, and that draw supplies about
 two thirds of the across-seed spread. The 18-species blocks drew theirs
 18-21\% wider than \code{sigma_logr / sqrt(S)}. Put the draw at its expectation and
 the scale is 1.077 / 1.101 / 0.977; rebuild the SE at the simulated sigma as
-well and it is 0.990 / 1.035 / 0.963 (\code{gcol33/tulpaObs#285},
-NOTES_measurements.md). The residual there is the attenuation of
+well and it is 0.990 / 1.035 / 0.963 (NOTES_measurements.md). The residual
+there is the attenuation of
 \code{sigma_log_r} itself (0.418 / 0.448 / 0.487 against 0.5), which shrinks as
 species are added and which the SE inherits, since
 \code{se^2 = (sigma_log_r^2 + c) / S}.

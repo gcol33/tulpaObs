@@ -170,10 +170,10 @@ factor of 4.5 in \code{S} -- so the shape is right and \code{sigma_hat} is the i
 that is off. Its attenuation (0.418 / 0.448 / 0.487 against a simulated
 0.5) is monotone in \code{S} and passes straight into the interval.
 
-A 1.28x-too-narrow \code{mu_log_r} interval at 18 species was reported on this
-fixture (\code{gcol33/tulpaObs#280}, \verb{#285}) and is mostly the seed block, not
-the estimator. \code{mu_log_r} is a population mean and each seed draws \code{S}
-log-dispersions around it, so the across-seed error carries a
+A 1.28x-too-narrow \code{mu_log_r} interval at 18 species on this fixture is
+mostly the seed block, not the estimator. \code{mu_log_r} is a population mean
+and each seed draws \code{S} log-dispersions around it, so the across-seed
+error carries a
 \code{sigma_logr^2 / S} term that the SE includes and that is itself measured on
 ~19 seeds: it supplies about two thirds of the spread, and the 18-species
 blocks drew it 18-21\% wide (chi-square p = 0.12 and 0.03). Putting that

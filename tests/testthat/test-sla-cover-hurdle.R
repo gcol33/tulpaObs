@@ -112,7 +112,7 @@ test_that("cover() default leaves SLA off and produces no skew fields", {
 })
 
 
-# ---- the correction reaches the per-draw consumers (gcol33/tulpaObs#268) ---
+# ---- the correction reaches the per-draw consumers ----
 
 test_that("laplace_sla reshapes the per-draw predictors, laplace does not", {
   sim <- simulate_beta_cover_local(N = 400, seed = 31)

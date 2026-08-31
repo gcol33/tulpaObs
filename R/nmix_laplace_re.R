@@ -155,10 +155,10 @@
 #'   that is off. Its attenuation (0.418 / 0.448 / 0.487 against a simulated
 #'   0.5) is monotone in `S` and passes straight into the interval.
 #'
-#'   A 1.28x-too-narrow `mu_log_r` interval at 18 species was reported on this
-#'   fixture (`gcol33/tulpaObs#280`, `#285`) and is mostly the seed block, not
-#'   the estimator. `mu_log_r` is a population mean and each seed draws `S`
-#'   log-dispersions around it, so the across-seed error carries a
+#'   A 1.28x-too-narrow `mu_log_r` interval at 18 species on this fixture is
+#'   mostly the seed block, not the estimator. `mu_log_r` is a population mean
+#'   and each seed draws `S` log-dispersions around it, so the across-seed
+#'   error carries a
 #'   `sigma_logr^2 / S` term that the SE includes and that is itself measured on
 #'   ~19 seeds: it supplies about two thirds of the spread, and the 18-species
 #'   blocks drew it 18-21% wide (chi-square p = 0.12 and 0.03). Putting that
