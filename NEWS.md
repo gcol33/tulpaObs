@@ -2,6 +2,29 @@
 
 ## 0.1.2 (2026-08-31)
 
+* **The outer-grid cost controls are reachable from `occu_cover()`.** The
+  engine's cheap-pass screen (`prune`, `prune_tol`) and its two placement knobs
+  (`auto_recenter`, `recenter_pilot`) were built for exactly this fit -- a copy
+  model whose outer posterior collapses onto a handful of cells, each costing a
+  full inner Newton on an areal field -- and none of them could be set. Only
+  `cover()` declared the prune keys, and `occu_cover_joint.R` builds the control
+  list it hands `tulpa_nested_laplace_joint()` term by term rather than
+  forwarding `control`, so a key reaches the engine only if the family declares
+  it AND the builder names it; neither half held for any of the four. Setting
+  `control$prune` on an `occu_cover()` fit failed at the front door with
+  "'prune' is not a known control option", with no near-match hint, which is
+  what a missing declaration looks like as opposed to a misspelling. The
+  forwarding reads `dots[["prune"]]`, not `dots$prune`: `prune` is a unique
+  prefix of `prune.tol`, so the partial match turns a fit that sizes the
+  tolerance into one that screens. Each new key is tested through the
+  provenance field the engine writes only when the knob fires (`prune_mask` /
+  `prune_fallback_triggered`, `outer_grid_pilot`,
+  `outer_grid_recenter_declined`), since a value-only test passes just as well
+  when a control is dropped on the floor. `auto.recenter` takes TRUE / FALSE
+  here; the joint path recentres on the whole grid's collapsed-edge regime
+  rather than a per-axis rail, so the per-axis policy names the standalone path
+  accepts are refused with an error.
+
 * **The parallel test-worker crash is an R bug, not one of ours
   (gcol33/tulpaObs#289).** A testthat parallel worker died with `0xC0000005` in
   a different file each run, aborting the tier. The fault was captured from

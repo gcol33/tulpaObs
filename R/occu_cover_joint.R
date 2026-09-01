@@ -665,6 +665,29 @@
       # the fused batch driver requires for per-species bit-identity.
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
       var_of_means_min_ess      = dots$var.of.means.min.ess,
+      # Cheap-pass screening of the outer grid. Every cell of a copy fit's
+      # grid costs a full inner Newton on the areal field, while the posterior
+      # mass sits on a handful of them, so `prune = TRUE` first sweeps the
+      # lattice with a short warm-started Newton per cell and full-solves only
+      # the cells whose screened weight clears `prune.tol`. The engine's safety
+      # gate re-solves the full grid whenever the cheap ranking disagrees with
+      # the full-solve argmax, so a pruned posterior is never silently wrong --
+      # a screen that does not pay costs time, not accuracy. NULL leaves the
+      # engine default (off).
+      #
+      # `[[` (exact) not `$`: `prune` is a unique prefix of `prune.tol`, so
+      # `dots$prune` reads the TOLERANCE on a fit that sets only the tolerance.
+      prune     = dots[["prune"]],
+      prune_tol = dots[["prune.tol"]],
+      # Outer-grid placement. `auto.recenter` moves a default axis onto the
+      # hyperparameter mode and refits, which costs a second full solve of the
+      # grid; `recenter.pilot` detects that placement on a THINNED grid instead,
+      # so the full grid is solved once, at the placed axes. The joint path
+      # recentres on the whole grid's collapsed-edge regime rather than a
+      # per-axis rail, so `auto.recenter` takes TRUE / FALSE here and the
+      # per-axis policy names the standalone path accepts are refused.
+      auto_recenter   = dots[["auto.recenter"]],
+      recenter_pilot  = dots[["recenter.pilot"]],
       # Prior on the cross-arm copy scale. The engine defaults to an exponential
       # continuum ("exponential") plus a point mass at alpha = 0 carrying half
       # the prior. `copy.slab = "flat"` makes the continuum flat in log alpha

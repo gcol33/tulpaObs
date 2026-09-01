@@ -660,6 +660,11 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
       "var.of.means.consistency", "var.of.means.min.ess",
+      # Cheap-pass outer-grid screen (see the engine's `prune` / `prune_tol`),
+      # and the two placement knobs: whether a default axis is recentred on the
+      # hyperparameter mode at all, and whether that placement is detected on a
+      # thinned pilot grid instead of a full extra solve.
+      "prune", "prune.tol", "auto.recenter", "recenter.pilot",
       # Shape of the prior on the cross-arm copy scale: the continuum measure
       # ("exponential" or "flat" in log alpha over the `alpha.grid` span) and
       # the prior probability of the no-coupling point mass at alpha = 0.
