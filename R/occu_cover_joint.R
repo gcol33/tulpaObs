@@ -274,7 +274,29 @@
     }
   }
 
+  # Is each shared field block copied onto the cover arm at all? With no copy()
+  # in the positive formula `.occu_cover_apply_copy_coupling()` resolves that
+  # block's amplitude to the single node 0, which IS the decoupled model. The
+  # postprocess reads these to decide whether `alpha` is a parameter of the fit,
+  # rather than inferring it from a constant-zero column.
+  alpha_decoupled <- .tobs_alpha_axis_decoupled(alpha_axis)
+  alpha_trend_decoupled <-
+    .tobs_alpha_axis_decoupled(.tobs_alpha_axis_trend(dots, alpha_axis))
+
   csr <- .occu_cover_adj_to_csr(adj)
+  # The shared occupancy field always states its SD axis, whether or not it is
+  # copied onto the cover arm.
+  #
+  # On the MULTI-block driver the engine offers the SD parameterization only to a
+  # COPIED block (nested_laplace_joint_multi.R, `if (is_copy)`); a non-copied one
+  # rides its precision `b<k>.tau` instead, as the arm-specific cover blocks
+  # below do. Those are the same implied SDs but a different prior MEASURE on the
+  # field's scale, and the shift is visible: moving this block to tau pulls the
+  # measured `sigma_pos_field` recovery from a median of ~0.548 to ~0.42 against
+  # a truth of 0.6. So a decoupled multi-block fit keeps its copy spec -- with
+  # the amplitude axis pinned at the single node 0, which is the decoupled model
+  # -- rather than re-priming the field. The degenerate axis is an artifact of
+  # that parameterization requirement and is not reported (see the postprocess).
   icar_template <- function(extra = list()) {
     c(list(
         type            = "icar",
@@ -285,7 +307,6 @@
         sigma_grid      = sigma_grid
       ), extra)
   }
-
   # Per-group RE blocks. Each random-intercept term (one per arm for #56/#102;
   # several per arm for crossed / nested #103) contributes one `iid` prior block
   # whose per-group latent rides THAT arm only: obs_idx is the 3-element (psi, p,
@@ -409,9 +430,7 @@
   # the provenance, which covers both the explicit pos-field grid and the shared
   # sigma grid it falls back to.
   pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||% sigma_grid
-  pos_armspec_tau_grid   <- .tobs_mark_auto(
-    sort(1.0 / as.numeric(pos_armspec_sigma_grid)^2),
-    tulpa::is_auto_grid(pos_armspec_sigma_grid))
+  pos_armspec_tau_grid   <- .tobs_sigma_to_tau_grid(pos_armspec_sigma_grid)
 
   # One arm-specific field -> ICAR block(s) that scatter on ONE arm's rows: the
   # node index lands in that arm's slot of the 3-slot spatial_idx (psi = site rows
@@ -607,6 +626,11 @@
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
     copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
   } else {
+    # Single-block backend: it integrates `sigma_grid` and has no precision
+    # spelling (the engine refuses `tau_grid` here), so the block keeps the SD
+    # axis whether or not it is copied. Decoupling is carried by the pos arm's
+    # numeric `field_coef = 0` alone, which is already enough for the engine to
+    # build no amplitude axis.
     prior_arg <- icar_template()
     copy_arg  <- NULL
   }
@@ -788,6 +812,12 @@
               field_specs = field_specs,
               n_occ_fields = 1L + n_trend,
               has_pos_armspec = has_armspec,
+              # Whether each shared field block carries a copy. A decoupled block
+              # keeps a pinned amplitude axis on the multi-block driver (that
+              # driver offers the SD parameterization only to a copied block), so
+              # the axis is present but is not an estimate and is not reported.
+              alpha_decoupled = alpha_decoupled,
+              alpha_trend_decoupled = alpha_trend_decoupled,
               pos_field_specs = pos_field_specs,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
 

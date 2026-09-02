@@ -130,8 +130,16 @@ test_that("occu_cover cover-arm field fits and yields a non-constant delta_cover
 
   expect_s3_class(fit, "tobs_fit")
   expect_identical(attr(fit, "tobs_family")$name, "occu_cover")
-  # The occupancy field (sigma, alpha) plus the independent cover-arm field SD.
-  expect_true(all(c("sigma", "alpha") %in% names(fit$means)))
+  # The occupancy field SD plus the independent cover-arm field SD. There is no
+  # `alpha`: the positive formula carries no copy(), so the occupancy field is
+  # not copied onto the cover arm and the amplitude is not a parameter of this
+  # model. (The multi-block driver still integrates a pinned amplitude axis,
+  # because it offers the SD parameterization only to a copied block -- see
+  # test-copy-alpha-resolution.R -- but that axis is an artifact of the
+  # parameterization, not an estimate, and is not reported.)
+  expect_true("sigma" %in% names(fit$means))
+  expect_false("alpha" %in% names(fit$means))
+  expect_true("b1.alpha" %in% fit$joint_fit$theta_names)
   sig_nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)
   expect_length(sig_nm, 1L)
   expect_true(is.finite(fit$means[[sig_nm]]) && fit$means[[sig_nm]] > 0)

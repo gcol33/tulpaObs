@@ -182,6 +182,45 @@
 # The two engine-facing shapes of one resolved axis: one copy spec's fields on
 # the multi-block driver, and the pos arm's `field_coef` on the single-block
 # path.
+# Is a resolved amplitude axis the DECOUPLED sentinel -- the single node 0?
+#
+# `alpha` is the amplitude of a copy, so it is a parameter only when there IS a
+# copy. `.occu_cover_apply_copy_coupling()` spells "no copy() named this block"
+# as an amplitude axis stating just 0, which is the same model as no coupling at
+# all but still reaches the engine as a real outer axis.
+#
+# What the two engine paths then do with that differs, and the split is forced
+# by the engine, not chosen:
+#
+#   * SINGLE-block backend -- the cover arm takes a plain numeric
+#     `field_coef = 0` (the spelling the detection arm already uses) and no
+#     amplitude axis is built at all. That backend integrates `sigma_grid` under
+#     either coupling, so the field's prior is untouched.
+#   * MULTI-block driver -- the copy spec STAYS, pinned at 0. That driver offers
+#     the SD parameterization only to a COPIED block; a non-copied one rides its
+#     precision `b<k>.tau` instead. Same implied SDs, different prior MEASURE on
+#     the field's scale, and the shift is measurable (`NOTES_measurements.md`).
+#     Dropping the copy to tidy the reporting would re-prior the shared field.
+#
+# Either way `alpha` must not be REPORTED when there is no copy: a pinned axis
+# was never estimated, and emitting it put an all-zero row and column into
+# vcov() (leaving it singular) and one too many in n_params.
+.tobs_alpha_axis_decoupled <- function(axis) {
+  if (is.null(axis)) return(FALSE)
+  .tobs_copy_amp_decoupled(.tobs_copy_amp(grid = axis$alpha_grid,
+                                          n = axis$alpha_n))
+}
+
+# The precision axis matching a field-SD axis. A block the engine does NOT copy
+# is parameterized by its precision `b<k>.tau` rather than by `b<k>.sigma` +
+# `b<k>.alpha`, so a decoupled block states its grid as tau = 1 / sigma^2. The
+# auto-grid mark rides across the translation: the provenance is the SD axis the
+# caller supplied, whether that was the default or stated.
+.tobs_sigma_to_tau_grid <- function(sigma_grid) {
+  .tobs_mark_auto(sort(1.0 / as.numeric(sigma_grid)^2),
+                  tulpa::is_auto_grid(sigma_grid))
+}
+
 .tobs_alpha_copy_spec <- function(arm, block, axis) {
   list(arm = arm, block = as.integer(block),
        alpha_grid = axis$alpha_grid, alpha_n = axis$alpha_n)
@@ -412,6 +451,19 @@
 # `cells` is the outer-grid cell each draw came from, so the returned length-n
 # vector carries the amplitude active for that draw. A missing axis returns a
 # constant `default`.
+# A field block's per-draw SD, read from whichever axis it rides: `b<k>.sigma`
+# when the block is copied onto another arm, `b<k>.tau` (SD = 1/sqrt(tau)) when
+# it is not. Every consumer of a field amplitude goes through this, so the two
+# parameterizations cannot drift apart.
+.tobs_joint_field_sd <- function(theta_grid, cells, block) {
+  cn <- colnames(theta_grid)
+  sig_col <- sprintf("b%d.sigma", block)
+  tau_col <- sprintf("b%d.tau", block)
+  if (sig_col %in% cn) return(as.numeric(theta_grid[cells, sig_col]))
+  if (tau_col %in% cn) return(1.0 / sqrt(as.numeric(theta_grid[cells, tau_col])))
+  .tobs_joint_amp(theta_grid, cells, block, "sigma")
+}
+
 .tobs_joint_amp <- function(theta_grid, cells, block, name, default = 1) {
   cn <- colnames(theta_grid)
   j  <- match(paste0("b", block, ".", name), cn)
@@ -644,15 +696,15 @@
                field_specs[[b]] else NULL
     if (!is.null(spec) && identical(spec$arm, "pos")) {
       # Non-copied ICAR: amplitude is its own SD, from b<k>.sigma or 1/sqrt(b<k>.tau).
-      sig_col <- sprintf("b%d.sigma", b); tau_col <- sprintf("b%d.tau", b)
-      amp <- if (sig_col %in% cn) as.numeric(tg[cells, sig_col])
-             else if (tau_col %in% cn) 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
-             else rep(1.0, length(cells))
+      amp <- .tobs_joint_field_sd(tg, cells, b)
       list(z = z, amp_occ = rep(0, length(cells)), amp_pos = amp,
            weight = spec$weight)
     } else {
-      sigma <- .tobs_joint_amp(tg, cells, b, "sigma")
-      alpha <- .tobs_joint_amp(tg, cells, b, "alpha")
+      sigma <- .tobs_joint_field_sd(tg, cells, b)
+      # No alpha axis = the block is not copied onto the pos arm, so its
+      # amplitude there is 0. Defaulting to 1 would turn a decoupled fit into a
+      # full-amplitude copy in the draws.
+      alpha <- .tobs_joint_amp(tg, cells, b, "alpha", default = 0)
       wt <- if (!is.null(spec)) spec$weight
             else if (b == 1L) NULL else trend_cols[[b - 1L]]
       list(z = z, amp_occ = sigma, amp_pos = alpha * sigma, weight = wt)
@@ -734,8 +786,11 @@
     trend_cols <- object$trend_weights %||% list(object$trend_weight)
     blocks <- lapply(seq_len(n_field), function(b) {
       z     <- take(n_cells)
-      sigma <- .tobs_joint_amp(tg, cells, b, "sigma")
-      alpha <- .tobs_joint_amp(tg, cells, b, "alpha")
+      sigma <- .tobs_joint_field_sd(tg, cells, b)
+      # No alpha axis = the block is not copied onto the pos arm, so its
+      # amplitude there is 0. Defaulting to 1 would turn a decoupled fit into a
+      # full-amplitude copy in the draws.
+      alpha <- .tobs_joint_amp(tg, cells, b, "alpha", default = 0)
       list(z = z, amp_occ = sigma, amp_pos = alpha * sigma,
            weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
     })

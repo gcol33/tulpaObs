@@ -233,8 +233,26 @@
   # On the latent path the pos arm's phi axis IS the cover-latent SD; surface it
   # as `sigma_u` rather than the engine's generic `phi_pos`.
   phi_pos_public <- if (is_latent) "sigma_u" else "phi_pos"
+  # Exact read of an optional hyper: `[[` errors on a missing name and `$`
+  # prefix-matches ("alpha" would resolve to "alpha_trend"/"alpha_mcar").
+  hyper_opt <- function(name) if (name %in% names(hyper_means))
+                                hyper_means[[name]] else NULL
   # pick2 reads a multi-block axis column (`b<k>.<axis>`) under a public name.
-  pick2 <- function(public, col) {
+  #
+  # `skip` suppresses an amplitude axis the fit's own spec says is not a
+  # parameter. On the multi-block driver a DECOUPLED field still carries a copy
+  # spec pinned at 0, because the engine offers the SD parameterization only to a
+  # copied block and moving the field onto its precision axis would re-prior it
+  # (see occu_cover_joint.R). That axis is an artifact of the parameterization,
+  # not an estimate: reporting it put an all-zero row and column into vcov() --
+  # leaving it singular, so solve() and any joint Wald fail -- and one too many
+  # in n_params. The flag comes from the resolved copy spec (`ctx$alpha_decoupled`)
+  # rather than from the column being constant zero, so it says "this block has
+  # no copy" instead of inferring it from the numbers. The single-block path
+  # needs none of this: there the cover arm's numeric `field_coef = 0` removes
+  # the amplitude outright and the axis never exists.
+  pick2 <- function(public, col, skip = FALSE) {
+    if (isTRUE(skip)) return(invisible(NULL))
     j <- match(col, tg_names)
     if (is.na(j)) return(invisible(NULL))
     vals <- as.numeric(tg_ok[, j])
@@ -276,6 +294,19 @@
     field_sd_summary[[out_name]] <<- list(
       mean = hyper_means[[sigma_name]] * scale_q,
       sd   = hyper_sds[[sigma_name]]   * scale_q)
+  }
+  # A field block's SD under either parameterization: `b<k>.sigma` when the
+  # block is copied onto the cover arm, `b<k>.tau` (SD = 1/sqrt(tau)) when it is
+  # not. The tau form is derived per grid cell and marginalized, so the reported
+  # SD is grid-weighted either way. `.tobs_joint_field_sd()` is the draw-side
+  # twin; both must read the same axes.
+  pick_field_sigma <- function(public, block) {
+    sig_col <- sprintf("b%d.sigma", block)
+    tau_col <- sprintf("b%d.tau", block)
+    if (sig_col %in% tg_names) return(pick2(public, sig_col))
+    j <- match(tau_col, tg_names)
+    if (is.na(j)) return(invisible(NULL))
+    put_derived(public, 1.0 / sqrt(as.numeric(tg_ok[, j])))
   }
   # Clean a coefficient name for use in a hyperparameter name: `(Intercept)` ->
   # `intercept`, other punctuation collapsed to `_`.
@@ -330,7 +361,7 @@
     for (a in seq_len(p_f - 1L)) for (b in (a + 1L):p_f) {
       put_derived(sprintf("rho_mcar_%d%d", a, b), rho_mat[, cc]); cc <- cc + 1L
     }
-    pick2("alpha_mcar", "b1.alpha")
+    pick2("alpha_mcar", "b1.alpha", skip = isTRUE(ctx$alpha_decoupled))
     pick("phi_pos", phi_pos_public)
   } else if (has_trend || has_any_re || has_pos_armspec) {
     # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
@@ -339,13 +370,16 @@
     # Each RE block's SD is reported by `re_sig_names[i]` (sigma_re / sigma_re_p /
     # sigma_re_pos for a lone term on an arm; suffixed by grouping var for crossed
     # / nested terms sharing an arm).
-    pick2("sigma", "b1.sigma")
-    pick2("alpha", "b1.alpha")
+    # `alpha` is reported only when the block carries a copy; a decoupled block
+    # builds no amplitude axis, so these picks no-op on absence.
+    pick_field_sigma("sigma", 1L)
+    pick2("alpha", "b1.alpha", skip = isTRUE(ctx$alpha_decoupled))
     put_field_sd("sigma", "field_sd")
     for (j in seq_len(n_trend)) {
       suffix <- if (n_trend == 1L) "" else as.character(j)
-      pick2(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
-      pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
+      pick_field_sigma(paste0("sigma_trend", suffix), j + 1L)
+      pick2(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L),
+            skip = isTRUE(ctx$alpha_trend_decoupled))
       put_field_sd(paste0("sigma_trend", suffix), paste0("field_sd_trend", suffix))
     }
     # Arm-specific cover fields: blocks n_occ_fields+1 .. n_fields, each a
@@ -436,9 +470,17 @@
     }
     pick("phi_pos", phi_pos_public)
   } else {
-    pick("sigma"); pick("alpha"); pick("phi_pos", phi_pos_public)
+    pick("sigma"); pick("alpha")
+    pick("phi_pos", phi_pos_public)
     put_field_sd("sigma", "field_sd")
   }
+  # Free-parameter count for the AIC / BIC penalty, taken BEFORE the outer
+  # hyperparameters are appended: those are integrated over the outer grid, not
+  # estimated, so they carry no penalty, while the three arms' coefficients and
+  # the cover dispersion do. Reported as `n_fixed`, which is what
+  # `logLik.tulpa_fit()` reads; without it that resolved df to 0 and AIC came
+  # back equal to BIC (gcol33/tulpa#654, #292).
+  n_fixed_coefs <- length(means)
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])
     sds   <- c(sds,   unlist(hyper_sds)[hyper_names])
@@ -534,7 +576,7 @@
     spatial_summary <- list(
       type = "mcar", graph = adj,
       sigma_mean = unname(hyper_means["sigma_mcar1"]),
-      alpha_mean = unname(hyper_means["alpha_mcar"]),
+      alpha_mean = hyper_opt("alpha_mcar"),
       sigma_trend_mean = if (n_fields >= 2L)
         unname(hyper_means["sigma_mcar2"]) else NULL,
       alpha_trend_mean = NULL,
@@ -551,7 +593,10 @@
     spatial_summary <- list(
       type = "icar", graph = adj,
       sigma_mean = unname(hyper_means["sigma"]),
-      alpha_mean = unname(hyper_means["alpha"]),
+      # Absent whenever the field is not copied onto the cover arm: there is
+      # no amplitude to report, and `hyper_means["alpha"]` would yield
+      # list(NULL) rather than NULL.
+      alpha_mean = hyper_opt("alpha"),
       # Geo-mean marginal SD (Sorbye-Rue), the #204 NUTS `field_sd` convention
       # -- `sigma_mean` above is the raw amplitude.
       field_sd_mean = fsd$mean, field_sd_sd = fsd$sd,
@@ -572,6 +617,7 @@
     vcov         = V,
     n_samples    = n_draws,
     n_params     = length(means),
+    n_fixed      = n_fixed_coefs,
     log_prob     = rep(log_lik_val, n_draws),
     log_lik      = log_lik_val,
     N            = if (isTRUE(model$ragged)) model$n_visits_valid else sum(model$valid)),

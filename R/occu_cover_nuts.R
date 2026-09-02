@@ -86,6 +86,20 @@
   x
 }
 
+# Does this field block carry a copy onto the cover arm? A resolved amplitude of
+# 0 (or a non-finite one) IS the decoupled model -- there is no coupling, so
+# there is no amplitude to report. The sampled-path spelling of
+# `.tobs_alpha_axis_decoupled()`.
+.ochf_has_copy <- function(alpha) isTRUE(is.finite(alpha) && alpha > 0)
+
+# A block's reported copy amplitude, or 0 when it carries no copy and therefore
+# no `alpha` entry. `[[` errors on a missing name, so every reader of a
+# possibly-absent amplitude goes through this.
+.ochf_block_alpha <- function(hyper, suffix) {
+  nm <- paste0("alpha", suffix)
+  if (nm %in% names(hyper)) hyper[[nm]] else 0
+}
+
 .ochf_inv_link <- function(t, link) if (link == 1L) stats::plogis(t) else exp(t)
 .ochf_link     <- function(v, link) if (link == 1L) stats::qlogis(v) else log(v)
 
@@ -1251,7 +1265,8 @@
     if (!is.null(wt)) entries$field_weight <- wt
     return(list(entries = entries, n_raw = fl$n_raw, theta0_hyper = numeric(0),
                 sampled = character(0),
-                pinned = c(sigma = wh$sigma, rho = fl$rho, alpha = wh$alpha),
+                pinned = c(sigma = wh$sigma, rho = fl$rho,
+                           if (.ochf_has_copy(wh$alpha)) c(alpha = wh$alpha)),
                 tau = fl$tau, rho = fl$rho))
   }
 
@@ -1302,7 +1317,19 @@
   # icar carries no mixing parameter: rho = 1 is the intrinsic precision itself.
   if (identical(type, "icar")) { entries$field_rho_fixed <- 1; pinned[["rho"]] <- 1 }
   else add("rho", wh$rho, bnd$rho, 1L, 1)
-  add("alpha", wh$alpha, bnd$alpha, 0L, 0)
+  # `alpha` is the amplitude of a copy, so it is a hyperparameter of this model
+  # only when there IS a copy. With none, `.occu_cover_apply_copy_coupling()`
+  # resolves the amplitude to 0 -- the decoupled model -- and the loading must
+  # still be defined for the target, but recording it as a PINNED hyper reports
+  # an absent term as one the fit conditioned on. Set the entry and leave it out
+  # of `sampled` / `pinned`, matching what the deterministic backend reports
+  # (#293). A user-requested pin at a positive value (`copy(spatial(),
+  # alpha = 0.5)`) is a real conditioning choice and is still reported.
+  #
+  # NOT the same case as `rho = 1` under icar above: that is the intrinsic
+  # precision, part of the icar model itself, not an absent term.
+  if (.ochf_has_copy(wh$alpha)) add("alpha", wh$alpha, bnd$alpha, 0L, 0)
+  else entries$field_alpha_fixed <- 0
   # The copy amplitude's declared slab, anchored on the same alpha node set the
   # engine's own density is declared over.
   if ("alpha" %in% sampled && identical(copy.slab, "exponential")) {
@@ -1343,6 +1370,13 @@
     fv <- fvs[[b]]
     for (nm in c("sigma", "rho", "alpha")) {
       h <- fv[[nm]]
+      # A block with no copy has no amplitude: emit no `alpha` column rather
+      # than a constant zero one, so the draws table agrees with
+      # `sampled_hyper` / `fixed_hyper` about what this model has (#293). The
+      # loading reader defaults a missing column to 0, which is the same value
+      # it would have read.
+      if (identical(nm, "alpha") && is.null(h$coord) &&
+          !.ochf_has_copy(h$fixed)) next
       hyp[[paste0(nm, suffix[b])]] <-
         if (is.null(h$coord)) rep(h$fixed, n_draws)
         else .ochf_inv_link(h$t_lo + (h$t_hi - h$t_lo) *
@@ -1579,7 +1613,7 @@
   # posterior, where the mean sits above the bulk; the median is the summary to
   # quote against a known truth.
   hyper_median <- apply(hyper_draws, 2L, stats::median)
-  alpha       <- hyper_mean[["alpha"]]
+  alpha       <- .ochf_block_alpha(hyper_mean, "")
   # Per-block sampled / pinned hyper names, suffixed as their columns are.
   # paste0() recycles a zero-length argument to "", so a block that samples (or
   # pins) nothing would otherwise contribute a phantom bare-suffix name.
@@ -1611,8 +1645,10 @@
     as.numeric(w) * field_means[[b]][site_cell]
   })
   f_site <- Reduce(`+`, site_load)
+  # A block with no copy loads nothing onto the cover arm, and reports no
+  # `alpha` to read; `.ochf_block_alpha()` supplies the 0 it would have carried.
   pos_site_load <- Reduce(`+`, lapply(seq_along(fbs), function(b)
-    hyper_mean[[paste0("alpha", suffix[b])]] * site_load[[b]]))
+    .ochf_block_alpha(hyper_mean, suffix[b]) * site_load[[b]]))
   psi_f  <- stats::plogis(.tobs_clamp_eta(stats::qlogis(eta$psi) + f_site))
   ep_f   <- eta$ep_mat + pos_site_load
   ll_mean <- sum(.occu_cover_site_ll(model, psi_f, eta$p_mat, ep_f, par_means[n_base]))
@@ -1680,7 +1716,12 @@
     spatial      = list(type = spatial$type, graph = adj,
                         sigma_mean = hyper_mean[["sigma"]],
                         sigma_sd = hyper_sd[["sigma"]],
-                        alpha_mean = alpha, alpha_sd = hyper_sd[["alpha"]],
+                        # NULL when the field is not copied onto the cover arm:
+                        # there is no amplitude, so there is none to summarise.
+                        alpha_mean = if ("alpha" %in% names(hyper_mean)) alpha
+                                     else NULL,
+                        alpha_sd = if ("alpha" %in% names(hyper_sd))
+                                     hyper_sd[["alpha"]] else NULL,
                         rho_mean = hyper_mean[["rho"]],
                         rho_sd = hyper_sd[["rho"]],
                         n_fields = length(fbs),

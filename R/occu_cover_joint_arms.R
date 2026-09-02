@@ -347,7 +347,11 @@
     cell_obs_map = as.integer(pos_site)
   )
   if (!multi) {
-    arm_pos$field_coef <- .tobs_alpha_field_coef(alpha_axis)
+    # A decoupled field carries no amplitude axis, so the pos arm is excluded
+    # from it by the plain numeric `field_coef = 0` -- the same spelling the
+    # detection arm uses above -- and no `alpha` coordinate is created.
+    arm_pos$field_coef <- if (.tobs_alpha_axis_decoupled(alpha_axis)) 0
+                          else .tobs_alpha_field_coef(alpha_axis)
   }
 
   list(responses      = list(psi = arm_psi, p = arm_p, pos = arm_pos),

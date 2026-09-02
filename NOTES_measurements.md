@@ -2001,3 +2001,82 @@ shared field takes the single-block backend, and the engine always uses the
 tensor grid there (`nested_laplace_joint.R`: "Single-block joint priors always
 use the tensor grid"), so `integration` cannot move it. Only a fit carrying a
 second field / MCAR / RE block -- the multi-axis, slow ones -- would change.
+
+## `alpha` exists only when there is a copy (occu_cover)
+
+tulpaObs 0.1.3 / tulpa 0.2.12. `.occu_cover_apply_copy_coupling()` spells "no
+`copy()` named this block" as an amplitude axis stating the single node 0. That
+is the decoupled model, and the fit really is decoupled (`field_pos` identically
+0), but the axis reached the engine as a real outer coordinate and was REPORTED
+as a parameter.
+
+**What it cost.** A no-copy fit on a 20x20 rook grid, beta cover arm:
+
+```
+means: ... sigma=0.4007  alpha=0.0000
+sds:   ... sigma=0.2115  alpha=0.0000
+vcov 6 x 6, alpha row: 0 0 0 0 0 0
+vcov rank = 5 of 6      solve(vcov) -> "system is exactly singular: U[6,6] = 0"
+n_params = 6            confint alpha: [-2e-04, 2e-04]
+```
+
+So `vcov()` was rank-deficient on every no-copy spatial `occu_cover()` fit, and
+`n_params` counted a coefficient that was never estimated. The grid cost was
+nil (one node multiplies the tensor by 1).
+
+**The two engine paths remove it differently, and the split is forced.**
+
+* *Single-block backend* (one shared field, no trend / RE / arm-specific block):
+  the cover arm takes a plain numeric `field_coef = 0`, the spelling the
+  detection arm already used, and NO amplitude axis is built. `theta_names` goes
+  from `sigma, alpha` to `sigma`, `vcov` to 5 x 5 full rank, and every
+  coefficient is byte-identical to the phantom fit. `control$sigma.grid` is
+  still honoured exactly (stated `0.2 0.5 1.5` -> nodes `0.2 0.5 1.5`).
+* *Multi-block driver*: the copy spec STAYS, pinned at 0, and the axis is
+  suppressed at reporting instead. The engine offers the SD parameterization
+  only to a copied block (`nested_laplace_joint_multi.R`, `if (is_copy)`); a
+  non-copied one rides its precision `b<k>.tau`. Same implied SDs, different
+  prior MEASURE on the field's scale -- and the shift is real, not cosmetic:
+
+  | shared field axis | `sigma_pos_field`, 6 seeds | median | truth |
+  |---|---|---|---|
+  | `b1.sigma` (copy kept) | 0.555 0.520 0.883 0.483 0.514 0.491 | **0.517** | 0.6 |
+  | `b1.tau` (copy dropped) | 0.440 0.393 0.638 0.375 ... | **~0.42** | 0.6 |
+
+  The test band is `abs(median - 0.6)/0.6 < 0.20`, i.e. (0.48, 0.72), against a
+  documented 40-seed median of ~0.548. The tau route falls out of it. Dropping
+  the copy to tidy away a reported coordinate would therefore have re-priored
+  the shared field and changed users' numbers.
+
+`.tobs_alpha_axis_decoupled()` (joint_substrate.R) is the single predicate;
+`test-copy-alpha-resolution.R` pins both paths, including that a decoupled
+multi-block fit still carries `b1.sigma` and NOT `b1.tau`.
+
+**Not covered.** The correlated `|` MCAR branch keeps today's behaviour: its
+block is log-Cholesky parameterized, not the icar sigma/tau pair, so the same
+reasoning does not transfer and no fixture exercises a no-copy MCAR fit.
+
+### The same rule on the NUTS path (#293)
+
+The sampled path never had the damaging half of this -- `alpha` was not in
+`means` / `vcov()`, so vcov() stayed full rank and `n_params` was right (the
+hypers live in `fit$hyper_draws`, off the coefficient block). What it did was
+report an absent copy as a hyperparameter the fit had conditioned on:
+
+```
+no copy(), before:  sampled_hyper: sigma | fixed_hyper: rho,alpha
+                    hyper_draws cols: sigma,rho,alpha,field_sd   (alpha == 0, sd 0)
+no copy(), after:   sampled_hyper: sigma | fixed_hyper: rho
+                    hyper_draws cols: sigma,rho,field_sd
+with copy():        sampled_hyper: sigma,alpha | fixed_hyper: rho
+                    alpha  mean 1.429  sd 1.027
+```
+
+`.ochf_has_copy()` is the sampled-path spelling of the predicate, and
+`.ochf_block_alpha()` the reader that supplies the 0 a decoupled block would
+have carried, so nothing downstream needs the column to exist. Dropping it is
+safe because the loading reader in `occu_cover_diag.R` already defaults a
+missing amplitude column to 0.
+
+`rho = 1` under icar is NOT the same case and is still reported: that is the
+intrinsic precision, part of the icar model, not an absent term.

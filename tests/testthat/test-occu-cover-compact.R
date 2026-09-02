@@ -456,3 +456,31 @@ test_that("detection-pattern compression == uncompressed fit (exact)", {
                    type = "occurrence", nsim = 100, draws = FALSE))
   expect_equal(po_on$mean, po_off$mean, tolerance = 1e-8)
 })
+
+
+test_that("fitted() works on the compact carrier", {
+  skip_if_fast(); skip_on_cran()
+  # A compact fit carries no `model$y` / `model$valid`, so every per-visit
+  # quantity must be read through `.occu_cover_visit_view()` (#185). `fitted()`
+  # had no occu_cover handler at all and died in the generic fallback (#291);
+  # the handler reads that view, so it must work on both carriers.
+  nc  <- 6L
+  adj <- chain_adj(nc)
+  dd  <- .mk_occu_cover_long(nc, 3L, function(cell, ti) sample(2:6, 1), seed = 21)
+  fit <- .fit_occu_cover(dd, adj, compact = TRUE)
+  expect_true(isTRUE(fit$model$ragged))
+  expect_null(fit$model$y)
+  expect_null(fit$model$valid)
+
+  v <- fitted(fit)
+  expect_true(all(c("psi", "p", "cover", "z", "site_of_visit") %in% names(v)))
+  expect_length(v$psi, fit$model$n_sites)
+  expect_length(v$z,   fit$model$n_sites)
+  expect_length(v$p,     length(v$site_of_visit))
+  expect_length(v$cover, length(v$site_of_visit))
+  expect_true(all(is.finite(v$psi)) && all(v$psi > 0 & v$psi < 1))
+  expect_true(all(is.finite(v$p))   && all(v$p   > 0 & v$p   < 1))
+  expect_true(all(is.finite(v$cover)))
+  expect_true(all(v$z >= 0 & v$z <= 1))
+  expect_true(all(v$z[.occu_cover_visit_view(fit$model)$any_det == 1L] == 1))
+})

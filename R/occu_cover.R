@@ -898,6 +898,11 @@
     vcov         = V,
     n_samples    = n_draws,
     n_params     = n_par,
+    # Every entry here is a directly estimated ML parameter (the three arms'
+    # coefficients plus the cover dispersion), so the AIC / BIC penalty counts
+    # all of them. `logLik.tulpa_fit()` reads this; without it df resolved to 0
+    # and AIC came back equal to BIC (#292).
+    n_fixed      = n_par,
     log_prob     = rep(-opt$value, n_draws),
     log_lik      = -opt$value,
     N            = sum(model$valid)),

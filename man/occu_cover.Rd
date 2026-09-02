@@ -158,10 +158,12 @@ place, not both.
 
 Without a \code{copy()} (and without \code{control$alpha.grid}) the occurrence field is
 NOT carried onto the cover arm -- there is no implicit coupling -- so the
-amplitude is not a parameter of the model and the fit reports no \code{alpha}:
-it is absent from \code{coef()}, \code{vcov()} and the \code{n_params} count, and
-\code{predict()} returns a cover arm the field does not enter. Add \code{copy(spatial())}
-to couple the two arms.
+amplitude is not a parameter of the model, and neither engine reports one.
+Under \code{nested_laplace} \code{alpha} is absent from \code{coef()}, \code{vcov()} and the
+\code{n_params} count; under \code{nuts} it is absent from \code{fit$nuts$sampled_hyper},
+\code{fit$nuts$fixed_hyper} and the \code{fit$hyper_draws} columns. \code{predict()} returns
+a cover arm the occurrence field does not enter. Add \code{copy(spatial())} to
+couple the two arms.
 
 The axis the amplitude rides carries prior structure -- a point mass at
 \code{alpha = 0} ("no coupling") and a log-spaced slab above it -- so it is set

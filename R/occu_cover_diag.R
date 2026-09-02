@@ -108,6 +108,82 @@
 # engine. The cover arm is observed only where the site was detected, so it
 # is not a per-site series and is not reported; `det` is NULL for the same
 # reason it is on ms_occu_cover().
+# fitted() for occu_cover(): the three arms at the posterior mean, plus the
+# smoothed occupancy state.
+#
+# `fitted.tobs_fit()`'s generic fallback rebuilds eta from `model$X_processes`,
+# which this family never builds -- so without a handler here it died on
+# `X_occ %*% beta_occ` with a NULL design (#291). The predictors come from
+# `.occu_cover_eta_components()`, the one source the pointwise log-likelihood,
+# the PPC and the PIT already share, over the draws / field / RE offsets
+# `.tobs_occu_cover_components()` assembles -- so the field and the random
+# effects are IN the fitted values rather than silently scored at 0.
+#
+# Per-visit quantities are indexed through `.occu_cover_visit_view()`, never
+# `model$y` / `model$valid`, so a compact (ragged) fit works: the view's
+# `site_of_visit` picks each visit's site-level block and its `flat_idx` the
+# visit-level one, which is the identity on a compact fit and the site-major
+# selection on a dense one. That makes this the all-draws analogue of
+# `.occu_cover_draw_eta_ragged()`, layout-agnostic by construction (#185).
+#
+# Returned, averaged over draws:
+#   psi    [n_sites]  occupancy probability
+#   p      [V]        per-visit detection probability, in the view's row order
+#   cover  [V]        conditional cover on the natural scale, given detection
+#   z      [n_sites]  P(z = 1 | y): 1 where ever detected, else the two-state
+#                     posterior over that unit's undetected visits
+#   site_of_visit     the visit -> site map, so `p` / `cover` can be regrouped
+.tobs_fitted_occu_cover <- function(object) {
+  model <- object$model
+  cmp   <- .tobs_occu_cover_components(object)
+  rg    <- .occu_cover_visit_view(model)
+  eta   <- .occu_cover_eta_components(model, cmp$b_occ, cmp$b_det, cmp$b_pos,
+                                      cmp$field_occ, cmp$field_pos)
+
+  psi_draws <- stats::plogis(.tobs_clamp_eta(eta$eta_psi_all))
+
+  per_visit <- function(site_all, visit_all, has_visit, off) {
+    e <- site_all[rg$site_of_visit, , drop = FALSE]
+    if (isTRUE(has_visit)) e <- e + visit_all[rg$flat_idx, , drop = FALSE]
+    if (!is.null(off) && ncol(off)) e <- e + off
+    e
+  }
+  eta_p   <- per_visit(eta$eta_p_site_all, eta$eta_p_visit_all,
+                       eta$has_det_visit, cmp$off_det)
+  eta_pos <- per_visit(eta$eta_pos_site_all, eta$eta_pos_visit_all,
+                       eta$has_pos_visit, cmp$off_pos)
+  p_draws <- stats::plogis(.tobs_clamp_eta(eta_p))
+
+  # Smoothed state: a unit with any detection is occupied; otherwise the
+  # two-state posterior over the product of its undetected visits.
+  log_q <- rowsum(log1p(-p_draws), group = rg$site_of_visit, reorder = TRUE)
+  q <- matrix(0, model$n_sites, ncol(p_draws))
+  q[as.integer(rownames(log_q)), ] <- exp(log_q)
+  z_draws <- psi_draws * q / (psi_draws * q + (1 - psi_draws))
+  z_draws[rg$n_valid == 0L, ] <- psi_draws[rg$n_valid == 0L, , drop = FALSE]
+  z_draws[rg$any_det == 1L, ] <- 1
+
+  list(psi = rowMeans(psi_draws),
+       p = rowMeans(p_draws),
+       cover = rowMeans(.occu_cover_mu_from_eta(eta_pos, cmp$disp,
+                                                model$positive)),
+       z = rowMeans(z_draws),
+       site_of_visit = rg$site_of_visit)
+}
+
+# Conditional cover on the natural scale from the positive arm's linear
+# predictor. Lognormal reports the MEAN, exp(eta + sigma^2/2), which is what
+# simulate() draws in expectation; beta and gaussian read eta through their own
+# link (`disp` is the beta precision / the gaussian residual SD, neither of
+# which shifts the mean).
+.occu_cover_mu_from_eta <- function(eta, disp, positive) {
+  if (identical(positive, "beta")) return(stats::plogis(.tobs_clamp_eta(eta)))
+  if (identical(positive, "gaussian")) return(eta)
+  s2 <- if (length(disp)) matrix(as.numeric(disp)^2, nrow(eta), ncol(eta),
+                                 byrow = TRUE) else 0
+  exp(.tobs_clamp_eta(eta) + s2 / 2)
+}
+
 .tobs_residuals_occu_cover <- function(object, type) {
   model <- object$model
   comp  <- .tobs_occu_cover_components(object)

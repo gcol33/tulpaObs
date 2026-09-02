@@ -367,10 +367,12 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #'
 #' Without a `copy()` (and without `control$alpha.grid`) the occurrence field is
 #' NOT carried onto the cover arm -- there is no implicit coupling -- so the
-#' amplitude is not a parameter of the model and the fit reports no `alpha`:
-#' it is absent from `coef()`, `vcov()` and the `n_params` count, and
-#' `predict()` returns a cover arm the field does not enter. Add `copy(spatial())`
-#' to couple the two arms.
+#' amplitude is not a parameter of the model, and neither engine reports one.
+#' Under `nested_laplace` `alpha` is absent from `coef()`, `vcov()` and the
+#' `n_params` count; under `nuts` it is absent from `fit$nuts$sampled_hyper`,
+#' `fit$nuts$fixed_hyper` and the `fit$hyper_draws` columns. `predict()` returns
+#' a cover arm the occurrence field does not enter. Add `copy(spatial())` to
+#' couple the two arms.
 #'
 #' The axis the amplitude rides carries prior structure -- a point mass at
 #' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
