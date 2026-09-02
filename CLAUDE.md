@@ -119,6 +119,17 @@ Do NOT run on every edit. Ladder:
    fit-based blocks into compile assertions -- a true positive wanting a
    regeneration, not a fix.
 
+   Regenerate it from a MEASURED run, never by hand:
+   `TULPAOBS_TEST_OUT=out Rscript .github/scripts/run-tests.R`, then
+   `Rscript .github/scripts/record-counts.R out/timings.csv --tier=smoke`
+   (`--dry-run` to see the delta first). The full tier records the same way
+   from the `tier3-timings.csv` that `aggregate-tier3.R` publishes, one
+   completed shard at a time. The recorder REFUSES a run carrying any failure
+   or error -- a recorded count is the floor later runs are held to, so taking
+   it from a red run pins the breakage -- and drops rows for files not in
+   `tests/testthat` or that neither asserted nor skipped (a 0/0 row cannot
+   fail, so it reads as coverage while checking nothing).
+
    A stale `expect_error()` string cannot be found by grepping `R/`: nearly
    every message is `sprintf`/`paste`-composed, so no contiguous literal exists
    to match. A static audit over the suite returned 165 "unfindable" literals,
