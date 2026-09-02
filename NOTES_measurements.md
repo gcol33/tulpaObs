@@ -12,13 +12,15 @@ that rule: what each non-tier skip in the suite actually READS, over the 286
 files the runner globs. `skip_on_cran` (818 uses) and `skip_if_fast` (792) are
 tier gates, not environment, and are excluded.
 
-**27 of 286 files carry any environment- or outcome-dependent skip.** The other
-259 are invariant and safe to record from any box.
+**26 of 286 files carry any environment- or outcome-dependent skip.** The other
+260 are invariant and safe to record from any box. The classes below partition
+that 26 exactly -- no file carries gates from two of them, so the parts sum to
+the union.
 
 | class | files | what the skip reads |
 |---|---|---|
 | package presence | 16 | `skip_if_no_tulpamesh` / `skip_if_not_installed` -- tulpaMesh, unmarked (7), spOccupancy (1), spAbundance (1), betareg (1) |
-| engine capability | 4 | `skip_if_not(exists(..., asNamespace("tulpa")))` -- invariant under the engine pin |
+| engine capability | 4 | `skip_if_not(exists(..., asNamespace("tulpa")))` and `skip_if_no_auto_grid` -- invariant under the engine pin |
 | fit outcome | 4 | whether a fit converged (below) |
 | source tree | 1 | `test-gate-messages.R`, `dir.exists(r_dir)` -- source checkout vs installed-only |
 | hardware | 1 | `test-occu-cover-joint-reuse.R`, `detectCores() >= 2` |
@@ -31,7 +33,17 @@ The 16: `test-count-spatial`, `test-cover-hurdle-beta`, `test-dyn-int-occu-recov
 `test-occu-cover-parallel-coupling.R` also calls `detectCores()`, but only to
 SIZE a thread pool (`n_out <- max(2, min(8, detectCores()))`); it asserts the
 same 5 expectations at any core count, so it is NOT a count hazard and is not
-in the table.
+in the table. Excluding it is why the total is 26 and not 27: it was the only
+reason that file entered the union at all, and it carries no other gate. A
+count of 27 is the pool-sizing call miscounted as a gate.
+
+Re-derive by classifying each `^test-.*[.][Rr]$` file on these predicates
+(they are disjoint over the suite, which is what makes the parts sum to the
+union): `skip_if_no_tulpamesh|skip_if_not_installed` / `skip_if_not(exists(`
+plus `skip_if_no_auto_grid` / `skip_if_not(dir.exists` /
+`skip_if_not(parallel::detectCores` / `skip_if_not(fit$|skip_if(is.null`.
+`skip_on_cran` and `skip_if_fast` are tier gates and are excluded. Glob
+`^test-` rather than `*.R`, or helper files inflate the count.
 
 **Worked example, the package-presence class.** `test-cover-hurdle-beta.R` is 25
 assertions where betareg is installed and 20 where it is not. The manifest

@@ -153,7 +153,7 @@ Do NOT run on every edit. Ladder:
    measured anywhere else describes a run nobody performs. That asymmetry is a
    decision, NOT an inconsistency to tidy up.
 
-   27 of 286 files carry an environment- or outcome-dependent skip; the full
+   26 of 286 files carry an environment- or outcome-dependent skip; the full
    partition and the betareg worked example are in `NOTES_measurements.md`. The
    rule that has to be here: **4 of those gate on a FIT OUTCOME**
    (`fit$converged` and friends), which a Suggests list does NOT predict and
