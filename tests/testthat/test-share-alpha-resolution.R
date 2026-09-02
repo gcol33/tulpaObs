@@ -48,9 +48,14 @@ simulate_copy_axis_cover <- function(seed = 4242L, N = 300L, n_s = 25L,
        y    = pmin(pmax(y, 0), 1 - 1e-6))
 }
 
+# The bare `share(spatial())` is what asks for the coupling axis at all. Since
+# #297 a cover() formula that names no coupling is pinned at alpha = 0, so a
+# stated `alpha.n` would be a resolution for an axis that does not exist; the
+# resolution composes with a share() naming no amplitude, which is the pair
+# these blocks are about.
 fit_copy_axis_cover <- function(sim, adj, ctrl) {
   suppressWarnings(tobs(
-    formula = ~ x + icar(graph = adj, group_var = "region"),
+    formula = ~ x + icar(graph = adj, group_var = "region") + share(spatial()),
     data = sim$data, family = cover("beta"), y = sim$y,
     method = "nested_laplace",
     control = c(list(sigma.grid = c(0.3, 0.6), phi.grid = c(12, 40),
@@ -299,7 +304,8 @@ test_that("the trend block carries its own resolution", {
 
   fit <- suppressWarnings(tobs(
     formula = ~ x + icar(graph = adj, group_var = "region") +
-                icar(graph = adj, weight = time.sc, group_var = "region"),
+                icar(graph = adj, weight = time.sc, group_var = "region") +
+                share(spatial()),
     data = sim$data, family = cover("beta"), y = sim$y,
     method = "nested_laplace",
     control = list(sigma.grid = c(0.4, 0.8), phi.grid = c(12, 40),
