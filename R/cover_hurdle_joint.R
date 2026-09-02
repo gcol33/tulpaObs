@@ -543,7 +543,11 @@
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
   if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
-    sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
+    # `phi_pos` is on the engine's scale for this arm's family: the residual
+    # variance for the plain gaussian arm, the SD for the truncated one.
+    pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
+                                  .cover_pos_engine_family(positive))
+    sigma_pos <- pd$est; sigma_pos_sd <- pd$sd
     phi_pos <- NA_real_; phi_pos_sd <- NA_real_
   } else {
     sigma_pos <- NA_real_; sigma_pos_sd <- NA_real_
@@ -676,7 +680,11 @@
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
   if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
-    sigma_pos <- phi_mu; sigma_pos_sd <- phi_sd
+    # `phi_pos` is on the engine's scale for this arm's family: the residual
+    # variance for the plain gaussian arm, the SD for the truncated one.
+    pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
+                                  .cover_pos_engine_family(positive))
+    sigma_pos <- pd$est; sigma_pos_sd <- pd$sd
     phi_pos <- NA_real_; phi_pos_sd <- NA_real_
   } else {
     sigma_pos <- NA_real_; sigma_pos_sd <- NA_real_
@@ -1202,8 +1210,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
   phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
   if (positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
-    sigma_pos    <- phi_mu
-    sigma_pos_sd <- phi_sd
+    pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
+                                  .cover_pos_engine_family(positive))
+    sigma_pos    <- pd$est
+    sigma_pos_sd <- pd$sd
     phi_pos      <- NA_real_
     phi_pos_sd   <- NA_real_
   } else {

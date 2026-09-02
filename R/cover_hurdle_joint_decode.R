@@ -31,16 +31,66 @@
 # axis as the lognormal sigma -- its discrete-class sibling), or the beta
 # precision. The ordinal grid runs a touch wider on the low side because the
 # midpoint-residual prefit over-disperses the censored latent.
+# The engine's R-level `phi` is not one scale for every family. For the plain
+# "gaussian" arm it is the residual VARIANCE -- tulpa converts it to the
+# kernel's SD parameterization itself, at `.joint_phi_args_to_kernel()` -- while
+# "truncated_gaussian" and "interval_gaussian" carry the SD at both levels.
+#
+# cover()'s own surface is the SD throughout: `control$phi.grid` is documented
+# as the lognormal noise SD, `sigma_pos` is reported as one, and the recovery
+# tests assert against a simulated SD. So the two conventions meet here and
+# nowhere else, in one pair of functions rather than at each of the three
+# read-out sites and the grid builder.
+#
+# Getting this wrong is silent: an SD-valued axis read as a variance still
+# brackets the truth (a 3x span around `sigma_hat` covers `sigma_hat^2` for the
+# SDs cover data produce), so the fit converges, the arm coefficients are
+# unaffected -- the mean model does not see the dispersion scale -- and
+# `sigma_pos` comes back as the square of the right answer with no warning.
+.cover_phi_is_variance <- function(pos_family) identical(pos_family, "gaussian")
+
+# Which engine family a `positive =` spelling fits. `.cover_pos_family_grid()`
+# below chooses the same names when it builds the arm; this reader exists so the
+# read-out sites can ask the question without rebuilding the grid.
+.cover_pos_engine_family <- function(positive) {
+  switch(positive,
+         lognormal = ,
+         gaussian            = "gaussian",
+         lognormal_trunc     = "truncated_gaussian",
+         ordinal             = "interval_gaussian",
+         "beta")
+}
+
+# SD (cover()'s surface) -> the engine's R-level phi for that family.
+.cover_phi_sd_to_engine <- function(sd, pos_family) {
+  if (.cover_phi_is_variance(pos_family)) sd^2 else sd
+}
+
+# The engine's R-level phi -> the SD cover() reports. `phi_sd` is the outer-grid
+# SD of phi; on the variance scale the reported SD follows by the delta method,
+# d sqrt(phi) / d phi = 1 / (2 sqrt(phi)).
+.cover_phi_engine_to_sd <- function(phi, phi_sd, pos_family) {
+  if (!.cover_phi_is_variance(pos_family)) return(list(est = phi, sd = phi_sd))
+  est <- sqrt(phi)
+  list(est = est,
+       sd = if (is.finite(est) && est > 0) phi_sd / (2 * est) else NA_real_)
+}
+
 .cover_pos_family_grid <- function(positive, enc, control) {
   if (positive %in% c("lognormal", "gaussian")) {
     # Both fit the tulpa "gaussian" family; they differ only in the response the
     # encoder stored (log-cover for lognormal, raw for gaussian, #112), so the
     # residual-SD prefit yields the correct dispersion on either scale.
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
-    list(pos_family = "gaussian", phi_hat = sigma_hat,
+    # Stated in SD, then carried to the engine's variance scale for this arm --
+    # both the auto span and a user-supplied `phi.grid`, which is documented in
+    # SD and must keep that meaning.
+    sd_grid <- control$phi.grid %||%
+      exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7))
+    list(pos_family = "gaussian",
+         phi_hat = .cover_phi_sd_to_engine(sigma_hat, "gaussian"),
          phi_grid_pos = .tobs_mark_auto(
-           control$phi.grid %||%
-             exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7)),
+           .cover_phi_sd_to_engine(sd_grid, "gaussian"),
            is.null(control$phi.grid)))
   } else if (positive == "lognormal_trunc") {
     # Upper-truncated Gaussian on log-cover (cover <= 1). The midpoint prefit SD

@@ -61,10 +61,12 @@
 "test-cover-hurdle-bpos0-coverage.R","smoke",3,1,0.1
 "test-cover-hurdle-gaussian.R","full",36,0,0.5
 "test-cover-hurdle-gaussian.R","smoke",29,1,0.6
+"test-cover-hurdle-lognormal-trunc.R","full",37,0,93.6
 "test-cover-hurdle-lognormal-trunc.R","smoke",8,3,0.2
 "test-cover-hurdle-lognormal.R","smoke",31,1,0.3
 "test-cover-hurdle-multi-block.R","full",34,0,8.2
 "test-cover-hurdle-multi-block.R","smoke",1,5,0.2
+"test-cover-hurdle-nested-joint-recovery.R","full",90,0,61.8
 "test-cover-hurdle-nested-joint-recovery.R","smoke",0,5,0.1
 "test-cover-hurdle-nested-joint.R","full",31,0,2.7
 "test-cover-hurdle-nested-joint.R","smoke",0,5,0.1
