@@ -435,6 +435,42 @@ different shapes. Band from the bootstrap: at 0.55 the median form clears 0.954
 interval coverage -- the calibration claim the block exists to make -- is
 0.95-0.97 on both hypers and both field types throughout, unmoved by any of it.
 
+### What the bound is worth, and where tulpa 0.3.0 leaves it
+
+The proper-CAR loading scales its leading eigen-column by
+`(1 - rho lambda_max)^(-1/2)`, and `lambda_max` is exactly 1 on a lattice, so the
+whole question is where the sampled rho's support ends:
+
+| support upper | leading-column scale |
+|---|---|
+| 0.99 (the outermost node) | 10.0 |
+| 0.995 (tulpa 0.3.0's in-domain span) | 14.1 |
+| 0.9999 (the clamp) | 100.0 |
+
+tulpa 0.3.0 (`4b42809`) intersects a declared support with the axis's own domain,
+so the default nodes declare `[0.35, 0.995]` rather than `[0.35, 1.01]`. That is
+inside the domain, so `.ochf_rho_support()` passes it through and no longer binds
+on any default grid. `sigma` and `alpha` come back unchanged at
+`[0.0654, 4.589]`, so the `field_sd` shift and the summary-stability reversal
+above are properties of the span as it stands, not of a state 0.3.0 moves away
+from.
+
+The four seeds that read 17 / 82 / 14 / 96 before the guard and 0 / 0 / 0 / 0
+with it at 0.99, re-measured on 0.3.0 at 0.995:
+
+| seed | div | max rho draw | max field_sd |
+|---|---|---|---|
+| 2001 | 1 | 0.99495 | 3.60 |
+| 2003 | 0 | 0.99457 | 5.04 |
+| 2005 | 0 | 0.99496 | 3.70 |
+| 7003 | 0 | 0.99491 | 4.72 |
+
+The guard stays for a user-stated axis that does leave its domain, and for the
+bym2 mixing weight. No default grid reaches it any more, and a guard nothing
+exercises cannot be told apart from one that does not work, so
+`test-occu-cover-spatial-nuts.R` constructs the out-of-domain span directly
+rather than waiting for an engine to produce one.
+
 ### Cost of the parameterisation car_proper rho did NOT need
 
 Reading `Q(rho) = D - rho W` literally makes a sampled rho a per-leapfrog dense

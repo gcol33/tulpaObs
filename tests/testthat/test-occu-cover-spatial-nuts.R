@@ -1201,3 +1201,50 @@ test_that("occu_cover spatial NUTS bounds are the engine's own declared support"
     expect_equal(as.numeric(r), as.numeric(sup[[sp$name]]), tolerance = 1e-12)
   }
 })
+
+
+test_that("occu_cover spatial NUTS refuses a rho span outside the field's domain", {
+  # A rho axis is bounded -- the bym2 mixing weight lives in (0, 1), the
+  # proper-CAR correlation in (0, 1 / lambda_max) -- and a declared span can
+  # leave that interval. The loading scales its j-th eigen-column by
+  # (1 - rho lambda_j)^(-1/2), so a bound taken at the interval's open edge
+  # hands the sampler a numerically intrinsic field.
+  #
+  # The condition is CONSTRUCTED here rather than driven through a fit: no
+  # default axis leaves its domain, so nothing else in the suite reaches this
+  # guard, and a guard nothing exercises cannot be told apart from one that does
+  # not work.
+  span <- function(lo, hi, nodes) structure(c(lo, hi), nodes = nodes)
+  lam  <- c(1, 0.4, -0.6)      # a symmetrically normalised adjacency
+
+  # Out of domain: truncated to the outermost NODE -- the last value the outer
+  # quadrature evaluated -- and not to the open edge.
+  out <- tulpaObs:::.ochf_rho_support(span(0.35, 1.01, c(0.5, 0.99)), lam)
+  expect_equal(out, c(0.35, 0.99))
+  # The loading is finite there: the leading column carries a scale of 10, where
+  # a bound at 1 - 1e-4 would give it 100.
+  expect_equal(1 / sqrt(1 - out[2L] * max(lam)), 10, tolerance = 1e-8)
+
+  # Inside the domain the span passes through untouched: the guard binds only
+  # where the span is not a correlation.
+  expect_equal(
+    tulpaObs:::.ochf_rho_support(span(0.35, 0.995, c(0.5, 0.99)), lam),
+    c(0.35, 0.995))
+
+  # The bym2 mixing weight carries no eigenvalues, so its domain is (0, 1).
+  expect_equal(
+    tulpaObs:::.ochf_rho_support(span(0.1, 1.2, c(0.2, 0.9)), numeric(0)),
+    c(0.1, 0.9))
+
+  # A graph whose largest eigenvalue exceeds 1 has a domain SHORTER than (0, 1),
+  # and the interval is read off the eigenvalues rather than assumed.
+  expect_equal(
+    tulpaObs:::.ochf_rho_support(span(0.1, 0.9, c(0.2, 0.4)), c(2, 0.5)),
+    c(0.1, 0.4))
+
+  # No span at all (an icar block pins rho), and a span whose own nodes are also
+  # out of domain: both decline, which leaves the hyper pinned rather than
+  # sampled at a value the field is not defined at.
+  expect_null(tulpaObs:::.ochf_rho_support(NULL, lam))
+  expect_null(tulpaObs:::.ochf_rho_support(span(0.5, 1.4, c(1.2, 1.3)), lam))
+})
