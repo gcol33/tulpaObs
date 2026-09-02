@@ -48,6 +48,7 @@
 "test-cover-hurdle-nested-joint-recovery.R","smoke",0,5,0.1
 "test-cover-hurdle-nested-joint.R","full",31,0,2.7
 "test-cover-hurdle-nested-joint.R","smoke",0,5,0.1
+"test-cover-hurdle-phi-prior.R","full",4,0,5.7
 "test-cover-hurdle-phi-prior.R","smoke",0,1,0.1
 "test-cover-hurdle-trend.R","full",16,0,12.9
 "test-cover-hurdle-trend.R","smoke",4,2,0.1

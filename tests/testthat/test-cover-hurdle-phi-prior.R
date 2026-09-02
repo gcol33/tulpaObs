@@ -27,8 +27,16 @@ test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
     adj <- chain_adj(nlevels(sim$data$region))
     phi_grid <- c(5, 15, 40, 100, 250)
 
+    # The simulator puts w_s in the occurrence logit AND in mu_pos, so the arms
+    # share the field and the formula has to say so. Uncoupled, w_s stays in the
+    # cover arm's residual and phi_pos pins against the bottom of the axis
+    # (8.9 against a truth of 30) -- and a prior that shrinks TOWARD zero then
+    # has nowhere left to pull, so the comparison below turns on numerical noise
+    # and can land either way. Coupled, phi_pos recovers to 23.1 and the
+    # half-normal moves it to 22.8, which is the effect this block is about.
     fit_one <- function(prior_phi) tobs(
-        formula = ~ x + bym2(graph = adj, group_var = "region"),
+        formula = ~ x + bym2(graph = adj, group_var = "region") +
+            share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data = sim$data, family = cover("beta"), y = sim$y,
         method = "nested_laplace",
         control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9),
