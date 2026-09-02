@@ -753,25 +753,34 @@ test_that("occu_cover spatial NUTS reports its hypers honestly per fit (#204)", 
   ctl <- list(verbose = FALSE, n.iter = 200L, n.warmup = 200L, n.chains = 1L,
               seed = 1L)
 
-  # icar carries no mixing parameter, so rho is pinned at 1 and says so; a bare
-  # areal term asks for no cover-arm copy, so alpha is pinned at 0 and says so
-  # (#217); sigma is sampled and carries a posterior.
+  # icar carries no mixing parameter, so rho is pinned at 1 and says so; sigma is
+  # sampled and carries a posterior.
+  #
+  # There is NO `alpha`. A bare areal term asks for no cover-arm copy, and the
+  # amplitude of a copy that does not exist is not a hyperparameter this fit
+  # conditioned on -- reporting it as pinned at 0 said the model had a coupling
+  # term it does not have (#293). It is absent from `sampled_hyper`,
+  # `fixed_hyper`, `fixed_hyper_values` and the `hyper_draws` columns alike.
+  # `rho = 1` is NOT the same case and is still reported: that is the intrinsic
+  # precision, part of the icar model itself, not an absent term.
   f_icar <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl)
   expect_identical(f_icar$nuts$sampled_hyper, "sigma")
-  expect_setequal(f_icar$nuts$fixed_hyper, c("rho", "alpha"))
+  expect_identical(f_icar$nuts$fixed_hyper, "rho")
   expect_equal(unname(f_icar$nuts$fixed_hyper_values[["rho"]]), 1)
-  expect_equal(unname(f_icar$nuts$fixed_hyper_values[["alpha"]]), 0)
-  expect_true(all(c("sigma", "rho", "alpha", "field_sd") %in%
+  expect_false("alpha" %in% names(f_icar$nuts$fixed_hyper_values))
+  expect_true(all(c("sigma", "rho", "field_sd") %in%
                   colnames(f_icar$hyper_draws)))
+  expect_false("alpha" %in% colnames(f_icar$hyper_draws))
   expect_gt(f_icar$nuts$hyper_sd[["sigma"]], 0)
-  expect_equal(f_icar$nuts$hyper_sd[["alpha"]], 0)
+  expect_false("alpha" %in% names(f_icar$nuts$hyper_sd))
   expect_equal(f_icar$nuts$hyper_sd[["rho"]], 0)
 
-  # bym2 and car_proper sample the field's own two hypers.
+  # bym2 and car_proper sample the field's own two hypers, and -- these fits also
+  # carrying no copy -- pin nothing at all.
   for (ty in c("bym2", "car_proper")) {
     ft <- .ocsn_fit(inp, "nuts", field = ty, control = ctl)
     expect_setequal(ft$nuts$sampled_hyper, c("sigma", "rho"))
-    expect_identical(ft$nuts$fixed_hyper, "alpha")
+    expect_identical(ft$nuts$fixed_hyper, character(0))
     expect_gt(ft$nuts$hyper_sd[["rho"]], 0)
   }
 
@@ -781,14 +790,17 @@ test_that("occu_cover spatial NUTS reports its hypers honestly per fit (#204)", 
   expect_identical(f_cp$nuts$fixed_hyper, "rho")
   expect_gt(f_cp$nuts$hyper_sd[["alpha"]], 0)
 
-  # An explicitly pinned fit reports all three as fixed, at the warm values.
+  # An explicitly pinned fit reports every hyper it HAS as fixed, at the warm
+  # values. This fixture carries no copy, so that is sigma and rho: asking to
+  # condition on the hypers does not conjure an amplitude for a coupling the
+  # model does not have.
   f_fix <- .ocsn_fit(inp, "nuts", field = "car_proper",
                      control = c(ctl, list(fixed.hyper = TRUE)))
   expect_identical(f_fix$nuts$sampled_hyper, character(0))
-  expect_setequal(f_fix$nuts$fixed_hyper, c("sigma", "rho", "alpha"))
-  expect_equal(unname(f_fix$nuts$hyper_sd), rep(0, 4))
-  expect_equal(unname(f_fix$nuts$hyper_mean[c("sigma", "alpha")]),
-               unname(f_fix$nuts$warm_hyper[c("sigma", "alpha")]))
+  expect_setequal(f_fix$nuts$fixed_hyper, c("sigma", "rho"))
+  expect_equal(unname(f_fix$nuts$hyper_sd), rep(0, length(f_fix$nuts$hyper_sd)))
+  expect_equal(unname(f_fix$nuts$hyper_mean[["sigma"]]),
+               unname(f_fix$nuts$warm_hyper[["sigma"]]))
 })
 
 
