@@ -15,6 +15,11 @@
 #   TULPAOBS_SHARD     one shard id from .github/scripts/shard-tests.R. Unset
 #                      (the smoke job, and any local run) means the whole
 #                      directory, exactly as before.
+#   TULPAOBS_FILES     the subset of the suite to run: file names, testthat
+#                      stems or globs, comma or space separated. Read whether
+#                      or not a shard is set, so a local run and a dispatched
+#                      one select the same way. A pattern matching nothing is
+#                      an error, not an empty run.
 #   TULPAOBS_TEST_OUT  directory to write the machine-readable results into,
 #                      for the aggregate job to collect. Unset writes nothing.
 #   TULPAOBS_WORKERS   worker count. Unset takes every core under CI, and a
@@ -46,6 +51,12 @@ if (nzchar(shard)) {
   files <- assigned[order(-plan$seconds[match(assigned, plan$file)], assigned)]
 } else {
   files <- sort(basename(list.files(test_path, pattern = "^test-.*[.][Rr]$")))
+  # A shardless run honours the same selection a dispatched one does; the
+  # planner owns the matching so the two cannot read a pattern differently.
+  if (nzchar(Sys.getenv("TULPAOBS_FILES", ""))) {
+    source(".github/scripts/shard-tests.R")
+    files <- tier3_selection(files)
+  }
 }
 
 # One test file per worker, and the worker times its own file. testthat's own

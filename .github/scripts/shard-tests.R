@@ -113,6 +113,39 @@ tier3_weights <- function(weights_path = ".github/tier3-weights.csv") {
 # Longest-processing-time-first packing: the standard makespan heuristic, and
 # the only sensible one here because the cost distribution is extremely skewed.
 # Ties break on file name so a plan is reproducible across runs.
+# The subset of the tier a run was asked for, from TULPAOBS_FILES: file names,
+# testthat stems, or globs, separated by commas or whitespace. Unset means the
+# whole tier, which is what every unattended run does.
+#
+# The tier is sharded, so a targeted run does not need a second dispatch path:
+# narrowing the set the planner packs makes the matrix smaller by itself, and a
+# shard still runs through exactly the code an unrestricted one does. This is
+# also what lets an expensive file be TIMED without committing a runner to the
+# whole tier, which is how the weights table gets numbers rather than guesses.
+tier3_selection <- function(files, spec = Sys.getenv("TULPAOBS_FILES", "")) {
+  if (!nzchar(trimws(spec))) return(files)
+  pats <- trimws(strsplit(spec, "[,[:space:]]+")[[1L]])
+  pats <- pats[nzchar(pats)]
+  if (!length(pats)) return(files)
+  stems <- tier3_stem(files)
+  hit <- rep(FALSE, length(files))
+  unmatched <- character(0)
+  for (p in pats) {
+    m <- files == p | stems == p |
+      grepl(utils::glob2rx(p), files) | grepl(utils::glob2rx(p), stems)
+    if (!any(m)) unmatched <- c(unmatched, p)
+    hit <- hit | m
+  }
+  if (length(unmatched)) {
+    stop("TULPAOBS_FILES names nothing in the suite: ",
+         paste(unmatched, collapse = ", "),
+         ". A pattern matching no file would silently shrink the tier it was ",
+         "meant to select, so this is an error rather than an empty shard.",
+         call. = FALSE)
+  }
+  files[hit]
+}
+
 tier3_plan <- function(test_path = "tests/testthat",
                        weights_path = ".github/tier3-weights.csv",
                        n_pools = TIER3_POOLS) {
@@ -126,6 +159,13 @@ tier3_plan <- function(test_path = "tests/testthat",
          ". Update ", weights_path, " -- a stale weight silently mis-packs the ",
          "shard it was meant to describe.", call. = FALSE)
   }
+
+  # After the staleness check, which is about the weights table against the
+  # whole suite: a run asking for three files must not report the other
+  # weights as stale. The table is narrowed with the file set, since every
+  # lookup below indexes one against the other.
+  files <- tier3_selection(files)
+  w <- w[w$file %in% files, , drop = FALSE]
 
   seconds <- rep(TIER3_DEFAULT_SECONDS, length(files))
   measured <- rep(FALSE, length(files))
@@ -144,6 +184,9 @@ tier3_plan <- function(test_path = "tests/testthat",
   shard[solo] <- paste0("solo-", tier3_stem(solo))
 
   pooled <- files[!isolate]
+  # No more pools than there is pooled work: a targeted run of two files would
+  # otherwise start a runner per pool and leave all but two with nothing to do.
+  n_pools <- max(1L, min(n_pools, length(pooled)))
   pools <- paste0("pool-", seq_len(n_pools))
   load <- stats::setNames(numeric(length(pools)), pools)
   ord <- pooled[order(-seconds[pooled], pooled)]

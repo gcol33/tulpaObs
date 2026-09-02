@@ -25,6 +25,15 @@ name: full-recovery
 
 on:
   workflow_dispatch:
+    inputs:
+      files:
+        description: >-
+          Test files to run: names, testthat stems or globs, comma or space
+          separated (e.g. "test-ms-abun*.R, occu-categorical"). Empty runs the
+          whole tier. A pattern matching nothing fails the plan rather than
+          quietly shrinking the run.
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -36,6 +45,8 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TULPAOBS_FILES: ${{ inputs.files }}
     outputs:
       shards: ${{ steps.shards.outputs.shards }}
     steps:
@@ -86,6 +97,9 @@ jobs:
       # the aggregate job collects.
       TULPAOBS_SHARD: ${{ matrix.shard }}
       TULPAOBS_TEST_OUT: tier3-out
+      # The same selection the plan job packed against. A shard re-derives its
+      # own file list rather than being handed one, so both ends must see it.
+      TULPAOBS_FILES: ${{ inputs.files }}
 
     steps:
       - uses: actions/checkout@v4
