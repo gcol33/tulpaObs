@@ -353,10 +353,27 @@ encode_cover_hurdle <- function(formula, data, y,
                            temporal = NULL, re = NULL, mcar = NULL, armspec = NULL)
     }
   } else {
+    # The single shared formula carries both arms, so a share() written in it
+    # states the coupling for the whole fit -- the only spelling this door has,
+    # since there is no separate positive formula to place one in. Strip it
+    # first: the strip evaluates the share() calls alone and leaves every other
+    # term in place, so the field it selects is still parsed below.
+    shared_copy  <- .occu_cover_extract_pos_copies(formula)
     # Parse structured terms against the NA-dropped observations so re()/
     # temporal() index codes align with both hurdle arms. An areal spatial
     # term is converted to the tulpa_spatial spec the cover engine consumes.
-    cover_struct   <- .encode_cover_terms(formula, data_obs)
+    cover_struct   <- .encode_cover_terms(shared_copy$formula, data_obs)
+    if (length(shared_copy$copies)) {
+      # One field set, and a coupling always targets the positive arm, so the
+      # selector is unambiguous here; the amplitude translation is the per-arm
+      # branch's, unchanged.
+      promo <- .cover_promote_copied_fields(
+        shared_copy$copies,
+        if (is.null(cover_struct$spatial)) list() else list(cover_struct$spatial))
+      copy_amp       <- promo$amp
+      copy_amp_terms <- promo$amp_terms
+      copy_prior     <- promo$prior
+    }
     fe_occ_formula <- cover_struct$fe
     fe_pos_formula <- cover_struct$fe
   }

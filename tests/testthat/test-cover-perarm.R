@@ -46,6 +46,98 @@ test_that("the shared single formula stays back-compat (both arms share the FE)"
   expect_true(all(c("x1", "x2") %in% names(fit$beta_pos)))
 })
 
+# ---------------------------------------------------------------------------
+# share() in the SINGLE shared formula (#298)
+#
+# The shared spelling has no positive formula to place a share() in, so a
+# share() written in `formula` is the only way that door can state a coupling.
+# It used to die inside the strip with `get1index`, naming no term the user
+# wrote.
+# ---------------------------------------------------------------------------
+
+.cp_shared_sim <- function(seed = 7L, g = 4L, N = 400L) {
+  set.seed(seed)
+  n_cells <- g * g
+  co  <- expand.grid(r = seq_len(g), c = seq_len(g))
+  adj <- matrix(0L, n_cells, n_cells)
+  for (i in seq_len(n_cells)) for (j in seq_len(n_cells)) {
+    if (i < j && abs(co$r[i] - co$r[j]) + abs(co$c[i] - co$c[j]) == 1L) {
+      adj[i, j] <- 1L; adj[j, i] <- 1L
+    }
+  }
+  cell <- sample.int(n_cells, N, replace = TRUE)
+  time <- as.numeric(scale(stats::rnorm(N)))
+  z    <- as.numeric(scale(stats::rnorm(n_cells)))
+  occ  <- stats::rbinom(N, 1L, stats::plogis(0.2 + 0.3 * time + 0.8 * z[cell]))
+  cover <- ifelse(occ == 1L,
+                  pmin(exp(-1.6 + 0.2 * time + 0.8 * z[cell] +
+                             stats::rnorm(N, 0, 0.4)), 1 - 1e-6), 0)
+  list(adj = adj, data = data.frame(cell = cell, time = time, cover = cover))
+}
+
+.cp_shared_ctrl <- list(verbose = FALSE, n.threads = 1L,
+                        sigma.grid = exp(seq(log(0.3), log(1.5),
+                                             length.out = 3)))
+
+test_that("share() in the single shared cover() formula is accepted (#298)", {
+  skip_on_cran()
+  skip_if_fast()
+  s   <- .cp_shared_sim()
+  adj <- s$adj
+  fit_at <- function(fml, ctrl = .cp_shared_ctrl) {
+    suppressWarnings(suppressMessages(tobs(
+      formula = fml, data = s$data, family = cover("lognormal"),
+      y = s$data$cover, method = "nested_laplace", control = ctrl)))
+  }
+  alpha_of <- function(f) {
+    h <- f$hyperpar$spatial
+    unname(unlist(h[grep("alpha", names(h))]))[1L]
+  }
+
+  base_f <- ~ time + icar(graph = adj, group_var = "cell")
+
+  # It fits at all -- this is what used to be `get1index`.
+  f_bare <- fit_at(update(base_f, ~ . + share(spatial())))
+  expect_s3_class(f_bare, "tobs_fit")
+
+  # A bare share() asks for the engine's own axis, so it reproduces the fit
+  # that writes no coupling at all. (When cover()'s no-coupling default flips
+  # to pinned-at-zero per #297, THIS is the pair that has to be re-read: the
+  # bare share() keeps the estimated axis and the bare formula loses it.)
+  expect_equal(alpha_of(f_bare), alpha_of(fit_at(base_f)), tolerance = 1e-8)
+
+  # A stated amplitude reaches the fit.
+  expect_equal(alpha_of(fit_at(update(base_f, ~ . + share(spatial(),
+                                                          alpha = 0.5)))),
+               0.5, tolerance = 1e-8)
+
+  # A stated grid is integrated rather than pinned: the reported amplitude is
+  # inside the stated nodes.
+  a_grid <- alpha_of(fit_at(update(base_f, ~ . + share(spatial(),
+                                                       alpha = grid(c(0, 1))))))
+  expect_gte(a_grid, 0); expect_lte(a_grid, 1)
+})
+
+test_that("shared-formula share() refuses the same conflicts the per-arm one does", {
+  skip_on_cran()
+  skip_if_fast()
+  s   <- .cp_shared_sim()
+  adj <- s$adj
+  fit_at <- function(fml, ctrl = .cp_shared_ctrl) {
+    suppressWarnings(suppressMessages(tobs(
+      formula = fml, data = s$data, family = cover("lognormal"),
+      y = s$data$cover, method = "nested_laplace", control = ctrl)))
+  }
+  # Both spellings of the amplitude at once.
+  expect_error(
+    fit_at(~ time + icar(graph = adj, group_var = "cell") + share(spatial()),
+           ctrl = c(.cp_shared_ctrl, list(alpha.grid = c(0, 1)))),
+    "not both")
+  # A coupling with no field to couple names the field, not an index error.
+  expect_error(fit_at(~ time + share(spatial())),
+               "needs a spatial field")
+})
+
 test_that("a spatial field placed in the positive formula is an arm-specific field", {
   skip_on_cran()
   side <- 6L; nc <- side * side
