@@ -68,9 +68,19 @@
   # The spatially-varying trend is a second weighted areal term in the
   # formula: unweighted bym2() = shared intercept field, weighted bym2(...,
   # weight = time) = the coupled trend field.
+  #
+  # Both fields sit in the cover eta as well as the occurrence eta -- at
+  # `alpha` and `alpha_trend` respectively -- so the coupling is named per
+  # block. A field the formula does not couple is decoupled, which pins that
+  # block's alpha at 0 and leaves its contribution in the cover arm's
+  # residual; here that also drags phi onto the floor of its own axis. Each
+  # axis straddles the amplitude the simulator used.
   suppressWarnings(tobs(
     formula = ~ x + bym2(graph = s$adj, group_var = "region") +
-                bym2(graph = s$adj, weight = time, group_var = "region"),
+                bym2(graph = s$adj, weight = time, group_var = "region") +
+                share(spatial(), terms = list(
+                  intercept = grid(c(0.5, 1.0, 1.5)),
+                  trend     = grid(c(0.5, 0.9, 1.3)))),
     data = s$data, family = cover("beta"), y = s$y,
     method = "nested_laplace", control = ctrl))
 }
