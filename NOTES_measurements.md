@@ -4,6 +4,64 @@ Measured evidence behind decisions recorded tersely in `CLAUDE.md`. Numbers here
 what was actually run: fixture, seeds, wall time, and what moved. `CLAUDE.md` keeps the
 resulting rule; this file keeps the measurement it rests on.
 
+## Which test files can move a recorded count (`record-counts.R`, #302)
+
+A manifest row is a pair of BOUNDS a later run is held to, so it is sound only
+where it holds in every supported environment. This is the enumeration behind
+that rule: what each non-tier skip in the suite actually READS, over the 286
+files the runner globs. `skip_on_cran` (818 uses) and `skip_if_fast` (792) are
+tier gates, not environment, and are excluded.
+
+**27 of 286 files carry any environment- or outcome-dependent skip.** The other
+259 are invariant and safe to record from any box.
+
+| class | files | what the skip reads |
+|---|---|---|
+| package presence | 16 | `skip_if_no_tulpamesh` / `skip_if_not_installed` -- tulpaMesh, unmarked (7), spOccupancy (1), spAbundance (1), betareg (1) |
+| engine capability | 4 | `skip_if_not(exists(..., asNamespace("tulpa")))` -- invariant under the engine pin |
+| fit outcome | 4 | whether a fit converged (below) |
+| source tree | 1 | `test-gate-messages.R`, `dir.exists(r_dir)` -- source checkout vs installed-only |
+| hardware | 1 | `test-occu-cover-joint-reuse.R`, `detectCores() >= 2` |
+
+The 16: `test-count-spatial`, `test-cover-hurdle-beta`, `test-dyn-int-occu-recovery`,
+`test-em-det-block-weights`, `test-fem-matrices`, `test-ms-abun-spatial`,
+`test-ms-occu-spatial-spde`, `test-nmix-laplace`, `test-occu-pg-gibbs`,
+`test-refimpl-equivalence`, `test-spde-{arms,detection,int-detection,nested,nmix,occ}`.
+
+`test-occu-cover-parallel-coupling.R` also calls `detectCores()`, but only to
+SIZE a thread pool (`n_out <- max(2, min(8, detectCores()))`); it asserts the
+same 5 expectations at any core count, so it is NOT a count hazard and is not
+in the table.
+
+**Worked example, the package-presence class.** `test-cover-hurdle-beta.R` is 25
+assertions where betareg is installed and 20 where it is not. The manifest
+holds **20**, which is correct: `assertions` is a floor, so the leanest box's
+number is the one that holds everywhere. Recording a CI run over that row
+writes 25 and fails every box without betareg -- and it moves the ceiling the
+same way at the same time (skipped 1 -> 0). This is the measured defect that
+made `record-counts.R` add-only.
+
+**How far one box can bound this.** Two independent full smoke sweeps, one per
+session, on the same workstation: exactly ONE row differed across 285 files,
+the betareg one. That box has unmarked, spOccupancy, spAbundance and tulpaMesh
+and lacks only betareg and INLA, so the measurement bounds the
+package-presence class tightly -- and says NOTHING about the fit-outcome class,
+because both sweeps ran on one box and those four files had identical
+convergence outcomes by construction.
+
+**The fit-outcome four**, which no Suggests list predicts:
+
+* `test-nmix-nb.R:78` -- `skip_if_not(fit$converged && fit$vcov_ok && !isTRUE(fit$dispersion_boundary))`
+* `test-nmix-site-marginal.R:49` -- `skip_if_not(fit$converged)`
+* `test-occu-cover-pareto-k.R:79` -- `skip_if(is.null(lr) || length(lr) < 25L)`
+* `test-occu-svc-joint-recovery.R:192` -- `skip_if(is.null(fit_oc))`
+
+Seeds are fixed, so each is deterministic per (platform, BLAS, engine) and not
+per installed-package set: they vary along the SAME Linux-CI-vs-Windows axis as
+#153. A floor recorded where the fit converged fails on a box with an identical
+package set. For these four a guard-fails note is TRUE and the response is to
+read it, not to record a lower floor.
+
 ## Community latent-structure engine (`R/community_latent.R`)
 
 Issues #119 / #120 / #121 (shared engine), #153 -> #156 (loadings by marginal

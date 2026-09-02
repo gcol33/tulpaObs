@@ -135,17 +135,33 @@ Do NOT run on every edit. Ladder:
    (fails when a run asserts fewer), `skipped` a CEILING (fails when a run
    skips more) -- so a row is sound only if it holds in EVERY supported
    environment, and one run measures one. A box with more Suggests installed
-   asserts more and skips less, so recording from it raises the floor and drops
-   the ceiling together and every leaner box fails on a healthy suite:
-   `test-cover-hurdle-beta.R` is 25 assertions where betareg is installed and
-   20 where it is not, and the manifest correctly holds **20**. Lowering is
-   worse: a block that stops executing asserts fewer, which is what this
+   asserts more and skips less, so recording from it moves BOTH bounds inward
+   and every leaner box fails on a healthy suite. Lowering is worse: a block
+   that stops executing asserts fewer, which is what this
    manifest exists to catch, so auto-taking the minimum would erase the finding
    and hand back a green suite. Neither direction is decidable from counts
    ("fewer" is a lean environment or a dead block, identically), so differences
    on existing rows are REPORTED for a person and left alone; `--update` is for
    when you know why a count moved and are recording it in the same commit as
    the change that moved it.
+
+   **Which box owns a floor is PER TIER, and the two answers differ on
+   purpose.** Smoke floors come from the LEANEST box: smoke is cheap and runs
+   everywhere, so a floor that holds without the optional Suggests is what
+   keeps it honest. Full floors come from CI, deliberately: the full tier is a
+   ~25h on-request dispatch that in practice only ever runs there, so a floor
+   measured anywhere else describes a run nobody performs. That asymmetry is a
+   decision, NOT an inconsistency to tidy up.
+
+   27 of 286 files carry an environment- or outcome-dependent skip; the full
+   partition and the betareg worked example are in `NOTES_measurements.md`. The
+   rule that has to be here: **4 of those gate on a FIT OUTCOME**
+   (`fit$converged` and friends), which a Suggests list does NOT predict and
+   two sweeps on one box CANNOT bound -- fixed seeds make them deterministic
+   per (platform, BLAS, engine), the #153 axis, so a floor recorded where the
+   fit converged fails on a box with an IDENTICAL package set. **For those four
+   the guard-fails note is TRUE and recording a lower floor is the wrong
+   response** -- a lean box seeing it has found something.
 
    A stale `expect_error()` string cannot be found by grepping `R/`: nearly
    every message is `sprintf`/`paste`-composed, so no contiguous literal exists
