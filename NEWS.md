@@ -2,6 +2,30 @@
 
 ## 0.1.4 (2026-09-02)
 
+* **`occu_multiscale_cover()` can name the copy coefficient it is built
+  around** (gcol33/tulpaObs#294). The model carries one: `alpha` is in `means`,
+  in `draws`, in the fitted-surface function, and the simulator draws the cover
+  arm as `... + alpha * sigma * f[plot_cell]`. Its cover formula could not say
+  so -- the raw formula reached `.occu_cover_reject_structured()`, whose list
+  ends in `"copy"`, because this door skipped the copy-stripping step
+  `occu_cover()` does first -- so `control$alpha.grid[.trend]` /
+  `alpha.n[.trend]` was the only way in, and the documented
+  `copy(alpha = grid(...))` spelling named a term the front door rejected.
+
+  `copy(spatial())` now works in the `positive` formula, with the stated-nodes,
+  `grid(n = )` resolution and fixed-scalar forms `occu_cover()` takes, and is
+  translated through the same shared helper. It is refused under
+  `method = "laplace"` / `"nuts"`, which are the non-spatial path (iid cells,
+  field fixed at 0) and so have no field for an amplitude to scale.
+
+  A fit that writes no `copy()` is unchanged: it still integrates the engine's
+  default amplitude axis. That is NOT what `occu_cover()` does with the same
+  absence -- there it pins `alpha = 0` -- so the shared translation runs only
+  when a copy is actually written; routing every fit through it flips this
+  door's default from coupled to decoupled. Verified against the pre-change
+  resolved axis on the same fixture. The disagreement between the doors is
+  gcol33/tulpaObs#297 and is a modelling call, not a cleanup.
+
 * **Everything a cross-arm copy states about its coefficient is now written in
   the formula.** `copy()` stated the amplitude's NODES, and the other two things
   a coupling has -- how finely the axis is read, and the prior on the

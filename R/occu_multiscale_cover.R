@@ -574,7 +574,12 @@
   }
 
   theta_formula <- dots$availability %||% ~ 1
-  pos_formula   <- dots$positive %||% detection
+  # A copy() on the cover formula names the coupling amplitude of the shared
+  # field, exactly as on occu_cover(). Strip it off first so the rejection below
+  # and the visit-design build see a clean fixed-effects formula; it is
+  # translated once the field blocks are resolved.
+  pos_copy      <- .occu_cover_extract_pos_copies(dots$positive %||% detection)
+  pos_formula   <- pos_copy$formula
   is_nuts       <- identical(engine, "nuts")
   non_spatial   <- identical(engine, "laplace") || is_nuts
 
@@ -604,10 +609,30 @@
                  gv), call. = FALSE)
   }
 
-  # Detection / availability / cover arms carry no structured terms.
+  # Detection / availability / cover arms carry no structured terms. copy() is
+  # the exception on the cover arm and was stripped off above.
   .occu_cover_reject_structured(detection,     "detection")
   .occu_cover_reject_structured(theta_formula, "availability")
   .occu_cover_reject_structured(pos_formula,   "positive cover")
+
+  # The non-spatial engines fix the field at 0, so a copy amplitude has nothing
+  # to scale there and the request cannot be honoured.
+  if (non_spatial && length(pos_copy$copies) > 0L) {
+    stop("occu_multiscale_cover(): copy() scales the shared areal field onto ",
+         "the cover arm, and method = \"", engine, "\" is the non-spatial path ",
+         "(iid cells, field fixed at 0). Use method = \"nested_laplace\" for ",
+         "the shared field, or drop the copy().", call. = FALSE)
+  }
+  # Only a fit that WROTE a copy is translated. The shared helper spells "no
+  # copy() named this block" as alpha pinned at 0, which is occu_cover()'s
+  # meaning but not this door's: here a fit naming no coupling has always
+  # integrated the engine's default amplitude axis, and running the translation
+  # unconditionally would silently decouple every existing multiscale fit
+  # (gcol33/tulpaObs#297).
+  if (length(pos_copy$copies) > 0L) {
+    control <- .occu_cover_apply_copy_coupling(pos_copy$copies, spatial_info,
+                                               control)
+  }
 
   fields  <- spatial_info$fields
   n_cells <- nrow(fields[[1L]]$graph)

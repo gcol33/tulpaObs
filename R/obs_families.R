@@ -925,6 +925,13 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' `fit$trend_fields`. The coupled / trend field is not sampled, so
 #' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
+#' The coupling is written as `copy(spatial())` in the `positive` formula, the
+#' same spelling [occu_cover()] takes; it needs a field to copy, so it is
+#' accepted under `method = "nested_laplace"` and refused on the two
+#' non-spatial engines, which fix the field at 0. Omitting it leaves the
+#' amplitude on the engine's default axis, estimated -- unlike [occu_cover()],
+#' where a missing `copy()` pins `alpha = 0`.
+#'
 #' The copy amplitude's axis carries prior structure -- a point mass at
 #' `alpha = 0` and a log-spaced slab above it -- so `copy(alpha = grid(...))`
 #' STATES its nodes, while `copy(alpha = grid(n = ))` states a RESOLUTION: the
