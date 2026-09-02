@@ -130,6 +130,23 @@ Do NOT run on every edit. Ladder:
    `tests/testthat` or that neither asserted nor skipped (a 0/0 row cannot
    fail, so it reads as coverage while checking nothing).
 
+   **It is ADD-ONLY: it never rewrites an existing row without `--update`.**
+   The two numbers are BOUNDS in opposite directions -- `assertions` a FLOOR
+   (fails when a run asserts fewer), `skipped` a CEILING (fails when a run
+   skips more) -- so a row is sound only if it holds in EVERY supported
+   environment, and one run measures one. A box with more Suggests installed
+   asserts more and skips less, so recording from it raises the floor and drops
+   the ceiling together and every leaner box fails on a healthy suite:
+   `test-cover-hurdle-beta.R` is 25 assertions where betareg is installed and
+   20 where it is not, and the manifest correctly holds **20**. Lowering is
+   worse: a block that stops executing asserts fewer, which is what this
+   manifest exists to catch, so auto-taking the minimum would erase the finding
+   and hand back a green suite. Neither direction is decidable from counts
+   ("fewer" is a lean environment or a dead block, identically), so differences
+   on existing rows are REPORTED for a person and left alone; `--update` is for
+   when you know why a count moved and are recording it in the same commit as
+   the change that moved it.
+
    A stale `expect_error()` string cannot be found by grepping `R/`: nearly
    every message is `sprintf`/`paste`-composed, so no contiguous literal exists
    to match. A static audit over the suite returned 165 "unfindable" literals,

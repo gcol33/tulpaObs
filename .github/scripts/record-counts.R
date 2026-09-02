@@ -25,7 +25,42 @@
 #   --tier=         "smoke" or "full". Required: the manifest carries one row
 #                   per (file, tier) and a run only ever measures its own.
 #   --manifest=     default tests/expected-counts.csv
+#   --update        also rewrite rows that already exist (see below). Without
+#                   it, existing rows are compared and reported but never
+#                   changed.
 #   --dry-run       report what would change and write nothing.
+#
+# ADD-ONLY BY DEFAULT, and that is the whole safety argument.
+#
+# The two recorded numbers are not estimates of a true value, they are BOUNDS
+# that run-tests.R holds a later run to, in opposite directions:
+#
+#     assertions   a FLOOR   (fails when a run asserts FEWER)
+#     skipped      a CEILING (fails when a run skips MORE)
+#
+# So a row is only sound if it holds in EVERY environment the suite is expected
+# to pass in, and one run measures exactly one environment. A richer box -- one
+# with more Suggests installed -- asserts more and skips less, so recording
+# from it raises the floor and lowers the ceiling together, and every leaner
+# box then fails on a suite that is perfectly healthy. Measured instance:
+# test-cover-hurdle-beta.R reports 25 assertions where betareg is installed and
+# 20 where it is not, and the manifest correctly holds 20. Recording a CI run
+# over that row would write 25 and break every box without betareg.
+#
+# Lowering is not the safe direction either, and this is the sharper of the
+# two. A block that stops executing makes a run assert fewer -- which is the
+# defect this manifest exists to catch, and the guard does catch it. A recorder
+# that then wrote the smaller number would erase the finding and hand back a
+# green suite. Automatically taking the minimum would be a tool for hiding
+# exactly what the manifest is for.
+#
+# Since neither direction can be resolved from counts alone -- "fewer
+# assertions" is indistinguishable between a leaner environment and a block
+# that died -- the default changes no row that already exists. It ADDS rows for
+# files that have none, which is the whole of the full tier's backlog and needs
+# no judgement, and it REPORTS every difference on the rest for a person to
+# read. Pass --update when you know why a count moved and are recording it in
+# the same commit as the change that moved it.
 #
 # What it refuses to do, and why each one matters:
 #
@@ -60,6 +95,7 @@ opt_value <- function(flag, default = NULL) {
 tier <- opt_value("--tier")
 manifest_path <- opt_value("--manifest", "tests/expected-counts.csv")
 dry_run <- "--dry-run" %in% args
+do_update <- "--update" %in% args
 inputs <- args[!grepl("^--", args)]
 
 die <- function(...) {
@@ -160,32 +196,62 @@ new_rows <- data.frame(file = got$file, tier = tier,
                        stringsAsFactors = FALSE)
 
 key <- function(d) paste(d$file, d$tier, sep = "\r")
-existing <- man[key(man) %in% key(new_rows), , drop = FALSE]
 added <- new_rows[!key(new_rows) %in% key(man), , drop = FALSE]
+existing <- man[key(man) %in% key(new_rows), , drop = FALSE]
 
-changed <- 0L; same <- 0L
+# Every difference on a row that already exists is reported whether or not it
+# is going to be written, and labelled with which bound it moves and what that
+# would do to a run. "assertions below" is the guard's own failing case, so it
+# is a finding to read rather than a number to record.
+same <- 0L
+drift <- list()
 if (nrow(existing)) {
   m <- match(key(existing), key(new_rows))
   for (i in seq_len(nrow(existing))) {
     n <- new_rows[m[i], ]
-    if (identical(as.integer(existing$assertions[i]), n$assertions) &&
-        identical(as.integer(existing$skipped[i]), n$skipped)) {
+    was_a <- as.integer(existing$assertions[i])
+    was_s <- as.integer(existing$skipped[i])
+    if (identical(was_a, n$assertions) && identical(was_s, n$skipped)) {
       same <- same + 1L
-    } else {
-      changed <- changed + 1L
-      cat(sprintf("  update %-46s assertions %d -> %d   skipped %d -> %d\n",
-                  existing$file[i], as.integer(existing$assertions[i]),
-                  n$assertions, as.integer(existing$skipped[i]), n$skipped))
+      next
     }
+    note <- if (n$assertions < was_a || n$skipped > was_s) {
+      "run is BELOW the recorded bound -- the guard fails on this; read it"
+    } else {
+      "manifest is behind, or this box has more Suggests than the leanest one"
+    }
+    drift[[length(drift) + 1L]] <- data.frame(
+      file = existing$file[i], was_a = was_a, now_a = n$assertions,
+      was_s = was_s, now_s = n$skipped, note = note, stringsAsFactors = FALSE)
+  }
+}
+drift <- if (length(drift)) do.call(rbind, drift) else NULL
+
+if (!is.null(drift)) {
+  cat(sprintf("\n%d existing row(s) differ from this run%s:\n", nrow(drift),
+              if (do_update) " (--update: rewriting them)" else
+                " (not changed; pass --update to rewrite)"))
+  for (i in seq_len(nrow(drift))) {
+    cat(sprintf("  %-46s assertions %d -> %d   skipped %d -> %d\n    %s\n",
+                drift$file[i], drift$was_a[i], drift$now_a[i],
+                drift$was_s[i], drift$now_s[i], drift$note[i]))
   }
 }
 
-out <- rbind(man[!key(man) %in% key(new_rows), man_need, drop = FALSE], new_rows)
+if (do_update) {
+  keep <- man[!key(man) %in% key(new_rows), man_need, drop = FALSE]
+  out <- rbind(keep, new_rows)
+} else {
+  # Existing rows survive verbatim; only files with no row for this tier are
+  # added.
+  out <- rbind(man[, man_need, drop = FALSE], added)
+}
 out <- out[order(out$file, out$tier), , drop = FALSE]
 rownames(out) <- NULL
 
-cat(sprintf("\n%s tier: %d row(s) added, %d updated, %d already exact\n",
-            tier, nrow(added), changed, same))
+cat(sprintf("\n%s tier: %d row(s) added, %d rewritten, %d already exact\n",
+            tier, nrow(added),
+            if (do_update && !is.null(drift)) nrow(drift) else 0L, same))
 cat(sprintf("manifest: %d rows -> %d rows (%d smoke, %d full)\n",
             nrow(man), nrow(out), sum(out$tier == "smoke"),
             sum(out$tier == "full")))
