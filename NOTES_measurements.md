@@ -435,7 +435,7 @@ different shapes. Band from the bootstrap: at 0.55 the median form clears 0.954
 interval coverage -- the calibration claim the block exists to make -- is
 0.95-0.97 on both hypers and both field types throughout, unmoved by any of it.
 
-### What the bound is worth, and where tulpa 0.3.0 leaves it
+### What the bound is worth, and where the engine fix leaves it
 
 The proper-CAR loading scales its leading eigen-column by
 `(1 - rho lambda_max)^(-1/2)`, and `lambda_max` is exactly 1 on a lattice, so the
@@ -444,19 +444,27 @@ whole question is where the sampled rho's support ends:
 | support upper | leading-column scale |
 |---|---|
 | 0.99 (the outermost node) | 10.0 |
-| 0.995 (tulpa 0.3.0's in-domain span) | 14.1 |
+| 0.995 (the in-domain span after tulpa#657) | 14.1 |
 | 0.9999 (the clamp) | 100.0 |
 
-tulpa 0.3.0 (`4b42809`) intersects a declared support with the axis's own domain,
-so the default nodes declare `[0.35, 0.995]` rather than `[0.35, 1.01]`. That is
-inside the domain, so `.ochf_rho_support()` passes it through and no longer binds
-on any default grid. `sigma` and `alpha` come back unchanged at
-`[0.0654, 4.589]`, so the `field_sd` shift and the summary-stability reversal
-above are properties of the span as it stands, not of a state 0.3.0 moves away
-from.
+tulpa `4b42809` -- the seven-issue batch, shipped as **v0.2.14** -- intersects a
+declared support with the axis's own domain, so the default nodes declare
+`[0.35, 0.995]` rather than `[0.35, 1.01]`. That is inside the domain, so
+`.ochf_rho_support()` passes it through and no longer binds on any default grid.
+`sigma` and `alpha` come back unchanged at `[0.0654, 4.589]`, so the `field_sd`
+shift and the summary-stability reversal above are properties of the span as it
+stands, not of a state the engine fix moves away from.
+
+Everything below was measured against the tree at `4b42809`, whose `DESCRIPTION`
+read 0.3.0 at the time. That version was recut: v0.3.0 is reserved for the
+release closing every open issue, the tag was deleted, and the same batch ships
+as v0.2.14 (`b838a63`). The recut is a version label only -- `b838a63` touches
+`DESCRIPTION` and `NEWS.md` and nothing under `R/` or `src/` -- so these numbers
+are v0.2.14's. The commit hash is what they are attached to; a tag on this
+engine has moved once already.
 
 The four seeds that read 17 / 82 / 14 / 96 before the guard and 0 / 0 / 0 / 0
-with it at 0.99, re-measured on 0.3.0 at 0.995:
+with it at 0.99, re-measured at 0.995:
 
 | seed | div | max rho draw | max field_sd |
 |---|---|---|---|
