@@ -184,6 +184,31 @@
 #' amplitude, \code{alpha = grid(c(0.25, 0.5, 1))} marginalizes over it on the
 #' outer integration.
 #'
+#' \code{grid()} states the axis's NODES, and the span the fit works over is
+#' wider than the nodes themselves, for two separate reasons.
+#'
+#' First, each node represents the cell around it, so the axis runs half a node
+#' step past the outermost node at each end, in the axis's own log coordinate.
+#' That is what makes the quadrature weights sum over a whole axis rather than
+#' stopping on the last node, and under \code{method = "nuts"} the sampled
+#' amplitude takes the same span as the support of its flat prior, so one stated
+#' grid moves both backends over one region. For \code{k} equally log-spaced
+#' nodes this is exact: \code{k - 1} steps between the nodes plus a half step at
+#' each end, so the span is \code{k / (k - 1)} times the stated range in the log
+#' coordinate. It is therefore largest for the shortest grid -- 2x at two nodes,
+#' 1.125x at nine. With refinement off, \code{c(0.2, 0.5)} gives
+#' \code{[0.127, 0.791]}.
+#'
+#' Second, and much larger: \code{control$adaptive.grid} is \code{TRUE} by
+#' default, so a stated axis is REFINED and EXTENDED when a boundary cell still
+#' holds weight (\code{adaptive.grid.edge.thresh}, default 0.02). A stated
+#' \code{c(0.2, 0.5)} was measured to reach an axis of
+#' \code{0.032, 0.08, 0.2, 0.316, 0.5, 1.25, 3.125} and a span of
+#' \code{[0.020, 4.94]} -- the stated nodes are a starting point, not a bound.
+#' Set \code{control$adaptive.grid = FALSE} to hold the axis exactly where it
+#' was stated (then only the half-step above applies). A fit reports the span it
+#' actually worked over in \code{fit$nuts$hyper_support}.
+#'
 #' @name tobs_terms
 #' @aliases icar bym2 car_proper gp multiscale_gp spde svc re temporal latent spatial
 #' @seealso \code{\link{tobs}} for the model front door.

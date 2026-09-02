@@ -375,6 +375,50 @@ test_that("a structured term on the positive arm reaches the arm rejector (#296)
     "not supported on the positive cover arm")
 })
 
+test_that("a stated alpha grid states NODES, and the span reaches past them (#301)", {
+  skip_on_cran()
+  skip_if_fast()
+  d <- .cfa_data(N = 24L)
+  fit_at <- function(nodes, ...) suppressWarnings(suppressMessages(tobs(
+    occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = d$adj),
+    data = d$cell_dat, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    method = "nested_laplace",
+    control = c(list(verbose = FALSE, engine = "joint",
+                     sigma.grid = c(0.5, 1), alpha.grid = nodes), list(...)))))
+  span <- function(nodes, ...) {
+    b <- tulpaObs:::.occu_cover_nuts_hyper_bounds(fit_at(nodes, ...), "icar")
+    b$alpha
+  }
+  ratio <- function(s, lo, hi) (log(s[2L]) - log(s[1L])) / (log(hi) - log(lo))
+  nodes9 <- exp(seq(log(0.2), log(0.5), length.out = 9))
+
+  # With refinement OFF the stated nodes ARE the axis, and the only widening is
+  # the half node step each end: each node represents the cell around it, so the
+  # weights sum over a whole axis rather than stopping on the last node. For k
+  # equally log-spaced nodes that is an EXACT identity in the axis's own log
+  # coordinate -- (k - 1) steps between the nodes plus a half step at each end
+  # -- so the span is k / (k - 1) times the stated range: 2x at two nodes,
+  # 1.125x at nine. Asserted as the identity rather than to a tolerance, since
+  # it is arithmetic and not an estimate.
+  s2 <- span(c(0.2, 0.5), adaptive.grid = FALSE)
+  expect_lt(s2[1L], 0.2); expect_gt(s2[2L], 0.5)
+  expect_equal(ratio(s2, 0.2, 0.5), 2 / 1, tolerance = 1e-6)
+  s9 <- span(nodes9, adaptive.grid = FALSE)
+  expect_equal(ratio(s9, 0.2, 0.5), 9 / 8, tolerance = 1e-6)
+  expect_lt(ratio(s9, 0.2, 0.5), ratio(s2, 0.2, 0.5))
+
+  # With refinement ON -- the DEFAULT -- the stated nodes are a starting point
+  # rather than a bound: the axis is extended while a boundary cell still holds
+  # weight, so the span runs far past them. This is the behaviour a fit gets
+  # unless it says otherwise, and it dwarfs the half step above.
+  s2a <- span(c(0.2, 0.5))
+  expect_gt(ratio(s2a, 0.2, 0.5), 2 * ratio(s2, 0.2, 0.5))
+  expect_lt(s2a[1L], s2[1L])
+  expect_gt(s2a[2L], s2[2L])
+})
+
 test_that("the retired copy() spelling names its replacement", {
   d <- data.frame(y = c(0, 1, 1, 0), x = rnorm(4), cell_idx = 1:4)
   # Every scanner that resolves a call head against the term registry: the

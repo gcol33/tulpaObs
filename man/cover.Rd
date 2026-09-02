@@ -217,11 +217,21 @@ shared \code{formula}, or on \code{presence} with \code{share()} on \code{positi
 one estimated amplitude; placed on one arm's formula it is a free-Sigma
 correlated field on that arm alone, no cross-arm copy.
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{field in the shared formula (or share())   one shared / copied latent (presence anchor, coupling estimated)
+\if{html}{\out{<div class="sourceCode">}}\preformatted{field in the shared formula, no share()   one presence-arm latent, pinned at alpha = 0
+field + share() (either spelling)         one shared / copied latent (presence anchor, coupling estimated)
 a field in each arm's formula             separate / free latents, no coupling
 ||                                        independent intercept and slope coefficient fields
 |                                         correlated (MCAR) coefficient fields, copy-only
 }\if{html}{\out{</div>}}
+
+Without a \code{share()} (and without \code{control$alpha.grid}) the presence field is
+NOT carried onto the cover arm: the amplitude is pinned at \code{alpha = 0} and the
+field rides the presence arm alone. Structure nobody wrote is not in the
+model, the reading \code{occu_cover()} and \code{occu_multiscale_cover()} also have.
+Write \code{+ share(spatial())} in the shared formula, or place the field on
+\code{presence} and \code{share(spatial())} on \code{positive}, to couple the two arms. A
+correlated \code{|} bar is the exception: that spelling is copy-only by
+definition, so the bar itself states the coupling.
 }
 
 \section{A formula bar is a random effect, not a spatial field}{

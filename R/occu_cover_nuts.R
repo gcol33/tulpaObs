@@ -1224,11 +1224,45 @@
     r <- sort(as.numeric(r))
     if (!all(is.finite(r)) || r[1L] <= 0 && positive_only) return(NULL)
     if (r[2L] <= r[1L] * (1 + 1e-8)) return(NULL)
+    # The node range travels with the span so a bounded axis can fall back to it
+    # (`.ochf_rho_support()`); it is an attribute rather than a second element so
+    # the span itself stays the declared support this function returns.
+    attr(r, "nodes") <- range(v)
     r
   }
   list(sigma = ax("sigma"),
        alpha = ax("alpha", positive_only = TRUE),
        rho   = switch(type, bym2 = ax("rho"), car_proper = ax("rho_car"), NULL))
+}
+
+# The span the sampled mixing parameter is given: what the outer grid declared
+# for its axis, intersected with the interval the field is defined on.
+#
+# A rho axis is BOUNDED -- the bym2 mixing weight lives in (0, 1), the
+# proper-CAR correlation in (0, 1 / lambda_max) for the largest eigenvalue of
+# the symmetrically normalised adjacency -- and the declared span can leave it.
+# tulpa classifies every `rho*` axis as evenly spaced, so its support reaches
+# half a node step past the outermost node on the NATURAL scale, while the
+# proper-CAR default nodes (0.5, 0.8, 0.95, 0.99) are laid out logit-spaced:
+# that step lands at 1.01, which is not a correlation (gcol33/tulpa#657).
+#
+# Where the span leaves the interval it falls back to the outermost NODE, the
+# last value the outer quadrature evaluated. Taking the interval's own open edge
+# instead is what a clamp to 1 - 1e-4 does, and the proper-CAR loading scales
+# its j-th column by (1 - rho lambda_j)^(-1/2): at rho lambda_max = 1 - 1e-4 the
+# field's leading direction carries a scale of 100, so the sampler has a
+# near-intrinsic funnel inside its own support. Measured on the coupled
+# fixture, the difference is in NOTES_measurements.md.
+.ochf_rho_support <- function(bounds, lambda) {
+  if (is.null(bounds)) return(NULL)
+  r  <- sort(as.numeric(bounds))
+  nd <- sort(as.numeric(attr(bounds, "nodes") %||% r))
+  lam_max <- if (length(lambda)) max(lambda, 0) else 0
+  hi <- if (lam_max > 0) 1 / lam_max else 1
+  if (!(r[2L] < hi)) r[2L] <- min(nd[2L], r[2L])
+  if (!(r[1L] > 0))  r[1L] <- max(nd[1L], r[1L])
+  if (!(r[1L] > 0 && r[2L] < hi && r[2L] > r[1L])) return(NULL)
+  r
 }
 
 # Assemble the field spec entries the C++ block (and the R oracle) read, plus the
@@ -1272,16 +1306,8 @@
 
   bas <- .occu_cover_nuts_field_basis(adj, type, n_cells, scale_factor)
   bnd <- .occu_cover_nuts_hyper_bounds(warm, type, block = block)
-  # rho rides a logit coordinate, so a grid node at 0 or 1 would put a bound at
-  # infinity; both ends of the mixing / correlation range are degenerate anyway.
-  if (!is.null(bnd$rho)) bnd$rho <- pmin(pmax(bnd$rho, 1e-4), 1 - 1e-4)
-  # A proper-CAR precision stays positive definite only while rho lambda_j < 1.
-  if (bas$scale1 == .OCHF_CAR && !is.null(bnd$rho)) {
-    lam_max <- max(bas$lambda, 0)
-    if (lam_max > 0)
-      bnd$rho[2L] <- min(bnd$rho[2L], (1 - 1e-6) / lam_max)
-    if (bnd$rho[2L] <= bnd$rho[1L]) bnd$rho <- NULL
-  }
+  bnd$rho <- .ochf_rho_support(
+    bnd$rho, if (bas$scale1 == .OCHF_CAR) bas$lambda else numeric(0))
   entries <- list(n_field_units = as.integer(n_cells),
                   field_map = as.integer(site_cell),
                   field_load = bas$B1,
@@ -1341,8 +1367,15 @@
     entries$field_alpha_rate  <- rate
   }
 
+  # The span each sampled hyper actually got, in natural units. A stated grid
+  # names NODES, and the axis reaches half a node step past the outermost one at
+  # each end, so the span is wider than the nodes and widest for the shortest
+  # grid (#301). Reported so a fit says what region it worked over rather than
+  # leaving it to be recomputed from the grid.
+  support <- lapply(bnd[intersect(names(bnd), sampled)], as.numeric)
   list(entries = entries, n_raw = n_raw, theta0_hyper = theta0_hyper,
-       sampled = sampled, pinned = pinned, tau = NA_real_, rho = wh$rho)
+       sampled = sampled, pinned = pinned, tau = NA_real_, rho = wh$rho,
+       support = support)
 }
 
 # Natural-scale hyper draws from the sampled field coordinates, and the per-draw
@@ -1687,6 +1720,15 @@
                sampled_hyper = sampled_nm,
                fixed_hyper = pinned_nm,
                fixed_hyper_values = pinned_val,
+               # The span each sampled hyper was worked over, natural units,
+               # suffixed per block like `sampled_hyper` (#301). A stated
+               # `alpha = grid(c(...))` names nodes; this is the axis those
+               # nodes imply, which reaches half a node step past each end.
+               hyper_support = unlist(lapply(seq_along(fbs), function(b) {
+                 s <- fbs[[b]]$support
+                 if (!length(s)) return(NULL)
+                 stats::setNames(s, paste0(names(s), suffix[b]))
+               }), recursive = FALSE),
                hyper_mean = hyper_mean, hyper_median = hyper_median,
                hyper_sd = hyper_sd,
                hyper_rhat = hyper_diag$rhat, hyper_ess = hyper_diag$ess,
