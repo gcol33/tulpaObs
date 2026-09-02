@@ -1005,18 +1005,24 @@ test_that("occu_cover: a bare areal term loads on occurrence alone on both engin
   nut <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl)
   nl  <- .ocsn_fit_nl(inp)
 
-  # nuts: alpha pinned at 0, and the record says so. `fixed_hyper` is a character
-  # vector (#204), so this cannot be read as a stale TRUE / FALSE flag.
+  # nuts: there is NO amplitude to report. The positive formula names no copy(),
+  # so the model has no coupling term, and #293 stopped reporting one -- an
+  # absent term is not a hyperparameter the sampler conditioned on. It is gone
+  # from every register alike. `fixed_hyper` is still a character vector (#204),
+  # so this cannot be read as a stale TRUE / FALSE flag.
   expect_true(is.character(nut$nuts$fixed_hyper))
-  expect_true("alpha" %in% nut$nuts$fixed_hyper)
+  expect_false("alpha" %in% nut$nuts$fixed_hyper)
   expect_false("alpha" %in% nut$nuts$sampled_hyper)
-  expect_equal(unname(nut$nuts$fixed_hyper_values[["alpha"]]), 0)
-  # Pinned in every draw, not merely centred at 0.
-  expect_true(all(nut$hyper_draws[, "alpha"] == 0))
-  expect_equal(unname(nut$nuts$hyper_sd[["alpha"]]), 0)
+  expect_false("alpha" %in% names(nut$nuts$fixed_hyper_values))
+  expect_false("alpha" %in% colnames(nut$hyper_draws))
+  expect_false("alpha" %in% names(nut$nuts$hyper_sd))
+  # What #217 is about -- the field riding occurrence alone -- is carried by the
+  # absence of the amplitude plus the cross-engine field agreement asserted
+  # below, not by a reported 0.
 
-  # nested_laplace: the same amplitude, from the grid the dispatcher pins at 0.
-  expect_equal(nl$spatial$alpha_mean, 0)
+  # nested_laplace: the same reading -- no amplitude, because there is no copy.
+  expect_null(nl$spatial$alpha_mean)
+  expect_false("alpha" %in% names(nl$means))
 
   # ... and the two backends then recover the same occurrence field.
   expect_gt(abs(stats::cor(nut$spatial_field, nl$spatial_field)), 0.8)
