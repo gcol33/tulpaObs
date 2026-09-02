@@ -218,6 +218,8 @@
 "test-occu-cover-predict.R","smoke",5,10,0.3
 "test-occu-cover-progress.R","full",15,0,1.1
 "test-occu-cover-progress.R","smoke",0,3,0.1
+"test-occu-cover-residual.R","full",74,0,29
+"test-occu-cover-residual.R","smoke",33,5,0.6
 "test-occu-cover-s2z-logdet.R","smoke",3,0,0.5
 "test-occu-cover-spatial-mcar.R","full",42,0,15.1
 "test-occu-cover-spatial-mcar.R","smoke",7,2,0.1

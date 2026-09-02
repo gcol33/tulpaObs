@@ -446,6 +446,13 @@
   pos_copies <- pos_copy$copies
   pos_formula <- pos_copy$formula
 
+  # The engine gate on share(residual = ) is read HERE, before the sampled-field
+  # branch returns: the deviation is a grid-integrated latent block, so a fit
+  # asking for one under another engine has to be told, not quietly given a fit
+  # without it. The remaining gates need the resolved field roster and run below.
+  .occu_cover_residual_check(.occu_cover_residual_spec(pos_copies),
+                             list(), engine)
+
   # Spatial NUTS path: a single areal term on the psi formula -- icar() / bym2() /
   # car_proper(), or the equivalent single-column bar spatial(~ 1 || cell, graph =
   # adj) -- under method = "nuts" samples a non-centered coupled field, and its
@@ -536,6 +543,21 @@
   }
   control <- .occu_cover_apply_copy_coupling(pos_copies, spatial_info, control)
 
+  # A share() may also ask for an arm-specific DEVIATION beside the copy
+  # (`residual =`), which the cover arm carries as its own latent block. Resolved
+  # here, next to the amplitude it belongs with, and gated against the
+  # configurations the arm-specific block does not carry; the block itself is
+  # built below, once the site -> node map is known.
+  residual_spec <- .occu_cover_residual_spec(pos_copies)
+  if (!is.null(residual_spec)) {
+    if (!has_spatial) {
+      stop("occu_cover(): share(residual = ) is a deviation from the shared ",
+           "field, so it needs one on the occurrence formula (e.g. ",
+           "spatial(~ 1 || cell, graph = adj)).", call. = FALSE)
+    }
+    .occu_cover_residual_check(residual_spec, spatial_info, engine)
+  }
+
   # Resolve cover aggregation. NULL (unset) -> "mean" on the shared-field spatial
   # path (so the cover arm contributes at the cell scale and does not outweigh
   # occupancy on the shared field), "none" (per-visit) on the non-spatial path
@@ -581,11 +603,13 @@
   # An arm-specific cover field is scored per detected visit (its node/weight
   # index the pos-arm visit rows), so it needs per-visit cover; an explicit
   # aggregation errors, the bare default falls back to per-visit.
-  if (has_spatial && !is.null(spatial_info$pos_armspec) &&
+  if (has_spatial &&
+      (!is.null(spatial_info$pos_armspec) || !is.null(residual_spec)) &&
       cover_aggregate != "none") {
     if (agg_explicit) {
       stop(sprintf(paste0(
-        "occu_cover(): an arm-specific cover field (to = \"positive\") uses ",
+        "occu_cover(): an arm-specific cover field (to = \"positive\" / ",
+        "share(residual = )) uses ",
         "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
         "cell-aggregated cover rows. Got cover_aggregate = \"%s\"."),
         cover_aggregate), call. = FALSE)
@@ -740,6 +764,17 @@
     model$site_cell <- site_cell
     model$n_cells   <- n_cells_field
 
+    # share(residual = "full"): the deviation spans the node set, which is what
+    # the arm-specific block already is, so it is built here -- where the site ->
+    # node map is resolved -- and handed to the fitter through the same slot a
+    # placed positive-arm field fills. One block builder, two spellings. A
+    # rank-r deviation is a different block and is prepared at the fit call.
+    if (!is.null(residual_spec) && identical(residual_spec$rank, "full")) {
+      spatial_info$armspec[["pos"]] <- .occu_cover_residual_armspec(
+        residual_spec, site_cell, model$n_sites)
+      spatial_info$pos_armspec <- spatial_info$armspec[["pos"]]
+    }
+
     # Optional per-group random intercept on the occupancy arm, layered on the
     # shared field. The grouping is per occupancy unit (one code per site / data
     # row); validate its length and carry it to the fitter. It also lands on the
@@ -827,7 +862,21 @@
                        pos_armspec = spatial_info$armspec[["pos"]],
                        det_armspec = spatial_info$armspec[["p"]]),
                   control)
-    return(do.call(.tobs_fit_occu_cover_joint, fit_args))
+    # A rank-r deviation is anchored on a warm fit of the model without it: that
+    # fit supplies the shared field the basis is orthogonalized against and the
+    # scale the basis coefficients are pinned at. Prepared from the SAME
+    # `fit_args`, so the warm fit and the fit it warms differ in the deviation
+    # and in nothing else.
+    if (!is.null(residual_spec)) {
+      prep <- .occu_cover_residual_prepare(residual_spec, fit_args, base_graph)
+      if (!is.null(prep)) {
+        fit_args$pos_residual <- list(basis = prep$basis, sigma = prep$sigma)
+        residual_spec$basis   <- prep$basis
+        residual_spec$sigma   <- prep$sigma
+      }
+    }
+    return(.occu_cover_residual_attach(
+      do.call(.tobs_fit_occu_cover_joint, fit_args), residual_spec))
   }
 
   # Non-spatial NUTS: sample the exact two-state coefficient marginal (the

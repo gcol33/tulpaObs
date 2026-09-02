@@ -597,6 +597,37 @@
        "grid(c(...)) (integrated).", call. = FALSE)
 }
 
+# Resolve a share()'s `residual =` argument: the arm-specific DEVIATION carried
+# beside the copied field, so the sharing arm's surface is
+# `alpha * w + delta` rather than `alpha * w` alone.
+#
+#   NULL      the arm carries the copy alone (the default; no deviation)
+#   "full"    one latent per field node -- the deviation spans the whole node
+#             set, the same latent dimension a free arm-specific field has
+#   r         a rank-r deviation, r latent, on a basis orthogonalized against
+#             the shared field (so it cannot reproduce the copied component)
+#
+# A rank is a count, so it is written as a whole number: a fractional value is
+# an error rather than a truncation, and `"full"` is the only word the argument
+# takes. The rank is checked against the node count at fit time, where the graph
+# is known; here it is only checked to be a rank at all.
+.tobs_resolve_residual <- function(residual) {
+  if (is.null(residual)) return(NULL)
+  if (is.character(residual) && length(residual) == 1L) {
+    if (identical(residual, "full")) return(list(rank = "full"))
+    stop("share(residual = ): the only word is \"full\" (a deviation over the ",
+         "whole node set); a rank is a number, e.g. residual = 50.",
+         call. = FALSE)
+  }
+  if (is.numeric(residual) && length(residual) == 1L && is.finite(residual) &&
+      residual >= 1 && residual == round(residual)) {
+    return(list(rank = as.integer(residual)))
+  }
+  stop("share(residual = ): give a whole number of basis functions (e.g. ",
+       "residual = 50) or \"full\" (a deviation over the whole node set).",
+       call. = FALSE)
+}
+
 # share(selector)           — carry a scaled copy of a latent effect from the
 #                            occurrence arm onto another arm's linear predictor.
 #
@@ -626,10 +657,17 @@
 # one such prior per fit, and a fit copying several blocks is refused it at
 # dispatch rather than given it on one block silently.
 #
+# `residual =` adds an arm-specific DEVIATION beside the copy, so the sharing arm
+# carries `alpha * w + delta` instead of `alpha * w` alone: `"full"` gives the
+# deviation one latent per field node, a whole number gives it that many basis
+# functions, on a basis orthogonalized against the shared field. Like `prior =`
+# it describes the copy as a whole rather than one of its blocks, so it sits on
+# share() rather than inside `terms =`.
+#
 # `scale` stays the generic cross-process amplitude for the non-hurdle
 # field-sharing path (occu / jsdm), keyed by the explicit-name reference.
 .tobs_term_copy <- function(selector, scale = NULL, alpha = NULL, terms = NULL,
-                            prior = NULL) {
+                            prior = NULL, residual = NULL) {
   if (missing(selector)) {
     stop("share(): give an effect selector as the first argument, e.g. ",
          "share(spatial(), alpha = grid(c(0.25, 0.5, 1))).", call. = FALSE)
@@ -703,6 +741,7 @@
                   alpha_n = alpha_res$n,
                   alpha_integrate = alpha_res$integrate,
                   alpha_prior = .tobs_copy_prior(prior),
+                  residual = .tobs_resolve_residual(residual),
                   copy_terms = copy_terms),
              class = "tobs_copy", id = id, label = "share")
 }
@@ -1335,5 +1374,10 @@ print.tobs_copy <- function(x, ...) {
               if (!is.null(x$alpha_prior))
                 sprintf(" prior: %s", x$alpha_prior[[1L]]) else "",
               if (!is.null(x$scale)) " (scaled)" else ""))
+  if (!is.null(x$residual)) {
+    cat(sprintf("  Residual: %s\n",
+                if (identical(x$residual$rank, "full")) "full (one per node)"
+                else sprintf("rank %d", x$residual$rank)))
+  }
   invisible(x)
 }

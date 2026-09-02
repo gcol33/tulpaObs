@@ -205,6 +205,23 @@ processes, optionally scaled: \code{alpha = 0.5} pins the coupling
 amplitude, \code{alpha = grid(c(0.25, 0.5, 1))} marginalizes over it on the
 outer integration.
 
+\code{residual =} carries an arm-specific deviation beside the copy, so the
+sharing arm's surface is \code{alpha * w + delta} rather than
+\code{alpha * w} alone. Use it where the two arms respond to related but not
+identical surfaces: a plain copy has no way to bend, so a pattern the shared
+field does not have is not fitted at all. \code{residual = "full"} gives the
+deviation one latent per field node, spanning the same surfaces as a field
+placed on the arm itself. \code{residual = r} gives it \code{r} basis
+functions on a basis orthogonalized against the shared field, so the latent
+problem is \code{K + r} rather than \code{2K}, and the deviation cannot
+reproduce the copied component. Because the two halves are orthogonal, the
+reported amplitude is identified: it is the projection of the fitted arm
+surface onto the occurrence surface, taken on the linear-predictor scale. A
+rank-\code{r} deviation is pinned at the shared field's own SD, which costs
+one warm fit of the model without it. Available on \code{occu_cover()} under
+\code{method = "nested_laplace"}, one per fit, and it needs a shared field to
+deviate from.
+
 \code{grid()} states the axis's NODES, and the span the fit works over is
 wider than the nodes themselves, for two separate reasons.
 

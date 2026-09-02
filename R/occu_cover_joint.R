@@ -16,6 +16,7 @@
                                                 correlated = FALSE,
                                                 pos_armspec = NULL,
                                                 det_armspec = NULL,
+                                                pos_residual = NULL,
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
@@ -411,6 +412,63 @@
     }
   }
 
+  # share(residual = r): the cover arm's deviation from the shared field, carried
+  # on r FIXED basis functions (`.tobs_residual_basis()`, orthogonal to the
+  # shared field by construction). Emitted as one weighted `iid` block per basis
+  # function -- exactly the shape an uncorrelated random slope emits, one design
+  # column per block -- so the deviation is `B %*% u` with the r coefficients
+  # sharing one SD.
+  #
+  # That SD is PINNED, and by the engine's block algebra rather than by taste: a
+  # free SD is a per-block outer-grid axis, and r blocks would be r axes, which
+  # multiplies the conditional fits the outer integration pays for and (past
+  # three axes) moves the integrator off the tensor grid entirely. One axis
+  # shared across r blocks is not expressible today, so the deviation's scale is
+  # set rather than integrated, and the fit says so.
+  #
+  # The blocks trail the RE blocks, which trail the field blocks: the field copy
+  # indices name field blocks and the RE descriptors are positions relative to
+  # the field count, so appending last leaves both readings valid.
+  residual_blocks <- list()
+  if (!is.null(pos_residual)) {
+    B <- as.matrix(pos_residual$basis)
+    if (nrow(B) != n_cells) {
+      stop(sprintf(paste0(
+        "occu_cover(): the residual basis has %d rows but the areal graph has ",
+        "%d nodes."), nrow(B), n_cells), call. = FALSE)
+    }
+    pos_node  <- as.integer(site_cell[pos_site])
+    ones_pos  <- rep(1L, n_pos_rows)
+    sigma_res <- .tobs_num_auto(rep(as.numeric(pos_residual$sigma), 1L))
+    for (j in seq_len(ncol(B))) {
+      residual_blocks[[j]] <- list(
+        type       = "iid",
+        n_units    = 1L,
+        sigma_grid = sigma_res,
+        obs_idx    = obs_for("pos", ones_pos),
+        svc_weight = wt_for("pos", B[pos_node, j]))
+    }
+  }
+  has_residual <- length(residual_blocks) > 0L
+  # A pinned axis is not something to place a design over, and there are r of
+  # them. The CCD counts every axis a block declares, free or not, so at r basis
+  # functions it sets out to build a 2^(r+1)-point factorial over axes that hold
+  # one node each -- which at r = 32 asks for a 64 GB design matrix before the
+  # first inner solve. The tensor grid multiplies by one node per pinned axis, so
+  # it costs the deviation nothing; that is the integrator this path uses, and it
+  # overrides an explicit request rather than failing on it.
+  if (has_residual && !identical(dots$integration, "grid")) {
+    if (!is.null(dots$integration)) {
+      warning(sprintf(paste0(
+        "occu_cover(): share(residual = ) integrates on the tensor grid; ",
+        "control$integration = \"%s\" is not used. The deviation's %d ",
+        "basis-coefficient axes are pinned, and a central composite design ",
+        "over them costs a factorial in their count and buys nothing."),
+        dots$integration, length(residual_blocks)), call. = FALSE)
+    }
+    dots$integration <- "grid"
+  }
+
   # Arm-specific cover field blocks. Each field column of the `to = "positive"` bar
   # becomes ONE non-copied ICAR block scattering on the cover (pos) arm alone: the
   # psi + detection rows carry the 0-sentinel node so they skip it
@@ -605,15 +663,16 @@
     # The arm-specific cover fields (non-copied, pos arm only) trail the occupancy
     # field blocks, then the RE blocks; the copy indices above name occupancy
     # blocks only, so they stay valid.
-    prior_arg <- c(prior_arg, pos_armspec_blocks, re_blocks)
-  } else if (has_any_re || has_armspec) {
+    prior_arg <- c(prior_arg, pos_armspec_blocks, re_blocks, residual_blocks)
+  } else if (has_any_re || has_armspec || has_residual) {
     # Single shared occupancy field + per-group REs and/or arm-specific cover
     # fields: the multi-block driver with the occupancy field as block 1 (alpha
     # copy onto cover), then the non-copied arm-specific cover block(s), then the
     # iid RE block(s) -- each rides its own arm with no copy.
     field_block <- icar_template(list(
       spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
-    prior_arg <- c(list(field_block), pos_armspec_blocks, re_blocks)
+    prior_arg <- c(list(field_block), pos_armspec_blocks, re_blocks,
+                   residual_blocks)
     copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
   } else if (isTRUE(.batch_collect)) {
     # Single-field, batched fused path: run the MULTI-block driver so the alpha
@@ -812,6 +871,10 @@
               field_specs = field_specs,
               n_occ_fields = 1L + n_trend,
               has_pos_armspec = has_armspec,
+              # A rank-r deviation's basis-coefficient blocks also force the
+              # multi-block driver, so the hyper axes carry `b<k>.` names even
+              # with no trend / RE / arm-specific block in the fit.
+              has_residual = has_residual,
               # Whether each shared field block carries a copy. A decoupled block
               # keeps a pinned amplitude axis on the multi-block driver (that
               # driver offers the SD parameterization only to a copied block), so

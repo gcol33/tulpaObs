@@ -324,6 +324,10 @@
   # cover with alpha), the rest are the non-copied pos-arm fields. Each
   # reports its own sigma (b<k>.sigma) with no alpha copy axis.
   has_pos_armspec <- isTRUE(ctx$has_pos_armspec)
+  # share(residual = r) appends one basis-coefficient block per basis function,
+  # which puts the fit on the multi-block driver -- and so on the `b<k>.` axis
+  # names -- even when nothing else does.
+  has_residual    <- isTRUE(ctx$has_residual)
   n_occ_fields    <- ctx$n_occ_fields %||% n_fields
   pos_field_specs <- ctx$pos_field_specs %||% list()
   if (mcar) {
@@ -363,7 +367,7 @@
     }
     pick2("alpha_mcar", "b1.alpha", skip = isTRUE(ctx$alpha_decoupled))
     pick("phi_pos", phi_pos_public)
-  } else if (has_trend || has_any_re || has_pos_armspec) {
+  } else if (has_trend || has_any_re || has_pos_armspec || has_residual) {
     # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
     # then the RE block(s). A single trend field keeps the bare
     # sigma_trend/alpha_trend names; several are indexed (sigma_trend1, ...).

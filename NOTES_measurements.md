@@ -2323,3 +2323,95 @@ deviation would hide the signal. Three changes instead:
 Note for re-running: these blocks are `skip_on_cran()` + `skip_if_fast()`, and
 the fast variable is **`TULPAOBS_FAST`**, not the engine's `TULPA_FAST`. A run
 setting the engine spelling skips via `skip_on_cran` instead and looks green.
+
+## `share(residual = )`: what the rank buys, and what the pinned SD buys
+
+Steps 4-6 of the `share()` plan (todo.md). Fixture: `rook_adj(8)` (64 cells),
+`simulate_occu_cover(J = 6, lognormal, sigma = 0.5, alpha = 1.0,
+pos_field = TRUE, sigma_pos_int = 0.6, sigma_pos_trend = 0)` -- a shared field
+the cover arm copies AND an independent cover-arm field, which is the
+configuration the amplitude and the deviation are confounded in. Seeds 1:12,
+the FULL set, because a 3-seed read of the neighbouring #299 fixture inverted
+its own verdict. Engine tulpa 0.3.0, `integration = "ccd"` requested (the
+residual path forces the tensor grid; see below).
+
+Estimand is the seed's OWN orthogonal decomposition, not the nominal
+`alpha = 1`: the simulator draws the two fields independently, but a finite
+draw of two independent fields is not orthogonal, so the identified amplitude
+is `<s_cover, s_occ> / <s_occ, s_occ>` on the seed's realized surfaces
+(`s_occ = sigma * f`, `s_cover = alpha * s_occ + sigma_pos_int * g0`). Scoring
+against the constant spends most of the budget on draw noise -- the #155 rule.
+
+| deviation | bias(alpha) | median abs err | median cor(delta, truth) | worst cor | median sd(delta) |
+|---|---|---|---|---|---|
+| full rank, free SD | +1.040 | 0.683 | 0.387 | 0.055 | 0.075 |
+| full rank, PINNED SD | +0.363 | 0.319 | 0.261 | -0.109 | 0.028 |
+| rank 2  | +0.277 | 0.371 | 0.453 | 0.230 | 0.367 |
+| rank 8  | +0.420 | 0.416 | 0.440 | 0.170 | 0.287 |
+| rank 32 | +0.488 | 0.480 | 0.423 | 0.128 | 0.251 |
+
+Truth `sd(delta)` is 0.621 on every row (the same seeds).
+
+**Two effects, and the plan had them bundled.** The control row is what
+separates them, and it is the row that had to be run before any of this could
+be claimed: a rank-r deviation runs at a PINNED SD while the full-rank block
+estimates its own, so "low rank recovers more deviation" is confounded with
+"pinned SD recovers more deviation" until the full-rank block is held at the
+same pin (`control$sigma.grid.pos.field` at the warm fit's `field_sd_mean`
+divided by the graph's ICAR scale factor -- that axis is the RAW amplitude).
+
+* The AMPLITUDE's identification comes from the PIN, not the rank: +1.04 free
+  vs +0.36 pinned at the same full rank, against +0.28 / +0.42 / +0.49 at ranks
+  2 / 8 / 32.
+* The DEVIATION's recovery comes from the RANK, not the pin: pinned at full
+  rank the deviation still comes back at SD 0.028 against a truth of 0.62 --
+  the block puts essentially all its mass along the shared direction, which is
+  the #110 confounding -- while ranks 2 / 8 / 32 return 0.37 / 0.29 / 0.25.
+
+**So the rank is a regularizer, not only a cost knob, and the plan's step-6
+expectation is refuted in this fixture.** The plan predicted the sweep would
+"converge on the #110 fit while alpha stops drifting". It does converge on the
+full-rank fit -- `sd(delta)` falls 0.367 -> 0.287 -> 0.251 toward the full-rank
+0.075, and the amplitude bias climbs 0.277 -> 0.420 -> 0.488 toward 1.040 --
+but converging on it is a LOSS here, because in a confounded fixture the
+full-rank end is the degenerate one. Lower rank is better on both readings, so
+`residual = "full"` is not the setting to recommend.
+
+Amplitude stability across ranks within a seed: median spread 0.22, max 0.425.
+"alpha stops drifting" holds relative to the raw amplitude (which moves ~0.7
+between the full-rank and low-rank fits of the same seed) but it is not
+constant in r, so it is reported and not asserted.
+
+Cost the deviation carries: the occurrence field's own recovery is slightly
+WORSE with a deviation on the cover arm -- median `cor(spatial_field, f)` 0.46
+to 0.49 at ranks 2-32 against 0.56 for the full-rank block and 0.54 for the
+pinned control.
+
+**Scope of all of the above: ONE fixture family**, 8x8 rook, `alpha = 1`,
+lognormal cover, J = 6, 12 seeds. It is not established that the ordering holds
+at other graph sizes, other `alpha`, or a beta cover arm.
+
+### Why the deviation's SD is pinned rather than integrated
+
+Not a modelling preference -- the engine's block algebra. A rank-r deviation is
+r weighted `iid` blocks (one per basis function, the shape an uncorrelated
+random slope already emits), and a free SD is a per-block outer-grid axis, so a
+free deviation SD would be r axes. One axis shared across r blocks is not
+expressible on today's joint multi-block spec. That also forces the integrator:
+the CCD counts every axis a block declares, pinned or not, and builds a
+2^(d-1)-point factorial, so at r = 32 it asked for a **64 GB** design matrix
+before the first inner solve (`expand.grid(rep(list(c(-1, 1)), k - 1))` in
+`.joint_ccd_grid`). The residual path therefore forces `integration = "grid"`,
+where each pinned axis multiplies the tensor by one node and costs nothing:
+measured 30 outer cells with a rank-r deviation against 150 for the full-rank
+block on the same fixture.
+
+### Wall time
+
+`tests/testthat/test-occu-cover-residual.R`: 74 assertions, 0 failures, 0 skips,
+31 s at tier 3 (`NOT_CRAN=true`, `TULPAOBS_FAST` unset, tulpa 0.3.0, this box);
+33 assertions / 5 skips under `TULPAOBS_FAST=1`. Not in
+`tests/expected-counts.csv` yet -- that file is one of the five the #301 bundle
+is holding uncommitted. The step-6 block alone is 84 fits: 12 seeds x (1
+full-rank + 3 ranks, each rank paying one warm fit for its orthogonality
+reference and its pin).
