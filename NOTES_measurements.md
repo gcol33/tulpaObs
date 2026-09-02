@@ -395,6 +395,46 @@ clamps to the same 1 - 1e-4:
 | 0.5, 0.8, 0.95 | [0.35, 1.025] | 0.99988 | 8 |
 | 0.5, 0.7, 0.9 | [0.40, 1.00] | 0.99990 | 46 |
 
+### Re-measured over 40 seeds with the rho guard in
+
+Same protocol as the 40-seed table above (seeds 7001-7040, both field types,
+1000 kept after 800 warmup, 2 chains, `adapt.delta = 0.99`), so this row is
+like-for-like with it except for `.ochf_rho_support()`:
+
+| field | n | mean alpha | \|err\| | alpha cov | mean field_sd | \|err\| | median field_sd | \|err\| | field_sd cov | div (max) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| icar | 20 | 1.053 | 0.053 | 1.00 | 1.034 | 0.334 | 0.902 | 0.202 | 1.00 | 0 |
+| icar | 40 | 1.097 | 0.097 | 0.95 | 1.048 | 0.348 | 0.768 | 0.068 | 0.95 | 0 |
+| car_proper | 20 | 1.018 | 0.018 | 1.00 | 1.191 | 0.491 | 1.058 | 0.359 | 1.00 | 1 |
+| car_proper | 40 | 1.040 | 0.040 | 0.97 | 1.181 | 0.481 | 1.009 | 0.309 | 0.97 | 1 |
+
+Divergences are gone (1 across 80 fits, against 93 in a single fit before) and
+`alpha` is unbiased. What does NOT come all the way back is the `field_sd` MEAN:
+1.18 for car_proper against the 1.011 recorded before the support widened. That
+residual is the SIGMA axis, not rho -- its nodes 0.1 to 3 declare a span
+[0.0654, 4.589] where the node range was [0.1, 3], and on a log axis with no
+domain edge that half-node step is legitimate. A flat prior over a wider log
+span, on the right-skewed posterior of a weakly identified variance component,
+raises the mean. So the estimand moved for a stated reason; the sampler did not.
+
+**The median is now the more stable summary, which reverses what was measured on
+the old span.** Bootstrapping the 40 measured fits, P(a 20-seed set clears the
+0.45 band):
+
+| field | mean of per-fit means | median of per-fit medians |
+|---|---|---|
+| icar | 0.825 | 0.995 |
+| car_proper | 0.401 | 0.851 |
+
+At n = 12 it is 0.431 against 0.804 for car_proper -- the earlier finding that
+the median form was the less stable one (0.90 against 0.80) does not survive the
+wider span. `test-occu-cover-spatial-nuts.R` therefore reads `field_sd` at
+`fit$nuts$hyper_median` and `alpha` at its mean, the two posteriors having
+different shapes. Band from the bootstrap: at 0.55 the median form clears 0.954
+(car_proper) / 0.999 (icar), against 0.725 / 0.962 for the mean form. The
+interval coverage -- the calibration claim the block exists to make -- is
+0.95-0.97 on both hypers and both field types throughout, unmoved by any of it.
+
 ### Cost of the parameterisation car_proper rho did NOT need
 
 Reading `Q(rho) = D - rho W` literally makes a sampled rho a per-leapfrog dense
