@@ -273,6 +273,65 @@ if (!is.null(assigned)) {
   }
 }
 
-if (failed > 0 || errors > 0) quit(status = 1L)
+# A file that stops RUNNING its tests reports the same clean tail as one that
+# ran them: testthat prints a skip only where a skip happened, and a block
+# gated by both skip_on_cran() and skip_if_fast() is reached by neither routine
+# tier, so an assertion can go stale or a whole block can stop executing with
+# nothing to notice (gcol33/tulpaObs#302). The counts a file HAS produced are
+# recorded in tests/expected-counts.csv; this compares against them so a run
+# has to have run, rather than merely not failed.
+#
+# A smoke run's skip counts differ from a full run's by construction, so the
+# manifest carries one row per (file, tier) and a run reads its own tier's
+# rows. Files absent from the manifest are not checked -- it records what has
+# actually been measured, and the full tier has never completed once, so it
+# starts partial and grows.
+drift <- NULL
+manifest_path <- "tests/expected-counts.csv"
+if (file.exists(manifest_path) && nrow(by_file)) {
+  want <- utils::read.csv(manifest_path, stringsAsFactors = FALSE)
+  want <- want[want$tier == if (fast) "smoke" else "full", , drop = FALSE]
+  got  <- by_file[match(want$file, by_file$file), , drop = FALSE]
+  seen <- !is.na(got$file)
+  want <- want[seen, , drop = FALSE]
+  got  <- got[seen, , drop = FALSE]
+  if (nrow(want)) {
+    lost    <- got$assertions < want$assertions
+    skipped <- got$skipped    > want$skipped
+    if (any(lost | skipped)) {
+      drift <- data.frame(
+        file = want$file[lost | skipped],
+        assertions = sprintf("%d (expected %d)", got$assertions[lost | skipped],
+                             want$assertions[lost | skipped]),
+        skipped = sprintf("%d (expected %d)", got$skipped[lost | skipped],
+                          want$skipped[lost | skipped]),
+        stringsAsFactors = FALSE)
+      cat("\nCount check FAILED -- a file ran fewer assertions, or skipped more,\n",
+          "than tests/expected-counts.csv records for the ",
+          if (fast) "smoke" else "full", " tier:\n", sep = "")
+      for (i in seq_len(nrow(drift))) {
+        cat(sprintf("  %-46s assertions %-18s skipped %s\n",
+                    drift$file[i], drift$assertions[i], drift$skipped[i]))
+      }
+      cat("\nIf the drop is intended (a block deleted or deliberately gated),",
+          "update the manifest in the same commit.\n")
+    }
+    gained <- got$assertions > want$assertions
+    if (any(gained)) {
+      cat("\nCount check: ", sum(gained), " file(s) ran MORE assertions than ",
+          "recorded (manifest is behind, not a failure):\n", sep = "")
+      for (i in which(gained)) {
+        cat(sprintf("  %-46s %d, recorded %d\n", want$file[i],
+                    got$assertions[i], want$assertions[i]))
+      }
+    }
+    cat(sprintf("\ncount check: %d of %d %s-tier manifest files ran here\n",
+                nrow(want), sum(utils::read.csv(manifest_path)$tier ==
+                                  (if (fast) "smoke" else "full")),
+                if (fast) "smoke" else "full"))
+  }
+}
+
+if (failed > 0 || errors > 0 || !is.null(drift)) quit(status = 1L)
 
 cat("Suite green.\n")

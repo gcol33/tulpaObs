@@ -347,6 +347,54 @@ settings), so the divergences were the step size, not a region the chain was
 missing. Hence the `occu_cover_spatial` row in `.TOBS_FAMILY_DEFAULTS`
 (`adapt.delta = 0.99`, roughly 2x wall time).
 
+### They came back when the sampled rho ran past its own domain (gcol33/tulpa#657)
+
+`adapt.delta = 0.99` stopped being enough once the sampled hypers took their
+bounds from the axis's declared SUPPORT rather than its node range. tulpa
+classifies every `rho*` axis as evenly spaced (`.hyper_axis_scale()`), so a
+declared support reaches half a node step past the outermost node on the NATURAL
+scale -- and the proper-CAR default nodes are laid out logit-spaced:
+
+| nodes | 0.5 | 0.8 | 0.95 | 0.99 |
+|---|---|---|---|---|
+| linear step | 0.300 | 0.150 | 0.040 | |
+| logit | 0.000 | 1.386 | 2.944 | 4.595 |
+| logit step | 1.386 | 1.558 | 1.651 | |
+
+so the span comes back `[0.35, 1.01]` where the coordinate the grid is built in
+gives `[0.333, 0.9956]`. 1.01 is not a correlation. The block clamped it to
+1 - 1e-4 to keep the logit finite, and the loading scales its j-th eigen-column
+by `(1 - rho lambda_j)^(-1/2)` with `lambda_max` exactly 1 on a lattice: the
+sampler's own support then contained a direction scaled by 100.
+
+Coupled fixture (64 cells, J = 5, lognormal, sigma 0.7, alpha 1.0,
+`share(spatial())`, car_proper, 2 chains, 1200 kept after 800 warmup,
+`adapt.delta = 0.99`), before -> after `.ochf_rho_support()`:
+
+| seed | divergences | max rho draw | max field_sd | step size | field cor | s / fit |
+|---|---|---|---|---|---|---|
+| 2001 | 17 -> 0 | 0.99990 -> 0.98998 | 11.34 -> 3.80 | 0.013 -> 0.031 | 0.685 -> 0.677 | 84 -> 40 |
+| 2003 | 82 -> 0 | 0.99980 -> 0.98977 | 10.89 -> 3.74 | 0.026 -> 0.030 | 0.640 -> 0.641 | 57 -> 48 |
+| 2005 | 14 -> 0 | 0.99990 -> 0.98993 | 9.20 -> 2.92 | 0.006 -> 0.027 | 0.767 -> 0.764 | 150 -> 49 |
+| 7003 | 96 -> 0 | 0.99989 -> 0.99000 | 15.82 -> 4.23 | 0.017 -> 0.018 | 0.644 -> 0.640 | 81 -> 69 |
+
+The field posterior does not move (field cor is the same to two decimals), so
+what the guard removes is a region, not an answer. The same tail is why the
+hyper block's `field_sd` mean read 1.5 to 1.9 against the 1.011 recorded over 40
+seeds above: a draw that reaches `rho lambda_max = 1 - 1e-4` reports a
+`field_sd` of 9 to 16 against a truth of 0.7, and the MEAN carries it.
+
+**Restating the grid does not escape it**, which is what makes it a defect and
+not a knob. Dropping the top node lowers the nodes but not the overshoot -- the
+linear half step from a lower top node still lands above 1, and every variant
+clamps to the same 1 - 1e-4:
+
+| rho.car.grid | support | max rho draw | divergences (seed 7003) |
+|---|---|---|---|
+| 0.5, 0.8, 0.95, 0.99 (default) | [0.35, 1.01] | 0.99989 | 96 |
+| 0.5, 0.8, 0.95 | [0.35, 1.025] | 0.99988 | 8 |
+| 0.5, 0.7, 0.9 | [0.40, 1.00] | 0.99990 | 46 |
+
 ### Cost of the parameterisation car_proper rho did NOT need
 
 Reading `Q(rho) = D - rho W` literally makes a sampled rho a per-leapfrog dense
