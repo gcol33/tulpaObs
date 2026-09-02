@@ -11,6 +11,7 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   n_seed <- 20L
   covered <- logical(0)
   est <- numeric(0); se <- numeric(0); truth <- numeric(0); real <- numeric(0)
+  kept <- integer(0)
   refused <- integer(0)
   unconverged <- integer(0)
   for (s in seq_len(n_seed)) {
@@ -50,7 +51,7 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
     selr <- fit$sds[["log_r"]]
     lo <- lr - 1.96 * selr; hi <- lr + 1.96 * selr
     covered <- c(covered, sim$truth$mu_log_r >= lo && sim$truth$mu_log_r <= hi)
-    est <- c(est, lr); se <- c(se, selr)
+    est <- c(est, lr); se <- c(se, selr); kept <- c(kept, seed)
     truth <- c(truth, sim$truth$mu_log_r)
     # The mean of the 18 log-dispersions this seed actually drew. The interval
     # targets the population constant, so `truth` is what coverage is scored
@@ -58,6 +59,25 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
     real <- c(real, sim$truth$mu_log_r_real)
   }
   z <- (est - truth) / se
+
+  # A seed can clear BOTH gates above -- the engine does not refuse it and
+  # `converged()` is TRUE -- and still report `se` as exactly 0, when the
+  # community dispersion component collapses onto its boundary. That makes `z`
+  # infinite for that seed, and `shapiro.test()` returns a NaN p-value for a
+  # sample containing an infinity rather than erroring, so `NaN <= 0.05` renders
+  # a degenerate interval as "the errors are not normal" -- a true failure
+  # pointing at the wrong quantity. NA and NaN do not do this: `shapiro.test()`
+  # drops them. Only an infinity does, which is what a zero SE produces.
+  #
+  # Checked before the assertions that consume `z`, and it names the seed, so
+  # the finding is the interval rather than the normality.
+  bad <- which(!is.finite(z))
+  expect_true(length(bad) == 0L,
+              info = if (length(bad))
+                sprintf("non-finite z from seed(s) %s: se = %s, est - truth = %s",
+                        paste(kept[bad], collapse = ", "),
+                        paste(format(se[bad]), collapse = ", "),
+                        paste(format((est - truth)[bad]), collapse = ", ")))
   # A sweep that drops most of its seeds is not a coverage measurement any
   # more, whatever rate the survivors show.
   expect_gte(length(covered), n_seed - 3L)
