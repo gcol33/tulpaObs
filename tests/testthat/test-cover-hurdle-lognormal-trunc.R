@@ -62,7 +62,8 @@ test_that("lognormal_trunc cover recovers truth from bounded cover data", {
   skip_if_fast()
   s <- .sim_trunc(2026L)
   expect_true(all(s$data$y >= 0 & s$data$y <= 1))
-  fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
+  fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj) +
+                share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
               data = s$data, family = cover(response = "lognormal_trunc"),
               method = "nested_laplace", control = list(progress = FALSE))
   expect_s3_class(fit, "cover_fit")
@@ -106,7 +107,8 @@ test_that("lognormal_trunc cover recovers betas + dispersion across seeds (#140)
   bo2 <- bp2 <- sg <- numeric(n_seeds)
   for (r in seq_len(n_seeds)) {
     s <- .sim_trunc(3000L + r, N = 3000L)
-    fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
+    fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj) +
+                share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
                 data = s$data, family = cover(response = "lognormal_trunc"),
                 method = "nested_laplace", control = list(progress = FALSE))
     expect_s3_class(fit, "cover_fit")
@@ -134,7 +136,8 @@ test_that("negligible truncation reduces to the lognormal fit", {
   # to the ceiling and the two legitimately diverge there -- that is the truncated
   # model recovering the true latent sigma, tested in the recovery block above.)
   s <- .sim_trunc(7L, N = 3000L, b_pos_int = -4.0, sigma = 0.4, field_scale = 0.25)
-  fml <- y ~ x + spatial(~ 1 || cell_idx, graph = s$adj)
+  fml <- y ~ x + spatial(~ 1 || cell_idx, graph = s$adj) +
+    share(spatial(), alpha = grid(c(0.5, 1.0, 1.5)))
   ctl <- list(progress = FALSE,
               phi.grid = exp(seq(log(0.15), log(1.1), length.out = 9)))
   fit_ln <- tobs(fml, data = s$data, family = cover(response = "lognormal"),

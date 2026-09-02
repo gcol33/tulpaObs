@@ -56,6 +56,7 @@
 "test-cover-joint-predict.R","full",41,0,2.8
 "test-cover-joint-predict.R","smoke",0,6,0.2
 "test-cover-nuts.R","smoke",17,5,0.3
+"test-cover-ordinal.R","full",39,0,125.9
 "test-cover-ordinal.R","smoke",14,2,0.2
 "test-cover-perarm.R","full",72,0,30.7
 "test-cover-perarm.R","smoke",63,2,52.9

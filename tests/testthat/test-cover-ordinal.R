@@ -73,7 +73,8 @@ test_that("ordinal cover recovers truth from censored class data", {
   skip_on_cran()
   skip_if_fast()
   s <- .sim_ordinal(2026L)
-  fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
+  fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj) +
+                share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
               data = s$data, family = cover(response = "ordinal", breaks = s$brks),
               method = "nested_laplace", control = list(progress = FALSE))
   expect_s3_class(fit, "cover_fit")
@@ -106,7 +107,8 @@ test_that("ordinal cover recovers betas + slope CIs across seeds, calibrated (#1
   bo2 <- bp2 <- sg <- numeric(n_seeds)
   for (r in seq_len(n_seeds)) {
     s <- .sim_ordinal(3000L + r, N = 3000L)
-    fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj),
+    fit <- tobs(y ~ x + spatial(~ 1 || cell_idx, graph = s$adj) +
+                share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
                 data = s$data, family = cover(response = "ordinal", breaks = s$brks),
                 method = "nested_laplace", control = list(progress = FALSE))
     expect_s3_class(fit, "cover_fit")
