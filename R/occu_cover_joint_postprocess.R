@@ -219,7 +219,10 @@
   hyper_sds   <- numeric(0)
   hyper_vals  <- list()
   hyper_names <- character(0)
-  pick <- function(name, public = name) {
+  # `skip` carries the same meaning it does on pick2 below: an axis the fit's own
+  # spec says is not a parameter is not reported, even when the grid carries it.
+  pick <- function(name, public = name, skip = FALSE) {
+    if (isTRUE(skip)) return(invisible(NULL))
     j <- match(name, tg_names)
     if (is.na(j)) return(invisible(NULL))
     vals <- as.numeric(tg_ok[, j])
@@ -474,7 +477,14 @@
     }
     pick("phi_pos", phi_pos_public)
   } else {
-    pick("sigma"); pick("alpha")
+    # `alpha` carries the same guard as its two siblings above. On the
+    # single-block driver a decoupled block builds no amplitude axis at all, so
+    # the pick no-ops on absence and the guard is redundant -- but the fused
+    # batch path reaches this branch with a MULTI-block engine fit whose
+    # decoupled block does keep a pinned axis, renamed from `b1.alpha` to bare
+    # `alpha` before the summary resolves. Unguarded, that pinned zero is
+    # reported as an estimate on the fused route and on no other.
+    pick("sigma"); pick("alpha", skip = isTRUE(ctx$alpha_decoupled))
     pick("phi_pos", phi_pos_public)
     put_field_sd("sigma", "field_sd")
   }
