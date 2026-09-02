@@ -35,9 +35,43 @@
 # left in place for .occu_cover_reject_structured() to reject.
 .occu_cover_extract_pos_copies <- function(pos_formula) {
   if (is.null(pos_formula)) return(list(formula = pos_formula, copies = list()))
-  parsed <- .tobs_parse_formula(pos_formula, data = NULL)
-  copies <- Filter(function(t) inherits(t, "tobs_copy"), parsed$terms)
-  list(formula = parsed$fe_formula, copies = copies)
+  tt   <- stats::terms(pos_formula, keep.order = TRUE)
+  labs <- attr(tt, "term.labels")
+
+  # Only the share() calls are evaluated. Parsing the WHOLE formula here
+  # evaluates every term against `data = NULL`, so a structured term naming a
+  # data column (`re(cell)`, `temporal(year)`) died as "object cell not found"
+  # before the arm rejector could name the unsupported feature.
+  share_labs <- character(0); keep <- character(0)
+  for (lab in labs) {
+    e    <- tryCatch(str2lang(lab), error = function(...) NULL)
+    head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]])
+            else NA_character_
+    .tobs_check_retired_term(head)
+    if (identical(head, "share")) {
+      share_labs <- c(share_labs, lab)
+    } else if (!is.na(head) && head %in% c("|", "||")) {
+      # terms() strips the parentheses off a bar; reformulate() would rebuild
+      # `... + 1 | g`, which re-parses as `(... + 1) | g` and is no longer a bar.
+      keep <- c(keep, sprintf("(%s)", lab))
+    } else {
+      keep <- c(keep, lab)
+    }
+  }
+
+  copies <- list()
+  if (length(share_labs)) {
+    sf <- stats::reformulate(termlabels = share_labs, intercept = FALSE)
+    environment(sf) <- environment(pos_formula)
+    copies <- Filter(function(t) inherits(t, "tobs_copy"),
+                     .tobs_parse_formula(sf, data = NULL)$terms)
+  }
+
+  fe <- stats::reformulate(
+    termlabels = if (length(keep)) keep else "1",
+    intercept  = as.logical(attr(tt, "intercept")))
+  environment(fe) <- environment(pos_formula)
+  list(formula = fe, copies = copies)
 }
 
 # Spatial-field constructors that declare a NEW latent field (unlike share(), which

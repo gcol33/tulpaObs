@@ -330,6 +330,51 @@ test_that("share(string) on the positive arm errors (selector required)", {
     "not a string")
 })
 
+test_that("the positive-arm strip evaluates only share(), leaving the rest (#296)", {
+  f  <- tulpaObs:::.occu_cover_extract_pos_copies
+  dp <- function(x) paste(deparse(x$formula), collapse = "")
+
+  # A structured term naming a data column used to die inside the strip
+  # ("object year not found"), because the whole formula was parsed against
+  # `data = NULL`. It has to survive the strip so the ARM rejector can name the
+  # unsupported feature instead.
+  r <- f(~ x_cov + temporal(year))
+  expect_length(r$copies, 0L)
+  expect_true(grepl("temporal(year)", dp(r), fixed = TRUE))
+
+  r2 <- f(~ x_cov + re(cell))
+  expect_length(r2$copies, 0L)
+  expect_true(grepl("re(cell)", dp(r2), fixed = TRUE))
+
+  # share() is still stripped, and composes with a term left in place.
+  r3 <- f(~ x_cov + share(spatial()) + re(cell))
+  expect_length(r3$copies, 1L)
+  expect_s3_class(r3$copies[[1L]], "tobs_copy")
+  expect_true(grepl("re(cell)", dp(r3), fixed = TRUE))
+  expect_false(grepl("share(", dp(r3), fixed = TRUE))
+
+  # The rebuilt fixed-effects formula keeps the intercept term and bar syntax.
+  expect_true(grepl("- 1", dp(f(~ 0 + x_cov)), fixed = TRUE))
+  expect_true(grepl("(1 | g)", dp(f(~ x_cov + (1 | g))), fixed = TRUE))
+})
+
+test_that("a structured term on the positive arm reaches the arm rejector (#296)", {
+  skip_on_cran()
+  skip_if_fast()
+  d <- .cfa_data(N = 20L)
+  # `visit` is not a column of the cell-level frame, so the pre-#296 strip
+  # reported it as a missing object and pointed the user at their data.
+  expect_error(
+    suppressWarnings(suppressMessages(tobs(
+      occurrence = ~ occ_cov1 + icar(graph = d$adj), data = d$cell_dat,
+      family = occu_cover("lognormal"), detection = ~ det_cov1,
+      positive = ~ pos_cov1 + temporal(visit),
+      y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+      method = "nested_laplace",
+      control = list(verbose = FALSE, engine = "joint")))),
+    "not supported on the positive cover arm")
+})
+
 test_that("the retired copy() spelling names its replacement", {
   d <- data.frame(y = c(0, 1, 1, 0), x = rnorm(4), cell_idx = 1:4)
   # Every scanner that resolves a call head against the term registry: the
