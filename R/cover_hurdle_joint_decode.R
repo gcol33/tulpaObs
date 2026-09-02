@@ -38,25 +38,32 @@
     # residual-SD prefit yields the correct dispersion on either scale.
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "gaussian", phi_hat = sigma_hat,
-         phi_grid_pos = control$phi.grid %||%
-           exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7)))
+         phi_grid_pos = .tobs_mark_auto(
+           control$phi.grid %||%
+             exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7)),
+           is.null(control$phi.grid)))
   } else if (positive == "lognormal_trunc") {
     # Upper-truncated Gaussian on log-cover (cover <= 1). The midpoint prefit SD
     # ignores truncation and so over-disperses a touch; the grid runs a little
     # wider on the low side, as for the ordinal censored latent.
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "truncated_gaussian", phi_hat = sigma_hat,
-         phi_grid_pos = control$phi.grid %||%
-           exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)))
+         phi_grid_pos = .tobs_mark_auto(
+           control$phi.grid %||%
+             exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)),
+           is.null(control$phi.grid)))
   } else if (positive == "ordinal") {
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "interval_gaussian", phi_hat = sigma_hat,
-         phi_grid_pos = control$phi.grid %||%
-           exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)))
+         phi_grid_pos = .tobs_mark_auto(
+           control$phi.grid %||%
+             exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)),
+           is.null(control$phi.grid)))
   } else {
     list(pos_family = "beta", phi_hat = 1.0,
-         phi_grid_pos = control$phi.grid %||%
-           exp(seq(log(2), log(300), length.out = 7)))
+         phi_grid_pos = .tobs_mark_auto(
+           control$phi.grid %||% exp(seq(log(2), log(300), length.out = 7)),
+           is.null(control$phi.grid)))
   }
 }
 
