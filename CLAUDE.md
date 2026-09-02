@@ -103,6 +103,28 @@ Do NOT run on every edit. Ladder:
    every fitting block; no-op when env var unset. Baseline assertion/skip counts
    + the #148 fix history: `NOTES_measurements.md`. Wall time NOT measured (box
    shared) -- time it yourself, do NOT trust old figures.
+
+   **The switch is `TULPAOBS_FAST`, NOT the engine's `TULPA_FAST`.** Setting the
+   engine spelling leaves `skip_if_fast()` INACTIVE, so the heavy blocks fall to
+   `skip_on_cran()` instead and the run reports a clean tail having fitted
+   nothing. Both spellings produce a green suite; only one of them ran it.
+   A run is verified by its COUNTS, not its tail: `tests/expected-counts.csv`
+   records assertions + skips per (file, tier) and `.github/scripts/run-tests.R`
+   fails a run that asserts fewer or skips more than recorded (#302). Files
+   absent from it are unchecked -- it holds what has actually been measured.
+
+   Regenerate the manifest in the SAME commit as a change that legitimately
+   moves counts; the checker's own message says so. Its first catch was
+   `test-cover-perarm.R` at 72 against a recorded 107 after #295 turned two
+   fit-based blocks into compile assertions -- a true positive wanting a
+   regeneration, not a fix.
+
+   A stale `expect_error()` string cannot be found by grepping `R/`: nearly
+   every message is `sprintf`/`paste`-composed, so no contiguous literal exists
+   to match. A static audit over the suite returned 165 "unfindable" literals,
+   almost all false. The instrument for that class is RUNNING the block, which
+   is why the counts manifest and a finishable tier are the fix and a scanner is
+   not.
 3. **Full recovery suite** (all seeds, NUTS, spatial) -> CI cron
    (`full-recovery.yaml`), or on request. NOT a release gate, NOT pre-commit:
    ~9h serial, one file never terminates -> local whole-tier run finishes only
