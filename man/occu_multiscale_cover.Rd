@@ -82,7 +82,7 @@ with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field}
 \code{fit$trend_fields}. The coupled / trend field is not sampled, so
 \code{method = "nuts"} takes a single cell-declaring areal term only.
 
-The coupling is written as \code{copy(spatial())} in the \code{positive} formula, the
+The coupling is written as \code{share(spatial())} in the \code{positive} formula, the
 same spelling \code{\link[=occu_cover]{occu_cover()}} takes; it needs a field to copy, so it is
 accepted under \code{method = "nested_laplace"} and refused on the two
 non-spatial engines, which fix the field at 0. Omitting it decouples the
@@ -91,8 +91,8 @@ alone, the same meaning the absence has on \code{\link[=occu_cover]{occu_cover()
 implicit default coupling.
 
 The copy amplitude's axis carries prior structure -- a point mass at
-\code{alpha = 0} and a log-spaced slab above it -- so \code{copy(alpha = grid(...))}
-STATES its nodes, while \code{copy(alpha = grid(n = ))} states a RESOLUTION: the
+\code{alpha = 0} and a log-spaced slab above it -- so \code{share(alpha = grid(...))}
+STATES its nodes, while \code{share(alpha = grid(n = ))} states a RESOLUTION: the
 engine re-reads its own axis with that many slab nodes, point mass and bounds
 unchanged. \verb{terms =} gives either, per block, and
 \code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]} are the lower-level

@@ -69,7 +69,7 @@ tobs(~ time.sc + habitat +
 
 Naming the response makes the per-arm spatial labels read naturally: \code{cover()}
 splits \code{cover.flat} into a \code{presence} arm and a \code{positive} arm, the arm names
-that per-arm formulas and copy() address. The LHS is evaluated against \code{data}
+that per-arm formulas and share() address. The LHS is evaluated against \code{data}
 (then the calling environment), so it may be a bare column or an expression.
 }
 
@@ -114,8 +114,8 @@ fit.
 
 The axis the amplitude rides carries prior structure -- a point mass at
 \code{alpha = 0} ("no coupling") and a log-spaced slab above it -- so it is set
-in one of two ways. \code{copy(alpha = grid(...))} STATES its nodes, and with them
-that structure. \code{copy(alpha = grid(n = 9))} states a RESOLUTION: the engine
+in one of two ways. \code{share(alpha = grid(...))} STATES its nodes, and with them
+that structure. \code{share(alpha = grid(n = 9))} states a RESOLUTION: the engine
 re-reads its own axis with that many slab nodes, point mass and slab bounds
 unchanged, so sharpening the axis never restates its structure. \verb{terms =}
 gives either, per block. The resolution is the only way to raise this axis,
@@ -155,12 +155,12 @@ so the two spellings give the same fit.
 }
 
 \section{Choosing a field's arm}{
- placement and copy():
+ placement and share():
 The cover hurdle's two arms are \code{presence} (the \code{y > 0} Bernoulli arm) and
 \code{positive} (the \code{y | y > 0} arm); \code{summary()} and the coefficient output print
 these same labels. A field is placed on an arm by writing it in that arm's
 per-arm formula (\code{presence = ~ ...}, \code{positive = ~ ...}), and shared across
-arms with copy(). A field in the single shared \code{formula} reaches both arms.
+arms with share(). A field in the single shared \code{formula} reaches both arms.
 
 \emph{Both arms (shared / copied).} A field in the shared \code{formula} is one
 presence-anchored latent copied onto the positive arm with an estimated
@@ -178,17 +178,17 @@ positive: eta_positive = ... + alpha * u_cell + alpha_trend * time.sc * s_cell
 }\if{html}{\out{</div>}}
 
 Per-arm formulas make the shared field explicit: place it on \code{presence} and
-copy it onto \code{positive}. \code{copy(spatial())} estimates the coupling on the
-default axis; \code{copy(spatial(), alpha = grid(c(...)))} integrates it over
+copy it onto \code{positive}. \code{share(spatial())} estimates the coupling on the
+default axis; \code{share(spatial(), alpha = grid(c(...)))} integrates it over
 supplied nodes, \code{alpha = grid(n = 9)} over the engine's own axis read at \code{n}
-slab nodes, and \code{alpha = 0.5} fixes it. \code{copy(spatial(), prior = list(...))}
+slab nodes, and \code{alpha = 0.5} fixes it. \code{share(spatial(), prior = list(...))}
 regularizes the coefficient itself; a fit copying both the intercept and a
 weighted trend block is refused it, since one prior reaches the engine per
 fit (gcol33/tulpa#655).
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(presence = ~ time.sc + habitat +
                   spatial(~ 1 + time.sc || cell_idx, graph = adj),
-     positive = ~ time.sc + habitat + copy(spatial()),
+     positive = ~ time.sc + habitat + share(spatial()),
      data = dat, family = cover(response = "beta"), method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
@@ -213,11 +213,11 @@ or \code{temporal()} / \code{re()} in the same formula, and at most one targets 
 The \code{||} and \code{|} axis is separate from shared / free: \code{||} makes the intercept
 and slope fields independent, while a single \code{|} makes them correlated (a free
 cross-covariance, MCAR). A correlated \code{|} bar shared across both arms (in the
-shared \code{formula}, or on \code{presence} with \code{copy()} on \code{positive}) is copied with
+shared \code{formula}, or on \code{presence} with \code{share()} on \code{positive}) is copied with
 one estimated amplitude; placed on one arm's formula it is a free-Sigma
 correlated field on that arm alone, no cross-arm copy.
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{field in the shared formula (or copy())   one shared / copied latent (presence anchor, coupling estimated)
+\if{html}{\out{<div class="sourceCode">}}\preformatted{field in the shared formula (or share())   one shared / copied latent (presence anchor, coupling estimated)
 a field in each arm's formula             separate / free latents, no coupling
 ||                                        independent intercept and slope coefficient fields
 |                                         correlated (MCAR) coefficient fields, copy-only

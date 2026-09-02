@@ -79,7 +79,7 @@ grid also accepts. The grid weighs that slab against a point mass at
 sampled copy amplitude is the posterior conditional on a coupled field; the
 point mass's share of the prior is read on the \code{nested_laplace} route. \code{fit$nuts$sampled_hyper} and
 \code{fit$nuts$fixed_hyper} name which is which per fit (\code{icar} pins \code{rho} at 1:
-the intrinsic precision has no mixing parameter; a field with no \code{copy()} pins
+the intrinsic precision has no mixing parameter; a field with no \code{share()} pins
 the copy amplitude at 0), \code{fit$hyper_draws} carries
 their posterior alongside \code{field_sd}, the geometric-mean marginal SD the
 field implies. \code{control$fixed.hyper = TRUE} conditions on the warm
@@ -108,7 +108,7 @@ coordinates: two fields share no hyperparameter. The surfaces are
 weight column), and each block's hypers carry that block's suffix in
 \code{fit$hyper_draws} and in \code{fit$nuts$sampled_hyper} (\code{sigma_trend},
 \code{alpha_trend}, indexed when there are several). Each field's amplitude is
-addressed on its own through \code{copy(spatial(), terms = list(...))} -- with
+addressed on its own through \code{share(spatial(), terms = list(...))} -- with
 stated nodes, or \code{grid(n = )} for the engine's axis read more finely -- or
 through \code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]}, the same
 knobs the grid-integrated route reads. A second field
@@ -136,11 +136,11 @@ fits the same model on either engine.
 To carry the occurrence field onto the cover arm as well, write the copy in
 the \code{positive} formula:
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{positive = ~ pos_cov + copy(spatial())                      # amplitude estimated
-positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over given nodes
-positive = ~ pos_cov + copy(spatial(), alpha = grid(n = 9))  # engine axis, finer
-positive = ~ pos_cov + copy(spatial(), alpha = 0.5)          # fixed
-positive = ~ pos_cov + copy(spatial(), prior = list("pc.prec", c(4, 0.01)))
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{positive = ~ pos_cov + share(spatial())                      # amplitude estimated
+positive = ~ pos_cov + share(spatial(), alpha = grid(c(...))) # over given nodes
+positive = ~ pos_cov + share(spatial(), alpha = grid(n = 9))  # engine axis, finer
+positive = ~ pos_cov + share(spatial(), alpha = 0.5)          # fixed
+positive = ~ pos_cov + share(spatial(), prior = list("pc.prec", c(4, 0.01)))
 }\if{html}{\out{</div>}}
 
 The amplitude is integrated over that axis on the \code{nested_laplace} path and
@@ -156,19 +156,19 @@ given it on the first (gcol33/tulpa#655).
 requests, and the representation the formula compiles into; set each in one
 place, not both.
 
-Without a \code{copy()} (and without \code{control$alpha.grid}) the occurrence field is
+Without a \code{share()} (and without \code{control$alpha.grid}) the occurrence field is
 NOT carried onto the cover arm -- there is no implicit coupling -- so the
 amplitude is not a parameter of the model, and neither engine reports one.
 Under \code{nested_laplace} \code{alpha} is absent from \code{coef()}, \code{vcov()} and the
 \code{n_params} count; under \code{nuts} it is absent from \code{fit$nuts$sampled_hyper},
 \code{fit$nuts$fixed_hyper} and the \code{fit$hyper_draws} columns. \code{predict()} returns
-a cover arm the occurrence field does not enter. Add \code{copy(spatial())} to
+a cover arm the occurrence field does not enter. Add \code{share(spatial())} to
 couple the two arms.
 
 The axis the amplitude rides carries prior structure -- a point mass at
 \code{alpha = 0} ("no coupling") and a log-spaced slab above it -- so it is set
-in one of two ways. \code{copy(alpha = grid(...))} STATES its nodes, and with them
-that structure. \code{copy(alpha = grid(n = 9))} states a RESOLUTION: the engine
+in one of two ways. \code{share(alpha = grid(...))} STATES its nodes, and with them
+that structure. \code{share(alpha = grid(n = 9))} states a RESOLUTION: the engine
 re-reads its own axis with that many slab nodes, point mass and slab bounds
 unchanged, so sharpening the axis never restates its structure. \verb{terms =}
 gives either, per block. The resolution is the only way to raise this axis,
@@ -203,10 +203,10 @@ e.g. a temporal trend - are added as \emph{weighted} areal terms in the formula:
 
 Each weighted term \code{icar(graph, weight = col)} is a second field whose
 contribution to a predictor row is \code{weight_i * z[cell_i]}. All such fields
-share the same graph; a \code{copy()} carries one onto the cover arm with its own
+share the same graph; a \code{share()} carries one onto the cover arm with its own
 scale (\code{alpha} for the intercept field, \code{alpha_trend} for a trend field),
 integrated over the outer grid, and a field the \code{positive} formula does not
-copy stays on occurrence. \code{copy(spatial(), terms = list(...))} gives a
+copy stays on occurrence. \code{share(spatial(), terms = list(...))} gives a
 per-block amplitude and must address every block. The intercept field is
 reported in \code{fit$spatial_field}, trend fields in \code{fit$trend_field} /
 \code{fit$trend_fields}. The trend coupling grid defaults to
@@ -267,7 +267,7 @@ bar is fitted as a random effect; suppress it with \code{\link[base:suppressMess
 
 \section{Independent field on the cover arm (placement)}{
 
-A \code{copy(spatial())} in the \code{positive} formula shares the occupancy field: the
+A \code{share(spatial())} in the \code{positive} formula shares the occupancy field: the
 cover arm sees it as \verb{alpha * (occupancy field)}, the coregionalization copy
 on the outer \verb{(sigma, alpha)} grid. When the cover trend is spatially
 structured but is not

@@ -43,7 +43,7 @@ Structured effects are written as terms inside the formula, the way
 community latent factors
 \code{latent(k)}. A term enters whichever linear predictor it is written in
 (occupancy \code{formula} or \code{detection}). To share one realization across
-both predictors, tag the term with \code{id = "u"} and write \code{copy("u")} in
+both predictors, tag the term with \code{id = "u"} and write \code{share("u")} in
 the other formula.
 
 The spatial fields also have a single-verb umbrella \code{spatial(..., model = ...)} that selects the field type by name, mirroring
@@ -91,26 +91,26 @@ Family-dependent: required for \code{\link[=occu]{occu()}} and \code{\link[=abun
 
 \item{positive}{positive-arm (cover) formula for \code{\link[=occu_cover]{occu_cover()}}, e.g.
 \code{~ time.sc + habitat}. The occurrence spatial field is carried onto this arm
-with a \code{copy()} selector, the INLA-style cross-arm edge written in the
+with a \code{share()} selector, the INLA-style cross-arm edge written in the
 formula. The selector is a constructor, so no field name is needed in the
 common case:
 \itemize{
-\item \code{copy(spatial(), alpha = grid(g))} copies the occurrence arm's spatial
+\item \code{share(spatial(), alpha = grid(g))} copies the occurrence arm's spatial
 effect and marginalizes the coupling amplitude over the nodes \code{g};
 \code{alpha = grid(n = 9)} marginalizes it over the engine's own axis read at
 \code{n} slab nodes instead, which sharpens the axis without restating the
 prior structure it carries; \verb{alpha = <scalar>} fixes it.
-\item \code{copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))}
+\item \code{share(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))}
 gives a per-component amplitude, keyed by the field's own block names (the
 intercept block and a \code{||}-declared trend column, or its alias \code{trend});
 \verb{terms =} must address every block.
-\item \code{copy(spatial(), prior = list("pc.prec", c(4, 0.01)))} regularizes the
+\item \code{share(spatial(), prior = list("pc.prec", c(4, 0.01)))} regularizes the
 copy coefficient itself (\code{prior_alpha} in
 \code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}). One reaches the engine per fit.
-\item \code{copy(spatial(cell_idx), ...)} disambiguates by grouping variable when the
+\item \code{share(spatial(cell_idx), ...)} disambiguates by grouping variable when the
 occurrence arm carries several spatial effects.
-\item decoupling is structural: omit \code{copy()} so the field rides occupancy only
-(a block with no \code{copy()} is pinned at zero coupling), or write a
+\item decoupling is structural: omit \code{share()} so the field rides occupancy only
+(a block with no \code{share()} is pinned at zero coupling), or write a
 \code{spatial()} term for the cover arm's own field.
 }
 

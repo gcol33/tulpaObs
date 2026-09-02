@@ -50,8 +50,9 @@ more than one covariate, build the design matrix and pass it as \code{X.0}.}
 field cell (or carrying a \code{cell} column mapping rows to field cells).
 Defaults to the training data.}
 
-\item{times}{\code{occu_cover} \code{type = "change"} only: length-2 numeric
-\code{c(t1, t2)}, the two values of the time covariate to difference.}
+\item{times}{\code{occu_cover} \code{type = "change"} only: numeric values of the time
+covariate, at least two. \code{c(t1, t2)} differences one against the other;
+\code{c(t1, ..., tK)} returns a trajectory, every step differenced against \code{t1}.}
 
 \item{level}{\code{occu_cover} only: credible level for the interval columns
 (default 0.95).}
@@ -111,7 +112,14 @@ marginalises every derived quantity per draw. \code{type = "change"} with
 decomposition, and \code{.lwr} / \code{.upr} at \code{level}), plus the start / end
 occupancy \code{p_T1} / \code{p_T2} with their own \code{.sd} / \code{.lwr} / \code{.upr}, and a
 \code{.prob_pos} column per headline delta giving the directional posterior
-probability \code{P(delta > 0)} per cell. The result is a
+probability \code{P(delta > 0)} per cell. Passing more than two times,
+\code{times = c(t1, ..., tK)}, widens the same table into a trajectory: a level
+column per step (\code{p_T1..p_TK}, \verb{cover_cond_T*}, \verb{cover_exp_T*}) and a
+\verb{_T<k>}-suffixed delta per step, each differenced against \code{t1} and each
+carrying the same decomposition and interval columns. Every step is
+evaluated on ONE draw set, so the steps share a posterior and their deltas
+are jointly valid; with two times the delta columns keep their unsuffixed
+names, there being only one step to name. The result is a
 \code{tobs_prediction} table (one row per cell) carrying per-unit \verb{[cell x nsim]}
 draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then
