@@ -77,12 +77,13 @@
     formula = ~ xocc + icar(graph = sim$adj, group_var = "cell_idx"),
     data = sim$site,
     family = occu_cover(family, cover_aggregate = "latent"),
-    detection = ~ det_cov, positive = ~ xpos,
+    detection = ~ det_cov,
+    positive = ~ xpos + share(spatial(), alpha = grid(c(0, 0.8, 1.5))),
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(1.6), length.out = 4)),
-                   alpha.grid = c(0, 0.8, 1.5), adaptive.grid = FALSE,
+                   adaptive.grid = FALSE,
                    diagnose.k = FALSE, n.quad = 15L)))
 }
 

@@ -156,13 +156,13 @@ test_that("a pruned occu_cover fit does not warn about convergence", {
   fit <- withCallingHandlers(
     tobs(formula = ~ occ_cov1 + bym2(graph = fx$adj), data = fx$cell_dat,
          family = occu_cover("lognormal"),
-         detection = ~ det_cov1, positive = ~ pos_cov1,
+         detection = ~ det_cov1,
+         positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1, 1.5))),
          y = fx$od$y, y_pos = fx$y_pos, visits = fx$od$det.covs,
          method = "nested_laplace",
          control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
                         prune = TRUE, prune.tol = 1e-3,
-                        sigma.grid = c(0.3, 0.5, 0.8, 1.2, 1.8),
-                        alpha.grid = c(0, 0.5, 1, 1.5))),
+                        sigma.grid = c(0.3, 0.5, 0.8, 1.2, 1.8))),
     warning = function(w) {
       warns <<- c(warns, conditionMessage(w))
       invokeRestart("muffleWarning")

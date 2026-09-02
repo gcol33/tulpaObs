@@ -517,14 +517,13 @@ fit_oc <- suppressWarnings(tobs(
   data      = cell_dat,
   family    = occu_cover("lognormal"),
   detection = ~ det_cov1,
-  positive  = ~ pos_cov1,
+  positive  = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1.0))),
   y         = od$y,
   y_pos     = y_pos,
   visits    = od$det.covs,
   method    = "nested_laplace",
   control   = list(verbose = FALSE, max.iter = 300L,
-                   sigma.grid = c(0.5, 1.0),
-                   alpha.grid = c(0, 0.5, 1.0))
+                   sigma.grid = c(0.5, 1.0))
 ))
 ```
 
@@ -819,7 +818,7 @@ A decision table for picking the family and method:
 On the grid and priors: the outer hyperparameter grid is integrated, not
 optimized, so a coarse `sigma.grid` biases `sigma` toward whatever points you
 supply. The defaults are reasonable, but for a publication fit widen and refine
-`control$sigma.grid` and `control$alpha.grid` and confirm the posterior is
+`control$sigma.grid` and the `share()` amplitude and confirm the posterior is
 interior to the grid rather than pinned at an edge. The copy coefficient is the
 most prior-sensitive quantity at small N: with few positive observations the
 data barely constrains `alpha`, and the posterior will track the grid you

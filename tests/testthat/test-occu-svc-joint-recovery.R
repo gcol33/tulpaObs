@@ -184,8 +184,7 @@ test_that("occu() SVC occupancy arm matches occu_cover(alpha = 0) within toleran
     method    = "nested_laplace",
     control   = list(verbose = FALSE, progress = FALSE,
                      engine = "joint", n.threads = 1L,
-                     sigma.grid = sigma_grid, alpha.grid = 0,
-                     alpha.grid.trend = 0, integration = "grid",
+                     sigma.grid = sigma_grid, integration = "grid",
                      adaptive.grid = FALSE, var.of.means.consistency = FALSE,
                      diagnose.k = FALSE)
   )), error = function(e) { message("occu_cover ref fit failed: ",

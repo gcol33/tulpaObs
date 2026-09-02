@@ -203,7 +203,8 @@ test_that("SLA gamma near zero at large N", {
                             alpha_true = 1.0)
 
     fit <- suppressMessages(tobs(
-        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
+        formula = ~ x + bym2(graph = sim$adj, group_var = "region") +
+                  share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
@@ -211,7 +212,6 @@ test_that("SLA gamma near zero at large N", {
         control = list(
             sigma.grid     = c(0.4, 0.8),
             rho.grid       = c(0.5, 0.9),
-            alpha.grid     = c(0.5, 1.0, 1.5),
             adaptive.grid  = FALSE
         )
     ))
@@ -266,7 +266,6 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
             # max(alpha) * max(sigma) = 0.2 * 0.15 = 0.03.
             sigma.grid     = c(0.02, 0.08, 0.15),
             rho.grid       = c(0.5),
-            alpha.grid     = c(0, 0.05, 0.20),
             adaptive.grid  = FALSE
         )
     ))

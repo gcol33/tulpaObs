@@ -53,9 +53,12 @@ simulate_copy_axis_cover <- function(seed = 4242L, N = 300L, n_s = 25L,
 # stated `alpha.n` would be a resolution for an axis that does not exist; the
 # resolution composes with a share() naming no amplitude, which is the pair
 # these blocks are about.
-fit_copy_axis_cover <- function(sim, adj, ctrl) {
+fit_copy_axis_cover <- function(sim, adj, ctrl = list(), n = NULL) {
+  share_call <- if (is.null(n)) quote(share(spatial()))
+                else bquote(share(spatial(), alpha = grid(n = .(n))))
   suppressWarnings(tobs(
-    formula = ~ x + icar(graph = adj, group_var = "region") + share(spatial()),
+    formula = eval(bquote(
+      ~ x + icar(graph = adj, group_var = "region") + .(share_call))),
     data = sim$data, family = cover("beta"), y = sim$y,
     method = "nested_laplace",
     control = c(list(sigma.grid = c(0.3, 0.6), phi.grid = c(12, 40),
@@ -128,18 +131,21 @@ test_that("the control reader is exact, not prefix-matching", {
 
 # ---- the two spellings are refused together -------------------------------
 
-test_that("stating nodes and naming a resolution on one block is an error", {
-  expect_error(
-    tulpaObs:::.tobs_check_alpha_control(
-      list(alpha.grid = c(0, 1), alpha.n = 9), "cover()"),
-    "not both")
-  expect_error(
-    tulpaObs:::.tobs_check_alpha_control(
-      list(alpha.grid.trend = c(0, 1), alpha.n.trend = 9), "cover()"),
-    "not both")
-  # Different blocks: each takes its own spelling.
+test_that("every coupling-amplitude control key is refused (#295)", {
+  # These four were the lower-level spelling of what share() states. They are
+  # the wire format the formula compiles into, so a fit that sets one is
+  # refused and told which formula form to write. The guard that used to keep
+  # the two doors consistent with each other went with the second door.
+  for (k in c("alpha.grid", "alpha.n", "alpha.grid.trend", "alpha.n.trend")) {
+    ctl <- stats::setNames(list(c(0, 1)), k)
+    expect_error(tulpaObs:::.tobs_check_alpha_control(ctl, "cover()"),
+                 "not user surface", info = k)
+    expect_error(tulpaObs:::.tobs_check_alpha_control(ctl, "cover()"),
+                 "share(spatial()", fixed = TRUE, info = k)
+  }
+  # A control carrying none of them passes.
   expect_true(tulpaObs:::.tobs_check_alpha_control(
-    list(alpha.grid = c(0, 1), alpha.n.trend = 9), "cover()"))
+    list(sigma.grid = c(0.5, 1)), "cover()"))
 })
 
 test_that("a share() stating an amplitude and a resolution knob are refused together", {
@@ -260,7 +266,7 @@ test_that("the resolution is a declared control key on the joint families", {
          data = sim$data, family = cover("beta"), y = sim$y,
          method = "nested_laplace",
          control = list(alpha.grid = c(0, 1), alpha.n = 9)),
-    "not both")
+    "not user surface")
 })
 
 
@@ -273,7 +279,7 @@ test_that("the resolution places the copy axis the fit integrates", {
   sim <- simulate_copy_axis_cover()
 
   dflt <- fit_copy_axis_cover(sim, adj, list())
-  fine <- fit_copy_axis_cover(sim, adj, list(alpha.n = 11))
+  fine <- fit_copy_axis_cover(sim, adj, n = 11)
 
   expect_true(all(engine_alpha_axis()   %in% alpha_nodes_of(dflt)))
   expect_true(all(engine_alpha_axis(11) %in% alpha_nodes_of(fine)))
@@ -285,7 +291,7 @@ test_that("the resolution places the copy axis the fit integrates", {
   # Naming the engine's OWN resolution reproduces the default fit, so the
   # pass-through resolves the same axis rather than a parallel one.
   same <- fit_copy_axis_cover(
-    sim, adj, list(alpha.n = length(engine_alpha_axis()) - 1L))
+    sim, adj, n = length(engine_alpha_axis()) - 1L)
   expect_equal(alpha_nodes_of(same), alpha_nodes_of(dflt))
   expect_equal(same$joint$log_marginal, dflt$joint$log_marginal)
 
@@ -305,11 +311,12 @@ test_that("the trend block carries its own resolution", {
   fit <- suppressWarnings(tobs(
     formula = ~ x + icar(graph = adj, group_var = "region") +
                 icar(graph = adj, weight = time.sc, group_var = "region") +
-                share(spatial()),
+                share(spatial(),
+                      terms = list(intercept = grid(n = 4),
+                                   trend     = grid(n = 2))),
     data = sim$data, family = cover("beta"), y = sim$y,
     method = "nested_laplace",
     control = list(sigma.grid = c(0.4, 0.8), phi.grid = c(12, 40),
-                   alpha.n = 4, alpha.n.trend = 2,
                    adaptive.grid = FALSE, integration = "grid")))
 
   # Each block reads its own resolution off its own knob.
@@ -354,22 +361,22 @@ test_that("a bare share() takes the resolution; a share() with nodes refuses it"
     length(unique(as.numeric(tg[, which(colnames(tg) == "alpha")])))
   }
   dflt <- fit_at(~ pos_cov1 + share(spatial()), list())
-  fine <- fit_at(~ pos_cov1 + share(spatial()), list(alpha.n = 11))
+  fine <- fit_at(~ pos_cov1 + share(spatial(), alpha = grid(n = 11)), list())
   expect_gt(alpha_axis_size(fine), alpha_axis_size(dflt))
 
   # At `alpha.n = 1` the slab collapses to its lower bound, so a truth of
   # alpha = 1.0 is off the axis and cannot be reached -- the knob reaches the
   # likelihood, not just the grid's shape.
-  narrow <- fit_at(~ pos_cov1 + share(spatial()), list(alpha.n = 1))
+  narrow <- fit_at(~ pos_cov1 + share(spatial(), alpha = grid(n = 1)), list())
   expect_lte(narrow$means[["alpha"]], max(engine_alpha_axis(1)))
   expect_gt(dflt$means[["alpha"]], narrow$means[["alpha"]])
 
-  # `share(alpha = grid(...))` states the nodes, so the two are the same axis
-  # written twice.
+  # The control spelling of the resolution is retired (#295): a fit reaching
+  # for it is refused and pointed at grid(n = ).
   expect_error(
     fit_at(~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1))),
            list(alpha.n = 11)),
-    "share(alpha = ) states the copy axis", fixed = TRUE)
+    "not user surface")
 })
 
 

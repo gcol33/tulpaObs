@@ -32,13 +32,13 @@
     fit <- suppressWarnings(tobs(
         formula = ~ occ_cov1 + year + bym2(graph = adj), data = cell_dat,
         family = occu_cover("lognormal"),
-        detection = ~ det_cov1, positive = ~ pos_cov1,
+        detection = ~ det_cov1,
+        positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1.0))),
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 300L,
                        engine = "joint",
-                       sigma.grid = c(0.5, 1.0),
-                       alpha.grid = c(0, 0.5, 1.0))
+                       sigma.grid = c(0.5, 1.0))
     ))
     list(fit = fit, cell_dat = cell_dat, adj = adj, N = N, f = sim$truth$f)
 }
@@ -226,14 +226,14 @@ test_that("in-sample occurrence tracks the plug-in predictor", {
     fit <- suppressWarnings(tobs(
         formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
         family = occu_cover("lognormal"),
-        detection = ~ det_cov1, positive = ~ pos_cov1,
+        detection = ~ det_cov1,
+        positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5))),
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 250L,
                        engine = "joint",
                        trend = list(weight = "time"),
-                       sigma.grid = c(0.5, 1.0),
-                       alpha.grid = c(0, 0.5))
+                       sigma.grid = c(0.5, 1.0))
     ))
     list(fit = fit, cell_dat = cell_dat, N = N)
 }
@@ -312,12 +312,13 @@ test_that("trend fit errors clearly when time_col is unavailable", {
     fit <- suppressWarnings(tobs(
         formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
         family = occu_cover("lognormal"),
-        detection = ~ det_cov1, positive = ~ pos_cov1,
+        detection = ~ det_cov1,
+        positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5))),
         y = od$y, y_pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 250L, engine = "joint",
                        trend = list(weight = "time"),
-                       sigma.grid = c(0.5, 1.0), alpha.grid = c(0, 0.5))
+                       sigma.grid = c(0.5, 1.0))
     ))
     list(fit = fit, cell_dat = cell_dat, truth = sim$truth, N = N)
 }

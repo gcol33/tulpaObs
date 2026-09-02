@@ -94,9 +94,10 @@ The copy amplitude's axis carries prior structure -- a point mass at
 \code{alpha = 0} and a log-spaced slab above it -- so \code{share(alpha = grid(...))}
 STATES its nodes, while \code{share(alpha = grid(n = ))} states a RESOLUTION: the
 engine re-reads its own axis with that many slab nodes, point mass and bounds
-unchanged. \verb{terms =} gives either, per block, and
-\code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]} are the lower-level
-spelling of the same pair. One block takes one of the two.
+unchanged. \verb{terms =} gives either, per block; one block takes one of the
+two. \code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]} are the wire
+format these compile into and are refused as user input
+(gcol33/tulpaObs#295).
 }
 
 \seealso{

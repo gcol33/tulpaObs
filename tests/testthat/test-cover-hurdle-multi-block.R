@@ -98,7 +98,6 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
 .mb_grid <- list(
   sigma.grid         = c(0.2, 0.45, 0.9),
   rho.grid           = c(0.5, 0.85),
-  alpha.grid         = c(0.4, 1.0, 2.5),
   tau.temporal.grid  = c(1, 4, 16, 64),
   rho.temporal.grid  = 0.6,
   sigma.re.grid      = c(0.06, 0.2, 0.7),
@@ -106,10 +105,15 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
   adaptive.grid      = FALSE
 )
 
+# The coupling amplitude is stated in the FORMULA (#295): control$alpha.grid is
+# the wire format it compiles into, not a knob a fit sets itself.
+.mb_alpha <- c(0.4, 1.0, 2.5)
+
 .mb_fit <- function(sim) {
   suppressWarnings(tobs(
     formula  = ~ x + bym2(graph = sim$adj, group_var = "region") +
-                 temporal(year, type = "ar1") + re(obs, type = "iid"),
+                 temporal(year, type = "ar1") + re(obs, type = "iid") +
+                 share(spatial(), alpha = grid(.mb_alpha)),
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
@@ -150,7 +154,7 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
   # Every block axis the driver placed is the one asked for, per block.
   tg <- fit$joint$theta_grid
   expect_equal(sort(unique(tg[, "b1.sigma"])), .mb_grid$sigma.grid)
-  expect_equal(sort(unique(tg[, "b1.alpha"])), .mb_grid$alpha.grid)
+  expect_equal(sort(unique(tg[, "b1.alpha"])), .mb_alpha)
   expect_equal(sort(unique(tg[, "b2.tau"])),   .mb_grid$tau.temporal.grid)
   expect_equal(sort(unique(tg[, "b3.sigma"])), .mb_grid$sigma.re.grid)
 
@@ -205,15 +209,17 @@ test_that("cover(): each multi-block hyperparameter follows its own truth", {
 # magnitude apart gave a bit-identical `log_marginal`. The assertion is
 # therefore that the knob CHANGES the fit: a band the default also satisfies is
 # what let this survive.
-test_that("cover(): control$alpha.grid places the multi-block copy axis", {
+test_that("cover(): share(alpha = grid()) places the multi-block copy axis", {
   skip_if_fast()
   sim <- simulate_cover_multi_block(N = 300, seed = 7005)
   adj <- sim$adj
 
   fit_at <- function(alpha_grid) {
     suppressWarnings(tobs(
-      formula  = ~ x + bym2(graph = adj, group_var = "region") +
-                   temporal(year, type = "ar1"),
+      formula  = eval(bquote(
+        ~ x + bym2(graph = adj, group_var = "region") +
+          temporal(year, type = "ar1") +
+          share(spatial(), alpha = grid(.(alpha_grid))))),
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
@@ -221,7 +227,6 @@ test_that("cover(): control$alpha.grid places the multi-block copy axis", {
       control  = list(
         sigma.grid        = c(0.4, 0.8),
         rho.grid          = 0.85,
-        alpha.grid        = alpha_grid,
         tau.temporal.grid = 9,
         rho.temporal.grid = 0.5,
         phi.grid          = c(12, 40),
@@ -260,7 +265,7 @@ test_that("cover(): the retired sigma.pos.grid knob is refused, not ignored", {
       method   = "nested_laplace",
       control  = list(sigma.pos.grid = c(0.4, 0.8, 1.2))
     ),
-    "control$alpha.grid", fixed = TRUE)
+    "share(spatial(), alpha = grid", fixed = TRUE)
 })
 
 

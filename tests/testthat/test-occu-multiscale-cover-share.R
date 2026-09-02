@@ -67,11 +67,16 @@ test_that("occu_multiscale_cover(): the pin is a one-node axis, not a dropped sp
   expect_false(is.null(a$alpha.grid))
 })
 
-test_that("occu_multiscale_cover(): control$alpha.grid still overrides the pin", {
-  # The lower-level spelling short-circuits the translation, so a fit that
-  # states the axis keeps it rather than being decoupled underneath itself.
-  a <- mscopy_control(~ x_cov, control = list(alpha.grid = c(0, 0.5, 1)))
-  expect_equal(as.numeric(a$alpha.grid), c(0, 0.5, 1))
+test_that("occu_multiscale_cover(): the control spelling is refused (#295)", {
+  # It was the lower-level way to state the same axis, and it short-circuited
+  # the translation rather than compiling to it. Retired: share() states the
+  # axis, control$alpha.grid[.trend] is only what it compiles into.
+  expect_error(
+    mscopy_control(~ x_cov, control = list(alpha.grid = c(0, 0.5, 1))),
+    "not user surface")
+  expect_error(
+    mscopy_control(~ x_cov, control = list(alpha.n = 9L)),
+    "not user surface")
 })
 
 test_that("occu_multiscale_cover(): share() is refused where no field enters", {
@@ -83,11 +88,13 @@ test_that("occu_multiscale_cover(): share() is refused where no field enters", {
   }
 })
 
-test_that("occu_multiscale_cover(): share() and the control spelling are exclusive", {
+test_that("occu_multiscale_cover(): the control key is refused beside a share() too", {
+  # Refused for being the retired spelling, not for conflicting -- the message
+  # names the formula form either way.
   expect_error(
     mscopy_control(~ x_cov + share(spatial(), alpha = grid(c(0.5, 1))),
                    control = list(alpha.grid = c(0.5, 1))),
-    "not both")
+    "not user surface")
 })
 
 test_that("occu_multiscale_cover(): a share() with no field to copy is refused", {

@@ -2,6 +2,58 @@
 
 ## 0.1.4 (2026-09-02)
 
+* **The sampled areal hypers changed what they reach, on every such fit.** Two
+  separate movements, both in this version, and neither announced itself in a
+  fitted object -- so a number carried across this boundary is not comparable.
+
+  The sampled proper-CAR / bym2 `rho` now stops at the field's admissible
+  interval instead of a clamp at `1 - 1e-4`. tulpa declares every `rho*` axis
+  evenly spaced while the default node set `c(0.5, 0.8, 0.95, 0.99)` is built
+  logit-spaced, so the half-node-step support came back as `[0.35, 1.01]` --
+  1.01 is not a correlation -- and the proper-CAR loading scales its j-th
+  eigen-column by `(1 - rho lambda_j)^-1/2`, which is numerically intrinsic at
+  `lambda_max = 1`. Measured on the coupled fixture: divergences 17 / 82 / 14 /
+  96 across four seeds fall to 0, and the `field_sd` posterior mean falls from
+  10.9-22.0 at its worst draws. Upstream cause filed as gcol33/tulpa#657; the
+  downstream guard is belt-and-braces once that lands.
+
+  Separately, the outer grid's declared SPAN (gcol33/tulpaObs#301) moved a
+  REPORTED summary. `field_sd` is weakly identified and right-skewed, so a flat
+  prior over a wider log span raises its posterior mean: 1.18 against 1.011
+  recorded for the same fixture, ~17%, with interval coverage unchanged at
+  0.95-0.97. The calibration claim is intact; the point summary is not
+  comparable across the boundary. It also reversed which across-seed summary is
+  more stable -- the median now is, where the mean was on the narrower span --
+  because the mean is the summary the span moves.
+
+* **BREAKING: the coupling-amplitude control keys are no longer user surface**
+  (gcol33/tulpaObs#295). `control$alpha.grid`, `control$alpha.n`,
+  `control$alpha.grid.trend` and `control$alpha.n.trend` are the wire format the
+  formula compiles into, and a fit that sets one is now refused with the
+  formula spelling to use:
+
+  ```
+  control$alpha.grid       ->  share(spatial(), alpha = grid(c(...)))
+  control$alpha.n          ->  share(spatial(), alpha = grid(n = <k>))
+  control$alpha.grid.trend ->  share(spatial(), terms = list(trend = grid(c(...))))
+  control$alpha.n.trend    ->  share(spatial(), terms = list(trend = grid(n = <k>)))
+  ```
+
+  Two front doors for one request meant a guard layer to keep them consistent,
+  an asymmetry in which one composes with what, and two spellings a reader had
+  to know were the same model. `share()` says what the model IS; the keys say
+  how the engine reads an axis, and only one of those is the user's business.
+
+  Every case is expressible: on a two-block field
+  `share(spatial(), terms = list(intercept = grid(g1), trend = grid(g2)))`
+  reproduces `alpha.grid` + `alpha.grid.trend` exactly (verified to the reported
+  digit before the keys were closed). A block the formula does not name is
+  decoupled, per the reading settled in #297.
+
+  `control$prior.alpha` is unaffected: it is one of three regularizing
+  hyperpriors on the outer-grid axes, and retiring one member alone would break
+  the family.
+
 * **BREAKING: a missing `share()` decouples the arms on `cover()` too**
   (gcol33/tulpaObs#297). The third and last door now reads a bare areal term
   the way `occu_cover()` always has and `occu_multiscale_cover()` moved to in

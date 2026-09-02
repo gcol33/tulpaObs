@@ -107,8 +107,9 @@ arm's predictor is \code{weight_i * z[cell_i]}, coupled onto the cover arm with
 its own scale (\code{alpha_trend}, reported in \code{fit$alpha_trend} /
 \code{fit$sigma_trend}) integrated over the outer grid. The umbrella spelling
 \code{spatial(graph = adj, model = "icar", weight = col)} resolves identically.
-The trend coupling grid defaults to \code{control$alpha.grid}; override it with
-\code{control$alpha.grid.trend}. Requires \code{method = "nested_laplace"}. A coupled
+The trend block inherits the intercept block's amplitude; give it its own
+with \code{share(spatial(), terms = list(intercept = ..., trend = ...))}.
+Requires \code{method = "nested_laplace"}. A coupled
 trend cannot currently combine with \code{temporal()} / \code{re()} blocks in the same
 fit.
 
@@ -124,7 +125,8 @@ informative data set the outer grid's quadrature effective sample size
 saturates on the copy amplitude while every other axis tracks the request
 (measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
 two; giving both is an error. \code{control$alpha.grid[.trend]} and
-\code{control$alpha.n[.trend]} are the lower-level spelling of the same pair.
+\code{control$alpha.n[.trend]} are the wire format these compile into and are
+refused as user input (gcol33/tulpaObs#295).
 
 Set it when the fit's hyperparameter intervals are reported. On the coupled
 SBC fixture the declared resolution leaves the field SD miscalibrated once

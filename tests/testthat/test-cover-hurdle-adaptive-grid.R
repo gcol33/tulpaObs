@@ -3,7 +3,7 @@
 #
 # The joint engine integrates the cross-arm coupling as the copy coefficient
 # `alpha`: the presence arm sees the BYM2 field at amplitude `sigma`, the cover
-# arm at `alpha * sigma`. `control$alpha.grid` is the axis knob for it, declared
+# arm at `alpha * sigma`. `share(spatial(), alpha = grid(...))` states that axis, declared
 # on the positive arm's `field_coef` (`R/cover_hurdle_joint.R`). Every fit below
 # pins that axis at `c(0, 0.5, 1.0, 1.5)` with `alpha_true = 1.5`, so the truth
 # sits AT its top node -- the configuration the adaptive-grid fix was written
@@ -88,8 +88,12 @@ adaptive_axes_of <- function(fit) {
   unlist(strsplit(info$triggered_axes, ","), use.names = FALSE)
 }
 
-fit_d3_like <- function(sim, adj, ctrl) {
-  tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
+# The copy axis is stated in the FORMULA (#295): control$alpha.grid is the wire
+# format share() compiles into. `alpha` defaults to the pin this file is about.
+fit_d3_like <- function(sim, adj, ctrl, alpha = alpha_pin_for_test) {
+  tobs(formula = eval(bquote(
+         ~ x + bym2(graph = adj, group_var = "region") +
+           share(spatial(), alpha = grid(.(alpha))))),
        data = sim$data, family = cover("beta"), y = sim$y,
        method = "nested_laplace", control = ctrl)
 }
@@ -108,7 +112,6 @@ test_that("adaptive refinement leaves the copy axis at the upper boundary", {
     fit <- fit_d3_like(sim, adj, list(
       sigma.grid     = c(0.3, 0.6, 0.9),
       rho.grid       = c(0.5, 0.7, 0.9),
-      alpha.grid     = alpha_pin_for_test,
       adaptive.grid  = TRUE
     ))
     expect_s3_class(fit, "cover_fit")
@@ -163,7 +166,6 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
   ctrl <- list(
     sigma.grid     = c(0.3, 0.6, 0.9),
     rho.grid       = c(0.5, 0.7, 0.9),
-    alpha.grid     = alpha_pin_for_test,
     phi.grid       = exp(seq(log(2), log(300), length.out = 13)),
     var.of.means.consistency = FALSE
   )
@@ -240,7 +242,6 @@ test_that("adaptive refinement is a no-op on the copy axis when the integrand ha
   fit <- fit_d3_like(sim, adj, list(
     sigma.grid     = c(0.3, 0.6, 0.9),
     rho.grid       = c(0.5, 0.7, 0.9),
-    alpha.grid     = alpha_pin_for_test,
     adaptive.grid  = TRUE
   ))
 
@@ -274,7 +275,6 @@ test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
   ctrl_grid <- list(
     sigma.grid     = exp(seq(log(0.2), log(1.5), length.out = 5)),
     rho.grid       = c(0.25, 0.5, 0.7, 0.9),
-    alpha.grid     = alpha_pin_for_test,
     phi.grid       = exp(seq(log(2), log(300), length.out = 7)),
     adaptive.grid  = FALSE
   )
@@ -330,8 +330,7 @@ test_that("cover() reaches the consistency pass, and holds a declared axis when 
 
   sim <- simulate_d3_like(seed = 3401L, alpha_true = 1.5)
   adj <- chain_adj(nlevels(sim$data$region))
-  ctrl <- list(sigma.grid = c(0.3, 0.6, 0.9), rho.grid = c(0.5, 0.7, 0.9),
-               alpha.grid = alpha_pin_for_test, adaptive.grid = FALSE)
+  ctrl <- list(sigma.grid = c(0.3, 0.6, 0.9), rho.grid = c(0.5, 0.7, 0.9), adaptive.grid = FALSE)
 
   on  <- fit_d3_like(sim, adj, ctrl)
   off <- fit_d3_like(sim, adj, c(ctrl, list(var.of.means.consistency = FALSE)))

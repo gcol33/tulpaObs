@@ -63,8 +63,6 @@
 .acr_fit <- function(s, agg = NULL) {
   ctrl <- list(verbose = FALSE,
                sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
-               alpha.grid = c(0, 0.5, 1.0, 1.5),
-               alpha.grid.trend = c(0, 0.5, 1.0, 1.5),
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)
   if (!is.null(agg)) { ctrl$aggregate.occ <- agg; ctrl$aggregate.pos <- agg }
   # The spatially-varying trend is a second weighted areal term in the

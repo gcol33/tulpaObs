@@ -23,19 +23,23 @@
   list(od = od, cell_dat = cell_dat, y_pos = y_pos)
 }
 
+# The coupling amplitude is stated in the FORMULA (#295); the whole-field form
+# reaches both the intercept and the trend block, which is what the retired
+# control$alpha.grid + alpha.grid.trend pair did here.
+.trend_alpha <- c(0, exp(seq(log(0.1), log(3), length.out = 5)))
+
 # Trend field requested out-of-band via control$trend (back-compat route).
 .trend_fit <- function(sim, N, J, max.iter = 100L) {
   d <- .trend_data(sim, N, J)
   suppressWarnings(tobs(
     formula = ~ occ_cov1 + bym2(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1,
+    detection = ~ det_cov1,
+    positive = ~ pos_cov1 + share(spatial(), alpha = grid(.trend_alpha)),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter,
                    engine = "joint",
-                   alpha.grid = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
-                   alpha.grid.trend = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    trend = list(weight = "time"))
   ))
 }
@@ -124,11 +128,10 @@ test_that("trend field via a weighted formula term matches the control$trend rou
   # numerically identical given the same intercept term.
   fit_ctrl <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
-    family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
+    family = occu_cover("lognormal"), detection = ~ det_cov1,
+    positive = ~ pos_cov1 + share(spatial(), alpha = grid(.trend_alpha)),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 300L, engine = "joint",
-                   alpha.grid = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
-                   alpha.grid.trend = c(0, exp(seq(log(0.1), log(3), length.out = 5))),
                    trend = list(weight = "time"))
   ))
   keys <- c("psi_occ_cov1", "p_det_cov1", "pos_pos_cov1", "alpha", "alpha_trend")

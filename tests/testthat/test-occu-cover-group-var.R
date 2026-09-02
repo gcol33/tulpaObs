@@ -63,13 +63,12 @@
     formula = ~ time.sc + icar(graph = adj, group_var = "cell_idx") +
                 icar(graph = adj, weight = time.sc, group_var = "cell_idx"),
     data = sim$site, family = occu_cover("beta"),
-    detection = ~ det_cov, positive = ~ pos_cov,
+    detection = ~ det_cov,
+    positive = ~ pos_cov + share(spatial(), alpha = grid(c(0, 0.6, 1.5))),
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(2.0), length.out = 4)),
-                   alpha.grid = c(0, 0.6, 1.5),
-                   alpha.grid.trend = c(0, 0.6, 1.5),
                    adaptive.grid = TRUE)
   ))
 }
@@ -173,12 +172,13 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
   fit <- suppressWarnings(tobs(
     formula = ~ icar(graph = adj, group_var = "cell_idx"),
     data = sim$site, family = occu_cover("beta"),
-    detection = ~ det_cov, positive = ~ pos_cov,
+    detection = ~ det_cov,
+    positive = ~ pos_cov + share(spatial(), alpha = grid(c(0, 0.6, 1.5))),
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 300L, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(2.0), length.out = 4)),
-                   alpha.grid = c(0, 0.6, 1.5), adaptive.grid = TRUE)))
+                   adaptive.grid = TRUE)))
 
   psi_int <- unname(fit$means[["psi_(Intercept)"]])
   sig_hat <- unname(fit$means[["sigma"]])

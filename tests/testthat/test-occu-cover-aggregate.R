@@ -50,12 +50,13 @@
     formula = ~ xocc + icar(graph = sim$adj, group_var = "cell_idx"),
     data = sim$site,
     family = occu_cover("beta", cover_aggregate = cover_aggregate),
-    detection = ~ det_cov, positive = ~ xpos,
+    detection = ~ det_cov,
+    positive = ~ xpos + share(spatial(), alpha = grid(c(0, 0.8, 1.5))),
     y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(1.6), length.out = 4)),
-                   alpha.grid = c(0, 0.8, 1.5), adaptive.grid = FALSE,
+                   adaptive.grid = FALSE,
                    diagnose.k = FALSE)))
 }
 
@@ -85,12 +86,13 @@ test_that("aggregation resolution, fall-back, and error gates", {
   fit_fallback <- suppressWarnings(tobs(
     formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
     data = sim$site, family = occu_cover("beta"),     # default
-    detection = ~ det_cov, positive = ~ pcov,         # visit-level pos covariate
+    detection = ~ det_cov,                            # visit-level pos covariate
+    positive = ~ pcov + share(spatial(), alpha = grid(c(0, 1.0))),
     y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 200L, engine = "joint",
                    sigma.grid = exp(seq(log(0.5), log(1.5), length.out = 3)),
-                   alpha.grid = c(0, 1.0), adaptive.grid = FALSE, diagnose.k = FALSE)))
+                   adaptive.grid = FALSE, diagnose.k = FALSE)))
   expect_identical(fit_fallback$model$cover_aggregate, "none")
 
   # Explicit aggregation + a visit-level positive covariate -> error.

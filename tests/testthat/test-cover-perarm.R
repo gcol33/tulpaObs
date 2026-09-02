@@ -128,11 +128,16 @@ test_that("shared-formula share() refuses the same conflicts the per-arm one doe
       formula = fml, data = s$data, family = cover("lognormal"),
       y = s$data$cover, method = "nested_laplace", control = ctrl)))
   }
-  # Both spellings of the amplitude at once.
+  # The control spelling is retired (#295): it is refused whether or not a
+  # share() is present, and the message names the formula form to use.
   expect_error(
     fit_at(~ time + icar(graph = adj, group_var = "cell") + share(spatial()),
            ctrl = c(.cp_shared_ctrl, list(alpha.grid = c(0, 1)))),
-    "not both")
+    "not user surface")
+  expect_error(
+    fit_at(~ time + icar(graph = adj, group_var = "cell"),
+           ctrl = c(.cp_shared_ctrl, list(alpha.grid = c(0, 1)))),
+    "not user surface")
   # A coupling with no field to couple names the field, not an index error.
   expect_error(fit_at(~ time + share(spatial())),
                "needs a spatial field")
@@ -254,9 +259,11 @@ test_that("only one per-arm formula errors (need both, or the shared one)", {
 
 # ---------------------------------------------------------------------------
 # share() coupling-amplitude handoff (whole-field + per-component decoupling).
-# Guards the alpha -> control$alpha.grid[.trend] handoff the roadmap flagged as
-# untested, and the per-component grammar that lets cover()'s intercept and
-# trend blocks decouple (parity with occu_cover()).
+# Guards that a share()'s stated amplitude reaches the block it names -- the
+# whole-field form both blocks, the per-component form each block on its own --
+# and the per-component grammar that lets cover()'s intercept and trend blocks
+# decouple (parity with occu_cover()). The control spelling these once compared
+# against was retired in #295.
 # ---------------------------------------------------------------------------
 
 # 6x6 grid with a shared intercept field u0 and a shared trend field u1
@@ -300,7 +307,7 @@ test_that("only one per-arm formula errors (need both, or the shared one)", {
   checked
 }
 
-test_that("cover() whole-field share(alpha = grid()) == the shared-formula + control handoff", {
+test_that("cover() whole-field share(alpha = grid()) compiles onto both blocks", {
   skip_on_cran()
   s <- .cov_trend_sim(); g <- c(0, 0.5, 1)
   ctrl <- list(progress = FALSE, integration = "ccd")
@@ -310,14 +317,20 @@ test_that("cover() whole-field share(alpha = grid()) == the shared-formula + con
     positive = ~ x + share(spatial(), alpha = grid(g)),
     family = cover(response = "beta"), data = s$data, y = s$y,
     method = "nested_laplace", control = ctrl))
-  fit_ctrl <- suppressWarnings(tobs(
-    ~ x + spatial(~ 1 + t || cell, graph = s$adj),
-    family = cover(response = "beta"), data = s$data, y = s$y,
-    method = "nested_laplace",
-    control = c(ctrl, list(alpha.grid = g, alpha.grid.trend = g))))
 
+  # This used to fit the same model a second way, through
+  # control$alpha.grid[.trend], and assert the two doors agreed. That door is
+  # retired (#295), so what is asserted is the half that still means something:
+  # the whole-field form reaches BOTH blocks' axes with the nodes it states.
   expect_s3_class(fit_copy, "cover_fit")
-  expect_gt(.cover_fit_equal(fit_copy, fit_ctrl), 3L)
+  # A cover_fit carries the joint object at $joint; theta_grid labels a
+  # multi-block axis "b<k>.alpha".
+  ax <- function(f, nm) {
+    tg <- f$joint$theta_grid %||% f$joint_fit$theta_grid
+    sort(unique(as.numeric(tg[, which(colnames(tg) == nm)])))
+  }
+  expect_equal(ax(fit_copy, "b1.alpha"), sort(g))
+  expect_equal(ax(fit_copy, "b2.alpha"), sort(g))
 })
 
 test_that("cover() per-component share(terms=) with equal grids == the whole-field share(alpha=)", {
@@ -350,12 +363,6 @@ test_that("cover() per-component share(terms=) decouples the intercept and trend
     positive = ~ x + share(spatial(), terms = list(intercept = grid(g), trend = 0)),
     family = cover(response = "beta"), data = s$data, y = s$y,
     method = "nested_laplace", control = ctrl))
-  # The low-level control spelling of the same coupling.
-  fit_ctrl <- suppressWarnings(tobs(
-    ~ x + spatial(~ 1 + t || cell, graph = s$adj),
-    family = cover(response = "beta"), data = s$data, y = s$y,
-    method = "nested_laplace",
-    control = c(ctrl, list(alpha.grid = g, alpha.grid.trend = 0))))
   # Whole-field coupling of BOTH blocks -- must differ from the decoupled fit.
   fit_whole <- suppressWarnings(tobs(
     presence = ~ x + spatial(~ 1 + t || cell, graph = s$adj),
@@ -363,8 +370,17 @@ test_that("cover() per-component share(terms=) decouples the intercept and trend
     family = cover(response = "beta"), data = s$data, y = s$y,
     method = "nested_laplace", control = ctrl))
 
-  # Per-component grids map exactly onto control$alpha.grid[.trend].
-  expect_gt(.cover_fit_equal(fit_dec, fit_ctrl), 3L)
+  # Per-component grids reach their own block's axis: the intercept takes the
+  # stated nodes, the trend is pinned at the single node 0. (This used to assert
+  # equality with the control$alpha.grid[.trend] spelling, retired in #295.)
+  # A cover_fit carries the joint object at $joint; theta_grid labels a
+  # multi-block axis "b<k>.alpha".
+  ax <- function(f, nm) {
+    tg <- f$joint$theta_grid %||% f$joint_fit$theta_grid
+    sort(unique(as.numeric(tg[, which(colnames(tg) == nm)])))
+  }
+  expect_equal(ax(fit_dec, "b1.alpha"), sort(g))
+  expect_equal(ax(fit_dec, "b2.alpha"), 0)
   # Decoupling the trend genuinely changes the fit.
   lm_dec   <- fit_dec$log_marginal   %||% fit_dec$logLik
   lm_whole <- fit_whole$log_marginal %||% fit_whole$logLik

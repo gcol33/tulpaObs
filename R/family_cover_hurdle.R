@@ -77,15 +77,15 @@
   # axis was retired, so nothing has read the knob on any cover() route: a fit
   # pinning it integrated the default coupling axis and reported a bit-identical
   # log-marginal. `[[` (exact), never `$`.
-  # `alpha.grid` states the copy axis's nodes, `alpha.n` how many nodes the
-  # engine's own axis is read at; one block takes one of them.
+  # The coupling-amplitude keys are the wire format share() compiles into, not
+  # user surface (#295).
   .tobs_check_alpha_control(control, "cover()")
   if (!is.null(control[["sigma.pos.grid"]])) {
     stop("control$sigma.pos.grid is no longer supported for cover hurdle ",
          "models.\nThe joint engine integrates the copy coefficient `alpha`, ",
          "with the cover-arm field amplitude `alpha * sigma`; `sigma` is the ",
-         "donor axis (control$sigma.grid).\nSet the coupling with ",
-         "control$alpha.grid, or with share() in the positive formula.",
+         "donor axis (control$sigma.grid).\nSet the coupling in the formula ",
+         "with share(spatial(), alpha = grid(c(...))).",
          call. = FALSE)
   }
   # Per-arm formulas (arm = formula): tobs()'s `presence` and `positive` formula

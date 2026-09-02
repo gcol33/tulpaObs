@@ -254,7 +254,8 @@ behaviour is identical across both implementations.
 
 ```{r joint-fit-tulpa, message = FALSE, warning = FALSE}
 fit_joint <- tobs(
-  formula = ~ x + bym2(graph = adj, group_var = "region"),
+  formula = ~ x + bym2(graph = adj, group_var = "region") +
+              share(spatial(), alpha = grid(c(0.25, 0.75, 1.5, 2.5))),
   data    = sim_joint$data,
   family  = cover("lognormal"),
   y       = sim_joint$y,
@@ -262,7 +263,6 @@ fit_joint <- tobs(
   control = list(
     sigma.grid = c(0.4, 0.8),
     rho.grid   = c(0.5, 0.9),
-    alpha.grid = c(0.25, 0.75, 1.5, 2.5),
     verbose    = FALSE
   )
 )
@@ -361,7 +361,7 @@ not the optimizer. For the joint shared-field case the cost is the outer
 grid size: the example above pins a small one, which keeps the fit fast,
 but a dense default grid with adaptive densification runs longer.
 tulpaObs exposes the grid directly through `control$sigma.grid`,
-`control$rho.grid`, and `control$alpha.grid`, so the time-accuracy
+`control$rho.grid`, and the `share()` amplitude, so the time-accuracy
 trade is in the user's hands.
 
 **Output format.** INLA returns full posterior marginals for every fixed

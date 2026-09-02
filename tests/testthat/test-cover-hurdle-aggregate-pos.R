@@ -46,9 +46,9 @@
   # The trend is a second weighted areal term in the formula, not a control knob;
   # the unweighted bym2() is the shared intercept field.
   if (trend) {
-    ctrl$alpha.grid <- c(0, 0.5, 1.0); ctrl$alpha.grid.trend <- c(0, 0.5, 1.0)
     f <- ~ x + bym2(graph = s$adj, group_var = "region") +
-             bym2(graph = s$adj, weight = time, group_var = "region")
+             bym2(graph = s$adj, weight = time, group_var = "region") +
+             share(spatial(), alpha = grid(c(0, 0.5, 1.0)))
   } else {
     f <- ~ x + bym2(graph = s$adj, group_var = "region")
   }

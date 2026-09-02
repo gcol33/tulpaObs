@@ -9,8 +9,8 @@
 #   control    = list(engine = "joint")
 #
 # replacing the control-based path (formula =, control$alpha.grid[.trend],
-# engine = "joint"). A pure API change moves no number: the equivalence
-# tests below fit the SAME model both ways and assert byte-identical results.
+# engine = "joint"), which #295 retired as user surface: those keys are now the
+# wire format the formula compiles into, and a fit that sets one is refused.
 # =============================================================================
 
 
@@ -155,118 +155,96 @@ test_that("spatial(name =) is optional; a bar and a single term still take it", 
 
 
 # ---------------------------------------------------------------------------
-# Equivalence: OLD control path == NEW formula-native path (no number moves).
+# What the formula compiles to.
 # ---------------------------------------------------------------------------
 
-test_that("OLD (control alpha.grid) == NEW (share(spatial()) grid) intercept field", {
+# Each of these fitted the SAME model twice -- once through
+# control$alpha.grid[.trend], once through share() -- and asserted the two doors
+# agreed. That door is retired (#295), so what is asserted now is the half that
+# still carries the claim: the formula compiles to the wire values the control
+# key used to state. Read at the compile boundary rather than through a fit,
+# which is both exact and free.
+
+.cfa_compiled <- function(pos_formula, occ_formula, data) {
+  copies <- tulpaObs:::.occu_cover_extract_pos_copies(pos_formula)$copies
+  info   <- tulpaObs:::.occu_cover_spatial_fields(occ_formula, data)
+  tulpaObs:::.occu_cover_apply_copy_coupling(copies, info, list())
+}
+
+test_that("share(spatial(), alpha = grid()) compiles to the intercept axis", {
+  d   <- .cfa_data(N = 20L)
+  adj <- d$adj
+  g   <- c(0.25, 0.5, 1.0, 1.5)
+  ctl <- .cfa_compiled(~ pos_cov1 + share(spatial(), alpha = grid(g)),
+                       ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
+                       d$cell_dat)
+  expect_equal(as.numeric(ctl[["alpha.grid"]]), g)
+})
+
+test_that("omitting share() compiles to a pinned, decoupled axis", {
+  d   <- .cfa_data(N = 20L)
+  adj <- d$adj
+  ctl <- .cfa_compiled(~ pos_cov1,
+                       ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
+                       d$cell_dat)
+  expect_equal(as.numeric(ctl[["alpha.grid"]]), 0)
+})
+
+test_that("a scalar alpha compiles to a one-node axis", {
+  d   <- .cfa_data(N = 20L)
+  adj <- d$adj
+  ctl <- .cfa_compiled(~ pos_cov1 + share(spatial(), alpha = 0.5),
+                       ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
+                       d$cell_dat)
+  expect_equal(as.numeric(ctl[["alpha.grid"]]), 0.5)
+})
+
+test_that("per-component terms= compile to one axis per block", {
+  d   <- .cfa_data(N = 20L, trend = TRUE, seed = 31337L)
+  adj <- d$adj
+  gi  <- c(0.25, 0.5, 1.0)
+  gt  <- c(0.5, 1.0, 1.5)
+  ctl <- .cfa_compiled(
+    ~ pos_cov1 + share(spatial(),
+                       terms = list(intercept = grid(gi), time = grid(gt))),
+    ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
+    d$cell_dat)
+  expect_equal(as.numeric(ctl[["alpha.grid"]]), gi)
+  expect_equal(as.numeric(ctl[["alpha.grid.trend"]]), gt)
+})
+
+test_that("whole-field share() compiles the same amplitude onto every block", {
+  d   <- .cfa_data(N = 20L, trend = TRUE, seed = 31337L)
+  adj <- d$adj
+  gw  <- c(0.25, 0.5, 1.0)
+  ctl <- .cfa_compiled(~ pos_cov1 + share(spatial(), alpha = grid(gw)),
+                       ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
+                       d$cell_dat)
+  expect_equal(as.numeric(ctl[["alpha.grid"]]), gw)
+  expect_equal(as.numeric(ctl[["alpha.grid.trend"]]), gw)
+})
+
+# One end-to-end fit still runs the compiled axis through the engine, so the
+# compile assertions above are anchored to a model that actually fits.
+test_that("the compiled axis is the axis the fit integrates", {
   skip_if_fast()
   d   <- .cfa_data()
   adj <- d$adj
   g   <- c(0.25, 0.5, 1.0, 1.5)
-  base <- list(data = d$cell_dat, family = occu_cover("lognormal"),
-               detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
-               visits = d$od$det.covs, method = "nested_laplace")
-
-  old <- .cfa_fit(c(base, list(
-    formula  = ~ occ_cov1 + icar(graph = adj),
-    positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 500L,
-                    engine = "joint", alpha.grid = g))))
-  new <- .cfa_fit(c(base, list(
+  fit <- .cfa_fit(list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
     positive   = ~ pos_cov1 + share(spatial(), alpha = grid(g)),
-    control    = list(verbose = FALSE, max.iter = 500L, engine = "joint"))))
-
-  expect_identical(names(old$means), names(new$means))
-  .cfa_expect_identical_fit(old, new)
-})
-
-test_that("decouple: OLD alpha.grid = 0 == NEW omitting share()", {
-  skip_if_fast()
-  d   <- .cfa_data()
-  adj <- d$adj
-  base <- list(data = d$cell_dat, family = occu_cover("lognormal"),
-               detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
-               visits = d$od$det.covs, method = "nested_laplace")
-
-  old <- .cfa_fit(c(base, list(
-    formula  = ~ occ_cov1 + icar(graph = adj),
-    positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 500L,
-                    engine = "joint", alpha.grid = 0))))
-  new <- .cfa_fit(c(base, list(
-    occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
-    positive   = ~ pos_cov1,   # no share() => decoupled
-    control    = list(verbose = FALSE, max.iter = 500L, engine = "joint"))))
-
-  .cfa_expect_identical_fit(old, new)
-})
-
-test_that("scalar alpha fixes the amplitude (OLD alpha.grid = 0.5 == NEW share(spatial(), alpha = 0.5))", {
-  skip_if_fast()
-  d   <- .cfa_data()
-  adj <- d$adj
-  base <- list(data = d$cell_dat, family = occu_cover("lognormal"),
-               detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
-               visits = d$od$det.covs, method = "nested_laplace")
-
-  old <- .cfa_fit(c(base, list(
-    formula  = ~ occ_cov1 + icar(graph = adj),
-    positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 500L,
-                    engine = "joint", alpha.grid = 0.5))))
-  new <- .cfa_fit(c(base, list(
-    occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
-    positive   = ~ pos_cov1 + share(spatial(), alpha = 0.5),
-    control    = list(verbose = FALSE, max.iter = 500L, engine = "joint"))))
-
-  .cfa_expect_identical_fit(old, new)
-})
-
-test_that("per-component: OLD alpha.grid vs alpha.grid.trend == NEW share(spatial(), terms =)", {
-  skip_if_fast()
-  d   <- .cfa_data(trend = TRUE, seed = 31337L)
-  adj <- d$adj
-  gi  <- c(0.25, 0.5, 1.0)
-  gt  <- c(0.5, 1.0, 1.5)
-  base <- list(data = d$cell_dat, family = occu_cover("lognormal"),
-               detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
-               visits = d$od$det.covs, method = "nested_laplace")
-
-  old <- .cfa_fit(c(base, list(
-    formula  = ~ occ_cov1 + icar(graph = adj) + icar(graph = adj, weight = time),
-    positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 300L, engine = "joint",
-                    alpha.grid = gi, alpha.grid.trend = gt))))
-  new <- .cfa_fit(c(base, list(
-    occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
-    positive   = ~ pos_cov1 +
-      share(spatial(), terms = list(intercept = grid(gi), time = grid(gt))),
-    control    = list(verbose = FALSE, max.iter = 300L, engine = "joint"))))
-
-  .cfa_expect_identical_fit(old, new)
-})
-
-test_that("whole-field share(spatial()) scales every block with one amplitude", {
-  skip_if_fast()
-  d   <- .cfa_data(trend = TRUE, seed = 31337L)
-  adj <- d$adj
-  gw  <- c(0.25, 0.5, 1.0)
-  base <- list(data = d$cell_dat, family = occu_cover("lognormal"),
-               detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
-               visits = d$od$det.covs, method = "nested_laplace")
-
-  old <- .cfa_fit(c(base, list(
-    formula  = ~ occ_cov1 + icar(graph = adj) + icar(graph = adj, weight = time),
-    positive = ~ pos_cov1,
-    control  = list(verbose = FALSE, max.iter = 300L, engine = "joint",
-                    alpha.grid = gw))))   # alpha.grid.trend defaults to alpha.grid
-  new <- .cfa_fit(c(base, list(
-    occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
-    positive   = ~ pos_cov1 + share(spatial(), alpha = grid(gw)),
-    control    = list(verbose = FALSE, max.iter = 300L, engine = "joint"))))
-
-  .cfa_expect_identical_fit(old, new)
+    data = d$cell_dat, family = occu_cover("lognormal"),
+    detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
+    visits = d$od$det.covs, method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
+                   adaptive.grid = FALSE)))
+  # theta_grid labels the copy axis "alpha" on a single-block fit and
+  # "b<k>.alpha" on a multi-block one.
+  tg    <- fit$joint_fit$theta_grid %||% fit$joint$theta_grid
+  col   <- if ("b1.alpha" %in% colnames(tg)) "b1.alpha" else "alpha"
+  nodes <- sort(unique(as.numeric(tg[, col])))
+  expect_equal(nodes, sort(g))
 })
 
 
@@ -274,7 +252,7 @@ test_that("whole-field share(spatial()) scales every block with one amplitude", 
 # Guard rails.
 # ---------------------------------------------------------------------------
 
-test_that("share() and control$alpha.grid together is an error", {
+test_that("control$alpha.grid is refused: it is not user surface (#295)", {
   d   <- .cfa_data(N = 20L)
   adj <- d$adj
   expect_error(
@@ -285,7 +263,7 @@ test_that("share() and control$alpha.grid together is an error", {
       y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint", alpha.grid = c(0.5, 1))))),
-    "not both")
+    "not user surface")
 })
 
 test_that("share(spatial(grp)) on a mismatched grouping variable errors", {
@@ -382,11 +360,13 @@ test_that("a stated alpha grid states NODES, and the span reaches past them (#30
   fit_at <- function(nodes, ...) suppressWarnings(suppressMessages(tobs(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = d$adj),
     data = d$cell_dat, family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1,
+    detection = ~ det_cov1,
+    positive = eval(bquote(
+      ~ pos_cov1 + share(spatial(), alpha = grid(.(nodes))))),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = c(list(verbose = FALSE, engine = "joint",
-                     sigma.grid = c(0.5, 1), alpha.grid = nodes), list(...)))))
+                     sigma.grid = c(0.5, 1)), list(...)))))
   span <- function(nodes, ...) {
     b <- tulpaObs:::.occu_cover_nuts_hyper_bounds(fit_at(nodes, ...), "icar")
     b$alpha

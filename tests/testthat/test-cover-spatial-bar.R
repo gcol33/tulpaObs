@@ -64,8 +64,12 @@
 
 .bar_trend_control <- list(
   verbose = FALSE, n.threads = 1L, adaptive.grid = TRUE,
-  sigma.grid = exp(seq(log(0.2), log(2), length.out = 5)),
-  alpha.grid = c(0, exp(seq(log(0.2), log(3), length.out = 4))))
+  sigma.grid = exp(seq(log(0.2), log(2), length.out = 5)))
+
+# The coupling amplitude is stated in the FORMULA (#295); control$alpha.grid is
+# the wire format it compiles into. Every fit below writes the same share(), so
+# the byte-identity comparisons still hold one axis across both spellings.
+.bar_trend_alpha <- c(0, exp(seq(log(0.2), log(3), length.out = 4)))
 
 # ---- Byte-identical: bar sugar == two-term coupled form --------------------
 
@@ -76,13 +80,15 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
 
   fit_two <- tobs(
     formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
-                icar(graph = sim$adj, weight = time, group_var = "cell"),
+                icar(graph = sim$adj, weight = time, group_var = "cell") +
+                share(spatial(), alpha = grid(.bar_trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
   fit_bar <- tobs(
     formula = ~ time +
-                spatial(~ 1 + time || cell, graph = sim$adj),
+                spatial(~ 1 + time || cell, graph = sim$adj) +
+                share(spatial(), alpha = grid(.bar_trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
 
@@ -133,7 +139,8 @@ test_that("the coupled intercept+trend || bar recovers both field amplitudes + o
   bo2 <- st <- sg <- numeric(n_seeds); co <- logical(n_seeds)
   for (r in seq_len(n_seeds)) {
     sim <- .bar_sim_cover_trend(seed = 700L + r)
-    fit <- tobs(~ time + spatial(~ 1 + time || cell, graph = sim$adj),
+    fit <- tobs(~ time + spatial(~ 1 + time || cell, graph = sim$adj) +
+                  share(spatial(), alpha = grid(.bar_trend_alpha)),
                 data = sim$data, family = cover(response = "lognormal"), y = sim$y,
                 method = "nested_laplace", control = .bar_trend_control)
     bo2[r] <- fit$beta_occ[2]

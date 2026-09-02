@@ -267,18 +267,35 @@
 # `alpha.grid` states the axis's nodes, `alpha.n` a resolution for the engine's
 # own axis; one block takes one of them. Refused here, in the dispatcher, so the
 # message names the knobs as the user spelled them.
+# The coupling-amplitude keys are the WIRE FORMAT the formula compiles into, not
+# user surface (#295). Two front doors for one request meant a guard layer to
+# keep them consistent, an asymmetry in which one composes with what, and two
+# spellings a reader has to know are the same model. `share()` is the one that
+# says what the model IS; these say how the engine reads an axis.
+#
+# Refused at the dispatcher entry, BEFORE any translation writes them, so the
+# compile target still works and only the user's own spelling is rejected.
+.TOBS_WIRE_ALPHA_KEYS <- c(
+  alpha.grid       = "share(spatial(), alpha = grid(c(...)))",
+  alpha.n          = "share(spatial(), alpha = grid(n = <k>))",
+  alpha.grid.trend = "share(spatial(), terms = list(trend = grid(c(...))))",
+  alpha.n.trend    = "share(spatial(), terms = list(trend = grid(n = <k>)))")
+
 .tobs_check_alpha_control <- function(control, what) {
-  pairs <- list(c("alpha.grid", "alpha.n"),
-                c("alpha.grid.trend", "alpha.n.trend"))
-  for (p in pairs) {
-    if (!is.null(control[[p[1L]]]) && !is.null(control[[p[2L]]])) {
-      stop(what, ": set the copy amplitude axis with control$", p[1L],
-           " (which states its nodes) OR control$", p[2L],
-           " (which states how many nodes the engine's own axis is read at), ",
-           "not both.", call. = FALSE)
-    }
-  }
-  invisible(TRUE)
+  hit <- intersect(names(.TOBS_WIRE_ALPHA_KEYS), names(control))
+  if (!length(hit)) return(invisible(TRUE))
+  stop(sprintf(paste0(
+    "%s: control$%s %s not user surface -- %s the wire format the formula ",
+    "compiles into. State the coupling where the model is declared:\n  %s\n",
+    "A field the formula does not couple is decoupled (alpha pinned at 0); to ",
+    "give one block its own amplitude, name every block with ",
+    "share(spatial(), terms = list(intercept = ..., trend = ...))."),
+    what, paste(hit, collapse = ", control$"),
+    if (length(hit) > 1L) "are" else "is",
+    if (length(hit) > 1L) "they are" else "it is",
+    paste(sprintf("control$%-16s ->  %s", hit,
+                  .TOBS_WIRE_ALPHA_KEYS[hit]), collapse = "\n  ")),
+    call. = FALSE)
 }
 
 # ---- outer-grid adaptive knobs -------------------------------------------

@@ -360,12 +360,13 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' fit copying both an intercept and a trend block is refused it rather than
 #' given it on the first (gcol33/tulpa#655).
 #'
-#' `control$alpha.grid[.trend]`, `control$alpha.n[.trend]` and
-#' `control$prior.alpha` are the lower-level spelling of the same three
-#' requests, and the representation the formula compiles into; set each in one
-#' place, not both.
+#' `control$alpha.grid[.trend]` and `control$alpha.n[.trend]` are the WIRE
+#' FORMAT these compile into, not user surface: a fit that sets one is refused
+#' and told which formula form to write (gcol33/tulpaObs#295).
+#' `control$prior.alpha` is still the lower-level spelling of `prior =`; set it
+#' in one place, not both.
 #'
-#' Without a `share()` (and without `control$alpha.grid`) the occurrence field is
+#' Without a `share()` the occurrence field is
 #' NOT carried onto the cover arm -- there is no implicit coupling -- so the
 #' amplitude is not a parameter of the model, and neither engine reports one.
 #' Under `nested_laplace` `alpha` is absent from `coef()`, `vcov()` and the
@@ -386,7 +387,8 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' saturates on the copy amplitude while every other axis tracks the request
 #' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
 #' two; giving both is an error. `control$alpha.grid[.trend]` and
-#' `control$alpha.n[.trend]` are the lower-level spelling of the same pair.
+#' `control$alpha.n[.trend]` are the wire format these compile into and are
+#' refused as user input (gcol33/tulpaObs#295).
 #'
 #' Set it when the fit's hyperparameter intervals are reported. On the coupled
 #' SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -418,7 +420,8 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' per-block amplitude and must address every block. The intercept field is
 #' reported in `fit$spatial_field`, trend fields in `fit$trend_field` /
 #' `fit$trend_fields`. The trend coupling grid defaults to
-#' `control$alpha.grid`; override it with `control$alpha.grid.trend`. Under
+#' the intercept block's amplitude; give the trend its own with
+#' `share(spatial(), terms = list(intercept = ..., trend = ...))`. Under
 #' `method = "nuts"` each field is its own sampled block, with the scales
 #' sampled over those same spans rather than integrated over the grid.
 #'
@@ -937,9 +940,10 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' `alpha = 0` and a log-spaced slab above it -- so `share(alpha = grid(...))`
 #' STATES its nodes, while `share(alpha = grid(n = ))` states a RESOLUTION: the
 #' engine re-reads its own axis with that many slab nodes, point mass and bounds
-#' unchanged. `terms =` gives either, per block, and
-#' `control$alpha.grid[.trend]` / `control$alpha.n[.trend]` are the lower-level
-#' spelling of the same pair. One block takes one of the two.
+#' unchanged. `terms =` gives either, per block; one block takes one of the
+#' two. `control$alpha.grid[.trend]` / `control$alpha.n[.trend]` are the wire
+#' format these compile into and are refused as user input
+#' (gcol33/tulpaObs#295).
 #'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
@@ -1899,8 +1903,9 @@ occu_categorical <- function(classes = NULL) {
 #' its own scale (`alpha_trend`, reported in `fit$alpha_trend` /
 #' `fit$sigma_trend`) integrated over the outer grid. The umbrella spelling
 #' `spatial(graph = adj, model = "icar", weight = col)` resolves identically.
-#' The trend coupling grid defaults to `control$alpha.grid`; override it with
-#' `control$alpha.grid.trend`. Requires `method = "nested_laplace"`. A coupled
+#' The trend block inherits the intercept block's amplitude; give it its own
+#' with `share(spatial(), terms = list(intercept = ..., trend = ...))`.
+#' Requires `method = "nested_laplace"`. A coupled
 #' trend cannot currently combine with `temporal()` / `re()` blocks in the same
 #' fit.
 #'
@@ -1916,7 +1921,8 @@ occu_categorical <- function(classes = NULL) {
 #' saturates on the copy amplitude while every other axis tracks the request
 #' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
 #' two; giving both is an error. `control$alpha.grid[.trend]` and
-#' `control$alpha.n[.trend]` are the lower-level spelling of the same pair.
+#' `control$alpha.n[.trend]` are the wire format these compile into and are
+#' refused as user input (gcol33/tulpaObs#295).
 #'
 #' Set it when the fit's hyperparameter intervals are reported. On the coupled
 #' SBC fixture the declared resolution leaves the field SD miscalibrated once

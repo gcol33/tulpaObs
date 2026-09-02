@@ -267,9 +267,10 @@ test_that("multiscale shared-field fit takes missing cover", {
   fit_one <- function(y_pos) suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
-    detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
+    detection = ~ x_pdet, availability = ~ x_plot,
+    positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
     y = sim$y, y_pos = y_pos, method = "nested_laplace",
-    control = list(sigma.grid = c(0.3, 0.6, 1.0), alpha.grid = c(0, 0.5, 1, 2),
+    control = list(sigma.grid = c(0.3, 0.6, 1.0),
                    diagnose.k = FALSE, max.iter = 500L, verbose = FALSE)))
 
   full <- fit_one(sim$y_pos)

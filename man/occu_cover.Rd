@@ -151,12 +151,13 @@ sampled over its span on the \code{nuts} path; a scalar \verb{alpha =} pins it o
 fit copying both an intercept and a trend block is refused it rather than
 given it on the first (gcol33/tulpa#655).
 
-\code{control$alpha.grid[.trend]}, \code{control$alpha.n[.trend]} and
-\code{control$prior.alpha} are the lower-level spelling of the same three
-requests, and the representation the formula compiles into; set each in one
-place, not both.
+\code{control$alpha.grid[.trend]} and \code{control$alpha.n[.trend]} are the WIRE
+FORMAT these compile into, not user surface: a fit that sets one is refused
+and told which formula form to write (gcol33/tulpaObs#295).
+\code{control$prior.alpha} is still the lower-level spelling of \verb{prior =}; set it
+in one place, not both.
 
-Without a \code{share()} (and without \code{control$alpha.grid}) the occurrence field is
+Without a \code{share()} the occurrence field is
 NOT carried onto the cover arm -- there is no implicit coupling -- so the
 amplitude is not a parameter of the model, and neither engine reports one.
 Under \code{nested_laplace} \code{alpha} is absent from \code{coef()}, \code{vcov()} and the
@@ -177,7 +178,8 @@ informative data set the outer grid's quadrature effective sample size
 saturates on the copy amplitude while every other axis tracks the request
 (measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
 two; giving both is an error. \code{control$alpha.grid[.trend]} and
-\code{control$alpha.n[.trend]} are the lower-level spelling of the same pair.
+\code{control$alpha.n[.trend]} are the wire format these compile into and are
+refused as user input (gcol33/tulpaObs#295).
 
 Set it when the fit's hyperparameter intervals are reported. On the coupled
 SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -210,7 +212,8 @@ copy stays on occurrence. \code{share(spatial(), terms = list(...))} gives a
 per-block amplitude and must address every block. The intercept field is
 reported in \code{fit$spatial_field}, trend fields in \code{fit$trend_field} /
 \code{fit$trend_fields}. The trend coupling grid defaults to
-\code{control$alpha.grid}; override it with \code{control$alpha.grid.trend}. Under
+the intercept block's amplitude; give the trend its own with
+\code{share(spatial(), terms = list(intercept = ..., trend = ...))}. Under
 \code{method = "nuts"} each field is its own sampled block, with the scales
 sampled over those same spans rather than integrated over the grid.
 

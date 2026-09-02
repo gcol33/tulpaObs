@@ -46,9 +46,11 @@ simulate_cover_trend <- function(g = 5L, N = 2500L,
                     sigma2 = sigma2, alpha2 = alpha2))
 }
 
+# The coupling amplitude is stated in the FORMULA (#295); control$alpha.grid is
+# the wire format it compiles into.
+trend_alpha <- c(0, exp(seq(log(0.2), log(3), length.out = 4)))
 trend_control <- list(verbose = FALSE, n.threads = 1L, adaptive.grid = TRUE,
-                      sigma.grid = exp(seq(log(0.2), log(2), length.out = 5)),
-                      alpha.grid = c(0, exp(seq(log(0.2), log(3), length.out = 4))))
+                      sigma.grid = exp(seq(log(0.2), log(2), length.out = 5)))
 
 # ---- Recovery: the formula-driven trend path fits and recovers the trend ----
 
@@ -59,7 +61,8 @@ test_that("cover() recovers a trend declared as a weighted areal formula term", 
 
   fit <- tobs(
     formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
-                icar(graph = sim$adj, weight = time, group_var = "cell"),
+                icar(graph = sim$adj, weight = time, group_var = "cell") +
+                share(spatial(), alpha = grid(trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
@@ -87,7 +90,8 @@ test_that("spatial(model='icar', weight=) resolves identically to icar(weight=)"
 
   fit_bare <- tobs(
     formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
-                icar(graph = sim$adj, weight = time, group_var = "cell"),
+                icar(graph = sim$adj, weight = time, group_var = "cell") +
+                share(spatial(), alpha = grid(trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
@@ -95,7 +99,8 @@ test_that("spatial(model='icar', weight=) resolves identically to icar(weight=)"
     formula = ~ time +
                 spatial(graph = sim$adj, model = "icar", group_var = "cell") +
                 spatial(graph = sim$adj, model = "icar", weight = time,
-                        group_var = "cell"),
+                        group_var = "cell") +
+                share(spatial(), alpha = grid(trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
