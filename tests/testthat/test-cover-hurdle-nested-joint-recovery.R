@@ -7,16 +7,32 @@
 # where the engine recovers cleanly.
 #
 # Triggered by INLAabun's validation harness, which previously dropped
-# `sigma_pos` / `phi_pos` from its summary tables (a reporting bug) and
-# in passing surfaced a recovery problem in the joint-engine beta path
-# (phi profile is downward-biased; see below).
+# `sigma_pos` / `phi_pos` from its summary tables (a reporting bug).
 #
 # Path coverage:
-#   * joint  nested_laplace + lognormal -> sigma_pos       (passes here)
-#   * joint  nested_laplace + beta      -> phi_pos         (known biased,
-#                                                          test skipped
-#                                                          with reason)
+#   * joint  nested_laplace + lognormal -> sigma_pos       (FAILS, see below)
+#   * joint  nested_laplace + beta      -> phi_pos         (passes here)
 #   * separate-hurdle       + beta      -> phi_pos         (passes here)
+#
+# THE LOGNORMAL BLOCK FAILS, and the cause is the cover arm's family rather
+# than anything in this file. `cover("lognormal")` under-reports the residual
+# SD: on identical data carrying the coupled field, five seeds give
+# `sigma_pos` 0.219 against a truth of 0.400 (relative error 0.45), while
+# `cover("lognormal_trunc")` on the SAME rows, formula and control gives 0.376
+# (relative error 0.06). So the quantity is identified and the joint machinery
+# can recover it; the plain family is what misses.
+#
+# The bias does not shrink with information, so it is not a small-sample
+# limit of this design: holding the truth fixed and raising the positives per
+# region from 7.3 to 230.7 leaves the relative error at 0.451, 0.452, 0.444,
+# 0.442. The shared field's own SD comes back correspondingly HIGH (0.71-0.83
+# against a truth of 0.6) -- variance that belongs to the residual is landing
+# in the field.
+#
+# Do not widen the band to admit 0.46, and do not drop the coupling to make it
+# pass. Without the coupling the fit is one the simulator did not generate, and
+# the unmodelled field variance inflates the same downward-biased estimate back
+# to ~0.43, which sits near the truth by cancellation rather than by recovery.
 #
 # The separate-hurdle lognormal multi-seed sigma_pos recovery already
 # lives in `test-cover-hurdle-lognormal.R::"repeat fits recover truth
@@ -83,7 +99,8 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
       N = 400, n_s = n_s, sigma_pos_true = truth_sigma, seed = 1000L + r
     )
     fit <- tobs(
-      formula  = ~ x + bym2(graph = adj, group_var = "region"),
+      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+        share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
       data     = sim$data,
       family   = cover("lognormal"),
       y        = sim$y,
@@ -130,7 +147,8 @@ test_that("joint areal cover hurdle recovers the betas + slope CIs, calibrated (
   for (r in seq_len(n_seeds)) {
     sim <- simulate_joint_lognormal_for_recovery(N = 400, n_s = n_s, seed = 4000L + r)
     fit <- tobs(
-      formula = ~ x + bym2(graph = adj, group_var = "region"),
+      formula = ~ x + bym2(graph = adj, group_var = "region") +
+        share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
       data = sim$data, family = cover("lognormal"), y = sim$y,
       method = "nested_laplace",
       # Same off-node pins as the sigma_pos test above: simulator sigma = 0.6
@@ -235,7 +253,8 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
       N = 600, n_s = n_s, phi = truth_phi, seed = 2000L + r
     )
     fit <- tobs(
-      formula  = ~ x + bym2(graph = adj, group_var = "region"),
+      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+        share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
       data     = sim$data,
       family   = cover("beta"),
       y        = sim$y,
@@ -276,7 +295,8 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
     N = 600, n_s = n_s, phi = truth_phi, seed = 3001L
   )
   fit <- tobs(
-    formula  = ~ x + bym2(graph = adj, group_var = "region"),
+    formula  = ~ x + bym2(graph = adj, group_var = "region") +
+      share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
     data     = sim$data,
     family   = cover("beta"),
     y        = sim$y,
