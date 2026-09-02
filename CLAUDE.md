@@ -34,7 +34,7 @@ Bayesian occupancy / abundance / distance / removal / cover. Built on
 **Structured terms live in formula** (lme4/mgcv/INLA style), NOT `tobs()` args.
 Registry `R/formula_terms.R` maps name -> ctor: spatial `icar() bym2() car()
 car_proper() gp() multiscale_gp() spde()`; `re()`; `temporal()`; `svc()`;
-`latent()`; `copy("id")` (share one realization state+detection). Ctors
+`latent()`; `share("id")` (share one realization state+detection). Ctors
 `.tobs_term_*`, parser `.tobs_parse_formula`/`.tobs_bind_formulas` internal. No
 exported `tobs_icar()`, no `spatial=`/`temporal=`/`re=` args. Term's process =
 which formula it sits in; fitter derives `shared=c(occ,det)` via
@@ -1171,7 +1171,7 @@ R/
     **`n.iter` means the OPPOSITE thing under `pg_gibbs`**: TOTAL sweeps, warmup taken out of it (kept = `length(seq.int(n.warmup+1, n.iter, by=n.thin))` = 1500); under `nuts` it is the KEPT count and the run = `n.iter + n.warmup`. Stated in the table's `pg_gibbs` block, pinned by a test recomputing the kept count from the profile.
     **`sd.load` (1.0) + `re.lkj` (1.5) = laplace rows (#189)**; `n.quad` NOT one number, deliberately -- `.TOBS_NQUAD_ROUTES` / `.tobs_n_quad(route)` enumerates seven marginals, `?tobs` lists them per route, and there is no single default most routes do not use.
   occu_categorical.R        — presence + nominal K-class hurdle (#106); Bernoulli presence arm + baseline-category multinomial logit class arm over tulpa `cpp_multinomial_logit_terms`
-  occu_cover_dispatch.R     — formula-native cross-arm copy()/spatial-field DAG coupling dispatch for occu_cover()
+  occu_cover_dispatch.R     — formula-native cross-arm share()/spatial-field DAG coupling dispatch for occu_cover()
   occu_joint.R              — standalone occu() SVC-spatial-bar nested-Laplace path (#81): occu_cover()'s joint direct-grid engine with the cover arm removed
   cover_hurdle_joint.R      — the joint nested-Laplace cover fit (lognormal / beta), incl. occurrence-arm suff-stat aggregation `.cover_aggregate_occ`. One of the largest files in the package
   cover_nuts.R / src/cover_nuts.cpp — standalone cover() NUTS

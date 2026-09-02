@@ -868,7 +868,14 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   decomposition, and `.lwr` / `.upr` at `level`), plus the start / end
 #'   occupancy `p_T1` / `p_T2` with their own `.sd` / `.lwr` / `.upr`, and a
 #'   `.prob_pos` column per headline delta giving the directional posterior
-#'   probability `P(delta > 0)` per cell. The result is a
+#'   probability `P(delta > 0)` per cell. Passing more than two times,
+#'   `times = c(t1, ..., tK)`, widens the same table into a trajectory: a level
+#'   column per step (`p_T1..p_TK`, `cover_cond_T*`, `cover_exp_T*`) and a
+#'   `_T<k>`-suffixed delta per step, each differenced against `t1` and each
+#'   carrying the same decomposition and interval columns. Every step is
+#'   evaluated on ONE draw set, so the steps share a posterior and their deltas
+#'   are jointly valid; with two times the delta columns keep their unsuffixed
+#'   names, there being only one step to name. The result is a
 #'   `tobs_prediction` table (one row per cell) carrying per-unit `[cell x nsim]`
 #'   draw matrices in `attr(, "draws")`; map it yourself, e.g.
 #'   `left_join(cents, pr, by = "cell")` then
@@ -922,8 +929,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' @param newdata `occu_cover` only: data.frame of prediction units, one row per
 #'   field cell (or carrying a `cell` column mapping rows to field cells).
 #'   Defaults to the training data.
-#' @param times `occu_cover` `type = "change"` only: length-2 numeric
-#'   `c(t1, t2)`, the two values of the time covariate to difference.
+#' @param times `occu_cover` `type = "change"` only: numeric values of the time
+#'   covariate, at least two. `c(t1, t2)` differences one against the other;
+#'   `c(t1, ..., tK)` returns a trajectory, every step differenced against `t1`.
 #' @param level `occu_cover` only: credible level for the interval columns
 #'   (default 0.95).
 #' @param nsim `occu_cover` only: number of joint posterior draws (default 1000).

@@ -2,18 +2,43 @@
 
 ## 0.1.4 (2026-09-02)
 
-* **BREAKING: a missing `copy()` decouples the arms on
+* **BREAKING: `share()` replaces `share()` as the cross-arm formula verb.** The
+  term that carries one arm's latent field onto another is now
+  `share(spatial(), ...)`. One concept, one verb: the old name is deleted
+  rather than aliased, and writing `share()` in a formula raises an error naming
+  its replacement instead of falling through to the fixed-effects design and
+  dying there as a missing function. The whole argument surface is unchanged --
+  `alpha =` (scalar, `grid()`, `grid(n = )`), per-component `terms =`, and
+  `prior =` on the coefficient -- so a fit is restored by changing the verb and
+  nothing else. `copy` remains the ENGINE word: the tulpa-side `copy =` spec
+  key, the internal constructor and class, and the prose describing INLA's own
+  `copy=` mechanism all keep it. The rename is what makes room for the
+  arm-specific deviation (`share(spatial(), residual = )`), which lands next:
+  once an arm's field is a copy PLUS a deviation, "copy" no longer describes
+  it.
+
+* **`predict(type = "change")` takes more than two times.** `times = c(t1, t2)`
+  is unchanged, down to the column names. `times = c(t1, ..., tK)` widens the
+  same table into a trajectory: a level column per step (`p_T1..p_TK`,
+  `cover_cond_T*`, `cover_exp_T*`) and a `_T<k>`-suffixed delta per step, each
+  differenced against `t1` and each carrying the occupancy / abundance
+  decomposition, its `.lwr` / `.upr` at `level` and its `.prob_pos`. Every step
+  is evaluated on ONE draw set, so the steps share a posterior and their deltas
+  are jointly valid -- which K separate two-time calls would not be. With two
+  times the delta columns stay unsuffixed, there being only one step to name.
+
+* **BREAKING: a missing `share()` decouples the arms on
   `occu_multiscale_cover()`** (gcol33/tulpaObs#297). The three cover doors gave
   a bare areal term opposite readings: `occu_cover()` pinned the amplitude at
   `alpha = 0` -- structure nobody wrote is not in the model, which is what makes
-  `copy()` mean something -- while `occu_multiscale_cover()` and `cover()`
+  `share()` mean something -- while `occu_multiscale_cover()` and `cover()`
   integrated the engine's default axis and coupled the arms. Same formula,
   different model, no message either way. `occu_cover()`'s reading is the one
   kept, and `occu_multiscale_cover()` now matches it.
 
-  A multiscale fit that writes no `copy()` therefore changes: the occurrence
+  A multiscale fit that writes no `share()` therefore changes: the occurrence
   field no longer reaches the cover arm. Restore the previous fit by writing the
-  coupling the model was getting implicitly, `copy(spatial())` in the `positive`
+  coupling the model was getting implicitly, `share(spatial())` in the `positive`
   formula, which #294 made expressible. A fit that already states
   `control$alpha.grid[.trend]` is unaffected.
 
@@ -23,7 +48,7 @@
   re-priors it.
 
   `cover()` is NOT changed and still couples by default. It has no formula
-  spelling for the amplitude at all under a shared formula -- `copy()` there
+  spelling for the amplitude at all under a shared formula -- `share()` there
   dies with an internal error (gcol33/tulpaObs#298) -- so decoupling it by
   default would make the coupling unreachable except through the control key.
   It moves once #298 gives it one.
@@ -36,15 +61,15 @@
   ends in `"copy"`, because this door skipped the copy-stripping step
   `occu_cover()` does first -- so `control$alpha.grid[.trend]` /
   `alpha.n[.trend]` was the only way in, and the documented
-  `copy(alpha = grid(...))` spelling named a term the front door rejected.
+  `share(alpha = grid(...))` spelling named a term the front door rejected.
 
-  `copy(spatial())` now works in the `positive` formula, with the stated-nodes,
+  `share(spatial())` now works in the `positive` formula, with the stated-nodes,
   `grid(n = )` resolution and fixed-scalar forms `occu_cover()` takes, and is
   translated through the same shared helper. It is refused under
   `method = "laplace"` / `"nuts"`, which are the non-spatial path (iid cells,
   field fixed at 0) and so have no field for an amplitude to scale.
 
-  A fit that writes no `copy()` is unchanged: it still integrates the engine's
+  A fit that writes no `share()` is unchanged: it still integrates the engine's
   default amplitude axis. That is NOT what `occu_cover()` does with the same
   absence -- there it pins `alpha = 0` -- so the shared translation runs only
   when a copy is actually written; routing every fit through it flips this
@@ -53,7 +78,7 @@
   gcol33/tulpaObs#297 and is a modelling call, not a cleanup.
 
 * **Everything a cross-arm copy states about its coefficient is now written in
-  the formula.** `copy()` stated the amplitude's NODES, and the other two things
+  the formula.** `share()` stated the amplitude's NODES, and the other two things
   a coupling has -- how finely the axis is read, and the prior on the
   coefficient itself -- existed only as `control$alpha.n[.trend]` and
   `control$prior.alpha`, so a fit that wanted either had to leave the formula
@@ -65,13 +90,13 @@
   unchanged, so sharpening the axis never restates the prior structure it
   carries. It is accepted wherever nodes are, `terms = list(...)` included, so
   one field can take stated nodes on its intercept block and a resolution on its
-  trend block. `copy(prior = list("pc.prec", c(4, 0.01)))` carries the
+  trend block. `share(prior = list("pc.prec", c(4, 0.01)))` carries the
   hyperprior on the copy coefficient (`prior_alpha` in the joint driver), shape
   checked where it is written.
 
   The control keys stay as the lower-level spelling and the representation the
   formula compiles into; a fit writing one request in both places is refused,
-  and a bare `copy(spatial())` still composes with `control$alpha.n` -- the
+  and a bare `share(spatial())` still composes with `control$alpha.n` -- the
   translation writes only what the copy stated.
 
 * **A prior on the copy coefficient is refused on a fit that copies two
@@ -81,13 +106,13 @@
   Filed upstream as gcol33/tulpa#655; refused here in the meantime rather than
   applied to block 1.
 
-* `print()` on a `copy()` term printed nothing at all for the common
-  `copy(spatial())` form: it read `x$ref`, which a selector copy does not carry,
+* `print()` on a `share()` term printed nothing at all for the common
+  `share(spatial())` form: it read `x$ref`, which a selector copy does not carry,
   and `sprintf()` on a NULL returns `character(0)`. It now names the selector,
   the amplitude and the prior.
 
 * The header on `.occu_cover_apply_copy_coupling()` described a naming-keyed
-  back-compat path -- an occurrence field with no `name =` and no `copy()`
+  back-compat path -- an occurrence field with no `name =` and no `share()`
   leaving `control$alpha.grid` untouched -- that has not existed since the copy
   selector became type-carrying at 0.0.45. Decoupled is the default on every
   path (gcol33/tulpaObs#290).

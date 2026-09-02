@@ -125,7 +125,7 @@ columns exactly like `s()` does inside `gam()`.
 
 A term enters whichever linear predictor it appears in (`formula` vs
 `detection`). To share one realization across both predictors, tag it with
-`id = "u"` in one formula and write `copy("u")` in the other.
+`id = "u"` in one formula and write `share("u")` in the other.
 
 ```r
 tobs(~ elev + bym2(graph = adj) + re(region),
@@ -147,7 +147,7 @@ tobs(~ elev + bym2(graph = adj) + re(region),
 | `temporal(time, ...)`             | AR1 / RW1 / RW2 / IID temporal field |
 | `svc(lon, lat, indices, prior_range)` | Continuous NNGP spatially varying coefficients on design columns |
 | `latent(n_factors, ...)`          | Latent factors for community models |
-| `copy("id")`                      | Share a named term's realization across processes |
+| `share("id")`                      | Share a named term's realization across processes |
 
 Common term options:
 

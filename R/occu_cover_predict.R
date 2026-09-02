@@ -302,25 +302,30 @@
   out
 }
 
-# The two prediction frames a change map differences: `newdata` with the time
-# covariate held at `times[1]` and at `times[2]`.
+# The prediction frames a change map differences: `newdata` with the time
+# covariate held at each of `times`. Two times give one difference; K times give
+# a trajectory, every step differenced against `times[1]`.
 .tobs_joint_change_frames <- function(object, newdata, times, time_col) {
-  if (is.null(times) || length(times) != 2L) {
-    stop("predict(type = \"change\") needs `times = c(t1, t2)`.", call. = FALSE)
+  if (is.null(times) || length(times) < 2L) {
+    stop("predict(type = \"change\") needs `times = c(t1, t2)` (one change) or ",
+         "`times = c(t1, ..., tK)` (a trajectory, each step against t1).",
+         call. = FALSE)
+  }
+  if (!is.numeric(times) || anyNA(times) || !all(is.finite(times))) {
+    stop("predict(type = \"change\"): `times` must be finite numeric values.",
+         call. = FALSE)
   }
   if (is.null(time_col)) time_col <- object$trend_weight
   if (is.null(time_col)) {
     stop("predict(type = \"change\") needs the name of the time covariate. ",
-         "Pass `time_col = \"<column>\"` (the covariate whose change between ",
-         "`times[1]` and `times[2]` drives the prediction).", call. = FALSE)
+         "Pass `time_col = \"<column>\"` (the covariate the `times` are held ",
+         "at, whose movement drives the prediction).", call. = FALSE)
   }
   if (!time_col %in% names(newdata)) {
     stop("predict(): `time_col = \"", time_col, "\"` is not a column of ",
          "`newdata`.", call. = FALSE)
   }
-  nd1 <- newdata; nd1[[time_col]] <- times[1L]
-  nd2 <- newdata; nd2[[time_col]] <- times[2L]
-  list(nd1, nd2)
+  lapply(times, function(tk) { nd <- newdata; nd[[time_col]] <- tk; nd })
 }
 
 # Per-row summaries over a draw matrix: the `level` central-interval endpoints
@@ -374,65 +379,98 @@
     return(tbl)
   }
 
-  # --- change between two values of the time covariate ---------------------
+  # --- the time covariate held at each of `times` --------------------------
+  # Two times give one difference; K times give a trajectory, every step
+  # differenced against the first. One draw set serves the whole table, so the
+  # steps share a posterior and their deltas are jointly valid.
   nds <- .tobs_joint_change_frames(object, newdata, times, time_col)
-  s1  <- state(nds[[1L]])
-  s2  <- state(nds[[2L]])
+  st  <- lapply(nds, state)
+  K   <- length(st)
+  s1  <- st[[1L]]
 
-  # Per-draw deltas + the exact additive decomposition
-  #   delta_exp = p2 mu2 - p1 mu1 = (p2 - p1) mu1 + p2 (mu2 - mu1).
-  d_p    <- s2$p  - s1$p
-  d_cond <- s2$mu - s1$mu
-  d_exp  <- s2$E  - s1$E
-  d_occ  <- (s2$p - s1$p) * s1$mu
-  d_ab   <- s2$p * (s2$mu - s1$mu)
+  # Per-draw deltas against the baseline step + the exact additive decomposition
+  #   delta_exp = pk muk - p1 mu1 = (pk - p1) mu1 + pk (muk - mu1).
+  d <- lapply(st[-1L], function(sk) list(
+    p    = sk$p  - s1$p,
+    cond = sk$mu - s1$mu,
+    exp  = sk$E  - s1$E,
+    occ  = (sk$p - s1$p) * s1$mu,
+    ab   = sk$p * (sk$mu - s1$mu)))
 
   qlo <- function(m) .tobs_draw_lwr(m, level)
   qhi <- function(m) .tobs_draw_upr(m, level)
+  qsd <- .tobs_draw_sd
 
-  tbl <- data.frame(
-    cell             = cell,
-    p_T1             = rowMeans(s1$p),
-    p_T2             = rowMeans(s2$p),
-    delta_p          = rowMeans(d_p),
-    cover_cond_T1    = rowMeans(s1$mu),
-    cover_cond_T2    = rowMeans(s2$mu),
-    delta_cover_cond = rowMeans(d_cond),
-    cover_exp_T1     = rowMeans(s1$E),
-    cover_exp_T2     = rowMeans(s2$E),
-    delta_cover_exp  = rowMeans(d_exp),
-    delta_cover_from_occ = rowMeans(d_occ),
-    delta_cover_from_ab  = rowMeans(d_ab)
-  )
+  # A delta belongs to the step it was taken at, and with two times there is
+  # only one step -- so the delta columns carry a `_T<k>` suffix only when the
+  # table holds a trajectory. Two times therefore keep the column names (and
+  # their order) a change map has always had.
+  sfx <- if (K == 2L) rep("", K) else paste0("_T", seq_len(K))
+  lvl <- function(nm, k) sprintf("%s_T%d", nm, k)
+  dl  <- function(nm, k) paste0(nm, sfx[k])
+
+  tbl <- data.frame(cell = cell)
+  add <- function(tbl, nm, v) { tbl[[nm]] <- v; tbl }
+
+  # Quantity-major: every step's level, then that quantity's deltas.
+  for (k in seq_len(K)) tbl <- add(tbl, lvl("p", k), rowMeans(st[[k]]$p))
+  for (k in 2:K)        tbl <- add(tbl, dl("delta_p", k), rowMeans(d[[k - 1L]]$p))
+  for (k in seq_len(K)) tbl <- add(tbl, lvl("cover_cond", k), rowMeans(st[[k]]$mu))
+  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_cond", k),
+                                   rowMeans(d[[k - 1L]]$cond))
+  for (k in seq_len(K)) tbl <- add(tbl, lvl("cover_exp", k), rowMeans(st[[k]]$E))
+  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_exp", k),
+                                   rowMeans(d[[k - 1L]]$exp))
+  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_from_occ", k),
+                                   rowMeans(d[[k - 1L]]$occ))
+  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_from_ab", k),
+                                   rowMeans(d[[k - 1L]]$ab))
+
   # .lwr / .upr for each delta at `level`.
-  tbl$delta_p.lwr <- qlo(d_p);   tbl$delta_p.upr <- qhi(d_p)
-  tbl$delta_cover_cond.lwr <- qlo(d_cond); tbl$delta_cover_cond.upr <- qhi(d_cond)
-  tbl$delta_cover_exp.lwr  <- qlo(d_exp);  tbl$delta_cover_exp.upr  <- qhi(d_exp)
-  tbl$delta_cover_from_occ.lwr <- qlo(d_occ); tbl$delta_cover_from_occ.upr <- qhi(d_occ)
-  tbl$delta_cover_from_ab.lwr  <- qlo(d_ab);  tbl$delta_cover_from_ab.upr  <- qhi(d_ab)
+  for (q in c("p", "cover_cond", "cover_exp", "cover_from_occ", "cover_from_ab")) {
+    slot <- switch(q, p = "p", cover_cond = "cond", cover_exp = "exp",
+                   cover_from_occ = "occ", cover_from_ab = "ab")
+    for (k in 2:K) {
+      nm <- dl(paste0("delta_", q), k)
+      m  <- d[[k - 1L]][[slot]]
+      tbl <- add(tbl, paste0(nm, ".lwr"), qlo(m))
+      tbl <- add(tbl, paste0(nm, ".upr"), qhi(m))
+    }
+  }
 
-  # Start / end occupancy uncertainty (sd + CI at `level`) and the directional
+  # Per-step occupancy uncertainty (sd + CI at `level`) and the directional
   # posterior probability P(delta > 0) per cell -- the certainty that the quantity
   # increased. Both are taken over draws, so they carry the joint posterior rather
   # than a plug-in of the means (the marginalize-derived-quantities rule). These
   # are the per-cell change-certainty quantities a spatially-varying-trend
   # occupancy fit reports; they are pure additions to the table.
-  qsd <- .tobs_draw_sd
-  tbl$p_T1.sd <- qsd(s1$p); tbl$p_T1.lwr <- qlo(s1$p); tbl$p_T1.upr <- qhi(s1$p)
-  tbl$p_T2.sd <- qsd(s2$p); tbl$p_T2.lwr <- qlo(s2$p); tbl$p_T2.upr <- qhi(s2$p)
-  tbl$delta_p.prob_pos          <- rowMeans(d_p    > 0)
-  tbl$delta_cover_cond.prob_pos <- rowMeans(d_cond > 0)
-  tbl$delta_cover_exp.prob_pos  <- rowMeans(d_exp  > 0)
+  for (k in seq_len(K)) {
+    nm <- lvl("p", k)
+    tbl <- add(tbl, paste0(nm, ".sd"),  qsd(st[[k]]$p))
+    tbl <- add(tbl, paste0(nm, ".lwr"), qlo(st[[k]]$p))
+    tbl <- add(tbl, paste0(nm, ".upr"), qhi(st[[k]]$p))
+  }
+  for (q in c("p", "cover_cond", "cover_exp")) {
+    slot <- switch(q, p = "p", cover_cond = "cond", cover_exp = "exp")
+    for (k in 2:K) {
+      tbl <- add(tbl, paste0(dl(paste0("delta_", q), k), ".prob_pos"),
+                 rowMeans(d[[k - 1L]][[slot]] > 0))
+    }
+  }
 
   attr(tbl, "quantity") <- "change"
   attr(tbl, "times")    <- times
   if (isTRUE(draws)) {
-    attr(tbl, "draws") <- list(
-      p_T1 = s1$p, p_T2 = s2$p, delta_p = d_p,
-      cover_cond_T1 = s1$mu, cover_cond_T2 = s2$mu, delta_cover_cond = d_cond,
-      cover_exp_T1 = s1$E, cover_exp_T2 = s2$E, delta_cover_exp = d_exp,
-      delta_cover_from_occ = d_occ, delta_cover_from_ab = d_ab
-    )
+    dr <- list()
+    for (k in seq_len(K)) dr[[lvl("p", k)]] <- st[[k]]$p
+    for (k in 2:K)        dr[[dl("delta_p", k)]] <- d[[k - 1L]]$p
+    for (k in seq_len(K)) dr[[lvl("cover_cond", k)]] <- st[[k]]$mu
+    for (k in 2:K)        dr[[dl("delta_cover_cond", k)]] <- d[[k - 1L]]$cond
+    for (k in seq_len(K)) dr[[lvl("cover_exp", k)]] <- st[[k]]$E
+    for (k in 2:K)        dr[[dl("delta_cover_exp", k)]] <- d[[k - 1L]]$exp
+    for (k in 2:K)        dr[[dl("delta_cover_from_occ", k)]] <- d[[k - 1L]]$occ
+    for (k in 2:K)        dr[[dl("delta_cover_from_ab", k)]] <- d[[k - 1L]]$ab
+    attr(tbl, "draws") <- dr
   }
   class(tbl) <- c("tobs_prediction", "data.frame")
   tbl

@@ -113,6 +113,82 @@ test_that("type = change emits the exact column contract keyed by cell", {
     expect_gt(stats::sd(pr$delta_p), 0)
 })
 
+test_that("times = c(t1, ..., tK) widens the change table into a trajectory", {
+    skip_on_cran()
+    skip_if_fast()
+    f  <- .ocp_build_fit()
+    tt <- c(0, 0.25, 0.5, 0.75, 1)
+    pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
+                  times = tt, time_col = "year", nsim = 400L)
+
+    # A level column per step; a delta per step against the baseline, suffixed
+    # by the step it was taken at. The baseline names no delta of its own.
+    expect_true(all(paste0("p_T", 1:5) %in% names(pr)))
+    expect_true(all(paste0("cover_cond_T", 1:5) %in% names(pr)))
+    expect_true(all(paste0("cover_exp_T", 1:5) %in% names(pr)))
+    for (q in c("delta_p", "delta_cover_cond", "delta_cover_exp",
+                "delta_cover_from_occ", "delta_cover_from_ab")) {
+        expect_true(all(paste0(q, "_T", 2:5) %in% names(pr)))
+        expect_false(paste0(q, "_T1") %in% names(pr))
+        expect_false(q %in% names(pr))   # unsuffixed only when there is one step
+    }
+    expect_equal(attr(pr, "times"), tt)
+    expect_equal(nrow(pr), f$N)
+    expect_s3_class(pr, "tobs_prediction")
+
+    # The additive decomposition holds at every step, and every step is
+    # differenced against the SAME baseline (not against its predecessor).
+    dr <- attr(pr, "draws")
+    for (k in 2:5) {
+        s <- paste0("_T", k)
+        expect_equal(pr[[paste0("delta_cover_from_occ", s)]] +
+                     pr[[paste0("delta_cover_from_ab", s)]],
+                     pr[[paste0("delta_cover_exp", s)]], tolerance = 1e-6)
+        expect_equal(pr[[paste0("delta_cover_exp", s)]],
+                     pr[[paste0("cover_exp_T", k)]] - pr$cover_exp_T1,
+                     tolerance = 1e-6)
+        expect_equal(pr[[paste0("delta_p", s)]],
+                     pr[[paste0("p_T", k)]] - pr$p_T1, tolerance = 1e-6)
+        expect_equal(dr[[paste0("delta_cover_from_occ", s)]] +
+                     dr[[paste0("delta_cover_from_ab", s)]],
+                     dr[[paste0("delta_cover_exp", s)]], tolerance = 1e-6)
+    }
+})
+
+test_that("two times keep the unsuffixed change schema", {
+    skip_on_cran()
+    skip_if_fast()
+    f  <- .ocp_build_fit()
+    pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
+                  times = c(0, 1), time_col = "year", nsim = 200L)
+    # REGRESSION GUARD for the trajectory generalization: with one step there is
+    # nothing to index, so the delta columns a change map has always had must
+    # come back unsuffixed and no `_T2` delta may appear beside them.
+    expect_true(all(c("delta_p", "delta_cover_cond", "delta_cover_exp",
+                      "delta_cover_from_occ", "delta_cover_from_ab") %in%
+                    names(pr)))
+    expect_false(any(grepl("^delta_.*_T[0-9]+$", names(pr))))
+    expect_true(all(c("delta_p.lwr", "delta_p.upr", "delta_p.prob_pos",
+                      "p_T1.sd", "p_T2.sd") %in% names(pr)))
+})
+
+test_that("`times` is validated before any arm is evaluated", {
+    nd <- data.frame(cell = 1:3, year = 0)
+    expect_error(
+        tulpaObs:::.tobs_joint_change_frames(NULL, nd, 1, "year"),
+        "times = c\\(t1, t2\\)", fixed = FALSE)
+    expect_error(
+        tulpaObs:::.tobs_joint_change_frames(NULL, nd, c(0, NA), "year"),
+        "finite numeric")
+    expect_error(
+        tulpaObs:::.tobs_joint_change_frames(NULL, nd, c(0, 1), "missing_col"),
+        "not a column")
+    fr <- tulpaObs:::.tobs_joint_change_frames(NULL, nd, c(0, 0.5, 1), "year")
+    expect_length(fr, 3L)
+    expect_equal(vapply(fr, function(d) unique(d$year), numeric(1)),
+                 c(0, 0.5, 1))
+})
+
 test_that("in-sample occurrence tracks the plug-in predictor", {
     skip_on_cran()
     skip_if_fast()

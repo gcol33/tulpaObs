@@ -119,7 +119,7 @@ The continuous form fits on single-season `occu()` under `laplace` /
 `spatial(model = "icar")`.
 
 A term enters whichever process it is written in, so `detection = ~ (1 | observer)` puts
-the random effect on detection. `copy("id")` shares one realization across both processes.
+the random effect on detection. `share("id")` shares one realization across both processes.
 `?tobs_terms` documents every term and its arguments; `?svc` and `?icar` land there too.
 Bar syntax follows `lme4` throughout: `(1 | site)`, `(x | site)` for a correlated random
 slope, `(x || site)` uncorrelated, `(1 | g:h)` and `(1 | g/h)` for crossed and nested
