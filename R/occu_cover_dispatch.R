@@ -96,10 +96,16 @@
 # resolved fields (block 1 = intercept, block 2+ = weighted trend), each with a
 # `field_name` and a `component` label. Returns the updated control list.
 #
-# On the formula-native path (a named occupancy field, or any copy() present)
-# the amplitude axes come ENTIRELY from copy(): a field block with no copy() is
-# pinned at alpha = 0 (decoupled). On the back-compat path (no name, no copy())
-# control$alpha.grid / .trend are left untouched, so old fits are byte-identical.
+# The amplitude axes come ENTIRELY from copy(): a block a copy() names takes the
+# axis it states (or the engine's own axis when it states none), and a block no
+# copy() names is pinned at alpha = 0 -- the field rides occupancy alone. That
+# holds however the occurrence formula spells the field. `name =` is not the
+# signal: the selector is type-carrying (copy(spatial())), so a field needs no
+# name to be copied and carrying one does not couple it.
+#
+# The one exception is a fit that sets control$alpha.grid[.trend] itself, which
+# is the lower-level spelling of the same axes: those grids stand as given, and
+# are refused alongside a copy().
 .occu_cover_apply_copy_coupling <- function(copies, spatial_info, control) {
   has_control_alpha <- any(c("alpha.grid", "alpha.grid.trend") %in% names(control))
   if (has_control_alpha && length(copies) > 0L) {
@@ -460,11 +466,11 @@
   has_spatial  <- !is.null(spatial_info)
 
   # Translate the positive arm's copy() spec(s) into the engine coupling grids
-  # now that the occupancy field blocks are resolved. On the formula-native path
-  # (named field and/or copy()) this sets control$alpha.grid[.trend]; on the
-  # back-compat path it is a no-op, so control-driven fits are unchanged. A
-  # copy() with no named field, or a named field outside the spatial path, is an
-  # error surfaced here.
+  # now that the occupancy field blocks are resolved. Every fit carrying a
+  # spatial field gets control$alpha.grid[.trend] set here -- to the amplitude
+  # each copy() names, and to 0 (decoupled) for a block none names -- unless the
+  # fit stated those grids itself, in which case they stand. A copy() with no
+  # spatial field to select is an error surfaced just above.
   if (length(pos_copies) > 0L && !has_spatial) {
     stop("occu_cover(): copy() on the positive arm needs a spatial field on the ",
          "occurrence formula (e.g. spatial(~ 1 || cell, graph = adj, name = ",
