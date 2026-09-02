@@ -147,6 +147,24 @@
     control[["prior.alpha"]] <- enc[["copy_prior"]]
   }
 
+  # A shared field that no share() couples is pinned at alpha = 0: the field
+  # rides the presence arm alone. Structure nobody wrote is not in the model,
+  # which is what makes share() mean something -- the reading occu_cover() has
+  # always had and occu_multiscale_cover() moved to in #297. Pinned rather than
+  # dropped: the engine offers the (sigma, alpha) parameterization only to a
+  # copied block, so removing the spec would move the field onto `b<k>.tau` and
+  # re-prior it.
+  #
+  # A correlated `|` bar is excluded. That spelling is copy-only by definition
+  # (one free-Sigma block carried across both arms with a single alpha), so its
+  # coupling IS written by the bar, and there is nothing here the user left out.
+  if (is.null(enc[["copy_amp"]]) && is.null(enc[["copy_amp_terms"]]) &&
+      !any(c("alpha.grid", "alpha.grid.trend") %in% names(control)) &&
+      !isTRUE(enc$per_arm) && !is.null(enc$spatial) && is.null(enc$mcar)) {
+    control[["alpha.grid"]] <- 0
+    if (!is.null(enc$trend)) control[["alpha.grid.trend"]] <- 0
+  }
+
   # NUTS: the non-spatial sampler over the exact two-arm coefficient marginal.
   # Any structured term (areal field, weighted trend, correlated / arm-specific
   # bar, temporal, re) is integrated on the nested-Laplace outer grid, not

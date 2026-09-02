@@ -2,10 +2,47 @@
 
 ## 0.1.4 (2026-09-02)
 
-* **BREAKING: `share()` replaces `share()` as the cross-arm formula verb.** The
+* **BREAKING: a missing `share()` decouples the arms on `cover()` too**
+  (gcol33/tulpaObs#297). The third and last door now reads a bare areal term
+  the way `occu_cover()` always has and `occu_multiscale_cover()` moved to in
+  `55d1219`: a shared field that no `share()` couples is pinned at `alpha = 0`
+  and rides the presence arm alone. Structure nobody wrote is not in the model.
+
+  A shared-formula `cover()` fit that writes no coupling therefore changes: the
+  presence field no longer reaches the cover arm. Restore the previous fit by
+  writing the coupling it was getting implicitly, `+ share(spatial())` in the
+  formula, which #298 made expressible. A fit that already states
+  `control$alpha.grid[.trend]` is unaffected, and so is a correlated `|` bar --
+  that spelling is copy-only by definition, so its coupling is written by the
+  bar itself.
+
+  The two spellings still agree exactly when both state the coupling: per-arm
+  `positive = ~ ... + share(spatial())` and shared
+  `~ ... + spatial(~ 1 || cell, graph = adj) + share(spatial())` stay
+  byte-identical across every numeric fit field.
+
+* **`cover()` accepts `share()` in the single shared formula**
+  (gcol33/tulpaObs#298). It previously died inside the strip with
+  `attempt to select less than one element in get1index`, naming no term the
+  user wrote, because the coupling verb was lifted on the per-arm path only.
+  The shared branch now strips it first and translates it through the same
+  promotion the per-arm branch uses. This is what makes the decoupling above a
+  default rather than a capability loss: without it a shared-formula model
+  would have no way to state a coupling at all.
+
+* **A structured term on a cover arm reaches the arm rejector**
+  (gcol33/tulpaObs#296). `.occu_cover_extract_pos_copies()` parsed the whole
+  positive formula against `data = NULL` to pull the coupling out, so
+  `positive = ~ x + re(cell)` died as `object cell not found`, pointing at the
+  user's data instead of at the unsupported feature. The strip now evaluates
+  the `share()` calls alone and leaves every other term in place, so the arm
+  rejector's own message is what speaks. Reaches `occu_multiscale_cover()`,
+  which adopted the same strip in #294.
+
+* **BREAKING: `share()` replaces `copy()` as the cross-arm formula verb.** The
   term that carries one arm's latent field onto another is now
   `share(spatial(), ...)`. One concept, one verb: the old name is deleted
-  rather than aliased, and writing `share()` in a formula raises an error naming
+  rather than aliased, and writing `copy()` in a formula raises an error naming
   its replacement instead of falling through to the fixed-effects design and
   dying there as a missing function. The whole argument surface is unchanged --
   `alpha =` (scalar, `grid()`, `grid(n = )`), per-component `terms =`, and

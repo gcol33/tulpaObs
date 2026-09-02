@@ -2012,11 +2012,21 @@ occu_categorical <- function(classes = NULL) {
 #' correlated field on that arm alone, no cross-arm copy.
 #'
 #' ```
-#' field in the shared formula (or share())   one shared / copied latent (presence anchor, coupling estimated)
+#' field in the shared formula, no share()   one presence-arm latent, pinned at alpha = 0
+#' field + share() (either spelling)         one shared / copied latent (presence anchor, coupling estimated)
 #' a field in each arm's formula             separate / free latents, no coupling
 #' ||                                        independent intercept and slope coefficient fields
 #' |                                         correlated (MCAR) coefficient fields, copy-only
 #' ```
+#'
+#' Without a `share()` (and without `control$alpha.grid`) the presence field is
+#' NOT carried onto the cover arm: the amplitude is pinned at `alpha = 0` and the
+#' field rides the presence arm alone. Structure nobody wrote is not in the
+#' model, the reading `occu_cover()` and `occu_multiscale_cover()` also have.
+#' Write `+ share(spatial())` in the shared formula, or place the field on
+#' `presence` and `share(spatial())` on `positive`, to couple the two arms. A
+#' correlated `|` bar is the exception: that spelling is copy-only by
+#' definition, so the bar itself states the coupling.
 #'
 #' @section A formula bar is a random effect, not a spatial field:
 #' A bare lme4 bar in the formula -- `(1 | cell)`, `(1 + x | cell)`,

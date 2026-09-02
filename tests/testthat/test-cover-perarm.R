@@ -100,11 +100,11 @@ test_that("share() in the single shared cover() formula is accepted (#298)", {
   f_bare <- fit_at(update(base_f, ~ . + share(spatial())))
   expect_s3_class(f_bare, "tobs_fit")
 
-  # A bare share() asks for the engine's own axis, so it reproduces the fit
-  # that writes no coupling at all. (When cover()'s no-coupling default flips
-  # to pinned-at-zero per #297, THIS is the pair that has to be re-read: the
-  # bare share() keeps the estimated axis and the bare formula loses it.)
-  expect_equal(alpha_of(f_bare), alpha_of(fit_at(base_f)), tolerance = 1e-8)
+  # A bare share() asks for the engine's own axis; a formula that writes NO
+  # coupling is pinned at zero (#297). The two readings must differ, and this
+  # pair is what says the verb carries meaning rather than decoration.
+  expect_equal(alpha_of(fit_at(base_f)), 0, tolerance = 1e-8)
+  expect_gt(alpha_of(f_bare), 0)
 
   # A stated amplitude reaches the fit.
   expect_equal(alpha_of(fit_at(update(base_f, ~ . + share(spatial(),
@@ -195,9 +195,12 @@ test_that("share(spatial()) in the positive formula == the shared-formula field 
     positive = ~ x + t + share(spatial()),
     family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
-  # Shared-formula spelling: one bar in the shared formula reaches both arms.
+  # Shared-formula spelling: one bar in the shared formula, and the share()
+  # that couples it onto the cover arm. Since #297 the coupling has to be
+  # written here too -- a bar alone is a presence-arm field pinned at alpha = 0
+  # -- so the two spellings agree only when both state the coupling.
   fit_to <- suppressWarnings(tobs(
-    ~ x + t + spatial(~ 1 || cell, graph = adj),
+    ~ x + t + spatial(~ 1 || cell, graph = adj) + share(spatial()),
     family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
 
