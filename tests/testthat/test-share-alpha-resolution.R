@@ -363,7 +363,7 @@ test_that("a bare share() takes the resolution; a share() with nodes refuses it"
   expect_error(
     fit_at(~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1))),
            list(alpha.n = 11)),
-    "states the copy axis's nodes")
+    "share(alpha = ) states the copy axis", fixed = TRUE)
 })
 
 
