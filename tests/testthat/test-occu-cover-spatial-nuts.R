@@ -923,15 +923,14 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
 }
 
 # The span the outer quadrature integrates a stated amplitude axis over. A
-# `share(alpha = grid(c(...)))` and `control$alpha.grid` state that axis's
-# NODES; the span reaches half a node step past the outermost node in the axis's
-# own (log) coordinate, and THAT is what bounds the sampled amplitude. Both
-# engines are held over this same span, which is the point of the knob: a
-# sampler clipped to the node range would target a prior truncated two
-# half-cells short of the one the grid integrates, putting a support difference
-# into the very comparison the knob exists to make. Read through the engine's
-# own helpers, so the test cannot drift from the span the fit is bounded to
-# (#300).
+# `share(spatial(), alpha = grid(c(...)))` states that axis's NODES; the span
+# reaches half a node step past the outermost node in the axis's own (log)
+# coordinate, and THAT is what bounds the sampled amplitude. Both engines are
+# held over this same span: a sampler clipped to the node range would target a
+# prior truncated two half-cells short of the one the grid integrates, putting a
+# support difference into the very comparison the amplitude exists to make. Read
+# through the engine's own helpers, so the test cannot drift from the span the
+# fit is bounded to (#300).
 .ocsn_alpha_support <- function(nodes) {
   v  <- as.numeric(nodes); v <- v[is.finite(v) & v > 0]
   tg <- matrix(v, ncol = 1L, dimnames = list(NULL, "alpha"))
@@ -1002,12 +1001,10 @@ test_that("occu_cover spatial NUTS refuses a share() it cannot resolve (#210)", 
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
   ctl <- list(verbose = FALSE, n.iter = 50L, n.warmup = 50L, n.chains = 1L,
               seed = 1L)
-  # The amplitude is set in ONE place. Before the share() reached this path the
-  # control knob simply won and the share() vanished.
-  expect_error(
-    .ocsn_fit_copy(inp, ~ pos_cov1 + share(spatial(), alpha = 0.35),
-                   control = c(ctl, list(alpha.grid = c(0.2, 0.5)))),
-    "share() in the positive", fixed = TRUE)
+  # Naming the amplitude in two places at once -- a share() and the control key
+  # -- is unreachable since #295 retired that key as user surface, so the
+  # conflict it used to raise has no spelling left to arise from.
+  #
   # A string reference is not a coupling selector here, under either engine.
   expect_error(
     .ocsn_fit_copy(inp, ~ pos_cov1 + share("occ_space", alpha = 0.35),
@@ -1109,23 +1106,26 @@ test_that("occu_cover: share() puts the amplitude back on both engines (#217)", 
     as.numeric(ctl_of(list(mk(c(0.2, 0.5), TRUE)))$alpha.grid), c(0.2, 0.5))
 })
 
-test_that("occu_cover: control$alpha.grid overrides the amplitude on both engines (#217)", {
+test_that("occu_cover: a stated amplitude reaches both engines alike (#217)", {
   skip_on_cran()
   skip_if_fast()
-  # The low-level knob stays live: a user who names the axis gets it, on either
-  # engine, and the translation steps aside.
+  # One amplitude, written once in the positive formula, has to mean the same
+  # thing to the sampler and to the grid-integrated engine: a stated axis holds
+  # both over the same region, and a one-node axis pins both at the same value.
+  # Nothing else in the file holds the two backends to each other on this.
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
   ctl <- list(verbose = FALSE, n.iter = 200L, n.warmup = 200L, n.chains = 1L,
               seed = 1L)
+  band_pos <- ~ pos_cov1 + share(spatial(), alpha = grid(c(0.2, 0.5)))
+  pin_pos  <- ~ pos_cov1 + share(spatial(), alpha = 0.8)
 
-  band <- .ocsn_fit(inp, "nuts", field = "icar",
-                    control = c(ctl, list(alpha.grid = c(0.2, 0.5))))
+  band <- .ocsn_fit_copy(inp, band_pos, control = ctl, field = "icar")
   expect_true("alpha" %in% band$nuts$sampled_hyper)
-  # Same reading as the share() spelling above: the knob states nodes, and the
-  # sampler is bounded to the span the quadrature integrates them over. The
-  # grid-integrated half of this block already says the reported amplitude of a
+  # The stated nodes bound the draws through the axis's SUPPORT, not through the
+  # node range: the sampler is held over the span the quadrature integrates them
+  # over. The grid-integrated half below says the reported amplitude of a
   # multi-node axis "is not confined to the nodes"; asserting the node range
-  # here contradicted it (#300).
+  # here would contradict it (#300).
   sup <- .ocsn_alpha_support(c(0.2, 0.5))
   a <- band$hyper_draws[, "alpha"]
   expect_gte(min(a), sup[1L] - 1e-8)
@@ -1134,19 +1134,19 @@ test_that("occu_cover: control$alpha.grid overrides the amplitude on both engine
   # A one-node axis pins the amplitude. The warm fit reaches it as a grid-weight
   # average over that one node, so it carries the last bit of the weight
   # normalisation; the pinning itself is exact (zero spread across draws).
-  pinned <- .ocsn_fit(inp, "nuts", field = "icar",
-                      control = c(ctl, list(alpha.grid = 0.8)))
+  pinned <- .ocsn_fit_copy(inp, pin_pos, control = ctl, field = "icar")
   expect_true("alpha" %in% pinned$nuts$fixed_hyper)
   expect_equal(unname(pinned$nuts$fixed_hyper_values[["alpha"]]), 0.8)
   expect_equal(unname(pinned$nuts$hyper_sd[["alpha"]]), 0)
   expect_equal(range(pinned$hyper_draws[, "alpha"]), c(0.8, 0.8))
 
-  # Same knob, same meaning on the grid-integrated route. A one-node axis is the
-  # assertion that carries: the reported amplitude of a MULTI-node axis is the
-  # engine's own derived posterior mean, which is not confined to the nodes.
-  nl_pin <- .ocsn_fit_nl(inp, control = list(alpha.grid = 0.8))
+  # Same amplitude, same meaning on the grid-integrated route. A one-node axis
+  # is the assertion that carries: the reported amplitude of a MULTI-node axis
+  # is the engine's own derived posterior mean, which is not confined to the
+  # nodes.
+  nl_pin <- .ocsn_fit_nl(inp, positive = pin_pos)
   expect_equal(nl_pin$spatial$alpha_mean, 0.8)
-  nl_band <- .ocsn_fit_nl(inp, control = list(alpha.grid = c(0.2, 0.5)))
+  nl_band <- .ocsn_fit_nl(inp, positive = band_pos)
   expect_gt(nl_band$spatial$alpha_mean, 0)
   expect_false(isTRUE(all.equal(nl_band$spatial$alpha_mean,
                                 nl_pin$spatial$alpha_mean)))

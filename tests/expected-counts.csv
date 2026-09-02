@@ -39,6 +39,8 @@
 "test-occu-cover-predict.R","smoke",5,10,0.1
 "test-occu-cover-spatial-mcar.R","full",42,0,15.1
 "test-occu-cover-spatial-mcar.R","smoke",7,2,0.1
+"test-occu-cover-spatial-nuts.R","full",213,0,1413.1
+"test-occu-cover-spatial-nuts.R","smoke",132,12,5.6
 "test-occu-cover-trend.R","full",64,0,92
 "test-occu-cover-trend.R","smoke",0,7,0.1
 "test-occu-multiscale-cover-share.R","full",16,0,0.2
