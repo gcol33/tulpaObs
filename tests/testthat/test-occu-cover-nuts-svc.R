@@ -296,10 +296,35 @@ test_that("occu_cover two-field NUTS recovers both surfaces (#214)", {
   skip_on_cran()
   skip_if_fast()
   n_seeds <- 6L
+  # 12 x 12, not 6 x 6, and the MEDIAN rather than the mean. `field_sd` is a
+  # variance component: it needs cells to be identified at all, and at 36 cells
+  # its posterior spans the axis (95% width 4.5 on a truth of 0.8), so the
+  # reported number is a property of the axis rather than of the data and reads
+  # about 2.3x truth however many seeds are averaged. That is #299, and it is the
+  # fixture starving the estimator rather than the estimator being wrong --
+  # interval coverage of every truth is 1.00 even at 6 x 6. Over these six seeds:
+  #
+  #   side   N   field_sd mean   median   worst |dev| of the four: mean / median
+  #      6  36          1.802    1.442                  1.00 / 0.64
+  #     10 100          1.422    1.234                  0.62 / 0.43
+  #     12 144          0.774    0.690                  0.32 / 0.15
+  #
+  # The median is the summary to quote against a truth: the posterior of a
+  # positive scale at low counts is right-skewed, so its mean sits above the
+  # bulk. The single-field block in test-occu-cover-spatial-nuts.R says exactly
+  # that, and records the same overstatement at 64 cells, smaller (+0.24 icar /
+  # +0.34 car_proper) -- consistent with one mechanism monotone in how much data
+  # the field sees, one field against two, so an ordering rather than a curve.
+  #
+  # Do NOT take this back to a smaller grid, and do not let a 3-seed subset
+  # settle it: seeds 4001-4003 alone put side 10 at 0.857 and passing, which the
+  # full six reverse to 1.422 and failing. Measured in NOTES_measurements.md.
+  pars      <- c("field_sd", "field_sd_trend", "alpha", "alpha_trend")
+  truth_amp <- c(0.8, 0.7, 1.0, 0.9)
   fcor <- tcor <- div <- rhat <- rep(NA_real_, n_seeds)
-  amp  <- matrix(NA_real_, n_seeds, 4L)
+  amp  <- cover <- matrix(NA_real_, n_seeds, length(pars))
   for (s in seq_len(n_seeds)) {
-    inp <- .ocsvc_inputs(side = 6L, J = 5L, seed = 4000L + s)
+    inp <- .ocsvc_inputs(side = 12L, J = 5L, seed = 4000L + s)
     fit <- tryCatch(suppressWarnings(.ocsvc_fit(inp, control = list(
       verbose = FALSE, n.iter = 800L, n.warmup = 600L, n.chains = 2L, seed = 1L,
       max.iter = 100L))), error = function(e) NULL)
@@ -308,8 +333,10 @@ test_that("occu_cover two-field NUTS recovers both surfaces (#214)", {
     tcor[s] <- abs(stats::cor(fit$trend_field, inp$sim$truth$f2))
     div[s]  <- fit$nuts$divergent_total
     rhat[s] <- max(fit$nuts$rhat, na.rm = TRUE)
-    amp[s, ] <- fit$nuts$hyper_mean[c("field_sd", "field_sd_trend",
-                                      "alpha", "alpha_trend")]
+    amp[s, ] <- fit$nuts$hyper_median[pars]
+    q <- apply(fit$hyper_draws[, pars, drop = FALSE], 2L,
+               stats::quantile, probs = c(0.025, 0.975))
+    cover[s, ] <- as.numeric(q[1L, ] <= truth_amp & truth_amp <= q[2L, ])
   }
   ok <- !is.na(fcor)
   expect_gte(mean(ok), 0.8)
@@ -321,10 +348,19 @@ test_that("occu_cover two-field NUTS recovers both surfaces (#214)", {
   # not that the intercept field absorbs the trend.
   expect_gt(mean(fcor[ok]), 0.50)
   expect_gt(mean(tcor[ok]), 0.35)
+  # The calibration claim, and the one that holds at any grid size: each truth
+  # inside its own 95% credible interval. It is what a broken estimator would
+  # fail and a merely IMPRECISE one would not, so it is asserted separately from
+  # the point band below. Pooled over the four amplitudes rather than per
+  # amplitude as the single-field block does: that one averages 20 seeds, and at
+  # 6 seeds a per-parameter rate takes only 7 values, so an 0.85 floor there
+  # would demand a clean sweep. Measures 0.96 pooled at 12 x 12 (one seed's
+  # alpha_trend interval misses) and 1.00 at every smaller grid tried.
+  expect_gte(mean(cover[ok, , drop = FALSE]), 0.85)
   # Each block's own scale: the field SDs (as the geometric-mean marginal SD the
   # simulator's truth is stated in) and the two copy amplitudes, which is where a
-  # second block sharing the first's hyper would show.
-  truth_amp <- c(0.8, 0.7, 1.0, 0.9)
+  # second block sharing the first's hyper would show. A one-sided shift is a
+  # property of the summary over seeds, so it is asserted there and not per fit.
   expect_true(all(abs(colMeans(amp[ok, , drop = FALSE]) - truth_amp) < 0.4))
 })
 

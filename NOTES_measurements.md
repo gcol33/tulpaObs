@@ -2080,3 +2080,114 @@ missing amplitude column to 0.
 
 `rho = 1` under icar is NOT the same case and is still reported: that is the
 intrinsic precision, part of the icar model, not an absent term.
+
+
+## The two-field NUTS `field_sd` was the fixture, not the estimator (#299)
+
+`test-occu-cover-nuts-svc.R`'s "occu_cover two-field NUTS recovers both surfaces
+(#214)" failed its amplitude assertion with the intercept field's `field_sd` at
+about 2.3x truth, stably, on every seed. It is an identifiability property of the
+6 x 6 fixture. The estimator is right.
+
+Harness first: measured against the INSTALLED tulpaObs with the fixture sourced
+from a `git archive HEAD` snapshot, never the working tree (the tree was mid
+`copy()` -> `share()` rename throughout, so anything that `load_all()`ed it was
+contaminated). It reproduces #299's pinned per-seed values to the digit --
+1.9242 on seed 4002, 1.7745 on 4003 -- and its 6-seed aggregate reproduces
+#299's independent run at `86b4c50` exactly: 1.8021 / 0.9436 / 0.9916 / 0.9467
+against truths 0.8 / 0.7 / 1.0 / 0.9.
+
+### What is actually wrong
+
+`field_sd` is a variance component, and at 36 cells of binary occupancy it is
+barely identified. Its posterior spans essentially the whole axis, so the
+reported number is a property of the axis rather than of the data:
+
+```
+seed 4002  field_sd  mean 1.9242  median 1.6075  95% [0.362, 4.788]  truth 0.80 IN
+seed 4004  field_sd  mean 1.0025  median 0.5187  95% [0.052, 4.439]  truth 0.80 IN
+seed 4006  field_sd  mean 2.6690  median 2.5161  95% [0.541, 4.997]  truth 0.80 IN
+```
+
+**Interval coverage of the truth is 1.00 on all four amplitudes, on every seed,
+at every grid size tried.** The posterior is calibrated; only the point summary
+is off, and this block gated the point summary alone -- it was the one place in
+the suite scoring `hyper_mean` against a truth with no coverage assertion beside
+it, which is why it surfaced here and not in the single-field block.
+
+Two candidate explanations were checked and are NOT it. The `time` weight column
+is mean 0 / sd 1, so the trend block is not collinear with the intercept field.
+And the estimator is internally consistent: the sampler draws
+`z = sigma (B1 (s1 . raw1) + s2 raw2)` with `raw ~ N(0, 1)`, so
+`field_sd = sigma * geomean(sqrt(diag(B1 diag(s1^2) B1' + s2^2 I)))` is exactly
+that covariance's geo-mean marginal SD -- `sigma` is not double-counted.
+
+### The grid size is the whole of it
+
+Same fixture, same six seeds (4001-4006), same control, only `side` changed.
+`field_sd` is shown; the "worst" columns are over all four amplitudes:
+
+| side | N | field_sd mean | field_sd median | worst \|dev\| mean | worst \|dev\| median | gate |
+|---|---|---|---|---|---|---|
+| 6 | 36 | 1.802 | 1.442 | 1.002 | 0.642 | FAIL |
+| 10 | 100 | 1.422 | 1.234 | 0.622 | 0.434 | FAIL |
+| 12 | 144 | 0.774 | 0.690 | 0.319 | 0.154 | PASS |
+
+Monotone in N on both summaries, and the median is better behaved than the mean
+at every size -- which is what the single-field block already says to expect from
+a right-skewed positive scale.
+
+**A 3-seed subset inverts this, and nearly cost the fix.** An exploratory sweep
+over seeds 4001-4003 only put side 10 at `field_sd` 0.857 and PASSING; the full
+six reverse it to 1.422 and failing. That is the same "which side of a band it
+lands on is partly a property of the seed set" the single-field block warns
+about, and it means no sizing decision here is safe on fewer than the six seeds
+the block actually runs.
+
+The same reading answers #299's second open point, that `field_sd_trend` is "too
+seed-variable to support any claim" -- 0.302 to 2.455 across the six seeds at
+side 6, an 8x swing. It is the same near-prior posterior on the other block, and
+it settles with the grid (median 0.825 on a truth of 0.7 at side 12). Neither
+field SD was carrying information at 36 cells, which is also why the trend block
+could not serve as the contrast the fixture wanted it for.
+
+It also disposes of the nominal-vs-realized worry #299 raised (realized `sd(f)`
+0.71 to 1.43 against a nominal 0.8). A mis-stated truth would leave the estimate
+off by that amount at EVERY grid size; instead it converges onto the nominal
+value. The truth is stated correctly.
+
+### This re-scopes the single-field block too
+
+`test-occu-cover-spatial-nuts.R`'s single-field coverage block already records
+the same overstatement at 64 cells, smaller: `field_sd` +0.24 (icar) / +0.34
+(car_proper) on a truth of 0.7, with interval coverage 1.00. Its comment
+attributes that to the right-skewed posterior of a positive variance component
+and names `hyper_median` as the summary to quote -- correct in kind. The size
+sweep gives the sharper statement: the shift is monotone in how much data the
+field sees, and 64 cells sits between the 36 that fails and the 144 that passes.
+Consistent with one mechanism at two grid sizes rather than two defects -- one
+field against two, so an ordering rather than a fitted curve.
+
+So "the +0.24 shift is expected and not a defect" reads, after this, as: expected,
+and the same thing #299 reported, far enough inside its band to go unnoticed.
+
+### What changed
+
+The 0.4 band was NOT widened, as #299 asked -- a band admitting the 1.05
+deviation would hide the signal. Three changes instead:
+
+1. `side = 6` -> `12` (36 -> 144 cells). Feeds the estimator rather than
+   loosening the assertion. Costs about 75 s/fit against 16, so roughly 7.5 min
+   for the block; it is `skip_on_cran()` + `skip_if_fast()`, full tier only.
+2. `hyper_mean` -> `hyper_median`, the summary the single-field block already
+   names for this quantity. Worst deviation 0.154 against the mean's 0.319, a
+   2.6x margin under the unchanged band.
+3. A pooled interval-coverage gate added beside the point band -- the claim that
+   holds at any grid size, and what a genuinely broken estimator would fail
+   where a merely imprecise one would not. Pooled over the four amplitudes
+   rather than per amplitude, because at 6 seeds a per-parameter rate takes only
+   7 values. Measures 0.958 at 12 x 12.
+
+Note for re-running: these blocks are `skip_on_cran()` + `skip_if_fast()`, and
+the fast variable is **`TULPAOBS_FAST`**, not the engine's `TULPA_FAST`. A run
+setting the engine spelling skips via `skip_on_cran` instead and looks green.
