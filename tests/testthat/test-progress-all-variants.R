@@ -12,9 +12,6 @@
 # file is the detached-run channel and must appear whenever progress.file is set.
 # =============================================================================
 
-skip_on_cran()
-skip_if_fast()
-
 # Final heartbeat line "<done> <total> <elapsed_s> <eta_s>" parses to 4 numbers
 # with done >= 1 and total > 0.
 .expect_heartbeat <- function(path, label) {
@@ -30,6 +27,8 @@ skip_if_fast()
 }
 
 test_that("occu laplace (EM) writes a heartbeat under verbose = FALSE", {
+  skip_on_cran()
+  skip_if_fast()
   set.seed(1)
   sim <- simulate_occu(N = 80, J = 3, seed = 1)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
@@ -40,6 +39,8 @@ test_that("occu laplace (EM) writes a heartbeat under verbose = FALSE", {
 })
 
 test_that("ms_occu (community EM) writes a heartbeat under verbose = FALSE", {
+  skip_on_cran()
+  skip_if_fast()
   sim <- simulate_ms_occu(N = 90, J = 3, n_species = 8, seed = 2)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
   tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1, y = sim$y,
@@ -49,6 +50,8 @@ test_that("ms_occu (community EM) writes a heartbeat under verbose = FALSE", {
 })
 
 test_that("abun NUTS writes a heartbeat under verbose = FALSE", {
+  skip_on_cran()
+  skip_if_fast()
   set.seed(3)
   sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 3)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
@@ -60,6 +63,8 @@ test_that("abun NUTS writes a heartbeat under verbose = FALSE", {
 })
 
 test_that("abun laplace (count-marginal Newton) writes a heartbeat", {
+  skip_on_cran()
+  skip_if_fast()
   set.seed(4)
   sim <- simulate_abun(N = 200, J = 4, n_abund_covs = 2, n_det_covs = 1, seed = 4)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
@@ -70,6 +75,8 @@ test_that("abun laplace (count-marginal Newton) writes a heartbeat", {
 })
 
 test_that("ms_abun (community N-mixture EM) writes a heartbeat", {
+  skip_on_cran()
+  skip_if_fast()
   sim <- simulate_ms_abun(n_species = 10, N = 70, J = 4,
                           n_abund_covs = 1, n_det_covs = 1, seed = 5)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
@@ -80,6 +87,8 @@ test_that("ms_abun (community N-mixture EM) writes a heartbeat", {
 })
 
 test_that("NUTS progress does not perturb the sampler (byte-exact draws)", {
+  skip_on_cran()
+  skip_if_fast()
   set.seed(6)
   sim <- simulate_abun(N = 50, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 6)
   ctl <- list(n.iter = 300L, n.warmup = 200L, n.chains = 1L, seed = 9L,

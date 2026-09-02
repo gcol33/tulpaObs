@@ -15,9 +15,6 @@
 # file holding a final "<done> <total> <elapsed_s> <eta_s>" with done == total.
 # =============================================================================
 
-skip_on_cran()
-skip_if_fast()
-
 # Parse the last heartbeat line "<done> <total> <elapsed_s> <eta_s>".
 .read_heartbeat <- function(path) {
   expect_true(file.exists(path), info = "heartbeat file was never written")
@@ -32,6 +29,8 @@ skip_if_fast()
 }
 
 test_that("cover() hurdle writes its heartbeat file under verbose = FALSE", {
+  skip_on_cran()
+  skip_if_fast()
   set.seed(43L)
   n_s <- 12L; N <- 120L
   adj <- matrix(0L, n_s, n_s)
@@ -72,6 +71,8 @@ test_that("cover() hurdle writes its heartbeat file under verbose = FALSE", {
 })
 
 test_that("occu_cover() writes its heartbeat file under verbose = FALSE", {
+  skip_on_cran()
+  skip_if_fast()
   N <- 30L; J <- 4L
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -110,6 +111,8 @@ test_that("occu_cover() writes its heartbeat file under verbose = FALSE", {
 })
 
 test_that("verbose = FALSE without progress.file leaves no heartbeat file", {
+  skip_on_cran()
+  skip_if_fast()
   # The console progress bar is ON by default (independent of verbose); with no
   # progress.file requested, nothing is written to disk and the fit still
   # completes (the no-op baseline).

@@ -10,9 +10,6 @@
 # run must be discarded and re-solved to the same answer.
 # =============================================================================
 
-skip_on_cran()
-skip_if_fast()
-
 .cc_build <- function(N = 30L, J = 4L, positive = "lognormal", seed = 12345L) {
   adj <- matrix(0L, N, N)
   for (s in seq_len(N)) {
@@ -59,6 +56,8 @@ skip_if_fast()
 }
 
 test_that("occu_cover checkpoint fit equals an un-checkpointed fit", {
+  skip_on_cran()
+  skip_if_fast()
   d <- .cc_build(seed = 21L)
   path <- tempfile(fileext = ".ckpt")
   on.exit(unlink(path), add = TRUE)
@@ -71,6 +70,8 @@ test_that("occu_cover checkpoint fit equals an un-checkpointed fit", {
 })
 
 test_that("occu_cover resume loads completed cells and re-appends nothing", {
+  skip_on_cran()
+  skip_if_fast()
   d <- .cc_build(seed = 22L)
   path <- tempfile(fileext = ".ckpt")
   on.exit(unlink(path), add = TRUE)
@@ -84,6 +85,8 @@ test_that("occu_cover resume loads completed cells and re-appends nothing", {
 })
 
 test_that("occu_cover resume after a torn tail re-solves to the same fit", {
+  skip_on_cran()
+  skip_if_fast()
   d <- .cc_build(seed = 23L)
   path <- tempfile(fileext = ".ckpt")
   on.exit(unlink(path), add = TRUE)
@@ -98,6 +101,8 @@ test_that("occu_cover resume after a torn tail re-solves to the same fit", {
 })
 
 test_that("cover hurdle forwards checkpoint into the joint engine", {
+  skip_on_cran()
+  skip_if_fast()
   # Single-y beta cover hurdle on a chain BYM2 field; the checkpoint flows
   # through the .dispatch_cover() -> fit_cover_hurdle_joint_nested() path.
   set.seed(24L)
@@ -149,6 +154,8 @@ test_that("cover hurdle forwards checkpoint into the joint engine", {
 })
 
 test_that("occu_cover checkpoint validates its argument via the engine", {
+  skip_on_cran()
+  skip_if_fast()
   d <- .cc_build(seed = 25L)
   expect_error(
     .cc_fit(d, checkpoint = list(resume = TRUE)),

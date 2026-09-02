@@ -40,6 +40,10 @@ shard <- Sys.getenv("TULPAOBS_SHARD", "")
 out_dir <- Sys.getenv("TULPAOBS_TEST_OUT", "")
 
 test_path <- "tests/testthat"
+# Every test file that exists, before any shard or pattern narrows the run.
+# The manifest check needs this to tell a file this job was not asked to carry
+# from one that is not there at all.
+on_disk <- sort(basename(list.files(test_path, pattern = "^test-.*[.][Rr]$")))
 assigned <- NULL
 if (nzchar(shard)) {
   source(".github/scripts/shard-tests.R")
@@ -295,15 +299,27 @@ if (!is.null(assigned)) {
 # A smoke run's skip counts differ from a full run's by construction, so the
 # manifest carries one row per (file, tier) and a run reads its own tier's
 # rows. Files absent from the manifest are not checked -- it records what has
-# actually been measured, and the full tier has never completed once, so it
-# starts partial and grows.
+# actually been measured. The smoke tier is complete: every test file has a
+# smoke row, measured in one sweep. The full tier is not, because it has never
+# completed once, so its side starts partial and grows a file at a time as
+# runs measure them.
 drift <- NULL
+silent <- character(0)
 manifest_path <- "tests/expected-counts.csv"
 if (file.exists(manifest_path) && nrow(by_file)) {
   want <- utils::read.csv(manifest_path, stringsAsFactors = FALSE)
   want <- want[want$tier == if (fast) "smoke" else "full", , drop = FALSE]
   got  <- by_file[match(want$file, by_file$file), , drop = FALSE]
   seen <- !is.na(got$file)
+  # A row is legitimately absent from THIS run when the job was not asked to
+  # carry the file -- a shard holds a tenth of the tier, TULPAOBS_FILES holds
+  # whatever was named -- and dropping those is right. A row naming a file that
+  # is not in the suite AT ALL is different: the manifest is guarding something
+  # that no longer exists, and every later run quietly compares one file fewer
+  # while still printing a total that reads like coverage. A file renamed out
+  # from under its row loses its guard exactly when the rename is the thing
+  # worth noticing (gcol33/tulpaObs#302).
+  silent <- setdiff(want$file, on_disk)
   want <- want[seen, , drop = FALSE]
   got  <- got[seen, , drop = FALSE]
   if (nrow(want)) {
@@ -340,9 +356,30 @@ if (file.exists(manifest_path) && nrow(by_file)) {
                 nrow(want), sum(utils::read.csv(manifest_path)$tier ==
                                   (if (fast) "smoke" else "full")),
                 if (fast) "smoke" else "full"))
+
+    # A row recording no assertions AND no skips cannot fail: the comparison
+    # below it is 0 >= 0 either way, so the file is carried by the manifest
+    # without being held to anything. Name them rather than let the total imply
+    # a coverage the rows do not give. A file whose whole point is to skip in
+    # this tier avoids this by gating each test_that() rather than the file, so
+    # the skips are counted.
+    blind <- want$assertions == 0L & want$skipped == 0L
+    if (any(blind)) {
+      cat("count check: ", sum(blind), " row(s) record 0 assertions and 0 skips",
+          " and so cannot fail:\n", sep = "")
+      for (f in want$file[blind]) cat("  ", f, "\n", sep = "")
+    }
   }
 }
 
-if (failed > 0 || errors > 0 || !is.null(drift)) quit(status = 1L)
+if (length(silent)) {
+  cat("\nCount check FAILED -- ", length(silent), " file(s) recorded in ",
+      manifest_path, " for this tier are not in tests/testthat at all:\n", sep = "")
+  for (f in silent) cat("  ", f, "\n", sep = "")
+  cat("\nIf the file was renamed or deleted on purpose, move or drop its row in",
+      " the same commit.\n", sep = "")
+}
+
+if (failed > 0 || errors > 0 || !is.null(drift) || length(silent)) quit(status = 1L)
 
 cat("Suite green.\n")
