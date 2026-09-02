@@ -199,6 +199,37 @@
   invisible(TRUE)
 }
 
+# ---- outer-grid adaptive knobs -------------------------------------------
+#
+# TWO independent mechanisms share the `adaptive.grid` prefix, and a fit can
+# use either without the other:
+#
+#   * the post-integration REFINEMENT passes (`adaptive.grid`,
+#     `.edge.thresh`, `.max.passes`), which densify a coarse axis around the
+#     mode after the grid has been integrated; and
+#   * the `integration = "grid_adaptive"` LATTICE BUILDER (`.cutoff`,
+#     `.stride`, `.max.frac`, `.min.cells`), which evaluates a strict subset
+#     of the same tensor lattice and declines back to the dense tensor when
+#     the kept region would rival it.
+#
+# The builder knobs are forwarded UNSET so the engine keeps the single
+# definition of their defaults; restating them here would fork that number.
+#
+# Exact `[[`, never `$`: every name in this family has `adaptive.grid` as a
+# prefix, so a `$` read of the master flag returns a SUB-KNOB's value whenever
+# exactly one sub-knob is set and the flag itself is not -- a fit passing only
+# `adaptive.grid.edge.thresh = 0.05` would read `adaptive_grid = 0.05`.
+.tobs_adaptive_grid_control <- function(control) {
+  list(
+    adaptive_grid             = control[["adaptive.grid"]]             %||% TRUE,
+    adaptive_grid_edge_thresh = control[["adaptive.grid.edge.thresh"]] %||% 0.02,
+    adaptive_grid_max_passes  = control[["adaptive.grid.max.passes"]]  %||% 1L,
+    adaptive_grid_cutoff      = control[["adaptive.grid.cutoff"]],
+    adaptive_grid_stride      = control[["adaptive.grid.stride"]],
+    adaptive_grid_max_frac    = control[["adaptive.grid.max.frac"]],
+    adaptive_grid_min_cells   = control[["adaptive.grid.min.cells"]])
+}
+
 .tobs_default_sigma_grid <- function() {
   tulpa::auto_grid(tulpa:::.nl_grid_axis("field_sd"))
 }

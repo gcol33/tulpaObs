@@ -659,6 +659,13 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       "n.threads", "inner.refresh", "hessian",
       "n.threads.outer", "force.sparse", "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      # Tuning for `integration = "grid_adaptive"`, a DIFFERENT mechanism from
+      # the three refinement knobs above: the keep / expand radius from the
+      # peak, the coarse-seed subsample stride per axis, the kept-fraction
+      # ceiling past which the builder declines back to the dense tensor, and
+      # the smallest dense tensor worth the machinery at all.
+      "adaptive.grid.cutoff", "adaptive.grid.stride",
+      "adaptive.grid.max.frac", "adaptive.grid.min.cells",
       "var.of.means.consistency", "var.of.means.min.ess",
       # Cheap-pass outer-grid screen (see the engine's `prune` / `prune_tol`),
       # and the two placement knobs: whether a default axis is recentred on the
@@ -932,6 +939,13 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
       "alpha.n", "alpha.n.trend", "phi.grid.pos", "n.threads",
       "inner.refresh", "hessian", "n.threads.outer", "force.sparse",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      # Tuning for `integration = "grid_adaptive"`, a DIFFERENT mechanism from
+      # the three refinement knobs above: the keep / expand radius from the
+      # peak, the coarse-seed subsample stride per axis, the kept-fraction
+      # ceiling past which the builder declines back to the dense tensor, and
+      # the smallest dense tensor worth the machinery at all.
+      "adaptive.grid.cutoff", "adaptive.grid.stride",
+      "adaptive.grid.max.frac", "adaptive.grid.min.cells",
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
       "checkpoint", "k.threads"
@@ -2088,6 +2102,13 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
       "trend", "alpha.grid", "alpha.grid.trend", "alpha.n", "alpha.n.trend",
       "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      # Tuning for `integration = "grid_adaptive"`, a DIFFERENT mechanism from
+      # the three refinement knobs above: the keep / expand radius from the
+      # peak, the coarse-seed subsample stride per axis, the kept-fraction
+      # ceiling past which the builder declines back to the dense tensor, and
+      # the smallest dense tensor worth the machinery at all.
+      "adaptive.grid.cutoff", "adaptive.grid.stride",
+      "adaptive.grid.max.frac", "adaptive.grid.min.cells",
       "var.of.means.consistency", "var.of.means.min.ess",
       "prune", "prune.tol", "hessian", "aggregate.occ", "aggregate.pos",
       "progress", "progress.every", "progress.throttle", "progress.file",

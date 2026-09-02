@@ -163,59 +163,71 @@ export(tobs_stack)
 export(waic)
 export(within_between)
 importFrom(Rcpp,sourceCpp)
-importFrom(grDevices,adjustcolor)
-importFrom(grDevices,rgb)
-importFrom(graphics,abline)
-importFrom(graphics,axis)
-importFrom(graphics,barplot)
-importFrom(graphics,box)
-importFrom(graphics,hist)
-importFrom(graphics,image)
-importFrom(graphics,legend)
-importFrom(graphics,par)
-importFrom(graphics,polygon)
-importFrom(graphics,rect)
-importFrom(loo,loo)
-importFrom(loo,waic)
+importFrom(grDevices,
+  adjustcolor,
+  rgb
+)
+importFrom(graphics,
+  abline,
+  axis,
+  barplot,
+  box,
+  hist,
+  image,
+  legend,
+  par,
+  polygon,
+  rect
+)
+importFrom(loo,
+  loo,
+  waic
+)
 importFrom(methods,as)
-importFrom(stats,binomial)
-importFrom(stats,coef)
-importFrom(stats,cor)
-importFrom(stats,dnorm)
-importFrom(stats,fitted)
-importFrom(stats,glm)
-importFrom(stats,ks.test)
-importFrom(stats,logLik)
-importFrom(stats,model.matrix)
-importFrom(stats,nobs)
-importFrom(stats,optim)
-importFrom(stats,plogis)
-importFrom(stats,pnorm)
-importFrom(stats,predict)
-importFrom(stats,quantile)
-importFrom(stats,rbinom)
-importFrom(stats,residuals)
-importFrom(stats,rnorm)
-importFrom(stats,rpois)
-importFrom(stats,runif)
-importFrom(stats,sd)
-importFrom(stats,setNames)
-importFrom(stats,simulate)
-importFrom(stats,update)
-importFrom(stats,var)
-importFrom(tulpa,check_model)
-importFrom(tulpa,cpo)
-importFrom(tulpa,dic)
-importFrom(tulpa,glance)
-importFrom(tulpa,pit_residuals)
-importFrom(tulpa,ranef)
-importFrom(tulpa,sbc)
-importFrom(tulpa,test_dispersion)
-importFrom(tulpa,test_outliers)
-importFrom(tulpa,test_uniformity)
-importFrom(tulpa,test_zero_inflation)
-importFrom(tulpa,tidy)
+importFrom(stats,
+  binomial,
+  coef,
+  cor,
+  dnorm,
+  fitted,
+  glm,
+  ks.test,
+  logLik,
+  model.matrix,
+  nobs,
+  optim,
+  plogis,
+  pnorm,
+  predict,
+  quantile,
+  rbinom,
+  residuals,
+  rnorm,
+  rpois,
+  runif,
+  sd,
+  setNames,
+  simulate,
+  update,
+  var
+)
+importFrom(tulpa,
+  check_model,
+  cpo,
+  dic,
+  glance,
+  pit_residuals,
+  ranef,
+  sbc,
+  test_dispersion,
+  test_outliers,
+  test_uniformity,
+  test_zero_inflation,
+  tidy
+)
 importFrom(tulpaMesh,fem_matrices)
-importFrom(utils,getFromNamespace)
-importFrom(utils,modifyList)
+importFrom(utils,
+  getFromNamespace,
+  modifyList
+)
 useDynLib(tulpaObs, .registration = TRUE)

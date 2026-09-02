@@ -274,7 +274,7 @@
     responses     = responses,
     prior         = prior_arg,
     cell_coupling = "occu_only",
-    control = list(
+    control = c(list(
       max_iter        = as.integer(max.iter),
       tol             = as.numeric(tol),
       n_threads       = as.integer(dots$n.threads %||% 1L),
@@ -290,9 +290,6 @@
       n_threads_outer = as.integer(
         dots$n.threads.outer %||% max(1L, parallel::detectCores() - 4L)),
       force_sparse    = isTRUE(dots$force.sparse),
-      adaptive_grid             = dots$adaptive.grid             %||% TRUE,
-      adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
-      adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
       var_of_means_min_ess      = dots$var.of.means.min.ess,
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF on this path. At EVA
@@ -318,7 +315,8 @@
       progress.every    = dots$progress.every,
       progress.throttle = dots$progress.throttle,
       progress.file     = dots$progress.file
-    )
+    ),
+    .tobs_adaptive_grid_control(dots))
   )
 
   ctx <- list(adj = adj, pi_list = model$process_info, n_cells = n_cells,

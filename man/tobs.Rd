@@ -339,6 +339,27 @@ hyperparameter; \code{fit$spatial_integration} records which ran. Each outer
 node is a full inner solve, so \code{"ccd"} adds a mode-find without a node
 saving on these coarse grids -- it is opt-in, most useful when a
 multi-axis hyperparameter posterior is well identified.
+\item \code{adaptive.grid.cutoff}, \code{adaptive.grid.stride}, \code{adaptive.grid.max.frac},
+\code{adaptive.grid.min.cells} — tuning for \code{integration = "grid_adaptive"} on
+the joint-coupled spatial families (\code{occu_cover()}, \code{cover()}, \code{occu()}
+spatial, \code{occu_multiscale_cover()}), which the engine hosts alongside
+\code{"grid"} and \code{"ccd"}. That integrator evaluates a strict subset of the
+same tensor lattice -- it floods outward from the posterior mode and keeps
+the cells within \code{adaptive.grid.cutoff} log-density of the peak -- and
+declines back to the dense tensor when the kept region would rival it, so
+it trades inner solves for nothing but resolution of the hyperparameter
+tails. \code{adaptive.grid.cutoff} is the keep / expand radius (larger keeps
+more cells, closer to the dense tensor), \code{adaptive.grid.stride} the
+coarse-seed subsample stride per axis, \code{adaptive.grid.max.frac} the
+kept-fraction ceiling past which it declines, and
+\code{adaptive.grid.min.cells} the smallest dense tensor worth the machinery.
+Unset leaves each at the engine default. These are a DIFFERENT mechanism
+from \code{adaptive.grid} / \code{adaptive.grid.edge.thresh} /
+\code{adaptive.grid.max.passes}, which refine an already-integrated grid; the
+two compose and neither implies the other. The saving is largest where a
+fit carries several outer axes -- two spatial arms (a shared field plus an
+arm-specific one) put three on the grid, which \code{integration = "auto"}
+resolves to the dense tensor.
 \item \code{diagnose.k} — for the joint-coupled spatial families (\code{occu_cover()},
 \code{occu()} spatial, \code{occu_multiscale_cover()}), whether to score the outer
 hyperparameter Gaussian summary with an importance-sampling Pareto-k.

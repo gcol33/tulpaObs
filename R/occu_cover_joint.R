@@ -616,7 +616,7 @@
     prior         = prior_arg,
     phi_grid      = phi_grid_arg,
     cell_coupling = spec_name,
-    control = list(
+    control = c(list(
       max_iter  = as.integer(max.iter),
       tol       = as.numeric(tol),
       n_threads = as.integer(dots$n.threads %||% 1L),
@@ -655,9 +655,6 @@
       # (tulpa/R/hyper_grid_refine.R::.hyper_axis_edge_scores), so the
       # refinement walks finite mass only and never trips on a missing-value
       # threshold compare.
-      adaptive_grid             = dots$adaptive.grid             %||% TRUE,
-      adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
-      adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
       # Var-of-means consistency pass (tulpa engine, defaults ON in the joint
       # path) refines a sharply peaked axis post-integration -- independent of
       # adaptive_grid. Exposed so a fit can request a genuinely fixed outer grid
@@ -753,7 +750,8 @@
       progress.every    = dots$progress.every,
       progress.throttle = dots$progress.throttle,
       progress.file     = dots$progress.file
-    )
+    ),
+    .tobs_adaptive_grid_control(dots))
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
   # Regularizing hyperpriors on the outer grid, forwarded from control to the

@@ -172,3 +172,49 @@ test_that("a pruned occu_cover fit does not warn about convergence", {
   expect_gt(sum(!is.finite(jf$log_marginal)), 0L)
   expect_false(any(grepl("did not converge", warns)))
 })
+
+
+# --- the grid_adaptive lattice-builder knobs --------------------------------
+#
+# `integration = "grid_adaptive"` evaluates a strict subset of the same tensor
+# lattice. Its four tuning knobs are a DIFFERENT mechanism from the three
+# post-integration refinement knobs that share the `adaptive.grid` prefix, and
+# all seven resolve in one place (`.tobs_adaptive_grid_control()`).
+
+test_that("the builder knobs resolve unset so the engine owns their defaults", {
+  r <- .tobs_adaptive_grid_control(list())
+  expect_true(r$adaptive_grid)
+  expect_equal(r$adaptive_grid_edge_thresh, 0.02)
+  expect_equal(r$adaptive_grid_max_passes, 1L)
+  for (k in c("adaptive_grid_cutoff", "adaptive_grid_stride",
+              "adaptive_grid_max_frac", "adaptive_grid_min_cells")) {
+    expect_true(k %in% names(r))
+    expect_null(r[[k]])
+  }
+})
+
+test_that("a sub-knob alone does not become the master flag's value", {
+  # Every name in this family has `adaptive.grid` as a prefix, so a `$` read of
+  # the flag returns a sub-knob's VALUE whenever exactly one sub-knob is set and
+  # the flag is not -- `list(adaptive.grid.edge.thresh = 0.05)$adaptive.grid`
+  # is 0.05, not NULL. The resolver reads exactly.
+  for (k in c("adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+              "adaptive.grid.cutoff", "adaptive.grid.stride",
+              "adaptive.grid.max.frac", "adaptive.grid.min.cells")) {
+    ctl <- stats::setNames(list(0.05), k)
+    expect_identical(.tobs_adaptive_grid_control(ctl)$adaptive_grid, TRUE,
+                     info = k)
+  }
+  expect_false(.tobs_adaptive_grid_control(list(adaptive.grid = FALSE))$adaptive_grid)
+})
+
+test_that("every knob passes control validation on the families that host one", {
+  keys <- c("adaptive.grid.cutoff", "adaptive.grid.stride",
+            "adaptive.grid.max.frac", "adaptive.grid.min.cells")
+  for (fam in list(occu_cover(), occu_multiscale_cover(), cover())) {
+    expect_true(all(keys %in% fam$control_keys), info = fam$name)
+  }
+  # occu()'s spatial (SVC) reroute reaches the same engine through the shared
+  # route group rather than its own family key list.
+  expect_true(all(keys %in% .tobs_control_groups$nested_laplace_joint))
+})

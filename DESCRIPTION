@@ -49,4 +49,4 @@ Config/testthat/parallel: true
 Config/testthat/start-first: nuts*, dyn_abun, distance, fp_occu, method-gibbs-recovery, re-laplace-recovery,
     re-bar-recovery, occu-laplace-se, occu-prior, issue8*, spde-occ, spatial-occ,
     nested-laplace*, cover-hurdle-nested-joint-recovery, cover-hurdle-bpos0-coverage
-Config/roxygen2/version: 8.0.0
+Config/roxygen2/version: 8.1.0

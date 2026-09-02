@@ -486,7 +486,13 @@
                            "rho.grid", "tau.grid", "range.grid",
                            "n.threads", "n.threads.outer",
                            "adaptive.grid", "adaptive.grid.edge.thresh",
-                           "adaptive.grid.max.passes", "var.of.means.consistency",
+                           "adaptive.grid.max.passes",
+                           # Tuning for `integration = "grid_adaptive"` (the
+                           # subset-lattice builder), distinct from the three
+                           # post-integration refinement knobs above.
+                           "adaptive.grid.cutoff", "adaptive.grid.stride",
+                           "adaptive.grid.max.frac", "adaptive.grid.min.cells",
+                           "var.of.means.consistency",
                            "var.of.means.min.ess", "diagnose.k", "diagnose.draws",
                            "k.samples", "k.bootstrap", "k.tail.points", "k.conf.bands",
                            "force.sparse", "inner.refresh", "checkpoint",

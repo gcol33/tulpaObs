@@ -276,10 +276,7 @@
     list(prune     = control[["prune"]]     %||% FALSE,
          prune_tol = control[["prune.tol"]] %||% 1e-4)
   } else list()
-  tail <- list(
-    adaptive_grid             = control[["adaptive.grid"]]             %||% TRUE,
-    adaptive_grid_edge_thresh = control[["adaptive.grid.edge.thresh"]] %||% 0.02,
-    adaptive_grid_max_passes  = control[["adaptive.grid.max.passes"]]  %||% 1L,
+  tail <- c(.tobs_adaptive_grid_control(control), list(
     var_of_means_consistency  = control[["var.of.means.consistency"]]  %||% TRUE,
     var_of_means_min_ess      = control[["var.of.means.min.ess"]],
     progress          = control[["progress"]]     %||% TRUE,
@@ -287,7 +284,7 @@
     progress.throttle = control$progress.throttle %||% 2,
     progress.file     = control$progress.file     %||% "",
     checkpoint        = control$checkpoint,
-    integration       = control$integration %||% integration)
+    integration       = control$integration %||% integration))
   c(head, screen, tail)
 }
 

@@ -310,7 +310,7 @@
     prior         = prior_arg,
     phi_grid      = phi_grid_arg,
     cell_coupling = spec_name,
-    control = list(
+    control = c(list(
       max_iter        = as.integer(max.iter),
       tol             = as.numeric(tol),
       n_threads       = as.integer(dots$n.threads %||% 1L),
@@ -319,9 +319,6 @@
       inner_refresh   = as.integer(dots$inner.refresh %||% 1L),
       n_threads_outer = as.integer(dots$n.threads.outer %||% 1L),
       force_sparse    = isTRUE(dots$force.sparse),
-      adaptive_grid             = dots$adaptive.grid             %||% TRUE,
-      adaptive_grid_edge_thresh = dots$adaptive.grid.edge.thresh %||% 0.02,
-      adaptive_grid_max_passes  = dots$adaptive.grid.max.passes  %||% 1L,
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF, matching the
       # occu_cover_joint and occu_joint paths: the `k_samples` extra inner
       # re-solves on the full areal field dominate the runtime and scale with the
@@ -345,7 +342,8 @@
       # performance cores; an integer pins it. Forwarded verbatim.
       k_threads  = dots$k.threads,
       checkpoint = dots$checkpoint
-    )
+    ),
+    .tobs_adaptive_grid_control(dots))
   )
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)

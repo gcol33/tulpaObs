@@ -1937,3 +1937,67 @@ Scripts (gitignored): `dev_notes/_kr284_probe.R`, `_kr284_launch.ps1`,
 `_kr284_analyse.R`, and for the resolution `_i285_tails.R`, `_i285_draw.R`,
 `_i285_confirm.R`, `_i285_fixture.R`; data `dev_notes/kr284/`, Windows cross-arm
 `dev_notes/kr284_win_partial/`.
+
+## Two spatial arms on `occu_cover()`: outer-grid cost and the `grid_adaptive` knobs
+
+tulpaObs 0.1.3 / tulpa 0.2.12, this box (shared -- wall times are relative, not
+absolute). Fixture: `occu_cover(response = "beta")`, `simulate_occu_cover(J = 8,
+phi = 30, sigma = 0.6, alpha = 1.0, pos_field = TRUE, sigma_pos_int = 0.6)`,
+shared ICAR on the occurrence formula + an independent ICAR on the cover arm
+(`spatial(~ 1 || cell, graph)` in `positive`), rook grid, `method =
+"nested_laplace"`. `control$alpha.grid` stated the engine's own 6-node copy axis
+so the grid could not collapse onto the atom (see the alpha-collapse note below).
+
+**Two spatial arms = three outer axes.** `b1.sigma` (5) x `b1.alpha` (6) x
+`b2.tau` (5) = **150 cells**, against 30 for a shared field alone. Each cell is
+one full inner Newton on the joint 3-arm system, and `integration = "auto"`
+resolves to the dense tensor at exactly 3 axes (the CCD auto-engages at >= 4):
+measured `integration_requested = "auto"` -> `integration = "grid"`.
+`n.threads.outer` defaults to 1, so that grid runs serial.
+
+Levers, 625 cells (25x25), max abs coefficient deviation from the dense grid:
+
+| control | wall | cells | deviation |
+|---|---|---|---|
+| `integration = "grid"` (what `auto` gives) | 17.0 s | 150 | -- |
+| `grid_adaptive` | 6.9 s | 15 | 1.9e-4 |
+| `ccd` | 9.8 s | 24 | **2.1e-1** |
+| `n.threads.outer = 6` | 6.0 s | 150 | 1.2e-11 |
+| `grid_adaptive` + 6 threads | **2.2 s (7.8x)** | 15 | 1.9e-4 |
+| `prune = TRUE` + 6 threads | 2.4 s | 150 | 1.5e-3 |
+| `inner.refresh = 4` | 18.1 s | 150 | 0 |
+
+At 1600 cells (40x40): 89.2 s -> 10.6 s (**8.4x**), so the multiplier grows with
+the field. `inner.refresh` buys nothing on the beta arm and is not the lever the
+comment in `occu_cover_joint.R` might suggest for a grid fit.
+
+**`ccd` is WRONG here, and it is what the pos-field test helper asks for.** At
+625 cells it moved `alpha` 0.478 -> 0.268 and `sigma` 0.653 -> 0.779. That is the
+engine's own reason for preferring the tensor at <= 3 axes ("more ridge-robust"):
+the sigma/alpha copy ridge is exactly what a mode-centred star mishandles.
+`.pf_fit()` in `test-occu-cover-pos-field.R` defaults `integration = "ccd"`.
+
+**`adaptive.grid.cutoff` is the knob that decides whether the default is safe.**
+Sweep at 1600 cells, all at 6 outer threads, deviation from the dense grid:
+
+| cutoff | cells | coefs | sigma | alpha |
+|---|---|---|---|---|
+| 10 (engine default) | 9 | 1.6e-3 | 5.1e-3 | **5.7e-2** |
+| 20 | 19 | 4.1e-11 | 7.2e-12 | 4.9e-11 |
+| 30 / 50 | 20 / 21 | 2.2e-11 | 1.7e-12 | 2.6e-11 |
+| 80 | 31 | 9.5e-11 | 4.6e-12 | 5.7e-11 |
+
+Nothing improves past 20; it only costs cells. The engine's default of 10 is the
+only setting that loses anything, and what it loses is the copy amplitude.
+
+**Across seeds the agreement at cutoff = 20 is NOT uniform** (625 cells, 4 seeds,
+max abs deviation): 3.0e-11, 2.0e-10, 1.8e-3, 6.7e-4. So "a strict subset of the
+lattice" bounds the DESIGN, not the answer -- two of four seeds move at ~1e-3.
+Enough to prefer it as an opt-in over a shipped default until the cover recovery
+files have been run both ways.
+
+**Blast radius of a default flip is confined to multi-block fits.** A single
+shared field takes the single-block backend, and the engine always uses the
+tensor grid there (`nested_laplace_joint.R`: "Single-block joint priors always
+use the tensor grid"), so `integration` cannot move it. Only a fit carrying a
+second field / MCAR / RE block -- the multi-axis, slow ones -- would change.
