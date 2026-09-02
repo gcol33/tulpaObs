@@ -98,7 +98,7 @@ fit_d3_like <- function(sim, adj, ctrl, alpha = alpha_pin_for_test) {
        method = "nested_laplace", control = ctrl)
 }
 
-test_that("adaptive refinement leaves the copy axis at the upper boundary", {
+test_that("refinement densifies a stated copy axis and never extends it", {
   skip_on_cran()
   skip_if_fast()
   truth_alpha <- 1.5
@@ -115,14 +115,16 @@ test_that("adaptive refinement leaves the copy axis at the upper boundary", {
       adaptive.grid  = TRUE
     ))
     expect_s3_class(fit, "cover_fit")
-    # The truth is the top node of the pinned axis, so the boundary trigger is
-    # what the file is about: the pass must fire ON THE COPY AXIS and place
-    # cells strictly beyond the pin. Both hold on 20/20 seeds (tulpa 0.0.163;
-    # every seed extends the axis to 3.375). Without them the coverage number
+    # The truth sits on the top node of the stated axis, so what the boundary
+    # trigger does there is what this file is about: the pass fires ON THE COPY
+    # AXIS and places its cells INSIDE the stated range, leaving the outermost
+    # node exactly where the formula put it. Both hold on 20/20 seeds; the node
+    # count runs 5 to 9 against the 4 stated. Without them the coverage number
     # below is not evidence about the adaptive path -- the fixed grid covers
     # this truth too, for the reason the next test measures.
     expect_true("alpha" %in% adaptive_axes_of(fit))
-    expect_gt(max(alpha_nodes_of(fit)), max(alpha_pin_for_test))
+    expect_equal(max(alpha_nodes_of(fit)), max(alpha_pin_for_test))
+    expect_gt(length(alpha_nodes_of(fit)), length(alpha_pin_for_test))
     # Marginalized 95% quantile CI on alpha. Wald mean +/- 1.96*sd over-rejects
     # in this regime because the alpha posterior is right-skewed once the copy
     # amplitude piles against the axis edge. Quantile CI is the engine's
@@ -141,7 +143,7 @@ test_that("adaptive refinement leaves the copy axis at the upper boundary", {
   expect_gte(coverage, 0.85)
 })
 
-test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive one is not", {
+test_that("refinement halves the copy axis's outer cell, tightening its upper CI edge", {
   skip_on_cran()
   skip_if_fast()
   truth_alpha <- 1.5
@@ -196,24 +198,26 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
       truth_alpha <= fit_ad$joint$theta_ci_hi["alpha"]
   }
 
-  # What separates the two reads at the boundary is where the upper edge comes
-  # from. The fixed arm's 97.5% point is set by the axis's own outer-cell
-  # geometry: it lands at essentially the same place on every seed (measured
-  # mean 1.733, SD 0.011, full range 1.689-1.737 over 20 seeds). The adaptive
-  # arm places real cells past the pin and its upper edge follows the data
-  # (mean 2.026, SD 0.323, range 1.773-2.752). Assert the separation in spread
-  # rather than a fixed threshold, so the check does not encode this fixture's
-  # absolute scale.
+  # BOTH upper edges are axis geometry, and what separates them is the width of
+  # the outermost cell. A node represents the cell around it, so the reported
+  # support reaches half that cell past the top node: the fixed arm's outer
+  # interval is 1 -> 1.5, giving a half step of 0.25 and an edge just under
+  # 1.75 (measured mean 1.733, SD 0.011). Refinement halves that interval, so
+  # the adaptive arm's half step is 0.125 and its edge just under 1.625
+  # (mean 1.623, SD 0.011). Neither edge follows the data -- the two spreads
+  # are the same to a couple of percent -- so assert the geometry, which is
+  # what is actually on show here.
   expect_lt(sd(hi_fixed), 0.10)
-  expect_gt(sd(hi_adapt), 5 * sd(hi_fixed))
+  expect_lt(sd(hi_adapt), 0.10)
 
-  # The extra cells the adaptive pass places past the pin carry the copy axis's
-  # declared Exponential slab, which damps the far ones, so a higher upper edge
-  # is where the data lead and not an identity: measured 20 of 20 seeds. Read
-  # the spread above as the statement about the two arms; this is the direction
-  # it moves.
-  expect_gt(mean(hi_adapt), mean(hi_fixed))
-  expect_gte(sum(hi_adapt > hi_fixed), 0.8 * n_seeds)
+  # The adaptive arm's edge sits INSIDE the fixed arm's, on every seed, because
+  # its outer cell is the narrower one. Asserted as the direction plus a floor
+  # on the gap rather than the exact half-step difference, since these are
+  # posterior quantiles and land a little inside the support they are computed
+  # over.
+  expect_lt(mean(hi_adapt), mean(hi_fixed))
+  expect_equal(sum(hi_adapt < hi_fixed), n_seeds)
+  expect_gt(mean(hi_fixed) - mean(hi_adapt), 0.05)
 
   # Coverage does NOT separate the two arms at this placement, and the file no
   # longer claims it does. Both arms cover 20/20 here. With the truth exactly ON

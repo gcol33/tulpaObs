@@ -389,14 +389,26 @@ test_that("a stated alpha grid states NODES, and the span reaches past them (#30
   expect_equal(ratio(s9, 0.2, 0.5), 9 / 8, tolerance = 1e-6)
   expect_lt(ratio(s9, 0.2, 0.5), ratio(s2, 0.2, 0.5))
 
-  # With refinement ON -- the DEFAULT -- the stated nodes are a starting point
-  # rather than a bound: the axis is extended while a boundary cell still holds
-  # weight, so the span runs far past them. This is the behaviour a fit gets
-  # unless it says otherwise, and it dwarfs the half step above.
+  # With refinement ON -- the DEFAULT -- the stated nodes BOUND the axis: cells
+  # are placed inside the range and never past its ends, so the node range is
+  # what the formula said, to the bit. What refinement moves is the density.
+  nodes_of <- function(...) {
+    tg <- fit_at(...)$joint_fit$theta_grid
+    sort(unique(as.numeric(tg[, match("alpha", colnames(tg))])))
+  }
+  n2a <- nodes_of(c(0.2, 0.5))
+  expect_equal(range(n2a), c(0.2, 0.5))
+  expect_gt(length(n2a), 2L)
+
+  # Denser cells make the outer half step -- half of the outermost interval --
+  # smaller, so the span tightens TOWARD the stated range from both sides. It
+  # never reaches it: a node always represents the cell around it, so some
+  # overhang survives however fine the grid gets.
   s2a <- span(c(0.2, 0.5))
-  expect_gt(ratio(s2a, 0.2, 0.5), 2 * ratio(s2, 0.2, 0.5))
-  expect_lt(s2a[1L], s2[1L])
-  expect_gt(s2a[2L], s2[2L])
+  expect_lt(ratio(s2a, 0.2, 0.5), ratio(s2, 0.2, 0.5))
+  expect_gt(ratio(s2a, 0.2, 0.5), 1)
+  expect_gt(s2a[1L], s2[1L])
+  expect_lt(s2a[2L], s2[2L])
 })
 
 test_that("the retired copy() spelling names its replacement", {

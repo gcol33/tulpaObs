@@ -31,7 +31,7 @@
 "test-count.R","smoke",16,9,0.2
 "test-cover-bar-re-guard.R","smoke",12,0,0.1
 "test-cover-criteria-ppc.R","smoke",0,4,0.1
-"test-cover-hurdle-adaptive-grid.R","full",121,0,119.2
+"test-cover-hurdle-adaptive-grid.R","full",142,0,123.6
 "test-cover-hurdle-adaptive-grid.R","smoke",0,5,0.1
 "test-cover-hurdle-aggregate-occ.R","smoke",14,3,0.2
 "test-cover-hurdle-aggregate-pos.R","smoke",10,6,0.3
@@ -290,7 +290,7 @@
 "test-sbc.R","smoke",38,1,10.2
 "test-share-alpha-resolution.R","full",91,0,5.5
 "test-share-alpha-resolution.R","smoke",61,6,0.6
-"test-share-formula-api.R","full",73,0,0.5
+"test-share-formula-api.R","full",76,0,0.8
 "test-share-formula-api.R","smoke",63,3,0.7
 "test-simplified-laplace.R","smoke",30,0,1.4
 "test-sla-cover-hurdle.R","smoke",61,0,0.6

@@ -199,15 +199,23 @@
 #' 1.125x at nine. With refinement off, \code{c(0.2, 0.5)} gives
 #' \code{[0.127, 0.791]}.
 #'
-#' Second, and much larger: \code{control$adaptive.grid} is \code{TRUE} by
-#' default, so a stated axis is REFINED and EXTENDED when a boundary cell still
-#' holds weight (\code{adaptive.grid.edge.thresh}, default 0.02). A stated
-#' \code{c(0.2, 0.5)} was measured to reach an axis of
-#' \code{0.032, 0.08, 0.2, 0.316, 0.5, 1.25, 3.125} and a span of
-#' \code{[0.020, 4.94]} -- the stated nodes are a starting point, not a bound.
-#' Set \code{control$adaptive.grid = FALSE} to hold the axis exactly where it
-#' was stated (then only the half-step above applies). A fit reports the span it
-#' actually worked over in \code{fit$nuts$hyper_support}.
+#' Second, refinement. \code{control$adaptive.grid} is \code{TRUE} by default,
+#' and what it does depends on who placed the axis. An axis YOU stated is
+#' DENSIFIED: further nodes are placed inside the range you wrote, never past
+#' its ends, so the nodes you give are a bound and the half step above is the
+#' whole of the widening. An axis the fit placed for you -- the default copy
+#' axis, a field SD axis -- is EXTENDED when a boundary cell still holds weight
+#' (\code{adaptive.grid.edge.thresh}, default 0.02), which is what lets a fit
+#' whose default grid misses the mode go and find it.
+#'
+#' Denser cells make the outer half step smaller, so refining a stated axis
+#' tightens its span toward the range you wrote rather than widening it: a
+#' stated \code{c(0.2, 0.5)} spans \code{[0.127, 0.791]} with refinement off
+#' and \code{[0.184, 0.570]} with it on. Set
+#' \code{control$adaptive.grid = FALSE} to hold the axis at exactly the nodes
+#' stated. Under \code{method = "nuts"} a fit reports the span each sampled
+#' hyperparameter was worked over in \code{fit$nuts$hyper_support}, which is
+#' the region that hyperparameter's flat prior is supported on.
 #'
 #' @name tobs_terms
 #' @aliases icar bym2 car_proper gp multiscale_gp spde svc re temporal latent spatial
