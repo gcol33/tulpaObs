@@ -671,7 +671,7 @@ build_integrated_callbacks <- function(model, spatial = NULL,
   # source's sites (`src_rows`), exactly as the single-season detection arm
   # does. The field is fit independently per source block (one realization per
   # submodel block; a genuinely shared realization across sources needs the
-  # copy() path).
+  # share() path).
   .tobs_reject_nested_det_term(model, latent_prior, "int_occu")
   spatial_occ <- .spatial_for_arm(spatial, 1L)
   spatial_det <- .spatial_for_arm(spatial, 2L)

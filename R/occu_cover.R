@@ -268,11 +268,12 @@
   if (is.null(formula)) return(invisible(NULL))
   labs <- attr(stats::terms(formula), "term.labels")
   structured <- c("bym2", "icar", "car", "car_proper", "gp", "spde",
-                  "multiscale_gp", "re", "temporal", "svc", "latent", "copy")
+                  "multiscale_gp", "re", "temporal", "svc", "latent", "share")
   hits <- character(0)
   for (lab in labs) {
     fn <- tryCatch(as.character(as.call(parse(text = lab)[[1]])[[1]]),
                    error = function(e) NA_character_)
+    .tobs_check_retired_term(fn)
     if (!is.na(fn) && fn %in% structured) hits <- c(hits, fn)
   }
   if (length(hits) > 0L) {
@@ -296,7 +297,7 @@
 # blocks require it). Each spec keeps its grouping expression, slope covariate,
 # and intercept / correlated flags; group codes and the per-row design are
 # resolved later against `data` / `visits` once the model's `valid` mask is
-# built. Other structured terms (icar(), gp(), temporal(), ...) error; copy() is
+# built. Other structured terms (icar(), gp(), temporal(), ...) error; share() is
 # stripped separately.
 .occu_cover_obs_re_term_spec <- function(label) {
   e    <- str2lang(label)
@@ -319,14 +320,15 @@
   f    <- .tobs_desugar_bars(formula)
   tt   <- stats::terms(f, keep.order = TRUE)
   labs <- attr(tt, "term.labels")
-  # `re` is extracted here; `copy` is the cross-arm coupling, stripped separately
+  # `re` is extracted here; `share` is the cross-arm coupling, stripped separately
   # by .occu_cover_extract_pos_copies(); every other structured term is rejected.
-  reg  <- setdiff(.tobs_term_names(), c("re", "copy"))
+  reg  <- setdiff(.tobs_term_names(), c("re", "share"))
   re_labels <- character(0)
   for (lab in labs) {
     e    <- tryCatch(str2lang(lab), error = function(...) NULL)
     head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]])
             else NA_character_
+    .tobs_check_retired_term(head)
     if (identical(head, "re")) {
       re_labels <- c(re_labels, lab)
     } else if (!is.na(head) && head %in% reg) {

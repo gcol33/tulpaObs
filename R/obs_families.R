@@ -289,7 +289,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' sampled copy amplitude is the posterior conditional on a coupled field; the
 #' point mass's share of the prior is read on the `nested_laplace` route. `fit$nuts$sampled_hyper` and
 #' `fit$nuts$fixed_hyper` name which is which per fit (`icar` pins `rho` at 1:
-#' the intrinsic precision has no mixing parameter; a field with no `copy()` pins
+#' the intrinsic precision has no mixing parameter; a field with no `share()` pins
 #' the copy amplitude at 0), `fit$hyper_draws` carries
 #' their posterior alongside `field_sd`, the geometric-mean marginal SD the
 #' field implies. `control$fixed.hyper = TRUE` conditions on the warm
@@ -318,7 +318,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' weight column), and each block's hypers carry that block's suffix in
 #' `fit$hyper_draws` and in `fit$nuts$sampled_hyper` (`sigma_trend`,
 #' `alpha_trend`, indexed when there are several). Each field's amplitude is
-#' addressed on its own through `copy(spatial(), terms = list(...))` -- with
+#' addressed on its own through `share(spatial(), terms = list(...))` -- with
 #' stated nodes, or `grid(n = )` for the engine's axis read more finely -- or
 #' through `control$alpha.grid[.trend]` / `control$alpha.n[.trend]`, the same
 #' knobs the grid-integrated route reads. A second field
@@ -345,11 +345,11 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' the `positive` formula:
 #'
 #' ```r
-#' positive = ~ pos_cov + copy(spatial())                      # amplitude estimated
-#' positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over given nodes
-#' positive = ~ pos_cov + copy(spatial(), alpha = grid(n = 9))  # engine axis, finer
-#' positive = ~ pos_cov + copy(spatial(), alpha = 0.5)          # fixed
-#' positive = ~ pos_cov + copy(spatial(), prior = list("pc.prec", c(4, 0.01)))
+#' positive = ~ pos_cov + share(spatial())                      # amplitude estimated
+#' positive = ~ pos_cov + share(spatial(), alpha = grid(c(...))) # over given nodes
+#' positive = ~ pos_cov + share(spatial(), alpha = grid(n = 9))  # engine axis, finer
+#' positive = ~ pos_cov + share(spatial(), alpha = 0.5)          # fixed
+#' positive = ~ pos_cov + share(spatial(), prior = list("pc.prec", c(4, 0.01)))
 #' ```
 #'
 #' The amplitude is integrated over that axis on the `nested_laplace` path and
@@ -365,19 +365,19 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' requests, and the representation the formula compiles into; set each in one
 #' place, not both.
 #'
-#' Without a `copy()` (and without `control$alpha.grid`) the occurrence field is
+#' Without a `share()` (and without `control$alpha.grid`) the occurrence field is
 #' NOT carried onto the cover arm -- there is no implicit coupling -- so the
 #' amplitude is not a parameter of the model, and neither engine reports one.
 #' Under `nested_laplace` `alpha` is absent from `coef()`, `vcov()` and the
 #' `n_params` count; under `nuts` it is absent from `fit$nuts$sampled_hyper`,
 #' `fit$nuts$fixed_hyper` and the `fit$hyper_draws` columns. `predict()` returns
-#' a cover arm the occurrence field does not enter. Add `copy(spatial())` to
+#' a cover arm the occurrence field does not enter. Add `share(spatial())` to
 #' couple the two arms.
 #'
 #' The axis the amplitude rides carries prior structure -- a point mass at
 #' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
-#' in one of two ways. `copy(alpha = grid(...))` STATES its nodes, and with them
-#' that structure. `copy(alpha = grid(n = 9))` states a RESOLUTION: the engine
+#' in one of two ways. `share(alpha = grid(...))` STATES its nodes, and with them
+#' that structure. `share(alpha = grid(n = 9))` states a RESOLUTION: the engine
 #' re-reads its own axis with that many slab nodes, point mass and slab bounds
 #' unchanged, so sharpening the axis never restates its structure. `terms =`
 #' gives either, per block. The resolution is the only way to raise this axis,
@@ -411,10 +411,10 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #'
 #' Each weighted term `icar(graph, weight = col)` is a second field whose
 #' contribution to a predictor row is `weight_i * z[cell_i]`. All such fields
-#' share the same graph; a `copy()` carries one onto the cover arm with its own
+#' share the same graph; a `share()` carries one onto the cover arm with its own
 #' scale (`alpha` for the intercept field, `alpha_trend` for a trend field),
 #' integrated over the outer grid, and a field the `positive` formula does not
-#' copy stays on occurrence. `copy(spatial(), terms = list(...))` gives a
+#' copy stays on occurrence. `share(spatial(), terms = list(...))` gives a
 #' per-block amplitude and must address every block. The intercept field is
 #' reported in `fit$spatial_field`, trend fields in `fit$trend_field` /
 #' `fit$trend_fields`. The trend coupling grid defaults to
@@ -469,7 +469,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' bar is fitted as a random effect; suppress it with [base::suppressMessages()].
 #'
 #' @section Independent field on the cover arm (placement):
-#' A `copy(spatial())` in the `positive` formula shares the occupancy field: the
+#' A `share(spatial())` in the `positive` formula shares the occupancy field: the
 #' cover arm sees it as `alpha * (occupancy field)`, the coregionalization copy
 #' on the outer `(sigma, alpha)` grid. When the cover trend is spatially
 #' structured but is not
@@ -925,7 +925,7 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' `fit$trend_fields`. The coupled / trend field is not sampled, so
 #' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
-#' The coupling is written as `copy(spatial())` in the `positive` formula, the
+#' The coupling is written as `share(spatial())` in the `positive` formula, the
 #' same spelling [occu_cover()] takes; it needs a field to copy, so it is
 #' accepted under `method = "nested_laplace"` and refused on the two
 #' non-spatial engines, which fix the field at 0. Omitting it decouples the
@@ -934,8 +934,8 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' implicit default coupling.
 #'
 #' The copy amplitude's axis carries prior structure -- a point mass at
-#' `alpha = 0` and a log-spaced slab above it -- so `copy(alpha = grid(...))`
-#' STATES its nodes, while `copy(alpha = grid(n = ))` states a RESOLUTION: the
+#' `alpha = 0` and a log-spaced slab above it -- so `share(alpha = grid(...))`
+#' STATES its nodes, while `share(alpha = grid(n = ))` states a RESOLUTION: the
 #' engine re-reads its own axis with that many slab nodes, point mass and bounds
 #' unchanged. `terms =` gives either, per block, and
 #' `control$alpha.grid[.trend]` / `control$alpha.n[.trend]` are the lower-level
@@ -1864,7 +1864,7 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' Naming the response makes the per-arm spatial labels read naturally: `cover()`
 #' splits `cover.flat` into a `presence` arm and a `positive` arm, the arm names
-#' that per-arm formulas and copy() address. The LHS is evaluated against `data`
+#' that per-arm formulas and share() address. The LHS is evaluated against `data`
 #' (then the calling environment), so it may be a bare column or an expression.
 #'
 #' @section Joint nested-Laplace engine — spatial-prior parameterisation:
@@ -1906,8 +1906,8 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' The axis the amplitude rides carries prior structure -- a point mass at
 #' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
-#' in one of two ways. `copy(alpha = grid(...))` STATES its nodes, and with them
-#' that structure. `copy(alpha = grid(n = 9))` states a RESOLUTION: the engine
+#' in one of two ways. `share(alpha = grid(...))` STATES its nodes, and with them
+#' that structure. `share(alpha = grid(n = 9))` states a RESOLUTION: the engine
 #' re-reads its own axis with that many slab nodes, point mass and slab bounds
 #' unchanged, so sharpening the axis never restates its structure. `terms =`
 #' gives either, per block. The resolution is the only way to raise this axis,
@@ -1944,12 +1944,12 @@ occu_categorical <- function(classes = NULL) {
 #' correlated. This desugars to exactly the two-term weighted-areal form above,
 #' so the two spellings give the same fit.
 #'
-#' @section Choosing a field's arm: placement and copy():
+#' @section Choosing a field's arm: placement and share():
 #' The cover hurdle's two arms are `presence` (the `y > 0` Bernoulli arm) and
 #' `positive` (the `y | y > 0` arm); `summary()` and the coefficient output print
 #' these same labels. A field is placed on an arm by writing it in that arm's
 #' per-arm formula (`presence = ~ ...`, `positive = ~ ...`), and shared across
-#' arms with copy(). A field in the single shared `formula` reaches both arms.
+#' arms with share(). A field in the single shared `formula` reaches both arms.
 #'
 #' \emph{Both arms (shared / copied).} A field in the shared `formula` is one
 #' presence-anchored latent copied onto the positive arm with an estimated
@@ -1969,10 +1969,10 @@ occu_categorical <- function(classes = NULL) {
 #' ```
 #'
 #' Per-arm formulas make the shared field explicit: place it on `presence` and
-#' copy it onto `positive`. `copy(spatial())` estimates the coupling on the
-#' default axis; `copy(spatial(), alpha = grid(c(...)))` integrates it over
+#' copy it onto `positive`. `share(spatial())` estimates the coupling on the
+#' default axis; `share(spatial(), alpha = grid(c(...)))` integrates it over
 #' supplied nodes, `alpha = grid(n = 9)` over the engine's own axis read at `n`
-#' slab nodes, and `alpha = 0.5` fixes it. `copy(spatial(), prior = list(...))`
+#' slab nodes, and `alpha = 0.5` fixes it. `share(spatial(), prior = list(...))`
 #' regularizes the coefficient itself; a fit copying both the intercept and a
 #' weighted trend block is refused it, since one prior reaches the engine per
 #' fit (gcol33/tulpa#655).
@@ -1980,7 +1980,7 @@ occu_categorical <- function(classes = NULL) {
 #' ```r
 #' tobs(presence = ~ time.sc + habitat +
 #'                   spatial(~ 1 + time.sc || cell_idx, graph = adj),
-#'      positive = ~ time.sc + habitat + copy(spatial()),
+#'      positive = ~ time.sc + habitat + share(spatial()),
 #'      data = dat, family = cover(response = "beta"), method = "nested_laplace")
 #' ```
 #'
@@ -2007,12 +2007,12 @@ occu_categorical <- function(classes = NULL) {
 #' The `||` and `|` axis is separate from shared / free: `||` makes the intercept
 #' and slope fields independent, while a single `|` makes them correlated (a free
 #' cross-covariance, MCAR). A correlated `|` bar shared across both arms (in the
-#' shared `formula`, or on `presence` with `copy()` on `positive`) is copied with
+#' shared `formula`, or on `presence` with `share()` on `positive`) is copied with
 #' one estimated amplitude; placed on one arm's formula it is a free-Sigma
 #' correlated field on that arm alone, no cross-arm copy.
 #'
 #' ```
-#' field in the shared formula (or copy())   one shared / copied latent (presence anchor, coupling estimated)
+#' field in the shared formula (or share())   one shared / copied latent (presence anchor, coupling estimated)
 #' a field in each arm's formula             separate / free latents, no coupling
 #' ||                                        independent intercept and slope coefficient fields
 #' |                                         correlated (MCAR) coefficient fields, copy-only

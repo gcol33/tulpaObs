@@ -241,7 +241,7 @@
 # one it was written on. Those error here with a pointer instead.
 #
 # A single realization shared across both arms (a term written on the occupancy
-# formula and `copy()`d onto detection, or a second field on the other arm) is
+# formula and `share()`d onto detection, or a second field on the other arm) is
 # the same limit the single-season path has: the block fitter fits one field
 # realization per submodel block, so one shared realization is not expressible.
 .tobs_validate_integrated_terms <- function(terms) {

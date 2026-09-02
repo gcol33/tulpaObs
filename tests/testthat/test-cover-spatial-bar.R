@@ -173,7 +173,7 @@ test_that("`to =` is not a bar argument (retired: arm chosen by placement)", {
   d <- .bar_small_data()
   # `to =` is gone from the call surface: the bar form takes only `graph`/`by`,
   # so an explicit arm argument is an unknown argument. The arm is chosen by
-  # placement (write the field in that arm's formula) and shared with copy().
+  # placement (write the field in that arm's formula) and shared with share().
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time || cell, graph = d$adj,

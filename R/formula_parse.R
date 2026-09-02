@@ -31,6 +31,7 @@
   if (is.call(e) && is.symbol(e[[1L]])) {
     head <- as.character(e[[1L]])
     if (head %in% reg_names) return(head)
+    .tobs_check_retired_term(head)
   }
   NA_character_
 }
@@ -341,7 +342,7 @@
 }
 
 # Resolve the flat tagged-term list into per-class specs whose `processes`
-# field lists every process index they enter. `copy(id)` merges its own
+# field lists every process index they enter. `share(id)` merges its own
 # process into the process set of the term with matching `id`.
 .tobs_resolve_terms <- function(tagged) {
   if (length(tagged) == 0L) return(list())
@@ -367,7 +368,7 @@
     ref <- cp$spec$ref
     target <- by_id[[ref]]
     if (is.null(target)) {
-      stop(sprintf("copy(\"%s\"): no term with id = \"%s\" found in the model.",
+      stop(sprintf("share(\"%s\"): no term with id = \"%s\" found in the model.",
                    ref, ref), call. = FALSE)
     }
     defs[[target]]$processes <- sort(unique(c(defs[[target]]$processes,
@@ -378,7 +379,7 @@
 }
 
 # Bind a family's process formulas in one shot: parse each into a
-# fixed-effects design formula + structured terms, then resolve copy()
+# fixed-effects design formula + structured terms, then resolve share()
 # references across processes. `processes` is a named list of formulas in the
 # family's natural process order (e.g. list(psi = , p = ) for single-season;
 # NULL entries are allowed and keep their slot). Returns:

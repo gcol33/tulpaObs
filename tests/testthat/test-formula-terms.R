@@ -143,7 +143,7 @@ test_that("print methods on structured-term specs emit their term summaries", {
   expect_output(print(p_temp$terms[[1]]), "tobs temporal term: rw1 (5 times)",
                 fixed = TRUE)
 
-  p_copy <- tulpaObs:::.tobs_parse_formula(~ elev + copy("u"), data = dat)
+  p_copy <- tulpaObs:::.tobs_parse_formula(~ elev + share("u"), data = dat)
   expect_output(print(p_copy$terms[[1]]), "tobs copy term: -> u")
 })
 
@@ -173,11 +173,11 @@ test_that("term in one process is tagged to that process only", {
   expect_identical(resolved[[1]]$processes, 1L)
 })
 
-test_that("copy() shares one realization across processes", {
+test_that("share() shares one realization across processes", {
   dat <- make_dat()
   parsed <- tulpaObs:::.tobs_parse_processes(
     list(psi = ~ gp(lon, lat, id = "u", prior_range = c(0.1, 0.05)),
-         p = ~ forest + copy("u")),
+         p = ~ forest + share("u")),
     data = dat, env = environment()
   )
   resolved <- tulpaObs:::.tobs_resolve_terms(parsed$terms)
@@ -186,10 +186,10 @@ test_that("copy() shares one realization across processes", {
   expect_identical(resolved[[1]]$processes, c(1L, 2L))
 })
 
-test_that("copy() to a missing id is an error", {
+test_that("share() to a missing id is an error", {
   dat <- make_dat()
   parsed <- tulpaObs:::.tobs_parse_processes(
-    list(psi = ~ elev, p = ~ copy("nope")),
+    list(psi = ~ elev, p = ~ share("nope")),
     data = dat, env = environment()
   )
   expect_error(tulpaObs:::.tobs_resolve_terms(parsed$terms), "no term with id")

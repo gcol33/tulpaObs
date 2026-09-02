@@ -36,7 +36,7 @@
     ~ occ_cov1 + icar(graph = adj),
     data = cbind(data.frame(site_id = seq_len(N)), sim$data),
     family = occu_cover("lognormal"), detection = ~ det_cov1,
-    positive = ~ pos_cov1 + copy(spatial(), alpha = grid(
+    positive = ~ pos_cov1 + share(spatial(), alpha = grid(
       c(0, exp(seq(log(0.1), log(3), length.out = 5))))),
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",

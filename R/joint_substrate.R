@@ -87,7 +87,7 @@
 # block given both is refused.
 #
 # Both are written in the formula, on the copy whose coefficient they place:
-# `copy(spatial(), alpha = grid(c(...)))` states nodes, `alpha = grid(n = 9)` a
+# `share(spatial(), alpha = grid(c(...)))` states nodes, `alpha = grid(n = 9)` a
 # resolution, `terms = list(<component> = ...)` either, per block, and
 # `prior =` regularizes the coefficient itself.
 # `control$alpha.grid[.trend]` / `alpha.n[.trend]` / `prior.alpha` are the
@@ -108,13 +108,13 @@
 # hold the nodes itself -- the NUTS warm fit, whose sampled alpha takes the
 # axis's realised span as the support of its flat prior.
 #
-# Stated nodes win over a resolution here: a field block with no `copy()` is
+# Stated nodes win over a resolution here: a field block with no `share()` is
 # pinned (`grid = 0`, decoupled) and reaches this with the fit's `n` alongside,
 # and a pinned block has no axis to resolve.
 .tobs_alpha_n <- function(n) {
   n <- suppressWarnings(as.integer(n))
   if (length(n) != 1L || is.na(n) || n < 1L) {
-    stop("A copy amplitude resolution (copy(alpha = grid(n = )), ",
+    stop("A copy amplitude resolution (share(alpha = grid(n = )), ",
          "control$alpha.n[.trend]) must be a single integer >= 1: it is the ",
          "number of slab nodes on the copy coefficient's axis (the atom at ",
          "alpha = 0 is carried alongside them).", call. = FALSE)
@@ -152,9 +152,9 @@
 # keys its block reads. Only what the copy STATED is written: an amplitude
 # stating neither nodes nor a resolution asks for the engine's default axis,
 # which is exactly what composes with a `control$alpha.n[.trend]` the fit set
-# alongside a bare `copy(spatial())`, so writing NULL over that key (`[[<-` with
+# alongside a bare `share(spatial())`, so writing NULL over that key (`[[<-` with
 # NULL drops a list element) would discard the resolution the fit asked for.
-# Nothing can leave both keys set: a copy() that states either is refused
+# Nothing can leave both keys set: a share() that states either is refused
 # alongside both control spellings (`.tobs_check_alpha_copy()`,
 # `has_control_alpha`), and a decoupled block's stated `grid = 0` takes
 # precedence over a resolution in `.tobs_alpha_axis()` -- a pinned block has no
@@ -185,7 +185,7 @@
 # Is a resolved amplitude axis the DECOUPLED sentinel -- the single node 0?
 #
 # `alpha` is the amplitude of a copy, so it is a parameter only when there IS a
-# copy. `.occu_cover_apply_copy_coupling()` spells "no copy() named this block"
+# copy. `.occu_cover_apply_copy_coupling()` spells "no share() named this block"
 # as an amplitude axis stating just 0, which is the same model as no coupling at
 # all but still reaches the engine as a real outer axis.
 #
@@ -238,9 +238,9 @@
   axis$alpha_grid %||% .tobs_default_alpha_grid(axis$alpha_n)
 }
 
-# Does this `copy()` STATE an amplitude -- nodes or a resolution? `alpha =
+# Does this `share()` STATE an amplitude -- nodes or a resolution? `alpha =
 # grid(c(...))`, `alpha = grid(n = )` and a bare scalar `alpha =` all do (the
-# last pins a one-node axis); `copy(spatial())` with no amplitude does not, and
+# last pins a one-node axis); `share(spatial())` with no amplitude does not, and
 # asks for the engine's default axis.
 .tobs_copy_states_amplitude <- function(cp) {
   if (!is.null(cp$copy_terms)) {
@@ -250,18 +250,18 @@
   !isTRUE(is.na(cp$alpha_integrate))
 }
 
-# A `copy()` that states an amplitude and `control$alpha.n[.trend]` are the same
-# axis written twice; a `copy()` that states none composes with the resolution
+# A `share()` that states an amplitude and `control$alpha.n[.trend]` are the same
+# axis written twice; a `share()` that states none composes with the resolution
 # knob.
 .tobs_check_alpha_copy <- function(states_amplitude, control, what) {
   n_keys <- c("alpha.n", "alpha.n.trend")
   n_set  <- n_keys[vapply(n_keys, function(k) !is.null(control[[k]]), logical(1))]
   if (!isTRUE(states_amplitude) || length(n_set) == 0L) return(invisible(TRUE))
-  stop(what, ": copy(alpha = ) states the copy axis and control$", n_set[1L],
+  stop(what, ": share(alpha = ) states the copy axis and control$", n_set[1L],
        " states how many nodes the engine's own axis is read at. Give one: ",
-       "write the resolution in the formula as copy(alpha = grid(n = ",
+       "write the resolution in the formula as share(alpha = grid(n = ",
        control[[n_set[1L]]], ")) and drop control$", n_set[1L],
-       ", or drop the amplitude from copy().", call. = FALSE)
+       ", or drop the amplitude from share().", call. = FALSE)
 }
 
 # `alpha.grid` states the axis's nodes, `alpha.n` a resolution for the engine's

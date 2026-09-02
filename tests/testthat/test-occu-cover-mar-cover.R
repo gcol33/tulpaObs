@@ -235,7 +235,7 @@ test_that("MAR cover fits and stays close to full on the spatial compact path", 
       occurrence = ~ spatial(~ 1 || cell_idx, graph = adj),
       data = od$occ.covs,
       family = occu_cover(response = "beta", cover_aggregate = "none"),
-      detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
+      detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
       y = od$y, y_pos = ocv$y, visits = od$det.covs,
       method = "nested_laplace", control = ctrl))
   }

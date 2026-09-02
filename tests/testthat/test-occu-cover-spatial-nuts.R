@@ -80,7 +80,7 @@
 .ocsn_fit_coupled <- function(inp, method = "nuts", control = list(),
                               field = "car_proper") {
   .ocsn_fit(inp, method, spatial = TRUE, control = control, field = field,
-            positive = ~ pos_cov1 + copy(spatial()))
+            positive = ~ pos_cov1 + share(spatial()))
 }
 
 
@@ -786,7 +786,7 @@ test_that("occu_cover spatial NUTS reports its hypers honestly per fit (#204)", 
     expect_gt(ft$nuts$hyper_sd[["rho"]], 0)
   }
 
-  # A copy() puts the amplitude back among the sampled hypers.
+  # A share() puts the amplitude back among the sampled hypers.
   f_cp <- .ocsn_fit_coupled(inp, "nuts", control = ctl, field = "icar")
   expect_setequal(f_cp$nuts$sampled_hyper, c("sigma", "alpha"))
   expect_identical(f_cp$nuts$fixed_hyper, "rho")
@@ -818,7 +818,7 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
   #             identically by the simulator (eta_pos += alpha * sigma * f) and
   #             the fitter, so the truth needs no conversion. The simulated truth
   #             couples the field onto the cover arm, so the fitted model
-  #             declares that with copy(spatial()): a bare areal term is an
+  #             declares that with share(spatial()): a bare areal term is an
   #             occurrence-only field and pins alpha at 0 (#217).
   #   field_sd  the geometric-mean marginal SD of the field the block implies at
   #             that draw's hypers. The simulator's f carries geo-mean marginal
@@ -902,17 +902,34 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
 
 
 # --------------------------------------------------------------------------- #
-# copy() on the positive arm reaches the sampler #
+# share() on the positive arm reaches the sampler #
 # --------------------------------------------------------------------------- #
 
-# Same fixture as .ocsn_fit, with a copy() term on the positive formula.
+# Same fixture as .ocsn_fit, with a share() term on the positive formula.
 .ocsn_fit_copy <- function(inp, pos_formula, control = list(),
                            field = "car_proper") {
   .ocsn_fit(inp, "nuts", spatial = TRUE, control = control, field = field,
             positive = pos_formula)
 }
 
-test_that("occu_cover spatial NUTS honours a copy()'s fixed amplitude (#210)", {
+# The span the outer quadrature integrates a stated amplitude axis over. A
+# `share(alpha = grid(c(...)))` and `control$alpha.grid` state that axis's
+# NODES; the span reaches half a node step past the outermost node in the axis's
+# own (log) coordinate, and THAT is what bounds the sampled amplitude. Both
+# engines are held over this same span, which is the point of the knob: a
+# sampler clipped to the node range would target a prior truncated two
+# half-cells short of the one the grid integrates, putting a support difference
+# into the very comparison the knob exists to make. Read through the engine's
+# own helpers, so the test cannot drift from the span the fit is bounded to
+# (#300).
+.ocsn_alpha_support <- function(nodes) {
+  v  <- as.numeric(nodes); v <- v[is.finite(v) & v > 0]
+  tg <- matrix(v, ncol = 1L, dimnames = list(NULL, "alpha"))
+  as.numeric(tulpa:::.hyper_axis_support(
+    v, tulpa:::.joint_axis_specs_from_grid(tg)[[1L]]))
+}
+
+test_that("occu_cover spatial NUTS honours a share()'s fixed amplitude (#210)", {
   skip_on_cran()
   skip_if_fast()
   # A scalar `alpha =` is a pinned amplitude: it collapses the warm fit's copy
@@ -922,7 +939,7 @@ test_that("occu_cover spatial NUTS honours a copy()'s fixed amplitude (#210)", {
   # rather than inferred from the draws alone.
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
   nut <- .ocsn_fit_copy(
-    inp, ~ pos_cov1 + copy(spatial(), alpha = 0.35),
+    inp, ~ pos_cov1 + share(spatial(), alpha = 0.35),
     control = list(verbose = FALSE, n.iter = 200L, n.warmup = 200L,
                    n.chains = 1L, seed = 1L))
   expect_true("alpha" %in% nut$nuts$fixed_hyper)
@@ -932,7 +949,7 @@ test_that("occu_cover spatial NUTS honours a copy()'s fixed amplitude (#210)", {
   expect_true(all(nut$hyper_draws[, "alpha"] == 0.35))
 })
 
-test_that("occu_cover spatial NUTS honours a copy()'s amplitude grid (#210)", {
+test_that("occu_cover spatial NUTS honours a share()'s amplitude grid (#210)", {
   skip_on_cran()
   skip_if_fast()
   # An integrated `alpha = grid(c(...))` sets the SUPPORT of the sampled
@@ -942,38 +959,48 @@ test_that("occu_cover spatial NUTS honours a copy()'s amplitude grid (#210)", {
   # alpha is no longer pinned at the warm estimate.
   #
   # The band is deliberately BELOW the simulation truth (alpha = 1), so the
-  # posterior pushes against its upper bound: a dropped copy() would fall back
+  # posterior pushes against its upper bound: a dropped share() would fall back
   # to the default axis, whose positive span reaches 3, and the draws would sit
   # near 1 rather than under 0.5. The assertion therefore cannot pass vacuously.
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L, alpha = 1.0)
   nut <- .ocsn_fit_copy(
-    inp, ~ pos_cov1 + copy(spatial(), alpha = grid(c(0.2, 0.5))),
+    inp, ~ pos_cov1 + share(spatial(), alpha = grid(c(0.2, 0.5))),
     control = list(verbose = FALSE, n.iter = 200L, n.warmup = 200L,
                    n.chains = 1L, seed = 1L))
   expect_true("alpha" %in% nut$nuts$sampled_hyper)
+  # The stated nodes bound the draws through the axis's SUPPORT, not through the
+  # node range: c(0.2, 0.5) declares [0.1265, 0.7906], the half-node-step
+  # extension in log alpha. Asserting the node range instead is what #300
+  # reported, and it contradicts the declared-support block further down.
+  sup <- .ocsn_alpha_support(c(0.2, 0.5))
+  expect_lt(sup[1L], 0.2)
+  expect_gt(sup[2L], 0.5)
   a <- nut$hyper_draws[, "alpha"]
-  expect_gte(min(a), 0.2 - 1e-8)
-  expect_lte(max(a), 0.5 + 1e-8)
-  # The default axis reaches far above this band, which is what the copy()
-  # narrowed.
-  expect_gt(max(as.numeric(tulpaObs:::.tobs_default_alpha_grid())), 0.5)
+  expect_gte(min(a), sup[1L] - 1e-8)
+  expect_lte(max(a), sup[2L] + 1e-8)
+  # The default axis reaches far above this band, which is what the share()
+  # narrowed -- compared on the two axes' spans, since that is what each bounds
+  # its sampler to. This is what stops the assertion passing vacuously.
+  dflt <- .ocsn_alpha_support(tulpaObs:::.tobs_default_alpha_grid())
+  expect_gt(dflt[2L], sup[2L])
+  expect_lt(max(a), dflt[2L])
 })
 
-test_that("occu_cover spatial NUTS refuses a copy() it cannot resolve (#210)", {
+test_that("occu_cover spatial NUTS refuses a share() it cannot resolve (#210)", {
   skip_on_cran()
   skip_if_fast()
   inp <- .ocsn_inputs(side = 5L, J = 3L, seed = 21L)
   ctl <- list(verbose = FALSE, n.iter = 50L, n.warmup = 50L, n.chains = 1L,
               seed = 1L)
-  # The amplitude is set in ONE place. Before the copy() reached this path the
-  # control knob simply won and the copy() vanished.
+  # The amplitude is set in ONE place. Before the share() reached this path the
+  # control knob simply won and the share() vanished.
   expect_error(
-    .ocsn_fit_copy(inp, ~ pos_cov1 + copy(spatial(), alpha = 0.35),
+    .ocsn_fit_copy(inp, ~ pos_cov1 + share(spatial(), alpha = 0.35),
                    control = c(ctl, list(alpha.grid = c(0.2, 0.5)))),
-    "copy() in the positive", fixed = TRUE)
+    "share() in the positive", fixed = TRUE)
   # A string reference is not a coupling selector here, under either engine.
   expect_error(
-    .ocsn_fit_copy(inp, ~ pos_cov1 + copy("occ_space", alpha = 0.35),
+    .ocsn_fit_copy(inp, ~ pos_cov1 + share("occ_space", alpha = 0.35),
                    control = ctl),
     "not a string")
 })
@@ -996,7 +1023,7 @@ test_that("occu_cover: a bare areal term loads on occurrence alone on both engin
   skip_on_cran()
   skip_if_fast()
   # Same input, same model. The psi formula carries an areal term and the
-  # positive formula carries no copy(), so the field rides occupancy and the
+  # positive formula carries no share(), so the field rides occupancy and the
   # cover-arm copy amplitude is 0 under nuts exactly as under nested_laplace.
   # Before this, the sampler kept the default amplitude axis and estimated a
   # cover-arm copy the deterministic route had pinned away.
@@ -1007,7 +1034,7 @@ test_that("occu_cover: a bare areal term loads on occurrence alone on both engin
   nut <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl)
   nl  <- .ocsn_fit_nl(inp)
 
-  # nuts: there is NO amplitude to report. The positive formula names no copy(),
+  # nuts: there is NO amplitude to report. The positive formula names no share(),
   # so the model has no coupling term, and #293 stopped reporting one -- an
   # absent term is not a hyperparameter the sampler conditioned on. It is gone
   # from every register alike. `fixed_hyper` is still a character vector (#204),
@@ -1030,13 +1057,13 @@ test_that("occu_cover: a bare areal term loads on occurrence alone on both engin
   expect_gt(abs(stats::cor(nut$spatial_field, nl$spatial_field)), 0.8)
 })
 
-test_that("occu_cover: copy() puts the amplitude back on both engines (#217)", {
+test_that("occu_cover: share() puts the amplitude back on both engines (#217)", {
   skip_on_cran()
   skip_if_fast()
   inp <- .ocsn_inputs(side = 6L, J = 4L, seed = 11L, alpha = 1.0)
   ctl <- list(verbose = FALSE, n.iter = 400L, n.warmup = 400L, n.chains = 1L,
               seed = 1L)
-  pos <- ~ pos_cov1 + copy(spatial())
+  pos <- ~ pos_cov1 + share(spatial())
 
   nut <- .ocsn_fit(inp, "nuts", field = "icar", control = ctl, positive = pos)
   nl  <- .ocsn_fit_nl(inp, positive = pos)
@@ -1045,16 +1072,31 @@ test_that("occu_cover: copy() puts the amplitude back on both engines (#217)", {
   expect_gt(nut$nuts$hyper_mean[["alpha"]], 0)
   expect_gt(nl$spatial$alpha_mean, 0)
 
-  # The default copy() rides the same amplitude axis the pre-#217 no-copy fit
-  # used, so an explicit copy() is the spelling that reproduces it.
-  ctrl_copy <- tulpaObs:::.occu_cover_nuts_copy_control(
-    list(structure(list(id = "spatial()", selector_type = "spatial",
-                        selector_group = NULL, component = NULL,
-                        alpha_integrate = NA, alpha_grid = NULL,
-                        copy_terms = NULL), class = "tobs_copy")),
-    list(group_var = NULL), list())
-  expect_equal(as.numeric(ctrl_copy$alpha.grid),
-               as.numeric(tulpaObs:::.tobs_default_alpha_grid()))
+  # A bare share() names no amplitude, so it leaves the block on the engine's
+  # own axis. NULL is what REMOVES the key, so a bare share() reaches the fitter
+  # exactly as an unset knob does -- the assertion that carries is that the two
+  # are indistinguishable, not that the default nodes are written out. Writing
+  # them out would make this a second place the default axis is stated, and it
+  # is what #300 reported as stale.
+  mk <- function(alpha_grid = NULL, alpha_integrate = NA) {
+    structure(list(id = "spatial()", selector_type = "spatial",
+                   selector_group = NULL, component = NULL,
+                   alpha_integrate = alpha_integrate, alpha_grid = alpha_grid,
+                   copy_terms = NULL), class = "tobs_copy")
+  }
+  ctl_of <- function(copies) tulpaObs:::.occu_cover_nuts_copy_control(
+    copies, list(group_var = NULL), list())
+
+  ctrl_copy <- ctl_of(list(mk()))
+  expect_false("alpha.grid" %in% names(ctrl_copy))
+  expect_identical(ctrl_copy, list())
+  # The three spellings are distinguishable, which is what #217 is about: no
+  # share() PINS the block at alpha = 0 (the field rides occurrence alone), a
+  # bare share() hands the block to the engine's own axis, and a share() that
+  # states nodes writes exactly those.
+  expect_equal(as.numeric(ctl_of(list())$alpha.grid), 0)
+  expect_equal(
+    as.numeric(ctl_of(list(mk(c(0.2, 0.5), TRUE)))$alpha.grid), c(0.2, 0.5))
 })
 
 test_that("occu_cover: control$alpha.grid overrides the amplitude on both engines (#217)", {
@@ -1069,9 +1111,15 @@ test_that("occu_cover: control$alpha.grid overrides the amplitude on both engine
   band <- .ocsn_fit(inp, "nuts", field = "icar",
                     control = c(ctl, list(alpha.grid = c(0.2, 0.5))))
   expect_true("alpha" %in% band$nuts$sampled_hyper)
+  # Same reading as the share() spelling above: the knob states nodes, and the
+  # sampler is bounded to the span the quadrature integrates them over. The
+  # grid-integrated half of this block already says the reported amplitude of a
+  # multi-node axis "is not confined to the nodes"; asserting the node range
+  # here contradicted it (#300).
+  sup <- .ocsn_alpha_support(c(0.2, 0.5))
   a <- band$hyper_draws[, "alpha"]
-  expect_gte(min(a), 0.2 - 1e-8)
-  expect_lte(max(a), 0.5 + 1e-8)
+  expect_gte(min(a), sup[1L] - 1e-8)
+  expect_lte(max(a), sup[2L] + 1e-8)
 
   # A one-node axis pins the amplitude. The warm fit reaches it as a grid-weight
   # average over that one node, so it carries the last bit of the weight

@@ -20,26 +20,26 @@
 #'   of the two.
 #' @param positive positive-arm (cover) formula for [occu_cover()], e.g.
 #'   `~ time.sc + habitat`. The occurrence spatial field is carried onto this arm
-#'   with a `copy()` selector, the INLA-style cross-arm edge written in the
+#'   with a `share()` selector, the INLA-style cross-arm edge written in the
 #'   formula. The selector is a constructor, so no field name is needed in the
 #'   common case:
 #'
-#'   * `copy(spatial(), alpha = grid(g))` copies the occurrence arm's spatial
+#'   * `share(spatial(), alpha = grid(g))` copies the occurrence arm's spatial
 #'     effect and marginalizes the coupling amplitude over the nodes `g`;
 #'     `alpha = grid(n = 9)` marginalizes it over the engine's own axis read at
 #'     `n` slab nodes instead, which sharpens the axis without restating the
 #'     prior structure it carries; `alpha = <scalar>` fixes it.
-#'   * `copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))`
+#'   * `share(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))`
 #'     gives a per-component amplitude, keyed by the field's own block names (the
 #'     intercept block and a `||`-declared trend column, or its alias `trend`);
 #'     `terms =` must address every block.
-#'   * `copy(spatial(), prior = list("pc.prec", c(4, 0.01)))` regularizes the
+#'   * `share(spatial(), prior = list("pc.prec", c(4, 0.01)))` regularizes the
 #'     copy coefficient itself (`prior_alpha` in
 #'     [tulpa::tulpa_nested_laplace_joint()]). One reaches the engine per fit.
-#'   * `copy(spatial(cell_idx), ...)` disambiguates by grouping variable when the
+#'   * `share(spatial(cell_idx), ...)` disambiguates by grouping variable when the
 #'     occurrence arm carries several spatial effects.
-#'   * decoupling is structural: omit `copy()` so the field rides occupancy only
-#'     (a block with no `copy()` is pinned at zero coupling), or write a
+#'   * decoupling is structural: omit `share()` so the field rides occupancy only
+#'     (a block with no `share()` is pinned at zero coupling), or write a
 #'     `spatial()` term for the cover arm's own field.
 #'
 #'   Defaults to `detection` when unset (a per-visit cover design matching the
@@ -67,7 +67,7 @@
 #'   community latent factors
 #'   `latent(k)`. A term enters whichever linear predictor it is written in
 #'   (occupancy `formula` or `detection`). To share one realization across
-#'   both predictors, tag the term with `id = "u"` and write `copy("u")` in
+#'   both predictors, tag the term with `id = "u"` and write `share("u")` in
 #'   the other formula.
 #'
 #'   The spatial fields also have a single-verb umbrella `spatial(...,

@@ -255,14 +255,14 @@ test_that("a sampled coupled field is scored per site", {
   od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
                   det.covs = c("det_cov1", "pos_cov1"))
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
-  # copy(spatial()) is what puts the field on the cover arm as well, which is
+  # share(spatial()) is what puts the field on the cover arm as well, which is
   # what the simulated alpha = 1 does and what keeps the field_pos assertion
   # below non-vacuous: without it the amplitude is 0 and both sides of that
   # comparison are zero matrices.
   fit <- tobs(formula = ~ occ_cov1 + car_proper(graph = adj),
               data = cbind(data.frame(site_id = seq_len(N)), sim$data),
               family = occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1 + copy(spatial()), y = od$y, y_pos = y_pos,
+              positive = ~ pos_cov1 + share(spatial()), y = od$y, y_pos = y_pos,
               visits = od$det.covs, method = "nuts",
               control = list(verbose = FALSE, progress = FALSE, n.iter = 300L,
                              n.warmup = 300L, n.chains = 1L, seed = 4L))

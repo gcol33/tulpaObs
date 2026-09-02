@@ -131,7 +131,7 @@ test_that("occu_cover cover-arm field fits and yields a non-constant delta_cover
   expect_s3_class(fit, "tobs_fit")
   expect_identical(attr(fit, "tobs_family")$name, "occu_cover")
   # The occupancy field SD plus the independent cover-arm field SD. There is no
-  # `alpha`: the positive formula carries no copy(), so the occupancy field is
+  # `alpha`: the positive formula carries no share(), so the occupancy field is
   # not copied onto the cover arm and the amplitude is not a parameter of this
   # model. (The multi-block driver still integrates a pinned amplitude axis,
   # because it offers the SD parameterization only to a copied block -- see

@@ -974,7 +974,7 @@
     # nothing else off the grid, so a DEFAULTED axis is thinned to three nodes
     # over the SAME span: the prior is unchanged and the warm fit stays
     # affordable. Provenance is the auto-grid mark, not whether the argument
-    # arrived -- `copy(spatial())` with no amplitude hands this path the default
+    # arrived -- `share(spatial())` with no amplitude hands this path the default
     # alpha axis through `control$alpha.grid`, and that is a defaulted axis. An
     # axis the caller chose keeps its nodes.
     thin <- function(g) {
@@ -1323,7 +1323,7 @@
   # still be defined for the target, but recording it as a PINNED hyper reports
   # an absent term as one the fit conditioned on. Set the entry and leave it out
   # of `sampled` / `pinned`, matching what the deterministic backend reports
-  # (#293). A user-requested pin at a positive value (`copy(spatial(),
+  # (#293). A user-requested pin at a positive value (`share(spatial(),
   # alpha = 0.5)`) is a real conditioning choice and is still reported.
   #
   # NOT the same case as `rho = 1` under icar above: that is the intrinsic

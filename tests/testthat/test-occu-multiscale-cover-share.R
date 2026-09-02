@@ -29,29 +29,29 @@ mscopy_sim <- function() {
 }
 
 
-test_that("occu_multiscale_cover() accepts copy() on the cover formula", {
-  # A bare copy() asks for the engine's own axis, so it states neither key.
-  a <- mscopy_control(~ x_cov + copy(spatial()))
+test_that("occu_multiscale_cover() accepts share() on the cover formula", {
+  # A bare share() asks for the engine's own axis, so it states neither key.
+  a <- mscopy_control(~ x_cov + share(spatial()))
   expect_null(a$alpha.grid)
   expect_null(a$alpha.n)
 })
 
-test_that("occu_multiscale_cover(): copy() states nodes, a resolution, or a pin", {
-  a <- mscopy_control(~ x_cov + copy(spatial(), alpha = grid(c(0.25, 0.5, 1))))
+test_that("occu_multiscale_cover(): share() states nodes, a resolution, or a pin", {
+  a <- mscopy_control(~ x_cov + share(spatial(), alpha = grid(c(0.25, 0.5, 1))))
   expect_equal(as.numeric(a$alpha.grid), c(0.25, 0.5, 1))
   expect_null(a$alpha.n)
 
-  a <- mscopy_control(~ x_cov + copy(spatial(), alpha = grid(n = 9)))
+  a <- mscopy_control(~ x_cov + share(spatial(), alpha = grid(n = 9)))
   expect_identical(a$alpha.n, 9L)
   expect_null(a$alpha.grid)
 
   # A scalar pins the amplitude: a one-node axis.
-  a <- mscopy_control(~ x_cov + copy(spatial(), alpha = 0.5))
+  a <- mscopy_control(~ x_cov + share(spatial(), alpha = 0.5))
   expect_equal(as.numeric(a$alpha.grid), 0.5)
 })
 
-test_that("occu_multiscale_cover(): no copy() decouples the cover arm", {
-  # gcol33/tulpaObs#297: coupling is what a copy() states, on this door as on
+test_that("occu_multiscale_cover(): no share() decouples the cover arm", {
+  # gcol33/tulpaObs#297: coupling is what a share() states, on this door as on
   # occu_cover(). A fit naming none pins alpha = 0 -- it does NOT fall back to
   # the engine's default axis, which is what this door did before the ruling.
   a <- mscopy_control(~ x_cov)
@@ -74,29 +74,29 @@ test_that("occu_multiscale_cover(): control$alpha.grid still overrides the pin",
   expect_equal(as.numeric(a$alpha.grid), c(0, 0.5, 1))
 })
 
-test_that("occu_multiscale_cover(): copy() is refused where no field enters", {
+test_that("occu_multiscale_cover(): share() is refused where no field enters", {
   # method = "laplace" / "nuts" are the non-spatial paths (iid cells, field
   # fixed at 0), so a copy amplitude has nothing to scale.
   for (m in c("laplace", "nuts")) {
-    expect_error(mscopy_control(~ x_cov + copy(spatial()), method = m),
+    expect_error(mscopy_control(~ x_cov + share(spatial()), method = m),
                  "non-spatial path")
   }
 })
 
-test_that("occu_multiscale_cover(): copy() and the control spelling are exclusive", {
+test_that("occu_multiscale_cover(): share() and the control spelling are exclusive", {
   expect_error(
-    mscopy_control(~ x_cov + copy(spatial(), alpha = grid(c(0.5, 1))),
+    mscopy_control(~ x_cov + share(spatial(), alpha = grid(c(0.5, 1))),
                    control = list(alpha.grid = c(0.5, 1))),
     "not both")
 })
 
-test_that("occu_multiscale_cover(): a copy() with no field to copy is refused", {
+test_that("occu_multiscale_cover(): a share() with no field to copy is refused", {
   sim <- mscopy_sim()
   expect_error(
     tobs(formula = ~ x_cell, data = sim$data,
          family = occu_multiscale_cover(response = "lognormal"),
          detection = ~ x_pdet, availability = ~ x_plot,
-         positive = ~ x_cov + copy(spatial()),
+         positive = ~ x_cov + share(spatial()),
          y = sim$y, y_pos = sim$y_pos, method = "nested_laplace"),
     "areal")
 })

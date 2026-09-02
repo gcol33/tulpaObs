@@ -47,7 +47,7 @@
     formula = ~ occ_cov1 + icar(graph = sim$adj) +
                 icar(graph = sim$adj, weight = time),
     data = d$cell_dat, family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1 + copy(spatial()),
+    detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
     y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint")

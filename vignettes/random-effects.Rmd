@@ -416,7 +416,7 @@ cor(re$estimate, re_n$estimate)
 
 A few random-effect specifications are NUTS-only. The Laplace path errors,
 with a pointer to NUTS, for: a single random effect shared across both the
-occupancy and detection predictors (`copy()` semantics); a random effect
+occupancy and detection predictors (`share()` semantics); a random effect
 combined with a spatial field in the same fit; and a random effect
 combined with visit-level detection covariates. In each case the
 deterministic path would have to fit something it cannot represent

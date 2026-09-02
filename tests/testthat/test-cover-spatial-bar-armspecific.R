@@ -4,7 +4,7 @@
 # field on that arm only, with its own precision and NO cross-arm copy. A field in
 # each arm's formula = independent per-arm fields, each its own precision, no
 # coupling. This is the FREE counterpart to #61's shared (copied) field (a field
-# in the shared formula, or copy()): there the engine anchors one field on
+# in the shared formula, or share()): there the engine anchors one field on
 # presence and copies it to positive with an estimated alpha; here each arm
 # carries its own field.
 #
@@ -323,7 +323,7 @@ test_that("an arm-specific bar cannot be mixed with a shared field", {
   # positive field in the same fit is the disallowed mix.
   expect_error(
     tobs(presence = ~ x + spatial(~ 1 || cell, graph = d$adj),
-         positive = ~ x + copy(spatial()) +
+         positive = ~ x + share(spatial()) +
                     spatial(~ 0 + x || cell, graph = d$adj),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),

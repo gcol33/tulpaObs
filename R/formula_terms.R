@@ -14,7 +14,7 @@
 # user directly. Process membership (which linear predictor an effect enters)
 # is determined by *which process formula* the term appears in — there is no
 # `shared` argument. A single realization is shared across processes with
-# `copy("id")`.
+# `share("id")`.
 # =============================================================================
 
 
@@ -447,7 +447,7 @@
 # numeric form, kept because it predates the names and because a design column
 # is addressable by position when it has no usable name. Exactly one of the two
 # is given; positions are reorder-sensitive, so the names are the documented
-# form (the same argument copy() makes against `spatial(<n>)`).
+# form (the same argument share() makes against `spatial(<n>)`).
 #
 # Resolution is deferred to fit time by `.tobs_svc_columns()`: the design matrix
 # is not in scope here, and the names must be read against the same design the
@@ -528,7 +528,7 @@
 
 # grid(values) / grid(n = )  — mark a coupling-amplitude axis for integration.
 #
-# Inside a copy() the `alpha =` argument is either a scalar (a FIXED coupling
+# Inside a share() the `alpha =` argument is either a scalar (a FIXED coupling
 # amplitude, pinned) or a grid() to MARGINALIZE over on the outer nested-Laplace
 # integration. grid() tags the request so the intent is explicit at the call site
 # (alpha = grid(...) integrates, alpha = 0.5 fixes) rather than inferred from
@@ -570,7 +570,7 @@
   structure(list(values = vals, n = NULL), class = "tobs_alpha_grid")
 }
 
-# Resolve a copy()'s `alpha =` argument to the amplitude axis it asks for plus
+# Resolve a share()'s `alpha =` argument to the amplitude axis it asks for plus
 # an integrate/fixed flag. A grid() marker integrates -- over its own values, or
 # over the engine's axis read at its `n` -- and a bare scalar fixes the amplitude
 # (a length-1 grid, pinned); NULL asks for the engine's default axis. A bare
@@ -589,27 +589,27 @@
     return(list(grid = as.numeric(alpha), n = NULL, integrate = FALSE))
   }
   if (is.numeric(alpha) && length(alpha) > 1L) {
-    stop("copy(alpha = ): a numeric vector marginalizes only when wrapped in ",
+    stop("share(alpha = ): a numeric vector marginalizes only when wrapped in ",
          "grid(), e.g. alpha = grid(c(0.25, 0.5, 1)). A bare scalar fixes the ",
          "amplitude.", call. = FALSE)
   }
-  stop("copy(alpha = ): `alpha` must be a single finite number (fixed) or ",
+  stop("share(alpha = ): `alpha` must be a single finite number (fixed) or ",
        "grid(c(...)) (integrated).", call. = FALSE)
 }
 
-# copy(selector)           — carry a scaled copy of a latent effect from the
+# share(selector)           — carry a scaled copy of a latent effect from the
 #                            occurrence arm onto another arm's linear predictor.
 #
 # The selector is a constructor call, not a string, so it is type-carrying and
 # needs no user-assigned name in the common case:
-#   copy(spatial())            the unique spatial effect on the occurrence arm
-#   copy(spatial(cell_idx))    the spatial effect grouped on `cell_idx`, when
+#   share(spatial())            the unique spatial effect on the occurrence arm
+#   share(spatial(cell_idx))    the spatial effect grouped on `cell_idx`, when
 #                              several spatial effects make the bare form ambiguous
 # The selector argument is captured UNEVALUATED (it is a reference, not a term to
 # build): `spatial()` here selects, it does not construct a field. An integer
 # position (`spatial(1)`) is rejected -- reordering the formula would retarget it
 # silently -- in favour of the reorder-stable grouping variable. A bare string
-# (`copy("occ_space")`, optionally dotted `"occ_space.trend"`) is still accepted
+# (`share("occ_space")`, optionally dotted `"occ_space.trend"`) is still accepted
 # as an explicit-name reference, the lower-level form.
 #
 # Coupling amplitude: `alpha =` sets one amplitude for the whole field (a scalar
@@ -622,7 +622,7 @@
 #
 # `prior =` regularizes the copy coefficient itself, in the joint driver's
 # list(<family>, <params>) shape. It is a property of the copy, not of one of its
-# blocks, so it sits on copy() rather than inside `terms =`; the engine carries
+# blocks, so it sits on share() rather than inside `terms =`; the engine carries
 # one such prior per fit, and a fit copying several blocks is refused it at
 # dispatch rather than given it on one block silently.
 #
@@ -631,8 +631,8 @@
 .tobs_term_copy <- function(selector, scale = NULL, alpha = NULL, terms = NULL,
                             prior = NULL) {
   if (missing(selector)) {
-    stop("copy(): give an effect selector as the first argument, e.g. ",
-         "copy(spatial(), alpha = grid(c(0.25, 0.5, 1))).", call. = FALSE)
+    stop("share(): give an effect selector as the first argument, e.g. ",
+         "share(spatial(), alpha = grid(c(0.25, 0.5, 1))).", call. = FALSE)
   }
   sel <- substitute(selector)
 
@@ -648,39 +648,39 @@
     head <- if (is.call(sel)) as.character(sel[[1L]]) else as.character(sel)
     if (!identical(head, "spatial")) {
       stop(sprintf(paste0(
-        "copy(): the copyable latent effect is spatial(); got `%s`. Write ",
-        "copy(spatial(), ...) or copy(spatial(<grouping_var>), ...)."), head),
+        "share(): the copyable latent effect is spatial(); got `%s`. Write ",
+        "share(spatial(), ...) or share(spatial(<grouping_var>), ...)."), head),
         call. = FALSE)
     }
     selector_type <- "spatial"
     if (is.call(sel) && length(sel) >= 2L) {
       disc <- sel[[2L]]
       if (is.numeric(disc)) {
-        stop("copy(spatial(<n>)): an integer position is not a stable selector ",
+        stop("share(spatial(<n>)): an integer position is not a stable selector ",
              "(reordering the formula would retarget it). Name the grouping ",
-             "variable instead, e.g. copy(spatial(cell_idx)).", call. = FALSE)
+             "variable instead, e.g. share(spatial(cell_idx)).", call. = FALSE)
       }
       selector_group <- as.character(disc)
     }
   } else {
-    stop("copy(): the selector must be spatial(), spatial(<grouping_var>), or a ",
+    stop("share(): the selector must be spatial(), spatial(<grouping_var>), or a ",
          "field name string.", call. = FALSE)
   }
 
   if (!is.null(alpha) && !is.null(terms)) {
-    stop("copy(): set the amplitude with `alpha =` (one value for the whole ",
+    stop("share(): set the amplitude with `alpha =` (one value for the whole ",
          "field) OR `terms = list(<component> = ...)` (per component), not both.",
          call. = FALSE)
   }
   if (!is.null(component) && !is.null(terms)) {
-    stop("copy(): a dotted component name and `terms =` are two ways to write the ",
+    stop("share(): a dotted component name and `terms =` are two ways to write the ",
          "same thing; use terms = list(...).", call. = FALSE)
   }
 
   copy_terms <- NULL
   if (!is.null(terms)) {
     if (!is.list(terms) || is.null(names(terms)) || any(!nzchar(names(terms)))) {
-      stop("copy(terms = ): a named list keyed by field component, e.g. ",
+      stop("share(terms = ): a named list keyed by field component, e.g. ",
            "terms = list(intercept = grid(g0), time.sc = grid(g1)).",
            call. = FALSE)
     }
@@ -704,7 +704,7 @@
                   alpha_integrate = alpha_res$integrate,
                   alpha_prior = .tobs_copy_prior(prior),
                   copy_terms = copy_terms),
-             class = "tobs_copy", id = id, label = "copy")
+             class = "tobs_copy", id = id, label = "share")
 }
 
 # A regularizing hyperprior on the copy coefficient, in the joint driver's
@@ -712,12 +712,12 @@
 # list("half_normal", scale). The shape is checked here, where the argument is
 # written; the families and their parameter ranges belong to the engine, which
 # validates them at the fit entry, so they are not restated.
-# What a copy() asked for on ONE field block: stated nodes, a stated resolution,
+# What a share() asked for on ONE field block: stated nodes, a stated resolution,
 # or neither (the engine's own axis). At most one of the two is ever non-NULL,
 # which is the invariant `.tobs_alpha_axis()` reads them under.
 .tobs_copy_amp <- function(grid = NULL, n = NULL) list(grid = grid, n = n)
 
-# Did the copy() name an amplitude for this block at all? A block that named
+# Did the share() name an amplitude for this block at all? A block that named
 # none asks for the engine's default axis, which is what composes with a
 # resolution set alongside it.
 .tobs_copy_amp_stated <- function(amp) !is.null(amp$grid) || !is.null(amp$n)
@@ -737,18 +737,18 @@
 }
 
 # The hyperprior on the copy coefficient a fit carries: refuses two copies that
-# disagree, and the control spelling written alongside a copy() that names one.
+# disagree, and the control spelling written alongside a share() that names one.
 # Returns the prior, or NULL.
 .tobs_copy_prior_resolve <- function(copies, control, what) {
   priors <- Filter(Negate(is.null), lapply(copies, function(cp) cp$alpha_prior))
   if (length(priors) == 0L) return(control[["prior.alpha"]])
   if (!is.null(control[["prior.alpha"]])) {
-    stop(what, ": set the prior on the copy coefficient with copy(prior = ) ",
+    stop(what, ": set the prior on the copy coefficient with share(prior = ) ",
          "OR control$prior.alpha, not both.", call. = FALSE)
   }
   if (length(priors) > 1L &&
       !all(vapply(priors[-1L], identical, logical(1), priors[[1L]]))) {
-    stop(what, ": two copy(prior = ) specs disagree, and one prior on the copy ",
+    stop(what, ": two share(prior = ) specs disagree, and one prior on the copy ",
          "coefficient reaches the engine per fit.", call. = FALSE)
   }
   priors[[1L]]
@@ -758,7 +758,7 @@
   if (is.null(prior)) return(NULL)
   if (!is.list(prior) || length(prior) != 2L ||
       !is.character(prior[[1L]]) || length(prior[[1L]]) != 1L) {
-    stop("copy(prior = ): a hyperprior on the copy coefficient is written ",
+    stop("share(prior = ): a hyperprior on the copy coefficient is written ",
          "list(<family>, <params>), e.g. list(\"pc.prec\", c(4, 0.01)) or ",
          "list(\"half_normal\", 2).", call. = FALSE)
   }
@@ -813,7 +813,7 @@
                                name = NULL) {
   dots <- list(...)
 
-  # `name =` labels the field so a copy() in another arm/process can reference
+  # `name =` labels the field so a share() in another arm/process can reference
   # it ("occ_space"), the INLA-style cross-arm edge. It is the field's reference
   # label; when `id` is not given it doubles as the term id (the resolver keys
   # on id), so the common case sets only `name`.
@@ -1038,10 +1038,10 @@
       term$weight_label <- col$column_name
       # The coefficient (trend) column is addressable as "<field>.<column>" and,
       # for the single-trend common case, as "<field>.trend"; both resolve to
-      # this block so a per-component copy() amplitude stays expressible.
+      # this block so a per-component share() amplitude stays expressible.
       term$component <- col$column_name
     }
-    # Carry the field name onto each desugared block so a copy() in the positive
+    # Carry the field name onto each desugared block so a share() in the positive
     # arm can resolve "<name>" (whole field) or "<name>.<component>" (one block).
     term$field_name <- spec$field_name
     # Carry the replication factor onto each desugared term. The shared-field path
@@ -1123,12 +1123,31 @@
   temporal      = .tobs_term_temporal,
   svc           = .tobs_term_svc,
   latent        = .tobs_term_latent,
-  copy          = .tobs_term_copy,
+  share         = .tobs_term_copy,
   grid          = .tobs_term_grid
 )
 
 # Names of the registered special terms (used by the parser to detect them).
 .tobs_term_names <- function() names(.tobs_terms)
+
+# Front-door names that were retired, mapped to what replaced them. A formula
+# written in the old spelling is not a registered term any more, so it falls
+# through to the fixed-effects design and fails there as a missing function,
+# pointing at nothing. Every scanner that resolves a call head against the
+# registry checks this too, so the old spelling names its replacement instead.
+.tobs_retired_terms <- c(copy = "share")
+
+.tobs_check_retired_term <- function(head) {
+  if (length(head) != 1L || is.na(head) ||
+      !head %in% names(.tobs_retired_terms)) {
+    return(invisible(NULL))
+  }
+  now <- .tobs_retired_terms[[head]]
+  stop(sprintf(paste0(
+    "%s() is now %s(): write %s(spatial(), alpha = ...) in the formula. The ",
+    "amplitude, per-component `terms =` and `prior =` arguments are unchanged."),
+    head, now, now), call. = FALSE)
+}
 
 # A varying-coefficient areal field -- a per-node SVC weight
 # (icar/bym2/car_proper `weight =`), the multi-field intercept + SVC container,

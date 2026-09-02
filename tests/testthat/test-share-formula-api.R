@@ -1,11 +1,11 @@
 # =============================================================================
-# test-copy-formula-api.R - the formula-native cross-arm coupling API.
+# test-share-formula-api.R - the formula-native cross-arm coupling API.
 #
 # The occu_cover() positive arm carries a scaled copy of the occurrence arm's
 # spatial effect, selected structurally (no name needed) by a constructor:
 #
 #   occurrence = ~ ... + spatial(~ 1 + time || cell_idx, graph = adj)
-#   positive   = ~ ... + copy(spatial(), alpha = grid(c(...)))
+#   positive   = ~ ... + share(spatial(), alpha = grid(c(...)))
 #   control    = list(engine = "joint")
 #
 # replacing the control-based path (formula =, control$alpha.grid[.trend],
@@ -69,7 +69,7 @@ test_that("grid() marks a coupling axis for integration; scalar fixes it", {
   expect_error(tulpaObs:::.tobs_resolve_copy_alpha(c(0.25, 0.5)), "grid\\(")
 })
 
-test_that("copy(spatial()) selects the spatial effect with no name", {
+test_that("share(spatial()) selects the spatial effect with no name", {
   cp <- tulpaObs:::.tobs_term_copy(
     spatial(), alpha = tulpaObs:::.tobs_term_grid(c(0.25, 0.5)))
   expect_s3_class(cp, "tobs_copy")
@@ -80,14 +80,14 @@ test_that("copy(spatial()) selects the spatial effect with no name", {
   expect_identical(cp$alpha_grid, c(0.25, 0.5))
 })
 
-test_that("copy(spatial(grp)) carries the grouping-variable discriminator", {
+test_that("share(spatial(grp)) carries the grouping-variable discriminator", {
   cp <- tulpaObs:::.tobs_term_copy(spatial(cell_idx), alpha = 0.5)
   expect_identical(cp$selector_type, "spatial")
   expect_identical(cp$selector_group, "cell_idx")
   expect_false(cp$alpha_integrate)
 })
 
-test_that("copy(spatial(), terms =) resolves a per-component amplitude map", {
+test_that("share(spatial(), terms =) resolves a per-component amplitude map", {
   cp <- tulpaObs:::.tobs_term_copy(
     spatial(),
     terms = list(intercept = tulpaObs:::.tobs_term_grid(c(0.25, 0.5)),
@@ -97,24 +97,24 @@ test_that("copy(spatial(), terms =) resolves a per-component amplitude map", {
   expect_identical(cp$copy_terms$time$grid, c(0.5, 1.0))
 })
 
-test_that("copy(spatial(1)) integer position is rejected", {
+test_that("share(spatial(1)) integer position is rejected", {
   expect_error(tulpaObs:::.tobs_term_copy(spatial(1), alpha = 0.5),
                "integer position")
 })
 
-test_that("copy(temporal()) non-spatial selector is rejected", {
+test_that("share(temporal()) non-spatial selector is rejected", {
   expect_error(tulpaObs:::.tobs_term_copy(temporal(), alpha = 0.5),
                "spatial")
 })
 
-test_that("copy() with both alpha and terms errors", {
+test_that("share() with both alpha and terms errors", {
   expect_error(
     tulpaObs:::.tobs_term_copy(spatial(), alpha = 0.5,
                                terms = list(intercept = 0.5)),
     "not both")
 })
 
-test_that("copy(\"name\") explicit string form still parses (back-compat)", {
+test_that("share(\"name\") explicit string form still parses (back-compat)", {
   cp <- tulpaObs:::.tobs_term_copy(
     "occ_space", alpha = tulpaObs:::.tobs_term_grid(c(0.25, 0.5)))
   expect_identical(cp$ref, "occ_space")
@@ -128,8 +128,8 @@ test_that("copy(\"name\") explicit string form still parses (back-compat)", {
   expect_false(cp2$alpha_integrate)
 })
 
-test_that("copy(spatial()) inside a positive formula parses without a name", {
-  pf <- ~ pos_cov1 + copy(spatial(), alpha = grid(c(0.25, 0.5, 1.0)))
+test_that("share(spatial()) inside a positive formula parses without a name", {
+  pf <- ~ pos_cov1 + share(spatial(), alpha = grid(c(0.25, 0.5, 1.0)))
   parsed <- tulpaObs:::.tobs_parse_formula(pf, data = NULL)
   expect_identical(deparse(parsed$fe_formula), "~pos_cov1")
   cp <- Filter(function(t) inherits(t, "tobs_copy"), parsed$terms)[[1L]]
@@ -158,7 +158,7 @@ test_that("spatial(name =) is optional; a bar and a single term still take it", 
 # Equivalence: OLD control path == NEW formula-native path (no number moves).
 # ---------------------------------------------------------------------------
 
-test_that("OLD (control alpha.grid) == NEW (copy(spatial()) grid) intercept field", {
+test_that("OLD (control alpha.grid) == NEW (share(spatial()) grid) intercept field", {
   skip_if_fast()
   d   <- .cfa_data()
   adj <- d$adj
@@ -174,14 +174,14 @@ test_that("OLD (control alpha.grid) == NEW (copy(spatial()) grid) intercept fiel
                     engine = "joint", alpha.grid = g))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
-    positive   = ~ pos_cov1 + copy(spatial(), alpha = grid(g)),
+    positive   = ~ pos_cov1 + share(spatial(), alpha = grid(g)),
     control    = list(verbose = FALSE, max.iter = 500L, engine = "joint"))))
 
   expect_identical(names(old$means), names(new$means))
   .cfa_expect_identical_fit(old, new)
 })
 
-test_that("decouple: OLD alpha.grid = 0 == NEW omitting copy()", {
+test_that("decouple: OLD alpha.grid = 0 == NEW omitting share()", {
   skip_if_fast()
   d   <- .cfa_data()
   adj <- d$adj
@@ -196,13 +196,13 @@ test_that("decouple: OLD alpha.grid = 0 == NEW omitting copy()", {
                     engine = "joint", alpha.grid = 0))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
-    positive   = ~ pos_cov1,   # no copy() => decoupled
+    positive   = ~ pos_cov1,   # no share() => decoupled
     control    = list(verbose = FALSE, max.iter = 500L, engine = "joint"))))
 
   .cfa_expect_identical_fit(old, new)
 })
 
-test_that("scalar alpha fixes the amplitude (OLD alpha.grid = 0.5 == NEW copy(spatial(), alpha = 0.5))", {
+test_that("scalar alpha fixes the amplitude (OLD alpha.grid = 0.5 == NEW share(spatial(), alpha = 0.5))", {
   skip_if_fast()
   d   <- .cfa_data()
   adj <- d$adj
@@ -217,13 +217,13 @@ test_that("scalar alpha fixes the amplitude (OLD alpha.grid = 0.5 == NEW copy(sp
                     engine = "joint", alpha.grid = 0.5))))
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
-    positive   = ~ pos_cov1 + copy(spatial(), alpha = 0.5),
+    positive   = ~ pos_cov1 + share(spatial(), alpha = 0.5),
     control    = list(verbose = FALSE, max.iter = 500L, engine = "joint"))))
 
   .cfa_expect_identical_fit(old, new)
 })
 
-test_that("per-component: OLD alpha.grid vs alpha.grid.trend == NEW copy(spatial(), terms =)", {
+test_that("per-component: OLD alpha.grid vs alpha.grid.trend == NEW share(spatial(), terms =)", {
   skip_if_fast()
   d   <- .cfa_data(trend = TRUE, seed = 31337L)
   adj <- d$adj
@@ -241,13 +241,13 @@ test_that("per-component: OLD alpha.grid vs alpha.grid.trend == NEW copy(spatial
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
     positive   = ~ pos_cov1 +
-      copy(spatial(), terms = list(intercept = grid(gi), time = grid(gt))),
+      share(spatial(), terms = list(intercept = grid(gi), time = grid(gt))),
     control    = list(verbose = FALSE, max.iter = 300L, engine = "joint"))))
 
   .cfa_expect_identical_fit(old, new)
 })
 
-test_that("whole-field copy(spatial()) scales every block with one amplitude", {
+test_that("whole-field share(spatial()) scales every block with one amplitude", {
   skip_if_fast()
   d   <- .cfa_data(trend = TRUE, seed = 31337L)
   adj <- d$adj
@@ -263,7 +263,7 @@ test_that("whole-field copy(spatial()) scales every block with one amplitude", {
                     alpha.grid = gw))))   # alpha.grid.trend defaults to alpha.grid
   new <- .cfa_fit(c(base, list(
     occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
-    positive   = ~ pos_cov1 + copy(spatial(), alpha = grid(gw)),
+    positive   = ~ pos_cov1 + share(spatial(), alpha = grid(gw)),
     control    = list(verbose = FALSE, max.iter = 300L, engine = "joint"))))
 
   .cfa_expect_identical_fit(old, new)
@@ -274,60 +274,73 @@ test_that("whole-field copy(spatial()) scales every block with one amplitude", {
 # Guard rails.
 # ---------------------------------------------------------------------------
 
-test_that("copy() and control$alpha.grid together is an error", {
+test_that("share() and control$alpha.grid together is an error", {
   d   <- .cfa_data(N = 20L)
   adj <- d$adj
   expect_error(
     suppressWarnings(suppressMessages(tobs(
       occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1 + copy(spatial(), alpha = grid(c(0.5, 1))),
+      positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0.5, 1))),
       y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint", alpha.grid = c(0.5, 1))))),
     "not both")
 })
 
-test_that("copy(spatial(grp)) on a mismatched grouping variable errors", {
+test_that("share(spatial(grp)) on a mismatched grouping variable errors", {
   d   <- .cfa_data(N = 20L)
   adj <- d$adj
   expect_error(
     suppressWarnings(suppressMessages(tobs(
       occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1 + copy(spatial(region_idx), alpha = grid(c(0.5, 1))),
+      positive = ~ pos_cov1 + share(spatial(region_idx), alpha = grid(c(0.5, 1))),
       y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "grouped on")
 })
 
-test_that("copy(spatial(), terms =) must address every field block", {
+test_that("share(spatial(), terms =) must address every field block", {
   d   <- .cfa_data(N = 20L, trend = TRUE)
   adj <- d$adj
   expect_error(
     suppressWarnings(suppressMessages(tobs(
       occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1 + copy(spatial(), terms = list(intercept = grid(c(0.5, 1)))),
+      positive = ~ pos_cov1 + share(spatial(), terms = list(intercept = grid(c(0.5, 1)))),
       y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "every field block")
 })
 
-test_that("copy(string) on the positive arm errors (selector required)", {
+test_that("share(string) on the positive arm errors (selector required)", {
   d   <- .cfa_data(N = 20L)
   adj <- d$adj
   expect_error(
     suppressWarnings(suppressMessages(tobs(
       occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
-      positive = ~ pos_cov1 + copy("occ_space", alpha = grid(c(0.5, 1))),
+      positive = ~ pos_cov1 + share("occ_space", alpha = grid(c(0.5, 1))),
       y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "not a string")
+})
+
+test_that("the retired copy() spelling names its replacement", {
+  d <- data.frame(y = c(0, 1, 1, 0), x = rnorm(4), cell_idx = 1:4)
+  # Every scanner that resolves a call head against the term registry: the
+  # shared parser, and the per-arm scanners the cover families run.
+  expect_error(tulpaObs:::.tobs_parse_formula(~ x + copy(spatial()), data = d),
+               "copy\\(\\) is now share\\(\\)")
+  expect_error(tulpaObs:::.tobs_check_retired_term("copy"), "share\\(spatial")
+  # A live term and an ordinary fixed effect are untouched by the check.
+  expect_null(tulpaObs:::.tobs_check_retired_term("share"))
+  expect_null(tulpaObs:::.tobs_check_retired_term(NA_character_))
+  expect_null(tulpaObs:::.tobs_check_retired_term("log"))
 })
 
 test_that("giving both occurrence and formula errors", {

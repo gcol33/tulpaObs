@@ -574,7 +574,7 @@
   }
 
   theta_formula <- dots$availability %||% ~ 1
-  # A copy() on the cover formula names the coupling amplitude of the shared
+  # A share() on the cover formula names the coupling amplitude of the shared
   # field, exactly as on occu_cover(). Strip it off first so the rejection below
   # and the visit-design build see a clean fixed-effects formula; it is
   # translated once the field blocks are resolved.
@@ -609,7 +609,7 @@
                  gv), call. = FALSE)
   }
 
-  # Detection / availability / cover arms carry no structured terms. copy() is
+  # Detection / availability / cover arms carry no structured terms. share() is
   # the exception on the cover arm and was stripped off above.
   .occu_cover_reject_structured(detection,     "detection")
   .occu_cover_reject_structured(theta_formula, "availability")
@@ -618,12 +618,12 @@
   # The non-spatial engines fix the field at 0, so a copy amplitude has nothing
   # to scale there and the request cannot be honoured.
   if (non_spatial && length(pos_copy$copies) > 0L) {
-    stop("occu_multiscale_cover(): copy() scales the shared areal field onto ",
+    stop("occu_multiscale_cover(): share() scales the shared areal field onto ",
          "the cover arm, and method = \"", engine, "\" is the non-spatial path ",
          "(iid cells, field fixed at 0). Use method = \"nested_laplace\" for ",
-         "the shared field, or drop the copy().", call. = FALSE)
+         "the shared field, or drop the share().", call. = FALSE)
   }
-  # Coupling is what a copy() states, here as on occu_cover(): a block no copy()
+  # Coupling is what a share() states, here as on occu_cover(): a block no share()
   # names is pinned at alpha = 0 and the field rides occupancy alone. Pinned
   # rather than dropped -- the engine offers the (sigma, alpha) parameterization
   # only to a copied block, so removing the spec moves the shared field onto

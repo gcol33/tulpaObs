@@ -223,7 +223,7 @@
   }
   lab <- attr(stats::terms(spec$pos), "term.labels")
   f <- stats::as.formula(
-    paste("~", paste(c(lab, "copy(spatial())"), collapse = " + ")))
+    paste("~", paste(c(lab, "share(spatial())"), collapse = " + ")))
   environment(f) <- globalenv()
   f
 }
@@ -3161,7 +3161,7 @@
 #'             data = cbind(data.frame(site_id = seq_len(N)), sim$data),
 #'             family = occu_cover("lognormal"),
 #'             detection = ~ det_cov1,
-#'             positive = ~ pos_cov1 + copy(spatial()),
+#'             positive = ~ pos_cov1 + share(spatial()),
 #'             y = od$y, y_pos = y_pos, visits = od$det.covs,
 #'             method = "nested_laplace", control = ctl)
 #' sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)

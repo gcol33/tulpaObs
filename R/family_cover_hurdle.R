@@ -85,7 +85,7 @@
          "models.\nThe joint engine integrates the copy coefficient `alpha`, ",
          "with the cover-arm field amplitude `alpha * sigma`; `sigma` is the ",
          "donor axis (control$sigma.grid).\nSet the coupling with ",
-         "control$alpha.grid, or with copy() in the positive formula.",
+         "control$alpha.grid, or with share() in the positive formula.",
          call. = FALSE)
   }
   # Per-arm formulas (arm = formula): tobs()'s `presence` and `positive` formula
@@ -100,24 +100,24 @@
   temporal <- enc$temporal
   re       <- enc$re
 
-  # A copy() in a per-arm positive formula sets the cross-arm coupling-amplitude
+  # A share() in a per-arm positive formula sets the cross-arm coupling-amplitude
   # grid(s) the presence field is transferred onto the positive arm with. The
-  # whole-field form (copy(spatial()) / copy(spatial(), alpha = )) sets one grid
+  # whole-field form (share(spatial()) / share(spatial(), alpha = )) sets one grid
   # on both the intercept (alpha.grid) and trend (alpha.grid.trend) blocks; a
-  # bare copy(spatial()) with no alpha leaves control untouched so the fitter's
+  # bare share(spatial()) with no alpha leaves control untouched so the fitter's
   # default grid applies (byte-identical to the shared to = both spelling). The
-  # per-component form copy(spatial(), terms = list(intercept = , trend = ))
+  # per-component form share(spatial(), terms = list(intercept = , trend = ))
   # sets each block's grid independently, so the intercept and trend decouple --
   # mirroring occu_cover()'s per-component copy grammar.
   # `[[` (exact), never `$`: `copy_amp` is a prefix of `copy_amp_terms`.
   if (!is.null(enc[["copy_amp"]]) || !is.null(enc[["copy_amp_terms"]])) {
     if (any(c("alpha.grid", "alpha.grid.trend") %in% names(control))) {
-      stop("cover(): set the cross-arm coupling with copy() in the positive ",
+      stop("cover(): set the cross-arm coupling with share() in the positive ",
            "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
     }
     # `control$alpha.n[.trend]` is a RESOLUTION for the engine's own axis, so it
-    # composes with a copy() naming no amplitude -- that copy asks for the
-    # default axis, and the resolution says how finely to read it. A copy() that
+    # composes with a share() naming no amplitude -- that copy asks for the
+    # default axis, and the resolution says how finely to read it. A share() that
     # STATES one (nodes, or grid(n = )) is the same request written twice.
     states <- .tobs_copy_amp_stated(enc[["copy_amp"]] %||% .tobs_copy_amp()) ||
       any(vapply(enc[["copy_amp_terms"]] %||% list(), .tobs_copy_amp_stated,
@@ -136,7 +136,7 @@
   }
   if (!is.null(enc[["copy_prior"]])) {
     if (!is.null(control[["prior.alpha"]])) {
-      stop("cover(): set the prior on the copy coefficient with copy(prior = ) ",
+      stop("cover(): set the prior on the copy coefficient with share(prior = ) ",
            "OR control$prior.alpha, not both.", call. = FALSE)
     }
     # cover() couples the presence field's blocks together, so a fit carrying a
@@ -288,7 +288,7 @@ encode_cover_hurdle <- function(formula, data, y,
   # fixed effects, so the two arms get independent designs. The single `formula`
   # (shared across arms) remains the back-compat spelling. An arm is chosen by
   # placement -- write a field in that arm's formula -- and shared across arms
-  # with copy(). When per-arm formulas are absent this branch is skipped, so the
+  # with share(). When per-arm formulas are absent this branch is skipped, so the
   # shared path is untouched.
   copy_amp <- NULL
   copy_amp_terms <- NULL
@@ -305,16 +305,16 @@ encode_cover_hurdle <- function(formula, data, y,
     # (a field in `positive` becomes an arm-specific positive field, indexed onto
     # the positive rows by the fitter). Fixed effects give each arm its design.
     #
-    # copy() is the canonical shared-field spelling: it lives in the `positive`
+    # share() is the canonical shared-field spelling: it lives in the `positive`
     # formula and couples the presence field onto the positive arm. Each arm's
-    # copy() calls come back from .cover_lift_arm_fields as unevaluated language
+    # share() calls come back from .cover_lift_arm_fields as unevaluated language
     # objects (so a data-dependent term elsewhere in the arm formula is never
-    # forced); a copy() on the `presence` formula is rejected -- the anchor arm
+    # forced); a share() on the `presence` formula is rejected -- the anchor arm
     # needs no copy.
     lift_occ <- .cover_lift_arm_fields(presence_formula, "presence")
     lift_pos <- .cover_lift_arm_fields(positive_formula, "positive")
     if (length(lift_occ$copies)) {
-      stop("cover(): copy() belongs in the `positive` formula; it copies the ",
+      stop("cover(): share() belongs in the `positive` formula; it copies the ",
            "presence field onto the positive arm.", call. = FALSE)
     }
     occ_arm <- "presence"
@@ -629,12 +629,13 @@ encode_cover_hurdle <- function(formula, data, y,
   for (lab in labs) {
     e    <- tryCatch(str2lang(lab), error = function(...) NULL)
     head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
+    .tobs_check_retired_term(head)
     if (!is.na(head) && head %in% field_ctors) {
       # The arm is fixed by placement (this formula's arm); the field call is
       # kept unevaluated and tagged with the arm later, on its evaluated spec.
       fields[[length(fields) + 1L]] <- e
-    } else if (!is.na(head) && identical(head, "copy")) {
-      # copy() is not a fixed effect and not a placed field: it references the
+    } else if (!is.na(head) && identical(head, "share")) {
+      # share() is not a fixed effect and not a placed field: it references the
       # presence field and couples it onto this arm. Collect the call (evaluated
       # into a tobs_copy spec by the caller) and keep it out of the
       # fixed-effects formula.
@@ -654,32 +655,32 @@ encode_cover_hurdle <- function(formula, data, y,
   list(fe = fe, fields = fields, copies = copies)
 }
 
-# Promote the presence-arm spatial field(s) that a copy() selects to the shared
+# Promote the presence-arm spatial field(s) that a share() selects to the shared
 # (both-arm) arm tag, so encode routes them through the presence-anchored,
-# positive-coupled machinery. copy() is the canonical shared-field spelling for
+# positive-coupled machinery. share() is the canonical shared-field spelling for
 # per-arm cover formulas: the field is placed on the `presence` formula and
-# copy(spatial()) in the `positive` formula couples it across, mirroring
+# share(spatial()) in the `positive` formula couples it across, mirroring
 # occu_cover(). Returns the presence field calls, the both-arm tag to set on
 # their specs, and the coupling amplitude grid (NULL = the fitter's default,
 # estimated on the standard alpha grid).
 .cover_promote_copied_fields <- function(copies, occ_fields) {
   if (length(copies) > 1L) {
-    stop("cover(): one copy() per fit is supported (it couples the whole ",
+    stop("cover(): one share() per fit is supported (it couples the whole ",
          "presence field onto the positive arm). Per-component coupling is not ",
          "yet wired for cover().", call. = FALSE)
   }
   cp <- copies[[1L]]
   if (is.null(cp$selector_type)) {
-    stop("cover(): copy() must select the presence spatial field, e.g. ",
-         "copy(spatial()); a field-name string is not a coupling selector here.",
+    stop("cover(): share() must select the presence spatial field, e.g. ",
+         "share(spatial()); a field-name string is not a coupling selector here.",
          call. = FALSE)
   }
   if (length(occ_fields) == 0L) {
-    stop("cover(): copy() needs a spatial field on the `presence` formula to ",
+    stop("cover(): share() needs a spatial field on the `presence` formula to ",
          "copy onto the positive arm, e.g. ",
          "presence = ~ x + spatial(~ 1 || cell, graph = adj).", call. = FALSE)
   }
-  # Per-component coupling: copy(terms = list(<component> = ...)) couples each
+  # Per-component coupling: share(terms = list(<component> = ...)) couples each
   # field block (intercept, weighted trend) with its own amplitude grid, so the
   # two can decouple. Resolved here into a named list of grids (NULL = the
   # fitter's default grid); the trend-block-existence check runs downstream in
@@ -695,7 +696,7 @@ encode_cover_hurdle <- function(formula, data, y,
        amp = amp, amp_terms = amp_terms, prior = cp$alpha_prior)
 }
 
-# Map a copy(terms = list(...)) per-component amplitude spec onto the fitter's
+# Map a share(terms = list(...)) per-component amplitude spec onto the fitter's
 # per-block coupling axes: the presence field's intercept block reads
 # control$alpha.grid / alpha.n, the weighted-trend block reads
 # control$alpha.grid.trend / alpha.n.trend (see the joint-coupled cover fitter:
@@ -722,11 +723,11 @@ encode_cover_hurdle <- function(formula, data, y,
         sprintf("\"intercept\", \"trend\" (or \"%s\")", trend_label)
       } else "\"intercept\""
       stop(sprintf(paste0(
-        "cover(): copy(terms = ): unknown field component \"%s\". ",
+        "cover(): share(terms = ): unknown field component \"%s\". ",
         "Name %s."), k, avail), call. = FALSE)
     }
     if (identical(role, "trend") && !has_trend) {
-      stop("cover(): copy(terms = ) names a \"trend\" component, but the ",
+      stop("cover(): share(terms = ) names a \"trend\" component, but the ",
            "presence field has no weighted trend block (it is a single ",
            "intercept field). Drop the trend component or add a weighted areal ",
            "term, e.g. spatial(~ 1 + time.sc || cell, graph = adj).",
@@ -739,7 +740,7 @@ encode_cover_hurdle <- function(formula, data, y,
   missing_roles <- setdiff(required, names(amps))
   if (length(missing_roles)) {
     stop(sprintf(paste0(
-      "cover(): copy(terms = ) must give an amplitude for every field block; ",
+      "cover(): share(terms = ) must give an amplitude for every field block; ",
       "%s left unaddressed. Field blocks: %s."),
       paste0("\"", missing_roles, "\"", collapse = ", "),
       paste0("\"", required, "\"", collapse = ", ")), call. = FALSE)

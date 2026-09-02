@@ -45,7 +45,7 @@
 # (the fixture simulates a coupled truth, so the copy is declared -- a bare areal
 # term is an occurrence-only field).
 .ocsvc_fit <- function(inp, control = list(), field = "icar",
-                       copy_call = "copy(spatial())") {
+                       copy_call = "share(spatial())") {
   f <- stats::as.formula(sprintf(
     "~ occ_cov1 + %s(graph = inp$adj) + %s(graph = inp$adj, weight = time)",
     field, field))
@@ -250,7 +250,7 @@ test_that("the two-field flat vector is exactly n_raw + n_hyper wide (#214)", {
   # to hand the engine a vector of any other length, so a two-block bym2 fit
   # running at all is the invariant holding on the widest layout there is.
   fit <- suppressWarnings(.ocsvc_fit(inp, field = "bym2",
-    copy_call = "copy(spatial(), alpha = grid(c(0.3, 1.5)))",
+    copy_call = "share(spatial(), alpha = grid(c(0.3, 1.5)))",
     control = list(verbose = FALSE, progress = FALSE, n.iter = 150L,
                    n.warmup = 150L, n.chains = 1L, seed = 2L, max.iter = 60L,
                    sigma.grid = c(0.3, 1.2))))
@@ -378,7 +378,7 @@ test_that("the criteria score the second field too (#211, #214)", {
 
 test_that("occu_cover NUTS gates the field structures it does not sample (#214)", {
   inp <- .ocsvc_inputs(side = 4L, J = 3L, seed = 12L)
-  fit_args <- function(f, pos = ~ pos_cov1 + copy(spatial())) {
+  fit_args <- function(f, pos = ~ pos_cov1 + share(spatial())) {
     tobs(formula = f, data = inp$cell_dat, family = occu_cover("lognormal"),
          detection = ~ det_cov1, positive = pos, y = inp$od$y,
          y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",

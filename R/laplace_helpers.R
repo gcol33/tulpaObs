@@ -27,7 +27,7 @@
 # multi-block latent prior the nested-Laplace path attaches to the STATE block. A
 # single field shared across both arms at once (shared = c(TRUE, TRUE)) is a stop()
 # everywhere: the single-Laplace block fitter fits one field realization per
-# submodel block, so a genuinely shared realization needs the copy() path, not two
+# submodel block, so a genuinely shared realization needs the share() path, not two
 # independent blocks. The areal path (icar/bym2/car_proper via nested_laplace) is
 # wider; this matrix is the continuous-mesh SPDE path only. The continuous
 # gp()/spde() fields on the N-mixture arms (abun / em_nested / ms_abun) are tracked
@@ -39,7 +39,7 @@
 #   detection arm (shared[2]): single, integrated (per source)
 # jsdm has no detection process; community and dynamic do not yet carry a
 # detection-arm field. A single realization shared across both arms at once
-# needs the copy() path (the single-Laplace block fitter fits one realization
+# needs the share() path (the single-Laplace block fitter fits one realization
 # per submodel block), so c(TRUE, TRUE) errors here rather than silently fitting
 # two independent fields. Other combinations error explicitly.
 .validate_spatial_laplace <- function(spatial, model_type) {

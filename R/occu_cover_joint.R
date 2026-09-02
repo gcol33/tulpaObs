@@ -274,7 +274,7 @@
     }
   }
 
-  # Is each shared field block copied onto the cover arm at all? With no copy()
+  # Is each shared field block copied onto the cover arm at all? With no share()
   # in the positive formula `.occu_cover_apply_copy_coupling()` resolves that
   # block's amplitude to the single node 0, which IS the decoupled model. The
   # postprocess reads these to decide whether `alpha` is a parameter of the fit,

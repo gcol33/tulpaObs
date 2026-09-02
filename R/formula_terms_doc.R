@@ -30,7 +30,7 @@
 #'   \item{\code{weight}}{Per-node numeric column turning the field into a
 #'     spatially varying coefficient (\code{weight_i * z[node_i]}) instead of an
 #'     intercept field. \code{car()} does not take it.}
-#'   \item{\code{id}}{Name for the realization, so \code{copy("id")} can share it
+#'   \item{\code{id}}{Name for the realization, so \code{share("id")} can share it
 #'     with another process.}
 #' }
 #'
@@ -179,7 +179,7 @@
 #' \code{constraint} and \code{sigma_prior_rate} control the identification
 #' anchor and the loading prior.
 #'
-#' \code{copy("id")} shares one realization of the term named \code{id} across
+#' \code{share("id")} shares one realization of the term named \code{id} across
 #' processes, optionally scaled: \code{alpha = 0.5} pins the coupling
 #' amplitude, \code{alpha = grid(c(0.25, 0.5, 1))} marginalizes over it on the
 #' outer integration.

@@ -1,22 +1,22 @@
 # ---------------------------------------------------------------------------
-# Formula-native cross-arm coupling (INLA-style copy())
+# Formula-native cross-arm coupling: share(), the INLA `copy =` idiom
 #
 # The occurrence arm carries a spatial field; the positive (cover) arm declares
-# it carries a scaled copy of that field with a copy() selector, the DAG edge
+# it carries a scaled copy of that field with a share() selector, the DAG edge
 # u_occ -> cover placed in the formula:
 #
-#   copy(spatial(), alpha = grid(g))   the unique occurrence spatial effect,
-#                                      one amplitude g over every block
-#   copy(spatial(cell_idx), ...)       disambiguate by grouping variable when
-#                                      the occurrence arm has several spatials
-#   copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))
-#                                      a per-block amplitude
-#   copy("occ_space", ...)             explicit-name reference (lower-level),
-#                                      requires spatial(..., name = "occ_space")
+#   share(spatial(), alpha = grid(g))   the unique occurrence spatial effect,
+#                                       one amplitude g over every block
+#   share(spatial(cell_idx), ...)       disambiguate by grouping variable when
+#                                       the occurrence arm has several spatials
+#   share(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))
+#                                       a per-block amplitude
+#   share("occ_space", ...)             explicit-name reference (lower-level),
+#                                       requires spatial(..., name = "occ_space")
 #
 # No name is needed in the common case: spatial() selects the occurrence arm's
 # spatial effect structurally. The engine still reads the coupling amplitude axes
-# off `control$alpha.grid` / `control$alpha.grid.trend`, so the formula copy() is
+# off `control$alpha.grid` / `control$alpha.grid.trend`, so the formula share() is
 # translated into those axes here and the downstream fit is unchanged:
 #
 #   whole-field amplitude g            -> alpha.grid = g, alpha.grid.trend = g
@@ -25,11 +25,11 @@
 # `alpha = grid(g)` integrates over g; a scalar fixes it (a length-1 grid). The
 # block layout follows .occu_cover_spatial_fields(): the unweighted intercept
 # field is block 1, weighted trend field(s) block 2+. Decoupling an arm is
-# structural -- write spatial() (an own field) or omit copy() -- not a magic
+# structural -- write spatial() (an own field) or omit share() -- not a magic
 # alpha of 0; 0 is only ever one value you could place in a grid.
 # ---------------------------------------------------------------------------
 
-# Parse copy() terms off the positive formula, returning the stripped
+# Parse share() terms off the positive formula, returning the stripped
 # fixed-effects positive formula plus the list of tobs_copy specs. The copy
 # special is the only structured term allowed on the positive arm; any other is
 # left in place for .occu_cover_reject_structured() to reject.
@@ -40,7 +40,7 @@
   list(formula = parsed$fe_formula, copies = copies)
 }
 
-# Spatial-field constructors that declare a NEW latent field (unlike copy(), which
+# Spatial-field constructors that declare a NEW latent field (unlike share(), which
 # reuses a named one). A term with one of these heads is a field; placement in an
 # arm's formula puts the field on that arm.
 .occu_cover_field_ctors <- c("spatial", "icar", "bym2", "car", "car_proper")
@@ -49,7 +49,7 @@
 # written in the detection or positive formula declares a field ON that arm. Pull
 # such terms off their arm formula and carry them as (call, arm) pairs, so the
 # arm-generic resolver (.occu_cover_spatial_fields) can evaluate each field spec
-# and tag it with its arm alongside the occurrence formula's own fields. copy()
+# and tag it with its arm alongside the occurrence formula's own fields. share()
 # and RE terms are handled separately and left untouched. Returns the unchanged
 # occurrence formula, the stripped detection / positive formulas, and the lifted
 # arm-field calls.
@@ -64,6 +64,7 @@
     for (lab in labs) {
       e    <- tryCatch(str2lang(lab), error = function(...) NULL)
       head <- if (is.call(e) && is.symbol(e[[1L]])) as.character(e[[1L]]) else NA_character_
+      .tobs_check_retired_term(head)
       if (!is.na(head) && head %in% .occu_cover_field_ctors) {
         # The arm is fixed by placement; keep the field call unevaluated and
         # carry its arm, to tag the evaluated spec later.
@@ -90,22 +91,22 @@
   list(occ = occ_formula, det = det2, pos = pos2, arm_fields = arm_fields)
 }
 
-# Map the positive arm's copy() specs onto the coupling-amplitude grids the
+# Map the positive arm's share() specs onto the coupling-amplitude grids the
 # joint fitter reads (control$alpha.grid for the intercept block,
 # control$alpha.grid.trend for the trend block). `spatial_info` carries the
 # resolved fields (block 1 = intercept, block 2+ = weighted trend), each with a
 # `field_name` and a `component` label. Returns the updated control list.
 #
-# The amplitude axes come ENTIRELY from copy(): a block a copy() names takes the
+# The amplitude axes come ENTIRELY from share(): a block a share() names takes the
 # axis it states (or the engine's own axis when it states none), and a block no
-# copy() names is pinned at alpha = 0 -- the field rides occupancy alone. That
+# share() names is pinned at alpha = 0 -- the field rides occupancy alone. That
 # holds however the occurrence formula spells the field. `name =` is not the
-# signal: the selector is type-carrying (copy(spatial())), so a field needs no
+# signal: the selector is type-carrying (share(spatial())), so a field needs no
 # name to be copied and carrying one does not couple it.
 #
 # The one exception is a fit that sets control$alpha.grid[.trend] itself, which
 # is the lower-level spelling of the same axes: those grids stand as given, and
-# are refused alongside a copy().
+# are refused alongside a share().
 #
 # Everything a copy states about its coefficient is carried here: the amplitude
 # axis (stated nodes, or a resolution for the engine's own axis) and the
@@ -113,36 +114,36 @@
 .occu_cover_apply_copy_coupling <- function(copies, spatial_info, control) {
   has_control_alpha <- any(c("alpha.grid", "alpha.grid.trend") %in% names(control))
   if (has_control_alpha && length(copies) > 0L) {
-    stop("occu_cover(): set the cross-arm coupling with copy() in the positive ",
+    stop("occu_cover(): set the cross-arm coupling with share() in the positive ",
          "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
   }
   # `control$alpha.n[.trend]` is a RESOLUTION for the engine's own axis, so it
-  # composes with a copy() that names no amplitude -- that copy asks for the
-  # default axis, and the resolution says how finely to read it. A copy() that
+  # composes with a share() that names no amplitude -- that copy asks for the
+  # default axis, and the resolution says how finely to read it. A share() that
   # STATES one (nodes, or grid(n = )) is the same request spelled twice, and is
   # refused.
   .tobs_check_alpha_copy(
     any(vapply(copies, .tobs_copy_states_amplitude, logical(1))),
     control, "occu_cover()")
-  # Resolved before the early returns below: a prior written on a copy() that
+  # Resolved before the early returns below: a prior written on a share() that
   # selects nothing is a mistake wherever it is written, and the conflict with
   # the control spelling does not depend on there being a field to copy.
   alpha_prior <- .tobs_copy_prior_resolve(copies, control, "occu_cover()")
-  # control$alpha.grid is the low-level amplitude knob: when set (and no copy())
+  # control$alpha.grid is the low-level amplitude knob: when set (and no share())
   # the engine reads the grids as given.
   if (has_control_alpha) return(control)
 
   if (is.null(spatial_info)) {
     if (length(copies) > 0L) {
-      stop("occu_cover(): copy() needs a spatial field on the occurrence ",
+      stop("occu_cover(): share() needs a spatial field on the occurrence ",
            "formula, e.g. spatial(~ 1 || cell, graph = adj).", call. = FALSE)
     }
     return(control)
   }
 
-  # Coupling is formula-native and explicit: a copy() carries the occurrence
+  # Coupling is formula-native and explicit: a share() carries the occurrence
   # spatial field onto the cover arm with the amplitude it names; a block with no
-  # copy() is decoupled (alpha pinned 0), the field rides occupancy only. There
+  # share() is decoupled (alpha pinned 0), the field rides occupancy only. There
   # is no implicit default coupling.
   #
   # Component labels of the resolved field blocks. Block 1 is the intercept
@@ -153,18 +154,18 @@
                        function(f) f$component %||% NA_character_, character(1))
   node       <- spatial_info$group_var
 
-  # Default to decoupled: every block pinned at alpha = 0. A copy() then sets the
+  # Default to decoupled: every block pinned at alpha = 0. A share() then sets the
   # amplitude axis on the block(s) it names -- to the nodes it states, or to NULL
-  # for a copy() naming no amplitude, which leaves the block on the engine's own
+  # for a share() naming no amplitude, which leaves the block on the engine's own
   # axis (at `control$alpha.n`'s resolution when one is asked for). NULL is also
-  # what removes the key below, so a bare copy() reaches the fitter exactly as an
+  # what removes the key below, so a bare share() reaches the fitter exactly as an
   # unset knob does.
   amp_int   <- .tobs_copy_amp(grid = 0)
   amp_trend <- if (has_trend) .tobs_copy_amp(grid = 0) else NULL
 
   # Apply one (component, amplitude) assignment, returning the canonical block
   # role ("intercept" / "trend") it resolved to. `comp = NULL` is the whole
-  # field. `cp_label` names the copy() in any error.
+  # field. `cp_label` names the share() in any error.
   apply_component <- function(comp, amp, cp_label) {
     if (is.null(comp)) {
       amp_int <<- amp
@@ -192,27 +193,27 @@
   }
 
   for (cp in copies) {
-    cp_label <- sprintf("copy(%s)", cp$id)
+    cp_label <- sprintf("share(%s)", cp$id)
 
     # The positive arm couples the occurrence spatial field through a selector
     # (spatial() / spatial(<grouping_var>)); a string reference is not a coupling
     # selector here.
     if (is.null(cp$selector_type)) {
       stop(sprintf(paste0(
-        "%s: select the occurrence spatial field with copy(spatial()) or ",
-        "copy(spatial(%s)), not a string."), cp_label, node %||% "<grouping_var>"),
+        "%s: select the occurrence spatial field with share(spatial()) or ",
+        "share(spatial(%s)), not a string."), cp_label, node %||% "<grouping_var>"),
         call. = FALSE)
     }
     if (!is.null(cp$selector_group)) {
       if (is.null(node)) {
         stop(sprintf(paste0(
           "%s: the occurrence spatial field has no named grouping variable; ",
-          "use copy(spatial())."), cp_label), call. = FALSE)
+          "use share(spatial())."), cp_label), call. = FALSE)
       }
       if (!identical(cp$selector_group, node)) {
         stop(sprintf(paste0(
           "%s: no spatial effect grouped on \"%s\"; the occurrence spatial ",
-          "field is on \"%s\". Use copy(spatial(%s)) or copy(spatial())."),
+          "field is on \"%s\". Use share(spatial(%s)) or share(spatial())."),
           cp_label, cp$selector_group, node, node), call. = FALSE)
       }
     }
@@ -263,14 +264,14 @@
 }
 
 
-# Map the positive arm's copy() spec(s) onto the sampled field's coupling
+# Map the positive arm's share() spec(s) onto the sampled field's coupling
 # amplitude on the NUTS spatial path, including the no-copy case, which
 # pins the amplitude at 0.
 #
 # A bare areal term on the psi formula loads on the OCCURRENCE arm alone under
-# both engines: a term's process is the formula it sits in, and copy() is how a
+# both engines: a term's process is the formula it sits in, and share() is how a
 # field is also placed on the cover arm. Running the translation unconditionally
-# is what makes that true here -- with no copy() the shared translation pins
+# is what makes that true here -- with no share() the shared translation pins
 # alpha at 0, exactly as the grid-integrated route already did, instead of
 # leaving the default amplitude axis in place for the warm fit to estimate and
 # the sampler to then integrate over ( made that axis visible work rather than a
@@ -281,18 +282,18 @@
 # span becomes the support of the sampled alpha's flat prior
 # (`.occu_cover_nuts_hyper_bounds()`), so `alpha = grid(c(...))` bounds the
 # amplitude and a scalar `alpha =` collapses the axis to one node and pins it.
-# The same copy() therefore means the same thing under both engines.
+# The same share() therefore means the same thing under both engines.
 #
 # The translation is the shared `.occu_cover_apply_copy_coupling()`, so the
 # selector rules, the per-component addressing and every error message are one
 # implementation. It reads two things off the resolved field description -- the
 # per-block roster (one entry per block, each with its `component` role) and the
-# grouping variable a `copy(spatial(<var>))` selector must match. The sampled
+# grouping variable a `share(spatial(<var>))` selector must match. The sampled
 # path resolves that roster itself (`.occu_cover_spatial_fields()` cannot supply
 # it: it resolves the grid-integrated path's fields and rejects `car_proper()`,
 # the sampled field's primary kind), so the roster here is the intercept field
 # plus one entry per varying-coefficient field, and a per-component
-# `copy(spatial(), terms = list(...))` addresses them by the same names it does
+# `share(spatial(), terms = list(...))` addresses them by the same names it does
 # under nested_laplace.
 .occu_cover_nuts_copy_control <- function(copies, nuts_sp, control) {
   field_view <- list(
@@ -356,10 +357,10 @@
   # formula is pulled off that arm formula and carried as a (call, arm) pair, so
   # the arm-generic spatial resolver evaluates and tags every arm's fields
   # together. Done before the RE parse and the positive-defaults-to-detection
-  # fallback, so each downstream step sees a field-free arm formula. copy() stays
+  # fallback, so each downstream step sees a field-free arm formula. share() stays
   # on its arm's formula (it is a reference, not a new field). An arm is chosen by
   # placement (write the field in that arm's formula); a field is shared across
-  # arms with copy().
+  # arms with share().
   lifted         <- .occu_cover_lift_arm_fields(formula, detection, pos_formula)
   formula        <- lifted$occ
   detection      <- lifted$det
@@ -371,7 +372,7 @@
   # Observation-arm random intercept: a `(1 | g)` / `re(g)` on the detection or
   # positive-cover formula adds a random effect on that arm -- an iid latent
   # block on the joint nested-Laplace fit, a non-centered block with its own
-  # sampled SD under method = "nuts". Parse it off FIRST -- before the copy()
+  # sampled SD under method = "nuts". Parse it off FIRST -- before the share()
   # extraction and every design build -- so each downstream consumer sees a
   # clean fixed-effects formula; the grouping is resolved to per-visit codes
   # once the model (and its `valid` mask) is built. The plain `laplace` route is
@@ -401,8 +402,8 @@
   if (!is.null(det_re_parse)) detection   <- det_re_parse$fe
   if (!is.null(pos_re_parse)) pos_formula <- pos_re_parse$fe
 
-  # Formula-native cross-arm coupling: pull any copy() term off the positive
-  # formula and keep the stripped fixed-effects design. The copy() specs are
+  # Formula-native cross-arm coupling: pull any share() term off the positive
+  # formula and keep the stripped fixed-effects design. The share() specs are
   # translated into the engine's coupling-amplitude grids once the occupancy
   # field blocks are resolved (below). Stripping here lets every downstream
   # consumer (NUTS branch, design build, structured-term rejection) see a clean
@@ -430,9 +431,9 @@
       }
       .occu_cover_reject_structured(detection,   "detection")
       .occu_cover_reject_structured(pos_formula, "positive cover")
-      # The copy() specs were stripped off the positive formula above, so they
+      # The share() specs were stripped off the positive formula above, so they
       # have to be translated here rather than at the shared call below this
-      # branch. Ahead of the design build, so a copy() the field cannot satisfy
+      # branch. Ahead of the design build, so a share() the field cannot satisfy
       # is refused before any fitting work.
       control <- .occu_cover_nuts_copy_control(pos_copies, nuts_sp, control)
       vd_det  <- .normalize_visits(visits, detection,
@@ -488,14 +489,14 @@
   spatial_info <- .occu_cover_spatial_fields(formula, data, arm_fields)
   has_spatial  <- !is.null(spatial_info)
 
-  # Translate the positive arm's copy() spec(s) into the engine coupling grids
+  # Translate the positive arm's share() spec(s) into the engine coupling grids
   # now that the occupancy field blocks are resolved. Every fit carrying a
   # spatial field gets control$alpha.grid[.trend] set here -- to the amplitude
-  # each copy() names, and to 0 (decoupled) for a block none names -- unless the
-  # fit stated those grids itself, in which case they stand. A copy() with no
+  # each share() names, and to 0 (decoupled) for a block none names -- unless the
+  # fit stated those grids itself, in which case they stand. A share() with no
   # spatial field to select is an error surfaced just above.
   if (length(pos_copies) > 0L && !has_spatial) {
-    stop("occu_cover(): copy() on the positive arm needs a spatial field on the ",
+    stop("occu_cover(): share() on the positive arm needs a spatial field on the ",
          "occurrence formula (e.g. spatial(~ 1 || cell, graph = adj, name = ",
          "\"occ_space\")) under method = \"nested_laplace\".", call. = FALSE)
   }
@@ -732,7 +733,7 @@
     # take only the single intercept field.
     correlated <- isTRUE(spatial_info$correlated)
     # Default 3-arm nested-Laplace fitter (coupling lives in the positive
-    # formula via copy()); "v2_joint" / "v3_nested" are the single-field escape
+    # formula via share()); "v2_joint" / "v3_nested" are the single-field escape
     # hatches handled below.
     engine_pick <- control[["engine"]] %||% "joint"
     control[["engine"]] <- NULL

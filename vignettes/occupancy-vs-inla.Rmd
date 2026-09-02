@@ -85,7 +85,7 @@ structure, choose the inference, and pull summaries off the result.
 | IID random effect | `f(group, model = "iid")` | `re(group)` or `(1 | group)` bar syntax | `lme4`-style bars are sugar for `re()` |
 | Random slope | `f(group, x, model = "iid")` | `(x | group)` (correlated) / `(x \|\| group)` | correlation toggled by single vs double bar |
 | Temporal field | `f(time, model = "ar1" / "rw1")` | `temporal(time, type = ...)` | AR1 / RW kernels |
-| Shared field across arms | `copy = ...` in a second `f()` | `id = "u"` tag + `copy("u")` in the other formula | the occupancy / detection arms share one realisation |
+| Shared field across arms | `copy = ...` in a second `f()` | `id = "u"` tag + `share("u")` in the other formula | the occupancy / detection arms share one realisation |
 | Prior on fixed effect | `control.fixed = list(...)` | `priors =` (`occu_priors()`) or `control$sigma.beta` | weakly-informative quadratic prior by default |
 | Hyperparameter prior | `hyper = list(prec = list(prior = "pc.prec"))` | PC priors built per block by the engine | default PC + LKJ on covariance blocks |
 | Inference | (only) nested Laplace | `method = "laplace"` (default) | nested approximation, no debias |
@@ -397,7 +397,7 @@ site effect on occupancy, while the same term written in the `detection`
 formula would be a site effect on detection, and the two are different
 models. INLA makes the same distinction by which linear predictor the
 `f()` enters, so the habit transfers directly. If you want one shared
-site effect across both arms, tag it with `id` and `copy()` it into the
+site effect across both arms, tag it with `id` and `share()` it into the
 second formula, which is the tulpaObs spelling of INLA's `copy` feature.
 
 The migration is mechanical for the structured terms: every `f(...)` in
