@@ -169,7 +169,7 @@
 # multi-block grid it is baked onto the FIRST block carrying a (sigma, alpha)
 # axis pair (tulpa's `.joint_multi_hp_cols()`). A fit copying several blocks
 # would have one block regularized and the rest not, which is neither spelling's
-# meaning, so it is refused rather than applied to block 1 (gcol33/tulpa#655).
+# meaning, so it is refused rather than applied to block 1.
 .tobs_check_alpha_prior <- function(prior, n_copied, what) {
   if (is.null(prior) || n_copied <= 1L) return(invisible(TRUE))
   stop(what, ": a prior on the copy coefficient reaches one copied block, and ",

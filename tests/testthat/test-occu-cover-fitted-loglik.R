@@ -11,7 +11,7 @@
 # owns that fixture.
 #
 #   * `logLik()` reported `df = 0`, so AIC and BIC came back identical and
-#     neither could rank models (#292, root cause gcol33/tulpa#654).
+#     neither could rank models.
 
 .fl_sim <- function(resp = "lognormal", seed = 9L, n = 6L, pos_field = FALSE) {
   adj <- rook_adj(n); N <- nrow(adj)

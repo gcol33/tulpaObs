@@ -1244,7 +1244,7 @@
 # tulpa classifies every `rho*` axis as evenly spaced, so its support reaches
 # half a node step past the outermost node on the NATURAL scale, while the
 # proper-CAR default nodes (0.5, 0.8, 0.95, 0.99) are laid out logit-spaced:
-# that step lands at 1.01, which is not a correlation (gcol33/tulpa#657).
+# that step lands at 1.01, which is not a correlation.
 #
 # Where the span leaves the interval it falls back to the outermost NODE, the
 # last value the outer quadrature evaluated. Taking the interval's own open edge

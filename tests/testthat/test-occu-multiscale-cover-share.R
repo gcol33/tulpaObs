@@ -1,7 +1,7 @@
 # The multiscale cover model is built around a copy coefficient: `alpha` is in
 # `means`, in `draws`, in .occu_mscale_cover_surface_at(), and the simulator
 # draws the cover arm as `... + alpha * sigma * f[plot_cell]`. Its cover formula
-# could not name it until gcol33/tulpaObs#294 -- the raw formula reached
+# could not name it at all: the raw formula reached
 # .occu_cover_reject_structured(), whose list ends in "copy", because this door
 # skipped the strip occu_cover() does. These tests pin the route open.
 
@@ -51,7 +51,7 @@ test_that("occu_multiscale_cover(): share() states nodes, a resolution, or a pin
 })
 
 test_that("occu_multiscale_cover(): no share() decouples the cover arm", {
-  # gcol33/tulpaObs#297: coupling is what a share() states, on this door as on
+  # Coupling is what a share() states, on this door as on
   # occu_cover(). A fit naming none pins alpha = 0 -- it does NOT fall back to
   # the engine's default axis, which is what this door did before the ruling.
   a <- mscopy_control(~ x_cov)

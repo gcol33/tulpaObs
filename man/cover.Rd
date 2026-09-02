@@ -126,7 +126,7 @@ saturates on the copy amplitude while every other axis tracks the request
 (measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
 two; giving both is an error. \code{control$alpha.grid[.trend]} and
 \code{control$alpha.n[.trend]} are the wire format these compile into and are
-refused as user input (gcol33/tulpaObs#295).
+refused as user input.
 
 Set it when the fit's hyperparameter intervals are reported. On the coupled
 SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -186,7 +186,7 @@ supplied nodes, \code{alpha = grid(n = 9)} over the engine's own axis read at \c
 slab nodes, and \code{alpha = 0.5} fixes it. \code{share(spatial(), prior = list(...))}
 regularizes the coefficient itself; a fit copying both the intercept and a
 weighted trend block is refused it, since one prior reaches the engine per
-fit (gcol33/tulpa#655).
+fit.
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(presence = ~ time.sc + habitat +
                   spatial(~ 1 + time.sc || cell_idx, graph = adj),

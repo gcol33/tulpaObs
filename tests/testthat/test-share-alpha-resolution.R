@@ -248,7 +248,7 @@ test_that("share(prior = ) carries the hyperprior, and is checked where written"
     app(list(cp(quote(share(spatial(), prior = pc)))), fv,
         list(prior.alpha = list("half_normal", 2))),
     "not both")
-  # And the engine bakes it on the FIRST copied block (gcol33/tulpa#655), so a
+  # And the engine bakes it on the FIRST copied block, so a
   # fit copying two is refused rather than given it on one of them.
   expect_error(app(list(cp(quote(share(spatial(), prior = pc)))), fv2, list()),
                "copies 2")

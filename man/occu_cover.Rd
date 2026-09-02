@@ -149,11 +149,11 @@ sampled over its span on the \code{nuts} path; a scalar \verb{alpha =} pins it o
 \verb{list(<family>, <params>)} shape (see \code{prior_alpha} in
 \code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}); one reaches the engine per fit, so a
 fit copying both an intercept and a trend block is refused it rather than
-given it on the first (gcol33/tulpa#655).
+given it on the first.
 
 \code{control$alpha.grid[.trend]} and \code{control$alpha.n[.trend]} are the WIRE
 FORMAT these compile into, not user surface: a fit that sets one is refused
-and told which formula form to write (gcol33/tulpaObs#295).
+and told which formula form to write.
 \code{control$prior.alpha} is still the lower-level spelling of \verb{prior =}; set it
 in one place, not both.
 
@@ -179,7 +179,7 @@ saturates on the copy amplitude while every other axis tracks the request
 (measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
 two; giving both is an error. \code{control$alpha.grid[.trend]} and
 \code{control$alpha.n[.trend]} are the wire format these compile into and are
-refused as user input (gcol33/tulpaObs#295).
+refused as user input.
 
 Set it when the fit's hyperparameter intervals are reported. On the coupled
 SBC fixture the declared resolution leaves the field SD miscalibrated once

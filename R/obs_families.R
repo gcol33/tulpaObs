@@ -358,11 +358,11 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' `list(<family>, <params>)` shape (see `prior_alpha` in
 #' [tulpa::tulpa_nested_laplace_joint()]); one reaches the engine per fit, so a
 #' fit copying both an intercept and a trend block is refused it rather than
-#' given it on the first (gcol33/tulpa#655).
+#' given it on the first.
 #'
 #' `control$alpha.grid[.trend]` and `control$alpha.n[.trend]` are the WIRE
 #' FORMAT these compile into, not user surface: a fit that sets one is refused
-#' and told which formula form to write (gcol33/tulpaObs#295).
+#' and told which formula form to write.
 #' `control$prior.alpha` is still the lower-level spelling of `prior =`; set it
 #' in one place, not both.
 #'
@@ -388,7 +388,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
 #' two; giving both is an error. `control$alpha.grid[.trend]` and
 #' `control$alpha.n[.trend]` are the wire format these compile into and are
-#' refused as user input (gcol33/tulpaObs#295).
+#' refused as user input.
 #'
 #' Set it when the fit's hyperparameter intervals are reported. On the coupled
 #' SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -942,8 +942,7 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' engine re-reads its own axis with that many slab nodes, point mass and bounds
 #' unchanged. `terms =` gives either, per block; one block takes one of the
 #' two. `control$alpha.grid[.trend]` / `control$alpha.n[.trend]` are the wire
-#' format these compile into and are refused as user input
-#' (gcol33/tulpaObs#295).
+#' format these compile into and are refused as user input.
 #'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
@@ -1922,7 +1921,7 @@ occu_categorical <- function(classes = NULL) {
 #' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
 #' two; giving both is an error. `control$alpha.grid[.trend]` and
 #' `control$alpha.n[.trend]` are the wire format these compile into and are
-#' refused as user input (gcol33/tulpaObs#295).
+#' refused as user input.
 #'
 #' Set it when the fit's hyperparameter intervals are reported. On the coupled
 #' SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -1981,7 +1980,7 @@ occu_categorical <- function(classes = NULL) {
 #' slab nodes, and `alpha = 0.5` fixes it. `share(spatial(), prior = list(...))`
 #' regularizes the coefficient itself; a fit copying both the intercept and a
 #' weighted trend block is refused it, since one prior reaches the engine per
-#' fit (gcol33/tulpa#655).
+#' fit.
 #'
 #' ```r
 #' tobs(presence = ~ time.sc + habitat +

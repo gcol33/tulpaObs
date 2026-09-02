@@ -479,7 +479,7 @@
   # estimated, so they carry no penalty, while the three arms' coefficients and
   # the cover dispersion do. Reported as `n_fixed`, which is what
   # `logLik.tulpa_fit()` reads; without it that resolved df to 0 and AIC came
-  # back equal to BIC (gcol33/tulpa#654, #292).
+  # back equal to BIC.
   n_fixed_coefs <- length(means)
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])

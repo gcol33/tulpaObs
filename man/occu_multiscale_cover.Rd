@@ -96,8 +96,7 @@ STATES its nodes, while \code{share(alpha = grid(n = ))} states a RESOLUTION: th
 engine re-reads its own axis with that many slab nodes, point mass and bounds
 unchanged. \verb{terms =} gives either, per block; one block takes one of the
 two. \code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]} are the wire
-format these compile into and are refused as user input
-(gcol33/tulpaObs#295).
+format these compile into and are refused as user input.
 }
 
 \seealso{
