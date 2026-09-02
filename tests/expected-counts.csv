@@ -13,11 +13,13 @@
 "test-autoscale.R","full",14,0,0.7
 "test-autoscale.R","smoke",8,2,0.1
 "test-bym2-scale.R","smoke",46,0,0.5
+"test-car-logdet.R","full",7,0,0.1
 "test-car-logdet.R","smoke",7,0,0.1
 "test-ccd-outer.R","full",15,0,32.8
 "test-ccd-outer.R","smoke",8,1,0.1
 "test-community-diagnostics.R","full",13,0,4.9
 "test-community-diagnostics.R","smoke",7,2,1.2
+"test-community-latent-control.R","full",26,0,36.6
 "test-community-latent-control.R","smoke",17,2,10.9
 "test-community-latent-quad.R","smoke",32,2,1.4
 "test-community-latent-solve.R","smoke",12,0,0.2
@@ -29,6 +31,7 @@
 "test-count-gof.R","full",22,0,6.9
 "test-count-gof.R","smoke",10,1,0.2
 "test-count-ploglik-dispersion.R","smoke",18,1,20.4
+"test-count-residual-dispersion.R","full",37,0,9
 "test-count-residual-dispersion.R","smoke",37,0,11.1
 "test-count-spatial-nuts.R","full",78,0,977.4
 "test-count-spatial-nuts.R","smoke",0,15,0.2
@@ -52,6 +55,7 @@
 "test-cover-hurdle-aggregate-recovery.R","smoke",0,2,0.1
 "test-cover-hurdle-beta-oi.R","full",18,0,5.4
 "test-cover-hurdle-beta-oi.R","smoke",9,2,0.3
+"test-cover-hurdle-beta.R","full",25,0,0.6
 "test-cover-hurdle-beta.R","smoke",20,1,0.4
 "test-cover-hurdle-bpos0-coverage.R","full",44,0,35.2
 "test-cover-hurdle-bpos0-coverage.R","smoke",3,1,0.1
@@ -70,6 +74,7 @@
 "test-cover-hurdle-trend.R","smoke",4,2,0.1
 "test-cover-joint-predict.R","full",41,0,2.8
 "test-cover-joint-predict.R","smoke",0,6,0.2
+"test-cover-nuts.R","full",48,0,11.4
 "test-cover-nuts.R","smoke",17,5,0.3
 "test-cover-ordinal.R","full",39,0,125.9
 "test-cover-ordinal.R","smoke",14,2,0.2
@@ -98,6 +103,7 @@
 "test-doc-surface.R","smoke",0,3,0.1
 "test-double-observer.R","smoke",26,2,0.4
 "test-dyn-abun-season-varying.R","smoke",20,3,0.3
+"test-dyn-abun-zip.R","full",10,0,207.8
 "test-dyn-abun-zip.R","smoke",5,2,3.3
 "test-dyn-int-occu-areal-recovery.R","smoke",3,2,0.1
 "test-dyn-int-occu-recovery.R","full",23,0,14.5
@@ -118,6 +124,7 @@
 "test-family-marg-ploglik-cpp.R","full",12,0,0.5
 "test-family-marg-ploglik-cpp.R","smoke",12,0,0.6
 "test-family-method-coverage.R","smoke",159,0,1.1
+"test-family-nuts-coverage.R","full",14,0,2299.7
 "test-family-nuts-coverage.R","smoke",0,7,0.2
 "test-fem-matrices.R","full",37,0,0.3
 "test-fem-matrices.R","smoke",37,0,0.3
@@ -136,6 +143,7 @@
 "test-icar-draw-basis.R","smoke",10,0,0.5
 "test-inputs-frame.R","smoke",18,2,0.2
 "test-int-occu-areal-recovery.R","smoke",0,3,0.1
+"test-int-occu-fitted-predict.R","full",21,0,1.5
 "test-int-occu-fitted-predict.R","smoke",21,0,1.3
 "test-int-occu-single-source-anchor.R","full",8,0,2.9
 "test-int-occu-single-source-anchor.R","smoke",5,1,0.8
@@ -151,6 +159,7 @@
 "test-ms-abun-factor.R","full",27,0,3807.5
 "test-ms-abun-factor.R","smoke",8,3,0.2
 "test-ms-abun-nb-rs-coverage.R","smoke",0,1,0.1
+"test-ms-abun-nb-rs-recovery.R","full",18,0,780.5
 "test-ms-abun-nb-rs-recovery.R","smoke",0,1,0.1
 "test-ms-abun-nb-rs.R","smoke",0,1,0
 "test-ms-abun-nuts.R","smoke",28,6,615.7
@@ -170,6 +179,7 @@
 "test-ms-count-pg-gibbs.R","full",11,0,162.5
 "test-ms-count-pg-gibbs.R","smoke",5,2,1.1
 "test-ms-count-spatial.R","smoke",37,2,20.3
+"test-ms-count.R","full",36,0,13.3
 "test-ms-count.R","smoke",26,3,1.2
 "test-ms-distance-info.R","full",18,0,2
 "test-ms-distance-info.R","smoke",18,0,6.2
@@ -178,6 +188,7 @@
 "test-ms-distance.R","full",52,0,2129.5
 "test-ms-distance.R","smoke",27,4,1.8
 "test-ms-dyn-occu-nuts.R","smoke",4,4,0.7
+"test-ms-dyn-occu-pg-gibbs.R","full",10,0,306.7
 "test-ms-dyn-occu-pg-gibbs.R","smoke",6,1,10.4
 "test-ms-dyn-occu.R","full",44,0,319.5
 "test-ms-dyn-occu.R","smoke",16,5,0.3
@@ -195,6 +206,7 @@
 "test-ms-occu-cover-spatial.R","smoke",113,25,5.5
 "test-ms-occu-cover.R","full",74,0,241.7
 "test-ms-occu-cover.R","smoke",19,8,3.5
+"test-ms-occu-factor.R","full",41,0,1721.9
 "test-ms-occu-factor.R","smoke",12,5,3.7
 "test-ms-occu-field.R","smoke",8,2,8.5
 "test-ms-occu-nuts.R","smoke",7,5,0.9
@@ -203,6 +215,7 @@
 "test-ms-occu-spatial.R","full",19,0,14.7
 "test-ms-occu-spatial.R","smoke",4,3,0.2
 "test-ms-occu.R","smoke",4,3,0.1
+"test-ms-ocs-ploglik-cpp.R","full",8,0,0.2
 "test-ms-ocs-ploglik-cpp.R","smoke",8,0,0.2
 "test-ms-ocs-theta-length.R","full",18,0,0.2
 "test-ms-ocs-theta-length.R","smoke",18,0,0.2
@@ -217,6 +230,7 @@
 "test-nmix-nb.R","full",5,0,1.2
 "test-nmix-nb.R","smoke",5,0,1.8
 "test-nmix-re-joint-grad.R","smoke",0,2,0.1
+"test-nmix-re-nb.R","full",11,0,5.8
 "test-nmix-re-nb.R","smoke",0,2,0.1
 "test-nmix-re.R","full",17,0,19.9
 "test-nmix-re.R","smoke",0,3,0.1
@@ -234,6 +248,7 @@
 "test-nuts-convergence-contract.R","smoke",1,1,0.1
 "test-nuts-sampler-knobs.R","smoke",6,3,0.1
 "test-obs-det-field.R","smoke",1,3,0.1
+"test-obs-nuts-temporal.R","full",27,0,7993.2
 "test-obs-nuts-temporal.R","smoke",1,4,0.1
 "test-occ.R","full",13,0,0.7
 "test-occ.R","smoke",13,0,0.5
@@ -250,6 +265,7 @@
 "test-occu-cover-checkpoint.R","full",20,0,2.1
 "test-occu-cover-checkpoint.R","smoke",0,5,0.2
 "test-occu-cover-compact.R","smoke",71,2,5.2
+"test-occu-cover-coupling.R","full",494,0,1.7
 "test-occu-cover-coupling.R","smoke",494,0,3.3
 "test-occu-cover-field-re.R","full",18,0,2.7
 "test-occu-cover-field-re.R","smoke",13,1,0.3
@@ -285,6 +301,7 @@
 "test-occu-cover-pareto-k.R","full",5,0,15.5
 "test-occu-cover-pareto-k.R","smoke",0,2,0.1
 "test-occu-cover-ploglik-boundary.R","smoke",8,0,0.3
+"test-occu-cover-ploglik-cpp.R","full",17,0,0.4
 "test-occu-cover-ploglik-cpp.R","smoke",17,0,0.5
 "test-occu-cover-pos-field.R","full",37,0,2.8
 "test-occu-cover-pos-field.R","smoke",10,6,0.2
@@ -308,6 +325,7 @@
 "test-occu-interleaved-na.R","full",6,0,7.7
 "test-occu-interleaved-na.R","smoke",0,2,0.1
 "test-occu-joint-predict.R","smoke",15,1,0.2
+"test-occu-laplace-se.R","full",19,0,15
 "test-occu-laplace-se.R","smoke",2,3,0.1
 "test-occu-mscale-cover-ploglik-cpp.R","full",8,0,0.2
 "test-occu-mscale-cover-ploglik-cpp.R","smoke",8,0,0.2
@@ -327,6 +345,7 @@
 "test-occu-prior.R","full",17,0,20.4
 "test-occu-prior.R","smoke",6,4,0.2
 "test-occu-spatial-svc-recovery.R","smoke",0,2,0.1
+"test-occu-svc-joint-recovery.R","full",13,0,9.2
 "test-occu-svc-joint-recovery.R","smoke",0,2,0.1
 "test-occu-svc-laplace-recovery.R","smoke",14,4,0.3
 "test-occu-svc-nngp-recovery.R","full",19,0,1121.5
@@ -350,6 +369,7 @@
 "test-refimpl-equivalence.R","smoke",0,3,0.1
 "test-removal.R","full",103,0,169.1
 "test-removal.R","smoke",24,12,0.6
+"test-residuals-contract.R","full",119,0,4
 "test-residuals-contract.R","smoke",108,1,4.9
 "test-response-lhs.R","full",14,0,0.3
 "test-response-lhs.R","smoke",6,3,0.2
@@ -358,11 +378,13 @@
 "test-sbc-acceptance-cover.R","smoke",0,1,0
 "test-sbc-acceptance-distsamp_open.R","smoke",0,1,0
 "test-sbc-acceptance-double_observer.R","smoke",0,1,0
+"test-sbc-acceptance-dyn_abun.R","full",6,0,5922
 "test-sbc-acceptance-dyn_abun.R","smoke",0,1,0
 "test-sbc-acceptance-dyn_int_occu.R","full",6,0,16.1
 "test-sbc-acceptance-dyn_int_occu.R","smoke",0,1,0.1
 "test-sbc-acceptance-dyn_occu.R","smoke",0,1,0.1
 "test-sbc-acceptance-gdistremoval.R","smoke",0,1,0.1
+"test-sbc-acceptance-int_occu.R","full",6,0,68.7
 "test-sbc-acceptance-int_occu.R","smoke",0,1,0.1
 "test-sbc-acceptance-jsdm.R","full",6,0,57.4
 "test-sbc-acceptance-jsdm.R","smoke",0,1,0.1
@@ -370,10 +392,13 @@
 "test-sbc-acceptance-ms_count.R","smoke",0,1,0.1
 "test-sbc-acceptance-ms_distance.R","smoke",0,1,0
 "test-sbc-acceptance-ms_dyn_occu.R","smoke",0,1,0.1
+"test-sbc-acceptance-ms_int_occu.R","full",6,0,105
 "test-sbc-acceptance-ms_int_occu.R","smoke",0,1,0
+"test-sbc-acceptance-ms_occu.R","full",6,0,109.6
 "test-sbc-acceptance-ms_occu.R","smoke",0,1,0
 "test-sbc-acceptance-ms_occu_cover.R","full",6,0,246.6
 "test-sbc-acceptance-ms_occu_cover.R","smoke",0,1,0
+"test-sbc-acceptance-occu.R","full",6,0,17
 "test-sbc-acceptance-occu.R","smoke",0,1,0.1
 "test-sbc-acceptance-occu_categorical.R","full",6,0,9.4
 "test-sbc-acceptance-occu_categorical.R","smoke",0,1,0.1
@@ -397,6 +422,7 @@
 "test-sla-int-occu.R","full",25,0,1.3
 "test-sla-int-occu.R","smoke",0,4,0.1
 "test-spatial-occ.R","smoke",3,0,0.8
+"test-spde-arms.R","full",25,0,63.2
 "test-spde-arms.R","smoke",0,6,0.1
 "test-spde-detection.R","full",20,0,21.1
 "test-spde-detection.R","smoke",0,3,0.1
@@ -414,6 +440,7 @@
 "test-t-occu.R","full",44,0,282.3
 "test-t-occu.R","smoke",36,1,4.7
 "test-tobs-data-types.R","smoke",32,0,0.4
+"test-visit-data.R","full",41,0,1.4
 "test-visit-data.R","smoke",41,0,1.9
 "test-visit-intercept-drop.R","full",15,0,0.1
 "test-visit-intercept-drop.R","smoke",15,0,0.1
