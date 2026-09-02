@@ -36,6 +36,7 @@
 "test-cover-hurdle-aggregate-occ.R","smoke",14,3,0.2
 "test-cover-hurdle-aggregate-pos.R","smoke",10,6,0.3
 "test-cover-hurdle-aggregate-recovery.R","smoke",0,2,0.1
+"test-cover-hurdle-beta-oi.R","full",18,0,5.4
 "test-cover-hurdle-beta-oi.R","smoke",9,2,0.3
 "test-cover-hurdle-beta.R","smoke",20,1,0.4
 "test-cover-hurdle-bpos0-coverage.R","smoke",3,1,0.1

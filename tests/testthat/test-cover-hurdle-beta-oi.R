@@ -100,7 +100,14 @@ test_that("beta_oi carries through the spatial nested-Laplace path", {
   y[is_pos] <- yp
   dat <- data.frame(x = x, region = factor(region))
 
-  fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
+  # The simulator puts the SAME field w in both means -- the occurrence logit
+  # and the interior cover mean -- so the fit has to be told the arms share it.
+  # A field without share() loads on occurrence alone, which leaves w in the
+  # cover arm's residual and reads back as over-dispersion: phi comes out near
+  # 10 against a truth of 25, the same value a fit with no field at all gives.
+  # Truth is one field at unit loading, so the alpha axis straddles 1.
+  fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region") +
+                share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
               data = dat, family = cover("beta_oi"), y = y,
               method = "nested_laplace",
               control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))
