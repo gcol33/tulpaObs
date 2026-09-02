@@ -108,3 +108,67 @@ test_that("the joint path refuses a per-axis auto.recenter policy", {
   expect_error(oc_grid_fit(fx, list(auto.recenter = "rail")),
                "per-axis placement policy")
 })
+
+
+test_that("a pruned cell is not reported as a non-converged one", {
+  # A cell the cheap-pass screen dropped is never solved, so its log-marginal is
+  # non-finite for the same reason a failed inner Newton's is. `prune_mask`
+  # separates them; without it a pruned fit tells its caller that most of its
+  # grid failed, which on a 25 km run is most of the grid.
+  fit <- list(log_marginal = c(-1, -Inf, -Inf, -2),
+              weights      = c(0.5, 0, 0, 0.5),
+              prune_mask   = c(FALSE, TRUE, TRUE, FALSE))
+  expect_no_warning(oc <- .tobs_joint_ok_cells(fit, "test route"))
+  expect_identical(oc$ok_cells, c(1L, 4L))
+
+  # A genuine failure alongside pruned cells is still reported, counted over
+  # the cells that were actually solved.
+  bad <- list(log_marginal = c(-1, -Inf, -Inf, NaN),
+              weights      = c(1, 0, 0, 0),
+              prune_mask   = c(FALSE, TRUE, TRUE, FALSE))
+  expect_warning(.tobs_joint_ok_cells(bad, "test route"),
+                 "dropping 1 / 2 outer-grid")
+
+  # The screen runs on the base tensor and the refinement passes append their
+  # cells after it, so a mask shorter than the grid indexes the base cells and
+  # the appended ones were solved.
+  short <- list(log_marginal = c(-1, -Inf, -2),
+                weights      = c(0.5, 0, 0.5),
+                prune_mask   = c(FALSE, TRUE))
+  expect_no_warning(.tobs_joint_ok_cells(short, "test route"))
+
+  # Without a mask every non-finite cell is a failure, which is what an
+  # unpruned fit means by one.
+  expect_warning(.tobs_joint_ok_cells(
+    list(log_marginal = c(-1, -Inf), weights = c(1, 0)), "test route"),
+    "dropping 1 / 2 outer-grid")
+})
+
+
+test_that("a pruned occu_cover fit does not warn about convergence", {
+  # The package-default axes give this fixture a 5-cell grid, which the screen
+  # keeps whole; the declared axes below are what make the screen drop cells,
+  # so the assertion is about a fit that actually pruned. Measured: 5 of 20
+  # base cells pruned, and the refinement pass appends 4 more afterwards, so
+  # the mask is shorter than the grid it indexes.
+  fx <- oc_grid_fixture()
+  warns <- character(0)
+  fit <- withCallingHandlers(
+    tobs(formula = ~ occ_cov1 + bym2(graph = fx$adj), data = fx$cell_dat,
+         family = occu_cover("lognormal"),
+         detection = ~ det_cov1, positive = ~ pos_cov1,
+         y = fx$od$y, y_pos = fx$y_pos, visits = fx$od$det.covs,
+         method = "nested_laplace",
+         control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
+                        prune = TRUE, prune.tol = 1e-3,
+                        sigma.grid = c(0.3, 0.5, 0.8, 1.2, 1.8),
+                        alpha.grid = c(0, 0.5, 1, 1.5))),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
+  jf <- fit$joint_fit
+  expect_gt(sum(jf$prune_mask), 0L)
+  expect_gt(sum(!is.finite(jf$log_marginal)), 0L)
+  expect_false(any(grepl("did not converge", warns)))
+})

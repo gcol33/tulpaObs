@@ -31,6 +31,26 @@
 }
 
 
+# Cells the engine's cheap-pass screen dropped, as indices into
+# `fit$log_marginal`.
+#
+# The screen runs on the base tensor; the refinement and consistency passes
+# append their cells afterwards, so the mask can be shorter than the grid it
+# indexes. A shorter mask is padded (an appended cell was solved, never
+# screened). Any other length is not alignable, and an unalignable mask claims
+# nothing, so those cells stay in the non-convergence count rather than being
+# excused by a guess.
+.tobs_pruned_cells <- function(fit) {
+  mask <- fit$prune_mask
+  if (is.null(mask)) return(integer(0))
+  mask <- as.logical(mask)
+  n <- length(fit$log_marginal)
+  if (length(mask) > n) return(integer(0))
+  if (length(mask) < n) mask <- c(mask, rep(FALSE, n - length(mask)))
+  which(mask)
+}
+
+
 # Outer-grid cells whose inner Newton converged, their softmax weights, and the
 # reconciled `fit$weights`.
 #
@@ -43,6 +63,13 @@
 # the reported moments use and keep the two consistent. Untouched when the engine
 # weights are already usable (every finite-grid fit).
 #
+# A cell the engine's cheap-pass screen (`control$prune`) dropped is never
+# solved, so it holds the same non-finite `log_marginal` a failed inner Newton
+# leaves. The two are distinguished by `fit$prune_mask`, which the engine emits
+# only when it screened: a pruned cell was skipped on purpose, carries
+# negligible weight by construction, and is not a fit failure. Both the count
+# and the denominator are read over the cells that were actually solved.
+#
 # `label` names the route in the error / warning text.
 .tobs_joint_ok_cells <- function(fit, label) {
   ok_cells <- which(is.finite(fit$log_marginal))
@@ -51,10 +78,14 @@
          "Bump control$max.iter or tighten control$tol.", call. = FALSE)
   }
   if (length(ok_cells) < length(fit$log_marginal)) {
-    n_bad <- length(fit$log_marginal) - length(ok_cells)
-    warning(sprintf("%s: dropping %d / %d outer-grid cell(s) ",
-                    label, n_bad, length(fit$log_marginal)),
-            "whose inner Newton did not converge.", call. = FALSE)
+    pruned  <- setdiff(.tobs_pruned_cells(fit), ok_cells)
+    n_solved <- length(fit$log_marginal) - length(pruned)
+    n_bad    <- n_solved - length(ok_cells)
+    if (n_bad > 0L) {
+      warning(sprintf("%s: dropping %d / %d outer-grid cell(s) ",
+                      label, n_bad, n_solved),
+              "whose inner Newton did not converge.", call. = FALSE)
+    }
   }
   # The engine's cell weights carry the outer-grid quadrature: node spacing and
   # the declared hyperparameter prior, not the likelihood alone. Posterior

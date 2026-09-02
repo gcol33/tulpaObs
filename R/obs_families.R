@@ -2088,6 +2088,7 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
       "trend", "alpha.grid", "alpha.grid.trend", "alpha.n", "alpha.n.trend",
       "integration",
       "adaptive.grid", "adaptive.grid.edge.thresh", "adaptive.grid.max.passes",
+      "var.of.means.consistency", "var.of.means.min.ess",
       "prune", "prune.tol", "hessian", "aggregate.occ", "aggregate.pos",
       "progress", "progress.every", "progress.throttle", "progress.file",
       "checkpoint"

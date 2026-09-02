@@ -247,6 +247,15 @@
 #   * adaptive_grid -- brackets the mode with FULL inner solves and densifies
 #     near it, so it never approximates the marginal and cannot drop the true
 #     mode.
+#   * var_of_means_consistency -- the second, independent refinement pass: an
+#     axis whose marginal has collapsed onto too few nodes to carry a spread
+#     gains slice points around its modal cell, so the reported axis SD is a
+#     spread rather than a floor at zero. It runs whatever `adaptive_grid` is
+#     set to, and on an explicitly declared axis as well, so a fit that must
+#     integrate the nodes it was given and nothing else sets this FALSE.
+#   * `[[` (exact) not `$` on every key that another key extends: `prune` is a
+#     unique prefix of `prune.tol`, so a `$` read turns a fit that only sizes
+#     the tolerance into one that screens.
 #   * progress / progress.file -- two independent channels, both ON by default.
 #     `progress` gates the console bar (NOT tied to `verbose`); `progress.file`
 #     is emitted whenever non-empty and is the only channel that survives a
@@ -264,13 +273,15 @@
     store_Q   = TRUE,
     hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"))
   screen <- if (prune) {
-    list(prune     = control$prune     %||% FALSE,
-         prune_tol = control$prune.tol %||% 1e-4)
+    list(prune     = control[["prune"]]     %||% FALSE,
+         prune_tol = control[["prune.tol"]] %||% 1e-4)
   } else list()
   tail <- list(
-    adaptive_grid             = control$adaptive.grid             %||% TRUE,
-    adaptive_grid_edge_thresh = control$adaptive.grid.edge.thresh %||% 0.02,
-    adaptive_grid_max_passes  = control$adaptive.grid.max.passes  %||% 1L,
+    adaptive_grid             = control[["adaptive.grid"]]             %||% TRUE,
+    adaptive_grid_edge_thresh = control[["adaptive.grid.edge.thresh"]] %||% 0.02,
+    adaptive_grid_max_passes  = control[["adaptive.grid.max.passes"]]  %||% 1L,
+    var_of_means_consistency  = control[["var.of.means.consistency"]]  %||% TRUE,
+    var_of_means_min_ess      = control[["var.of.means.min.ess"]],
     progress          = control[["progress"]]     %||% TRUE,
     progress.every    = control$progress.every    %||% 0L,
     progress.throttle = control$progress.throttle %||% 2,

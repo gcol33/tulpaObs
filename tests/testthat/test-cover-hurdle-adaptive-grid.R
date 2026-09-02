@@ -151,11 +151,21 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
   # at 13 points the pass fires on the copy axis alone (measured: triggered
   # axes are exactly "alpha" on 20/20 adaptive seeds here), which is what makes
   # the paired comparison below a statement about the copy axis.
+  #
+  # `adaptive.grid` is one of TWO refinement mechanisms, and the var-of-means
+  # consistency pass is the other: it places slice points around the modal cell
+  # of any axis whose marginal has collapsed onto too few nodes to carry a
+  # spread, on a declared axis as much as on a default one, whatever
+  # `adaptive.grid` is set to. It fires on the copy axis here whenever the
+  # modal node is interior (measured: 3 of these 20 seeds), which refines the
+  # arm this test needs held at its pin. Switched off so the two arms differ in
+  # `adaptive.grid` and nothing else.
   ctrl <- list(
     sigma.grid     = c(0.3, 0.6, 0.9),
     rho.grid       = c(0.5, 0.7, 0.9),
     alpha.grid     = alpha_pin_for_test,
-    phi.grid       = exp(seq(log(2), log(300), length.out = 13))
+    phi.grid       = exp(seq(log(2), log(300), length.out = 13)),
+    var.of.means.consistency = FALSE
   )
 
   cover_fixed <- logical(n_seeds)
@@ -170,8 +180,8 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
 
     # The fixed arm integrates the pin and nothing else, and puts most of its
     # posterior weight on the top node: the truncation this fixture exists to
-    # create. Measured over these seeds: weight on 1.5 is 0.876 on average,
-    # 0.206 at its lowest.
+    # create. Measured over these seeds: weight on 1.5 is 0.782 on average,
+    # 0.117 at its lowest.
     expect_equal(alpha_nodes_of(fit_fix), alpha_pin_for_test)
     expect_gt(alpha_node_weight(fit_fix, max(alpha_pin_for_test)), 0.10)
 
@@ -189,7 +199,7 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
   # geometry: it lands at essentially the same place on every seed (measured
   # mean 1.733, SD 0.011, full range 1.689-1.737 over 20 seeds). The adaptive
   # arm places real cells past the pin and its upper edge follows the data
-  # (mean 2.03, SD 0.327, range 1.662-2.752). Assert the separation in spread
+  # (mean 2.026, SD 0.323, range 1.773-2.752). Assert the separation in spread
   # rather than a fixed threshold, so the check does not encode this fixture's
   # absolute scale.
   expect_lt(sd(hi_fixed), 0.10)
@@ -197,9 +207,9 @@ test_that("the fixed grid's upper CI edge is its own axis geometry, the adaptive
 
   # The extra cells the adaptive pass places past the pin carry the copy axis's
   # declared Exponential slab, which damps the far ones, so a higher upper edge
-  # is where the data lead and not an identity: measured 19 of 20 seeds, and on
-  # the exception the adaptive interval still covers the truth. Read the spread
-  # above as the statement about the two arms; this is the direction it moves.
+  # is where the data lead and not an identity: measured 20 of 20 seeds. Read
+  # the spread above as the statement about the two arms; this is the direction
+  # it moves.
   expect_gt(mean(hi_adapt), mean(hi_fixed))
   expect_gte(sum(hi_adapt > hi_fixed), 0.8 * n_seeds)
 
@@ -272,22 +282,65 @@ test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
     fit_d3_like(sim, adj, c(ctrl_grid, list(prune = prune, prune.tol = 1e-4)))
 
   f_off <- run(FALSE)
-  f_on  <- run(TRUE)
+  warns <- character(0)
+  f_on  <- withCallingHandlers(
+    run(TRUE),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
 
   # Most cells pruned; the prune machinery is engaged.
   expect_true(f_on$joint$prune_n_pruned > 0.5 * f_on$joint$n_grid)
 
-  # The modal hyperparameters (highest-weight cell) agree between fits.
-  mode_off <- f_off$joint$theta_grid[which.max(f_off$joint$weights), ]
-  mode_on  <- f_on$joint$theta_grid[which.max(f_on$joint$weights), ]
-  names(mode_off) <- f_off$joint$theta_names
-  names(mode_on)  <- f_on$joint$theta_names
-  for (nm in c("sigma", "rho", "alpha"))
-    expect_equal(unname(mode_on[nm]), unname(mode_off[nm]), tolerance = 0.05)
+  # A pruned cell is skipped, so it holds the same non-finite log-marginal a
+  # failed inner Newton leaves. The postprocess separates the two on the
+  # engine's prune mask: on this fixture 539 of 563 cells are pruned, and
+  # reporting them as failures would tell the caller the fit collapsed.
+  expect_false(any(grepl("did not converge", warns)))
 
-  # Coefficient estimates materially unchanged by pruning.
+  # Pruning is a no-op on the reported posterior: the hyperparameter means and
+  # the coefficient estimates match the dense-grid fit.
+  #
+  # Not the modal grid CELL, which is not a stable statistic here. Both grids
+  # carry the consistency pass's slice points, the pruned grid drops the ones
+  # the dense grid placed on `phi_pos`, and the highest-weight node moves
+  # between neighbours accordingly (measured: copy-axis node 1.198 dense
+  # against 0.850 pruned, on a posterior whose copy-scale mean is 1.022 in
+  # both).
+  for (nm in c("sigma", "rho", "alpha"))
+    expect_equal(unname(f_on$joint$theta_mean[nm]),
+                 unname(f_off$joint$theta_mean[nm]), tolerance = 0.05)
+
   expect_equal(f_on$beta_occ, f_off$beta_occ, tolerance = 0.02)
   expect_equal(f_on$beta_pos, f_off$beta_pos, tolerance = 0.02)
-  expect_equal(unname(f_on$joint$theta_mean["alpha"]),
-               unname(f_off$joint$theta_mean["alpha"]), tolerance = 0.05)
+})
+
+
+test_that("cover() reaches the consistency pass, and holds a declared axis when told to", {
+  skip_on_cran()
+  skip_if_fast()
+  # The two halves a control needs to work: `cover()` declares the key, and
+  # `.cover_joint_control()` names it when it builds the engine's control list.
+  # Read through `var_of_means_consistency_info`, which the engine writes only
+  # when the pass placed cells, rather than through the estimates -- a dropped
+  # control passes a value-only check.
+  expect_true(all(c("var.of.means.consistency", "var.of.means.min.ess") %in%
+                    cover("beta")$control_keys))
+
+  sim <- simulate_d3_like(seed = 3401L, alpha_true = 1.5)
+  adj <- chain_adj(nlevels(sim$data$region))
+  ctrl <- list(sigma.grid = c(0.3, 0.6, 0.9), rho.grid = c(0.5, 0.7, 0.9),
+               alpha.grid = alpha_pin_for_test, adaptive.grid = FALSE)
+
+  on  <- fit_d3_like(sim, adj, ctrl)
+  off <- fit_d3_like(sim, adj, c(ctrl, list(var.of.means.consistency = FALSE)))
+
+  expect_false(is.null(on$joint$var_of_means_consistency_info))
+  expect_null(off$joint$var_of_means_consistency_info)
+
+  # Off, the fit integrates the axes it was handed and no others.
+  expect_equal(alpha_nodes_of(off), alpha_pin_for_test)
+  expect_equal(sort(unique(as.numeric(off$joint$theta_grid[, "sigma"]))),
+               c(0.3, 0.6, 0.9))
 })

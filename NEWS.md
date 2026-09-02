@@ -1,5 +1,31 @@
 # tulpaObs NEWS
 
+## 0.1.3 (2026-09-02)
+
+* **A control key is read exactly, not by prefix.** `.cover_joint_control()`
+  read the caller's control list with `$`, which matches on unique prefix:
+  `prune` is a prefix of `prune.tol`, so a fit that only sized the screening
+  tolerance was turned into one that screened. Every key another key extends is
+  now read with `[[`.
+
+* **The var-of-means consistency pass is reachable from `cover()`.** The two
+  halves a control needs are both in place: `cover()` declares
+  `var.of.means.consistency` and `var.of.means.min.ess`, and
+  `.cover_joint_control()` names them when it builds the engine's control list.
+  The pass places slice points around the modal cell of any axis whose marginal
+  has collapsed onto too few nodes to carry a spread, so the reported axis SD is
+  a spread rather than a floor at zero. It runs whatever `adaptive.grid` is set
+  to, and on a declared axis as well, so a fit that must integrate the nodes it
+  was given and nothing else sets it `FALSE`.
+
+* **A screened cell is no longer reported as a non-converged one.** A cell the
+  engine's cheap pass dropped is never solved, so it holds the same non-finite
+  log-marginal a failed inner Newton leaves. `.tobs_joint_ok_cells()` separates
+  the two on the engine's `prune_mask`, and reads both the count and the
+  denominator over the cells that were actually solved. On the 563-cell test
+  fixture 539 cells are screened, and reporting them as failures told the caller
+  the fit had collapsed.
+
 ## 0.1.2 (2026-08-31)
 
 * **The outer-grid cost controls are reachable from `occu_cover()`.** The
