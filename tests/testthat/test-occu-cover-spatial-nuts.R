@@ -691,10 +691,12 @@ test_that("occu_cover spatial NUTS beta SDs calibrate to nested-Laplace SEs", {
   expect_lte(nut$nuts$divergent_total, 5L)
   # The sampler no longer conditions on the warm fit's hypers (#204): it reports
   # which it integrated over and which it pinned. This fit's psi formula carries
-  # a bare areal term, so the field is on occurrence alone and the copy
-  # amplitude is pinned at 0 (#217); the field's own two hypers are sampled.
+  # a bare areal term, so the field is on occurrence alone (#217) and there is no
+  # copy -- hence no amplitude to report at all (#293), and nothing pinned, since
+  # the field's own two hypers are both sampled.
   expect_setequal(nut$nuts$sampled_hyper, c("sigma", "rho"))
-  expect_identical(nut$nuts$fixed_hyper, "alpha")
+  expect_identical(nut$nuts$fixed_hyper, character(0))
+  expect_false("alpha" %in% names(nut$nuts$fixed_hyper_values))
 
   # The slope-coefficient SDs (psi / p / cover) calibrate to the grid-integrated
   # nested-Laplace SEs (the field hyper is fixed at the same kind of estimate).
