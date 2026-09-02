@@ -83,11 +83,12 @@ with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field}
 \code{method = "nuts"} takes a single cell-declaring areal term only.
 
 The copy amplitude's axis carries prior structure -- a point mass at
-\code{alpha = 0} and a log-spaced slab above it -- so \code{control$alpha.grid}
-(\code{control$alpha.grid.trend} for the weighted fields) STATES its nodes, while
-\code{control$alpha.n} (\code{control$alpha.n.trend}) states a RESOLUTION: the engine
-re-reads its own axis with that many slab nodes, point mass and bounds
-unchanged. One block takes one of the two.
+\code{alpha = 0} and a log-spaced slab above it -- so \code{copy(alpha = grid(...))}
+STATES its nodes, while \code{copy(alpha = grid(n = ))} states a RESOLUTION: the
+engine re-reads its own axis with that many slab nodes, point mass and bounds
+unchanged. \verb{terms =} gives either, per block, and
+\code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]} are the lower-level
+spelling of the same pair. One block takes one of the two.
 }
 
 \seealso{

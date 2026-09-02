@@ -1,5 +1,47 @@
 # tulpaObs NEWS
 
+## 0.1.4 (2026-09-02)
+
+* **Everything a cross-arm copy states about its coefficient is now written in
+  the formula.** `copy()` stated the amplitude's NODES, and the other two things
+  a coupling has -- how finely the axis is read, and the prior on the
+  coefficient itself -- existed only as `control$alpha.n[.trend]` and
+  `control$prior.alpha`, so a fit that wanted either had to leave the formula
+  for the dotted knobs the formula API was built to replace. `prior.alpha` was
+  not documented at the front door at all.
+
+  `grid(n = 9)` states a RESOLUTION where `grid(c(...))` states nodes: the
+  engine re-reads its OWN axis with that many slab nodes, atom and slab bounds
+  unchanged, so sharpening the axis never restates the prior structure it
+  carries. It is accepted wherever nodes are, `terms = list(...)` included, so
+  one field can take stated nodes on its intercept block and a resolution on its
+  trend block. `copy(prior = list("pc.prec", c(4, 0.01)))` carries the
+  hyperprior on the copy coefficient (`prior_alpha` in the joint driver), shape
+  checked where it is written.
+
+  The control keys stay as the lower-level spelling and the representation the
+  formula compiles into; a fit writing one request in both places is refused,
+  and a bare `copy(spatial())` still composes with `control$alpha.n` -- the
+  translation writes only what the copy stated.
+
+* **A prior on the copy coefficient is refused on a fit that copies two
+  blocks.** The engine bakes one `prior_alpha` onto the FIRST block carrying a
+  (sigma, alpha) axis pair, so a fit with an intercept and a weighted trend
+  field would have had one coupling regularized and the other flat, silently.
+  Filed upstream as gcol33/tulpa#655; refused here in the meantime rather than
+  applied to block 1.
+
+* `print()` on a `copy()` term printed nothing at all for the common
+  `copy(spatial())` form: it read `x$ref`, which a selector copy does not carry,
+  and `sprintf()` on a NULL returns `character(0)`. It now names the selector,
+  the amplitude and the prior.
+
+* The header on `.occu_cover_apply_copy_coupling()` described a naming-keyed
+  back-compat path -- an occurrence field with no `name =` and no `copy()`
+  leaving `control$alpha.grid` untouched -- that has not existed since the copy
+  selector became type-carrying at 0.0.45. Decoupled is the default on every
+  path (gcol33/tulpaObs#290).
+
 ## 0.1.3 (2026-09-02)
 
 * **A control key is read exactly, not by prefix.** `.cover_joint_control()`

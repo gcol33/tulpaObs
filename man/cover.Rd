@@ -114,16 +114,17 @@ fit.
 
 The axis the amplitude rides carries prior structure -- a point mass at
 \code{alpha = 0} ("no coupling") and a log-spaced slab above it -- so it is set
-in one of two ways. \code{control$alpha.grid} and \code{copy(alpha = grid(...))} STATE
-its nodes, and with them that structure. \code{control$alpha.n} states a
-RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
-mass and slab bounds unchanged (\code{control$alpha.n.trend} does the same for the
-weighted trend blocks, defaulting to \code{control$alpha.n}). The resolution is the
-only way to raise this axis, because it does not densify when the donor
-\code{control$sigma.grid} does: on an informative data set the outer grid's
-quadrature effective sample size saturates on the copy amplitude while every
-other axis tracks the request (measured engine-side, \code{NOTES_measurements.md}).
-One block takes one of the two spellings; giving both is an error.
+in one of two ways. \code{copy(alpha = grid(...))} STATES its nodes, and with them
+that structure. \code{copy(alpha = grid(n = 9))} states a RESOLUTION: the engine
+re-reads its own axis with that many slab nodes, point mass and slab bounds
+unchanged, so sharpening the axis never restates its structure. \verb{terms =}
+gives either, per block. The resolution is the only way to raise this axis,
+because it does not densify when the donor \code{control$sigma.grid} does: on an
+informative data set the outer grid's quadrature effective sample size
+saturates on the copy amplitude while every other axis tracks the request
+(measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
+two; giving both is an error. \code{control$alpha.grid[.trend]} and
+\code{control$alpha.n[.trend]} are the lower-level spelling of the same pair.
 
 Set it when the fit's hyperparameter intervals are reported. On the coupled
 SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -178,8 +179,12 @@ positive: eta_positive = ... + alpha * u_cell + alpha_trend * time.sc * s_cell
 
 Per-arm formulas make the shared field explicit: place it on \code{presence} and
 copy it onto \code{positive}. \code{copy(spatial())} estimates the coupling on the
-default grid; \code{copy(spatial(), alpha = grid(c(...)))} integrates it over a
-supplied grid, \code{copy(spatial(), alpha = 0.5)} fixes it.
+default axis; \code{copy(spatial(), alpha = grid(c(...)))} integrates it over
+supplied nodes, \code{alpha = grid(n = 9)} over the engine's own axis read at \code{n}
+slab nodes, and \code{alpha = 0.5} fixes it. \code{copy(spatial(), prior = list(...))}
+regularizes the coefficient itself; a fit copying both the intercept and a
+weighted trend block is refused it, since one prior reaches the engine per
+fit (gcol33/tulpa#655).
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(presence = ~ time.sc + habitat +
                   spatial(~ 1 + time.sc || cell_idx, graph = adj),

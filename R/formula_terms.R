@@ -526,41 +526,67 @@
   ), class = "tobs_latent", id = id, label = "latent")
 }
 
-# grid(values)             — mark a coupling-amplitude axis for integration.
+# grid(values) / grid(n = )  — mark a coupling-amplitude axis for integration.
 #
 # Inside a copy() the `alpha =` argument is either a scalar (a FIXED coupling
-# amplitude, pinned) or a grid() of values to MARGINALIZE over on the outer
-# nested-Laplace integration. grid() tags the values so the intent is explicit
-# at the call site (alpha = grid(c(...)) integrates, alpha = 0.5 fixes) rather
-# than inferred from length. It is a formula special, parsed not evaluated: the
-# parser resolves the bare `grid` against the term registry before R's global
-# environment, so it does not collide with graphics::grid().
-.tobs_term_grid <- function(...) {
-  vals <- tryCatch(as.numeric(c(...)),
+# amplitude, pinned) or a grid() to MARGINALIZE over on the outer nested-Laplace
+# integration. grid() tags the request so the intent is explicit at the call site
+# (alpha = grid(...) integrates, alpha = 0.5 fixes) rather than inferred from
+# length. It is a formula special, parsed not evaluated: the parser resolves the
+# bare `grid` against the term registry before R's global environment, so it does
+# not collide with graphics::grid().
+#
+# Nodes and `n` are different requests, and one grid() carries one of them.
+# `grid(c(0.25, 0.5, 1))` STATES the axis's nodes, and with them the prior
+# structure the axis carries: the atom at alpha = 0 that gives the no-coupling
+# model posterior mass, and the slab above it. `grid(n = 9)` states a
+# RESOLUTION -- the engine re-reads its OWN axis with n slab nodes, atom and slab
+# bounds unchanged -- so sharpening the axis never restates its structure. The
+# resolution is the only way to sharpen it: the copy axis does not densify when
+# the donor `sigma` axis does.
+.tobs_term_grid <- function(..., n = NULL) {
+  vals <- list(...)
+  if (length(vals) && !is.null(n)) {
+    stop("grid(): give the axis's nodes OR `n =` (how many nodes the engine's ",
+         "own axis is read at), not both. grid(c(0.25, 0.5, 1)) states nodes; ",
+         "grid(n = 9) states a resolution.", call. = FALSE)
+  }
+  if (!length(vals) && is.null(n)) {
+    stop("grid(): give one or more finite numeric values, e.g. ",
+         "grid(c(0.25, 0.5, 1)), or a resolution, e.g. grid(n = 9).",
+         call. = FALSE)
+  }
+  if (!is.null(n)) {
+    return(structure(list(values = NULL, n = .tobs_alpha_n(n)),
+                     class = "tobs_alpha_grid"))
+  }
+  vals <- tryCatch(as.numeric(do.call(c, vals)),
                    error = function(e) stop(
                      "grid(): values must be numeric.", call. = FALSE))
   if (length(vals) < 1L || any(!is.finite(vals))) {
     stop("grid(): give one or more finite numeric values, e.g. ",
          "grid(c(0.25, 0.5, 1)).", call. = FALSE)
   }
-  structure(list(values = vals), class = "tobs_alpha_grid")
+  structure(list(values = vals, n = NULL), class = "tobs_alpha_grid")
 }
 
-# Resolve a copy()'s `alpha =` argument to an integration grid plus an
-# integrate/fixed flag. A grid() marker integrates over its values; a bare
-# scalar fixes the amplitude (a length-1 grid, pinned); NULL defers to the
-# default coupling grid (the back-compat default). A bare numeric vector of
-# length > 1 is rejected with a pointer to grid(), so integration is never
-# inferred from length silently.
+# Resolve a copy()'s `alpha =` argument to the amplitude axis it asks for plus
+# an integrate/fixed flag. A grid() marker integrates -- over its own values, or
+# over the engine's axis read at its `n` -- and a bare scalar fixes the amplitude
+# (a length-1 grid, pinned); NULL asks for the engine's default axis. A bare
+# numeric vector of length > 1 is rejected with a pointer to grid(), so
+# integration is never inferred from length silently. `grid` and `n` are the two
+# spellings of one axis and at most one is ever non-NULL, which is the invariant
+# `.tobs_alpha_axis()` reads them under.
 .tobs_resolve_copy_alpha <- function(alpha) {
   if (is.null(alpha)) {
-    return(list(grid = NULL, integrate = NA))
+    return(list(grid = NULL, n = NULL, integrate = NA))
   }
   if (inherits(alpha, "tobs_alpha_grid")) {
-    return(list(grid = alpha$values, integrate = TRUE))
+    return(list(grid = alpha$values, n = alpha$n, integrate = TRUE))
   }
   if (is.numeric(alpha) && length(alpha) == 1L && is.finite(alpha)) {
-    return(list(grid = as.numeric(alpha), integrate = FALSE))
+    return(list(grid = as.numeric(alpha), n = NULL, integrate = FALSE))
   }
   if (is.numeric(alpha) && length(alpha) > 1L) {
     stop("copy(alpha = ): a numeric vector marginalizes only when wrapped in ",
@@ -587,13 +613,23 @@
 # as an explicit-name reference, the lower-level form.
 #
 # Coupling amplitude: `alpha =` sets one amplitude for the whole field (a scalar
-# fixes it, grid(c(...)) marginalizes it on the outer nested-Laplace grid);
+# fixes it, grid(c(...)) marginalizes it on the outer nested-Laplace grid,
+# grid(n = ) marginalizes it on the engine's own axis read at n slab nodes);
 # `terms = list(<component> = grid(...))` sets a per-component amplitude, keyed by
 # the field's own block names (`intercept`, and a `||`-declared trend column such
 # as `time.sc`, or its alias `trend`). `alpha =` and `terms =` are mutually
-# exclusive. `scale` stays the generic cross-process amplitude for the non-hurdle
+# exclusive.
+#
+# `prior =` regularizes the copy coefficient itself, in the joint driver's
+# list(<family>, <params>) shape. It is a property of the copy, not of one of its
+# blocks, so it sits on copy() rather than inside `terms =`; the engine carries
+# one such prior per fit, and a fit copying several blocks is refused it at
+# dispatch rather than given it on one block silently.
+#
+# `scale` stays the generic cross-process amplitude for the non-hurdle
 # field-sharing path (occu / jsdm), keyed by the explicit-name reference.
-.tobs_term_copy <- function(selector, scale = NULL, alpha = NULL, terms = NULL) {
+.tobs_term_copy <- function(selector, scale = NULL, alpha = NULL, terms = NULL,
+                            prior = NULL) {
   if (missing(selector)) {
     stop("copy(): give an effect selector as the first argument, e.g. ",
          "copy(spatial(), alpha = grid(c(0.25, 0.5, 1))).", call. = FALSE)
@@ -651,7 +687,7 @@
     copy_terms <- lapply(terms, .tobs_resolve_copy_alpha)
   }
   alpha_res <- if (is.null(terms)) .tobs_resolve_copy_alpha(alpha)
-               else list(grid = NULL, integrate = NA)
+               else list(grid = NULL, n = NULL, integrate = NA)
 
   id <- if (!is.null(ref)) {
     if (!is.null(component)) paste(ref, component, sep = ".") else ref
@@ -664,9 +700,69 @@
   .tobs_term(list(ref = ref, component = component, scale = scale,
                   selector_type = selector_type, selector_group = selector_group,
                   alpha_grid = alpha_res$grid,
+                  alpha_n = alpha_res$n,
                   alpha_integrate = alpha_res$integrate,
+                  alpha_prior = .tobs_copy_prior(prior),
                   copy_terms = copy_terms),
              class = "tobs_copy", id = id, label = "copy")
+}
+
+# A regularizing hyperprior on the copy coefficient, in the joint driver's
+# list(<family>, <params>) shape -- list("pc.prec", c(U, alpha)) or
+# list("half_normal", scale). The shape is checked here, where the argument is
+# written; the families and their parameter ranges belong to the engine, which
+# validates them at the fit entry, so they are not restated.
+# What a copy() asked for on ONE field block: stated nodes, a stated resolution,
+# or neither (the engine's own axis). At most one of the two is ever non-NULL,
+# which is the invariant `.tobs_alpha_axis()` reads them under.
+.tobs_copy_amp <- function(grid = NULL, n = NULL) list(grid = grid, n = n)
+
+# Did the copy() name an amplitude for this block at all? A block that named
+# none asks for the engine's default axis, which is what composes with a
+# resolution set alongside it.
+.tobs_copy_amp_stated <- function(amp) !is.null(amp$grid) || !is.null(amp$n)
+
+# A block pinned at the single node 0: the same model as no coupling at all,
+# still reaching the engine as a real outer axis. `.tobs_alpha_axis_decoupled()`
+# is this predicate on the engine-facing spelling of the same pair.
+.tobs_copy_amp_decoupled <- function(amp) {
+  if (is.null(amp)) return(FALSE)
+  is.null(amp$n) && length(amp$grid) == 1L && isTRUE(amp$grid == 0)
+}
+
+# One `alpha = ` / `terms = ` entry, resolved to the amplitude its block reads.
+.tobs_copy_amp_of <- function(res) {
+  if (isTRUE(is.na(res$integrate))) .tobs_copy_amp()
+  else .tobs_copy_amp(grid = res$grid, n = res$n)
+}
+
+# The hyperprior on the copy coefficient a fit carries: refuses two copies that
+# disagree, and the control spelling written alongside a copy() that names one.
+# Returns the prior, or NULL.
+.tobs_copy_prior_resolve <- function(copies, control, what) {
+  priors <- Filter(Negate(is.null), lapply(copies, function(cp) cp$alpha_prior))
+  if (length(priors) == 0L) return(control[["prior.alpha"]])
+  if (!is.null(control[["prior.alpha"]])) {
+    stop(what, ": set the prior on the copy coefficient with copy(prior = ) ",
+         "OR control$prior.alpha, not both.", call. = FALSE)
+  }
+  if (length(priors) > 1L &&
+      !all(vapply(priors[-1L], identical, logical(1), priors[[1L]]))) {
+    stop(what, ": two copy(prior = ) specs disagree, and one prior on the copy ",
+         "coefficient reaches the engine per fit.", call. = FALSE)
+  }
+  priors[[1L]]
+}
+
+.tobs_copy_prior <- function(prior) {
+  if (is.null(prior)) return(NULL)
+  if (!is.list(prior) || length(prior) != 2L ||
+      !is.character(prior[[1L]]) || length(prior[[1L]]) != 1L) {
+    stop("copy(prior = ): a hyperprior on the copy coefficient is written ",
+         "list(<family>, <params>), e.g. list(\"pc.prec\", c(4, 0.01)) or ",
+         "list(\"half_normal\", 2).", call. = FALSE)
+  }
+  prior
 }
 
 
@@ -1205,7 +1301,20 @@ print.tobs_temporal <- function(x, ...) {
 
 #' @export
 print.tobs_copy <- function(x, ...) {
-  cat(sprintf("tobs copy term: -> %s%s\n", x$ref,
-              if (!is.null(x$scale)) sprintf(" (scaled)") else ""))
+  # `id`, not `ref`: a selector copy carries no `ref`, and sprintf() on a NULL
+  # returns character(0), so the whole line printed nothing for the common form.
+  amp <- if (!is.null(x$copy_terms)) {
+    sprintf(" per component: %s", paste(names(x$copy_terms), collapse = ", "))
+  } else if (!is.null(x$alpha_n)) {
+    sprintf(" alpha: engine axis at %d slab nodes", x$alpha_n)
+  } else if (!is.null(x$alpha_grid)) {
+    sprintf(" alpha: %s", if (isTRUE(x$alpha_integrate))
+      paste(format(x$alpha_grid, trim = TRUE), collapse = ", ")
+      else sprintf("%s (fixed)", format(x$alpha_grid, trim = TRUE)))
+  } else ""
+  cat(sprintf("tobs copy term: -> %s%s%s%s\n", x$id, amp,
+              if (!is.null(x$alpha_prior))
+                sprintf(" prior: %s", x$alpha_prior[[1L]]) else "",
+              if (!is.null(x$scale)) " (scaled)" else ""))
   invisible(x)
 }

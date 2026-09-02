@@ -109,7 +109,8 @@
   # per-component form copy(spatial(), terms = list(intercept = , trend = ))
   # sets each block's grid independently, so the intercept and trend decouple --
   # mirroring occu_cover()'s per-component copy grammar.
-  if (!is.null(enc$copy_alpha) || !is.null(enc$copy_terms)) {
+  # `[[` (exact), never `$`: `copy_amp` is a prefix of `copy_amp_terms`.
+  if (!is.null(enc[["copy_amp"]]) || !is.null(enc[["copy_amp_terms"]])) {
     if (any(c("alpha.grid", "alpha.grid.trend") %in% names(control))) {
       stop("cover(): set the cross-arm coupling with copy() in the positive ",
            "formula OR control$alpha.grid[.trend], not both.", call. = FALSE)
@@ -117,16 +118,33 @@
     # `control$alpha.n[.trend]` is a RESOLUTION for the engine's own axis, so it
     # composes with a copy() naming no amplitude -- that copy asks for the
     # default axis, and the resolution says how finely to read it. A copy() that
-    # STATES nodes is the same request written twice.
-    states_nodes <- !is.null(enc$copy_alpha) ||
-      any(!vapply(enc$copy_terms %||% list(), is.null, logical(1)))
-    .tobs_check_alpha_copy(states_nodes, control, "cover()")
+    # STATES one (nodes, or grid(n = )) is the same request written twice.
+    states <- .tobs_copy_amp_stated(enc[["copy_amp"]] %||% .tobs_copy_amp()) ||
+      any(vapply(enc[["copy_amp_terms"]] %||% list(), .tobs_copy_amp_stated,
+                 logical(1)))
+    .tobs_check_alpha_copy(states, control, "cover()")
   }
-  if (!is.null(enc$copy_terms)) {
-    control <- .cover_apply_copy_terms(enc$copy_terms, enc$trend, control)
-  } else if (!is.null(enc$copy_alpha)) {
-    control$alpha.grid       <- as.numeric(enc$copy_alpha)
-    control$alpha.grid.trend <- as.numeric(enc$copy_alpha)
+  if (!is.null(enc[["copy_amp_terms"]])) {
+    control <- .cover_apply_copy_terms(enc[["copy_amp_terms"]], enc$trend,
+                                       control)
+  } else if (!is.null(enc[["copy_amp"]])) {
+    # The whole-field form: one amplitude on both blocks.
+    control <- .tobs_alpha_control_set(control, enc[["copy_amp"]],
+                                       "alpha.grid", "alpha.n")
+    control <- .tobs_alpha_control_set(control, enc[["copy_amp"]],
+                                       "alpha.grid.trend", "alpha.n.trend")
+  }
+  if (!is.null(enc[["copy_prior"]])) {
+    if (!is.null(control[["prior.alpha"]])) {
+      stop("cover(): set the prior on the copy coefficient with copy(prior = ) ",
+           "OR control$prior.alpha, not both.", call. = FALSE)
+    }
+    # cover() couples the presence field's blocks together, so a fit carrying a
+    # weighted trend copies two of them and the engine would regularize only the
+    # first (`.tobs_check_alpha_prior()`).
+    .tobs_check_alpha_prior(enc[["copy_prior"]],
+                            if (is.null(enc$trend)) 1L else 2L, "cover()")
+    control[["prior.alpha"]] <- enc[["copy_prior"]]
   }
 
   # NUTS: the non-spatial sampler over the exact two-arm coefficient marginal.
@@ -272,8 +290,9 @@ encode_cover_hurdle <- function(formula, data, y,
   # placement -- write a field in that arm's formula -- and shared across arms
   # with copy(). When per-arm formulas are absent this branch is skipped, so the
   # shared path is untouched.
-  copy_alpha <- NULL
-  copy_terms_alpha <- NULL
+  copy_amp <- NULL
+  copy_amp_terms <- NULL
+  copy_prior <- NULL
   per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
   if (per_arm) {
     if (is.null(presence_formula) || is.null(positive_formula)) {
@@ -305,8 +324,9 @@ encode_cover_hurdle <- function(formula, data, y,
       promo <- .cover_promote_copied_fields(pos_copies, lift_occ$fields)
       lift_occ$fields <- promo$fields
       occ_arm          <- promo$arm
-      copy_alpha       <- promo$alpha
-      copy_terms_alpha <- promo$alpha_terms
+      copy_amp       <- promo$amp
+      copy_amp_terms <- promo$amp_terms
+      copy_prior     <- promo$prior
     }
     fe_occ_formula <- lift_occ$fe
     fe_pos_formula <- lift_pos$fe
@@ -468,8 +488,9 @@ encode_cover_hurdle <- function(formula, data, y,
     fe_occ       = fe_occ_formula,
     fe_pos       = fe_pos_formula,
     per_arm      = per_arm,
-    copy_alpha   = copy_alpha,
-    copy_terms   = copy_terms_alpha,
+    copy_amp       = copy_amp,
+    copy_amp_terms = copy_amp_terms,
+    copy_prior     = copy_prior,
     positive     = positive,
     breaks       = if (positive == "ordinal") as.numeric(breaks) else NULL,
     oi           = oi,
@@ -664,29 +685,29 @@ encode_cover_hurdle <- function(formula, data, y,
   # fitter's default grid); the trend-block-existence check runs downstream in
   # .dispatch_cover, where the encoded field is known. The whole-field form
   # (no terms) keeps its single amplitude, applied to both blocks.
-  alpha_terms <- if (!is.null(cp$copy_terms)) {
-    lapply(cp$copy_terms, function(res)
-      if (isTRUE(is.na(res$integrate))) NULL else res$grid)
+  amp_terms <- if (!is.null(cp$copy_terms)) {
+    lapply(cp$copy_terms, .tobs_copy_amp_of)
   } else NULL
-  alpha_grid <- if (!is.null(cp$copy_terms)) NULL
-                else if (is.na(cp$alpha_integrate)) NULL
-                else cp$alpha_grid
+  amp <- if (!is.null(cp$copy_terms)) NULL
+         else .tobs_copy_amp_of(list(grid = cp$alpha_grid, n = cp$alpha_n,
+                                     integrate = cp$alpha_integrate))
   list(fields = occ_fields, arm = c("presence", "positive"),
-       alpha = alpha_grid, alpha_terms = alpha_terms)
+       amp = amp, amp_terms = amp_terms, prior = cp$alpha_prior)
 }
 
 # Map a copy(terms = list(...)) per-component amplitude spec onto the fitter's
-# per-block coupling grids: the presence field's intercept block reads
-# control$alpha.grid, the weighted-trend block reads control$alpha.grid.trend
-# (see the joint-coupled cover fitter: base_block = block 1, trend_block =
-# block 2). `trend` is the resolved weighted-trend field (NULL when the presence
-# field is a single intercept). Every existing block must be named, so no block
-# is silently left at the default -- mirroring .occu_cover_apply_copy_coupling().
+# per-block coupling axes: the presence field's intercept block reads
+# control$alpha.grid / alpha.n, the weighted-trend block reads
+# control$alpha.grid.trend / alpha.n.trend (see the joint-coupled cover fitter:
+# base_block = block 1, trend_block = block 2). `trend` is the resolved
+# weighted-trend field (NULL when the presence field is a single intercept).
+# Every existing block must be named, so no block is silently left at the
+# default -- mirroring .occu_cover_apply_copy_coupling().
 .cover_apply_copy_terms <- function(copy_terms, trend, control) {
   has_trend   <- !is.null(trend)
   trend_label <- if (has_trend) trend$label else NULL
 
-  grids <- list()   # canonical role ("intercept" / "trend") -> amplitude grid
+  amps <- list()    # canonical role ("intercept" / "trend") -> amplitude
   for (k in names(copy_terms)) {
     role <- if (identical(k, "intercept")) {
       "intercept"
@@ -711,11 +732,11 @@ encode_cover_hurdle <- function(formula, data, y,
            "term, e.g. spatial(~ 1 + time.sc || cell, graph = adj).",
            call. = FALSE)
     }
-    grids[[role]] <- copy_terms[[k]]
+    amps[[role]] <- copy_terms[[k]]
   }
 
   required <- c("intercept", if (has_trend) "trend")
-  missing_roles <- setdiff(required, names(grids))
+  missing_roles <- setdiff(required, names(amps))
   if (length(missing_roles)) {
     stop(sprintf(paste0(
       "cover(): copy(terms = ) must give an amplitude for every field block; ",
@@ -724,12 +745,13 @@ encode_cover_hurdle <- function(formula, data, y,
       paste0("\"", required, "\"", collapse = ", ")), call. = FALSE)
   }
 
-  # NULL grid = the fitter's default (assigning NULL drops the control element).
-  control$alpha.grid <- if (is.null(grids$intercept)) NULL
-                        else as.numeric(grids$intercept)
+  # An amplitude naming neither nodes nor a resolution is the fitter's default,
+  # and reaches it as both keys absent.
+  control <- .tobs_alpha_control_set(control, amps[["intercept"]],
+                                     "alpha.grid", "alpha.n")
   if (has_trend) {
-    control$alpha.grid.trend <- if (is.null(grids$trend)) NULL
-                                else as.numeric(grids$trend)
+    control <- .tobs_alpha_control_set(control, amps[["trend"]],
+                                       "alpha.grid.trend", "alpha.n.trend")
   }
   control
 }

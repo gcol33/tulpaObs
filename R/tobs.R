@@ -25,12 +25,17 @@
 #'   common case:
 #'
 #'   * `copy(spatial(), alpha = grid(g))` copies the occurrence arm's spatial
-#'     effect and marginalizes the coupling amplitude over the grid `g`;
-#'     `alpha = <scalar>` fixes it.
+#'     effect and marginalizes the coupling amplitude over the nodes `g`;
+#'     `alpha = grid(n = 9)` marginalizes it over the engine's own axis read at
+#'     `n` slab nodes instead, which sharpens the axis without restating the
+#'     prior structure it carries; `alpha = <scalar>` fixes it.
 #'   * `copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))`
 #'     gives a per-component amplitude, keyed by the field's own block names (the
 #'     intercept block and a `||`-declared trend column, or its alias `trend`);
 #'     `terms =` must address every block.
+#'   * `copy(spatial(), prior = list("pc.prec", c(4, 0.01)))` regularizes the
+#'     copy coefficient itself (`prior_alpha` in
+#'     [tulpa::tulpa_nested_laplace_joint()]). One reaches the engine per fit.
 #'   * `copy(spatial(cell_idx), ...)` disambiguates by grouping variable when the
 #'     occurrence arm carries several spatial effects.
 #'   * decoupling is structural: omit `copy()` so the field rides occupancy only

@@ -318,9 +318,10 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' weight column), and each block's hypers carry that block's suffix in
 #' `fit$hyper_draws` and in `fit$nuts$sampled_hyper` (`sigma_trend`,
 #' `alpha_trend`, indexed when there are several). Each field's amplitude is
-#' addressed on its own through `copy(spatial(), terms = list(...))`, or through
-#' `control$alpha.grid` (intercept) and `control$alpha.grid.trend` (the weighted
-#' fields), the same knobs the grid-integrated route reads. A second field
+#' addressed on its own through `copy(spatial(), terms = list(...))` -- with
+#' stated nodes, or `grid(n = )` for the engine's axis read more finely -- or
+#' through `control$alpha.grid[.trend]` / `control$alpha.n[.trend]`, the same
+#' knobs the grid-integrated route reads. A second field
 #' multiplies the warm fit's outer grid, so a defaulted axis is thinned to three
 #' nodes over the same span - the sampled prior is unchanged, the warm fit stays
 #' affordable. A correlated bar (`|`, one free-Sigma MCAR block across the
@@ -344,29 +345,46 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' the `positive` formula:
 #'
 #' ```r
-#' positive = ~ pos_cov + copy(spatial())                     # amplitude estimated
-#' positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over a given grid
+#' positive = ~ pos_cov + copy(spatial())                      # amplitude estimated
+#' positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over given nodes
+#' positive = ~ pos_cov + copy(spatial(), alpha = grid(n = 9))  # engine axis, finer
 #' positive = ~ pos_cov + copy(spatial(), alpha = 0.5)          # fixed
+#' positive = ~ pos_cov + copy(spatial(), prior = list("pc.prec", c(4, 0.01)))
 #' ```
 #'
-#' The amplitude is integrated over that grid on the `nested_laplace` path and
+#' The amplitude is integrated over that axis on the `nested_laplace` path and
 #' sampled over its span on the `nuts` path; a scalar `alpha =` pins it on both.
-#' `control$alpha.grid` is the lower-level spelling of the same coupling and
-#' likewise sets it on both engines; set the amplitude with `copy()` or with
-#' `control$alpha.grid`, not both.
+#' `prior =` regularizes the coefficient itself, in the joint driver's
+#' `list(<family>, <params>)` shape (see `prior_alpha` in
+#' [tulpa::tulpa_nested_laplace_joint()]); one reaches the engine per fit, so a
+#' fit copying both an intercept and a trend block is refused it rather than
+#' given it on the first (gcol33/tulpa#655).
+#'
+#' `control$alpha.grid[.trend]`, `control$alpha.n[.trend]` and
+#' `control$prior.alpha` are the lower-level spelling of the same three
+#' requests, and the representation the formula compiles into; set each in one
+#' place, not both.
+#'
+#' Without a `copy()` (and without `control$alpha.grid`) the occurrence field is
+#' NOT carried onto the cover arm -- there is no implicit coupling -- so the
+#' amplitude is not a parameter of the model and the fit reports no `alpha`:
+#' it is absent from `coef()`, `vcov()` and the `n_params` count, and
+#' `predict()` returns a cover arm the field does not enter. Add `copy(spatial())`
+#' to couple the two arms.
 #'
 #' The axis the amplitude rides carries prior structure -- a point mass at
 #' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
-#' in one of two ways. `control$alpha.grid` and `copy(alpha = grid(...))` STATE
-#' its nodes, and with them that structure. `control$alpha.n` states a
-#' RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
-#' mass and slab bounds unchanged (`control$alpha.n.trend` does the same for the
-#' weighted trend blocks, defaulting to `control$alpha.n`). The resolution is the
-#' only way to raise this axis, because it does not densify when the donor
-#' `control$sigma.grid` does: on an informative data set the outer grid's
-#' quadrature effective sample size saturates on the copy amplitude while every
-#' other axis tracks the request (measured engine-side, `NOTES_measurements.md`).
-#' One block takes one of the two spellings; giving both is an error.
+#' in one of two ways. `copy(alpha = grid(...))` STATES its nodes, and with them
+#' that structure. `copy(alpha = grid(n = 9))` states a RESOLUTION: the engine
+#' re-reads its own axis with that many slab nodes, point mass and slab bounds
+#' unchanged, so sharpening the axis never restates its structure. `terms =`
+#' gives either, per block. The resolution is the only way to raise this axis,
+#' because it does not densify when the donor `control$sigma.grid` does: on an
+#' informative data set the outer grid's quadrature effective sample size
+#' saturates on the copy amplitude while every other axis tracks the request
+#' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
+#' two; giving both is an error. `control$alpha.grid[.trend]` and
+#' `control$alpha.n[.trend]` are the lower-level spelling of the same pair.
 #'
 #' Set it when the fit's hyperparameter intervals are reported. On the coupled
 #' SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -906,11 +924,12 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' `method = "nuts"` takes a single cell-declaring areal term only.
 #'
 #' The copy amplitude's axis carries prior structure -- a point mass at
-#' `alpha = 0` and a log-spaced slab above it -- so `control$alpha.grid`
-#' (`control$alpha.grid.trend` for the weighted fields) STATES its nodes, while
-#' `control$alpha.n` (`control$alpha.n.trend`) states a RESOLUTION: the engine
-#' re-reads its own axis with that many slab nodes, point mass and bounds
-#' unchanged. One block takes one of the two.
+#' `alpha = 0` and a log-spaced slab above it -- so `copy(alpha = grid(...))`
+#' STATES its nodes, while `copy(alpha = grid(n = ))` states a RESOLUTION: the
+#' engine re-reads its own axis with that many slab nodes, point mass and bounds
+#' unchanged. `terms =` gives either, per block, and
+#' `control$alpha.grid[.trend]` / `control$alpha.n[.trend]` are the lower-level
+#' spelling of the same pair. One block takes one of the two.
 #'
 #' @param response likelihood for the positive cover arm. `"beta"` (cover in
 #'   (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
@@ -1877,16 +1896,17 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' The axis the amplitude rides carries prior structure -- a point mass at
 #' `alpha = 0` ("no coupling") and a log-spaced slab above it -- so it is set
-#' in one of two ways. `control$alpha.grid` and `copy(alpha = grid(...))` STATE
-#' its nodes, and with them that structure. `control$alpha.n` states a
-#' RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
-#' mass and slab bounds unchanged (`control$alpha.n.trend` does the same for the
-#' weighted trend blocks, defaulting to `control$alpha.n`). The resolution is the
-#' only way to raise this axis, because it does not densify when the donor
-#' `control$sigma.grid` does: on an informative data set the outer grid's
-#' quadrature effective sample size saturates on the copy amplitude while every
-#' other axis tracks the request (measured engine-side, `NOTES_measurements.md`).
-#' One block takes one of the two spellings; giving both is an error.
+#' in one of two ways. `copy(alpha = grid(...))` STATES its nodes, and with them
+#' that structure. `copy(alpha = grid(n = 9))` states a RESOLUTION: the engine
+#' re-reads its own axis with that many slab nodes, point mass and slab bounds
+#' unchanged, so sharpening the axis never restates its structure. `terms =`
+#' gives either, per block. The resolution is the only way to raise this axis,
+#' because it does not densify when the donor `control$sigma.grid` does: on an
+#' informative data set the outer grid's quadrature effective sample size
+#' saturates on the copy amplitude while every other axis tracks the request
+#' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
+#' two; giving both is an error. `control$alpha.grid[.trend]` and
+#' `control$alpha.n[.trend]` are the lower-level spelling of the same pair.
 #'
 #' Set it when the fit's hyperparameter intervals are reported. On the coupled
 #' SBC fixture the declared resolution leaves the field SD miscalibrated once
@@ -1940,8 +1960,12 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' Per-arm formulas make the shared field explicit: place it on `presence` and
 #' copy it onto `positive`. `copy(spatial())` estimates the coupling on the
-#' default grid; `copy(spatial(), alpha = grid(c(...)))` integrates it over a
-#' supplied grid, `copy(spatial(), alpha = 0.5)` fixes it.
+#' default axis; `copy(spatial(), alpha = grid(c(...)))` integrates it over
+#' supplied nodes, `alpha = grid(n = 9)` over the engine's own axis read at `n`
+#' slab nodes, and `alpha = 0.5` fixes it. `copy(spatial(), prior = list(...))`
+#' regularizes the coefficient itself; a fit copying both the intercept and a
+#' weighted trend block is refused it, since one prior reaches the engine per
+#' fit (gcol33/tulpa#655).
 #'
 #' ```r
 #' tobs(presence = ~ time.sc + habitat +

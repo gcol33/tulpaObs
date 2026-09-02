@@ -106,6 +106,10 @@
 # The one exception is a fit that sets control$alpha.grid[.trend] itself, which
 # is the lower-level spelling of the same axes: those grids stand as given, and
 # are refused alongside a copy().
+#
+# Everything a copy states about its coefficient is carried here: the amplitude
+# axis (stated nodes, or a resolution for the engine's own axis) and the
+# hyperprior on the coefficient itself, which lands on control$prior.alpha.
 .occu_cover_apply_copy_coupling <- function(copies, spatial_info, control) {
   has_control_alpha <- any(c("alpha.grid", "alpha.grid.trend") %in% names(control))
   if (has_control_alpha && length(copies) > 0L) {
@@ -115,10 +119,15 @@
   # `control$alpha.n[.trend]` is a RESOLUTION for the engine's own axis, so it
   # composes with a copy() that names no amplitude -- that copy asks for the
   # default axis, and the resolution says how finely to read it. A copy() that
-  # STATES nodes is the same request spelled twice, and is refused.
+  # STATES one (nodes, or grid(n = )) is the same request spelled twice, and is
+  # refused.
   .tobs_check_alpha_copy(
-    any(vapply(copies, .tobs_copy_states_nodes, logical(1))),
+    any(vapply(copies, .tobs_copy_states_amplitude, logical(1))),
     control, "occu_cover()")
+  # Resolved before the early returns below: a prior written on a copy() that
+  # selects nothing is a mistake wherever it is written, and the conflict with
+  # the control spelling does not depend on there being a field to copy.
+  alpha_prior <- .tobs_copy_prior_resolve(copies, control, "occu_cover()")
   # control$alpha.grid is the low-level amplitude knob: when set (and no copy())
   # the engine reads the grids as given.
   if (has_control_alpha) return(control)
@@ -150,20 +159,20 @@
   # axis (at `control$alpha.n`'s resolution when one is asked for). NULL is also
   # what removes the key below, so a bare copy() reaches the fitter exactly as an
   # unset knob does.
-  alpha_int   <- 0
-  alpha_trend <- if (has_trend) 0 else NULL
+  amp_int   <- .tobs_copy_amp(grid = 0)
+  amp_trend <- if (has_trend) .tobs_copy_amp(grid = 0) else NULL
 
   # Apply one (component, amplitude) assignment, returning the canonical block
   # role ("intercept" / "trend") it resolved to. `comp = NULL` is the whole
   # field. `cp_label` names the copy() in any error.
-  apply_component <- function(comp, g, cp_label) {
+  apply_component <- function(comp, amp, cp_label) {
     if (is.null(comp)) {
-      alpha_int <<- g
-      if (has_trend) alpha_trend <<- g
+      amp_int <<- amp
+      if (has_trend) amp_trend <<- amp
       return(c("intercept", if (has_trend) "trend"))
     }
     if (identical(comp, "intercept")) {
-      alpha_int <<- g
+      amp_int <<- amp
       return("intercept")
     }
     if (identical(comp, "trend") ||
@@ -173,7 +182,7 @@
           "%s: the spatial field has no trend component (it is a single ",
           "intercept field)."), cp_label), call. = FALSE)
       }
-      alpha_trend <<- g
+      amp_trend <<- amp
       return("trend")
     }
     avail <- paste0("\"", stats::na.omit(components), "\"", collapse = ", ")
@@ -214,9 +223,9 @@
     if (!is.null(cp$copy_terms)) {
       covered <- character(0)
       for (k in names(cp$copy_terms)) {
-        res <- cp$copy_terms[[k]]
-        g   <- if (isTRUE(is.na(res$integrate))) NULL else res$grid
-        covered <- union(covered, apply_component(k, g, cp_label))
+        covered <- union(covered,
+                         apply_component(k, .tobs_copy_amp_of(cp$copy_terms[[k]]),
+                                         cp_label))
       }
       required <- c("intercept", if (has_trend) "trend")
       missing_blocks <- setdiff(required, covered)
@@ -229,13 +238,27 @@
           call. = FALSE)
       }
     } else {
-      g <- if (is.na(cp$alpha_integrate)) NULL else cp$alpha_grid
-      apply_component(cp$component, g, cp_label)
+      apply_component(cp$component,
+                      .tobs_copy_amp_of(list(grid = cp$alpha_grid,
+                                             n = cp$alpha_n,
+                                             integrate = cp$alpha_integrate)),
+                      cp_label)
     }
   }
 
-  control[["alpha.grid"]] <- alpha_int
-  if (has_trend) control[["alpha.grid.trend"]] <- alpha_trend
+  control <- .tobs_alpha_control_set(control, amp_int, "alpha.grid", "alpha.n")
+  if (has_trend) {
+    control <- .tobs_alpha_control_set(control, amp_trend,
+                                       "alpha.grid.trend", "alpha.n.trend")
+  }
+  # A decoupled block is the single node 0, and carries no coefficient to
+  # regularize; the prior reaches the engine only if some block is copied, and
+  # only one block may be, since the engine bakes it on the first
+  # (`.tobs_check_alpha_prior()`).
+  copied <- c(!.tobs_copy_amp_decoupled(amp_int),
+              if (has_trend) !.tobs_copy_amp_decoupled(amp_trend))
+  .tobs_check_alpha_prior(alpha_prior, sum(copied), "occu_cover()")
+  control[["prior.alpha"]] <- if (sum(copied) == 0L) NULL else alpha_prior
   control
 }
 

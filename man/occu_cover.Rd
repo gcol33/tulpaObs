@@ -108,9 +108,10 @@ coordinates: two fields share no hyperparameter. The surfaces are
 weight column), and each block's hypers carry that block's suffix in
 \code{fit$hyper_draws} and in \code{fit$nuts$sampled_hyper} (\code{sigma_trend},
 \code{alpha_trend}, indexed when there are several). Each field's amplitude is
-addressed on its own through \code{copy(spatial(), terms = list(...))}, or through
-\code{control$alpha.grid} (intercept) and \code{control$alpha.grid.trend} (the weighted
-fields), the same knobs the grid-integrated route reads. A second field
+addressed on its own through \code{copy(spatial(), terms = list(...))} -- with
+stated nodes, or \code{grid(n = )} for the engine's axis read more finely -- or
+through \code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]}, the same
+knobs the grid-integrated route reads. A second field
 multiplies the warm fit's outer grid, so a defaulted axis is thinned to three
 nodes over the same span - the sampled prior is unchanged, the warm fit stays
 affordable. A correlated bar (\code{|}, one free-Sigma MCAR block across the
@@ -135,29 +136,46 @@ fits the same model on either engine.
 To carry the occurrence field onto the cover arm as well, write the copy in
 the \code{positive} formula:
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{positive = ~ pos_cov + copy(spatial())                     # amplitude estimated
-positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over a given grid
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{positive = ~ pos_cov + copy(spatial())                      # amplitude estimated
+positive = ~ pos_cov + copy(spatial(), alpha = grid(c(...))) # over given nodes
+positive = ~ pos_cov + copy(spatial(), alpha = grid(n = 9))  # engine axis, finer
 positive = ~ pos_cov + copy(spatial(), alpha = 0.5)          # fixed
+positive = ~ pos_cov + copy(spatial(), prior = list("pc.prec", c(4, 0.01)))
 }\if{html}{\out{</div>}}
 
-The amplitude is integrated over that grid on the \code{nested_laplace} path and
+The amplitude is integrated over that axis on the \code{nested_laplace} path and
 sampled over its span on the \code{nuts} path; a scalar \verb{alpha =} pins it on both.
-\code{control$alpha.grid} is the lower-level spelling of the same coupling and
-likewise sets it on both engines; set the amplitude with \code{copy()} or with
-\code{control$alpha.grid}, not both.
+\verb{prior =} regularizes the coefficient itself, in the joint driver's
+\verb{list(<family>, <params>)} shape (see \code{prior_alpha} in
+\code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}); one reaches the engine per fit, so a
+fit copying both an intercept and a trend block is refused it rather than
+given it on the first (gcol33/tulpa#655).
+
+\code{control$alpha.grid[.trend]}, \code{control$alpha.n[.trend]} and
+\code{control$prior.alpha} are the lower-level spelling of the same three
+requests, and the representation the formula compiles into; set each in one
+place, not both.
+
+Without a \code{copy()} (and without \code{control$alpha.grid}) the occurrence field is
+NOT carried onto the cover arm -- there is no implicit coupling -- so the
+amplitude is not a parameter of the model and the fit reports no \code{alpha}:
+it is absent from \code{coef()}, \code{vcov()} and the \code{n_params} count, and
+\code{predict()} returns a cover arm the field does not enter. Add \code{copy(spatial())}
+to couple the two arms.
 
 The axis the amplitude rides carries prior structure -- a point mass at
 \code{alpha = 0} ("no coupling") and a log-spaced slab above it -- so it is set
-in one of two ways. \code{control$alpha.grid} and \code{copy(alpha = grid(...))} STATE
-its nodes, and with them that structure. \code{control$alpha.n} states a
-RESOLUTION: the engine re-reads its own axis with that many slab nodes, point
-mass and slab bounds unchanged (\code{control$alpha.n.trend} does the same for the
-weighted trend blocks, defaulting to \code{control$alpha.n}). The resolution is the
-only way to raise this axis, because it does not densify when the donor
-\code{control$sigma.grid} does: on an informative data set the outer grid's
-quadrature effective sample size saturates on the copy amplitude while every
-other axis tracks the request (measured engine-side, \code{NOTES_measurements.md}).
-One block takes one of the two spellings; giving both is an error.
+in one of two ways. \code{copy(alpha = grid(...))} STATES its nodes, and with them
+that structure. \code{copy(alpha = grid(n = 9))} states a RESOLUTION: the engine
+re-reads its own axis with that many slab nodes, point mass and slab bounds
+unchanged, so sharpening the axis never restates its structure. \verb{terms =}
+gives either, per block. The resolution is the only way to raise this axis,
+because it does not densify when the donor \code{control$sigma.grid} does: on an
+informative data set the outer grid's quadrature effective sample size
+saturates on the copy amplitude while every other axis tracks the request
+(measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
+two; giving both is an error. \code{control$alpha.grid[.trend]} and
+\code{control$alpha.n[.trend]} are the lower-level spelling of the same pair.
 
 Set it when the fit's hyperparameter intervals are reported. On the coupled
 SBC fixture the declared resolution leaves the field SD miscalibrated once

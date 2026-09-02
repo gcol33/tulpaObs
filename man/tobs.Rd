@@ -96,12 +96,17 @@ formula. The selector is a constructor, so no field name is needed in the
 common case:
 \itemize{
 \item \code{copy(spatial(), alpha = grid(g))} copies the occurrence arm's spatial
-effect and marginalizes the coupling amplitude over the grid \code{g};
-\verb{alpha = <scalar>} fixes it.
+effect and marginalizes the coupling amplitude over the nodes \code{g};
+\code{alpha = grid(n = 9)} marginalizes it over the engine's own axis read at
+\code{n} slab nodes instead, which sharpens the axis without restating the
+prior structure it carries; \verb{alpha = <scalar>} fixes it.
 \item \code{copy(spatial(), terms = list(intercept = grid(g0), time.sc = grid(g1)))}
 gives a per-component amplitude, keyed by the field's own block names (the
 intercept block and a \code{||}-declared trend column, or its alias \code{trend});
 \verb{terms =} must address every block.
+\item \code{copy(spatial(), prior = list("pc.prec", c(4, 0.01)))} regularizes the
+copy coefficient itself (\code{prior_alpha} in
+\code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}). One reaches the engine per fit.
 \item \code{copy(spatial(cell_idx), ...)} disambiguates by grouping variable when the
 occurrence arm carries several spatial effects.
 \item decoupling is structural: omit \code{copy()} so the field rides occupancy only

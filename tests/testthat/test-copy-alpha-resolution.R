@@ -2,11 +2,12 @@
 # RESOLUTION, and the two are different requests.
 #
 # The axis carries prior structure -- a point mass at alpha = 0 ("no coupling")
-# and a log-spaced slab above it -- so `control$alpha.grid` (and
-# `copy(alpha = grid(...))`) restate that structure along with the nodes, which
-# is why a fit that only wants the axis integrated more finely cannot use them.
-# `control$alpha.n` names the number of slab nodes and the ENGINE re-reads its
-# own axis at that resolution, atom and slab bounds unchanged.
+# and a log-spaced slab above it -- so `copy(alpha = grid(...))` (and
+# `control$alpha.grid`) restate that structure along with the nodes, which is
+# why a fit that only wants the axis integrated more finely cannot use them.
+# `copy(alpha = grid(n = ))` (and `control$alpha.n`) names the number of slab
+# nodes and the ENGINE re-reads its own axis at that resolution, atom and slab
+# bounds unchanged.
 #
 # It is the only way to raise this axis: it does not densify when the donor
 # `sigma.grid` does, so on informative data the outer quadrature's effective
@@ -136,19 +137,112 @@ test_that("stating nodes and naming a resolution on one block is an error", {
     list(alpha.grid = c(0, 1), alpha.n.trend = 9), "cover()"))
 })
 
-test_that("a copy() stating nodes and a resolution are refused together", {
-  states <- tulpaObs:::.tobs_copy_states_nodes
+test_that("a copy() stating an amplitude and a resolution knob are refused together", {
+  states <- tulpaObs:::.tobs_copy_states_amplitude
   expect_true(states(list(alpha_grid = c(0, 1), alpha_integrate = TRUE)))
   expect_true(states(list(alpha_grid = 0.8, alpha_integrate = FALSE)))
+  # grid(n = ) states the axis too -- as a resolution rather than as nodes --
+  # so it collides with the control spelling of the same request.
+  expect_true(states(list(alpha_grid = NULL, alpha_n = 9L,
+                          alpha_integrate = TRUE)))
   # copy(spatial()) with no amplitude asks for the DEFAULT axis, so it composes
   # with a resolution instead of colliding with it.
   expect_false(states(list(alpha_grid = NULL, alpha_integrate = NA)))
 
   expect_error(
     tulpaObs:::.tobs_check_alpha_copy(TRUE, list(alpha.n = 9), "occu_cover()"),
-    "states the copy axis's nodes")
+    "states the copy axis")
   expect_true(
     tulpaObs:::.tobs_check_alpha_copy(FALSE, list(alpha.n = 9), "occu_cover()"))
+})
+
+
+# ---- the resolution is written in the formula -----------------------------
+
+test_that("grid() states nodes OR a resolution, never both and never neither", {
+  g <- tulpaObs:::.tobs_terms$grid
+  expect_equal(g(c(0.25, 0.5, 1))$values, c(0.25, 0.5, 1))
+  expect_null(g(c(0.25, 0.5, 1))$n)
+  expect_identical(g(n = 9)$n, 9L)
+  expect_null(g(n = 9)$values)
+  expect_error(g(c(1, 2), n = 3), "not both")
+  expect_error(g(), "grid\\(n = 9\\)")
+  expect_error(g(n = 0), "integer >= 1")
+})
+
+test_that("copy(alpha = grid(n = )) reaches the engine's own axis at that n", {
+  reg <- list2env(tulpaObs:::.tobs_terms, parent = environment())
+  cp  <- function(e) eval(e, reg)
+  fv  <- list(fields = list(list(component = "intercept")),
+              group_var = "cell_idx")
+  app <- tulpaObs:::.occu_cover_apply_copy_coupling
+
+  ctrl <- app(list(cp(quote(copy(spatial(), alpha = grid(n = 9))))), fv, list())
+  expect_identical(ctrl[["alpha.n"]], 9L)
+  expect_null(ctrl[["alpha.grid"]])
+  # And it resolves to the engine's axis at that resolution, not to nodes of
+  # our own: the axis a fit integrates is the one `alpha.n = 9` names.
+  expect_equal(
+    as.numeric(tulpaObs:::.tobs_alpha_nodes(
+      tulpaObs:::.tobs_alpha_axis_base(ctrl))),
+    engine_alpha_axis(9))
+
+  # Nodes and a resolution are per BLOCK, so one field can take one of each.
+  fv2 <- list(fields = list(list(component = "intercept"),
+                            list(component = "time.sc")),
+              group_var = "cell_idx")
+  ctrl2 <- app(list(cp(quote(copy(spatial(), terms = list(
+    intercept = grid(n = 7), time.sc = grid(c(0, 1))))))), fv2, list())
+  expect_identical(ctrl2[["alpha.n"]], 7L)
+  expect_null(ctrl2[["alpha.grid"]])
+  expect_equal(as.numeric(ctrl2[["alpha.grid.trend"]]), c(0, 1))
+  expect_null(ctrl2[["alpha.n.trend"]])
+})
+
+test_that("a bare copy() still composes with the control resolution", {
+  # The formula spelling does not overwrite what it did not state: a copy()
+  # naming no amplitude asks for the engine's default axis, which is what the
+  # resolution knob then reads more finely.
+  reg <- list2env(tulpaObs:::.tobs_terms, parent = environment())
+  fv  <- list(fields = list(list(component = "intercept")),
+              group_var = "cell_idx")
+  ctrl <- tulpaObs:::.occu_cover_apply_copy_coupling(
+    list(eval(quote(copy(spatial())), reg)), fv, list(alpha.n = 5))
+  expect_equal(ctrl[["alpha.n"]], 5)
+  expect_null(ctrl[["alpha.grid"]])
+})
+
+
+# ---- the prior on the copy coefficient ------------------------------------
+
+test_that("copy(prior = ) carries the hyperprior, and is checked where written", {
+  reg <- list2env(tulpaObs:::.tobs_terms, parent = environment())
+  cp  <- function(e) eval(e, reg)
+  pc  <- list("pc.prec", c(4, 0.01))
+  fv  <- list(fields = list(list(component = "intercept")),
+              group_var = "cell_idx")
+  fv2 <- list(fields = list(list(component = "intercept"),
+                            list(component = "time.sc")),
+              group_var = "cell_idx")
+  app <- tulpaObs:::.occu_cover_apply_copy_coupling
+
+  expect_identical(
+    app(list(cp(quote(copy(spatial(), prior = pc)))), fv, list())[["prior.alpha"]],
+    pc)
+  # Shape is checked at the call site that writes it; the families and their
+  # parameter ranges belong to the engine.
+  expect_error(cp(quote(copy(spatial(), prior = c(4, 0.01)))), "list\\(<family>")
+  # One prior reaches the engine per fit, so the two spellings are exclusive.
+  expect_error(
+    app(list(cp(quote(copy(spatial(), prior = pc)))), fv,
+        list(prior.alpha = list("half_normal", 2))),
+    "not both")
+  # And the engine bakes it on the FIRST copied block (gcol33/tulpa#655), so a
+  # fit copying two is refused rather than given it on one of them.
+  expect_error(app(list(cp(quote(copy(spatial(), prior = pc)))), fv2, list()),
+               "copies 2")
+  # A decoupled fit has no coefficient to regularize.
+  expect_null(app(list(), fv, list())[["prior.alpha"]])
 })
 
 test_that("the resolution is a declared control key on the joint families", {
@@ -270,4 +364,93 @@ test_that("a bare copy() takes the resolution; a copy() with nodes refuses it", 
     fit_at(~ pos_cov1 + copy(spatial(), alpha = grid(c(0, 0.5, 1))),
            list(alpha.n = 11)),
     "states the copy axis's nodes")
+})
+
+
+# --- `alpha` exists only when there is a copy ---------------------------------
+#
+# `.occu_cover_apply_copy_coupling()` spells "no copy() named this block" as an
+# amplitude axis stating the single node 0, which is the decoupled model. That
+# is not a parameter, and reporting it as one left an all-zero row and column in
+# vcov() (rank-deficient, so solve() and any joint Wald failed) and one too many
+# in n_params.
+#
+# The two engine paths remove it differently, and the difference is deliberate:
+# the single-block backend takes a numeric `field_coef = 0` on the cover arm and
+# builds no amplitude axis at all, while the multi-block driver offers the SD
+# parameterization ONLY to a copied block, so a decoupled field there keeps its
+# copy spec (pinned at 0) and the axis is suppressed at reporting instead.
+
+.aq_adj <- function(n = 8L) rook_adj(n)
+
+.aq_sim <- function(seed = 5L, pos_field = FALSE, alpha = 1.0) {
+  adj <- .aq_adj(); N <- nrow(adj)
+  sim <- simulate_occu_cover(
+    N = N, J = 6L, positive = "lognormal",
+    beta_occ = c(qlogis(0.7), 0.3), beta_p = c(qlogis(0.65), 0.1),
+    beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3,
+    adj = adj, sigma = 0.5, alpha = alpha,
+    pos_field = pos_field, sigma_pos_int = 0.6, sigma_pos_trend = 0.0,
+    seed = seed)
+  if (is.null(sim$data$cell)) sim$data$cell <- seq_len(N)
+  list(sim = sim, adj = adj)
+}
+
+.aq_fit <- function(f, positive, ...) {
+  suppressWarnings(tobs(
+    occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
+    detection = ~ 1, positive = positive,
+    family = occu_cover(response = "lognormal"),
+    data = f$sim$data, y = f$sim$y, y_pos = f$sim$y_pos,
+    method = "nested_laplace",
+    control = c(list(progress = FALSE), list(...))))
+}
+
+test_that("a fit with no copy() reports no alpha and has a full-rank vcov", {
+  skip_if_fast(); skip_on_cran()
+  f   <- .aq_sim()
+  fit <- .aq_fit(f, ~ 1)
+
+  expect_false("alpha" %in% names(fit$means))
+  expect_false("alpha" %in% colnames(fit$vcov))
+  expect_false("alpha" %in% names(fit$sds))
+  expect_equal(fit$n_params, length(fit$means))
+  # The defect this guards: an all-zero row/column left vcov() singular.
+  expect_equal(qr(fit$vcov)$rank, ncol(fit$vcov))
+  expect_no_error(solve(fit$vcov))
+  # Single-block path: the amplitude axis is not built at all.
+  expect_false("alpha" %in% fit$joint_fit$theta_names)
+  # The cover arm genuinely carries none of the field.
+  expect_true(all(fit$field_pos == 0))
+})
+
+test_that("a copy() restores the amplitude and it is estimated", {
+  skip_if_fast(); skip_on_cran()
+  f   <- .aq_sim()
+  fit <- .aq_fit(f, ~ 1 + copy(spatial()))
+
+  expect_true("alpha" %in% names(fit$means))
+  expect_gt(fit$means[["alpha"]], 0)
+  expect_equal(qr(fit$vcov)$rank, ncol(fit$vcov))
+})
+
+test_that("a decoupled multi-block fit keeps the field's SD axis", {
+  skip_if_fast(); skip_on_cran()
+  # REGRESSION GUARD. Dropping the copy spec here would move the shared field
+  # from `b1.sigma` onto its precision axis `b1.tau`. Those are the same implied
+  # SDs but a different prior measure on the field's scale, and it is not
+  # cosmetic: it pulled the measured `sigma_pos_field` recovery from a median of
+  # ~0.55 to ~0.42 against a truth of 0.6. The copy stays; only the reporting of
+  # its pinned axis is dropped.
+  f   <- .aq_sim(pos_field = TRUE, alpha = 0.0)
+  fit <- .aq_fit(f, ~ 1 + spatial(~ 1 || cell, graph = f$adj),
+                 integration = "ccd")
+
+  tn <- fit$joint_fit$theta_names
+  expect_true("b1.sigma" %in% tn)
+  expect_false("b1.tau" %in% tn)
+  # The pinned amplitude axis is still integrated, and still not reported.
+  expect_true("b1.alpha" %in% tn)
+  expect_false("alpha" %in% names(fit$means))
+  expect_equal(qr(fit$vcov)$rank, ncol(fit$vcov))
 })

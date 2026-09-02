@@ -78,14 +78,22 @@
 
 # ---- the copy coefficient's outer axis ------------------------------------
 #
-# Two spellings, and they are different requests. `control$alpha.grid` STATES
-# the axis's nodes, and with them the prior structure the axis carries: the
-# atom at alpha = 0 that gives the no-coupling model posterior mass, and the
-# log-spaced slab above it. `control$alpha.n` states a RESOLUTION -- the engine
-# re-reads its OWN axis with `n` slab nodes, atom and slab bounds unchanged, so
-# the axis comes back `n + 1` nodes long. The engine refuses both on one block;
-# a fit that wrote both is refused earlier, in the dispatcher, where the knobs
-# still carry the names the user typed (`.tobs_check_alpha_control()`).
+# Two requests, one axis. NODES state the axis's coordinates, and with them the
+# prior structure it carries: the atom at alpha = 0 that gives the no-coupling
+# model posterior mass, and the log-spaced slab above it. A RESOLUTION states
+# how finely the engine's OWN axis is read -- `n` slab nodes, atom and slab
+# bounds unchanged, so the axis comes back `n + 1` nodes long and nothing about
+# its structure is restated to sharpen it. One block takes one of them, and a
+# block given both is refused.
+#
+# Both are written in the formula, on the copy whose coefficient they place:
+# `copy(spatial(), alpha = grid(c(...)))` states nodes, `alpha = grid(n = 9)` a
+# resolution, `terms = list(<component> = ...)` either, per block, and
+# `prior =` regularizes the coefficient itself.
+# `control$alpha.grid[.trend]` / `alpha.n[.trend]` / `prior.alpha` are the
+# lower-level spelling of the same requests, and the representation the formula
+# compiles into; a fit writing both is refused in the dispatcher, where the
+# knobs still carry the names the user typed (`.tobs_check_alpha_control()`).
 #
 # The resolution is the only way to raise this axis: it does not densify when
 # the donor `sigma.grid` does, so on informative data the outer grid's
@@ -106,7 +114,8 @@
 .tobs_alpha_n <- function(n) {
   n <- suppressWarnings(as.integer(n))
   if (length(n) != 1L || is.na(n) || n < 1L) {
-    stop("control$alpha.n[.trend] must be a single integer >= 1: it is the ",
+    stop("A copy amplitude resolution (copy(alpha = grid(n = )), ",
+         "control$alpha.n[.trend]) must be a single integer >= 1: it is the ",
          "number of slab nodes on the copy coefficient's axis (the atom at ",
          "alpha = 0 is carried alongside them).", call. = FALSE)
   }
@@ -139,6 +148,37 @@
   if (is.null(g) && is.null(n)) base else .tobs_alpha_axis(g, n)
 }
 
+# Write one resolved amplitude (`.tobs_copy_amp()`) onto the pair of control
+# keys its block reads. Only what the copy STATED is written: an amplitude
+# stating neither nodes nor a resolution asks for the engine's default axis,
+# which is exactly what composes with a `control$alpha.n[.trend]` the fit set
+# alongside a bare `copy(spatial())`, so writing NULL over that key (`[[<-` with
+# NULL drops a list element) would discard the resolution the fit asked for.
+# Nothing can leave both keys set: a copy() that states either is refused
+# alongside both control spellings (`.tobs_check_alpha_copy()`,
+# `has_control_alpha`), and a decoupled block's stated `grid = 0` takes
+# precedence over a resolution in `.tobs_alpha_axis()` -- a pinned block has no
+# axis to resolve.
+.tobs_alpha_control_set <- function(control, amp, grid_key, n_key) {
+  if (!is.null(amp$grid)) control[[grid_key]] <- as.numeric(amp$grid)
+  if (!is.null(amp$n))    control[[n_key]]    <- .tobs_alpha_n(amp$n)
+  control
+}
+
+# One hyperprior on the copy coefficient reaches the engine per fit, and on a
+# multi-block grid it is baked onto the FIRST block carrying a (sigma, alpha)
+# axis pair (tulpa's `.joint_multi_hp_cols()`). A fit copying several blocks
+# would have one block regularized and the rest not, which is neither spelling's
+# meaning, so it is refused rather than applied to block 1 (gcol33/tulpa#655).
+.tobs_check_alpha_prior <- function(prior, n_copied, what) {
+  if (is.null(prior) || n_copied <= 1L) return(invisible(TRUE))
+  stop(what, ": a prior on the copy coefficient reaches one copied block, and ",
+       "this fit copies ", n_copied, " (the field's intercept and its weighted ",
+       "trend blocks each carry their own amplitude). Drop the prior, or copy ",
+       "one block -- terms = list(...) decouples a block by giving it ",
+       "alpha = 0.", call. = FALSE)
+}
+
 # The two engine-facing shapes of one resolved axis: one copy spec's fields on
 # the multi-block driver, and the pos arm's `field_coef` on the single-block
 # path.
@@ -159,10 +199,11 @@
   axis$alpha_grid %||% .tobs_default_alpha_grid(axis$alpha_n)
 }
 
-# Does this `copy()` STATE the axis's nodes? `alpha = grid(c(...))` and a bare
-# scalar `alpha =` both do (the second pins a one-node axis); `copy(spatial())`
-# with no amplitude does not, and asks for the default axis.
-.tobs_copy_states_nodes <- function(cp) {
+# Does this `copy()` STATE an amplitude -- nodes or a resolution? `alpha =
+# grid(c(...))`, `alpha = grid(n = )` and a bare scalar `alpha =` all do (the
+# last pins a one-node axis); `copy(spatial())` with no amplitude does not, and
+# asks for the engine's default axis.
+.tobs_copy_states_amplitude <- function(cp) {
   if (!is.null(cp$copy_terms)) {
     return(any(vapply(cp$copy_terms,
                       function(res) !isTRUE(is.na(res$integrate)), logical(1))))
@@ -170,16 +211,18 @@
   !isTRUE(is.na(cp$alpha_integrate))
 }
 
-# A `copy()` that states nodes and `control$alpha.n[.trend]` are the same axis
-# written twice; a `copy()` that states none composes with the resolution knob.
-.tobs_check_alpha_copy <- function(states_nodes, control, what) {
+# A `copy()` that states an amplitude and `control$alpha.n[.trend]` are the same
+# axis written twice; a `copy()` that states none composes with the resolution
+# knob.
+.tobs_check_alpha_copy <- function(states_amplitude, control, what) {
   n_keys <- c("alpha.n", "alpha.n.trend")
   n_set  <- n_keys[vapply(n_keys, function(k) !is.null(control[[k]]), logical(1))]
-  if (!isTRUE(states_nodes) || length(n_set) == 0L) return(invisible(TRUE))
-  stop(what, ": copy(alpha = ) states the copy axis's nodes and control$",
-       n_set[1L], " states how many nodes the engine's own axis is read at. ",
-       "Give one: drop the amplitude from copy() to keep the resolution, or ",
-       "drop control$", n_set[1L], " to keep the stated nodes.", call. = FALSE)
+  if (!isTRUE(states_amplitude) || length(n_set) == 0L) return(invisible(TRUE))
+  stop(what, ": copy(alpha = ) states the copy axis and control$", n_set[1L],
+       " states how many nodes the engine's own axis is read at. Give one: ",
+       "write the resolution in the formula as copy(alpha = grid(n = ",
+       control[[n_set[1L]]], ")) and drop control$", n_set[1L],
+       ", or drop the amplitude from copy().", call. = FALSE)
 }
 
 # `alpha.grid` states the axis's nodes, `alpha.n` a resolution for the engine's
