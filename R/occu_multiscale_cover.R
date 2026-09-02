@@ -623,16 +623,13 @@
          "(iid cells, field fixed at 0). Use method = \"nested_laplace\" for ",
          "the shared field, or drop the copy().", call. = FALSE)
   }
-  # Only a fit that WROTE a copy is translated. The shared helper spells "no
-  # copy() named this block" as alpha pinned at 0, which is occu_cover()'s
-  # meaning but not this door's: here a fit naming no coupling has always
-  # integrated the engine's default amplitude axis, and running the translation
-  # unconditionally would silently decouple every existing multiscale fit
-  # (gcol33/tulpaObs#297).
-  if (length(pos_copy$copies) > 0L) {
-    control <- .occu_cover_apply_copy_coupling(pos_copy$copies, spatial_info,
-                                               control)
-  }
+  # Coupling is what a copy() states, here as on occu_cover(): a block no copy()
+  # names is pinned at alpha = 0 and the field rides occupancy alone. Pinned
+  # rather than dropped -- the engine offers the (sigma, alpha) parameterization
+  # only to a copied block, so removing the spec moves the shared field onto
+  # `b<k>.tau` and re-priors it.
+  control <- .occu_cover_apply_copy_coupling(pos_copy$copies, spatial_info,
+                                             control)
 
   fields  <- spatial_info$fields
   n_cells <- nrow(fields[[1L]]$graph)

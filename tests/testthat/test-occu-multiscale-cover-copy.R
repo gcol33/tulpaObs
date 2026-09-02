@@ -50,15 +50,28 @@ test_that("occu_multiscale_cover(): copy() states nodes, a resolution, or a pin"
   expect_equal(as.numeric(a$alpha.grid), 0.5)
 })
 
-test_that("occu_multiscale_cover(): a fit naming no copy is left alone", {
-  # This door's no-copy meaning is the engine's DEFAULT amplitude axis, not
-  # occu_cover()'s pinned alpha = 0, so adding the copy() route must not touch
-  # a fit that writes none. Measured against HEAD before the route landed: the
-  # translation run unconditionally pins alpha.grid = 0 and silently decouples
-  # every such fit (gcol33/tulpaObs#297 tracks the inconsistency itself).
+test_that("occu_multiscale_cover(): no copy() decouples the cover arm", {
+  # gcol33/tulpaObs#297: coupling is what a copy() states, on this door as on
+  # occu_cover(). A fit naming none pins alpha = 0 -- it does NOT fall back to
+  # the engine's default axis, which is what this door did before the ruling.
   a <- mscopy_control(~ x_cov)
-  expect_null(a$alpha.grid)
-  expect_null(a$alpha.n)
+  expect_equal(as.numeric(a$alpha.grid), 0)
+})
+
+test_that("occu_multiscale_cover(): the pin is a one-node axis, not a dropped spec", {
+  # The engine offers the (sigma, alpha) parameterization only to a COPIED
+  # block, so a pin has to reach it as a real one-node axis; dropping the spec
+  # moves the shared field onto `b<k>.tau` and re-priors it.
+  a <- mscopy_control(~ x_cov)
+  expect_length(a$alpha.grid, 1L)
+  expect_false(is.null(a$alpha.grid))
+})
+
+test_that("occu_multiscale_cover(): control$alpha.grid still overrides the pin", {
+  # The lower-level spelling short-circuits the translation, so a fit that
+  # states the axis keeps it rather than being decoupled underneath itself.
+  a <- mscopy_control(~ x_cov, control = list(alpha.grid = c(0, 0.5, 1)))
+  expect_equal(as.numeric(a$alpha.grid), c(0, 0.5, 1))
 })
 
 test_that("occu_multiscale_cover(): copy() is refused where no field enters", {

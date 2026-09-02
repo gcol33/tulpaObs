@@ -2,6 +2,32 @@
 
 ## 0.1.4 (2026-09-02)
 
+* **BREAKING: a missing `copy()` decouples the arms on
+  `occu_multiscale_cover()`** (gcol33/tulpaObs#297). The three cover doors gave
+  a bare areal term opposite readings: `occu_cover()` pinned the amplitude at
+  `alpha = 0` -- structure nobody wrote is not in the model, which is what makes
+  `copy()` mean something -- while `occu_multiscale_cover()` and `cover()`
+  integrated the engine's default axis and coupled the arms. Same formula,
+  different model, no message either way. `occu_cover()`'s reading is the one
+  kept, and `occu_multiscale_cover()` now matches it.
+
+  A multiscale fit that writes no `copy()` therefore changes: the occurrence
+  field no longer reaches the cover arm. Restore the previous fit by writing the
+  coupling the model was getting implicitly, `copy(spatial())` in the `positive`
+  formula, which #294 made expressible. A fit that already states
+  `control$alpha.grid[.trend]` is unaffected.
+
+  The pin reaches the engine as a real one-node axis rather than a dropped copy
+  spec: the joint driver offers the `(sigma, alpha)` parameterization only to a
+  copied block, so removing the spec moves the shared field onto `b<k>.tau` and
+  re-priors it.
+
+  `cover()` is NOT changed and still couples by default. It has no formula
+  spelling for the amplitude at all under a shared formula -- `copy()` there
+  dies with an internal error (gcol33/tulpaObs#298) -- so decoupling it by
+  default would make the coupling unreachable except through the control key.
+  It moves once #298 gives it one.
+
 * **`occu_multiscale_cover()` can name the copy coefficient it is built
   around** (gcol33/tulpaObs#294). The model carries one: `alpha` is in `means`,
   in `draws`, in the fitted-surface function, and the simulator draws the cover

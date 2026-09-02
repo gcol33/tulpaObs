@@ -85,9 +85,10 @@ with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field}
 The coupling is written as \code{copy(spatial())} in the \code{positive} formula, the
 same spelling \code{\link[=occu_cover]{occu_cover()}} takes; it needs a field to copy, so it is
 accepted under \code{method = "nested_laplace"} and refused on the two
-non-spatial engines, which fix the field at 0. Omitting it leaves the
-amplitude on the engine's default axis, estimated -- unlike
-\code{\link[=occu_cover]{occu_cover()}}, where a missing \code{copy()} pins \code{alpha = 0}.
+non-spatial engines, which fix the field at 0. Omitting it decouples the
+arms: the block is pinned at \code{alpha = 0} and the field rides occupancy
+alone, the same meaning the absence has on \code{\link[=occu_cover]{occu_cover()}}. There is no
+implicit default coupling.
 
 The copy amplitude's axis carries prior structure -- a point mass at
 \code{alpha = 0} and a log-spaced slab above it -- so \code{copy(alpha = grid(...))}
