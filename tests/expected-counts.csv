@@ -262,6 +262,7 @@
 "test-occu-cover-aggregate.R","smoke",17,4,0.5
 "test-occu-cover-batch-fused.R","full",138,0,2.7
 "test-occu-cover-batch-fused.R","smoke",0,3,0.1
+"test-occu-cover-batch.R","full",40,0,0.5
 "test-occu-cover-batch.R","smoke",15,2,0.2
 "test-occu-cover-by.R","smoke",34,1,0.9
 "test-occu-cover-checkpoint.R","full",20,0,2.1

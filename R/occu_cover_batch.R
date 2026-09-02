@@ -249,14 +249,39 @@
     colnames(theta_grid) <- sub("^b1\\.", "", colnames(theta_grid))
   }
 
+  # The batched driver is the multi-block one, and it returns a copied block's
+  # field latent WHITENED -- unit scale, with the amplitude carried on the axis
+  # -- where the single-block driver returns it already multiplied by that
+  # cell's sigma. The summary below reads the single-block convention (that is
+  # what the `b1.` strip above is for), so the field is put on that scale here,
+  # per grid cell, before it is read.
+  #
+  # Measured on the gate's own fixture: the two routes' per-cell field modes
+  # differed by exactly 1 / sigma at every grid point (10, 4.273, 1.826, 0.780,
+  # 0.333 against a sigma axis of 0.1, 0.234, 0.548, 1.282, 3), while the sigma
+  # axis, the weights, the log-marginal and every coefficient already agreed --
+  # so the posterior was never in question, only the scale it was reported on.
+  n_cells   <- preps[[1L]]$ctx$n_cells
+  fld_start <- arm_layout$field_starts
+  sig_col   <- match("sigma", colnames(theta_grid))
+  rescale_field <- !has_trend && length(fld_start) == 1L && !is.na(sig_col) &&
+    !is.null(n_cells)
+  fld_cols  <- if (rescale_field)
+    as.integer(fld_start[[1L]] + seq_len(n_cells)) else integer(0)
+
   fits <- lapply(seq_len(B), function(s) {
     ps <- bat$per_species[[s]]
+    modes_s <- ps$modes
+    if (rescale_field && max(fld_cols) <= ncol(modes_s)) {
+      modes_s[, fld_cols] <- modes_s[, fld_cols, drop = FALSE] *
+        as.numeric(theta_grid[, sig_col])
+    }
     engine_fit <- list(
       arm_layout       = arm_layout,
       theta_grid       = theta_grid,
       log_marginal     = ps$log_marginal,
       weights          = ps$weights,
-      modes            = ps$modes,
+      modes            = modes_s,
       Q_csc_p_per_grid = ps$Q_csc_p_per_grid,
       Q_csc_i_per_grid = ps$Q_csc_i_per_grid,
       Q_csc_x_per_grid = ps$Q_csc_x_per_grid,
