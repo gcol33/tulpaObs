@@ -211,6 +211,38 @@
   f
 }
 
+# The copy amplitude the observed fit ASKED for, written back as the `share()`
+# argument that asks for it again.
+#
+# The stored formula does not carry the `share()` term (it is stripped when the
+# structured terms are resolved) and the fit does not carry the control the
+# formula compiled into, so a rebuilt call reverts to the engine's default axis
+# and quietly analyses the replicate under a different model than the observed
+# data -- the invariant `test-sbc.R`'s "rebuilds the same call" asserts, and
+# already violated for a fit that pins its axis. `.occu_cover_jc_postprocess()`
+# records the request for exactly this.
+#
+# The REQUEST, never the realised axis. `control$adaptive.grid` refines a
+# defaulted (`auto`) axis against the data and only densifies a stated one, so
+# handing back the nodes a fit realised asks for something different from what
+# it asked for, and the rebuilt call stops reproducing it.
+.tobs_sbc_copy_arg <- function(spec) {
+  req <- spec$alpha_request
+  if (is.null(req)) return(NULL)
+  # A DEFAULTED axis arrives here as nodes too, carrying the `auto` mark, and
+  # writing those back would state them -- turning a defaulted axis into a
+  # stated one, which is the same category error as handing back a realised
+  # one. A bare `share(spatial())` is what asks for the default, so that is
+  # what a defaulted axis rebuilds as.
+  if (!is.null(req$alpha_grid)) {
+    if (isTRUE(tulpa::is_auto_grid(req$alpha_grid))) return(NULL)
+    return(as.call(list(quote(grid), as.numeric(req$alpha_grid))))
+  }
+  if (!is.null(req$alpha_n))
+    return(as.call(list(quote(grid), n = as.integer(req$alpha_n))))
+  NULL
+}
+
 # The cover formula, carrying the shared field's copy onto the cover arm when
 # the observed fit carried one. Without the copy the cover arm never sees the
 # field and `alpha` is pinned at zero, which is a different model.
@@ -222,8 +254,12 @@
     return(spec$pos)
   }
   lab <- attr(stats::terms(spec$pos), "term.labels")
-  f <- stats::as.formula(
-    paste("~", paste(c(lab, "share(spatial())"), collapse = " + ")))
+  amp <- .tobs_sbc_copy_arg(spec)
+  cp  <- if (is.null(amp)) quote(share(spatial())) else
+    as.call(list(quote(share), quote(spatial()), alpha = amp))
+  rhs <- Reduce(function(a, b) call("+", a, b),
+                c(lapply(lab, str2lang), list(cp)))
+  f <- stats::as.formula(call("~", rhs))
   environment(f) <- globalenv()
   f
 }
@@ -2960,6 +2996,7 @@
   # own draws: the copy is what gives `alpha` a posterior at all, and without it
   # the cover arm never sees the field.
   spec$has_copy <- "alpha" %in% scored
+  spec$alpha_request <- object$spatial$alpha_request
   .tobs_sbc_check_fixed_dispersion(object, fixed)
 
   structure(list(

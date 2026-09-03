@@ -894,6 +894,15 @@
               # the axis is present but is not an estimate and is not reported.
               alpha_decoupled = alpha_decoupled,
               alpha_trend_decoupled = alpha_trend_decoupled,
+              # The copy-amplitude axis the fit ASKED for, carried so a consumer
+              # rebuilding the call can ask for the same thing. Not the axis the
+              # fit realised: `control$adaptive.grid` refines a defaulted (`auto`)
+              # axis against the data while a stated one is only densified, so
+              # restating realised nodes changes how the engine treats them and a
+              # rebuilt call stops reproducing the fit it came from.
+              alpha_request = alpha_axis,
+              alpha_request_trend = if (has_trend)
+                .tobs_alpha_axis_trend(dots, alpha_axis) else NULL,
               pos_field_specs = pos_field_specs,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
 

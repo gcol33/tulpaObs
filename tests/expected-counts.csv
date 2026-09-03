@@ -413,7 +413,7 @@
 "test-sbc-gates.R","full",52,0,0.3
 "test-sbc-gates.R","smoke",52,0,0.3
 "test-sbc-registry.R","smoke",282,4,1.8
-"test-sbc.R","smoke",38,1,10.2
+"test-sbc.R","smoke",41,1,8.8
 "test-share-alpha-resolution.R","full",91,0,5.5
 "test-share-alpha-resolution.R","smoke",61,6,0.6
 "test-share-formula-api.R","full",76,0,0.8

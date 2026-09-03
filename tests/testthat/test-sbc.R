@@ -50,7 +50,8 @@
 # A small coupled occu_cover fixture: shared ICAR field on the occurrence arm,
 # copied onto the cover arm, dispersion on the outer grid.
 .sbc_fixture <- function(N = 30L, J = 4L, seed = 707L, sigma = 0.8,
-                         alpha = 1.0, phi.grid = .SBC_PHI_GRID) {
+                         alpha = 1.0, phi.grid = .SBC_PHI_GRID,
+                         alpha.grid = NULL) {
   adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
@@ -70,11 +71,20 @@
     ctl$phi.grid.pos <- phi.grid
     ctl$sigma.grid <- .SBC_SIGMA_GRID
   }
+  # `alpha.grid` STATES the copy axis, where the default asks for the engine's.
+  # The two are not interchangeable: a defaulted axis is `auto` and is refined
+  # by `control$adaptive.grid`, a stated one is only densified, so a consumer
+  # rebuilding the call has to reproduce which of the two was asked for.
+  pos_f <- if (is.null(alpha.grid)) ~ pos_cov1 + share(spatial()) else
+    stats::as.formula(call("~", call("+", quote(pos_cov1),
+      as.call(list(quote(share), quote(spatial()),
+                   alpha = as.call(list(quote(grid), as.numeric(alpha.grid))))))),
+      env = globalenv())
   fit <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = adj),
     data = cbind(data.frame(site_id = seq_len(N)), sim$data),
     family = occu_cover("lognormal"),
-    detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
+    detection = ~ det_cov1, positive = pos_f,
     y = od$y, y_pos = y_pos, visits = od$det.covs,
     method = "nested_laplace", control = ctl))
   list(fit = fit, sim = sim, adj = adj, phi.grid = phi.grid)
@@ -187,6 +197,29 @@ test_that("the refit rebuilds the same call on the pooled graph", {
   # the coupled model has quietly become an uncoupled one.
   expect_true("alpha" %in% names(pooled$means))
   expect_gt(pooled$means[["alpha"]], 0)
+})
+
+
+test_that("the refit rebuilds a STATED copy axis, not the engine default", {
+  skip_on_cran()
+  # The block above writes a bare `share(spatial())`, so it exercises the
+  # default axis only, and the invariant it asserts was already violated for a
+  # fit that pins its own: the fit carries neither the `share()` term (stripped
+  # from the stored formula) nor the control it compiled into, so the rebuilt
+  # call fell back to the engine default and the replicate was analysed under a
+  # different model than the observed data (#311).
+  stated <- c(0, 0.25, 0.75, 1.5)
+  fx <- .sbc_fixture(N = 20L, J = 3L, alpha.grid = stated)
+  m  <- sbc(fx$fit, model.only = TRUE, fit.control = .sbc_fit_control(fx))
+
+  axis_of <- function(f)
+    sort(unique(as.numeric(tulpaObs:::.tobs_joint_fit(f)$theta_grid[, "alpha"])))
+
+  # Stated nodes are densified, not replaced, so the request is a subset of
+  # what either fit integrates -- and the two integrate the same thing.
+  expect_true(all(stated %in% axis_of(fx$fit)))
+  expect_equal(axis_of(m$fit(m$data_obs)), axis_of(fx$fit))
+  expect_equal(m$fit(m$data_obs)$means, fx$fit$means, tolerance = 1e-8)
 })
 
 

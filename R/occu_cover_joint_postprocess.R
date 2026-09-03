@@ -617,7 +617,9 @@
       rho_mcar   = if (length(rho_nms))
         unname(unlist(hyper_means[rho_nms])) else numeric(0),
       rho_mcar_names = rho_nms,
-      alpha_mcar = unname(hyper_means["alpha_mcar"]))
+      alpha_mcar = unname(hyper_means["alpha_mcar"]),
+      alpha_request = ctx$alpha_request,
+      alpha_request_trend = ctx$alpha_request_trend)
   } else {
     fsd <- field_sd_summary[["field_sd"]]
     fsd_trend_nm <- if (n_trend == 1L) "field_sd_trend" else "field_sd_trend1"
@@ -639,7 +641,12 @@
         unname(hyper_means[if (n_trend == 1L) "alpha_trend"
                            else "alpha_trend1"]) else NULL,
       field_sd_trend_mean = if (has_trend) fsd_trend$mean else NULL,
-      field_sd_trend_sd   = if (has_trend) fsd_trend$sd   else NULL)
+      field_sd_trend_sd   = if (has_trend) fsd_trend$sd   else NULL,
+      # What the fit asked for on the copy axis, so `sbc()` and any other
+      # consumer that rebuilds the call requests the same axis rather than
+      # falling back to the engine default (#311).
+      alpha_request = ctx$alpha_request,
+      alpha_request_trend = ctx$alpha_request_trend)
   }
 
   structure(c(list(
