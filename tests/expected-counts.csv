@@ -82,6 +82,7 @@
 "test-cover-ordinal.R","smoke",14,2,0.2
 "test-cover-perarm.R","full",72,0,30.7
 "test-cover-perarm.R","smoke",63,2,52.9
+"test-cover-phi-scale.R","smoke",19,0,5.2
 "test-cover-ploglik-cpp.R","full",5,0,0.1
 "test-cover-ploglik-cpp.R","smoke",5,0,0.1
 "test-cover-priors.R","full",18,0,1.6
