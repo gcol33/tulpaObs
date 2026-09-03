@@ -66,12 +66,20 @@
   if (.cover_phi_is_variance(pos_family)) sd^2 else sd
 }
 
-# The engine's R-level phi -> the SD cover() reports. `phi_sd` is the outer-grid
-# SD of phi; on the variance scale the reported SD follows by the delta method,
-# d sqrt(phi) / d phi = 1 / (2 sqrt(phi)).
+# The engine's R-level phi -> the SD surface, elementwise. Every read-out of a
+# grid-integrated dispersion goes through this, including the per-draw axis the
+# joint substrate hands the diagnostics, so a route cannot report one scale and
+# score on another.
+.cover_phi_to_sd <- function(phi, pos_family) {
+  if (.cover_phi_is_variance(pos_family)) sqrt(phi) else phi
+}
+
+# The engine's R-level phi -> the SD cover() reports, for ONE estimate and its
+# uncertainty. `phi_sd` is the outer-grid SD of phi; on the variance scale the
+# reported SD follows by the delta method, d sqrt(phi) / d phi = 1 / (2 sqrt(phi)).
 .cover_phi_engine_to_sd <- function(phi, phi_sd, pos_family) {
   if (!.cover_phi_is_variance(pos_family)) return(list(est = phi, sd = phi_sd))
-  est <- sqrt(phi)
+  est <- .cover_phi_to_sd(phi, pos_family)
   list(est = est,
        sd = if (is.finite(est) && est > 0) phi_sd / (2 * est) else NA_real_)
 }

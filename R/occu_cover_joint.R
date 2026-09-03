@@ -203,7 +203,14 @@
         0.4
       }
     }
-    sigma_pos_init <- phi_pos_init  # passed through as pos-arm phi
+    # `phi_pos_init` is stated in cover() 's own surface -- an SD for the
+    # lognormal and gaussian arms, a precision for beta -- and the arm's `phi`
+    # slot is the ENGINE convention, which for the gaussian arm both of the
+    # first two compile to is the residual VARIANCE. Converted here, at the one
+    # place the pre-fit becomes the arm's dispersion, through the same pair
+    # `cover()` uses, so the two families cannot drift apart again.
+    sigma_pos_init <- .cover_phi_sd_to_engine(
+      phi_pos_init, .cover_pos_engine_family(model$positive))
   }
 
   # A defaulted axis arrives already marked from the helper and reaches its block
@@ -564,9 +571,15 @@
                (sigma_u_init * exp(seq(log(0.4), log(2.5), length.out = 4L)))
     phi_grid_arg <- list(pos = as.numeric(su_grid))
   } else {
+    # Stated in the same surface as the pre-fit above (`?occu_cover` documents
+    # `phi.grid.pos` in SD for the lognormal and gaussian arms), so it takes the
+    # same conversion -- without it a stated axis explores variances over a span
+    # meant for SDs.
     phi_grid_pos <- dots$phi.grid.pos
     phi_grid_arg <- if (!is.null(phi_grid_pos))
-                      list(pos = as.numeric(phi_grid_pos))
+                      list(pos = .cover_phi_sd_to_engine(
+                        as.numeric(phi_grid_pos),
+                        .cover_pos_engine_family(model$positive)))
                     else NULL
   }
 

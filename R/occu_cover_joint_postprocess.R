@@ -578,7 +578,14 @@
   # the latent path integrates sigma_u on the grid instead). The pointwise
   # log-likelihood reads it to score the cover term at the fitted dispersion
   # rather than a bare unit default.
-  if (!is_latent) model$cover_pos_disp <- sigma_pos_init
+  #
+  # Stored on the SD surface, which is what its readers take it for -- the
+  # simulator behind `sbc()`, and `.tobs_joint_disp()` as the fixed-dispersion
+  # default -- while `sigma_pos_init` is the arm's `phi`, the engine convention
+  # for that family.
+  if (!is_latent)
+    model$cover_pos_disp <- .cover_phi_to_sd(
+      sigma_pos_init, .cover_pos_engine_family(model$positive))
 
   # Spatial summary. The correlated MCAR field reports its per-field SDs
   # (sigma_mcar, intercept first) and cross-correlations (rho_mcar) alongside the

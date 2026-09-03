@@ -481,6 +481,23 @@
   .tobs_joint_amp(theta_grid, cells, block, "sigma")
 }
 
+# The cover-arm dispersion on cover()'s own surface, per draw.
+#
+# The outer grid carries the ENGINE convention for the arm's family -- for the
+# gaussian arm both `lognormal` and `gaussian` compile to, the residual VARIANCE
+# -- while `$disp` is contracted above as the residual SD, which is what every
+# consumer reads: the SBC simulator, the pointwise log-likelihood behind
+# WAIC/LOO/CPO, the PPC and `predict()`. Converted in ONE place so the FIXED
+# default and the INTEGRATED axis arrive on the same scale, and so a family
+# whose phi is already an SD (truncated / interval gaussian) or a precision
+# (beta) passes through untouched.
+.tobs_joint_disp <- function(theta_grid, cells, positive, fixed_sd = 1) {
+  fam <- .cover_pos_engine_family(positive)
+  d <- .tobs_joint_amp(theta_grid, cells, 1L, "phi_pos",
+                       default = .cover_phi_sd_to_engine(fixed_sd, fam))
+  .cover_phi_to_sd(d, fam)
+}
+
 .tobs_joint_amp <- function(theta_grid, cells, block, name, default = 1) {
   cn <- colnames(theta_grid)
   j  <- match(paste0("b", block, ".", name), cn)
@@ -656,7 +673,7 @@
   })
 
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = 1),
+       disp = .tobs_joint_disp(tg, cells, positive),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = blocks, n_cells = n_nodes[1L])
 }
@@ -763,7 +780,7 @@
   # of the value the spec used.
   fixed_disp <- object$model$cover_pos_disp %||% 1
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = fixed_disp),
+       disp = .tobs_joint_disp(tg, cells, positive, fixed_sd = fixed_disp),
        b = list(occ = b_occ, det = b_det, pos = b_pos),
        blocks = blocks, n_cells = n_cells, re = re_draws)
 }
@@ -812,7 +829,7 @@
            weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
     })
     return(list(n = n, positive = positive, cells = cells,
-                disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = 1),
+                disp = .tobs_joint_disp(tg, cells, positive),
                 b = list(occ = b_occ, det = NULL, pos = b_pos),
                 blocks = blocks, n_cells = n_cells))
   }
@@ -855,7 +872,7 @@
   block <- list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = NULL)
 
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_amp(tg, cells, 1L, "phi_pos", default = 1),
+       disp = .tobs_joint_disp(tg, cells, positive),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = list(block), n_cells = n_phi)
 }
