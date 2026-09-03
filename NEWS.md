@@ -1,5 +1,154 @@
 # tulpaObs NEWS
 
+## 0.2.0 (2026-09-03)
+
+The 0.1.4 section below was never tagged or released, so everything in it
+reaches a user here for the first time, including its four breaking changes:
+`share()` replacing `copy()` as the cross-arm formula verb, and a bare areal
+term no longer coupling the arms on `cover()`, `occu_cover()` or
+`occu_multiscale_cover()`.
+
+* **The cover dispersion is reported as an SD on every route**
+  (gcol33/tulpaObs#306, gcol33/tulpaObs#309). The joint nested-Laplace path --
+  `occu_cover()`'s spatial default -- reported the cover arm's dispersion as the
+  residual VARIANCE where `laplace`, the non-spatial NUTS path and `cover()` all
+  report the SD, and it consumed a stated `control$phi.grid.pos`, documented in
+  SD, as variances. tulpa's R-level `phi` is per family: for the gaussian arm
+  that `lognormal` and `gaussian` both compile to it is the residual variance,
+  converted to the kernel's SD parameterization by the engine itself, while
+  `truncated_gaussian` and `interval_gaussian` carry the SD at both levels. The
+  axis was built from an SD pre-fit, so it explored variances over a span meant
+  for SDs and the read-out sites returned it unchanged.
+
+  On a null-field control, where the residual SD is the whole cover-arm spread
+  and nothing can absorb it:
+
+  ```
+  simulated cover SD   oracle   laplace   joint (before)   joint (after)
+        0.40           0.5053    0.4213       0.1849          0.4308
+        0.70           0.7818    0.7353       0.5657          0.7561
+  ```
+
+  `occu_multiscale_cover()` carried it further than a label:
+  `.occu_mscale_cover_sigma_pos()` reads that entry to build the lognormal
+  conditional mean, so `fitted()` and `predict()` applied the `exp(sigma^2 / 2)`
+  correction at the square of the dispersion -- about 9% on every predicted
+  cover value from a spatial multiscale fit. The conversion now lives in one
+  pair of functions rather than at each of the four decode sites, and a stated
+  `phi.grid` keeps its documented SD surface. The beta arm passes through
+  unconverted: its `phi` is a precision on both levels, so converting it would
+  be the mirror defect.
+
+* **The reported dispersion's SCALE is now asserted against a simulated truth**
+  (gcol33/tulpaObs#310). The defect above passed the whole cover / occu_cover /
+  ms_occu_cover / multiscale suite byte-identically, 2612 assertions, twice: the
+  recovery tests score arm coefficients and the mean model does not see the
+  dispersion scale, while the one test reading the entry scored it at
+  `tol <- if (p == "phi_pos") 5 else 0.15`, which a factor-of-sigma error passes
+  at every sigma its fixture produces. Two reads that do not depend on the
+  per-seed level are asserted instead -- the ratio across two truths at one seed
+  (1.757 / 1.775 / 1.806 against `0.70 / 0.40 = 1.75`, where the variance scale
+  gives 3.06) and that the estimate is nearer its truth than its truth squared,
+  which needs no tolerance at all. The beta arm is scored the same way as a
+  control.
+
+* **A standard error of exactly zero is a failed solve, not a value**
+  (gcol33/tulpaObs#307). `sqrt(pmax(diag(V), 0))` was the idiom at all 17 sites
+  reporting marginal standard errors. A diagonal entry the solve did not produce
+  as positive -- an indefinite or singular marginal Hessian, or a block that
+  never left its starting value -- was floored to 0, and 0 survives as a value:
+  the fit returns `converged = TRUE`, with an ordinary point estimate beside an
+  SE claiming infinite information from finite data. A Wald interval collapses
+  onto the estimate and a standardized residual is infinite, which is how the
+  `ms_abun(negbin)` coverage loop rendered a degenerate interval as "the errors
+  are not normal" -- a true failure pointing at the wrong quantity, since
+  `shapiro.test()` returns NaN on an infinity while dropping NA and NaN.
+
+  All 17 sites go through one `.tobs_sds_from_vcov()`, which returns NA for a
+  non-positive diagonal and is the previous expression to the bit wherever the
+  Hessian is positive definite. NA is the honest value and also the quiet one --
+  every `na.rm = TRUE` reader drops the pathological row and lets the survivors
+  report a clean number -- so the helper warns, naming the coordinates, at the
+  one place that knows the solve failed. A NULL block does not warn: that is "no
+  covariance available", an explicit contract of the callers.
+
+* **`share(residual = )` carries an arm deviation beside the copy.**
+  `share(spatial())` puts the occurrence field on the cover arm as `alpha * w`:
+  one amplitude, the same pattern, which is the whole model wherever the two
+  arms really do respond to one surface. Where they do not, the copy cannot
+  bend, the amplitude drifts toward whichever arm carries more information, and
+  a cover-arm pattern the occurrence field lacks is not fitted at all. A free
+  field placed in the positive formula fits any pattern, but costs 2K latent and
+  leaves the amplitude weakly identified, a free field being able to reproduce
+  `alpha * w` for any `alpha`.
+
+  `residual =` is the middle: the cover arm carries `alpha * w + delta` with
+  `delta` orthogonal to the shared component, so the two halves cannot trade
+  against each other. `residual = "full"` is one latent per field node and
+  compiles to the same blocks a placed positive-arm bar produces (asserted with
+  `expect_identical`), reported as an amplitude and a deviation rather than as
+  one surface. `residual = r` takes the r smoothest Laplacian modes scaled to
+  the ICAR covariance and projected off the shared field -- latent `K + r`
+  rather than `2K`, orthogonality exact by construction, and Sorbye-Rue column
+  scaling so a rank-r deviation's SD reads on a full field's scale and a rank
+  sweep is comparable. The deviation SD is pinned, a free one being an outer
+  axis per block, which forces `integration = "grid"`.
+
+* **A posterior SBC refit carries the copy-amplitude axis the fit asked for**
+  (gcol33/tulpaObs#305, gcol33/tulpaObs#311). A fit retained neither end of its
+  request: `fit$model$control` is empty, so the `alpha.grid` / `alpha.n` a
+  `share()` spec compiles into was gone, and `fit$model$formulas$pos` is `~1`
+  with the term stripped. `.tobs_sbc_pos_formula()` could only synthesise a bare
+  `share(spatial())`, so a replicate was analysed under a different model than
+  the observed data whenever the observed fit pinned its axis -- the engine
+  default `0, 0.1, ... 16.432` against a stated `0, 0.25, 0.75, 1.5`.
+
+  What is carried is the REQUEST, never the realised axis:
+  `control$adaptive.grid` refines a defaulted axis against the data and only
+  densifies a stated one, so handing back the nodes a fit realised asks for
+  something different from what it asked for. Restating them instead was tried
+  and reverted, having broken the same equivalence test in the other direction
+  (`sigma` 0.481 against 0.619 on identical data), so the distinction is written
+  at both ends.
+
+* **A decoupled block's pinned alpha is not an estimate on any route, and the
+  fused batch field is on the scale it is read on** (gcol33/tulpaObs#304). Both
+  are confined to the fused batch backend, which is not the default. It reported
+  an `alpha` in `means` / `sds` on a formula with no `share()`, because the
+  single-block branch of `.occu_cover_jc_postprocess()` read the amplitude
+  without the guard its two siblings carry: harmless on the single-block driver,
+  where a decoupled block builds no amplitude axis at all, but the fused path
+  reaches that branch with a multi-block engine fit, where the axis is present
+  and pinned at 0. Its `spatial_field` was also about 2.3x large and not by a
+  constant -- the multi-block driver returns a copied block's latent whitened,
+  where the single-block driver returns it already multiplied by that cell's
+  sigma, so the field was read one factor short per grid cell, and the
+  grid-weighted mean of a per-cell error is not a ratio. The per-cell modes
+  differ by exactly `1 / sigma` at every grid point. Everything else already
+  agreed: sigma axis, weights, `log_marginal`, and the coefficients to 7.7e-10.
+
+* **The cover `phi` axis default declares itself engine-placed.** Every computed
+  outer-grid default in the package carries the `auto_grid()` marker except the
+  four `phi_grid_pos` defaults, which are built from a pre-fit and were handed
+  over unmarked. The marker is how the engine separates an axis this package
+  placed from one the user pinned, so the auto-recenter has never been able to
+  move the phi axis onto its mode, on any cover route, and nothing said so. The
+  marker is set only when the user named nothing, leaving a stated grid a pin.
+  Byte-neutral today, and load-bearing under per-axis refinement control, where
+  an unmarked axis is treated as a stated bound and frozen.
+
+* **The test suite's assertion and skip counts are recorded per file, and a run
+  that drifts fails** (gcol33/tulpaObs#302). `tests/expected-counts.csv` holds
+  assertions as a floor and skips as a ceiling per (file, tier), so a block that
+  stops executing cannot report a clean tail. The recorder takes its numbers
+  from a measured run, refuses a run carrying any failure, and is add-only:
+  differences on an existing row are reported for a person rather than
+  overwritten, because "asserted fewer" is a leaner environment and a dead block
+  identically, and auto-taking the minimum would erase exactly the finding the
+  manifest exists for. Smoke floors come from the leanest box and full floors
+  from CI, deliberately. The on-request recovery tier can also now run a named
+  subset of files.
+
 ## 0.1.4 (2026-09-02)
 
 * **The sampled areal hypers changed what they reach, on every such fit.** Two
