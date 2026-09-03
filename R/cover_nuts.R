@@ -222,7 +222,7 @@
 
   means  <- colMeans(draws); names(means) <- par_names
   V_post <- stats::cov(draws); dimnames(V_post) <- list(par_names, par_names)
-  sds    <- sqrt(pmax(diag(V_post), 0)); names(sds) <- par_names
+  sds    <- .tobs_sds_from_vcov(V_post, par_names)
 
   # Per-arm posterior summaries on the natural coefficient scale, named to match
   # the design columns (so print / summary / predict.cover_fit read them).

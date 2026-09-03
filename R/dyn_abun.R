@@ -782,7 +782,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   nms <- raw$coef_names
   means <- raw$means; names(means) <- nms
   vcov <- as.matrix(raw$vcov); dimnames(vcov) <- list(nms, nms)
-  sds <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
+  sds <- .tobs_sds_from_vcov(vcov, nms)
   n_fixed <- length(nms); fixed_names <- nms
   n_pseudo <- 1000L
   draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms

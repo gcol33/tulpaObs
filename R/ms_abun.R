@@ -610,7 +610,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
          "block otherwise.", call. = FALSE)
   }
   rownames(vcov) <- colnames(vcov) <- nms
-  sds   <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
+  sds   <- .tobs_sds_from_vcov(vcov, nms)
 
   Sigma_lambda <- as.matrix(raw$Sigma_lambda)
   Sigma_p      <- as.matrix(raw$Sigma_p)

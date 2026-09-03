@@ -378,7 +378,7 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   vcov <- .nmix_vcov(raw, p_lam, p_p,
                      p_extra = (if (has_omega) 1L else 0L) + (if (has_logr) 1L else 0L))
   rownames(vcov) <- colnames(vcov) <- nms
-  sds <- sqrt(pmax(diag(vcov), 0))
+  sds <- .tobs_sds_from_vcov(vcov)
   names(sds) <- nms
 
   # The fixed-effect block is the leading (lambda, p[, log_r]) coordinates; the

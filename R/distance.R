@@ -425,7 +425,7 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   vcov <- as.matrix(raw$vcov)
   if (any(dim(vcov) != p_total)) vcov <- matrix(NA_real_, p_total, p_total)
   rownames(vcov) <- colnames(vcov) <- nms
-  sds <- sqrt(pmax(diag(vcov), 0)); names(sds) <- nms
+  sds <- .tobs_sds_from_vcov(vcov, nms)
 
   n_fixed <- length(nms); fixed_names <- nms
   n_pseudo <- 1000L

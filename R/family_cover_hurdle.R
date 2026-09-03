@@ -1145,9 +1145,9 @@ decode_cover_hurdle <- function(fits, enc, family,
   V_occ <- .unscale_vcov_block(V_occ_sc, enc$scale_occ)
   V_pos <- .unscale_vcov_block(V_pos_sc, enc$scale_pos)
   se_occ <- if (is.null(V_occ)) rep(NA_real_, p_occ_n) else
-    sqrt(pmax(diag(as.matrix(V_occ)), 0))
+    .tobs_sds_from_vcov(V_occ)
   se_pos <- if (is.null(V_pos)) rep(NA_real_, p_pos_n) else
-    sqrt(pmax(diag(as.matrix(V_pos)), 0))
+    .tobs_sds_from_vcov(V_pos)
   if (length(se_occ)) names(se_occ) <- names(beta_occ)
   if (length(se_pos)) names(se_pos) <- names(beta_pos)
 

@@ -175,7 +175,7 @@
 # still gets a vector of the right length.
 .sd_from_vcov <- function(V, p) {
   if (is.null(V)) return(rep(NA_real_, p))
-  sqrt(pmax(diag(as.matrix(V)), 0))
+  .tobs_sds_from_vcov(V)
 }
 
 # Transform an `n_draws x p` matrix of pseudo-draws (rows = posterior

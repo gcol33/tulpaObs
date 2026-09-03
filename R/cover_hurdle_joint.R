@@ -708,7 +708,7 @@
   for (k in seq_len(nrow(tg))) {
     L <- .cover_mcar_logchol_to_L(as.numeric(tg[k, axis_nm]), p)
     Sig <- L %*% t(L)
-    sds <- sqrt(pmax(diag(Sig), 0))
+    sds <- .tobs_sds_from_vcov(Sig)
     sd_mat[k, ] <- sds
     cc <- 1L
     for (a in seq_len(p - 1L)) for (b in (a + 1L):p) {

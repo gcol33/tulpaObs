@@ -119,7 +119,7 @@
 
   means <- fe$beta; names(means) <- nms
   V <- fe$vcov; dimnames(V) <- list(nms, nms)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nms
+  sds <- .tobs_sds_from_vcov(V, nms)
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V)
@@ -219,7 +219,7 @@
 
   means <- fe$beta; names(means) <- nms
   V <- fe$vcov; dimnames(V) <- list(nms, nms)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nms
+  sds <- .tobs_sds_from_vcov(V, nms)
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V)

@@ -272,7 +272,7 @@
   V <- tryCatch(solve(info), error = function(e) diag(NA_real_, length(means)))
   V <- (V + t(V)) / 2
   dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+  sds <- .tobs_sds_from_vcov(V, par_names)
 
   draws <- .rmvn(n_draws, means, V)
   colnames(draws) <- par_names
@@ -326,7 +326,7 @@ extract_beta <- function(sub, p) {
   if (is.null(H)) return(rep(NA_real_, p))
   cov <- tryCatch(solve(H), error = function(e) NULL)
   if (is.null(cov)) return(rep(NA_real_, p))
-  d <- sqrt(pmax(diag(cov), 0))
+  d <- .tobs_sds_from_vcov(cov)
   if (length(d) >= p) return(d[seq_len(p)])
   c(d, rep(NA_real_, p - length(d)))
 }
@@ -474,12 +474,65 @@ extract_beta <- function(sub, p) {
   I_dd
 }
 
+# Marginal standard errors from a covariance block.
+#
+# A diagonal entry that is not strictly positive is NOT a small standard error.
+# It is a variance the solve did not produce -- an indefinite or singular
+# marginal Hessian, or a block that never left the value it started from -- and
+# reporting it as 0 claims infinite information from finite data. Flooring it
+# there is what lets a fit come back `converged = TRUE` carrying an interval of
+# zero width, which every reader downstream then takes at face value: a Wald
+# interval collapses onto the estimate, a standardized residual is infinite, and
+# a coverage loop scores that seed as data rather than skipping it.
+#
+# It comes back NA instead, which those readers already handle -- `.cor_scaled_cov()`
+# maps a non-finite SE to a point mass, an interval is NA rather than degenerate,
+# and `shapiro.test()` and friends DROP an NA where they return NaN on the
+# infinity a zero SE produces.
+#
+# On a fit whose Hessian is positive definite this is the previous expression to
+# the bit, so the change is confined to the pathological cases it exists for.
+#
+# NOT for a variance COMPONENT (a community `Sigma` diagonal, an EM `sigma_k`):
+# those sit at a boundary legitimately and zero is a value there, not a failure.
+.tobs_sds_from_vcov <- function(V, names = NULL) {
+  n <- length(names)
+  if (is.null(V)) {
+    return(if (n) stats::setNames(rep(NA_real_, n), names) else numeric(0))
+  }
+  d <- diag(as.matrix(V))
+  s <- rep(NA_real_, length(d))
+  ok <- is.finite(d) & d > 0
+  s[ok] <- sqrt(d[ok])
+  if (n) names(s) <- names
+  # NA is the honest value and the QUIET failure, and those pull opposite ways:
+  # a zero SE announces itself downstream (it makes a standardized residual
+  # infinite, and `shapiro.test()` returns NaN on an infinity where it silently
+  # DROPS an NA), while an NA is dropped by every `na.rm = TRUE` reader, taking
+  # the pathological row out of the sample and leaving the survivors to report a
+  # clean number. So the value is NA and the noise is made here, at the one place
+  # that knows the solve failed, rather than left to whichever consumer happens
+  # to guard on `is.finite`.
+  #
+  # A NULL block above is not this: that is "no covariance available", an
+  # explicit contract of the callers, not a solve that returned a bad one.
+  if (any(!ok)) {
+    lbl <- if (n) paste(names[!ok], collapse = ", ") else
+             paste(which(!ok), collapse = ", ")
+    warning("no positive marginal variance for ", lbl,
+            "; the standard error is reported as NA rather than 0. A fit ",
+            "reaching this is not identified in that coordinate, whatever its ",
+            "convergence flag says.", call. = FALSE)
+  }
+  s
+}
+
 # SE vector from an observed-info matrix; returns NA of length p on failure.
 .se_from_info <- function(I, p) {
   if (is.null(I)) return(rep(NA_real_, p))
   cov <- tryCatch(solve(I), error = function(e) NULL)
   if (is.null(cov)) return(rep(NA_real_, p))
-  d <- sqrt(pmax(diag(cov), 0))
+  d <- .tobs_sds_from_vcov(cov)
   if (length(d) >= p) d[seq_len(p)] else c(d, rep(NA_real_, p - length(d)))
 }
 

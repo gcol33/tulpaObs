@@ -266,7 +266,7 @@
                 error = function(e) diag(NA_real_, length(means)))
   V <- (V + t(V)) / 2
   dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+  sds <- .tobs_sds_from_vcov(V, par_names)
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V)
@@ -348,7 +348,7 @@
     paste0(pp$name, "_", pp$coef_names)))
   means <- res$beta_mean; names(means) <- nm
   V <- res$vcov; dimnames(V) <- list(nm, nm)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nm
+  sds <- .tobs_sds_from_vcov(V, nm)
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V); colnames(draws) <- nm
 

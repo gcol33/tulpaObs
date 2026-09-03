@@ -97,7 +97,7 @@
   raw <- list(
     beta_psi = means[i_psi], beta_p11 = means[i_p11],
     beta_p10 = means[i_p10], beta_b = means[i_b],
-    means = means, vcov = V, theta_se = sqrt(pmax(diag(V), 0)),
+    means = means, vcov = V, theta_se = .tobs_sds_from_vcov(V),
     log_lik = res$log_lik, w1 = ev$w1, converged = TRUE, n_iter = NA_integer_,
     coef_names = nm)
   fit <- build_fp_occu_fit(raw, model)

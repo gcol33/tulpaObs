@@ -488,7 +488,7 @@
   means <- as.numeric(means); names(means) <- par_names
   V <- (V + t(V)) / 2
   dimnames(V) <- list(par_names, par_names)
-  sds <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
+  sds <- .tobs_sds_from_vcov(V, par_names)
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V)
