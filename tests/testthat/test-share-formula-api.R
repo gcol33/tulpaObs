@@ -238,7 +238,13 @@ test_that("the compiled axis is the axis the fit integrates", {
     detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
     visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
-                   adaptive.grid = FALSE)))
+                   adaptive.grid = FALSE,
+                   var.of.means.consistency = FALSE)))
+  # A genuinely fixed outer grid takes BOTH knobs: refinement reaches a stated
+  # axis from the adaptive passes AND from the var-of-means consistency pass,
+  # and the second runs whatever `adaptive.grid` is. With only the first off,
+  # this fit integrates c(0.25, 0.5, 0.7303, 1, 1.5) -- inside the stated range,
+  # so the axis is still bounded by what the formula wrote, but not equal to it.
   # theta_grid labels the copy axis "alpha" on a single-block fit and
   # "b<k>.alpha" on a multi-block one.
   tg    <- fit$joint_fit$theta_grid %||% fit$joint$theta_grid

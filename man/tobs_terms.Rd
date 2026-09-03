@@ -249,9 +249,13 @@ whose default grid misses the mode go and find it.
 Denser cells make the outer half step smaller, so refining a stated axis
 tightens its span toward the range you wrote rather than widening it: a
 stated \code{c(0.2, 0.5)} spans \code{[0.127, 0.791]} with refinement off
-and \code{[0.184, 0.570]} with it on. Set
-\code{control$adaptive.grid = FALSE} to hold the axis at exactly the nodes
-stated. Under \code{method = "nuts"} a fit reports the span each sampled
+and \code{[0.184, 0.570]} with it on. Holding an axis at exactly the nodes
+stated takes BOTH \code{control$adaptive.grid = FALSE} and
+\code{control$var.of.means.consistency = FALSE}: refinement reaches an axis
+from two independent passes, and the consistency pass runs whatever the
+adaptive grid is set to, so a fit that turns off only the first still
+integrates nodes placed inside the range it wrote.
+Under \code{method = "nuts"} a fit reports the span each sampled
 hyperparameter was worked over in \code{fit$nuts$hyper_support}, which is
 the region that hyperparameter's flat prior is supported on.
 }
