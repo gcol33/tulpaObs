@@ -85,8 +85,24 @@ test_that("the two-column graph is the lexicographic Euclidean one, exactly", {
       pair <- outer(seq_len(m), seq_len(m), function(a, b) {
         sqrt((nb[a, 1] - nb[b, 1])^2 + (nb[a, 2] - nb[b, 2])^2)
       })
-      expect_equal(unname(g$nn_neighbor_dist[i, seq_len(m), seq_len(m)]),
-                   pair, tolerance = 0)
+      # Toleranced where the two above are exact, because this is the one
+      # comparison that crosses a language boundary. The pairwise block comes
+      # from stats::dist(), a compiled C loop accumulating `dist += dev * dev`
+      # (stats/src/distance.c); `pair` is the same arithmetic evaluated by the R
+      # interpreter. Where fused multiply-add is in the baseline instruction set
+      # the compiler contracts that accumulation and the two land a fraction of
+      # an ULP apart -- so on aarch64 they differ and on x86_64 they do not.
+      # nn_idx and nn_dist stay exact: nn_dist is built with rowSums(), which
+      # has no multiply to fuse.
+      #
+      # Measured in ULPs of the value, which is the scale the difference lives
+      # on, and reported rather than swallowed -- a bound alone cannot separate
+      # one ULP of contraction from a wrong neighbour block, and the two want
+      # opposite responses.
+      got <- unname(g$nn_neighbor_dist[i, seq_len(m), seq_len(m)])
+      ulp_gap <- max(abs(got - pair) /
+                     (pmax(abs(pair), .Machine$double.xmin) * .Machine$double.eps))
+      expect_lt(ulp_gap, 4)
     }
   }
 

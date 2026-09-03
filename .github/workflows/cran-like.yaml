@@ -1,0 +1,121 @@
+name: cran-like
+
+# Runs the tier r-universe and CRAN run, which nothing else here does (issue
+# #313), on both architectures they build for (issue #314).
+#
+# The suite gates its expensive blocks with skip_if_fast() and skip_on_cran(),
+# and every other workflow sets at least one of them: R-CMD-check.yaml and
+# smoke.yaml set TULPAOBS_FAST=1, full-recovery.yaml sets NOT_CRAN=true. A
+# block carrying ONLY skip_if_fast() therefore executes on r-universe, where
+# neither variable is set, and nowhere else on a push. That is how a fixed-grid
+# regression reached a tagged release green (#312): the block that would have
+# caught it runs in exactly one place, and that place is not read here.
+#
+# So this job sets NEITHER variable. skip_on_cran() still removes the multi-hour
+# recovery blocks, which is what keeps it to a few minutes rather than the
+# full-recovery tier.
+#
+# Both architectures, because they do not agree. Every aarch64 r-universe build
+# has failed its check since 0.1.4 while every x86_64 build passed the same
+# commit, and nothing here ever read that (#314). aarch64 has fused
+# multiply-add in the baseline instruction set and gcc contracts into it by
+# default, so a compiled accumulation lands a fraction of an ULP away from the
+# same arithmetic evaluated by the R interpreter. An assertion written as an
+# exact equality across that boundary holds on x86_64 by luck.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Base R only, so it reports the architecture's floating-point behaviour
+  # without waiting for the engine to compile. Runs on both arches to give the
+  # difference between them a number rather than an inference.
+  fp-probe:
+    name: fp-probe ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Probe cross-implementation floating-point agreement
+        run: Rscript .github/scripts/arch-fp-probe.R
+
+  check:
+    name: cran-like ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      MAKEFLAGS: "-j4"
+      _R_CHECK_FORCE_SUGGESTS_: false
+      # TULPAOBS_FAST and NOT_CRAN are deliberately absent. Setting either one
+      # is what makes this job a duplicate of a workflow that already exists.
+      TULPAOBS_PROGRESS: '0'
+      # Deterministic, for the same reason R-CMD-check.yaml pins it off on
+      # push: the callr worker pool is where #289 lands.
+      TESTTHAT_PARALLEL: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+          extra-repositories: https://gcol33.r-universe.dev
+
+      - name: Verify floor availability
+        run: Rscript .github/scripts/check-floor-served.R
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          dependencies: '"hard"'
+          extra-packages: |
+            any::rcmdcheck
+            any::testthat
+            any::knitr
+            any::rmarkdown
+            any::loo
+            any::MASS
+            any::betareg
+            any::dplyr
+            any::ggplot2
+
+      - name: Verify engine pin
+        run: Rscript .github/scripts/check-engine-pin.R
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual", "--as-cran")'
+          upload-snapshots: true

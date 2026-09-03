@@ -92,12 +92,31 @@ test_that("joint and NUTS occu_cover() backends report field_sd in the same conv
     control = list(verbose = FALSE, n.iter = 500L, n.warmup = 300L, seed = 1)
   ))))
 
-  fsd_joint <- fit_joint$spatial$field_sd_mean
-  fsd_nuts  <- mean(fit_nuts$hyper_draws[, "field_sd"])
+  scale_q <- tulpaObs:::.occu_cover_icar_scale(adj)
 
-  # Same convention, not the same estimator -- allow generous small-N slack (
-  # measured sd ratio ~0.88 between these two engines on a comparable fixture),
-  # but a leftover sqrt(scale_q) =~ 2.13 unit mismatch would blow well past
-  # this.
-  expect_lt(abs(log(fsd_joint / fsd_nuts)), log(2))
+  # The convention is a DETERMINISTIC relation on each backend -- field_sd is
+  # sigma rescaled by a graph constant, not an estimate -- so it is asserted as
+  # one, on every draw, the same way the joint path is asserted against
+  # sigma_mean above. Comparing two point estimates instead cannot separate a
+  # unit mismatch from ordinary estimator disagreement, and it is not what the
+  # claim says.
+  expect_equal(unname(fit_nuts$hyper_draws[, "field_sd"]),
+               unname(fit_nuts$hyper_draws[, "sigma"]) * sqrt(scale_q),
+               tolerance = 1e-12)
+
+  fsd_joint <- fit_joint$spatial$field_sd_mean
+  # Median, not mean. This posterior is strongly right-skewed -- on the
+  # reference fixture the 95th percentile of field_sd sits an order of
+  # magnitude above the median -- so its mean is carried by the tail and moves
+  # with whatever draws a platform's arithmetic happens to produce. The mean
+  # is what made this block fail on aarch64 and pass on x86_64 (issue #314);
+  # the median is the summary the package already uses for variance-scale
+  # posteriors elsewhere, for the same reason.
+  fsd_nuts <- stats::median(fit_nuts$hyper_draws[, "field_sd"])
+
+  # Two different estimators on 30 cells, so this is a gross-divergence guard
+  # only. It is deliberately looser than the log(2) it replaces: the unit
+  # question it used to stand in for is now carried by the exact assertion
+  # above, which is the stricter instrument, so the slack here costs no signal.
+  expect_lt(abs(log(fsd_joint / fsd_nuts)), log(4))
 })
