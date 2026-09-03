@@ -1,5 +1,35 @@
 # tulpaObs NEWS
 
+## 0.2.1 (2026-09-03)
+
+* **Holding an outer-grid axis at exactly the nodes stated takes two knobs, not
+  one** (gcol33/tulpaObs#312). `?tobs_terms` said `control$adaptive.grid = FALSE`
+  holds a stated axis at the nodes the formula wrote. Refinement reaches an axis
+  from two independent passes, and the second -- the var-of-means consistency
+  pass -- runs whatever `adaptive.grid` is set to, so a fit turning off only the
+  first still integrates nodes placed inside the stated range: a
+  `share(spatial(), alpha = grid(c(0.25, 0.5, 1, 1.5)))` fit came back
+  integrating five alpha nodes, the fifth at 0.7303. A genuinely fixed outer
+  grid is `adaptive.grid = FALSE` AND `var.of.means.consistency = FALSE`, which
+  is what the joint fitter's own comment says and what
+  `test-cover-hurdle-adaptive-grid.R` already asserts on the `cover()` path.
+  The stated nodes are a BOUND either way -- refinement never places a node past
+  an end node, which is what #301 established -- so no fit's numbers move here:
+  the documentation and the one test that read the promise the other way are
+  what change.
+
+  The engine behaviour arrived in tulpa 0.2.14 (gcol33/tulpa#658), the version
+  0.2.0 pinned. Measured on one fixture with the engine swapped underneath a
+  fixed tulpaObs binary in a private library: 0.2.14 and 0.3.0 place the same
+  fifth node, to the digit.
+
+* **r-universe can build tulpaObs binaries again.** Each binary job runs
+  `R CMD check` with no `TULPAOBS_FAST` set, so it reaches the
+  `test-share-formula-api.R` block that the package's own gate skips
+  (`R-CMD-check.yaml` sets `TULPAOBS_FAST=1`), and 13 of 14 binary jobs were
+  failing on that single assertion -- `[ FAIL 1 | WARN 21 | SKIP 810 |
+  PASS 6244 ]` -- while the source job passed and published.
+
 ## 0.2.0 (2026-09-03)
 
 The 0.1.4 section below was never tagged or released, so everything in it
