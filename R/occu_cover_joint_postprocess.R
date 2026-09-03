@@ -221,11 +221,18 @@
   hyper_names <- character(0)
   # `skip` carries the same meaning it does on pick2 below: an axis the fit's own
   # spec says is not a parameter is not reported, even when the grid carries it.
-  pick <- function(name, public = name, skip = FALSE) {
+  # `sd_family` puts a dispersion axis onto cover()'s SD surface before the
+  # moments are taken: the grid column is the ENGINE's phi for that family,
+  # which for the gaussian arm `lognormal` and `gaussian` compile to is the
+  # residual VARIANCE. Converted per cell rather than after averaging, so the
+  # reported estimate is the posterior mean of the SD -- what the name says, and
+  # what the per-draw `$disp` the diagnostics read already reports.
+  pick <- function(name, public = name, skip = FALSE, sd_family = NULL) {
     if (isTRUE(skip)) return(invisible(NULL))
     j <- match(name, tg_names)
     if (is.na(j)) return(invisible(NULL))
     vals <- as.numeric(tg_ok[, j])
+    if (!is.null(sd_family)) vals <- .cover_phi_to_sd(vals, sd_family)
     m <- sum(w * vals)
     v <- sum(w * vals^2) - m^2
     hyper_means[[public]] <<- m
@@ -236,6 +243,10 @@
   # On the latent path the pos arm's phi axis IS the cover-latent SD; surface it
   # as `sigma_u` rather than the engine's generic `phi_pos`.
   phi_pos_public <- if (is_latent) "sigma_u" else "phi_pos"
+  # The latent path's phi axis IS `sigma_u`, an SD on both levels, so it takes
+  # no conversion; the non-latent axis is the cover dispersion and does.
+  phi_pos_family <- if (is_latent) NULL else
+    .cover_pos_engine_family(model$positive)
   # Exact read of an optional hyper: `[[` errors on a missing name and `$`
   # prefix-matches ("alpha" would resolve to "alpha_trend"/"alpha_mcar").
   hyper_opt <- function(name) if (name %in% names(hyper_means))
@@ -369,7 +380,7 @@
       put_derived(sprintf("rho_mcar_%d%d", a, b), rho_mat[, cc]); cc <- cc + 1L
     }
     pick2("alpha_mcar", "b1.alpha", skip = isTRUE(ctx$alpha_decoupled))
-    pick("phi_pos", phi_pos_public)
+    pick("phi_pos", phi_pos_public, sd_family = phi_pos_family)
   } else if (has_trend || has_any_re || has_pos_armspec || has_residual) {
     # Multi-block: block 1 is the intercept field, blocks 2.. the trend fields,
     # then the RE block(s). A single trend field keeps the bare
@@ -475,7 +486,7 @@
       re_terms[[i]]$sigma <- sigma_vec
       re_terms[[i]]$cor   <- cor_mat
     }
-    pick("phi_pos", phi_pos_public)
+    pick("phi_pos", phi_pos_public, sd_family = phi_pos_family)
   } else {
     # `alpha` carries the same guard as its two siblings above. On the
     # single-block driver a decoupled block builds no amplitude axis at all, so
@@ -485,7 +496,7 @@
     # `alpha` before the summary resolves. Unguarded, that pinned zero is
     # reported as an estimate on the fused route and on no other.
     pick("sigma"); pick("alpha", skip = isTRUE(ctx$alpha_decoupled))
-    pick("phi_pos", phi_pos_public)
+    pick("phi_pos", phi_pos_public, sd_family = phi_pos_family)
     put_field_sd("sigma", "field_sd")
   }
   # Free-parameter count for the AIC / BIC penalty, taken BEFORE the outer

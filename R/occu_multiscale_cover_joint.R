@@ -214,6 +214,13 @@
   } else {
     if (length(pos_vals) > 0L) max(stats::sd(log(pos_vals)), 0.05) + 0.05 else 0.4
   }
+  # The pre-fit is stated on cover()'s surface -- an SD for the lognormal and
+  # gaussian arms, a precision for beta -- while the arm's `phi` slot is the
+  # engine convention, the residual VARIANCE for the gaussian arm both of the
+  # first two compile to. Converted here, at the one place the pre-fit becomes
+  # the arm's dispersion, through the same pair `cover()` and `occu_cover()` use.
+  phi_pos_init <- .cover_phi_sd_to_engine(
+    phi_pos_init, .cover_pos_engine_family(model$positive))
 
   alpha_axis <- .tobs_alpha_axis_base(dots)
   sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
@@ -301,8 +308,15 @@
     copy_arg  <- NULL
   }
 
+  # Stated in the same surface as the pre-fit above, so it takes the same
+  # conversion -- without it a stated axis explores variances over a span meant
+  # for SDs.
   phi_grid_pos <- dots$phi.grid.pos
-  phi_grid_arg <- if (!is.null(phi_grid_pos)) list(pos = as.numeric(phi_grid_pos)) else NULL
+  phi_grid_arg <- if (!is.null(phi_grid_pos))
+                    list(pos = .cover_phi_sd_to_engine(
+                      as.numeric(phi_grid_pos),
+                      .cover_pos_engine_family(model$positive)))
+                  else NULL
 
   fit_call <- list(
     responses     = responses,
@@ -453,10 +467,17 @@
   # are "sigma"/"alpha"; the multi-block trend path names them per block
   # ("b1.sigma", "b2.alpha", ...), surfaced as sigma/alpha (block 1) and
   # sigma_trend/alpha_trend (blocks 2..), mirroring occu_cover.
-  pick <- function(public, col = public) {
+  # `sd_family` converts a dispersion axis from the engine's phi to the SD
+  # surface before the moments, as on occu_cover: for the gaussian arm both
+  # `lognormal` and `gaussian` compile to, the grid column is the residual
+  # VARIANCE, and `.occu_mscale_cover_sigma_pos()` reads what lands here as the
+  # SD to build the lognormal conditional mean.
+  phi_family <- .cover_pos_engine_family(model$positive)
+  pick <- function(public, col = public, sd_family = NULL) {
     j <- match(col, tg_names)
     if (is.na(j)) return(invisible(NULL))
     vals <- as.numeric(tg_ok[, j])
+    if (!is.null(sd_family)) vals <- .cover_phi_to_sd(vals, sd_family)
     m <- sum(w * vals); v <- sum(w * vals^2) - m^2
     hyper_means[[public]] <<- m; hyper_sds[[public]] <<- sqrt(max(v, 0))
     hyper_names <<- c(hyper_names, public)
@@ -468,9 +489,10 @@
       pick(paste0("sigma_trend", suffix), sprintf("b%d.sigma", j + 1L))
       pick(paste0("alpha_trend", suffix), sprintf("b%d.alpha", j + 1L))
     }
-    pick("phi_pos")
+    pick("phi_pos", sd_family = phi_family)
   } else {
-    for (nm in c("sigma", "alpha", "phi_pos")) pick(nm)
+    for (nm in c("sigma", "alpha")) pick(nm)
+    pick("phi_pos", sd_family = phi_family)
   }
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])
