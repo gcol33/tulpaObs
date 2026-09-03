@@ -211,30 +211,6 @@
   f
 }
 
-# The support the observed fit's copy amplitude actually integrated.
-#
-# Every other outer axis reaches a replicate as a STATED grid -- `sigma.grid`
-# and `phi.grid.pos` travel in `fit.control`, and a stated axis is densified
-# deterministically, so each fit integrates the same nodes. The copy amplitude
-# is the exception: with nothing stated it is built from the fit's own warm
-# mode, so each replicate integrates a support of its own, centred on its own
-# data. That is not a resolution question. It makes the reference distribution
-# a function of the replicate, which is exactly the exchangeability posterior
-# SBC rests on, and because the axes share ONE grid it also moves the marginal
-# weights on the pinned `sigma` and dispersion axes -- so all three read as
-# mis-calibrated while the arm coefficients, which the axis placement does not
-# move, read as clean.
-#
-# Read from the fitted grid rather than from what the fit asked for, so the
-# nodes are the ones integrated whether the axis was stated or defaulted.
-.tobs_sbc_alpha_nodes <- function(fit) {
-  jf <- .tobs_joint_fit(fit)
-  tg <- jf$theta_grid
-  if (is.null(tg) || !("alpha" %in% colnames(tg))) return(NULL)
-  a <- sort(unique(as.numeric(tg[, "alpha"])))
-  if (length(a) < 2L) NULL else a
-}
-
 # The cover formula, carrying the shared field's copy onto the cover arm when
 # the observed fit carried one. Without the copy the cover arm never sees the
 # field and `alpha` is pinned at zero, which is a different model.
@@ -246,14 +222,8 @@
     return(spec$pos)
   }
   lab <- attr(stats::terms(spec$pos), "term.labels")
-  # The nodes go in as a literal vector rather than through a deparse, so the
-  # axis the replicate integrates is the observed one to the last bit.
-  cp <- if (is.null(spec$alpha_nodes)) quote(share(spatial())) else
-    as.call(list(quote(share), quote(spatial()),
-                 alpha = as.call(list(quote(grid), spec$alpha_nodes))))
-  rhs <- Reduce(function(a, b) call("+", a, b),
-                c(lapply(lab, str2lang), list(cp)))
-  f <- stats::as.formula(call("~", rhs))
+  f <- stats::as.formula(
+    paste("~", paste(c(lab, "share(spatial())"), collapse = " + ")))
   environment(f) <- globalenv()
   f
 }
@@ -2990,7 +2960,6 @@
   # own draws: the copy is what gives `alpha` a posterior at all, and without it
   # the cover arm never sees the field.
   spec$has_copy <- "alpha" %in% scored
-  spec$alpha_nodes <- if (isTRUE(spec$has_copy)) .tobs_sbc_alpha_nodes(object)
   .tobs_sbc_check_fixed_dispersion(object, fixed)
 
   structure(list(
