@@ -8,8 +8,30 @@
 # Louis/Fisher block in distance_kernel.h, filling only log_lik (plus the
 # mean_N / var_N / boundary_weight the log-likelihood sum already produces as a
 # side effect). What is asserted here is that this is a pure performance path:
-# log_lik must be bit-for-bit identical to the full sweep, at both detection
-# keys and with the oracle's site-subset (idx) contract.
+# log_lik must agree with the full sweep to within floating-point reassociation,
+# at both detection keys and with the oracle's site-subset (idx) contract.
+#
+# Agreement is to a few ULP, not to the bit, and that is a property of the code
+# rather than a slack allowance. Both branches obtain g by identical
+# expressions -- dist_key_value() returns exp(-0.5 * u) and dist_key_deriv()
+# assigns k.g the same, likewise 1 - exp(-z) under the hazard key -- so the
+# arithmetic content is the same. What differs is the shape of the loop
+# consuming it: `s += w * dist_key_value(...)` alone is a reduction a compiler
+# can contract into a single fused multiply-add, while `s += w * k.g`
+# interleaved with five other accumulations schedules differently. Where FMA is
+# in the baseline instruction set the two contract differently and the sums part
+# by a few ULP; on x86_64 there is no FMA to contract into and they coincide, so
+# asserting bit-identity pinned an accident of x86_64 codegen (issue #314). The
+# gap is bounded in ULPs and reported instead: a genuine divergence between the
+# two paths would be orders of magnitude larger. The site-subset test below
+# compares the value-only path against itself, one loop shape, and stays exact.
+
+# Gap between two floating-point vectors in ULPs of the value, the scale a
+# reassociation difference actually lives on.
+max_ulp_gap <- function(actual, expected) {
+  max(abs(actual - expected) /
+      (pmax(abs(expected), .Machine$double.xmin) * .Machine$double.eps))
+}
 
 test_that("cpp_distance_site_sweep(value_only = TRUE) matches the full sweep exactly", {
   set.seed(101)
@@ -27,7 +49,11 @@ test_that("cpp_distance_site_sweep(value_only = TRUE) matches the full sweep exa
   full  <- eng$sweep(1, eta_lam, eta_sig, 0, value_only = FALSE)
   value <- eng$sweep(1, eta_lam, eta_sig, 0, value_only = TRUE)
 
-  expect_identical(as.numeric(full$log_lik), as.numeric(value$log_lik))
+  fl <- as.numeric(full$log_lik); vl <- as.numeric(value$log_lik)
+  # Which sites are impossible (-Inf) is a branch, not an accumulation, so that
+  # stays exact; only the finite sums carry the reassociation.
+  expect_identical(is.finite(fl), is.finite(vl))
+  expect_lt(max_ulp_gap(fl[is.finite(fl)], vl[is.finite(vl)]), 64)
   expect_identical(full$n_inadmissible, value$n_inadmissible)
 })
 
@@ -47,7 +73,9 @@ test_that("value_only path matches under the hazard-rate key (nd == 2 detection 
   full  <- eng$sweep(1, eta_lam, eta_sig, 0.3, value_only = FALSE)
   value <- eng$sweep(1, eta_lam, eta_sig, 0.3, value_only = TRUE)
 
-  expect_identical(as.numeric(full$log_lik), as.numeric(value$log_lik))
+  fl <- as.numeric(full$log_lik); vl <- as.numeric(value$log_lik)
+  expect_identical(is.finite(fl), is.finite(vl))
+  expect_lt(max_ulp_gap(fl[is.finite(fl)], vl[is.finite(vl)]), 64)
 })
 
 test_that("oracle ll_cell() uses the value-only path and matches the site-subset contract", {
