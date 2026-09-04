@@ -77,8 +77,17 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
       MAKEFLAGS: "-j4"
       _R_CHECK_FORCE_SUGGESTS_: false
-      # TULPAOBS_FAST and NOT_CRAN are deliberately absent. Setting either one
-      # is what makes this job a duplicate of a workflow that already exists.
+      # TULPAOBS_FAST is deliberately absent: leaving it unset is what makes a
+      # block gated only by skip_if_fast() execute here.
+      #
+      # NOT_CRAN must be set, and set to false. r-lib/actions/setup-r exports
+      # NOT_CRAN=true by default, so leaving it alone does not give the CRAN
+      # configuration -- it gives skip_on_cran() not skipping either, which with
+      # TULPAOBS_FAST unset is the ~9h full-recovery tier, not this one. That is
+      # not a hypothetical: the first run of this workflow did exactly that and
+      # was still inside `checking tests` at the 120 minute cap, against 331s
+      # for the same tier on r-universe.
+      NOT_CRAN: 'false'
       TULPAOBS_PROGRESS: '0'
       # Deterministic, for the same reason R-CMD-check.yaml pins it off on
       # push: the callr worker pool is where #289 lands.
@@ -114,6 +123,24 @@ jobs:
 
       - name: Verify engine pin
         run: Rscript .github/scripts/check-engine-pin.R
+
+      # The whole value of this job is which tier it runs, and that is decided
+      # by two environment variables an action can set behind you. A job that
+      # silently ran the wrong tier would still go green, so assert the identity
+      # here rather than infer it from the run time.
+      - name: Verify tier identity
+        run: |
+          fail=0
+          if [ "${NOT_CRAN}" = "true" ]; then
+            echo "::error::NOT_CRAN is 'true'; skip_on_cran() will not skip and this becomes the full-recovery tier."
+            fail=1
+          fi
+          if [ -n "${TULPAOBS_FAST}" ]; then
+            echo "::error::TULPAOBS_FAST is set ('${TULPAOBS_FAST}'); skip_if_fast() will skip the blocks this job exists to run."
+            fail=1
+          fi
+          echo "NOT_CRAN='${NOT_CRAN}' TULPAOBS_FAST='${TULPAOBS_FAST}' -- cran-like tier"
+          exit $fail
 
       - uses: r-lib/actions/check-r-package@v2
         with:
