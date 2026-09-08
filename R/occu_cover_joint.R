@@ -578,11 +578,19 @@
     # `phi.grid.pos` in SD for the lognormal and gaussian arms), so it takes the
     # same conversion -- without it a stated axis explores variances over a span
     # meant for SDs.
+    # The conversion goes through `as.numeric()`, which drops the marker, so the
+    # provenance is re-applied on the converted vector -- the same shape
+    # `cover_hurdle_joint_decode.R` uses. A plain vector stays a pin; a caller
+    # who wrapped theirs in `auto_grid()` is stating it is a default they
+    # computed, and the engine then places it on its own posterior instead of
+    # integrating the span as written.
     phi_grid_pos <- dots$phi.grid.pos
     phi_grid_arg <- if (!is.null(phi_grid_pos))
-                      list(pos = .cover_phi_sd_to_engine(
-                        as.numeric(phi_grid_pos),
-                        .cover_pos_engine_family(model$positive)))
+                      list(pos = .tobs_mark_auto(
+                        .cover_phi_sd_to_engine(
+                          as.numeric(phi_grid_pos),
+                          .cover_pos_engine_family(model$positive)),
+                        tulpa::is_auto_grid(phi_grid_pos)))
                     else NULL
   }
 

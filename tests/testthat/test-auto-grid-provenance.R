@@ -337,3 +337,22 @@ test_that("occu_cover() declines to recenter a PINNED axis but not a defaulted o
   auto <- run(list())
   expect_false(identical(auto$outer_grid_recenter_declined, "axis_pinned"))
 })
+
+test_that("a stated phi.grid.pos keeps its own provenance across the conversion", {
+  skip_if_no_auto_grid()
+  # `?occu_cover` documents `phi.grid.pos` in SD for the lognormal and gaussian
+  # arms, so the dispatcher converts it to the engine's variance scale -- through
+  # `as.numeric()`, which drops the marker. A plain vector must stay a pin, and a
+  # caller who declared theirs a default must keep that across the conversion,
+  # since it is what decides whether the engine places the axis or integrates the
+  # span as written (gcol33/tulpa#663).
+  conv <- function(x) tulpaObs:::.tobs_mark_auto(
+    tulpaObs:::.cover_phi_sd_to_engine(as.numeric(x), "gaussian"),
+    tulpa::is_auto_grid(x))
+  sd_nodes <- c(0.2, 0.4, 0.8)
+  expect_false(tulpa::is_auto_grid(conv(sd_nodes)))
+  expect_true(tulpa::is_auto_grid(conv(tulpa::auto_grid(sd_nodes))))
+  # The conversion itself is unchanged either way.
+  expect_equal(as.numeric(conv(sd_nodes)), sd_nodes^2)
+  expect_equal(as.numeric(conv(tulpa::auto_grid(sd_nodes))), sd_nodes^2)
+})
