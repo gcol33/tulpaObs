@@ -565,11 +565,14 @@
   # sigma_u (the cover-latent SD), integrated over `sigma.u.grid` (default a
   # log-spaced grid around the between-unit init); the within-unit dispersion is
   # fixed in the spec. Otherwise the phi slot is sigma_pos and the optional
-  # `phi.grid.pos` integrates it.
+  # `phi.grid.pos` integrates it. Both reach the engine's dispersion-axis
+  # placement (gcol33/tulpa#663), which acts on provenance: `.tobs_num_auto()`
+  # carries the defaulting function's `auto_grid()` marker across the coercion,
+  # and a stated grid -- which never passes through that function -- reaches the
+  # engine unmarked and is integrated exactly as written.
   if (is_latent) {
-    su_grid <- dots$sigma.u.grid %||%
-               (sigma_u_init * exp(seq(log(0.4), log(2.5), length.out = 4L)))
-    phi_grid_arg <- list(pos = as.numeric(su_grid))
+    su_grid <- dots$sigma.u.grid %||% .tobs_default_sigma_u_grid(sigma_u_init)
+    phi_grid_arg <- list(pos = .tobs_num_auto(su_grid))
   } else {
     # Stated in the same surface as the pre-fit above (`?occu_cover` documents
     # `phi.grid.pos` in SD for the lognormal and gaussian arms), so it takes the

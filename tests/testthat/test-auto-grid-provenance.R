@@ -110,6 +110,26 @@ test_that("the per-front-door default axes declare themselves", {
                exp(seq(log(0.15), log(3), length.out = 4)))
 })
 
+test_that("the latent cover-SD axis declares itself, and a stated one does not", {
+  skip_if_no_auto_grid()
+  # Data-dependent, so the engine's value recognition cannot classify it
+  # whatever the nodes are: the marker is the whole answer. It rides the pos
+  # arm's `phi_grid` slot, where a default is re-laid on its own posterior and a
+  # pin is integrated as written (gcol33/tulpa#663).
+  g <- tulpaObs:::.tobs_default_sigma_u_grid(0.8)
+  expect_true(tulpa::is_auto_grid(g))
+  expect_equal(as.numeric(g), 0.8 * exp(seq(log(0.4), log(2.5), length.out = 4L)))
+
+  # The call site coerces, which is where the marker is lost if the coercion is
+  # a bare `as.numeric()`.
+  expect_true(tulpa::is_auto_grid(tulpaObs:::.tobs_num_auto(g)))
+  expect_type(tulpaObs:::.tobs_num_auto(g), "double")
+
+  # A stated `sigma.u.grid` never passes through the defaulting function, so it
+  # reaches the engine unmarked.
+  expect_false(tulpa::is_auto_grid(tulpaObs:::.tobs_num_auto(c(0.3, 0.6, 1.2))))
+})
+
 # --------------------------------------------------------------------------- #
 # cover() multi-block: the non-spatial blocks and the copy axis                 #
 # #

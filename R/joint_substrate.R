@@ -384,6 +384,19 @@
   tulpa::auto_grid(exp(seq(log(0.15), log(3), length.out = 4)))
 }
 
+# Between-unit cover SD of the occu_cover() latent path, which rides the pos
+# arm's `phi_grid` slot. Unlike every axis above it is DATA-DEPENDENT -- the span
+# is anchored on the between-unit spread the pre-fit measured -- so the engine's
+# value recognition (`.nl_axis_matches_default()`) cannot classify it whatever
+# the nodes are, and the `auto_grid()` marker is the only thing that separates
+# this from a caller who named their own. That distinction is now load-bearing:
+# a dispersion axis the engine reads as a default is re-laid on its own
+# posterior, and one it reads as a pin is integrated exactly as written
+# (gcol33/tulpa#663).
+.tobs_default_sigma_u_grid <- function(sigma_u_init) {
+  tulpa::auto_grid(sigma_u_init * exp(seq(log(0.4), log(2.5), length.out = 4L)))
+}
+
 
 # The joint nested-Laplace object regardless of family slot: occu_cover() stores
 # it at `$joint_fit`, cover() at `$joint`. NULL when neither is present (a
