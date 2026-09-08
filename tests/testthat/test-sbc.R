@@ -382,3 +382,65 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
   expect_lt(bad[["alpha"]], 1e-6)
   expect_false(rp$inside[rp$arm == "narrow" & rp$quantity == "alpha"])
 })
+
+# The two routes to the occu_cover draws table must agree on WHAT they score, or
+# a rank from one cannot be read against a rank from the other. `nuts` samples
+# the hyperparameters, so it is the continuous comparator for a grid whose
+# `sigma` / `alpha` / `disp` are node values; the point of the shared registry
+# entry is that it produces the same 10 columns on the same scales.
+test_that("occu_cover scores the same quantities on the sampled and grid routes", {
+  skip_on_cran()
+  N <- 24L; J <- 4L
+  adj <- chain_adj(N)
+  sim <- simulate_occu_cover(
+    N = N, J = J, positive = "beta", adj = adj,
+    beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5), beta_pos = c(-1.0, 0.3),
+    sigma = 0.8, alpha = 1.0, phi = 30, seed = 707L)
+  long <- data.frame(site_id = rep(seq_len(N), each = J),
+                     visit = rep(seq_len(J), times = N),
+                     y = as.vector(t(sim$y)),
+                     det_cov1 = sim$visit_data$det_cov1,
+                     pos_cov1 = sim$visit_data$pos_cov1)
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                  det.covs = c("det_cov1", "pos_cov1"))
+  y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+  args <- list(formula = ~ occ_cov1 + icar(graph = adj),
+               data = cbind(data.frame(site_id = seq_len(N)), sim$data),
+               family = occu_cover("beta"),
+               detection = ~ det_cov1,
+               positive = ~ pos_cov1 + share(spatial()),
+               y = od$y, y_pos = y_pos, visits = od$det.covs)
+
+  f_nuts <- suppressWarnings(do.call(tobs, c(args, list(
+    method = "nuts",
+    control = list(n.iter = 600, n.warmup = 300, n.chains = 1,
+                   verbose = FALSE, progress = FALSE)))))
+  f_grid <- suppressWarnings(do.call(tobs, c(args, list(
+    method = "nested_laplace",
+    control = list(engine = "joint", verbose = FALSE, progress = FALSE,
+                   sigma.grid = .SBC_SIGMA_GRID,
+                   phi.grid.pos = exp(seq(log(1), log(60), length.out = 7L)))))))
+
+  M_nuts <- tulpaObs:::.tobs_sbc_draws_occu_cover(f_nuts, 40L)
+  M_grid <- tulpaObs:::.tobs_sbc_draws_occu_cover(f_grid, 40L)
+
+  expect_identical(colnames(M_nuts), colnames(M_grid))
+  expect_identical(attr(M_nuts, "blocks"), attr(M_grid, "blocks"))
+  expect_identical(nrow(M_nuts), 40L)
+  expect_true(all(is.finite(M_nuts)))
+
+  # The sampled route is the one with no grid, so its hyperparameters must not
+  # arrive as a handful of repeated node values.
+  expect_gt(length(unique(M_nuts[, "sigma"])), 30L)
+  expect_gt(length(unique(M_nuts[, "disp"])), 30L)
+
+  # Scale, not just spelling. `sigma` is the amplitude against the unscaled
+  # intrinsic precision on BOTH routes, so `field_sd = sigma * sqrt(scale_q)`
+  # has to hold for the column this table reports.
+  s_q <- tulpaObs:::.occu_cover_icar_scale(as.matrix(adj))
+  expect_equal(mean(f_nuts$hyper_draws[, "sigma"]) * sqrt(s_q),
+               mean(f_nuts$hyper_draws[, "field_sd"]), tolerance = 1e-6)
+
+  # `disp` is cover()'s own surface on both: a beta precision, not a log one.
+  expect_gt(median(M_nuts[, "disp"]), 1)
+})

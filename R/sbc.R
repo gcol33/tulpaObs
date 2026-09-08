@@ -328,6 +328,70 @@
   M
 }
 
+# The sampled route to the same table. `nuts` carries the arm coefficients in
+# `$draws` under the names this table uses and the field scales in
+# `$hyper_draws`, so no grid is involved and every quantity is continuous.
+#
+# The conventions are the joint route's, not new ones. `hyper_draws[, "sigma"]`
+# is the amplitude against the unscaled intrinsic precision, the same quantity
+# `b<k>.sigma` carries on the grid (both satisfy `field_sd = sigma *
+# sqrt(scale_q)`), and the dispersion column is already on cover()'s own
+# surface -- `log_phi` is a log beta precision and `log_sigma_pos` a log
+# residual SD -- which is what `.tobs_joint_disp()` converts the grid axis to.
+# So the two routes' tables are read on one scale and a rank from one is
+# comparable with a rank from the other.
+#
+# A model with no copy emits no `alpha` column (#293); the joint route defaults
+# that amplitude to 0, and so does this.
+.tobs_sbc_draws_nuts_occu_cover <- function(fit, n) {
+  D <- fit$draws
+  S <- nrow(D)
+  if (is.null(D) || !S)
+    stop("This fit carries no sampled draws to score.", call. = FALSE)
+  # SBC asks for an arbitrary number of draws from a sample of fixed size, so
+  # the rows are resampled. With replacement only when more are asked for than
+  # the chain holds, which is a property of the request rather than of the fit.
+  take <- sample.int(S, n, replace = n > S)
+
+  pi_l <- fit$process_info
+  cn <- function(k, pre) paste0(pre, "_", pi_l[[k]]$coef_names)
+  nms <- c(cn(1L, "psi"), cn(2L, "p"), cn(3L, "pos"))
+  miss <- setdiff(nms, colnames(D))
+  if (length(miss))
+    stop("This fit's draws carry no column for: ",
+         paste(miss, collapse = ", "), ".", call. = FALSE)
+  M <- D[take, nms, drop = FALSE]
+  colnames(M) <- nms
+  blocks <- list(occ = cn(1L, "psi"), det = cn(2L, "p"), pos = cn(3L, "pos"))
+
+  hd <- fit$hyper_draws
+  hcol <- function(nm, default) {
+    if (!is.null(hd) && nm %in% colnames(hd)) as.numeric(hd[take, nm])
+    else rep(default, n)
+  }
+  sigma <- hcol("sigma", 0)
+  alpha <- hcol("alpha", 0)
+  M <- cbind(M, sigma = sigma, sigma_pos_field = alpha * sigma, alpha = alpha)
+
+  disp_col <- if (identical(fit$model$positive, "beta")) "log_phi"
+              else "log_sigma_pos"
+  if (!disp_col %in% colnames(D))
+    stop("This fit's draws carry no `", disp_col, "` column.", call. = FALSE)
+  M <- cbind(M, disp = exp(as.numeric(D[take, disp_col])))
+
+  attr(M, "blocks") <- blocks
+  M
+}
+
+# One entry in the registry, because the family is one family. Which route a
+# fit took is a property of the fit, and reading it here is what lets the same
+# 11 quantities be scored on the grid-integrated and the sampled posterior and
+# compared.
+.tobs_sbc_draws_occu_cover <- function(fit, n) {
+  if (identical(fit$method, "nuts")) .tobs_sbc_draws_nuts_occu_cover(fit, n)
+  else .tobs_sbc_draws_joint_occu_cover(fit, n)
+}
+
 
 # ---------------------------------------------------------------------------
 # 4. The joint-statistic rank arm
@@ -2581,7 +2645,7 @@
 
 .TOBS_SBC_REGISTRY <- list(
   occu_cover = list(
-    draws    = .tobs_sbc_draws_joint_occu_cover,
+    draws    = .tobs_sbc_draws_occu_cover,
     simulate = .tobs_sbc_sim_occu_cover,
     refit    = .tobs_sbc_refit_occu_cover,
     loglik   = .tobs_sbc_loglik_occu_cover),
