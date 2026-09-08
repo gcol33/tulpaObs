@@ -12,14 +12,17 @@
 # `fit_cover_hurdle_joint_nested` then refines this by subtracting the
 # alpha-scaled posterior field.
 .prefit_lognormal_sigma <- function(enc, control) {
-  y <- enc$pos_data$y
-  X <- enc$pos_data$X
-  n <- length(y); p <- ncol(X)
-  if (n <= p) return(1.0)
-  beta_init  <- tryCatch(qr.solve(X, y), error = function(e) NULL)
-  if (is.null(beta_init)) return(1.0)
-  resid_init <- as.numeric(y - X %*% beta_init)
-  sigma_init <- sqrt(sum(resid_init^2) / max(n - p, 1L))
+  # Residual about the arm's own design -- `.tobs_prefit_resid_var()` is the
+  # shared implementation, so this and `occu_cover()`'s pre-fit cannot drift
+  # into two different answers to one question. No `group`: cover()'s dispersion
+  # rides a 7-node `phi.grid` centred on this value rather than being pinned at
+  # it, so a shared field left in the residual moves the centre of a span that
+  # already covers `sigma_hat / 3` to `sigma_hat * 3` and costs far less than it
+  # does on a pinned arm. Absorbing the cell here would shift every cover() fit's
+  # grid and wants its own measurement (min_df = 1 keeps the old `n > p` gate).
+  v <- .tobs_prefit_resid_var(enc$pos_data$y, enc$pos_data$X, min_df = 1L)
+  if (!is.finite(v) || v <= 0) return(1.0)
+  sigma_init <- sqrt(v)
   if (!is.finite(sigma_init) || sigma_init <= 0) return(1.0)
   sigma_init
 }

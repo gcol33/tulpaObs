@@ -309,6 +309,19 @@
   }
   n_pos_rows <- length(pos_site)
 
+  # Which pos rows the cover density actually SCORES. Per-visit, the arm carries
+  # every valid visit -- the cell-coupling spec gates `f_pos` on `detected AND
+  # finite`, so a non-detected visit's `y_pos` is a placeholder that no term
+  # reads, and a detected one may still carry NA cover (missing at random, #262).
+  # Aggregation builds one row per DETECTED unit, so every row is scored. Carried
+  # out of here rather than re-derived by each consumer: the row set is this
+  # function's own product, and the gate is the spec's.
+  pos_scored <- if (identical(cover_aggregate, "none")) {
+    y_det_visit == 1L & is.finite(y_pos_arm)
+  } else {
+    is.finite(y_pos_arm)
+  }
+
   # Observation-arm RE terms, aligned to the arm rows by the same `keep` the
   # detection arm uses. model$re_det / model$re_pos are per-term LISTS (one entry
   # per crossed / nested / slope term); each term's site-major group codes --
@@ -359,6 +372,7 @@
        cell_of_visit  = cell_of_visit,
        n_visits_valid = n_visits_valid,
        pos_site       = as.integer(pos_site),
+       pos_scored     = as.logical(pos_scored),
        n_pos_rows     = n_pos_rows,
        pos_cover_values = pos_cover_values,
        re_det_terms   = re_det_terms,

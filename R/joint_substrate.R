@@ -397,6 +397,123 @@
   tulpa::auto_grid(sigma_u_init * exp(seq(log(0.4), log(2.5), length.out = 4L)))
 }
 
+# ---- positive-arm dispersion pre-fit --------------------------------------
+#
+# RESIDUAL variance of a positive arm about its own predictor, which is what a
+# dispersion is. The marginal spread of the response is not: it also carries
+# whatever the arm's covariates and its shared field explain, so pre-fitting a
+# dispersion at `var(y)` sets it above the truth by exactly the part of the
+# model that works.
+#
+# `group` is the arm's per-cell index. A shared field is a per-cell effect and
+# is NOT in `X`, so absorbing a cell mean is what removes it -- and on the
+# coupled path there is always a field. Measured on 12 seeds of
+# `simulate_occu_cover("lognormal")` at a true dispersion SD of 0.4, with an
+# ICAR field at alpha 0.6 / sigma 0.8:
+#
+#   estimator                     mean bias   RMSE
+#   marginal spread                  +0.275  0.303
+#   residual about X                 +0.163  0.186
+#   residual about X + cell mean     +0.002  0.047
+#
+# and with the field switched off, +0.118 / +0.005 / -0.017 (RMSE 0.142 /
+# 0.059 / 0.062) -- so absorbing the cell costs a little where there is no
+# field to absorb and is worth 4x in RMSE where there is one.
+#
+# Absorbed only when it leaves residual df to spare: one row per cell (every
+# aggregation mode but `"none"`) makes the cell factor saturated, and a design
+# with fewer than `min_df` residual degrees of freedom estimates nothing. Both
+# fall back to the covariate-only residual, and a fit with no usable design at
+# all returns NA for the caller to default.
+.tobs_prefit_resid_var <- function(y, X, group = NULL, min_df = 3L) {
+  y <- as.numeric(y)
+  # The group is checked against the INCOMING row count, before the row filter:
+  # subsetting a short vector by a full-length logical silently returns a
+  # full-length one padded with NA, so a length check taken afterwards passes on
+  # a group that never aligned with the design.
+  if (!is.null(group) && length(group) != length(y)) group <- NULL
+  ok <- is.finite(y)
+  if (!is.null(X)) ok <- ok & stats::complete.cases(X)
+  if (!is.null(group)) ok <- ok & !is.na(group)
+  y <- y[ok]
+  X <- if (is.null(X)) NULL else X[ok, , drop = FALSE]
+  group <- if (is.null(group)) NULL else group[ok]
+  n <- length(y)
+  if (n < 2L) return(NA_real_)
+  if (is.null(X)) X <- matrix(1, n, 1L)
+
+  rss <- function(D) {
+    p <- ncol(D)
+    if (n - p < min_df) return(NULL)
+    q <- tryCatch(qr(D), error = function(e) NULL)
+    if (is.null(q) || q$rank < 1L) return(NULL)
+    r <- tryCatch(as.numeric(qr.resid(q, y)), error = function(e) NULL)
+    if (is.null(r) || anyNA(r)) return(NULL)
+    v <- sum(r^2) / (n - q$rank)
+    if (!is.finite(v) || v < 0) NULL else v
+  }
+
+  if (!is.null(group)) {
+    g <- as.integer(group)
+    # A cell factor is only informative where some cell carries more than one
+    # row; saturated, it absorbs the response exactly and leaves nothing.
+    if (any(duplicated(g))) {
+      D <- cbind(X, stats::model.matrix(~ factor(g))[, -1L, drop = FALSE])
+      v <- rss(D)
+      if (!is.null(v)) return(v)
+    }
+  }
+  v <- rss(X)
+  if (is.null(v)) NA_real_ else v
+}
+
+# The positive arm's dispersion, on the ENGINE's scale for its family, pre-fit
+# from the arm's own rows. `arm` is the built pos arm (`y`, `X`, and
+# `spatial_idx`, the per-cell index a shared field loads on); `fallback` is the
+# engine-scale value to keep when the residual cannot be taken at all.
+#
+# Each family maps the same residual spread to whatever its dispersion means:
+# lognormal and gaussian carry a Gaussian SD (squared into the engine's
+# variance by `.cover_phi_sd_to_engine()`), differing only in the scale the
+# residual is taken on; beta carries a precision, which is the same moment match
+# the marginal estimator used with the RESIDUAL variance in place of the
+# marginal one, so the correction reaches it in the same direction (a marginal
+# variance is too large, so the precision it implies is too small).
+.occu_cover_prefit_dispersion <- function(arm, positive, fallback,
+                                          scored = NULL) {
+  y <- as.numeric(arm$y)
+  if (!length(y)) return(fallback)
+  # Only the rows the cover density scores. Per-visit, the arm carries every
+  # valid visit and the spec gates `f_pos` on detection, so the rest are
+  # placeholders -- and for the lognormal arm they are ZERO, which is what a
+  # dispersion pre-fit taken over the whole arm would take the log of.
+  keep <- if (is.null(scored)) rep(TRUE, length(y)) else as.logical(scored)
+  if (length(keep) != length(y)) keep <- rep(TRUE, length(y))
+  y <- y[keep]
+  X <- arm$X[keep, , drop = FALSE]
+  g <- if (is.null(arm$spatial_idx)) NULL else as.integer(arm$spatial_idx)[keep]
+  if (!length(y)) return(fallback)
+
+  is_beta  <- identical(positive, "beta")
+  is_gauss <- identical(positive, "gaussian")
+  # The residual is taken on the arm's own linear-predictor scale: log cover for
+  # the lognormal arm, the response itself for the other two.
+  z <- if (is_beta || is_gauss) y else {
+    if (any(!is.finite(y) | y <= 0)) return(fallback)
+    log(y)
+  }
+  v <- .tobs_prefit_resid_var(z, X, group = g)
+  if (!is.finite(v) || v <= 0) return(fallback)
+
+  if (is_beta) {
+    mu <- mean(y[is.finite(y)])
+    if (!is.finite(mu) || mu <= 0 || mu >= 1) return(fallback)
+    return(max(mu * (1 - mu) / v - 1, 1))
+  }
+  .cover_phi_sd_to_engine(max(sqrt(v), 0.05),
+                          .cover_pos_engine_family(positive))
+}
+
 
 # The joint nested-Laplace object regardless of family slot: occu_cover() stores
 # it at `$joint_fit`, cover() at `$joint`. NULL when neither is present (a

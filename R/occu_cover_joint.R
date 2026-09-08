@@ -260,6 +260,25 @@
     compress_nodet  = !isTRUE(.batch_collect) &&
       isTRUE(getOption("tulpaObs.compress_nodet", TRUE))
   )
+  # Re-fit the pos-arm dispersion on the ROWS THE ARM ACTUALLY MODELS, now that
+  # the builder has produced them. `sigma_pos_init` reaches the builder at
+  # exactly one place (`arm_pos$phi`), so overwriting it here is the same fit as
+  # having computed it first -- and computing it first is not possible, because
+  # the row set, the design and the cell map ARE the builder's output, and
+  # re-deriving them beside it is the duplication this avoids.
+  #
+  # What changes is the estimator, not the plumbing: a dispersion is the spread
+  # about the arm's own predictor, and the pre-fit used the MARGINAL spread of
+  # the response, which also carries everything the covariates and the shared
+  # field explain. The latent branch above already refuses that reasoning for
+  # `disp2_fixed`; this is the same argument on the non-latent arm.
+  if (!is_latent) {
+    sigma_pos_init <- .occu_cover_prefit_dispersion(
+      arms_out$responses$pos, model$positive, sigma_pos_init,
+      scored = arms_out$pos_scored)
+    arms_out$responses$pos$phi <- sigma_pos_init
+  }
+
   responses      <- arms_out$responses
   site_of_visit  <- arms_out$site_of_visit
   cell_of_visit  <- arms_out$cell_of_visit
