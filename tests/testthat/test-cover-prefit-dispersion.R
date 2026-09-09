@@ -61,18 +61,20 @@ test_that("each cover family maps the residual to its own dispersion scale", {
   X <- cbind(1, rnorm(n))
   eta <- as.numeric(X %*% c(0.2, 0.4)) + rnorm(20L, 0, 0.5)[g]
 
-  # lognormal: the residual is taken on log(y) and the ENGINE carries a variance.
+  # lognormal: the residual is taken on log(y), and the value comes back on the
+  # FAMILY SURFACE -- an SD. The engine's variance conversion belongs to the
+  # caller, because the joint fitter and the NUTS fitter pin different scales.
   y_ln <- exp(eta + rnorm(n, 0, 0.3))
   arm_ln <- list(y = y_ln, X = X, spatial_idx = g)
   phi_ln <- tulpaObs:::.occu_cover_prefit_dispersion(arm_ln, "lognormal", 99)
-  expect_lt(abs(sqrt(phi_ln) - 0.3), 0.15)
+  expect_lt(abs(phi_ln - 0.3), 0.15)
 
   # gaussian: same residual, taken on the response itself, so a negative value
   # is legitimate and must not be logged.
   y_g <- eta + rnorm(n, 0, 0.3) - 5
   arm_g <- list(y = y_g, X = X, spatial_idx = g)
   phi_g <- tulpaObs:::.occu_cover_prefit_dispersion(arm_g, "gaussian", 99)
-  expect_lt(abs(sqrt(phi_g) - 0.3), 0.15)
+  expect_lt(abs(phi_g - 0.3), 0.15)
 
   # beta: the same moment match the marginal estimator used, with the RESIDUAL
   # variance in place of the marginal one -- so a precision, not a variance, and
@@ -104,7 +106,7 @@ test_that("the pre-fit reads only the rows the cover density scores", {
   # Masked, it recovers the dispersion.
   phi <- tulpaObs:::.occu_cover_prefit_dispersion(arm, "lognormal", 99,
                                                   scored = scored)
-  expect_lt(abs(sqrt(phi) - 0.3), 0.2)
+  expect_lt(abs(phi - 0.3), 0.2)
 
   # A mask of the wrong length is ignored rather than silently mis-aligning the
   # rows against the design.
@@ -132,4 +134,34 @@ test_that("cover()'s own prefit is the same estimator, without the group", {
   # Degenerate input keeps the documented 1.0.
   expect_equal(tulpaObs:::.prefit_lognormal_sigma(
     list(pos_data = list(y = 1, X = cbind(1))), list()), 1.0)
+})
+
+test_that("both engines pin the dispersion from one estimator", {
+  # `.occu_cover_prefit_dispersion()` returns the FAMILY SURFACE, and the two
+  # fitters convert differently: the joint path writes
+  # `.cover_phi_sd_to_engine()`'s variance into `arm$phi`, the NUTS path carries
+  # the surface value into `log_disp`. Returning the engine scale would hand
+  # NUTS a variance where it wants an SD, and the two engines would pin
+  # different dispersions for one model -- which is what
+  # `test-occu-cover-spatial-nuts.R` (NUTS beta SDs against nested-Laplace SEs)
+  # asserts against.
+  set.seed(7)
+  n <- 60L
+  X <- cbind(1, rnorm(n))
+  g <- rep(seq_len(20L), each = 3L)
+  y <- exp(as.numeric(X %*% c(0.2, 0.4)) + rnorm(20L, 0, 0.5)[g] +
+             rnorm(n, 0, 0.3))
+  arm <- list(y = y, X = X, spatial_idx = g)
+
+  surface <- tulpaObs:::.occu_cover_prefit_dispersion(arm, "lognormal", 99)
+  # An SD, not a variance: a value near 0.3 rather than near 0.09.
+  expect_lt(abs(surface - 0.3), 0.15)
+  # The joint path's conversion squares it for the gaussian-family arm the
+  # lognormal compiles to.
+  engine <- tulpaObs:::.cover_phi_sd_to_engine(
+    surface, tulpaObs:::.cover_pos_engine_family("lognormal"))
+  expect_equal(engine, surface^2)
+  # Beta states a precision on both sides, so its surface IS its engine value.
+  expect_equal(tulpaObs:::.cover_phi_sd_to_engine(
+    30, tulpaObs:::.cover_pos_engine_family("beta")), 30)
 })

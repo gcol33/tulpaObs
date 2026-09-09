@@ -467,10 +467,20 @@
   if (is.null(v)) NA_real_ else v
 }
 
-# The positive arm's dispersion, on the ENGINE's scale for its family, pre-fit
-# from the arm's own rows. `arm` is the built pos arm (`y`, `X`, and
-# `spatial_idx`, the per-cell index a shared field loads on); `fallback` is the
-# engine-scale value to keep when the residual cannot be taken at all.
+# The positive arm's dispersion pre-fit from the arm's own rows, on THE FAMILY'S
+# OWN SURFACE -- an SD for lognormal and gaussian, a precision for beta, which is
+# the scale `?occu_cover` and `?cover` both state a dispersion in. `arm` is the
+# built pos arm (`y`, `X`, and `spatial_idx`, the per-cell index a shared field
+# loads on); `fallback` is the surface-scale value to keep when the residual
+# cannot be taken at all.
+#
+# The engine-scale conversion is the CALLER's, deliberately: the joint fitter
+# writes `.cover_phi_sd_to_engine()`'s variance into `arm$phi`, and the NUTS
+# fitter carries the surface value into its own `log_disp` coordinate. Returning
+# one scale and converting at each door is what lets both call the same
+# estimator -- and both MUST, or the two engines pin different dispersions for
+# one model and `test-occu-cover-spatial-nuts.R` (NUTS beta SDs against
+# nested-Laplace SEs) is the assertion that notices.
 #
 # Each family maps the same residual spread to whatever its dispersion means:
 # lognormal and gaussian carry a Gaussian SD (squared into the engine's
@@ -510,8 +520,7 @@
     if (!is.finite(mu) || mu <= 0 || mu >= 1) return(fallback)
     return(max(mu * (1 - mu) / v - 1, 1))
   }
-  .cover_phi_sd_to_engine(max(sqrt(v), 0.05),
-                          .cover_pos_engine_family(positive))
+  max(sqrt(v), 0.05)
 }
 
 

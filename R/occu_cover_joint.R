@@ -273,9 +273,11 @@
   # field explain. The latent branch above already refuses that reasoning for
   # `disp2_fixed`; this is the same argument on the non-latent arm.
   if (!is_latent) {
-    sigma_pos_init <- .occu_cover_prefit_dispersion(
-      arms_out$responses$pos, model$positive, sigma_pos_init,
+    phi_pos_init <- .occu_cover_prefit_dispersion(
+      arms_out$responses$pos, model$positive, phi_pos_init,
       scored = arms_out$pos_scored)
+    sigma_pos_init <- .cover_phi_sd_to_engine(
+      phi_pos_init, .cover_pos_engine_family(model$positive))
     arms_out$responses$pos$phi <- sigma_pos_init
   }
 

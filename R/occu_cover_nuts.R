@@ -940,9 +940,10 @@
   site_cell <- model$site_cell %||% seq_len(n_sites)
   n_cells   <- nrow(adj)
 
-  # Pre-fit the pos-arm dispersion at the empirical cover spread (matching the
-  # joint non-latent path); it rides the spec's phi slot, fixed here.
-  # Observed covers only (a detected visit may carry a missing cover).
+  # The pos-arm dispersion rides the spec's phi slot, fixed here. This is the
+  # FALLBACK -- the empirical cover spread, kept when the residual below cannot
+  # be taken at all. Observed covers only (a detected visit may carry a missing
+  # cover).
   pos_vals <- model$y_pos[model$valid & model$y == 1L]
   pos_vals <- pos_vals[is.finite(pos_vals)]
   sigma_pos_init <- if (is_beta) {
@@ -1005,6 +1006,21 @@
     alpha_axis = .tobs_alpha_axis(grid = alpha_grid),
     positive = model$positive, multi = multi, n_cells = n_cells,
     site_cell = site_cell, cover_aggregate = "none")
+
+  # Re-fit the dispersion on the rows the arm models, exactly as the joint path
+  # does -- one estimator, both engines. The value above is the marginal spread
+  # of the response, which also carries what the cover covariates and the shared
+  # field explain; the residual about the arm's own predictor is the dispersion.
+  # The scale here is the FAMILY SURFACE (an SD, a beta precision), which is what
+  # `log_disp` below is the log of, so no engine conversion at this door.
+  #
+  # Both engines must read the same estimator or they pin different dispersions
+  # for one model, and the NUTS-vs-nested-Laplace SD calibration is what notices.
+  sigma_pos_init <- .occu_cover_prefit_dispersion(
+    arms_out$responses$pos, model$positive, sigma_pos_init,
+    scored = arms_out$pos_scored)
+  arms_out$responses$pos$phi <- sigma_pos_init
+
   responses <- arms_out$responses
 
   arm_priors <- .occu_cover_coupled_arm_priors(priors, responses)
