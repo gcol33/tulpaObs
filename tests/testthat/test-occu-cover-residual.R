@@ -306,7 +306,7 @@ test_that("a deviation composes with a psi RE and with a trend field", {
 # it is a loss, not a gain. The assertions below are gross-regression guards on
 # the measured behaviour, not reproductions of it.
 
-test_that("the rank-r deviation recovers structure the full-rank block does not", {
+test_that("the rank-r deviation keeps more structure than the full-rank block", {
   skip_if_fast()
   skip_on_cran()
 
@@ -346,10 +346,26 @@ test_that("the rank-r deviation recovers structure the full-rank block does not"
   sd_r8   <- stats::median(grab("r8",   "sd_dev"))
   cor_r8  <- stats::median(grab("r8",   "cor_dev"))
 
-  # The full-rank block collapses the orthogonal deviation (measured 0.075
-  # against a truth of 0.62); a rank-8 deviation keeps a real one (0.287). The
-  # ratio is ~3.8x, so a 2x floor is a regression guard, not the measurement.
-  expect_gt(sd_r8, 2 * sd_full)
+  # A rank-8 deviation keeps more of the orthogonal deviation than the
+  # full-rank block does: 0.422 against 0.309, on a truth of 0.62.
+  #
+  # The floor was 2x, on a full-rank read of 0.075 against a rank-8 0.287.
+  # Most of that gap was the pos arm being mis-specified rather than a
+  # property of the rank: correcting the arm-specific field axis
+  # (`sigma_pos_field`, #315) took the full-rank read 0.075 -> 0.140, and
+  # correcting the dispersion pre-fit off the marginal spread took it
+  # 0.140 -> 0.309. Both are improvements -- the full-rank block was
+  # collapsing partly because the arm it sits on was wrong -- and neither
+  # cost the rank-8 block anything, its correlation with the seed's own
+  # orthogonal truth being 0.434 before and 0.433 after. Restoring the old
+  # marginal pin reproduces the old regime (0.140 / 0.310 / 2.21x), which
+  # is how the cause was pinned rather than inferred from the red.
+  #
+  # So the ordering is the claim and 1.1x is the guard; the measurement is
+  # 1.37x, or 1.21x once the cover dispersion is integrated rather than
+  # pinned (#317), which narrows the gap again by widening the full-rank
+  # block further.
+  expect_gt(sd_r8, 1.1 * sd_full)
   # ... and it is structure, not noise: median correlation with the seed's own
   # orthogonal truth is 0.44 (worst seed 0.17).
   expect_gt(cor_r8, 0.20)
