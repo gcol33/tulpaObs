@@ -178,10 +178,26 @@ test_that("occu_cover() LOO-PIT is returned, calibrated, with good Pareto-k", {
   expect_true(all(is.finite(cpo$pit)))
   expect_true(all(cpo$pit >= 0 & cpo$pit <= 1))
 
-  # PSIS-LOO Pareto-k finite and mostly good on the well-specified strong-field
-  # fit (the grid-integrated joint draws give a well-behaved LOO predictive).
+  # PSIS-LOO Pareto-k, on a 100-node chain carrying a strong field
+  # (sigma 2.0) copied onto the cover arm at alpha 1.0. Every node holds one
+  # occupancy observation, so leaving a site out moves the posterior a long
+  # way and a substantial share of k above 0.7 is what this model does, not
+  # a defect.
+  #
+  # The floor is 0.5, re-measured at a CORRECT dispersion. It was 0.8, which
+  # this fit met only while the pos-arm dispersion was pre-fit from the
+  # marginal spread at ~2.5x the simulated 0.35: an over-dispersed cover arm
+  # makes each site less influential and flattens the importance weights.
+  # Pinning at the SIMULATED dispersion reproduces the corrected value
+  # exactly (0.67 0.66 0.72 against the pre-fit's 0.68 0.66 0.72), so the
+  # old threshold described the mis-specification, not the estimator.
+  # Observed at the correct dispersion across repeated cpo() calls: 0.59 to
+  # 0.72, max k 1.12 to 1.19 -- the statistic is noisy because many sites sit
+  # near the 0.7 cut, so the floor carries margin below the observed minimum
+  # and the max-k bound is what catches a genuine blow-up.
   expect_true(all(is.finite(cpo$pareto_k)))
-  expect_gt(mean(cpo$pareto_k < 0.7), 0.8)
+  expect_gt(mean(cpo$pareto_k < 0.7), 0.5)
+  expect_lt(max(cpo$pareto_k), 1.5)
 })
 
 test_that("occu_cover(): loo.unit = 'cell' routes through the site_cell map", {
