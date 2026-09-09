@@ -606,14 +606,40 @@
     # who wrapped theirs in `auto_grid()` is stating it is a default they
     # computed, and the engine then places it on its own posterior instead of
     # integrating the span as written.
+    # Unset, the dispersion is INTEGRATED on a default axis rather than
+    # pinned at the pre-fit, which is what `cover()` has always done. A
+    # pinned dispersion makes the cover-arm SE conditional on one value:
+    # over 20 seeds the reported SE was 0.45 of the estimator's own spread
+    # with 75% of nominal-95% intervals covering (lognormal), and 0.56 /
+    # 85% (beta). On this axis the same seeds read 0.91 / 90% and
+    # 1.14 / 95%.
+    #
+    # THREE nodes, and NOT marked. Both are cost decisions taken against
+    # the same 20 seeds, on which neither changed the calibration:
+    #
+    #   * 5 and 7 nodes read 0.89 / 90% and 1.10 / 95%, the same answer.
+    #     Two is a node too few -- no freedom left for curvature, and the
+    #     SE comes back at 1.31 of the estimator's spread, the floor
+    #     `.TOBS_MIN_SCALAR_NQUAD` records for the scalar nuisance blocks.
+    #   * marking it `auto_grid()` costs a placement pilot and a SECOND
+    #     full grid solve, which is most of the price: 178s against 80s on
+    #     `test-occu-cover-joint.R` (38s with the axis absent), 41s against
+    #     20s on `test-occu-cover-pos-field.R` (9s absent). It buys nothing
+    #     here because the span is a factor-3 band about a residual pre-fit
+    #     that lands on the truth, so there is no misplacement to rescue.
+    #
+    # A caller whose pre-fit they expect to be off passes their own span
+    # through `phi.grid.pos`, and wrapping it in `auto_grid()` buys the
+    # placement pass back at that cost.
     phi_grid_pos <- dots$phi.grid.pos
-    phi_grid_arg <- if (!is.null(phi_grid_pos))
-                      list(pos = .tobs_mark_auto(
-                        .cover_phi_sd_to_engine(
-                          as.numeric(phi_grid_pos),
-                          .cover_pos_engine_family(model$positive)),
-                        tulpa::is_auto_grid(phi_grid_pos)))
-                    else NULL
+    phi_stated   <- !is.null(phi_grid_pos)
+    if (!phi_stated)
+      phi_grid_pos <- .cover_phi_grid_span(model$positive, phi_pos_init,
+                                           n = 3L)
+    phi_grid_arg <- list(pos = .tobs_mark_auto(
+      .cover_phi_sd_to_engine(as.numeric(phi_grid_pos),
+                              .cover_pos_engine_family(model$positive)),
+      if (phi_stated) tulpa::is_auto_grid(phi_grid_pos) else FALSE))
   }
 
   # Register the stateful latent spec for THIS fit: it captures the per-unit

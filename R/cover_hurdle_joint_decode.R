@@ -87,6 +87,21 @@
        sd = if (is.finite(est) && est > 0) phi_sd / (2 * est) else NA_real_)
 }
 
+# A dispersion axis spanning a factor of 3 on the SD scale, centred on the
+# pre-fit, stated in the FAMILY SURFACE its caller works in. Beta states a
+# PRECISION, on which a factor k of SD is k^2, so the same band is a factor of
+# 9 there. Node count is the caller's: the hurdle path takes 7, the joint
+# occu_cover path 5, each measured on its own route.
+.cover_phi_grid_span <- function(positive, phi_hat, n = 7L) {
+  band <- switch(positive,
+                 beta = ,
+                 beta_oi = c(1 / 9, 9),
+                 lognormal_trunc = ,
+                 ordinal = c(1 / 4, 3),
+                 c(1 / 3, 3))
+  exp(seq(log(phi_hat * band[1L]), log(phi_hat * band[2L]), length.out = n))
+}
+
 .cover_pos_family_grid <- function(positive, enc, control) {
   if (positive %in% c("lognormal", "gaussian")) {
     # Both fit the tulpa "gaussian" family; they differ only in the response the
@@ -97,7 +112,7 @@
     # both the auto span and a user-supplied `phi.grid`, which is documented in
     # SD and must keep that meaning.
     sd_grid <- control$phi.grid %||%
-      exp(seq(log(sigma_hat / 3), log(sigma_hat * 3), length.out = 7))
+      .cover_phi_grid_span("lognormal", sigma_hat)
     list(pos_family = "gaussian",
          phi_hat = .cover_phi_sd_to_engine(sigma_hat, "gaussian"),
          phi_grid_pos = .tobs_mark_auto(
@@ -110,17 +125,17 @@
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "truncated_gaussian", phi_hat = sigma_hat,
          phi_grid_pos = .tobs_mark_auto(
-           control$phi.grid %||%
-             exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)),
+           control$phi.grid %||% .cover_phi_grid_span(positive, sigma_hat),
            is.null(control$phi.grid)))
   } else if (positive == "ordinal") {
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "interval_gaussian", phi_hat = sigma_hat,
          phi_grid_pos = .tobs_mark_auto(
-           control$phi.grid %||%
-             exp(seq(log(sigma_hat / 4), log(sigma_hat * 3), length.out = 7)),
+           control$phi.grid %||% .cover_phi_grid_span(positive, sigma_hat),
            is.null(control$phi.grid)))
   } else {
+    # No beta dispersion pre-fit on this route (`phi_hat` is 1.0), so there is
+    # nothing to centre a band on and the span is stated outright.
     list(pos_family = "beta", phi_hat = 1.0,
          phi_grid_pos = .tobs_mark_auto(
            control$phi.grid %||% exp(seq(log(2), log(300), length.out = 7)),
