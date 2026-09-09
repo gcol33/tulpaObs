@@ -180,7 +180,13 @@ test_that("occu_cover cover-arm trend field SD recovers across seeds", {
     fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
                    positive = ~ 1 + spatial(~ 0 + time || cell, graph = adj))
     nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)[1L]
-    fit$means[[nm]]
+    # The MARGINAL companion, not `means[[nm]]`. `sigma_*_field` is the raw
+    # amplitude against the unscaled intrinsic Q; `sigma_pos_int` /
+    # `sigma_pos_trend` are simulated as geo-mean marginal SDs, and the two
+    # differ by the graph's fixed sqrt(scale_q) (0.778 on this lattice).
+    # Reading the amplitude here scored two different quantities against
+    # each other.
+    fit$field_sd_marginal[[paste0(nm, "_marginal")]]$mean
   }, numeric(1))
 
   expect_true(all(is.finite(rec)))
@@ -219,7 +225,13 @@ test_that("occu_cover cover-arm intercept field SD recovers across seeds", {
     fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
                    positive = ~ 1 + spatial(~ 1 || cell, graph = adj))
     nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)[1L]
-    fit$means[[nm]]
+    # The MARGINAL companion, not `means[[nm]]`. `sigma_*_field` is the raw
+    # amplitude against the unscaled intrinsic Q; `sigma_pos_int` /
+    # `sigma_pos_trend` are simulated as geo-mean marginal SDs, and the two
+    # differ by the graph's fixed sqrt(scale_q) (0.778 on this lattice).
+    # Reading the amplitude here scored two different quantities against
+    # each other.
+    fit$field_sd_marginal[[paste0(nm, "_marginal")]]$mean
   }, numeric(1))
 
   expect_true(all(is.finite(rec)))

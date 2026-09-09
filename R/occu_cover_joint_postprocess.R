@@ -420,6 +420,12 @@
       } else if (tau_col %in% tg_names) {
         put_derived(nm, 1.0 / sqrt(as.numeric(tg_ok[, match(tau_col, tg_names)])))
       }
+      # The same raw-amplitude-to-marginal-SD companion the shared and trend
+      # fields get above. `sigma_*_field` is the amplitude against the unscaled
+      # intrinsic Q, so it is NOT the geo-mean marginal SD a simulated field is
+      # stated in; without the companion the only reported number reads as
+      # though it were, high by 1 / sqrt(scale_q).
+      put_field_sd(nm, paste0(nm, "_marginal"))
     }
     # Per-term RE variance components. An intercept / uncorrelated-slope term
     # has one `b<P>.sigma` axis per coefficient; a correlated-slope term has one
@@ -689,6 +695,11 @@
     # block to (occ, pos) amplitudes; the pos-field tables are the independent
     # cover field posterior for user inspection.
     field_specs      = ctx$field_specs,
+    # Every field block's geo-mean marginal SD (Sorbye-Rue), keyed by the
+    # `sigma_*` name it accompanies. `means` carries the raw amplitude against
+    # the unscaled intrinsic Q; these are the same quantity a simulated field's
+    # SD is stated in, and the two differ by the graph's fixed sqrt(scale_q).
+    field_sd_marginal = if (length(field_sd_summary)) field_sd_summary else NULL,
     has_pos_armspec  = has_pos_armspec,
     pos_field        = pos_field,
     pos_field_table  = pos_field_table,

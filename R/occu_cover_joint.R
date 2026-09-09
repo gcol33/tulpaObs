@@ -515,7 +515,8 @@
   # is re-applied on the translated tau vector; the source vector's own marker is
   # the provenance, which covers both the explicit pos-field grid and the shared
   # sigma grid it falls back to.
-  pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||% sigma_grid
+  pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||%
+    .tobs_default_armspec_sigma_grid()
   pos_armspec_tau_grid   <- .tobs_sigma_to_tau_grid(pos_armspec_sigma_grid)
 
   # One arm-specific field -> ICAR block(s) that scatter on ONE arm's rows: the

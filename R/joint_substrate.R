@@ -333,6 +333,19 @@
   tulpa::auto_grid(tulpa:::.nl_grid_axis("field_sd"))
 }
 
+# The arm-specific (cover / detection) field's own SD axis. Denser than the
+# shared field's: that one is read through an alpha copy and a second arm, this
+# one IS the reported estimate, and the engine's 5-node span steps by a factor
+# of 2.34 between adjacent nodes. A variance component whose posterior
+# concentrates between two nodes that far apart reports whichever it lands on --
+# measured on `test-occu-cover-pos-field.R`'s fixture, six seeds returned two
+# distinct values, both grid nodes, against a truth lying between them. Nine
+# nodes over the same span step by 1.53 and the estimates leave the nodes.
+.tobs_default_armspec_sigma_grid <- function() {
+  span <- range(as.numeric(tulpa:::.nl_grid_axis("field_sd")))
+  tulpa::auto_grid(exp(seq(log(span[1L]), log(span[2L]), length.out = 9L)))
+}
+
 .tobs_default_bym2_rho_grid <- function() {
   tulpa::auto_grid(c(0.25, 0.5, 0.75))
 }
