@@ -588,7 +588,7 @@
   # log-spaced grid around the between-unit init); the within-unit dispersion is
   # fixed in the spec. Otherwise the phi slot is sigma_pos and the optional
   # `phi.grid.pos` integrates it. Both reach the engine's dispersion-axis
-  # placement (gcol33/tulpa#663), which acts on provenance: `.tobs_num_auto()`
+  # placement, which acts on provenance: `.tobs_num_auto()`
   # carries the defaulting function's `auto_grid()` marker across the coercion,
   # and a stated grid -- which never passes through that function -- reaches the
   # engine unmarked and is integrated exactly as written.

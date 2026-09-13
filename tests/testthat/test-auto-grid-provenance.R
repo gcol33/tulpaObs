@@ -115,7 +115,7 @@ test_that("the latent cover-SD axis declares itself, and a stated one does not",
   # Data-dependent, so the engine's value recognition cannot classify it
   # whatever the nodes are: the marker is the whole answer. It rides the pos
   # arm's `phi_grid` slot, where a default is re-laid on its own posterior and a
-  # pin is integrated as written (gcol33/tulpa#663).
+  # pin is integrated as written.
   g <- tulpaObs:::.tobs_default_sigma_u_grid(0.8)
   expect_true(tulpa::is_auto_grid(g))
   expect_equal(as.numeric(g), 0.8 * exp(seq(log(0.4), log(2.5), length.out = 4L)))
@@ -345,7 +345,7 @@ test_that("a stated phi.grid.pos keeps its own provenance across the conversion"
   # `as.numeric()`, which drops the marker. A plain vector must stay a pin, and a
   # caller who declared theirs a default must keep that across the conversion,
   # since it is what decides whether the engine places the axis or integrates the
-  # span as written (gcol33/tulpa#663).
+  # span as written.
   conv <- function(x) tulpaObs:::.tobs_mark_auto(
     tulpaObs:::.cover_phi_sd_to_engine(as.numeric(x), "gaussian"),
     tulpa::is_auto_grid(x))

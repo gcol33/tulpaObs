@@ -404,8 +404,7 @@
 # the nodes are, and the `auto_grid()` marker is the only thing that separates
 # this from a caller who named their own. That distinction is now load-bearing:
 # a dispersion axis the engine reads as a default is re-laid on its own
-# posterior, and one it reads as a pin is integrated exactly as written
-# (gcol33/tulpa#663).
+# posterior, and one it reads as a pin is integrated exactly as written.
 .tobs_default_sigma_u_grid <- function(sigma_u_init) {
   tulpa::auto_grid(sigma_u_init * exp(seq(log(0.4), log(2.5), length.out = 4L)))
 }
