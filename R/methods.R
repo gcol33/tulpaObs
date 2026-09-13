@@ -229,6 +229,10 @@ tulpa::glance
 #' @export
 glance.tobs_fit <- function(x, ...) {
   g <- NextMethod()
+  # A sampled fit keeps its verdict at `x$convergence$converged`, not at the
+  # top-level `x$converged` the inherited method reads; `converged()` reads both
+  # layouts.
+  g$converged <- tryCatch(converged(x), error = function(e) NA)
   # Prefer the promoted top-level fields; fall back to the nested joint object so a
   # fit saved before the promotion still glances its k-hat.
   g <- .tobs_glance_outer_grid(g, x)
@@ -454,11 +458,15 @@ fitted.tobs_fit <- function(object, ...) {
   X_occ <- model$X_processes[[1]]
   beta_occ <- means[seq_len(pi_list[[1]]$p)]
 
-  # A fitted latent surface on the state arm (the continuous NNGP svc() field of
-  # a Laplace fit) is a per-site offset on the occupancy logit, so the in-sample
-  # psi / z read it. NULL on every other route, which leaves eta_occ exactly as
-  # it was.
-  eta_occ <- as.vector(X_occ %*% beta_occ) + (model$occ_eta_offset %||% 0)
+  # A fitted latent surface on the state arm is a per-site offset on the
+  # occupancy logit, so the in-sample psi / z read it: `occ_eta_offset` is the
+  # continuous NNGP svc() surface of a Laplace fit, `field_eta_offset` the areal
+  # / temporal field recorded by every route through `.tobs_set_field_eta_offset()`
+  # (R/field_offset.R). Both are NULL on a field-free fit, which leaves eta_occ
+  # exactly as it was, and the two never coexist on one arm (svc() rejects a
+  # spatial / temporal term beside it).
+  eta_occ <- as.vector(X_occ %*% beta_occ) + (model$occ_eta_offset %||% 0) +
+    (.tobs_eta_offset(model, 1L) %||% 0)
   psi <- plogis(eta_occ)
 
   # Detection-arm SPDE field offset: the site -> mesh projector is the SAME
@@ -495,7 +503,8 @@ fitted.tobs_fit <- function(object, ...) {
     X_det <- model$X_processes[[2]]
     beta_det <- means[pi_list[[1]]$p + seq_len(pi_list[[2]]$p)]
     eta_det <- as.vector(X_det %*% beta_det) +
-      .det_field_offset(object$spatial_field_det)
+      .det_field_offset(object$spatial_field_det) +
+      (.tobs_eta_offset(model, 2L) %||% 0)
     p <- plogis(eta_det)
   }
 

@@ -79,27 +79,42 @@
   sds <- apply(draws, 2L, stats::sd); names(sds) <- par_names
   re  <- .tobs_nuts_rhat_ess(chains)
   rhat <- re$rhat; ess <- re$ess; names(rhat) <- names(ess) <- par_names
-  list(draws = draws, means = means, vcov = V, sds = sds, rhat = rhat, ess = ess)
+  # The per-chain matrices ride along: the convergence record `summary()` and
+  # `print()` read is written from the chains, not from the pooled draws, so
+  # `.tobs_pg_finalize_fit()` needs them (the pooled matrix cannot be split back
+  # into chains once the rows are interleaved).
+  list(draws = draws, means = means, vcov = V, sds = sds, rhat = rhat, ess = ess,
+       chains = chains)
 }
 
 # Assemble the common `tobs_fit` skeleton from a `.tobs_pg_summarize` result.
 # `extra` carries the family-specific tail (ms_community, intercepts,
 # temporal_field, spatial_field); `spatial` overrides the default NULL slot.
+#
+# A PG-Gibbs run is a real MCMC chain, so it reports what every other sampled
+# fit reports: the per-parameter convergence record `summary()` / `print()` read
+# (written by the shared `.tobs_nuts_attach_convergence()`, which also decides
+# `converged` on the same split-Rhat < 1.01 rule the NUTS paths use), and the
+# marginal log-likelihood at the posterior mean behind `logLik()` / `AIC()` /
+# `BIC()`.
 .tobs_pg_finalize_fit <- function(summ, par_names, model, process_info, N,
                                   n.iter, n.chains, spatial = NULL,
                                   extra = list()) {
-  rhat <- summ$rhat
   base <- list(
     draws        = summ$draws, means = summ$means, sds = summ$sds, vcov = summ$vcov,
     n_samples    = nrow(summ$draws), n_params = length(summ$means),
     log_prob     = rep(NA_real_, nrow(summ$draws)), log_lik = NA_real_,
-    N            = N, rhat = rhat, ess = summ$ess,
+    N            = N, rhat = summ$rhat, ess = summ$ess,
     col_names    = par_names, param_names = par_names,
     n_fixed      = length(summ$means), fixed_names = par_names,
     process_info = process_info, model = model, spatial = spatial,
     method       = "pg_gibbs", n_chains = n.chains)
-  structure(c(base, extra, list(
-    convergence = list(converged = any(is.finite(rhat)) &&
-                         max(rhat, na.rm = TRUE) < 1.1, n_iter = n.iter))),
+  fit <- structure(c(base, extra, list(
+    convergence = list(converged = NA, n_iter = n.iter))),
     class = c("tobs_fit", "tulpa_fit"))
+  # The marginal log-likelihood is filled at the `tobs()` tail rather than here:
+  # a field's eta offset is recorded after the dispatcher returns, and a value
+  # taken now would describe the coefficient-only model on every spatial route.
+  .tobs_nuts_attach_convergence(fit, summ$chains, par_names = par_names,
+                                n_iter = n.iter)
 }

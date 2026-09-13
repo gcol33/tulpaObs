@@ -1105,8 +1105,24 @@ never run. `converged` on a sampled fit = every reported split-Rhat < 1.01
 `test-nuts-convergence-contract.R` fits every family advertising `nuts` and
 asserts the record resolves an Rhat for every `summary()` row; its name-set check
 fails when a new NUTS family lands w/o a case. `.tobs_nuts_rhat_ess()` reads the
-same table. PG-Gibbs still keeps rhat/ess at `fit$rhat`/`fit$ess` ONLY, where
-summary/print do not look.
+same table. PG-Gibbs writes the same record through the same writer, from the
+per-chain matrices `.tobs_pg_summarize()` carries (#319); `converged` is `NA`
+when the chains are too short for the estimator, never the old Rhat < 1.1 rule.
+
+**Every `tobs()` fit passes one tail** (`R/tobs.R`, after dispatch):
+`.tobs_default_field_eta_offset()` derives the state-arm field offset from the
+field a fit REPORTS when its fitter recorded none (declines on any existing
+offset slot, no field, or a map it cannot line up, e.g. `group_var`), then
+`.tobs_attach_sampled_loglik()` fills `log_lik` ONLY where `logLik()` has no
+finite value (gate = `logLik()`, NOT the slot: NUTS reports `mean(log_prob)`
+with `log_lik` NA). `.tobs_eta_draws()` adds the offset itself, so every
+process-major ploglik kernel is field-aware; custom-layout kernels call
+`.tobs_add_eta_offset()` by hand, and the two never overlap (#318/#320).
+
+**`control` knobs are read by EXACT key when another accepted key extends
+them** (`control[["n.threads"]]`, not `control$n.threads` beside
+`n.threads.outer`). `test-control-exact-keys.R` walks every namespace function's
+parse tree and fails on a new prefix-shadowed `$` read (#322).
 
 **Areal field on the occu NUTS path** (#142): `occu() + icar()/bym2()` under
 `method="nuts"` EXPOSES its field. `occu_fit.cpp` emits `spatial_layout` (engine

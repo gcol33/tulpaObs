@@ -26,6 +26,7 @@
 "test-community-latent-subset-oracle.R","smoke",55,0,0.3
 "test-community-methods.R","full",104,0,5.9
 "test-community-methods.R","smoke",92,2,3.9
+"test-control-exact-keys.R","smoke",7,0,1.2
 "test-control-validation.R","smoke",75,0,0.4
 "test-count-family-field-offset.R","smoke",6,6,0.2
 "test-count-gof.R","full",22,0,6.9
@@ -325,6 +326,7 @@
 "test-occu-cover-trend.R","smoke",0,7,0.2
 "test-occu-cover.R","smoke",5,3,0.1
 "test-occu-family-ploglik-cpp.R","smoke",10,0,0.2
+"test-occu-field-offset-fitted.R","smoke",4,0,27.3
 "test-occu-gp-nngp-recovery.R","smoke",0,3,0.1
 "test-occu-interleaved-na.R","full",6,0,7.7
 "test-occu-interleaved-na.R","smoke",0,2,0.1
@@ -379,6 +381,7 @@
 "test-response-lhs.R","smoke",6,3,0.2
 "test-royle-nichols.R","full",86,0,44.6
 "test-royle-nichols.R","smoke",32,2,14.2
+"test-sampled-fit-reporting.R","smoke",0,4,0
 "test-sbc-acceptance-cover.R","smoke",0,1,0
 "test-sbc-acceptance-distsamp_open.R","smoke",0,1,0
 "test-sbc-acceptance-double_observer.R","smoke",0,1,0

@@ -1,5 +1,51 @@
 # tulpaObs NEWS
 
+## 0.2.2 (2026-09-13)
+
+* **`fitted()` on an `occu()` fit with an areal field returned a flat `psi`**
+  (gcol33/tulpaObs#318). The field was never recorded as an eta offset on the
+  single-season occupancy routes, so every door that rebuilds eta from the
+  design -- `fitted()`, `residuals()` and the pointwise log-likelihood behind
+  `waic()` / `loo()` / `dic()` / `cpo()` -- read log psi = X beta while
+  `predict(type = "state")` carried the field. On a 6x6 lattice whose field the
+  fit recovered at cor 0.79, `sd(fitted(fit)$psi)` was 0 under both
+  `nested_laplace` and `pg_gibbs`, and `elpd_waic` scored the field fit below
+  the intercept-only fit (-67.1 vs -65.5). `tobs()` now derives the offset from
+  the field a fit reports wherever its fitter did not record one, and
+  `.tobs_eta_draws()` adds it for every family whose predictor it builds, so the
+  same fit reads `fitted()$psi == plogis(intercept + field)` and `elpd_waic`
+  -45.8. Fits without a field are unchanged.
+
+* **A `pg_gibbs` fit reported no convergence diagnostics**
+  (gcol33/tulpaObs#319). Split-Rhat and ESS were computed and left at
+  `fit$rhat` / `fit$ess`, where `summary()` and `print()` do not look, on all
+  seven families that advertise the engine (`t_occu()` has no other). The
+  shared finalizer now writes the same per-parameter record the NUTS paths
+  write, so `summary()` carries `rhat` / `ess_bulk` / `ess_tail`, `print()`
+  prints the `Convergence:` line and its warning, and `converged` is decided on
+  the split-Rhat < 1.01 rule rather than < 1.1.
+
+* **`logLik()`, `AIC()` and `BIC()` were `NaN` on every `pg_gibbs` fit**
+  (gcol33/tulpaObs#320). The finalizer stored `log_lik` and every `log_prob` as
+  NA. A sampled fit with no finite `logLik()` now gets the marginal
+  log-likelihood at the posterior mean from its family's own pointwise kernel,
+  evaluated after any field offset is in place. A fit that already reports a
+  value keeps it: NUTS still reads `mean(log_prob)`.
+
+* **`glance()$converged` was `NA` on every sampled fit**
+  (gcol33/tulpaObs#321). The inherited method reads a top-level `converged`,
+  which sampled fits do not carry, so a NUTS chain that had not mixed glanced as
+  `NA` while `converged()` said `FALSE`. `glance()` now reports `converged()`.
+
+* **Control knobs whose name prefixes another knob were read by partial
+  match** (gcol33/tulpaObs#322). `control$n.threads` in `cover()` returned
+  `n.threads.outer` when only that was set, putting the outer-grid width on the
+  inner per-observation loops. The same `$` read sat on `sigma.grid`,
+  `phi.grid` and the `sbc()` check for `alpha.grid` (which returned `NULL` when
+  both `alpha.grid` and `alpha.grid.trend` were set, so the formula copy was
+  written beside a stated scale). All are exact-key reads now, and a test walks
+  every function in the namespace so a new read of that shape fails the suite.
+
 ## 0.2.1 (2026-09-03)
 
 * **Holding an outer-grid axis at exactly the nodes stated takes two knobs, not

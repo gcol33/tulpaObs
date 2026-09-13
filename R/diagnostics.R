@@ -226,9 +226,9 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # its own cell's field, so the per-observation marginal is exact, but the joint
 # field-coefficient covariance is not reconstructed. The draw-matrix families
 # routed through .tobs_eta_draws (single, dynamic, integrated, jsdm, ...) evaluate
-# the predictor from the process fixed-effect coefficient draws only; for those
-# models any structured field is not added and the score is conditional on the
-# fixed-effect predictor.
+# the predictor from the process fixed-effect coefficient draws plus the field
+# eta offset the fit records, one fixed vector per arm (.tobs_add_eta_offset): the
+# field enters the score, its draw-to-draw uncertainty does not.
 .tobs_pointwise_loglik <- function(object, n.draws = NULL, n.threads = 1L) {
   nd <- n.draws %||% 1000L
   if (inherits(object, "cover_fit"))
@@ -446,11 +446,18 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 }
 
 # Linear-predictor draws for process k: [n_draws x nrow(X_k)].
+#
+# A fitted latent field is part of eta on the arm it loads on, so it is added
+# here rather than by each kernel: every family whose coefficient block is laid
+# out process-major reaches its predictor through this one call, and a kernel
+# with a custom layout (the count marginals, fp_occu, dyn_abun) builds eta by
+# hand and calls `.tobs_add_eta_offset()` itself. Neither route sees the other's
+# offset, so folding it in here cannot double-count (R/field_offset.R).
 .tobs_eta_draws <- function(model, draws, k) {
   p_k    <- model$process_info[[k]]$p
   off    <- .tobs_proc_offset(model, k)
   beta_k <- draws[, off + seq_len(p_k), drop = FALSE]
-  beta_k %*% t(model$X_processes[[k]])
+  .tobs_add_eta_offset(beta_k %*% t(model$X_processes[[k]]), model, k)
 }
 
 # --- per-family marginal likelihoods ---------------------------------------

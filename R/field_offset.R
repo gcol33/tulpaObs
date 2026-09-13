@@ -62,6 +62,70 @@
   off
 }
 
+# The per-family named slots that already carry a fitted latent surface into the
+# post-fit readers: the continuous svc() surface, and the field / factor offsets
+# the count and community fitters write through `.tobs_latent_attach_field()`.
+# A fit holding one of these has its surface accounted for by the reader that
+# owns that slot, so the fallback below leaves it alone.
+.TOBS_FIELD_OFFSET_SLOTS <- c(
+  "occ_eta_offset", "occu_field_offset", "occu_factor_offset",
+  "count_field_offset", "count_factor_offset",
+  "nmix_field_offset", "nmix_factor_offset",
+  "distance_field_offset", "distance_factor_offset")
+
+# Derive the state-arm offset from what the fit REPORTS, for routes whose fitter
+# does not record one itself. `.tobs_set_field_eta_offset()` is the fitter-side
+# entry and stays the preferred one -- a fitter knows which arm its field loads
+# on and how its units map; this runs at the `tobs()` tail so a reported field is
+# never silently read and scored at zero on a route that never called it.
+#
+# Declines, leaving the fit byte-identical, whenever the field is already
+# accounted for (an offset recorded, or one of the named slots above), whenever
+# the fit reports no field, and whenever the offset cannot be lined up with the
+# state arm's design rows -- a field mapped through `group_var` is per CELL while
+# the arm is per site, and inventing that map here would be guessing.
+.tobs_default_field_eta_offset <- function(fit, arm = 1L) {
+  model <- fit[["model"]]
+  if (is.null(model) || !is.null(model$field_eta_offset)) return(fit)
+  if (!is.null(fit$field_eta_offset)) return(fit)
+  if (any(vapply(.TOBS_FIELD_OFFSET_SLOTS,
+                 function(s) !is.null(model[[s]]), logical(1)))) return(fit)
+  spatial <- fit[["spatial"]]
+  if (is.null(spatial)) return(fit)
+  off <- tryCatch(.tobs_spatial_field_offset(fit, spatial, model),
+                  error = function(e) NULL)
+  if (is.null(off) || !length(off)) return(fit)
+  staged <- .tobs_set_field_eta_offset(fit, arm, off)
+  tryCatch(.tobs_attach_model_eta_offset(staged), error = function(e) fit)
+}
+
+# Fill the scalar marginal log-likelihood `logLik()` / `AIC()` / `BIC()` report,
+# for a sampled fit that came back without one. Runs at the `tobs()` tail, after
+# any field offset is on the model, so the value describes the model the fit
+# made rather than its coefficient block alone. Evaluated at the posterior mean
+# through the family's own pointwise kernel -- `.tobs_loglik_at_mean()`, the
+# evaluator DIC already drives, so no family needs a second one.
+#
+# The gate is what `logLik()` ALREADY returns, not `fit$log_lik`: the generic
+# reads `mean(log_prob)` first and only falls back to the marginal, so a sampler
+# that reports a per-draw log posterior (every NUTS path) has a finite `logLik()`
+# with `log_lik` left at NA. Gating on the slot would overwrite those, and
+# writing `log_prob` is what makes the value visible -- so it is filled only for
+# a fit that has no usable value at all, which is the PG-Gibbs case: its
+# `log_prob` is all NA, so `mean()` is NaN and `logLik()` / `AIC()` / `BIC()`
+# come back NaN.
+.tobs_attach_sampled_loglik <- function(fit) {
+  cur <- tryCatch(as.numeric(stats::logLik(fit)), error = function(e) NA_real_)
+  if (length(cur) == 1L && is.finite(cur)) return(fit)
+  if (!is.matrix(fit[["draws"]]) || !nrow(fit[["draws"]])) return(fit)
+  ll <- tryCatch(sum(as.numeric(.tobs_loglik_at_mean(fit, n.draws = 1L))),
+                 error = function(e) NA_real_)
+  if (!is.finite(ll)) return(fit)
+  fit$log_lik  <- ll
+  fit$log_prob <- rep(ll, max(1L, length(fit$log_prob)))
+  fit
+}
+
 # Record the field's eta offset on the fit, tagged with the process (arm) it
 # loads on. `off` is in the field's own unit layout -- per site for an areal
 # field mapped one node per site, already mapped through `field_map` for a

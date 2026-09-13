@@ -111,13 +111,13 @@
     # Stated in SD, then carried to the engine's variance scale for this arm --
     # both the auto span and a user-supplied `phi.grid`, which is documented in
     # SD and must keep that meaning.
-    sd_grid <- control$phi.grid %||%
+    sd_grid <- control[["phi.grid"]] %||%
       .cover_phi_grid_span("lognormal", sigma_hat)
     list(pos_family = "gaussian",
          phi_hat = .cover_phi_sd_to_engine(sigma_hat, "gaussian"),
          phi_grid_pos = .tobs_mark_auto(
            .cover_phi_sd_to_engine(sd_grid, "gaussian"),
-           is.null(control$phi.grid)))
+           is.null(control[["phi.grid"]])))
   } else if (positive == "lognormal_trunc") {
     # Upper-truncated Gaussian on log-cover (cover <= 1). The midpoint prefit SD
     # ignores truncation and so over-disperses a touch; the grid runs a little
@@ -125,21 +125,21 @@
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "truncated_gaussian", phi_hat = sigma_hat,
          phi_grid_pos = .tobs_mark_auto(
-           control$phi.grid %||% .cover_phi_grid_span(positive, sigma_hat),
-           is.null(control$phi.grid)))
+           control[["phi.grid"]] %||% .cover_phi_grid_span(positive, sigma_hat),
+           is.null(control[["phi.grid"]])))
   } else if (positive == "ordinal") {
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
     list(pos_family = "interval_gaussian", phi_hat = sigma_hat,
          phi_grid_pos = .tobs_mark_auto(
-           control$phi.grid %||% .cover_phi_grid_span(positive, sigma_hat),
-           is.null(control$phi.grid)))
+           control[["phi.grid"]] %||% .cover_phi_grid_span(positive, sigma_hat),
+           is.null(control[["phi.grid"]])))
   } else {
     # No beta dispersion pre-fit on this route (`phi_hat` is 1.0), so there is
     # nothing to centre a band on and the span is stated outright.
     list(pos_family = "beta", phi_hat = 1.0,
          phi_grid_pos = .tobs_mark_auto(
-           control$phi.grid %||% exp(seq(log(2), log(300), length.out = 7)),
-           is.null(control$phi.grid)))
+           control[["phi.grid"]] %||% exp(seq(log(2), log(300), length.out = 7)),
+           is.null(control[["phi.grid"]])))
   }
 }
 

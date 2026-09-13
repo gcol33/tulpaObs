@@ -1003,7 +1003,7 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
   }
   max_iter  <- control$max.iter  %||% 100L
   tol       <- control$tol       %||% 1e-6
-  n_threads <- control$n.threads %||% 1L
+  n_threads <- control[["n.threads"]] %||% 1L
 
   # Opt-in fixed-effect priors (cover_priors()): the same quadratic beta_prior
   # tulpa_laplace() applies on the occupancy path, specified on natural-scale

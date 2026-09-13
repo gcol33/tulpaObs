@@ -255,7 +255,9 @@
 #     integrate the nodes it was given and nothing else sets this FALSE.
 #   * `[[` (exact) not `$` on every key that another key extends: `prune` is a
 #     unique prefix of `prune.tol`, so a `$` read turns a fit that only sizes
-#     the tolerance into one that screens.
+#     the tolerance into one that screens, and `n.threads` is a unique prefix of
+#     `n.threads.outer`, so a `$` read puts the outer-grid width on the inner
+#     per-observation loops as well.
 #   * progress / progress.file -- two independent channels, both ON by default.
 #     `progress` gates the console bar (NOT tied to `verbose`); `progress.file`
 #     is emitted whenever non-empty and is the only channel that survives a
@@ -268,7 +270,7 @@
   head <- list(
     max_iter  = control$max.iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
-    n_threads = control$n.threads %||% 1L,
+    n_threads = control[["n.threads"]] %||% 1L,
     n_threads_outer = control$n.threads.outer %||% 1L,
     store_Q   = TRUE,
     hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"))
@@ -399,8 +401,8 @@
   # this axis is ours to move: the marker goes on the vector finally written
   # into the block, so track the provenance here and apply it after the tau
   # translation / bym2 pairing below.
-  sigma_auto <- is.null(control$sigma.grid)
-  sigma_grid <- as.numeric(control$sigma.grid %||%
+  sigma_auto <- is.null(control[["sigma.grid"]])
+  sigma_grid <- as.numeric(control[["sigma.grid"]] %||%
                            exp(seq(log(0.2), log(2.5), length.out = 7)))
 
   block <- list(
@@ -963,7 +965,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   prior_for_joint <- prior
   prior_for_joint$spatial_idx <- NULL
   prior_for_joint$rho_bounds  <- NULL
-  if (!is.null(control$sigma.grid))   prior_for_joint$sigma_grid   <- control$sigma.grid
+  if (!is.null(control[["sigma.grid"]]))   prior_for_joint$sigma_grid   <- control[["sigma.grid"]]
   if (!is.null(control$rho.grid))     prior_for_joint$rho_grid     <- control$rho.grid
   if (!is.null(control$tau.grid)) {
     prior_for_joint$sigma_grid <- 1.0 / sqrt(as.numeric(control$tau.grid))

@@ -707,6 +707,12 @@ tobs <- function(formula,
   # unresolved name here clobbered the concrete label they had already set.
   fit$method <- route$method
   fit$dims   <- dims
+  # Last stop before the fit reaches the user, and the only point every family
+  # passes through: a route whose fitter did not record its field's eta offset
+  # gets it derived from the field the fit reports, so no door rebuilds eta
+  # without it (R/field_offset.R). A no-op wherever the fitter already did it.
+  fit <- .tobs_default_field_eta_offset(fit)
+  fit <- .tobs_attach_sampled_loglik(fit)
   fit
 }
 

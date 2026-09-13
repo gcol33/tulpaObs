@@ -247,10 +247,14 @@
 # the observed fit carried one. Without the copy the cover arm never sees the
 # field and `alpha` is pinned at zero, which is a different model.
 .tobs_sbc_pos_formula <- function(spec) {
-  # `control$alpha.grid` is the other spelling of the same coupling, and
-  # `occu_cover()` refuses both at once, so the formula copy is written only
-  # when the control does not already carry the scale.
-  if (!isTRUE(spec$has_copy) || !is.null(spec$control$alpha.grid)) {
+  # `control$alpha.grid` / `control$alpha.grid.trend` are the other spelling of
+  # the same coupling, and `occu_cover()` refuses either one beside a formula
+  # copy, so the copy is written only when the control carries neither. Both are
+  # read by exact key: `alpha.grid` is a strict prefix of `alpha.grid.trend`, so
+  # a `$` read matches the trend key alone and returns NULL when both are set.
+  ctl <- spec$control
+  if (!isTRUE(spec$has_copy) || !is.null(ctl[["alpha.grid"]]) ||
+      !is.null(ctl[["alpha.grid.trend"]])) {
     return(spec$pos)
   }
   lab <- attr(stats::terms(spec$pos), "term.labels")
