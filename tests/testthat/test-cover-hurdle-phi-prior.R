@@ -2,9 +2,9 @@
 #
 # The beta-precision phi on the positive arm rides its own outer-grid axis
 # (control$phi.grid). control$prior.phi forwards a regularizing hyperprior to
-# tulpa's prior_phi ( + tulpaObs side), so the phi axis is weighted by the
-# chosen density instead of an implicit flat prior. A sharp half-normal on the
-# precision pulls the posterior phi_pos below the flat fit.
+# tulpa's prior_phi, so the phi axis is weighted by the chosen density in place
+# of the engine's default (R-INLA's loggamma on a beta precision). A half-normal
+# sharper than that default pulls the posterior phi_pos below the default fit.
 
 simulate_beta_cover_pp <- function(N = 240, n_s = 25, sigma = 0.5, rho = 0.7,
                                    phi = 30, beta_occ = c(-0.3, 0.7),
@@ -43,12 +43,18 @@ test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
                        phi.grid = phi_grid,
                        prior.phi = prior_phi))
 
-    flat <- fit_one(NULL)
+    # `prior.phi = NULL` is not flat: the engine folds its default density on
+    # the precision axis. Measured on tulpa 0.4.1: phi_pos 21.97 under that
+    # default against 15.10 under a half-normal of scale 5; 22.64 against 15.08
+    # with the engine default set flat. A half-normal of scale 20 sits near the
+    # default (22.75), and between scales the adaptively refined phi axis moves
+    # the read by about 2, so the arm compared is one clearly sharper.
+    def <- fit_one(NULL)
     # A half-normal on the precision down-weights the large-phi cells.
-    hn   <- fit_one(list("half_normal", 20))
+    hn  <- fit_one(list("half_normal", 5))
 
-    expect_s3_class(flat, "cover_fit")
-    expect_true(flat$converged && hn$converged)
-    expect_true(is.finite(flat$phi_pos) && is.finite(hn$phi_pos))
-    expect_lt(hn$phi_pos, flat$phi_pos)
+    expect_s3_class(def, "cover_fit")
+    expect_true(def$converged && hn$converged)
+    expect_true(is.finite(def$phi_pos) && is.finite(hn$phi_pos))
+    expect_lt(hn$phi_pos, def$phi_pos)
 })

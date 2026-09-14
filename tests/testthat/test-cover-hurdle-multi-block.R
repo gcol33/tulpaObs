@@ -167,19 +167,22 @@ test_that("cover(): each multi-block hyperparameter follows its own truth", {
   skip_if_fast()
   # Same grid, two truths. A is the fixture's own configuration; B raises the
   # copy coefficient and both non-spatial SDs, lowers the field SD, and makes
-  # the beta arm far more disperse. Measured on seed 7001 (tulpa 0.0.163):
+  # the beta arm far more disperse. Measured on seed 7001 (tulpa 0.4.1):
   #
   #   quantity       A        B        ratio  margin asserted
-  #   b1.sigma     0.8933   0.4480     1.99x   1.5x
-  #   b1.alpha     1.0013   1.5717     1.57x   1.3x
-  #   b2.tau      51.4964   8.7709     5.87x   2.0x
-  #   b3.sigma     0.2395   0.7000     2.92x   2.0x
-  #   phi_pos     38.0000   6.0092     6.32x   3.0x
+  #   b1.sigma     0.8924   0.5036     1.77x   1.5x
+  #   b1.alpha     1.0006   1.2484     1.25x   1.15x
+  #   b2.tau      45.9275   7.1083     6.46x   2.0x
+  #   b3.sigma     0.2622   0.7000     2.67x   2.0x
+  #   phi_pos     37.9999   6.0059     6.33x   3.0x
   #
-  # Every ordering holds on all five of seeds 7001 / 7011-7014, and each rule
-  # fails when its own component of B is put back to A's value (the sigma_year
-  # reversal takes down `b2.tau` AND `b1.sigma`, the year effect and the field
-  # being partly confounded at this fixture size).
+  # Every ordering holds on all five of seeds 7001 / 7011-7014; the margins are
+  # sized to seed 7001, and the smallest ratio over the five is 1.10x
+  # (b1.sigma), 1.09x (b1.alpha), 1.98x (b2.tau), 1.10x (b3.sigma) and 6.32x
+  # (phi_pos). The copy coefficient reads 1.32x on seed 7001 with the engine's
+  # default hyperprior set flat: the proper defaults of tulpa 0.4.1 shrink it.
+  # Putting alpha back to A's value takes its ratio to 0.77x on seed 7001 and
+  # below 1.02x on three of the other four seeds, 1.78x on seed 7011.
   fit_a <- .mb_fit(simulate_cover_multi_block(N = 400, seed = 7001))
   fit_b <- .mb_fit(simulate_cover_multi_block(N = 400, seed = 7001,
                                               sigma      = 0.35,
@@ -193,7 +196,7 @@ test_that("cover(): each multi-block hyperparameter follows its own truth", {
   # Spatial field SD: truth 0.6 -> 0.35.
   expect_gt(a[[1L]]$mean[["sigma"]], 1.5 * b[[1L]]$mean[["sigma"]])
   # Copy coefficient: truth 1.2 -> 2.2.
-  expect_gt(b[[1L]]$mean[["alpha"]], 1.3 * a[[1L]]$mean[["alpha"]])
+  expect_gt(b[[1L]]$mean[["alpha"]], 1.15 * a[[1L]]$mean[["alpha"]])
   # AR1 precision: truth SD 0.3 -> 0.8, so tau falls.
   expect_gt(a[[2L]]$mean[["tau"]], 2.0 * b[[2L]]$mean[["tau"]])
   # Observer RE SD: truth 0.25 -> 0.6.

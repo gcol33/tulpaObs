@@ -42,12 +42,16 @@ test_that("a pg_gibbs fit carries the chain convergence record", {
   expect_true(any(grepl("Convergence:", capture.output(print(g)))))
 })
 
-test_that("logLik() and AIC() are finite on a pg_gibbs fit", {
+test_that("logLik() is finite on a pg_gibbs fit, and AIC() / BIC() refuse it", {
   skip_if_fast()
   g <- .sfr_fits()$pg_gibbs
-  expect_true(is.finite(as.numeric(logLik(g))))
-  expect_true(is.finite(AIC(g)))
-  expect_true(is.finite(BIC(g)))
+  ll <- logLik(g)
+  expect_true(is.finite(as.numeric(ll)))
+  # A sampled fit reports a log posterior mean, which is not a maximised
+  # log-likelihood, so tulpa's information criteria decline it by name.
+  expect_identical(attr(ll, "quantity"), "log_posterior_mean")
+  expect_error(AIC(g), "maximised log-likelihood")
+  expect_error(BIC(g), "maximised log-likelihood")
 })
 
 test_that("a fit that already reports a logLik() keeps it", {

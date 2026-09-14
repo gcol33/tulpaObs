@@ -894,7 +894,8 @@
   # joint driver's `prior_sigma` / `prior_alpha` / `prior_phi`. Each is a
   # list(<family>, <params>), e.g. list("pc.prec", c(U, alpha)) for a Penalized
   # Complexity prior (Simpson et al. 2017) on the spatial field SD, or
-  # list("half_normal", scale). NULL (default) leaves the flat hyperprior. The
+  # list("half_normal", scale). NULL (default) leaves tulpa's default prior on
+  # the axis (a PC prior on a scale, R-INLA's loggamma on a beta precision). The
   # PC prior shrinks the field-SD upper tail toward the no-spatial base model
   # unless the data identifies a larger amplitude, so a weakly-identified field
   # is not driven to an inflated SD that widens every per-cell interval.

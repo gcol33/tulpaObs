@@ -793,7 +793,7 @@
 #'   API. `prior.phi` puts the same kind of regularizing hyperprior on the
 #'   cover-arm dispersion grid (the beta precision under `positive = "beta"`,
 #'   the log-scale SD under `lognormal`), re-weighting the `phi.grid` axis by
-#'   the chosen density instead of an implicit flat prior; same
+#'   the chosen density in place of the engine's default prior on it; same
 #'   `list(family, params)` form, forwarded to tulpa's `prior_phi`.
 #' @param temporal,re Structured `temporal()` / `re()` blocks from the formula,
 #'   stacked onto the shared spatial block via the multi-block joint engine.

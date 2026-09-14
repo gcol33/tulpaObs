@@ -39,7 +39,7 @@ args. The prior on alpha directly regularizes the copy scalar at small
 API. \code{prior.phi} puts the same kind of regularizing hyperprior on the
 cover-arm dispersion grid (the beta precision under \code{positive = "beta"},
 the log-scale SD under \code{lognormal}), re-weighting the \code{phi.grid} axis by
-the chosen density instead of an implicit flat prior; same
+the chosen density in place of the engine's default prior on it; same
 \code{list(family, params)} form, forwarded to tulpa's \code{prior_phi}.}
 
 \item{temporal, re}{Structured \code{temporal()} / \code{re()} blocks from the formula,
