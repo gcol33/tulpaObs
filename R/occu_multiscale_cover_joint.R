@@ -219,8 +219,11 @@
   # engine convention, the residual VARIANCE for the gaussian arm both of the
   # first two compile to. Converted here, at the one place the pre-fit becomes
   # the arm's dispersion, through the same pair `cover()` and `occu_cover()` use.
+  # A one-node `phi.grid.pos` states the dispersion outright and replaces the
+  # pre-fit as the value the arm holds; it then carries no axis.
+  phi_pos_pin  <- .cover_phi_stated_pin(dots$phi.grid.pos)
   phi_pos_init <- .cover_phi_sd_to_engine(
-    phi_pos_init, .cover_pos_engine_family(model$positive))
+    phi_pos_pin %||% phi_pos_init, .cover_pos_engine_family(model$positive))
 
   alpha_axis <- .tobs_alpha_axis_base(dots)
   sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
@@ -312,7 +315,7 @@
   # conversion -- without it a stated axis explores variances over a span meant
   # for SDs.
   phi_grid_pos <- dots$phi.grid.pos
-  phi_grid_arg <- if (!is.null(phi_grid_pos))
+  phi_grid_arg <- if (!is.null(phi_grid_pos) && is.null(phi_pos_pin))
                     list(pos = .cover_phi_sd_to_engine(
                       as.numeric(phi_grid_pos),
                       .cover_pos_engine_family(model$positive)))

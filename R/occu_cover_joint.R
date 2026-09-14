@@ -272,8 +272,12 @@
   # the response, which also carries everything the covariates and the shared
   # field explain. The latent branch above already refuses that reasoning for
   # `disp2_fixed`; this is the same argument on the non-latent arm.
+  #
+  # A one-node `phi.grid.pos` states the dispersion outright, so it replaces the
+  # pre-fit as the value the arm holds.
+  phi_pos_pin <- if (!is_latent) .cover_phi_stated_pin(dots$phi.grid.pos)
   if (!is_latent) {
-    phi_pos_init <- .occu_cover_prefit_dispersion(
+    phi_pos_init <- phi_pos_pin %||% .occu_cover_prefit_dispersion(
       arms_out$responses$pos, model$positive, phi_pos_init,
       scored = arms_out$pos_scored)
     sigma_pos_init <- .cover_phi_sd_to_engine(
@@ -631,12 +635,15 @@
     # A caller whose pre-fit they expect to be off passes their own span
     # through `phi.grid.pos`, and wrapping it in `auto_grid()` buys the
     # placement pass back at that cost.
+    #
+    # A one-node grid is a pin, already written into the arm's `phi` above, so
+    # it carries no axis.
     phi_grid_pos <- dots$phi.grid.pos
     phi_stated   <- !is.null(phi_grid_pos)
     if (!phi_stated)
       phi_grid_pos <- .cover_phi_grid_span(model$positive, phi_pos_init,
                                            n = 3L)
-    phi_grid_arg <- list(pos = .tobs_mark_auto(
+    phi_grid_arg <- if (is.null(phi_pos_pin)) list(pos = .tobs_mark_auto(
       .cover_phi_sd_to_engine(as.numeric(phi_grid_pos),
                               .cover_pos_engine_family(model$positive)),
       if (phi_stated) tulpa::is_auto_grid(phi_grid_pos) else FALSE))

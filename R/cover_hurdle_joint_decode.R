@@ -102,6 +102,23 @@
   exp(seq(log(phi_hat * band[1L]), log(phi_hat * band[2L]), length.out = n))
 }
 
+# A stated dispersion grid of ONE node is a pin at that node. The engine reads a
+# scalar `phi_grid` entry as no axis and keeps the arm's parse-time `phi`, so the
+# node has to become that `phi`: handed over as a grid it is dropped, and the fit
+# runs at the pre-fit whatever value was stated. Returns the node on the surface
+# it was stated in (SD, or precision for beta), or NULL when the grid is unset or
+# has more than one node.
+.cover_phi_stated_pin <- function(grid, what = "phi.grid.pos") {
+  if (is.null(grid) || length(grid) != 1L) return(NULL)
+  v <- suppressWarnings(as.numeric(grid))
+  if (!is.finite(v) || v <= 0) {
+    stop("`", what, "` of one node pins the cover dispersion at that node, so ",
+         "it must be a finite positive number (got ", format(grid), ").",
+         call. = FALSE)
+  }
+  v
+}
+
 .cover_pos_family_grid <- function(positive, enc, control) {
   if (positive %in% c("lognormal", "gaussian")) {
     # Both fit the tulpa "gaussian" family; they differ only in the response the

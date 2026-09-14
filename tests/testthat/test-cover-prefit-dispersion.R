@@ -165,3 +165,95 @@ test_that("both engines pin the dispersion from one estimator", {
   expect_equal(tulpaObs:::.cover_phi_sd_to_engine(
     30, tulpaObs:::.cover_pos_engine_family("beta")), 30)
 })
+
+
+# A stated `phi.grid.pos` replaces the pre-fit. One node is a pin: the engine
+# reads a scalar `phi_grid` entry as no axis and keeps the arm's `phi`, so the
+# node has to be written there, and the reported dispersion is the one held.
+# Several nodes are an axis whose stated nodes are all integrated, over the
+# stated span.
+.phi_pin_occu_cover_fit <- function(phi.grid.pos, ...) {
+  N <- 20L; J <- 3L
+  adj <- chain_adj(N)
+  sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", adj = adj,
+    beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5),
+    beta_pos = c(log(0.25), 0.3), sigma = 0.8, alpha = 1.0, sigma_pos = 0.4,
+    seed = 707L)
+  long <- data.frame(site_id = rep(seq_len(N), each = J),
+                     visit = rep(seq_len(J), times = N),
+                     y = as.vector(t(sim$y)),
+                     det_cov1 = sim$visit_data$det_cov1,
+                     pos_cov1 = sim$visit_data$pos_cov1)
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                  det.covs = c("det_cov1", "pos_cov1"))
+  y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+  suppressWarnings(tobs(
+    formula = ~ occ_cov1 + icar(graph = adj),
+    data = cbind(data.frame(site_id = seq_len(N)), sim$data),
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
+    y = od$y, y_pos = y_pos, visits = od$det.covs, method = "nested_laplace",
+    control = c(list(verbose = FALSE, progress = FALSE, engine = "joint",
+                     phi.grid.pos = phi.grid.pos), list(...))))
+}
+
+test_that("a one-node phi.grid.pos is the dispersion occu_cover holds and reports", {
+  skip_on_cran()
+  held_of <- function(fit) tulpaObs:::.tobs_joint_fit(fit)$responses$pos$phi
+
+  f4 <- .phi_pin_occu_cover_fit(0.4)
+  expect_false("phi_pos" %in% colnames(tulpaObs:::.tobs_joint_fit(f4)$theta_grid))
+  # The lognormal arm's engine `phi` is the residual variance.
+  expect_equal(held_of(f4), 0.4^2, tolerance = 1e-12)
+  expect_equal(f4$model$cover_pos_disp, 0.4, tolerance = 1e-12)
+  expect_equal(f4$model$cover_pos_disp, sqrt(held_of(f4)), tolerance = 1e-12)
+
+  # A different node is a different fit.
+  f6 <- .phi_pin_occu_cover_fit(0.6)
+  expect_equal(held_of(f6), 0.6^2, tolerance = 1e-12)
+  expect_false(isTRUE(all.equal(f4$means, f6$means)))
+})
+
+test_that("a multi-node phi.grid.pos is integrated on the stated nodes", {
+  skip_on_cran()
+  stated <- c(0.25, 0.35, 0.5)
+  axis_of <- function(fit)
+    sort(unique(tulpaObs:::.tobs_joint_fit(fit)$theta_grid[, "phi_pos"]))
+
+  # With both refinement passes off the axis is exactly the stated nodes.
+  fixed <- .phi_pin_occu_cover_fit(stated, adaptive.grid = FALSE,
+                                   var.of.means.consistency = FALSE)
+  expect_equal(axis_of(fixed), stated^2, tolerance = 1e-12)
+
+  # The refinement passes densify inside the stated span and drop no node.
+  refined <- .phi_pin_occu_cover_fit(stated)
+  expect_true(all(stated^2 %in% axis_of(refined)))
+  expect_equal(range(axis_of(refined)), range(stated^2), tolerance = 1e-12)
+})
+
+test_that("a one-node phi.grid.pos is the dispersion occu_multiscale_cover holds", {
+  skip_on_cran()
+  sim <- simulate_occu_multiscale_cover(n_cells = 20L, plots_per_cell = 3L,
+                                        visits_per_plot = 2L, phi = 0.4,
+                                        sigma = 0.02, seed = 101L)
+  fit_at <- function(v) suppressWarnings(tobs(
+    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
+    detection = ~ x_pdet, availability = ~ x_plot,
+    positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
+    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    control = list(verbose = FALSE, progress = FALSE,
+                   sigma.grid = c(0.1, 0.5, 1), phi.grid.pos = v)))
+  jf <- tulpaObs:::.tobs_joint_fit(fit_at(0.4))
+  expect_false("phi_pos" %in% colnames(jf$theta_grid))
+  expect_equal(jf$responses$pos$phi, 0.4^2, tolerance = 1e-12)
+})
+
+test_that("a one-node dispersion grid must be a positive number", {
+  expect_null(tulpaObs:::.cover_phi_stated_pin(NULL))
+  expect_null(tulpaObs:::.cover_phi_stated_pin(c(0.2, 0.4)))
+  expect_identical(tulpaObs:::.cover_phi_stated_pin(0.4), 0.4)
+  for (bad in list(0, -1, NA_real_, Inf, "x")) {
+    expect_error(tulpaObs:::.cover_phi_stated_pin(bad), "one node pins")
+  }
+})
