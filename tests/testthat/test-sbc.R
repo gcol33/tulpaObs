@@ -22,8 +22,9 @@
 # =============================================================================
 
 # The dispersion grid the fixture puts phi_pos on. Without it the joint engine
-# holds the cover dispersion at a value it sets per data set, so the replicate
-# would be generated at one value and refitted under another.
+# integrates the cover dispersion on a three-node default axis centred on each
+# data set's own pre-fit, so the observed fit and every augmented refit would
+# integrate it over different supports, as for the field SD below.
 .SBC_PHI_GRID <- exp(seq(log(0.20), log(0.90), length.out = 17L))
 
 # The field-SD grid, PINNED. A defaulted axis is auto-recentred per fit, so the
@@ -223,13 +224,25 @@ test_that("the refit rebuilds a STATED copy axis, not the engine default", {
 })
 
 
-test_that("a dispersion the engine holds fixed is reported, not scored", {
+test_that("a dispersion the fit integrates by default is scored, not reported fixed", {
   skip_on_cran()
   fx <- .sbc_fixture(N = 20L, J = 3L, phi.grid = NULL)
-  expect_warning(m <- sbc(fx$fit, model.only = TRUE),
+  expect_no_warning(m <- sbc(fx$fit, model.only = TRUE),
+                    message = "holds the cover dispersion fixed")
+  expect_true("disp" %in% attr(m, "quantities"))
+  expect_false("disp" %in% attr(m, "fixed"))
+})
+
+
+test_that("a dispersion with no posterior spread is reported, not scored", {
+  probe <- cbind(beta = c(-0.2, 0.1, 0.4, 0.3), disp = rep(0.34, 4L))
+  expect_identical(tulpaObs:::.tobs_sbc_scored(probe), "beta")
+
+  held <- list(model = list(cover_pos_disp = 0.34))
+  expect_warning(tulpaObs:::.tobs_sbc_check_fixed_dispersion(held, "disp"),
                  "holds the cover dispersion fixed")
-  expect_true("disp" %in% attr(m, "fixed"))
-  expect_false("disp" %in% attr(m, "quantities"))
+  expect_no_warning(tulpaObs:::.tobs_sbc_check_fixed_dispersion(held,
+                                                                character(0)))
 })
 
 
