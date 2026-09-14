@@ -102,7 +102,9 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   # refines a peaked axis on the single fits but not the fused batch; see). The
   # default batch backend is "looped" (correct + fastest); this gate opts into
   # the FUSED backend (control$batch.backend = "fused") to validate it against
-  # independent fits.
+  # independent fits. The default fit integrates the cover-arm dispersion on an
+  # outer axis about each species' own pre-fit, so the two species reach the
+  # fused driver with different dispersion nodes over one shared cell layout.
   ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint",
                adaptive.grid = FALSE, var.of.means.consistency = FALSE,
                diagnose.k = FALSE)
@@ -131,6 +133,10 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   expect_identical(batch$n_species, 2L)
   expect_identical(batch$species, c("a", "b"))
   expect_identical(batch$backend, "fused")
+  phi_nodes <- lapply(batch$fits, function(f)
+    sort(unique(f$joint_fit$theta_grid[, "phi_pos"])))
+  expect_true(all(lengths(phi_nodes) > 1L))
+  expect_false(isTRUE(all.equal(phi_nodes[["a"]], phi_nodes[["b"]])))
 
   # The DEFAULT backend (no batch.backend) is the looped path.
   batch_default <- suppressWarnings(tobs(
@@ -161,6 +167,10 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
     expect_equal(fb$spatial_field, fi$spatial_field, tolerance = 1e-7)
     expect_equal(sort(fb$joint_fit$log_marginal),
                  sort(fi$joint_fit$log_marginal), tolerance = 1e-7)
+    expect_equal(sort(unique(fb$joint_fit$theta_grid[, "phi_pos"])),
+                 sort(unique(fi$joint_fit$theta_grid[, "phi_pos"])))
+    expect_equal(sort(fb$joint_fit$weights), sort(fi$joint_fit$weights),
+                 tolerance = 1e-7)
   }
 
   # The two species are genuinely different fits (not an accidental alias).

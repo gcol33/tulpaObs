@@ -168,12 +168,16 @@
 #
 # Returns a `tobs_batch` (backend = "fused"), or NULL when the configuration is
 # not fused-eligible -- the caller then falls back to the looped path. Eligible:
-# spatial nested-Laplace on the default joint engine with a FIXED pos-arm
-# dispersion (no latent cover RE, no phi.grid.pos), i.e. the common occu_cover
-# spatial fit. The fused driver integrates a single shared FIXED outer grid
-# across species (per-species adaptive refinement is inherently not shareable),
-# so a fused fit equals an adaptive single-species fit only with adaptive grid
-# off; the equivalence gate fixes both sides' grid.
+# spatial nested-Laplace on the default joint engine, with the pos-arm
+# dispersion either fixed or integrated on an axis the species state or default
+# (the occu_cover default integrates it on a per-species band about that
+# species' own pre-fit). The fused driver carries each species' dispersion nodes
+# over one cell layout the batch shares, so the latent cover RE (a stateful
+# per-fit coupling spec) and a dispersion axis marked `auto_grid()` (placed per
+# species by a refit) are not fused-eligible. The fused driver integrates a
+# FIXED outer grid (per-species adaptive refinement is inherently not
+# shareable), so a fused fit equals an adaptive single-species fit only with
+# adaptive grid off; the equivalence gate fixes both sides' grid.
 .tobs_fit_occu_cover_batch_fused <- function(tobs_args, y, y_pos, B, labels) {
   if (!identical(tobs_args$method, "nested_laplace")) return(NULL)
   engine_pick <- tobs_args$control[["engine"]] %||% "joint"
@@ -205,11 +209,13 @@
     preps[[s]] <- prep
   }
 
-  # Fused-eligible only with a fixed pos-arm dispersion: a latent cover RE or an
-  # explicit phi.grid.pos puts sigma on the outer grid as a per-arm phi axis,
-  # which the batched driver does not carry.
+  # The latent cover RE registers a coupling spec holding one species' detected
+  # cover values, and an `auto_grid()` dispersion axis is re-placed on each
+  # species' own posterior by a refit; neither shares one fused solve.
   ineligible <- vapply(preps, function(p)
-    !is.null(p$fit_call$phi_grid) || isTRUE(p$is_latent), logical(1))
+    isTRUE(p$is_latent) ||
+      any(vapply(p$fit_call$phi_grid %||% list(), tulpa::is_auto_grid,
+                 logical(1))), logical(1))
   if (any(ineligible)) return(NULL)
 
   fc1       <- preps[[1L]]$fit_call
@@ -238,6 +244,7 @@
     n_batch       = B, y_batch = y_batch, phi_batch = phi_batch,
     max_iter      = as.integer(fc1$control$max_iter %||% 200L),
     tol           = as.numeric(fc1$control$tol %||% 1e-6),
+    phi_grid_batch = lapply(preps, function(p) p$fit_call$phi_grid),
     cell_coupling = spec_name, store_Q = TRUE,
     prior_sigma   = fc1$prior_sigma, prior_alpha = fc1$prior_alpha,
     prior_phi     = fc1$prior_phi,
@@ -246,12 +253,16 @@
     copy_slab     = fc1$control$copy_slab %||% "exponential")
 
   arm_layout <- bat$arm_layout
-  theta_grid <- bat$theta_grid
-  # The single-field multi-block grid carries b1.-prefixed axis names; Part B's
-  # no-trend branch reads bare "sigma"/"alpha" (the single-block convention).
-  # Strip the single block's prefix so the hyperparameter summary resolves.
-  if (!has_trend && !is.null(colnames(theta_grid))) {
-    colnames(theta_grid) <- sub("^b1\\.", "", colnames(theta_grid))
+  # Each species' own outer grid: the shared latent axes plus that species'
+  # dispersion nodes. The single-field multi-block grid carries b1.-prefixed
+  # axis names; Part B's no-trend branch reads bare "sigma"/"alpha" (the
+  # single-block convention). Strip the single block's prefix so the
+  # hyperparameter summary resolves.
+  species_theta_grid <- function(tg) {
+    if (!has_trend && !is.null(colnames(tg))) {
+      colnames(tg) <- sub("^b1\\.", "", colnames(tg))
+    }
+    tg
   }
 
   # The batched driver is the multi-block one, and it returns a copied block's
@@ -268,7 +279,7 @@
   # so the posterior was never in question, only the scale it was reported on.
   n_cells   <- preps[[1L]]$ctx$n_cells
   fld_start <- arm_layout$field_starts
-  sig_col   <- match("sigma", colnames(theta_grid))
+  sig_col   <- match("sigma", colnames(species_theta_grid(bat$theta_grid)))
   rescale_field <- !has_trend && length(fld_start) == 1L && !is.na(sig_col) &&
     !is.null(n_cells)
   fld_cols  <- if (rescale_field)
@@ -276,6 +287,7 @@
 
   fits <- lapply(seq_len(B), function(s) {
     ps <- bat$per_species[[s]]
+    theta_grid <- species_theta_grid(ps$theta_grid)
     modes_s <- ps$modes
     if (rescale_field && max(fld_cols) <= ncol(modes_s)) {
       modes_s[, fld_cols] <- modes_s[, fld_cols, drop = FALSE] *
