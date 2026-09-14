@@ -21,7 +21,6 @@
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
                                                 sigma.beta = 5,
-                                                .batch_collect = FALSE,
                                                 ...) {
   # `fields` is the coupled-field list from .occu_cover_spatial_fields(): the
   # unweighted intercept field first, then any weighted SVC fields. They share
@@ -74,8 +73,7 @@
   # detection / positive-cover row) each join the fit as an `iid` prior block
   # whose per-group latent rides ONE arm. Any RE block forces the multi-block
   # driver (the field amplitude becomes an explicit copy spec). Not composed with
-  # the cover-latent RE (the latent spec carries its own per-unit cover RE) nor
-  # with the batched fused path (one species at a time).
+  # the cover-latent RE (the latent spec carries its own per-unit cover RE).
   has_re     <- !is.null(re_spec)            # occupancy (psi) arm
   has_re_det <- !is.null(model$re_det)       # detection (p) arm
   has_re_pos <- !is.null(model$re_pos)       # positive-cover arm
@@ -83,8 +81,7 @@
   # Arm-specific cover field: an independent, non-copied ICAR block on the cover
   # (pos) arm alone, composed with the shared occupancy field. Forces the
   # multi-block driver (like a trend field / RE block). Not composed with the
-  # latent cover RE, the correlated MCAR (gated at parse), or the batched fused
-  # path (one species at a time, no extra block). Arm-specific fields carry the
+  # latent cover RE or the correlated MCAR (gated at parse). Arm-specific fields carry the
   # detection (p) arm as well as the cover (pos) arm (each an independent,
   # non-copied ICAR block on that arm alone). Both force the multi-block driver.
   has_pos_armspec <- !is.null(pos_armspec)
@@ -95,31 +92,19 @@
          "be combined (the latent path carries its own per-unit cover RE).",
          call. = FALSE)
   }
-  if (has_any_re && isTRUE(.batch_collect)) {
-    stop("occu_cover(): the batched fused path does not carry a per-group RE ",
-         "block.", call. = FALSE)
-  }
   if (has_armspec && is_latent) {
     stop("occu_cover(): an arm-specific field (to = \"positive\" / \"detection\") ",
          "does not compose with cover_aggregate = \"latent\".", call. = FALSE)
   }
-  if (has_armspec && isTRUE(.batch_collect)) {
-    stop("occu_cover(): the batched fused path does not carry an arm-specific ",
-         "field.", call. = FALSE)
-  }
 
   # Correlated (`|`) free-Sigma MCAR field: one coupled block over the bar's
   # intercept + coefficient fields, copied onto the cover arm with one amplitude
-  # alpha. Scoped to the standard (non-latent, unbatched) path; the latent cover
-  # RE and the fused batch driver are not composed with it.
+  # alpha. Scoped to the non-latent path; the latent cover RE is not composed
+  # with it.
   if (correlated) {
     if (is_latent) {
       stop("occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) does ",
            "not compose with cover_aggregate = \"latent\".", call. = FALSE)
-    }
-    if (isTRUE(.batch_collect)) {
-      stop("occu_cover(): the batched fused path does not carry a correlated ",
-           "MCAR field.", call. = FALSE)
     }
     if (has_any_re) {
       stop("occu_cover(): a per-group RE does not compose with a correlated ",
@@ -253,12 +238,11 @@
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate,
     det_field       = has_det_armspec,
-    # Detection-pattern compression (exact): on for the single-species path,
-    # off for the batched fused solve (per-species detection differs, so the
-    # nodet rows are not exchangeable across species). getOption escape hatch
-    # (default on) lets a fit force the uncompressed build for an equivalence check.
-    compress_nodet  = !isTRUE(.batch_collect) &&
-      isTRUE(getOption("tulpaObs.compress_nodet", TRUE))
+    # Detection-pattern compression (exact), on by default. Each species groups
+    # its own non-detections, so a batch whose species share one design (the
+    # fused backend) and an equivalence check both build uncompressed through
+    # the `tulpaObs.compress_nodet` option.
+    compress_nodet  = isTRUE(getOption("tulpaObs.compress_nodet", TRUE))
   )
   # Re-fit the pos-arm dispersion on the ROWS THE ARM ACTUALLY MODELS, now that
   # the builder has produced them. `sigma_pos_init` reaches the builder at
@@ -753,16 +737,6 @@
     prior_arg <- c(list(field_block), pos_armspec_blocks, re_blocks,
                    residual_blocks)
     copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
-  } else if (isTRUE(.batch_collect)) {
-    # Single-field, batched fused path: run the MULTI-block driver so the alpha
-    # axis is an explicit copy spec and the per-arm field-node map is an explicit
-    # `spatial_idx` (the single-block backend derives both from the pos arm's
-    # field_coef; the multi-block driver needs them spelled out). A multi-block
-    # fit with this copy is bit-identical to the single-block fit at a shared
-    # grid (dev_notes/_probe_mb_vs_sb_occucover.R).
-    prior_arg <- icar_template(list(
-      spatial_idx = lapply(responses, function(a) as.integer(a$spatial_idx))))
-    copy_arg  <- .tobs_alpha_copy_spec("pos", 1L, alpha_axis)
   } else {
     # Single-block backend: it integrates `sigma_grid` and has no precision
     # spelling (the engine refuses `tau_grid` here), so the block keeps the SD
@@ -971,18 +945,6 @@
                 .tobs_alpha_axis_trend(dots, alpha_axis) else NULL,
               pos_field_specs = pos_field_specs,
               n_threads = as.integer(dots$n.threads.outer %||% 1L))
-
-  # Batched fused path: return the assembled call + context instead of fitting,
-  # so .tobs_fit_occu_cover_batch_fused can run B species through one fused
-  # multi-block solve and post-process each with the shared ctx. Eligibility (no
-  # pos-arm phi axis -> no latent / phi.grid.pos) is judged by the caller from
-  # `fit_call$phi_grid` + `is_latent`.
-  if (isTRUE(.batch_collect)) {
-    return(structure(
-      list(fit_call = fit_call, ctx = ctx, sigma_pos_init = sigma_pos_init,
-           is_latent = is_latent, spec_name = spec_name, has_trend = has_trend),
-      class = "occu_cover_jc_prep"))
-  }
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
 

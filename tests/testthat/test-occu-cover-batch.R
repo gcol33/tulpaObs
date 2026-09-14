@@ -303,6 +303,11 @@ test_that("a fused batch with a one-node phi.grid.pos holds the node for every s
   for (sp in c("a", "b")) {
     fb <- batch$fits[[sp]]; fi <- ind[[sp]]
     expect_false("phi_pos" %in% colnames(fb$joint_fit$theta_grid))
+    # Posterior draws read the fused fit like any other, and hold the node.
+    d_b <- tulpaObs:::.tobs_joint_draws(fb, n = 100L)
+    d_i <- tulpaObs:::.tobs_joint_draws(fi, n = 100L)
+    expect_equal(d_b$disp, rep(0.4, 100L), tolerance = 1e-12)
+    expect_equal(d_i$disp, rep(0.4, 100L), tolerance = 1e-12)
     expect_equal(fb$joint_fit$responses$pos$phi, 0.4^2, tolerance = 1e-12)
     expect_equal(fi$joint_fit$responses$pos$phi, 0.4^2, tolerance = 1e-12)
     expect_equal(fb$model$cover_pos_disp, 0.4, tolerance = 1e-12)
@@ -318,4 +323,155 @@ test_that("a fused batch with a one-node phi.grid.pos holds the node for every s
   other <- fit(list(a = y1, b = y2), list(yp1, yp2),
                c(ctrl_at(0.7), list(batch.backend = "fused")))
   expect_false(isTRUE(all.equal(other$fits[["a"]]$means, batch$fits[["a"]]$means)))
+})
+
+
+# ---- a fused species fit is the object its own tobs() call returns ----
+
+# The fit fields that record wall-clock time, which no two runs share, at any
+# depth of a fit.
+.batch_timing_fields <- c("timing", "diagnose_cost_ratio", "elapsed",
+                          "run_time", "runtime")
+
+.batch_drop_timing <- function(x) {
+  if (!is.list(x)) return(x)
+  keep <- !(names(x) %in% .batch_timing_fields)
+  if (is.null(names(x))) keep <- rep(TRUE, length(x))
+  at <- attributes(x)
+  out <- lapply(x[keep], .batch_drop_timing)
+  at$names <- names(x)[keep]
+  attributes(out) <- at
+  out
+}
+
+# The inner-layer Pareto k-hats a joint fit reports, and the fit without them.
+.batch_inner_k <- function(fit) {
+  jf <- fit$joint_fit
+  list(inner = jf$inner_pareto_k, correction = jf$skew_correction$pareto_k)
+}
+.batch_drop_inner_k <- function(fit) {
+  fit$joint_fit$inner_pareto_k <- NULL
+  fit$joint_fit$skew_correction$pareto_k <- NULL
+  fit
+}
+
+# The class and field names of `x`, recursively, as one flat record.
+.batch_structure <- function(x, path = "fit") {
+  here <- paste(path, paste(class(x), collapse = "/"))
+  if (!is.list(x)) return(here)
+  nm <- names(x) %||% rep("", length(x))
+  c(here, unlist(lapply(seq_along(x), function(i)
+    .batch_structure(x[[i]], paste0(path, "$", nm[[i]], "[", i, "]")))))
+}
+
+test_that("a fused species fit is the fit, draws, prediction and summary of its own tobs() call", {
+  skip_on_cran()
+  skip_if_fast()
+
+  N <- 24L; J <- 4L
+  adj <- matrix(0L, N, N)
+  for (s in seq_len(N)) {
+    if (s > 1L) adj[s, s - 1L] <- 1L
+    if (s < N)  adj[s, s + 1L] <- 1L
+  }
+  sim1 <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+                              adj = adj, sigma = 0.8, alpha = 1.0, seed = 101L)
+  sim2 <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+                              adj = adj, sigma = 0.8, alpha = 1.0, seed = 202L)
+  long <- data.frame(
+    site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
+    y = as.vector(t(sim1$y)),
+    det_cov1 = sim1$visit_data$det_cov1, pos_cov1 = sim1$visit_data$pos_cov1
+  )
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                  det.covs = c("det_cov1", "pos_cov1"))
+  cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim1$data)
+  y1 <- od$y;   yp1 <- sim1$y_pos; yp1[is.na(yp1)] <- 0
+  y2 <- sim2$y; yp2 <- sim2$y_pos; yp2[is.na(yp2)] <- 0
+
+  # The engine defaults, refinement and placement included: every step of a
+  # fused species' fit other than its main grid solve runs as it does alone.
+  ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint",
+               diagnose.k = FALSE, progress = FALSE)
+  fit <- function(yy, ypp, control) suppressWarnings(tobs(
+    formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = yy, y_pos = ypp, visits = od$det.covs,
+    method = "nested_laplace", control = control))
+
+  # Each fit draws posterior samples, so the fused species and the independent
+  # fits are run from one seed, in species order.
+  set.seed(31L)
+  batch <- fit(list(a = y1, b = y2), list(yp1, yp2),
+               c(ctrl, list(batch.backend = "fused")))
+  expect_identical(batch$backend, "fused")
+
+  # The fused species share one design, which the per-species no-detection
+  # compression would break, so the independent fits held to them here are
+  # built uncompressed too.
+  op <- options(tulpaObs.compress_nodet = FALSE)
+  on.exit(options(op), add = TRUE)
+  set.seed(31L)
+  ind <- list(a = fit(y1, yp1, ctrl), b = fit(y2, yp2, ctrl))
+
+  for (sp in c("a", "b")) {
+    fb <- batch$fits[[sp]]; fi <- ind[[sp]]
+    expect_identical(class(fb), class(fi), info = sp)
+    expect_identical(class(fb$joint_fit), class(fi$joint_fit), info = sp)
+    expect_identical(.batch_structure(.batch_drop_timing(fb)),
+                     .batch_structure(.batch_drop_timing(fi)), info = sp)
+    # A lone occu_cover cell hands the kernel its all-undetected (p, p)
+    # curvature as a rank-1 term, a batched cell as the dense block, so the
+    # fused kernel agrees with the lone one to the last few bits rather than bit
+    # for bit (test-occu-cover-batch-fused.R); every number is held to that.
+    # The inner Pareto k-hat is a tail-shape fit to a handful of points on the
+    # probed curve and moves by thousandths under that perturbation, so it is
+    # held at its own resolution. A formula's environment is the frame it was
+    # written in, which for the batch is the batch call's.
+    k_b <- .batch_inner_k(fb); k_i <- .batch_inner_k(fi)
+    expect_equal(k_b, k_i, tolerance = 0.05, info = paste(sp, "inner k-hat"))
+    expect_equal(.batch_drop_timing(.batch_drop_inner_k(fb)),
+                 .batch_drop_timing(.batch_drop_inner_k(fi)),
+                 tolerance = 1e-9, ignore_formula_env = TRUE, info = sp)
+
+    set.seed(11L); d_b <- tulpaObs:::.tobs_joint_draws(fb, n = 200L)
+    set.seed(11L); d_i <- tulpaObs:::.tobs_joint_draws(fi, n = 200L)
+    expect_identical(.batch_structure(d_b), .batch_structure(d_i))
+    expect_equal(d_b, d_i, tolerance = 1e-8, info = paste(sp, "draws"))
+
+    set.seed(12L); p_b <- suppressWarnings(predict(fb))
+    set.seed(12L); p_i <- suppressWarnings(predict(fi))
+    expect_identical(.batch_structure(p_b), .batch_structure(p_i))
+    expect_equal(p_b, p_i, tolerance = 1e-8, info = paste(sp, "predict"))
+
+    set.seed(14L); f_b <- fitted(fb)
+    set.seed(14L); f_i <- fitted(fi)
+    expect_equal(f_b, f_i, tolerance = 1e-9, info = paste(sp, "fitted"))
+    set.seed(15L); s_b <- .batch_drop_timing(summary(fb))
+    set.seed(15L); s_i <- .batch_drop_timing(summary(fi))
+    expect_identical(.batch_structure(s_b), .batch_structure(s_i))
+    expect_equal(s_b, s_i, tolerance = 1e-9, ignore_formula_env = TRUE,
+                 info = paste(sp, "summary"))
+  }
+  expect_false(isTRUE(all.equal(batch$fits[["a"]]$means,
+                                batch$fits[["b"]]$means)))
+
+  # Against the default (compressed) independent fits the posterior agrees to
+  # the solver tolerance.
+  options(op)
+  set.seed(31L)
+  ind_c <- list(a = fit(y1, yp1, ctrl), b = fit(y2, yp2, ctrl))
+  for (sp in c("a", "b")) {
+    fb <- batch$fits[[sp]]; fi <- ind_c[[sp]]
+    expect_equal(fb$means, fi$means, tolerance = 1e-7)
+    expect_equal(fb$sds,   fi$sds,   tolerance = 1e-7)
+    set.seed(16L); f_b <- fitted(fb)
+    set.seed(16L); f_i <- fitted(fi)
+    expect_equal(f_b, f_i, tolerance = 1e-7)
+    set.seed(13L); d_b <- tulpaObs:::.tobs_joint_draws(fb, n = 200L)
+    set.seed(13L); d_i <- tulpaObs:::.tobs_joint_draws(fi, n = 200L)
+    expect_equal(d_b$b, d_i$b, tolerance = 1e-6)
+    expect_equal(d_b$disp, d_i$disp, tolerance = 1e-6)
+  }
 })

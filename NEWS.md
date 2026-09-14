@@ -2,6 +2,26 @@
 
 ## 0.2.3 (2026-09-14)
 
+* **A fused-batch `occu_cover` species fit is the object its own `tobs()`
+  call returns.** The fused backend used to collect each species' prepared
+  engine call, run the batched kernel and assemble a plain list per species by
+  hand, which carried neither the class nor the fields of a joint fit, so
+  `.tobs_joint_draws()` stopped with "Got: list" and `predict()` / `fitted()`
+  could not read the fit. Each species is now fitted by the same single-species
+  `tobs()` call the looped backend makes (`.tobs_batch_species_call()`), run
+  through tulpa's `tulpa_joint_grid_batch()`: the species' main outer-grid
+  solves are answered by one fused solve and every other step runs as it does
+  alone. The `.batch_collect` branches of the joint builder are gone, so the
+  fused route also carries refinement, placement and the single-block backend
+  the ordinary fit uses. The species share one design only uncompressed, so
+  the no-detection compression is off inside the batch; the latent cover RE,
+  and any request tulpa declines, fall back to the looped backend. On the
+  24-site, 3-species fixture the fused fits match independent uncompressed fits
+  to 1.4e-14 on log-marginals, 1.7e-15 on weights, 4.4e-16 on means and 1.0e-14
+  on draws at one seed; `test-occu-cover-batch.R` restores the draws check on
+  the pinned-dispersion block and adds draws, `predict()`, `fitted()` and
+  `summary()` against the independent fits.
+
 * **Outer-grid weights rebuilt in tulpaObs now take the grid's own cell
   measure, refinement slice cells included.** A refinement pass appends slice
   cells to an outer hyperparameter grid: new levels on one axis at one

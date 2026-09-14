@@ -77,6 +77,30 @@
 # `tobs_args` is the captured argument list of the originating tobs() call
 # (formula/data/family/detection/visits/method/priors/control plus `...`),
 # already shorn of `y`; this driver inserts the per-species `y` / `y_pos`.
+# The single-species tobs() arguments for species `s` of a batch: the species'
+# `y` / `y_pos` slices, the originating call's everything else. `batch.backend`
+# is a batch-orchestration knob, not a single-species control key, and
+# `species` is batch-only, so both are dropped. The one call both backends fit
+# a species with.
+.tobs_batch_species_call <- function(tobs_args, y, y_pos, s) {
+  sp_control <- tobs_args$control
+  sp_control[["batch.backend"]] <- NULL
+  sp_dots <- tobs_args$dots
+  sp_dots$species <- NULL
+  sp_dots$y_pos <- .tobs_response_slice(y_pos, s)
+  c(list(
+      formula   = tobs_args$formula,
+      data      = tobs_args$data,
+      family    = tobs_args$family,
+      detection = tobs_args$detection,
+      y         = .tobs_response_slice(y, s),
+      visits    = tobs_args$visits,
+      method    = tobs_args$method,
+      priors    = tobs_args$priors,
+      control   = sp_control),
+    sp_dots)
+}
+
 .tobs_fit_occu_cover_batch <- function(tobs_args, y, B) {
   dots     <- tobs_args$dots
   y_pos    <- dots$y_pos
@@ -112,36 +136,9 @@
     if (!is.null(fused)) return(fused)
   }
 
-  # Looped backend. `batch.backend` is a batch-orchestration knob, not a
-  # single-species control key, so strip it before the per-species fits (it would
-  # otherwise be rejected by .tobs_validate_control). Per-species `...`: drop the
-  # batch-only `species`, override `y_pos` with the species slice; everything else
-  # (positive, etc.) flows through unchanged.
-  sp_control <- tobs_args$control
-  sp_control[["batch.backend"]] <- NULL
-  base_dots <- dots
-  base_dots$species <- NULL
-
-  fits <- vector("list", B)
-  for (s in seq_len(B)) {
-    sp_dots <- base_dots
-    sp_dots$y_pos <- .tobs_response_slice(y_pos, s)
-    call_args <- c(
-      list(
-        formula   = tobs_args$formula,
-        data      = tobs_args$data,
-        family    = tobs_args$family,
-        detection = tobs_args$detection,
-        y         = .tobs_response_slice(y, s),
-        visits    = tobs_args$visits,
-        method    = tobs_args$method,
-        priors    = tobs_args$priors,
-        control   = sp_control
-      ),
-      sp_dots
-    )
-    fits[[s]] <- do.call(tobs, call_args)
-  }
+  # Looped backend: B independent single-species tobs() calls.
+  fits <- lapply(seq_len(B), function(s)
+    do.call(tobs, .tobs_batch_species_call(tobs_args, y, y_pos, s)))
   names(fits) <- labels
 
   structure(
@@ -158,162 +155,36 @@
 }
 
 
-# Fused block-diagonal backend. Runs B species through ONE multi-block
-# nested-Laplace solve: the species share the design + sparsity pattern, their
-# latent systems are block-diagonal, and the fused cell-coupling scatter loads
-# each design row once and loops species inner. Per-species trajectory is
-# bit-identical to an independent single-species fit (the fused path only
-# reorganises the work), so each species post-processes to the same tobs_fit a
-# looped fit produces.
+# Fused block-diagonal backend. Each species is fit by the same single-species
+# tobs() call the looped backend makes, run through tulpa's grid batch: the
+# species' main outer-grid solves are answered by ONE fused block-diagonal solve
+# (one design pass per cell, B block-diagonal Newton solves), and every other
+# step of each fit (pre-fits, placement, refinement, post-processing) runs as it
+# does alone. Each species' fit is therefore the object its own tobs() call
+# returns.
 #
-# Returns a `tobs_batch` (backend = "fused"), or NULL when the configuration is
-# not fused-eligible -- the caller then falls back to the looped path. Eligible:
-# spatial nested-Laplace on the default joint engine, with the pos-arm
-# dispersion either fixed or integrated on an axis the species state or default
-# (the occu_cover default integrates it on a per-species band about that
-# species' own pre-fit). The fused driver carries each species' dispersion nodes
-# over one cell layout the batch shares, so the latent cover RE (a stateful
-# per-fit coupling spec) and a dispersion axis marked `auto_grid()` (placed per
-# species by a refit) are not fused-eligible. The fused driver integrates a
-# FIXED outer grid (per-species adaptive refinement is inherently not
-# shareable), so a fused fit equals an adaptive single-species fit only with
-# adaptive grid off; the equivalence gate fixes both sides' grid.
+# The species share a design only if their arms are built identically, so the
+# no-detection visit compression (which groups each species' own non-detections)
+# is off inside the batch. Returns a `tobs_batch` (backend = "fused"), or NULL
+# when the configuration cannot share one fused solve -- the caller then falls
+# back to the looped path: a non-spatial or non-joint route, the latent cover RE
+# (whose coupling spec is registered per fit with that species' cover values),
+# or any request tulpa's grid batch declines.
 .tobs_fit_occu_cover_batch_fused <- function(tobs_args, y, y_pos, B, labels) {
   if (!identical(tobs_args$method, "nested_laplace")) return(NULL)
   engine_pick <- tobs_args$control[["engine"]] %||% "joint"
   if (!identical(engine_pick, "joint")) return(NULL)
+  if (identical(tobs_args$family$params$cover_aggregate, "latent")) return(NULL)
 
-  dots <- tobs_args$dots
-
-  # Collect per-species prep by replaying the dispatch in collect mode. This
-  # reuses ALL of .dispatch_occu_cover + the joint Part-A builder (model
-  # construction, field resolution, arm priors, sigma_pos pre-fit, grids); no
-  # model-building logic is duplicated here. A species whose dispatch does not
-  # return an `occu_cover_jc_prep` (non-spatial, v2/v3, an error) is ineligible.
-  preps <- vector("list", B)
-  for (s in seq_len(B)) {
-    sp_dots          <- dots
-    sp_dots$species  <- NULL
-    sp_dots$y_pos    <- .tobs_response_slice(y_pos, s)
-    ctrl_s           <- tobs_args$control
-    ctrl_s$.batch_collect <- TRUE
-    prep <- tryCatch(
-      do.call(.dispatch_occu_cover, c(list(
-        formula   = tobs_args$formula, data = tobs_args$data,
-        family    = tobs_args$family,  detection = tobs_args$detection,
-        y         = .tobs_response_slice(y, s), visits = tobs_args$visits,
-        engine    = "nested_laplace", priors = tobs_args$priors,
-        control   = ctrl_s), sp_dots)),
-      error = function(e) e)
-    if (!inherits(prep, "occu_cover_jc_prep")) return(NULL)
-    preps[[s]] <- prep
-  }
-
-  # The latent cover RE registers a coupling spec holding one species' detected
-  # cover values, and an `auto_grid()` dispersion axis is re-placed on each
-  # species' own posterior by a refit; neither shares one fused solve.
-  ineligible <- vapply(preps, function(p)
-    isTRUE(p$is_latent) ||
-      any(vapply(p$fit_call$phi_grid %||% list(), tulpa::is_auto_grid,
-                 logical(1))), logical(1))
-  if (any(ineligible)) return(NULL)
-
-  fc1       <- preps[[1L]]$fit_call
-  arms1     <- fc1$responses
-  n_arms    <- length(arms1)
-  spec_name <- preps[[1L]]$spec_name
-  has_trend <- isTRUE(preps[[1L]]$has_trend)
-
-  # Per-data-arm species-column response matrix; per-arm per-species dispersion.
-  y_batch <- vector("list", n_arms)
-  for (k in seq_len(n_arms)) {
-    yk <- arms1[[k]]$y
-    if (is.null(yk) || length(yk) == 0L) next
-    y_batch[[k]] <- do.call(cbind, lapply(preps, function(p)
-      as.numeric(p$fit_call$responses[[k]]$y)))
-  }
-  phi_batch <- matrix(0, n_arms, B)
-  for (k in seq_len(n_arms)) {
-    for (s in seq_len(B)) {
-      phi_batch[k, s] <- preps[[s]]$fit_call$responses[[k]]$phi %||% 1
-    }
-  }
-
-  bat <- tulpa:::tulpa_nl_joint_batch(
-    responses     = arms1, prior = fc1$prior, copy = fc1$copy,
-    n_batch       = B, y_batch = y_batch, phi_batch = phi_batch,
-    max_iter      = as.integer(fc1$control$max_iter %||% 200L),
-    tol           = as.numeric(fc1$control$tol %||% 1e-6),
-    phi_grid_batch = lapply(preps, function(p) p$fit_call$phi_grid),
-    cell_coupling = spec_name, store_Q = TRUE,
-    prior_sigma   = fc1$prior_sigma, prior_alpha = fc1$prior_alpha,
-    prior_phi     = fc1$prior_phi,
-    copy_atom_mass = fc1$control$copy_atom_mass %||%
-                       tulpa:::.TULPA_COPY_ATOM_MASS,
-    copy_slab     = fc1$control$copy_slab %||% "exponential")
-
-  arm_layout <- bat$arm_layout
-  # Each species' own outer grid: the shared latent axes plus that species'
-  # dispersion nodes. The single-field multi-block grid carries b1.-prefixed
-  # axis names; Part B's no-trend branch reads bare "sigma"/"alpha" (the
-  # single-block convention). Strip the single block's prefix so the
-  # hyperparameter summary resolves.
-  species_theta_grid <- function(tg) {
-    if (!has_trend && !is.null(colnames(tg))) {
-      colnames(tg) <- sub("^b1\\.", "", colnames(tg))
-    }
-    tg
-  }
-
-  # The batched driver is the multi-block one, and it returns a copied block's
-  # field latent WHITENED -- unit scale, with the amplitude carried on the axis
-  # -- where the single-block driver returns it already multiplied by that
-  # cell's sigma. The summary below reads the single-block convention (that is
-  # what the `b1.` strip above is for), so the field is put on that scale here,
-  # per grid cell, before it is read.
-  #
-  # Measured on the gate's own fixture: the two routes' per-cell field modes
-  # differed by exactly 1 / sigma at every grid point (10, 4.273, 1.826, 0.780,
-  # 0.333 against a sigma axis of 0.1, 0.234, 0.548, 1.282, 3), while the sigma
-  # axis, the weights, the log-marginal and every coefficient already agreed --
-  # so the posterior was never in question, only the scale it was reported on.
-  n_cells   <- preps[[1L]]$ctx$n_cells
-  fld_start <- arm_layout$field_starts
-  sig_col   <- match("sigma", colnames(species_theta_grid(bat$theta_grid)))
-  rescale_field <- !has_trend && length(fld_start) == 1L && !is.na(sig_col) &&
-    !is.null(n_cells)
-  fld_cols  <- if (rescale_field)
-    as.integer(fld_start[[1L]] + seq_len(n_cells)) else integer(0)
-
-  fits <- lapply(seq_len(B), function(s) {
-    ps <- bat$per_species[[s]]
-    theta_grid <- species_theta_grid(ps$theta_grid)
-    modes_s <- ps$modes
-    if (rescale_field && max(fld_cols) <= ncol(modes_s)) {
-      modes_s[, fld_cols] <- modes_s[, fld_cols, drop = FALSE] *
-        as.numeric(theta_grid[, sig_col])
-    }
-    engine_fit <- list(
-      arm_layout       = arm_layout,
-      theta_grid       = theta_grid,
-      log_marginal     = ps$log_marginal,
-      weights          = ps$weights,
-      log_quad         = ps$log_quad,
-      log_hyperprior   = ps$log_hyperprior,
-      modes            = modes_s,
-      Q_csc_p_per_grid = ps$Q_csc_p_per_grid,
-      Q_csc_i_per_grid = ps$Q_csc_i_per_grid,
-      Q_csc_x_per_grid = ps$Q_csc_x_per_grid,
-      Q_csc_n          = ps$Q_csc_n,
-      # The engine's record of each arm's parse-time dispersion, as the single
-      # drivers keep it: the value a held dispersion was evaluated at, which is
-      # this species' own entry of `phi_batch`.
-      responses        = stats::setNames(
-        lapply(seq_len(n_arms), function(k) list(phi = phi_batch[k, s])),
-        names(arms1))
-    )
-    .occu_cover_jc_postprocess(engine_fit, preps[[s]]$ctx)
+  species_fits <- lapply(seq_len(B), function(s) {
+    force(s)
+    function() do.call(tobs, .tobs_batch_species_call(tobs_args, y, y_pos, s))
   })
+  op <- options(tulpaObs.compress_nodet = FALSE)
+  on.exit(options(op), add = TRUE)
+  fits <- tryCatch(tulpa:::tulpa_joint_grid_batch(species_fits),
+                   tulpa_grid_batch_ineligible = function(e) NULL)
+  if (is.null(fits)) return(NULL)
   names(fits) <- labels
 
   structure(

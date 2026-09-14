@@ -57,11 +57,9 @@
 }
 
 # Post-process an occu_cover joint-coupled engine fit into a tobs_fit. `fit` is
-# the tulpa_nested_laplace_joint return (single-species) or a per-species slice
-# of a batched fused fit assembled to the same shape; `ctx` carries the Part-A
-# context the shaping needs. Marginalisation here is a weighted sum over
-# outer-grid cells (order-invariant), so a fused fixed-grid slice and an
-# adaptive single-species fit shape identically given the same cells.
+# the tulpa_nested_laplace_joint return; `ctx` carries the Part-A context the
+# shaping needs. Marginalisation here is a weighted sum over outer-grid cells
+# (order-invariant).
 .occu_cover_jc_postprocess <- function(fit, ctx) {
   adj            <- ctx$adj
   is_latent      <- ctx$is_latent
