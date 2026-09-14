@@ -189,6 +189,23 @@ test_that("occu() SVC joint fit predicts occupancy, detection and change", {
     y = od$y, visits = od$det.covs,
     method = "nested_laplace", control = list(verbose = FALSE, max.iter = 50L)))
 
+  # Each field SD reports the engine's read of its precision axis through
+  # 1 / sqrt(tau), and vcov carries that variance.
+  hs <- fit$hyper_summary
+  jf <- fit$joint_fit
+  expect_identical(fit$hyper_axis, c(sigma = "b1.tau", sigma_trend = "b2.tau"))
+  expect_identical(hs$parameter, c("sigma", "sigma_trend"))
+  for (i in seq_len(nrow(hs))) {
+    ax <- hs$axis[[i]]
+    expect_equal(hs$sd[[i]], jf$theta_sd[[ax]] / (2 * jf$theta_mean[[ax]]^1.5),
+                 tolerance = 1e-12)
+    expect_equal(hs$lwr[[i]], 1 / sqrt(jf$theta_ci_hi[[ax]]), tolerance = 1e-12)
+    expect_equal(hs$upr[[i]], 1 / sqrt(jf$theta_ci_lo[[ax]]), tolerance = 1e-12)
+  }
+  reported <- ifelse(is.finite(hs$sd), hs$sd, hs$sd_grid)
+  expect_equal(unname(fit$sds[hs$parameter]), reported, tolerance = 0)
+  expect_equal(unname(diag(fit$vcov)[hs$parameter]), reported^2, tolerance = 1e-12)
+
   nd <- data.frame(cell = seq_len(N), x = 0)
   po <- predict(fit, newdata = nd, type = "occupancy", nsim = 200, draws = FALSE)
   expect_s3_class(po, "tobs_prediction")

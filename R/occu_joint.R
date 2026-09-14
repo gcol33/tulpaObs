@@ -407,7 +407,10 @@
   # grid-weighted mean / SD of the per-cell sigma values (the marginalize-derived-
   # quantities rule -- not 1 / sqrt(mean(tau))). The per-cell sigma values feed
   # the law-of-total-covariance block below so sigma's covariance with the betas
-  # and the other field SDs is carried, not dropped.
+  # and the other field SDs is carried, not dropped. Its reported SD is the
+  # engine's read of the tau axis through 1 / sqrt (`.tobs_joint_hyper_report()`).
+  hyper_axis      <- list()
+  hyper_transform <- list()
   pick_sigma <- function(public, tau_col) {
     j <- match(tau_col, tg_names)
     if (is.na(j)) return(invisible(NULL))
@@ -419,15 +422,19 @@
     hyper_sds  [[public]] <<- sqrt(max(v, 0))
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
+    hyper_axis     [[public]] <<- tau_col
+    hyper_transform[[public]] <<- .hyper_transform_precision_to_sd()
   }
   pick_sigma("sigma", "b1.tau")
   for (j in seq_len(n_trend)) {
     suffix <- if (n_trend == 1L) "" else as.character(j)
     pick_sigma(paste0("sigma_trend", suffix), sprintf("b%d.tau", j + 1L))
   }
+  hr <- .tobs_joint_hyper_report(fit, hyper_names, hyper_means, hyper_sds,
+                                 hyper_axis, transform = hyper_transform)
   if (length(hyper_names) > 0L) {
     means <- c(means, unlist(hyper_means)[hyper_names])
-    sds   <- c(sds,   unlist(hyper_sds)[hyper_names])
+    sds   <- c(sds,   hr$sd)
     par_names <- c(par_names, hyper_names)
   }
   names(means) <- par_names
@@ -435,7 +442,7 @@
 
   V <- .tobs_joint_param_vcov(modes, w, bfv$beta_idx, beta_block, p_beta,
                               hyper_names, hyper_vals, hyper_means,
-                              means, sds, par_names, Vj)
+                              means, sds, par_names, Vj, hyper_sd = hr$sd)
 
   n_draws <- 1000L
   draws <- .rmvn(n_draws, means, V)
@@ -475,6 +482,8 @@
     draws        = draws,
     means        = means,
     sds          = sds,
+    hyper_axis   = hr$axis,
+    hyper_summary = hr$summary,
     vcov         = V,
     n_samples    = n_draws,
     n_params     = length(means),

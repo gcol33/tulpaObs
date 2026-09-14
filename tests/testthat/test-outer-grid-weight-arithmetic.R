@@ -85,7 +85,11 @@ test_that("the reported copy-scale posterior is that weighted sum", {
 
   expect_equal(f$fit$spatial$alpha_mean, m,  tolerance = 1e-10)
   expect_equal(unname(f$fit$means[["alpha"]]), m,  tolerance = 1e-10)
-  expect_equal(unname(f$fit$sds[["alpha"]]),   sd, tolerance = 1e-10)
+  hs <- f$fit$hyper_summary
+  expect_equal(hs$sd_grid[hs$parameter == "alpha"], sd, tolerance = 1e-10)
+  # The reported SD is the engine's read of the copy axis.
+  expect_equal(unname(f$fit$sds[["alpha"]]), unname(j$theta_sd[["alpha"]]),
+               tolerance = 1e-12)
 
   # Recomputed against the likelihood alone the mean moves, so a consumer that
   # renormalises `log_marginal` instead of `weights` cannot pass both checks.

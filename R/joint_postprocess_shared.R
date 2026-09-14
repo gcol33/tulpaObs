@@ -224,9 +224,122 @@
 # On the older-tulpa fallback (`Vj = NULL`) the betas are a marginal-only
 # diagonal, so a beta-hyper cross block could break PSD; keep the hyper block
 # diagonal there, matching the betas' treatment.
+#
+# Per-hyperparameter summary of a joint nested-Laplace fit. `mean` is the
+# grid-weighted mean the fit reports in `means`; `sd`, `lwr`, `upr` and
+# `sd_source` are the engine's own per-axis read of the axis the name came from
+# (`theta_sd`, whose estimator `theta_sd_source` names, and the weighted
+# quantiles `theta_ci_lo` / `theta_ci_hi`), NA for a quantity no single axis
+# determines. `sd_grid` is the grid-weighted SD over the outer cells, which
+# measures the grid's resolution where the weight sits on few cells. A name
+# whose moments were divided by a covariate scale has its engine read divided
+# by the same scale. A name reported through a monotone map of its axis carries
+# a `transform` entry (`.hyper_transform_*()`): its quantiles go through `fwd`
+# and its SD through the entry's delta-method `sd` at the engine's axis mean.
+.tobs_joint_hyper_summary <- function(fit, hyper_names, mean, axis, scale,
+                                      transform,
+                                      sd_grid = rep(NA_real_, length(hyper_names))) {
+  n <- length(hyper_names)
+  axis_names <- colnames(fit$theta_grid)
+  engine_read <- function(v, ax, na) {
+    if (is.null(v) || is.na(ax)) return(na)
+    if (!is.null(names(v))) return(if (ax %in% names(v)) v[[ax]] else na)
+    if (length(v) == 1L && identical(axis_names, ax)) return(v[[1L]])
+    na
+  }
+  out <- data.frame(parameter = hyper_names,
+                    mean = as.numeric(mean %||% numeric(0)),
+                    sd = rep(NA_real_, n), lwr = rep(NA_real_, n),
+                    upr = rep(NA_real_, n),
+                    sd_source = rep(NA_character_, n),
+                    sd_grid = as.numeric(sd_grid),
+                    axis = as.character(axis),
+                    stringsAsFactors = FALSE)
+  for (i in seq_len(n)) {
+    nm <- hyper_names[[i]]; ax <- axis[[i]]
+    if (is.na(ax)) next
+    sd  <- engine_read(fit$theta_sd, ax, NA_real_)
+    lwr <- engine_read(fit$theta_ci_lo, ax, NA_real_)
+    upr <- engine_read(fit$theta_ci_hi, ax, NA_real_)
+    tr <- transform[[nm]]
+    if (!is.null(tr)) {
+      sd   <- tr$sd(engine_read(fit$theta_mean, ax, NA_real_), sd)
+      ends <- tr$fwd(c(lwr, upr))
+      lwr  <- min(ends); upr <- max(ends)
+    }
+    s <- scale[[nm]] %||% 1
+    out$sd[i]  <- sd / s
+    out$lwr[i] <- lwr / s
+    out$upr[i] <- upr / s
+    out$sd_source[i] <- as.character(
+      engine_read(fit$theta_sd_source, ax, NA_character_))
+  }
+  rownames(out) <- NULL
+  out
+}
+
+# Monotone map from an engine axis to the quantity a hyperparameter reports:
+# `fwd` carries a value (and so a quantile), `sd(m, s)` carries the axis SD `s`
+# at the axis mean `m` by the delta method. A field precision axis is reported
+# as the SD 1 / sqrt(tau), whose derivative is -tau^(-3/2) / 2.
+.hyper_transform_precision_to_sd <- function() {
+  list(fwd = function(tau) 1 / sqrt(tau),
+       sd  = function(m, s) if (is.finite(m) && m > 0) s / (2 * m^1.5)
+                            else NA_real_)
+}
+
+# The hyperparameter block a joint fit reports. `hyper_sds` are the
+# grid-weighted SDs; `axis`, `scale` and `transform` are keyed by public name
+# (an absent axis is NA). Returns the named axis vector, the summary, and the
+# reported SD: the engine's per-axis SD -- the weighted spread where the axis is
+# resolved, the parabola at the modal node where its weight has collapsed onto
+# too few cells -- and the grid-weighted SD for a quantity no single axis
+# determines or an axis with no finite engine SD.
+.tobs_joint_hyper_report <- function(fit, hyper_names, hyper_means, hyper_sds,
+                                     axis, scale = list(), transform = list()) {
+  axis_vec <- stats::setNames(
+    vapply(hyper_names, function(nm) axis[[nm]] %||% NA_character_,
+           character(1), USE.NAMES = FALSE),
+    hyper_names)
+  sd_grid <- vapply(hyper_names, function(nm) hyper_sds[[nm]], numeric(1))
+  summary <- .tobs_joint_hyper_summary(
+    fit, hyper_names, unlist(hyper_means)[hyper_names], axis_vec, scale,
+    transform, sd_grid = sd_grid)
+  sd <- stats::setNames(ifelse(is.finite(summary$sd), summary$sd, sd_grid),
+                        hyper_names)
+  list(axis = axis_vec, summary = summary, sd = sd)
+}
+
+# `hyper_sd`, when given, is the SD each hyperparameter reports (in
+# `hyper_names` order). The between-cell spread measures the grid's resolution
+# where the weight sits on few cells, so each hyperparameter's row and column
+# are scaled by `hyper_sd / sqrt(V[h, h])`: the correlations the grid carries
+# are kept and the diagonal is the reported variance. A congruence with a
+# diagonal matrix, so V stays positive semi-definite. A hyperparameter with no
+# spread over the grid carries no correlation to keep, and takes the reported
+# variance on its diagonal alone.
+.tobs_joint_rescale_hyper <- function(V, hyper_idx, hyper_sd) {
+  for (k in seq_along(hyper_idx)) {
+    h <- hyper_idx[[k]]
+    s_new <- hyper_sd[[k]]
+    if (!is.finite(s_new)) next
+    s_old <- sqrt(max(V[h, h], 0))
+    if (s_old > sqrt(.Machine$double.eps) * s_new) {
+      f <- s_new / s_old
+      V[h, ] <- V[h, ] * f
+      V[, h] <- V[, h] * f
+    } else {
+      V[h, ] <- 0
+      V[, h] <- 0
+    }
+    V[h, h] <- s_new^2
+  }
+  V
+}
+
 .tobs_joint_param_vcov <- function(modes, w, beta_idx, beta_block, p_beta,
                                    hyper_names, hyper_vals, hyper_means,
-                                   means, sds, par_names, Vj) {
+                                   means, sds, par_names, Vj, hyper_sd = NULL) {
   n_par <- length(means)
   V <- matrix(0, n_par, n_par)
   V[seq_len(p_beta), seq_len(p_beta)] <- beta_block
@@ -243,6 +356,7 @@
       V[seq_len(p_beta), hyper_idx] <- cross
       V[hyper_idx, seq_len(p_beta)] <- t(cross)
       V[hyper_idx, hyper_idx]       <- hyhy
+      if (!is.null(hyper_sd)) V <- .tobs_joint_rescale_hyper(V, hyper_idx, hyper_sd)
     } else {
       diag(V)[hyper_idx] <- sds[hyper_idx]^2
     }

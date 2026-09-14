@@ -1,19 +1,38 @@
 # tulpaObs NEWS
 
-## 0.2.3 (2026-09-14)
+## 0.2.4 (2026-09-14)
 
 * **`occu_cover()` joint fits report the engine's own read of each
   hyperparameter axis.** `fit$hyper_axis` names the engine column each public
-  hyperparameter was read off (NA for a quantity derived per cell, such as an
-  SD from a precision axis or an MCAR correlation), and `fit$hyper_summary` is a
+  hyperparameter was read off (NA for a quantity no single axis determines,
+  such as an MCAR correlation or a correlated-slope SD), and `fit$hyper_summary` is a
   data frame of `parameter`, `mean` (the grid-weighted mean `means` reports),
   `sd` / `sd_source` (the engine's `theta_sd` and the estimator that produced
-  it), `lwr` / `upr` (`theta_ci_lo` / `theta_ci_hi`) and `axis`. A random-effect
-  slope SD divided by its covariate scale takes the same division; the cover
-  dispersion reported as an SD takes its quantiles through the square root and
-  its SD by the delta method (`.cover_phi_engine_to_sd()`). Where the outer
-  weight sits on one cell the grid-weighted `sds` read 0 for a hyperparameter
-  while the engine's stencil SD does not; `sds` and the draws are unchanged.
+  it), `lwr` / `upr` (`theta_ci_lo` / `theta_ci_hi`), `sd_grid` (the
+  grid-weighted SD over the outer cells) and `axis`. A random-effect slope SD
+  divided by its covariate scale takes the same division. A quantity reported
+  through a monotone map of its axis takes its quantiles through the map and its
+  SD by the delta method: the cover dispersion reported as an SD through the
+  square root (`.cover_phi_engine_to_sd()`), a field SD read off a precision
+  axis (`b<k>.tau`, as a cover- or detection-arm field carries) through
+  `1 / sqrt(tau)`.
+
+* **A joint `occu_cover()` fit reports a hyperparameter's SD as the engine's
+  per-axis SD (#325).** The grid-weighted SD measures the outer grid's
+  resolution, and reads 0 where the weight sits on one cell: a 25 km fit at
+  grid ESS 1 reported sigma, alpha and `phi_pos` at +- 1e-4 against engine SDs
+  of 0.145, 0.0129 and 0.0947. `sds` now carries `hyper_summary$sd` for every
+  hyperparameter read off an engine axis, and the grid-weighted `sd_grid` for a
+  quantity no single axis determines or an axis with no finite engine SD. `vcov()` carries each hyperparameter's row and column to
+  that SD, keeping the correlations the grid measured, and the draws are taken
+  from it; a hyperparameter with no spread over the grid is uncorrelated with
+  the rest. The `field_sd` companions follow their `sigma`. The occupancy-only
+  joint route (`occu()` with a spatially-varying-coefficient bar) reads its
+  field SDs off precision axes the same way and now carries `hyper_axis`,
+  `hyper_summary` and the same reported SD. The interval in
+  `hyper_summary` is the engine's weighted-quantile read, which on an axis
+  whose weight has collapsed onto one cell spans that cell's box and is wider
+  than `sd` suggests.
 
 * **A fused-batch `occu_cover` species fit is the object its own `tobs()`
   call returns.** The fused backend used to collect each species' prepared
@@ -34,6 +53,8 @@
   on draws at one seed; `test-occu-cover-batch.R` restores the draws check on
   the pinned-dispersion block and adds draws, `predict()`, `fitted()` and
   `summary()` against the independent fits.
+
+## 0.2.3 (2026-09-14)
 
 * **Outer-grid weights rebuilt in tulpaObs now take the grid's own cell
   measure, refinement slice cells included.** A refinement pass appends slice
