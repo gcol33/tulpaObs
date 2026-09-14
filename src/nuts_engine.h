@@ -20,6 +20,29 @@
 
 namespace tulpaObs {
 
+// The double-precision log-posterior of a full-gradient target, in the
+// per-observation LikelihoodFn<double> form tulpa's generic evaluator sums.
+// The layout below carries no process coefficients and no latent blocks, so the
+// evaluator adds no prior of its own and passes a zero linear predictor; the
+// target's whole log-posterior therefore enters once, at observation 0. The
+// value is the one the target's own FullGradFn writes beside its gradient, so
+// the engine's runtime gradient check (and a numerical-gradient fallback)
+// differentiates exactly the density the hand-coded gradient belongs to.
+inline double full_grad_log_post(
+    int i, const double* /*eta*/, const double& /*logit_zi*/,
+    const double& /*logit_oi*/, const std::vector<double>& params,
+    const tulpa::ModelData& data, const tulpa::ParamLayout& layout,
+    const void* /*model_data*/
+) {
+    if (i != 0) return 0.0;
+    const auto* spec =
+        static_cast<const tulpa::LikelihoodSpec*>(data.likelihood_spec);
+    std::vector<double> grad(params.size(), 0.0);
+    double lp = 0.0;
+    spec->gradient_fn(params, data, layout, grad, &lp);
+    return lp;
+}
+
 // Run tulpa NUTS on a full-gradient target. `grad_fn` is the tulpa FullGradFn
 // (it reads its model through ModelData.model_response_data = `model_ptr`);
 // `n_params` the parameter dimension; `inv_metric` an optional diagonal inverse
@@ -27,13 +50,20 @@ namespace tulpaObs {
 // The engine reads that pointer for n_params entries without checking how many
 // it was given, so a short one is rejected here. Returns draws + diagnostics.
 //
+// The whole parameter vector is the spec's extra-parameter block behind one
+// coefficient-free process, which is the layout tulpa's generic double
+// evaluator needs to reach full_grad_log_post; the sampler reads none of those
+// block positions.
+//
 // `spec_name` labels the LikelihoodSpec and `data_N` sets ModelData.N (the
 // observation count, which the community targets carry as their site count).
-// Neither reaches the sampled density: nothing consults the spec name, and the
-// engine reads ModelData.N only for a checkpoint fingerprint (gated on a
-// checkpoint path these targets never set) and for a latent-factor stride that
-// is multiplied by latent_n_factors = 0 here. They are threaded so each caller
-// keeps the values it declared rather than relying on that.
+// Neither changes the sampled density: nothing consults the spec name, the
+// double evaluator calls full_grad_log_post once per observation and takes the
+// target's value at observation 0 only, and the engine otherwise reads
+// ModelData.N for a checkpoint fingerprint (gated on a checkpoint path these
+// targets never set) and for a latent-factor stride that is multiplied by
+// latent_n_factors = 0 here. They are threaded so each caller keeps the values
+// it declared rather than relying on that.
 inline Rcpp::List run_tulpa_nuts(
     decltype(tulpa::LikelihoodSpec::gradient_fn) grad_fn,
     void* model_ptr, int n_params,
@@ -51,9 +81,14 @@ inline Rcpp::List run_tulpa_nuts(
     lspec.name = spec_name;
     lspec.n_processes = 1;
     lspec.gradient_fn = grad_fn;
+    lspec.ll_double = &full_grad_log_post;
+    lspec.n_extra_params = n_params;
 
     tulpa::ModelData data;
     data.N = (data_N >= 0) ? data_N : n_params;
+    if (data.N < 1)
+        Rcpp::stop("run_tulpa_nuts: ModelData.N must be >= 1 (got %d); the "
+                   "double log-posterior is read at observation 0.", data.N);
     data.n_processes = 1;
     data.sigma_beta = sigma_beta;
     data.model_response_data = model_ptr;
@@ -61,9 +96,15 @@ inline Rcpp::List run_tulpa_nuts(
     data.sharing.init(1);
     data.zi_type = tulpa::ZIType::NONE;
     data.p_zi = 0; data.p_oi = 0;
+    tulpa::ProcessData proc;
+    proc.p = 0;
+    data.processes.push_back(proc);
 
-    tulpa::ParamLayout layout;
-    layout.total_params = n_params;
+    tulpa::ParamLayout layout = tulpa::compute_layout(data);
+    if (layout.total_params != n_params || layout.extra_offset != 0)
+        Rcpp::stop("run_tulpa_nuts: the engine laid out %d parameters from "
+                   "offset %d for a %d-parameter target.",
+                   layout.total_params, layout.extra_offset, n_params);
 
     tulpa::set_gradient_mode_str("H");
 
