@@ -1,5 +1,13 @@
 # tulpaObs NEWS
 
+## 0.2.5 (2026-09-15)
+
+* **Depends on tulpa 0.4.2.** On a joint fit whose outer axis was adaptively
+  refined, such as a beta cover dispersion axis, the engine's per-axis SD that `fit$hyper_summary$sd` reports read 2x
+  to 6x below the posterior's; it now reads each cell over its own row's box
+  (gcol33/tulpa#746). Unrefined fits and every reported mean and interval are
+  unchanged.
+
 ## 0.2.4 (2026-09-14)
 
 * **`occu_cover()` joint fits report the engine's own read of each
