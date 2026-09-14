@@ -225,6 +225,14 @@ test_that("a multi-node phi.grid.pos is integrated on the stated nodes", {
                                    var.of.means.consistency = FALSE)
   expect_equal(axis_of(fixed), stated^2, tolerance = 1e-12)
 
+  # An integrated dispersion is reported as its posterior, in `means`, and the
+  # fit records no held value beside it.
+  expect_true("phi_pos" %in% names(fixed$means))
+  expect_null(fixed$model$cover_pos_disp)
+  d <- tulpaObs:::.tobs_joint_draws(fixed, n = 4000L)$disp
+  expect_true(all(d^2 %in% stated^2))
+  expect_equal(mean(d), fixed$means[["phi_pos"]], tolerance = 0.05)
+
   # The refinement passes densify inside the stated span and drop no node.
   refined <- .phi_pin_occu_cover_fit(stated)
   expect_true(all(stated^2 %in% axis_of(refined)))
@@ -244,9 +252,67 @@ test_that("a one-node phi.grid.pos is the dispersion occu_multiscale_cover holds
     y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE,
                    sigma.grid = c(0.1, 0.5, 1), phi.grid.pos = v)))
-  jf <- tulpaObs:::.tobs_joint_fit(fit_at(0.4))
+  f4 <- fit_at(0.4)
+  jf <- tulpaObs:::.tobs_joint_fit(f4)
   expect_false("phi_pos" %in% colnames(jf$theta_grid))
   expect_equal(jf$responses$pos$phi, 0.4^2, tolerance = 1e-12)
+  expect_equal(f4$model$cover_pos_disp, 0.4, tolerance = 1e-12)
+
+  # The held SD reaches the lognormal conditional mean exp(eta + sigma^2 / 2)
+  # on both doors, fitted() and predict().
+  expect_equal(tulpaObs:::.occu_mscale_cover_sigma_pos(f4), 0.4, tolerance = 1e-12)
+  field <- as.numeric(f4$spatial_field)
+  at_median <- tulpaObs:::.occu_mscale_cover_surface_at(
+    f4$model, f4$means, field, unname(f4$means["alpha"]), 0)$cover
+  expect_equal(tulpaObs:::.tobs_fitted_occu_multiscale_cover(f4)$cover,
+               at_median * exp(0.4^2 / 2), tolerance = 1e-12)
+  pr <- predict(f4, type = "cover")
+  pr0 <- local({
+    g <- f4; g$model$cover_pos_disp <- 0
+    predict(g, type = "cover")
+  })
+  expect_equal(pr$mean, pr0$mean * exp(0.4^2 / 2), tolerance = 1e-10)
+
+  # The default route holds its pre-fit, and reports that, not zero.
+  f0 <- fit_at(NULL)
+  jf0 <- tulpaObs:::.tobs_joint_fit(f0)
+  expect_false("phi_pos" %in% colnames(jf0$theta_grid))
+  expect_equal(tulpaObs:::.occu_mscale_cover_sigma_pos(f0),
+               sqrt(jf0$responses$pos$phi), tolerance = 1e-12)
+  expect_gt(tulpaObs:::.occu_mscale_cover_sigma_pos(f0), 0)
+})
+
+test_that("a one-node phi.grid is the dispersion cover() holds and reports", {
+  skip_on_cran()
+  set.seed(11)
+  n_s <- 20L; N <- 300L
+  adj <- chain_adj(n_s)
+  x   <- rnorm(N)
+  reg <- sample(n_s, N, replace = TRUE)
+  occ <- rbinom(N, 1L, plogis(0.2 + 0.5 * x))
+  y   <- ifelse(occ == 1L,
+                pmin(exp(rnorm(N, log(0.2) + 0.3 * x, 0.4)), 1 - 1e-6), 0)
+  d   <- data.frame(x = x, region = factor(reg, levels = seq_len(n_s)))
+  fit_at <- function(v) suppressWarnings(tobs(
+    formula = ~ x + icar(graph = adj, group_var = "region") +
+      share(spatial(), alpha = grid(c(0.5, 1.0))),
+    data = d, family = cover("lognormal"), y = y, method = "nested_laplace",
+    control = list(sigma.grid = c(0.25, 0.5, 1.0), phi.grid = v)))
+
+  f4 <- fit_at(0.4)
+  jf <- tulpaObs:::.tobs_joint_fit(f4)
+  expect_false("phi_pos" %in% colnames(jf$theta_grid))
+  # The lognormal arm's engine `phi` is the residual variance.
+  expect_equal(jf$responses$pos$phi, 0.4^2, tolerance = 1e-12)
+  expect_equal(f4$sigma_pos, 0.4, tolerance = 1e-12)
+  expect_equal(f4$sigma_pos_sd, 0)
+  expect_equal(unique(tulpaObs:::.tobs_joint_draws(f4, n = 50L)$disp), 0.4,
+               tolerance = 1e-12)
+
+  f6 <- fit_at(0.6)
+  expect_equal(tulpaObs:::.tobs_joint_fit(f6)$responses$pos$phi, 0.6^2,
+               tolerance = 1e-12)
+  expect_false(isTRUE(all.equal(f4$beta_pos, f6$beta_pos)))
 })
 
 test_that("a one-node dispersion grid must be a positive number", {

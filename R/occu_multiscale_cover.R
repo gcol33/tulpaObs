@@ -173,21 +173,23 @@
   model <- object$model
   field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))   # per cell
   alpha <- unname(object$means["alpha"]); if (!is.finite(alpha)) alpha <- 0
-  sigma_pos <- .occu_mscale_cover_sigma_pos(object$means)
+  sigma_pos <- .occu_mscale_cover_sigma_pos(object)
   s  <- .occu_mscale_cover_surface_at(model, object$means, field, alpha, sigma_pos)
   pc <- model$plot_cell
   c(s, list(field = field, p_marginal = s$psi[pc] * s$theta * s$p))
 }
 
-# Lognormal-cover residual SD at a named coefficient vector (object$means, or
-# one row of object$draws), robust to the dispersion naming: the spatial path
-# reports `phi_pos` (already sigma_pos on the natural scale), the non-spatial
-# path a log-scale `log_sigma_pos`. Returns 0 if neither (beta arm /
-# unavailable), giving the conditional median exp(eta).
-.occu_mscale_cover_sigma_pos <- function(m) {
+# Lognormal-cover residual SD of a fit, robust to where the fit carries it: the
+# spatial path reports an integrated dispersion as `phi_pos` in `means` (already
+# sigma_pos on the natural scale) and records a held one as
+# `model$cover_pos_disp`; the non-spatial path reports a log-scale
+# `log_sigma_pos`. Returns 0 only for an arm with no residual SD (beta).
+.occu_mscale_cover_sigma_pos <- function(object) {
+  m <- object$means
   if ("phi_pos" %in% names(m) && is.finite(m[["phi_pos"]])) return(unname(m[["phi_pos"]]))
   if ("log_sigma_pos" %in% names(m) && is.finite(m[["log_sigma_pos"]]))
     return(exp(unname(m[["log_sigma_pos"]])))
+  if (!is.null(object$model$cover_pos_disp)) return(object$model$cover_pos_disp)
   0
 }
 
@@ -268,7 +270,7 @@
   } else if (identical(model$positive, "gaussian")) {
     eta
   } else {
-    sigma_pos <- .occu_mscale_cover_sigma_pos(object$means)
+    sigma_pos <- .occu_mscale_cover_sigma_pos(object)
     exp(eta + 0.5 * sigma_pos^2)
   }
   .occu_cover_summ(t(mat), pc, level)

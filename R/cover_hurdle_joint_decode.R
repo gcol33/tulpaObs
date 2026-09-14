@@ -120,6 +120,18 @@
 }
 
 .cover_pos_family_grid <- function(positive, enc, control) {
+  # A one-node `phi.grid` is the dispersion the arm holds, in place of the
+  # pre-fit, and carries no axis.
+  pin <- .cover_phi_stated_pin(control[["phi.grid"]], "phi.grid")
+  out <- .cover_pos_family_grid_default(positive, enc, control)
+  if (!is.null(pin)) {
+    out$phi_hat <- .cover_phi_sd_to_engine(pin, out$pos_family)
+    out["phi_grid_pos"] <- list(NULL)
+  }
+  out
+}
+
+.cover_pos_family_grid_default <- function(positive, enc, control) {
   if (positive %in% c("lognormal", "gaussian")) {
     # Both fit the tulpa "gaussian" family; they differ only in the response the
     # encoder stored (log-cover for lognormal, raw for gaussian, #112), so the

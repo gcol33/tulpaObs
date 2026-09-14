@@ -69,7 +69,6 @@
   n_cells        <- ctx$n_cells
   disp2_fixed    <- ctx$disp2_fixed
   n_quad_latent  <- ctx$n_quad_latent
-  sigma_pos_init <- ctx$sigma_pos_init
   has_trend      <- ctx$has_trend
   n_trend        <- ctx$n_trend
   coupled_trends <- ctx$coupled_trends
@@ -591,18 +590,15 @@
     model$cover_latent_disp2 <- disp2_fixed
     model$cover_latent_nquad <- n_quad_latent
   }
-  # Record the pos-arm dispersion the spec held fixed (sigma_pos for non-latent;
-  # the latent path integrates sigma_u on the grid instead). The pointwise
-  # log-likelihood reads it to score the cover term at the fitted dispersion
-  # rather than a bare unit default.
-  #
-  # Stored on the SD surface, which is what its readers take it for -- the
-  # simulator behind `sbc()`, and `.tobs_joint_disp()` as the fixed-dispersion
-  # default -- while `sigma_pos_init` is the arm's `phi`, the engine convention
-  # for that family.
+  # Record the pos-arm dispersion the arm HELD, on the SD surface, read off the
+  # engine's own record of it. A fit that integrates the dispersion holds none:
+  # its posterior is the `phi_pos` entry of `means` / `sds`, and the value its
+  # axis was centred on is not a quantity of the fit, so nothing is recorded
+  # here. Every reader of `cover_pos_disp` -- the `sbc()` simulator and
+  # likelihood, and its fixed-dispersion warning -- reads it only for a
+  # dispersion the fit did not integrate. The latent path integrates sigma_u.
   if (!is_latent)
-    model$cover_pos_disp <- .cover_phi_to_sd(
-      sigma_pos_init, .cover_pos_engine_family(model$positive))
+    model$cover_pos_disp <- .tobs_joint_held_disp(fit, model$positive)
 
   # Spatial summary. The correlated MCAR field reports its per-field SDs
   # (sigma_mcar, intercept first) and cross-correlations (rho_mcar) alongside the

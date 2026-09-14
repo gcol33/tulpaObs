@@ -541,6 +541,11 @@
   field_trend       <- if (length(trend_means))  trend_means[[1L]]  else NULL
   trend_field_table <- if (length(trend_tables)) trend_tables[[1L]] else NULL
 
+  # A dispersion the arm held has no `phi_pos` axis and so no entry in `means`;
+  # its value is recorded here, on the SD surface, for the conditional cover
+  # mean. An integrated one is the `phi_pos` entry of `means` and records none.
+  model$cover_pos_disp <- .tobs_joint_held_disp(fit, model$positive)
+
   log_lik_val <- sum(w * fit$log_marginal[ok_cells])
   structure(c(list(
     draws        = draws,

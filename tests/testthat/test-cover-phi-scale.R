@@ -180,7 +180,7 @@ test_that("occu_multiscale_cover() agrees across all three of its dispersion rea
   # converted, so `predict()` and `waic()` described different dispersions.
   fit <- .phi_scale_ms_fit(0.40, 103L)
   reported <- .phi_of(fit)
-  helper   <- tulpaObs:::.occu_mscale_cover_sigma_pos(fit$means)
+  helper   <- tulpaObs:::.occu_mscale_cover_sigma_pos(fit)
   drawn    <- mean(tulpaObs:::.tobs_joint_draws(fit, n = 2000L)$disp)
 
   expect_identical(helper, reported)

@@ -638,15 +638,57 @@
 # gaussian arm both `lognormal` and `gaussian` compile to, the residual VARIANCE
 # -- while `$disp` is contracted above as the residual SD, which is what every
 # consumer reads: the SBC simulator, the pointwise log-likelihood behind
-# WAIC/LOO/CPO, the PPC and `predict()`. Converted in ONE place so the FIXED
-# default and the INTEGRATED axis arrive on the same scale, and so a family
+# WAIC/LOO/CPO, the PPC and `predict()`. Converted in ONE place so a HELD
+# dispersion and an INTEGRATED axis arrive on the same scale, and so a family
 # whose phi is already an SD (truncated / interval gaussian) or a precision
 # (beta) passes through untouched.
-.tobs_joint_disp <- function(theta_grid, cells, positive, fixed_sd = 1) {
-  fam <- .cover_pos_engine_family(positive)
-  d <- .tobs_joint_amp(theta_grid, cells, 1L, "phi_pos",
-                       default = .cover_phi_sd_to_engine(fixed_sd, fam))
-  .cover_phi_to_sd(d, fam)
+.tobs_joint_disp <- function(jf, cells, positive) {
+  .cover_phi_to_sd(.tobs_joint_phi_at(jf, cells),
+                   .cover_pos_engine_family(positive))
+}
+
+# The cover arm's dispersion on the engine scale. Integrated, it is the outer
+# grid's `phi_pos` axis. Held, it is one value for the whole fit with no axis,
+# and the engine records it as the arm's parse-time `responses$pos$phi`, the
+# value its kernel evaluated every cell at. Every read of the dispersion off a
+# joint fit goes through these three, so a held value is never replaced by a
+# default and an integrated one never by the centre its axis was built around.
+.tobs_joint_phi_col <- function(jf) {
+  cn <- colnames(jf$theta_grid)
+  j <- match("b1.phi_pos", cn)
+  if (is.na(j)) j <- match("phi_pos", cn)
+  if (is.na(j)) NA_character_ else cn[j]
+}
+
+.tobs_joint_held_phi <- function(jf) {
+  v <- jf$responses$pos$phi
+  if (length(v) != 1L || !is.finite(v)) {
+    stop("This joint fit carries no `phi_pos` axis and records no held cover ",
+         "dispersion (`responses$pos$phi`).", call. = FALSE)
+  }
+  as.numeric(v)
+}
+
+.tobs_joint_phi_at <- function(jf, cells) {
+  col <- .tobs_joint_phi_col(jf)
+  if (is.na(col)) return(rep(.tobs_joint_held_phi(jf), length(cells)))
+  as.numeric(jf$theta_grid[cells, col])
+}
+
+# Posterior mean and SD of the engine-scale dispersion: the engine's own axis
+# moments when it is integrated, the held value with no spread when it is not.
+.tobs_joint_phi_moments <- function(jf) {
+  col <- .tobs_joint_phi_col(jf)
+  if (is.na(col)) return(list(mean = .tobs_joint_held_phi(jf), sd = 0))
+  list(mean = as.numeric(jf$theta_mean[[col]]),
+       sd   = as.numeric(jf$theta_sd[[col]]))
+}
+
+# The dispersion a fit HELD, on cover()'s own surface, or NULL when the fit
+# integrates it. This is what `model$cover_pos_disp` records.
+.tobs_joint_held_disp <- function(jf, positive) {
+  if (!is.na(.tobs_joint_phi_col(jf))) return(NULL)
+  .cover_phi_to_sd(.tobs_joint_held_phi(jf), .cover_pos_engine_family(positive))
 }
 
 .tobs_joint_amp <- function(theta_grid, cells, block, name, default = 1) {
@@ -824,7 +866,7 @@
   })
 
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(tg, cells, positive),
+       disp = .tobs_joint_disp(jf, cells, positive),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = blocks, n_cells = n_nodes[1L])
 }
@@ -926,12 +968,9 @@
 
   # Pos-arm dispersion: the `phi_pos` axis when it is integrated on the outer
   # grid (control$phi.grid.pos, or the latent path's sigma_u); otherwise the
-  # dispersion the fit held FIXED in the cell-coupling spec. Falling back to a
-  # bare 1 would score every spatial occu_cover fit at unit dispersion regardless
-  # of the value the spec used.
-  fixed_disp <- object$model$cover_pos_disp %||% 1
+  # dispersion the arm held.
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(tg, cells, positive, fixed_sd = fixed_disp),
+       disp = .tobs_joint_disp(jf, cells, positive),
        b = list(occ = b_occ, det = b_det, pos = b_pos),
        blocks = blocks, n_cells = n_cells, re = re_draws)
 }
@@ -980,7 +1019,7 @@
            weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
     })
     return(list(n = n, positive = positive, cells = cells,
-                disp = .tobs_joint_disp(tg, cells, positive),
+                disp = .tobs_joint_disp(jf, cells, positive),
                 b = list(occ = b_occ, det = NULL, pos = b_pos),
                 blocks = blocks, n_cells = n_cells))
   }
@@ -1023,7 +1062,7 @@
   block <- list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = NULL)
 
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(tg, cells, positive),
+       disp = .tobs_joint_disp(jf, cells, positive),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = list(block), n_cells = n_phi)
 }

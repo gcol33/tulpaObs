@@ -114,7 +114,7 @@
     if (length(y_pos) == 0L) {
       0
     } else {
-      phi_k <- fit$theta_grid[k, "phi_pos"]
+      phi_k <- .tobs_joint_phi_at(fit, k)
       mu_pos <- plogis(.tobs_clamp_eta(eta_pos))
       a <- mu_pos * phi_k
       b <- (1 - mu_pos) * phi_k
@@ -122,13 +122,15 @@
             (a - 1) * log(y_pos) + (b - 1) * log1p(-y_pos))
     }
   } else {
-    # Lognormal: enc$pos_data$y is already log(cover). The noise SD lives
-    # on the per-grid `phi_pos` axis (gaussian arm's phi is the residual SD).
+    # Lognormal: enc$pos_data$y is already log(cover). The arm's engine phi is
+    # the residual VARIANCE on the gaussian family and already an SD on the
+    # truncated one, so it is converted by the arm's own engine family.
     z <- enc$pos_data$y
     if (length(z) == 0L) {
       0
     } else {
-      sig_k <- fit$theta_grid[k, "phi_pos"]
+      sig_k <- .cover_phi_to_sd(.tobs_joint_phi_at(fit, k),
+                               .cover_pos_engine_family(positive))
       sum(stats::dnorm(z, eta_pos, sig_k, log = TRUE))
     }
   }

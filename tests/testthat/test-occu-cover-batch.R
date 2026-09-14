@@ -247,3 +247,75 @@ test_that("the default looped batch backend is per-species bit-identical to inde
     expect_equal(fb$spatial_field, fi$spatial_field, tolerance = 1e-7)
   }
 })
+
+
+# A one-node `phi.grid.pos` pins the cover dispersion. The fused driver takes
+# each species' held dispersion from its own prepared arm, so a pinned batch
+# holds the stated node for every species rather than each species' pre-fit, and
+# carries no dispersion axis.
+test_that("a fused batch with a one-node phi.grid.pos holds the node for every species", {
+  skip_on_cran()
+  skip_if_fast()
+
+  N <- 24L; J <- 4L
+  adj <- matrix(0L, N, N)
+  for (s in seq_len(N)) {
+    if (s > 1L) adj[s, s - 1L] <- 1L
+    if (s < N)  adj[s, s + 1L] <- 1L
+  }
+  sim1 <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+                              adj = adj, sigma = 0.8, alpha = 1.0, seed = 101L)
+  sim2 <- simulate_occu_cover(N = N, J = J, positive = "lognormal",
+                              adj = adj, sigma = 0.8, alpha = 1.0, seed = 202L)
+  long <- data.frame(
+    site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
+    y = as.vector(t(sim1$y)),
+    det_cov1 = sim1$visit_data$det_cov1, pos_cov1 = sim1$visit_data$pos_cov1
+  )
+  od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
+                  det.covs = c("det_cov1", "pos_cov1"))
+  cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim1$data)
+  y1 <- od$y;   yp1 <- sim1$y_pos; yp1[is.na(yp1)] <- 0
+  y2 <- sim2$y; yp2 <- sim2$y_pos; yp2[is.na(yp2)] <- 0
+
+  ctrl_at <- function(node) list(
+    verbose = FALSE, max.iter = 200L, engine = "joint", adaptive.grid = FALSE,
+    var.of.means.consistency = FALSE, diagnose.k = FALSE, phi.grid.pos = node)
+  fit <- function(yy, ypp, ctrl) suppressWarnings(tobs(
+    formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1, positive = ~ pos_cov1,
+    y = yy, y_pos = ypp, visits = od$det.covs,
+    method = "nested_laplace", control = ctrl))
+
+  batch <- fit(list(a = y1, b = y2), list(yp1, yp2),
+               c(ctrl_at(0.4), list(batch.backend = "fused")))
+  expect_identical(batch$backend, "fused")
+  ind <- list(a = fit(y1, yp1, ctrl_at(0.4)), b = fit(y2, yp2, ctrl_at(0.4)))
+
+  # The two species' pre-fits differ, so a batch that fell back to them could
+  # not hold one value for both.
+  pre <- vapply(list(y1 = list(y1, yp1), y2 = list(y2, yp2)), function(r)
+    tulpaObs:::.tobs_joint_fit(fit(r[[1L]], r[[2L]], ctrl_at(NULL)))$responses$pos$phi,
+    numeric(1))
+  expect_false(isTRUE(all.equal(pre[[1L]], pre[[2L]])))
+
+  for (sp in c("a", "b")) {
+    fb <- batch$fits[[sp]]; fi <- ind[[sp]]
+    expect_false("phi_pos" %in% colnames(fb$joint_fit$theta_grid))
+    expect_equal(fb$joint_fit$responses$pos$phi, 0.4^2, tolerance = 1e-12)
+    expect_equal(fi$joint_fit$responses$pos$phi, 0.4^2, tolerance = 1e-12)
+    expect_equal(fb$model$cover_pos_disp, 0.4, tolerance = 1e-12)
+    expect_equal(fb$model$cover_pos_disp, fi$model$cover_pos_disp)
+    expect_equal(fb$means, fi$means, tolerance = 1e-7)
+    expect_equal(fb$sds,   fi$sds,   tolerance = 1e-7)
+    expect_equal(fb$spatial_field, fi$spatial_field, tolerance = 1e-7)
+    expect_equal(sort(fb$joint_fit$log_marginal),
+                 sort(fi$joint_fit$log_marginal), tolerance = 1e-7)
+  }
+
+  # The node reaches the fused kernel: another node is another posterior.
+  other <- fit(list(a = y1, b = y2), list(yp1, yp2),
+               c(ctrl_at(0.7), list(batch.backend = "fused")))
+  expect_false(isTRUE(all.equal(other$fits[["a"]]$means, batch$fits[["a"]]$means)))
+})

@@ -419,6 +419,18 @@
 # variances too.
 # ---------------------------------------------------------------------------
 
+# The dispersion scored when theta carries none: a quantity with no posterior
+# spread is dropped from theta, which for the cover dispersion means the fit held
+# it, and `cover_pos_disp` is that held value.
+.tobs_sbc_held_disp <- function(model) {
+  v <- model$cover_pos_disp
+  if (is.null(v)) {
+    stop("theta carries no `disp` and the fit records no held cover dispersion ",
+         "(`model$cover_pos_disp`).", call. = FALSE)
+  }
+  v
+}
+
 .tobs_sbc_loglik_occu_cover <- function(fit, theta, n_quad = 15L) {
   m  <- fit$model
   bl <- attr(theta, "blocks")
@@ -427,7 +439,7 @@
   sigma <- sigma * .tobs_sbc_field_scale(fit$spatial$graph)
   alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0
   disp  <- if ("disp" %in% names(theta)) theta[["disp"]] else
-             (m$cover_pos_disp %||% 1)
+             .tobs_sbc_held_disp(m)
   # Each site's integral is taken independently, which is what makes this the
   # cell-by-cell surrogate rather than the model's own marginal; one shared
   # quadrature node per pass is therefore correct, and the rows are combined
@@ -509,7 +521,7 @@
   sigma <- if ("sigma" %in% names(theta)) theta[["sigma"]] else 0
   alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0
   disp  <- if ("disp" %in% names(theta)) theta[["disp"]] else
-             (m$cover_pos_disp %||% 1)
+             .tobs_sbc_held_disp(m)
 
   f_cell <- if (spec$has_field)
     (spec$field_scale %||% 1) *

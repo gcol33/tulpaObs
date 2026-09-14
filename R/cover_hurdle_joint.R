@@ -542,8 +542,9 @@
   beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
   se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
 
-  phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
-  phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
+  phi_m  <- .tobs_joint_phi_moments(fit)
+  phi_mu <- phi_m$mean
+  phi_sd <- phi_m$sd
   if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
     # `phi_pos` is on the engine's scale for this arm's family: the residual
     # variance for the plain gaussian arm, the SD for the truncated one.
@@ -679,8 +680,9 @@
   beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
   se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
 
-  phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
-  phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
+  phi_m  <- .tobs_joint_phi_moments(fit)
+  phi_mu <- phi_m$mean
+  phi_sd <- phi_m$sd
   if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
     # `phi_pos` is on the engine's scale for this arm's family: the residual
     # variance for the plain gaussian arm, the SD for the truncated one.
@@ -1193,8 +1195,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
 
   # Dispersion summary on the positive arm. Both regimes integrate the
-  # dispersion scalar on the outer joint hyperparameter grid; read the
-  # posterior mean and SD from the engine's `theta_mean` / `theta_sd`. The
+  # dispersion scalar on the outer joint hyperparameter grid unless a one-node
+  # `phi.grid` pins it; `.tobs_joint_phi_moments()` reads the posterior mean and
+  # SD from the engine's `theta_mean` / `theta_sd`, or the held value. The
   # engine computes those under the grid's cell-by-cell measure, refinement
   # slice cells included, and takes the per-axis SD from
   # `.nl_attach_axis_sd()`, so they do not depend on where the nodes fell.
@@ -1207,8 +1210,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # The phi axis carries the gaussian residual SD (lognormal) or the latent
   # log-cover SD (ordinal interval-censored Gaussian) -- both surfaced as
   # sigma_pos -- and the beta precision otherwise (phi_pos).
-  phi_mu <- as.numeric(fit$theta_mean[["phi_pos"]])
-  phi_sd <- as.numeric(fit$theta_sd[["phi_pos"]])
+  phi_m  <- .tobs_joint_phi_moments(fit)
+  phi_mu <- phi_m$mean
+  phi_sd <- phi_m$sd
   if (positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
     pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
                                   .cover_pos_engine_family(positive))
@@ -1230,9 +1234,9 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   # Stash the field-decomposition scale_factor (BYM2 Riebler scaling) on the
   # joint fit so the SLA path can reconstruct per-grid field amplitude
-  # without re-deriving it. Dispersion is always integrated on `phi_pos`
-  # (both lognormal and beta regimes), so the SLA path reads it directly
-  # from `fit$theta_grid[k, "phi_pos"]` and needs no attr fallback.
+  # without re-deriving it. The dispersion is read per grid cell through
+  # `.tobs_joint_phi_at()`: the `phi_pos` axis when it is integrated, the held
+  # value when a one-node `phi.grid` pins it.
   if (has_trend) {
     sf_attr <- as.numeric(base_block$scale_factor %||% 1.0)
   } else if (has_multi) {

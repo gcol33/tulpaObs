@@ -304,7 +304,13 @@
       Q_csc_p_per_grid = ps$Q_csc_p_per_grid,
       Q_csc_i_per_grid = ps$Q_csc_i_per_grid,
       Q_csc_x_per_grid = ps$Q_csc_x_per_grid,
-      Q_csc_n          = ps$Q_csc_n
+      Q_csc_n          = ps$Q_csc_n,
+      # The engine's record of each arm's parse-time dispersion, as the single
+      # drivers keep it: the value a held dispersion was evaluated at, which is
+      # this species' own entry of `phi_batch`.
+      responses        = stats::setNames(
+        lapply(seq_len(n_arms), function(k) list(phi = phi_batch[k, s])),
+        names(arms1))
     )
     .occu_cover_jc_postprocess(engine_fit, preps[[s]]$ctx)
   })
