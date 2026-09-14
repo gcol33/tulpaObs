@@ -1231,10 +1231,13 @@
     # fit object does not carry one.
     r <- sup[[a]]
     if (is.null(r)) {
-      specs <- tulpa:::.joint_axis_specs_from_grid(tg)
-      k <- match(a, vapply(specs, function(z) z$name, character(1)))
-      if (is.na(k)) return(NULL)
-      r <- tulpa:::.hyper_axis_support(v, specs[[k]])
+      # Specs are read off the base-tensor cells, the node set the axis was
+      # declared on, and the span off the cell measure, refinement slice cells
+      # included.
+      refining <- warm$joint_fit$refining_axis
+      base <- !nzchar(tulpa:::.hyper_slice_home(refining, nrow(tg)))
+      specs <- tulpa:::.joint_axis_specs_from_grid(tg[base, , drop = FALSE])
+      r <- tulpa:::.hyper_grid_supports(tg, specs, refining = refining)[[a]]
     }
     if (is.null(r)) return(NULL)
     r <- sort(as.numeric(r))

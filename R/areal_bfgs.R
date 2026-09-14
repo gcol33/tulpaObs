@@ -648,7 +648,9 @@
   # centrally, so every family wrapper drops its own identical guard (#136).
   if (!any(is.finite(logm)))
     stop(sprintf("%s: fit produced no usable grid point.", label), call. = FALSE)
-  w <- tulpa:::.nl_normalise_weights_safe(logm, "tau_grid / data")
+  w <- .tobs_grid_weights(
+    list(theta_grid = .tobs_block_hyper_grid(blocks, cell_grid)),
+    "tau_grid / data", log_marginal = logm)
   out <- summarise(res, w, "grid")
   if (!isTRUE(out$ok))
     stop(sprintf("%s: fit produced no usable grid point.", label), call. = FALSE)
@@ -664,6 +666,25 @@
   idx <- expand.grid(lapply(n_per, seq_len), KEEP.OUT.ATTRS = FALSE)
   lapply(seq_len(nrow(idx)), function(r)
     lapply(seq_along(grids), function(b) grids[[b]][[idx[r, b]]]))
+}
+
+# The outer product grid as a named hyperparameter matrix, one row per cell
+# tuple of `.tobs_block_cell_product()`, read off each block's `to_hyper`. With
+# more than one block every axis carries a `b<k>.` block prefix, which the axis
+# specs resolve to the bare name. A block without `to_hyper` contributes no
+# column; NULL when no block declares one.
+.tobs_block_hyper_grid <- function(blocks, cell_grid) {
+  n_blk <- length(blocks)
+  cols <- lapply(seq_len(n_blk), function(b) {
+    to_hyper <- blocks[[b]]$to_hyper
+    if (!is.function(to_hyper)) return(NULL)
+    M <- do.call(rbind, lapply(cell_grid, function(ct) to_hyper(ct[[b]])))
+    if (n_blk > 1L) colnames(M) <- paste0("b", b, ".", colnames(M))
+    M
+  })
+  cols <- Filter(Negate(is.null), cols)
+  if (length(cols) == 0L) return(NULL)
+  do.call(cbind, cols)
 }
 
 # Resolve the field spec for an areal-BFGS family from the spatial term.

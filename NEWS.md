@@ -1,5 +1,71 @@
 # tulpaObs NEWS
 
+## 0.2.3 (2026-09-14)
+
+* **Outer-grid weights rebuilt in tulpaObs now take the grid's own cell
+  measure, refinement slice cells included.** A refinement pass appends slice
+  cells to an outer hyperparameter grid: new levels on one axis at one
+  combination of the others. Such a grid is not a tensor product, and tulpa
+  0.4.0 measures it cell by cell from the per-cell `refining_axis` tag.
+  `.tobs_grid_weights()`, the helper every post-processor that rebuilds weights
+  from `theta_grid` goes through, called the measure without that tag and so
+  applied the tensor-product rule: on a 3 x 3 grid with two sigma slices in one
+  row the weights moved by up to 0.035. It now passes `refining_axis`, uses a
+  driver result's stored `log_quad` when it carries one, and reads a
+  single-axis grid stored as a bare vector through its axis name. A
+  `log_marginal` whose length does not match the grid is an error instead of a
+  silent fall-back to equal weights.
+
+  Every fixed-grid driver in tulpaObs (the areal count, community occupancy /
+  N-mixture, SPDE N-mixture and spatial `ms_abun()` routes) builds a tensor
+  grid with no refinement, so their weights do not change; on the areal count
+  route they equal the engine's own weights to the bit, as before.
+
+* **The converged-cell weights of a joint fit keep the measure when the engine
+  left none usable.** `.tobs_joint_ok_cells()` fell back to a softmax of
+  `log_marginal` when `fit$weights` was absent, the wrong length or all
+  non-positive, which weighs every node equally and gives a slice cell the mass
+  of a whole column. It now rebuilds them through `.tobs_grid_weights()`.
+
+* **The areal-BFGS product grid is weighted by its cell measure.** The
+  per-family areal fits (removal, distance, `fp_occu()`, `dyn_abun()`,
+  `dyn_int_occu()`, the SVC surfaces) normalised the grid log-marginals with equal node weights. The grid
+  is now named from each block's hyperparameters (`b<k>.`-prefixed with more
+  than one block) and weighted like every other outer grid. The default ICAR
+  tau grid is evenly spaced on log tau and does not move; the defaults that are
+  not evenly spaced on their integration coordinate, or reach a bounded axis's
+  edge, do: per-cell weight relative to equal weights ranges 0.69 to 1.06 on
+  the proper-CAR (tau, rho) grid, 0.71 to 1.19 on the BYM2 (sigma, rho) grid
+  and 0.86 to 1.14 on the temporal AR1 (tau, rho) grid.
+
+* **The fused `occu_cover` batch backend forwards the fit's hyperpriors and
+  copy-scale prior to the batched engine.** tulpa's batched joint driver now
+  folds the hyperprior into each species' log-marginal and weights the grid
+  with its cell measure, the same construction as the multi-block driver, so
+  `control$batch.backend = "fused"` passes `prior.sigma` / `prior.alpha` /
+  `prior.phi`, `copy.atom.mass` and `copy.slab` through and carries the
+  engine's `log_quad` into the per-species fit. The fused backend is reachable
+  only for a configuration without a positive-arm dispersion axis, which every
+  `occu_cover` fit has carried since 0.2.2, so every current fit still falls
+  back to the looped backend.
+
+* `?tobs_terms`: refining an axis changes how densely its nodes sit, and the
+  reported span stays the declared span unless a refinement point lands past
+  it. A stated `c(0.2, 0.5)` is only densified and spans `[0.127, 0.791]` with
+  refinement on as with it off; the page previously gave a tighter span for the
+  refined fit, which tulpa no longer reports.
+
+* **The SPDE routes of `abun()`, `ms_abun()` and `ms_occu()` fit again on tulpa
+  0.4.0.** They added tulpa's `pc_prior_log_density()` to each grid
+  log-marginal, and tulpa removed it when the SPDE hyperprior became a density
+  on (log range, log sigma), the coordinates the outer grid is measured in.
+  All three now take `.spde_log_hyperprior()`, so the PC prior carries the
+  Jacobian of that change of coordinates; `test-spde-nmix.R` (18) and
+  `test-ms-occu-spatial-spde.R` (11) pass, and errored before.
+
+* Requires tulpa 0.4.0: `.nl_grid_log_quad(refining =)` is new there, and
+  `tulpa::CovType::MATERN` is now `MATERN32` (same code, Matern 3/2).
+
 ## 0.2.2 (2026-09-13)
 
 * **`fitted()` on an `occu()` fit with an areal field returned a flat `psi`**

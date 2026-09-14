@@ -126,12 +126,15 @@
 
   # Per-species bit-identity (the fused path only reorganises the same math):
   # modes, log-marginals, AND the per-grid inner-covariance precision Q
-  # (store_Q) must match the independent fits cell-for-cell.
+  # (store_Q) must match the independent fits cell-for-cell. The oracle is the
+  # raw kernel solve and the batch folds the hyperprior into its log-marginal,
+  # so the oracle is compared with that fold added.
   for (pair in list(list(s0, bat$per_species[[1]]),
                     list(s1, bat$per_species[[2]]))) {
     single <- pair[[1]]; bs <- pair[[2]]
     expect_equal(as.numeric(bs$modes), as.numeric(single$modes), tolerance = 1e-9)
-    expect_equal(as.numeric(bs$log_marginal), as.numeric(single$log_marginal),
+    expect_equal(as.numeric(bs$log_marginal),
+                 as.numeric(single$log_marginal) + as.numeric(bs$log_hyperprior),
                  tolerance = 1e-9)
     expect_equal(bs$Q_csc_n, single$Q_csc_n)
     expect_equal(length(bs$Q_csc_x_per_grid), length(single$Q_csc_x_per_grid))

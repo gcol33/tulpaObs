@@ -406,15 +406,11 @@ test_that("a stated alpha grid states NODES, and the span reaches past them (#30
   expect_equal(range(n2a), c(0.2, 0.5))
   expect_gt(length(n2a), 2L)
 
-  # Denser cells make the outer half step -- half of the outermost interval --
-  # smaller, so the span tightens TOWARD the stated range from both sides. It
-  # never reaches it: a node always represents the cell around it, so some
-  # overhang survives however fine the grid gets.
+  # Densifying places its points inside the declared cells, so the region the
+  # cell measure integrates is the declared one: the span a densify-only stated
+  # axis reports is the span with refinement off.
   s2a <- span(c(0.2, 0.5))
-  expect_lt(ratio(s2a, 0.2, 0.5), ratio(s2, 0.2, 0.5))
-  expect_gt(ratio(s2a, 0.2, 0.5), 1)
-  expect_gt(s2a[1L], s2[1L])
-  expect_lt(s2a[2L], s2[2L])
+  expect_equal(s2a, s2, tolerance = 1e-8)
 })
 
 test_that("the retired copy() spelling names its replacement", {

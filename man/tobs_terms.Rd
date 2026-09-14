@@ -246,11 +246,11 @@ axis, a field SD axis -- is EXTENDED when a boundary cell still holds weight
 (\code{adaptive.grid.edge.thresh}, default 0.02), which is what lets a fit
 whose default grid misses the mode go and find it.
 
-Denser cells make the outer half step smaller, so refining a stated axis
-tightens its span toward the range you wrote rather than widening it: a
-stated \code{c(0.2, 0.5)} spans \code{[0.127, 0.791]} with refinement off
-and \code{[0.184, 0.570]} with it on. Holding an axis at exactly the nodes
-stated takes BOTH \code{control$adaptive.grid = FALSE} and
+Refining an axis changes how densely its nodes sit, not the region they
+cover: the reported span stays the declared span unless a refinement point
+lands past it. A stated \code{c(0.2, 0.5)} is only densified, so it spans
+\code{[0.127, 0.791]} with refinement on as with it off. Holding an axis at
+exactly the nodes stated takes BOTH \code{control$adaptive.grid = FALSE} and
 \code{control$var.of.means.consistency = FALSE}: refinement reaches an axis
 from two independent passes, and the consistency pass runs whatever the
 adaptive grid is set to, so a fit that turns off only the first still

@@ -140,8 +140,9 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
     if (is.null(cache[[key]])) cache[[key]] <- build_Q(grid$range[k], grid$sigma[k])
     Q_list[[k]]  <- cache[[key]]$Q
     log_dets[k]  <- cache[[key]]$log_det
-    pc_lp[k]     <- tulpa:::pc_prior_log_density(grid$range[k], grid$sigma[k],
-                                                 prior_range, prior_sigma)
+    pc_lp[k]     <- tulpa:::.spde_log_hyperprior(
+      grid$range[k], grid$sigma[k],
+      list(prior_range = prior_range, prior_sigma = prior_sigma))
   }
   theta_grid <- as.matrix(grid[, c("range", "sigma", "r"), drop = FALSE])
 
@@ -157,9 +158,10 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
     tol = as.numeric(tol), verbose = isTRUE(verbose)
   )
 
-  # Add the PC prior to each grid log-marginal, then integrate: the PC density
-  # is the measure on (range, sigma) and the grid's cell widths are the
-  # quadrature element it is integrated with.
+  # Add the PC prior to each grid log-marginal, then integrate: the PC density,
+  # carried to (log range, log sigma), is the measure, and the grid's cell
+  # widths on those same log coordinates are the quadrature element it is
+  # integrated with.
   lm_post <- fit$log_marginal + pc_lp
   weights <- .tobs_grid_weights(list(theta_grid = theta_grid),
                                 "range / sigma grid", lm_post)

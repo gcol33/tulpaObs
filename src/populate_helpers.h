@@ -93,7 +93,7 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
 
         // Covariance type
         std::string cov_str = Rcpp::as<std::string>(sp["cov_type"]);
-        if (cov_str == "matern") data.gp_data.cov_type = tulpa::CovType::MATERN;
+        if (cov_str == "matern") data.gp_data.cov_type = tulpa::CovType::MATERN32;
         else if (cov_str == "gaussian") data.gp_data.cov_type = tulpa::CovType::GAUSSIAN;
         else if (cov_str == "spherical") data.gp_data.cov_type = tulpa::CovType::SPHERICAL;
         else data.gp_data.cov_type = tulpa::CovType::EXPONENTIAL;
@@ -157,7 +157,7 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
 
         // Covariance
         std::string cov_str = Rcpp::as<std::string>(sp["cov_type"]);
-        if (cov_str == "matern") data.multiscale_gp_data.cov_type = tulpa::CovType::MATERN;
+        if (cov_str == "matern") data.multiscale_gp_data.cov_type = tulpa::CovType::MATERN32;
         else if (cov_str == "gaussian") data.multiscale_gp_data.cov_type = tulpa::CovType::GAUSSIAN;
         else data.multiscale_gp_data.cov_type = tulpa::CovType::EXPONENTIAL;
         data.multiscale_gp_data.nu = Rcpp::as<double>(sp["nu"]);
@@ -385,7 +385,7 @@ inline void populate_svc(tulpa::ModelData& data, Rcpp::List svc_spec) {
 
     // Covariance type
     std::string cov_str = Rcpp::as<std::string>(svc_spec["cov_type"]);
-    if (cov_str == "matern") data.svc_data.cov_type = tulpa::CovType::MATERN;
+    if (cov_str == "matern") data.svc_data.cov_type = tulpa::CovType::MATERN32;
     else if (cov_str == "gaussian") data.svc_data.cov_type = tulpa::CovType::GAUSSIAN;
     else data.svc_data.cov_type = tulpa::CovType::EXPONENTIAL;
 

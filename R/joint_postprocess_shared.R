@@ -23,10 +23,23 @@
 # rule the engine weights its own grids with, so a post-processor never falls
 # back to weighing every node equally: on an evenly spaced grid the two agree,
 # and on an uneven one the spacing is what differs.
+#
+# A driver result that already carries its cell measure (`fit$log_quad`, built by
+# the engine from the axis specs it declared) is weighted by that measure. One
+# without is measured from its grid: `fit$refining_axis` is the per-cell tag a
+# refinement pass leaves (`""` for a base-tensor cell, the axis name for a slice
+# cell), and a grid carrying slice cells is not a tensor product, so its cells
+# are measured one by one from that tag; a grid without the tag (every in-tree
+# fixed-grid driver) is the tensor product it was built as. A `log_marginal`,
+# measure or tag whose length does not match the grid is an error, never an
+# unweighted softmax.
 .tobs_grid_weights <- function(fit, what = "outer grid", log_marginal = NULL) {
   lm <- if (is.null(log_marginal)) fit$log_marginal else log_marginal
-  lq <- tulpa:::.nl_grid_log_quad(fit$theta_grid)
-  if (!is.null(lq) && length(lq) != length(lm)) lq <- NULL
+  lq <- fit$log_quad
+  if (is.null(lq)) {
+    lq <- tulpa:::.nl_grid_log_quad(tulpa:::.nl_theta_matrix(fit),
+                                    refining = fit$refining_axis)
+  }
   tulpa:::.nl_normalise_weights_safe(lm, what, log_quad = lq)
 }
 
@@ -91,18 +104,20 @@
   # the declared hyperparameter prior, not the likelihood alone. Posterior
   # summaries are built by renormalising THOSE over the converged cells. A
   # softmax of `log_marginal` would weigh every node equally and so report a
-  # posterior against a measure the fit never integrated.
+  # posterior against a measure the fit never integrated, so where the engine
+  # left no usable weights they are rebuilt from the same measure
+  # (`.tobs_grid_weights()`: the stored cell measure, else the grid's own,
+  # slice cells included).
   ew <- fit$weights
   ew_ok <- !is.null(ew) && length(ew) == length(fit$log_marginal) &&
            any(is.finite(ew[ok_cells]) & ew[ok_cells] > 0)
-  if (ew_ok) {
-    w <- ew[ok_cells]
-    w[!is.finite(w) | w < 0] <- 0
-    w <- w / sum(w)
-  } else {
-    w_raw <- exp(fit$log_marginal[ok_cells] - max(fit$log_marginal[ok_cells]))
-    w     <- w_raw / sum(w_raw)
+  w <- if (ew_ok) ew[ok_cells] else .tobs_grid_weights(fit, label)[ok_cells]
+  w[!is.finite(w) | w < 0] <- 0
+  if (!any(w > 0)) {
+    stop(sprintf("%s: no converged outer-grid cell carries quadrature mass.",
+                 label), call. = FALSE)
   }
+  w <- w / sum(w)
 
   if (!any(is.finite(fit$weights) & fit$weights > 0)) {
     w_full <- numeric(length(fit$log_marginal))

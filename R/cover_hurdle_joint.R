@@ -1194,15 +1194,13 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   # Dispersion summary on the positive arm. Both regimes integrate the
   # dispersion scalar on the outer joint hyperparameter grid; read the
-  # posterior mean and SD from the engine's `theta_mean` / `theta_sd`. Those
-  # are computed against the phi-axis marginal (foreign-axis slice cells
-  # filtered out by `.joint_recalibrate_axis_moments`) with Laplace-at-mode
-  # SD at the modal cell, so they are grid-spacing- independent.
-  # Hand-rolling `sum(weights * theta_grid^2) - mean^2` against
-  # `theta_grid[, "phi_pos"]` underestimates SD on sharply peaked axes and
-  # additionally collapses on slice cells that pin phi at the modal value
-  # while varying other axes -- that's the legacy pattern were added to
-  # replace.
+  # posterior mean and SD from the engine's `theta_mean` / `theta_sd`. The
+  # engine computes those under the grid's cell-by-cell measure, refinement
+  # slice cells included, and takes the per-axis SD from
+  # `.nl_attach_axis_sd()`, so they do not depend on where the nodes fell.
+  # `sum(weights * theta_grid^2) - mean^2` against `theta_grid[, "phi_pos"]`
+  # underestimates the SD on a sharply peaked axis, where the weight sits on
+  # one node.
   #
   # The phi axis carries the gaussian residual SD for lognormal and the
   # beta precision for beta; surface under the respective slot names.

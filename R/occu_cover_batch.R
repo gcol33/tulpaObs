@@ -238,7 +238,12 @@
     n_batch       = B, y_batch = y_batch, phi_batch = phi_batch,
     max_iter      = as.integer(fc1$control$max_iter %||% 200L),
     tol           = as.numeric(fc1$control$tol %||% 1e-6),
-    cell_coupling = spec_name, store_Q = TRUE)
+    cell_coupling = spec_name, store_Q = TRUE,
+    prior_sigma   = fc1$prior_sigma, prior_alpha = fc1$prior_alpha,
+    prior_phi     = fc1$prior_phi,
+    copy_atom_mass = fc1$control$copy_atom_mass %||%
+                       tulpa:::.TULPA_COPY_ATOM_MASS,
+    copy_slab     = fc1$control$copy_slab %||% "exponential")
 
   arm_layout <- bat$arm_layout
   theta_grid <- bat$theta_grid
@@ -281,6 +286,8 @@
       theta_grid       = theta_grid,
       log_marginal     = ps$log_marginal,
       weights          = ps$weights,
+      log_quad         = ps$log_quad,
+      log_hyperprior   = ps$log_hyperprior,
       modes            = modes_s,
       Q_csc_p_per_grid = ps$Q_csc_p_per_grid,
       Q_csc_i_per_grid = ps$Q_csc_i_per_grid,

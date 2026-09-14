@@ -332,8 +332,9 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
       key <- paste0(theta_grid[k, 1L], "_", theta_grid[k, 2L])
       if (is.null(cache[[key]])) cache[[key]] <- build_Q(theta_grid[k, 1L], theta_grid[k, 2L])
       Q_list[[k]] <- cache[[key]]$Q; log_dets[k] <- cache[[key]]$log_det
-      pc_lp[k] <- tulpa:::pc_prior_log_density(theta_grid[k, 1L], theta_grid[k, 2L],
-                                               prior_range, prior_sigma)
+      pc_lp[k] <- tulpa:::.spde_log_hyperprior(
+        theta_grid[k, 1L], theta_grid[k, 2L],
+        list(prior_range = prior_range, prior_sigma = prior_sigma))
     }
     raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_spde,
       oracle = orc$ptr, X_lambda_R = X_lambda, A_R = A_dense,
