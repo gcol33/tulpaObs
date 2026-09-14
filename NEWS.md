@@ -2,6 +2,19 @@
 
 ## 0.2.3 (2026-09-14)
 
+* **`occu_cover()` joint fits report the engine's own read of each
+  hyperparameter axis.** `fit$hyper_axis` names the engine column each public
+  hyperparameter was read off (NA for a quantity derived per cell, such as an
+  SD from a precision axis or an MCAR correlation), and `fit$hyper_summary` is a
+  data frame of `parameter`, `mean` (the grid-weighted mean `means` reports),
+  `sd` / `sd_source` (the engine's `theta_sd` and the estimator that produced
+  it), `lwr` / `upr` (`theta_ci_lo` / `theta_ci_hi`) and `axis`. A random-effect
+  slope SD divided by its covariate scale takes the same division; the cover
+  dispersion reported as an SD takes its quantiles through the square root and
+  its SD by the delta method (`.cover_phi_engine_to_sd()`). Where the outer
+  weight sits on one cell the grid-weighted `sds` read 0 for a hyperparameter
+  while the engine's stencil SD does not; `sds` and the draws are unchanged.
+
 * **A fused-batch `occu_cover` species fit is the object its own `tobs()`
   call returns.** The fused backend used to collect each species' prepared
   engine call, run the batched kernel and assemble a plain list per species by

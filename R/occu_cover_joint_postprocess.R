@@ -56,6 +56,56 @@
     else arms[[i]], character(1))
 }
 
+# Per-hyperparameter summary of an occu_cover joint fit. `mean` is the
+# grid-weighted mean the fit reports in `means`; `sd`, `lwr`, `upr` and
+# `sd_source` are the engine's own per-axis read of the axis the name came from
+# (`theta_sd`, whose estimator `theta_sd_source` names, and the weighted
+# quantiles `theta_ci_lo` / `theta_ci_hi`), NA for a derived quantity. A name
+# whose moments were divided by a covariate scale has its engine read divided
+# by the same scale. A dispersion reported as an SD has its quantiles carried
+# through the same monotone map (`.cover_phi_to_sd()`) and its SD by the delta
+# method at the engine's axis mean (`.cover_phi_engine_to_sd()`).
+.occu_cover_hyper_summary <- function(fit, hyper_names, mean, axis, scale,
+                                      family) {
+  n <- length(hyper_names)
+  axis_names <- colnames(fit$theta_grid)
+  engine_read <- function(v, ax, na) {
+    if (is.null(v) || is.na(ax)) return(na)
+    if (!is.null(names(v))) return(if (ax %in% names(v)) v[[ax]] else na)
+    if (length(v) == 1L && identical(axis_names, ax)) return(v[[1L]])
+    na
+  }
+  out <- data.frame(parameter = hyper_names,
+                    mean = as.numeric(mean %||% numeric(0)),
+                    sd = rep(NA_real_, n), lwr = rep(NA_real_, n),
+                    upr = rep(NA_real_, n),
+                    sd_source = rep(NA_character_, n),
+                    axis = as.character(axis),
+                    stringsAsFactors = FALSE)
+  for (i in seq_len(n)) {
+    nm <- hyper_names[[i]]; ax <- axis[[i]]
+    if (is.na(ax)) next
+    sd  <- engine_read(fit$theta_sd, ax, NA_real_)
+    lwr <- engine_read(fit$theta_ci_lo, ax, NA_real_)
+    upr <- engine_read(fit$theta_ci_hi, ax, NA_real_)
+    fam <- family[[nm]]
+    if (!is.null(fam)) {
+      sd  <- .cover_phi_engine_to_sd(engine_read(fit$theta_mean, ax, NA_real_),
+                                     sd, fam)$sd
+      lwr <- .cover_phi_to_sd(lwr, fam)
+      upr <- .cover_phi_to_sd(upr, fam)
+    }
+    s <- scale[[nm]] %||% 1
+    out$sd[i]  <- sd / s
+    out$lwr[i] <- lwr / s
+    out$upr[i] <- upr / s
+    out$sd_source[i] <- as.character(
+      engine_read(fit$theta_sd_source, ax, NA_character_))
+  }
+  rownames(out) <- NULL
+  out
+}
+
 # Post-process an occu_cover joint-coupled engine fit into a tobs_fit. `fit` is
 # the tulpa_nested_laplace_joint return; `ctx` carries the Part-A context the
 # shaping needs. Marginalisation here is a weighted sum over outer-grid cells
@@ -216,6 +266,13 @@
   hyper_sds   <- numeric(0)
   hyper_vals  <- list()
   hyper_names <- character(0)
+  # The engine axis each public hyperparameter was read off, the covariate scale
+  # its moments were divided by, and the family whose dispersion it was
+  # converted to an SD under. A derived quantity reads no single axis and
+  # records NA, so `hyper_summary` below has no engine interval to report for it.
+  hyper_axis   <- list()
+  hyper_scale  <- list()
+  hyper_family <- list()
   # `skip` carries the same meaning it does on pick2 below: an axis the fit's own
   # spec says is not a parameter is not reported, even when the grid carries it.
   # `sd_family` puts a dispersion axis onto cover()'s SD surface before the
@@ -236,6 +293,8 @@
     hyper_sds  [[public]] <<- sqrt(max(v, 0))
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
+    hyper_axis  [[public]] <<- name
+    if (!is.null(sd_family)) hyper_family[[public]] <<- sd_family
   }
   # On the latent path the pos arm's phi axis IS the cover-latent SD; surface it
   # as `sigma_u` rather than the engine's generic `phi_pos`.
@@ -273,6 +332,7 @@
     hyper_sds  [[public]] <<- sqrt(max(v, 0))
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
+    hyper_axis  [[public]] <<- col
   }
   # put_derived stores the grid-weighted moments of a DERIVED per-cell quantity
   # (e.g. a sigma / correlation reconstructed from log-Cholesky axes), so it is
@@ -284,6 +344,7 @@
     hyper_sds  [[public]] <<- sqrt(max(vv, 0))
     hyper_vals [[public]] <<- vals
     hyper_names <<- c(hyper_names, public)
+    hyper_axis  [[public]] <<- NA_character_
   }
   # Sorbye-Rue geo-mean marginal SD. `sigma` on this path is the raw amplitude
   # against the unscaled intrinsic precision Q = D - W -- the shared/trend
@@ -439,6 +500,7 @@
       hyper_means[[nm]] <<- hyper_means[[nm]] / s
       hyper_sds  [[nm]] <<- hyper_sds  [[nm]] / s
       hyper_vals [[nm]] <<- hyper_vals [[nm]] / s
+      hyper_scale[[nm]] <<- s
     }
     for (i in seq_along(re_terms)) {
       trm  <- re_terms[[i]]
@@ -517,6 +579,14 @@
 
   names(means) <- par_names
   names(sds)   <- par_names
+
+  hyper_axis_vec <- stats::setNames(
+    vapply(hyper_names, function(nm) hyper_axis[[nm]] %||% NA_character_,
+           character(1), USE.NAMES = FALSE),
+    hyper_names)
+  hyper_summary <- .occu_cover_hyper_summary(
+    fit, hyper_names, unlist(hyper_means)[hyper_names], hyper_axis_vec,
+    hyper_scale, hyper_family)
 
   # Parameter-surface vcov by the law of total covariance over the outer grid
   # (joint_postprocess_shared.R -- shared with .occu_jc_postprocess).
@@ -653,6 +723,8 @@
     draws        = draws,
     means        = means,
     sds          = sds,
+    hyper_axis   = hyper_axis_vec,
+    hyper_summary = hyper_summary,
     vcov         = V,
     n_samples    = n_draws,
     n_params     = length(means),
