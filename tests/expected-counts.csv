@@ -9,7 +9,7 @@
 "test-aghq-group-status.R","smoke",21,2,0.3
 "test-aghq-variance-boundary.R","smoke",38,0,0.4
 "test-arm-args.R","smoke",5,1,0.2
-"test-auto-grid-provenance.R","smoke",64,1,0.4
+"test-auto-grid-provenance.R","smoke",73,1,0.4
 "test-autoscale.R","full",14,0,0.7
 "test-autoscale.R","smoke",8,2,0.1
 "test-bym2-scale.R","smoke",46,0,0.5
@@ -57,7 +57,7 @@
 "test-cover-hurdle-beta-oi.R","full",18,0,5.4
 "test-cover-hurdle-beta-oi.R","smoke",9,2,0.3
 "test-cover-hurdle-beta.R","full",25,0,0.6
-"test-cover-hurdle-beta.R","smoke",20,1,0.4
+"test-cover-hurdle-beta.R","smoke",25,1,0.4
 "test-cover-hurdle-bpos0-coverage.R","full",44,0,35.2
 "test-cover-hurdle-bpos0-coverage.R","smoke",3,1,0.1
 "test-cover-hurdle-gaussian.R","full",36,0,0.5
@@ -82,7 +82,7 @@
 "test-cover-ordinal.R","full",39,0,125.9
 "test-cover-ordinal.R","smoke",14,2,0.2
 "test-cover-perarm.R","full",72,0,30.7
-"test-cover-perarm.R","smoke",63,2,52.9
+"test-cover-perarm.R","smoke",65,2,52.9
 "test-cover-phi-scale.R","smoke",19,0,5.2
 "test-cover-ploglik-cpp.R","full",5,0,0.1
 "test-cover-ploglik-cpp.R","smoke",5,0,0.1
@@ -188,7 +188,7 @@
 "test-ms-distance-info.R","full",18,0,2
 "test-ms-distance-info.R","smoke",18,0,6.2
 "test-ms-distance-value-only.R","full",5,0,0.1
-"test-ms-distance-value-only.R","smoke",5,0,0.2
+"test-ms-distance-value-only.R","smoke",7,0,0.2
 "test-ms-distance.R","full",52,0,2129.5
 "test-ms-distance.R","smoke",27,4,1.8
 "test-ms-dyn-occu-nuts.R","smoke",4,4,0.7
@@ -265,7 +265,7 @@
 "test-occu-cover-batch-fused.R","full",138,0,2.7
 "test-occu-cover-batch-fused.R","smoke",0,3,0.1
 "test-occu-cover-batch.R","full",40,0,0.5
-"test-occu-cover-batch.R","smoke",15,2,0.2
+"test-occu-cover-batch.R","smoke",15,4,0.2
 "test-occu-cover-by.R","smoke",34,1,0.9
 "test-occu-cover-checkpoint.R","full",20,0,2.1
 "test-occu-cover-checkpoint.R","smoke",0,5,0.2
@@ -416,7 +416,7 @@
 "test-sbc-gates.R","full",52,0,0.3
 "test-sbc-gates.R","smoke",52,0,0.3
 "test-sbc-registry.R","smoke",282,4,1.8
-"test-sbc.R","smoke",41,1,8.8
+"test-sbc.R","smoke",52,1,8.8
 "test-share-alpha-resolution.R","full",91,0,5.5
 "test-share-alpha-resolution.R","smoke",61,6,0.6
 "test-share-formula-api.R","full",76,0,0.8
