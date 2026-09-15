@@ -30,6 +30,10 @@ test_that("S3 methods work on single-season fit", {
   expect_s3_class(ll, "logLik")
 
   expect_equal(nobs(fit), sum(y >= 0, na.rm = TRUE))
+  # logLik()'s sample size is nobs()'s, so BIC() and nobs() agree on n (#331).
+  expect_identical(attr(ll, "nobs"), nobs(fit))
+  expect_equal(stats::BIC(ll),
+               -2 * as.numeric(ll) + log(nobs(fit)) * attr(ll, "df"))
 
   fv <- fitted(fit)
   expect_named(fv, c("psi", "p", "z"))
@@ -380,6 +384,26 @@ test_that("tobs_predict_spatial builds newocc.covs from the fitted formula", {
   expect_false(isTRUE(all.equal(pp$mean, as.numeric(naive %*% beta))))
 })
 
+
+test_that("logLik()'s nobs attribute is nobs(), not the engine's site count (#331)", {
+  # The engine stamps `fit$N`, which a detection family records as sites.
+  fit <- structure(list(log_marginal = -12.5, N = 3L, means = c(a = 0, b = 1),
+                        model = list(model_type = "single",
+                                     y = matrix(c(1L, 0L, -1L, 0L, 1L, 1L), 3L))),
+                   class = c("tobs_fit", "tulpa_fit"))
+  ll <- logLik(fit)
+  expect_identical(as.numeric(ll), -12.5)
+  expect_identical(attr(ll, "nobs"), 5L)
+  expect_identical(attr(ll, "nobs"), nobs(fit))
+
+  # A multi-arm fit on its draw path defers to the tobs_fit method and so reads
+  # the multi-arm nobs(), the same count its deterministic path stamps.
+  ma <- structure(list(draws = matrix(0, 4L, 2L), log_prob = rep(-3, 4L),
+                       n_total = 11L),
+                  class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit",
+                            "tulpa_fit"))
+  expect_identical(attr(logLik(ma), "nobs"), 11L)
+})
 
 test_that("nobs() resolves a per-family handler and refuses an unknown type", {
   bare <- function(mt) structure(list(model = list(model_type = mt)),

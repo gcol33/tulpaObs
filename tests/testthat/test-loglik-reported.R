@@ -16,7 +16,8 @@
 
 test_that("a fit with no value to report declines with a reason, not NaN", {
   fit <- structure(list(log_prob = rep(NA_real_, 5L), draws = NULL,
-                        model = list(model_type = "none")),
+                        model = list(model_type = "single",
+                                     y = matrix(c(0L, 1L, -1L, 0L), 2L))),
                    class = c("tobs_fit", "tulpa_fit"))
   out <- .tobs_attach_sampled_loglik(fit)
   expect_null(out$log_prob)

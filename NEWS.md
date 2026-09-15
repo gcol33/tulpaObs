@@ -12,6 +12,13 @@
   `waic()` and `loo()` accept only `group =` in `...` and refuse anything else,
   which they had been dropping.
 
+* **`logLik()` and `nobs()` count the same observations (#331).** The `"nobs"`
+  attribute of `logLik()` came from the engine's `fit$N`, which the detection
+  families record as sites, while `nobs()` counts observed response entries
+  (e.g. 60 against 240 on a 60-site, 4-visit `occu()` fit). `logLik.tobs_fit()`
+  now takes the attribute from `nobs()`, so `stats::BIC()` on a `logLik` object
+  uses the same n as `nobs()` on 26 fits over 11 families.
+
 ## 0.2.6 (2026-09-15)
 
 * **Every fit states what its draws are (#326).** `tobs()` stamps

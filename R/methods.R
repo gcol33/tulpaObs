@@ -124,6 +124,23 @@ nobs.tobs_fit <- function(object, ...) {
   as.integer(fn(object$model))
 }
 
+#' Log-likelihood of a tobs fit
+#'
+#' The value and degrees of freedom are the engine's ([tulpa::tulpa_fit]
+#' method); the `"nobs"` attribute is [nobs.tobs_fit()] on the same fit, so
+#' `stats::BIC()` and anything else reading the attribute counts the
+#' observations `nobs()` reports.
+#'
+#' @param object A `tobs_fit` object.
+#' @param ... Passed on to the next method.
+#' @return A `logLik` object.
+#' @export
+logLik.tobs_fit <- function(object, ...) {
+  ll <- NextMethod()
+  attr(ll, "nobs") <- nobs(object)
+  ll
+}
+
 # Integer detection grid, -1 marking an unsampled cell.
 .tobs_nobs_single <- function(model) sum(model$y >= 0)
 
