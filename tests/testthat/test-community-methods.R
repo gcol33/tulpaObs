@@ -39,7 +39,9 @@ test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
              y = si$y, species = paste0("sp", 1:5), method = "laplace",
              control = list(verbose = FALSE))
   expect_equal(dim(predict(fi)), c(60L, 5L))
-  expect_true(all(is.finite(residuals(fi)$occ)))
+  ri <- residuals(fi)
+  expect_equal(dim(ri$occ), c(60L, 5L))
+  expect_true(all(is.finite(ri$occ)))
 })
 
 test_that("fitted() / predict() / residuals() work on jsdm", {

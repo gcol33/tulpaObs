@@ -494,8 +494,11 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
 }
 
 # Per-species posterior-mean linear predictors: site-level occupancy psi
-# [n_sites x n_species] and a per-source list of site-level detection
-# probabilities p[[d]] [n_sites x n_species].
+# [n_sites x n_species], a per-source list of site-level detection
+# probabilities p[[d]] [n_sites x n_species], and the smoothed occupancy
+# state z = P(z=1 | data) -- the multi-source generalisation of ms_occu's
+# smoothed z (`.tobs_fitted_ms_occu`), reusing the same marginal the fit's
+# own log-likelihood integrates (`.ms_int_occu_sp_ll`).
 .tobs_fitted_ms_int_occu <- function(object) {
   model <- object$model
   cm    <- object$ms_community
@@ -512,7 +515,21 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
     p_list[[d]] <- pd
   }
   names(p_list) <- model$process_names
-  list(psi = psi, p = p_list)
+
+  z <- matrix(0, model$n_sites, model$n_species)
+  for (s in seq_len(model$n_species)) {
+    summ <- model$summaries[[s]]
+    log_prod <- numeric(model$n_sites)
+    for (d in seq_len(D)) {
+      log_prod <- log_prod + summ$n_valid[, d] * log1p(-p_list[[d]][, s])
+    }
+    prod1mp <- exp(log_prod)
+    num <- psi[, s] * prod1mp
+    z[, s] <- ifelse(summ$any_det, 1, num / (num + (1 - psi[, s])))
+  }
+  dimnames(z) <- list(NULL, model$species_names)
+
+  list(psi = psi, p = p_list, z = z)
 }
 
 # Draw community integrated data under the fitted per-species coefficients, at

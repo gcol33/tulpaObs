@@ -799,6 +799,15 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
                                           paste(names(res), collapse = "/"))
                  else paste0("a ", class(res)[[1L]])), call. = FALSE)
   }
+  # A handler that has no occupancy/state residual to give says so with
+  # `occ = NULL`; one that returns a zero-length placeholder (fitted() missing
+  # the field it read) is a bug in the handler, not "no residual" -- fail here
+  # rather than answering `numeric(0)`.
+  if (!is.null(res$occ) && length(res$occ) == 0L) {
+    stop(sprintf(paste0("`.tobs_residuals_%s()` returned a zero-length `occ`; ",
+                        "either give it a residual or return `occ = NULL`."),
+                 mt), call. = FALSE)
+  }
   res
 }
 
