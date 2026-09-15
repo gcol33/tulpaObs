@@ -783,6 +783,27 @@
         error = function(e) NULL)
     }
   }
+
+  # The spatial / temporal / svc / latent field blocks the spec above may have
+  # added are not named by the fixed-effect / visit / RE names above -- but the
+  # engine already names every parameter position (`col_names` in
+  # occu_fit.cpp: real names for the fixed/visit/spatial/svc/gp blocks, a
+  # `param[k]` fallback for temporal/latent, which occu_fit.cpp does not yet
+  # name), carried through untouched on `fit$means`/`fit$draws` colnames.
+  # Extending param_names with those trailing names -- rather than
+  # re-deriving field order here -- is what keeps the two from drifting; it is
+  # a no-op when param_names already spans every column (the RE-less,
+  # field-less case this block predates).
+  if (length(param_names) < length(fit$means)) {
+    extra_nm <- names(fit$means)[(length(param_names) + 1L):length(fit$means)]
+    if (!is.null(extra_nm) && !anyNA(extra_nm) && all(nzchar(extra_nm))) {
+      param_names <- c(param_names, extra_nm)
+      names(fit$means)[seq_along(param_names)] <- param_names
+      if (!is.null(fit$draws) && ncol(fit$draws) >= length(param_names)) {
+        colnames(fit$draws)[seq_along(param_names)] <- param_names
+      }
+    }
+  }
   fit$param_names <- param_names
 
   # ---- Compute probability-scale intercepts (on natural-scale means) ----
