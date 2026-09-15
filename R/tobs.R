@@ -707,6 +707,10 @@ tobs <- function(formula,
   # unresolved name here clobbered the concrete label they had already set.
   fit$method <- route$method
   fit$dims   <- dims
+  # Provenance of `$draws` for the chain-vs-iid diagnostic gate. tulpa reads an
+  # unstamped fit as a chain, so a Laplace fit would otherwise have Rhat / ESS
+  # computed on its i.i.d. approximation draws and pass `check_diagnostics()`.
+  fit$draws_kind <- fit$draws_kind %||% route$draws
   # Last stop before the fit reaches the user, and the only point every family
   # passes through: a route whose fitter did not record its field's eta offset
   # gets it derived from the field the fit reports, so no door rebuilds eta

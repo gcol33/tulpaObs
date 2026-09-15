@@ -76,15 +76,23 @@
 # Public `method` names are sugar over the orthogonal internal triple
 # (engine, approx, correction). Each method names one fully-specified route;
 # invalid cross-products (e.g. NUTS with an SLA marginal) simply have no name.
+#
+# `draws` is the provenance of the fit's `$draws`, stamped as `draws_kind` at the
+# `tobs()` tail and read by tulpa's chain-vs-iid diagnostic gate. A sampler route
+# keeps an autocorrelated chain, so Rhat / ESS describe it. Every Laplace route
+# reports i.i.d. draws from its Gaussian (or grid-mixture) approximation, the
+# MI / Gibbs corrections included: their draws come from the Rubin-pooled normal,
+# not from the correction's own z-chain, so Rhat is ~1 and ESS ~ n_draws by
+# construction and a convergence pass on them carries no information.
 .tobs_method_table <- list(
-  laplace            = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "none"),
-  laplace_sla        = list(engine = "laplace",        approx = "simplified_laplace", correction = "none"),
-  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs"),
-  laplace_mi         = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "mi"),
-  pg_gibbs           = list(engine = "pg_gibbs",       approx = "gaussian_laplace",   correction = "none"),
-  nested_laplace     = list(engine = "nested_laplace", approx = "gaussian_laplace",   correction = "none"),
-  nested_laplace_sla = list(engine = "nested_laplace", approx = "simplified_laplace", correction = "none"),
-  nuts               = list(engine = "nuts",           approx = "gaussian_laplace",   correction = "none")
+  laplace            = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "none",  draws = "iid"),
+  laplace_sla        = list(engine = "laplace",        approx = "simplified_laplace", correction = "none",  draws = "iid"),
+  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs", draws = "iid"),
+  laplace_mi         = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "mi",    draws = "iid"),
+  pg_gibbs           = list(engine = "pg_gibbs",       approx = "gaussian_laplace",   correction = "none",  draws = "chain"),
+  nested_laplace     = list(engine = "nested_laplace", approx = "gaussian_laplace",   correction = "none",  draws = "iid"),
+  nested_laplace_sla = list(engine = "nested_laplace", approx = "simplified_laplace", correction = "none",  draws = "iid"),
+  nuts               = list(engine = "nuts",           approx = "gaussian_laplace",   correction = "none",  draws = "chain")
 )
 
 # Resolve a public method name to the internal (engine, approx, correction)

@@ -106,6 +106,7 @@
 "test-doc-surface.R","full",20,0,0.8
 "test-doc-surface.R","smoke",0,3,0.1
 "test-double-observer.R","smoke",26,2,0.4
+"test-draws-kind.R","smoke",3,2,0.1
 "test-dyn-abun-season-varying.R","smoke",20,3,0.3
 "test-dyn-abun-zip.R","full",10,0,207.8
 "test-dyn-abun-zip.R","smoke",5,2,3.3

@@ -1,5 +1,15 @@
 # tulpaObs NEWS
 
+## 0.2.6 (2026-09-15)
+
+* **Every fit states what its draws are (#326).** `tobs()` stamps
+  `fit$draws_kind` from the route table: `"chain"` for `nuts` / `pg_gibbs`,
+  `"iid"` for every Laplace route. tulpa read an unstamped fit as a chain, so
+  `tulpa::diagnostics()` computed Rhat / ESS on a Laplace fit's i.i.d.
+  approximation draws and `tulpa::check_diagnostics()` printed a convergence
+  pass on them. Those fits now get the approximation-reliability table and a
+  "not applicable" result.
+
 ## 0.2.5 (2026-09-15)
 
 * **Depends on tulpa 0.4.2.** On a joint fit whose outer axis was adaptively
