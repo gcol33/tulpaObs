@@ -842,6 +842,8 @@
   m  <- fit$model
   S  <- m$n_species; P <- length(nm$par)
   cm <- fit$ms_community
+  family <- attr(fit, "tobs_family")$name %||% m$model_type %||% "?"
+  .tobs_sbc_require_laplace_covariance(fit, family, "fit$vcov", fit$vcov)
   mu_draws <- .tobs_sbc_mvn_draws(fit$means, fit$vcov, n)  # n x (P + globals)
   # The draw inherits its column names from `fit$vcov`'s dimnames; a shared
   # block is read off it by NAME, so name them here rather than rely on that.
@@ -851,6 +853,9 @@
   for (s in seq_len(S)) {
     b_hat_s <- unlist(lapply(nm$arms, function(a) cm[[a$blup]][s, ]),
                       use.names = FALSE)
+    .tobs_sbc_require_laplace_covariance(
+      fit, family, sprintf("fit$ms_community$Bf/Cinv[[%d]]", s),
+      if (is.null(cm$Bf[[s]]) || is.null(cm$Cinv[[s]])) NULL else TRUE)
     # `Bf[[s]]` spans the FULL (mu, globals) vector, not just the RE arms: the
     # community EM's Newton solve treats a shared block as jointly informative
     # about each species' deviation even where it carries no RE of its own, so
@@ -1275,6 +1280,26 @@
 # formula, so neither `.tobs_sbc_reject_structure` nor
 # `.tobs_sbc_reject_visit_design` apply here.
 # ---------------------------------------------------------------------------
+
+# The covariance-based draw (`mu ~ N(means, vcov)`, or an arm's `beta ~
+# N(beta, V)`) exists only on the fitter that actually computes it -- the
+# deterministic Laplace-EM / two-Laplace routes. A sampled fit (nuts,
+# pg_gibbs) or a nested-engine fit this family's registration was never
+# extended to structurally never populates that field; that is a property of
+# `fit$method`, not a symptom of a bad fit. Refuse HERE, by name, before the
+# NULL/missing value reaches `.tobs_sbc_mvn_draws()` and is misreported as
+# "non-converged or rank-deficient" -- the message every OTHER registered
+# spec's scope rejection already gives (see `.tobs_sbc_reject_ms_abun_scope`).
+.tobs_sbc_require_laplace_covariance <- function(fit, family, label, value) {
+  if (!is.null(value) && !anyNA(value)) return(invisible(NULL))
+  stop(sprintf(paste0(
+    "SBC on %s() draws its posterior from the fit's own Laplace covariance ",
+    "(%s), which method = '%s' does not provide here -- this is a scope ",
+    "limit of the registered draw path for %s(), not a sign this fit failed ",
+    "to converge. Refit under the Laplace-EM method this registration reads, ",
+    "or wait for a chain-draw registration for %s()."),
+    family, label, fit$method %||% "?", family, family), call. = FALSE)
+}
 
 .tobs_sbc_mvn_draws <- function(mean, V, n) {
   p <- length(mean)
@@ -1953,6 +1978,21 @@
     stop("SBC on cover() is registered for positive = \"lognormal\" only ",
          "(got \"", fit$positive, "\"); the beta/beta_oi/lognormal_trunc/",
          "ordinal/gaussian arms are follow-ups.", call. = FALSE)
+  }
+  # v1 scope really is the two-Laplace `.dispatch_cover()` routes (`laplace`
+  # and `laplace_sla`, both of which call `decode_cover_hurdle()` and so both
+  # populate `fit$V_occ`/`V_pos`) -- nothing checked it: a nuts or
+  # nested_laplace(_sla) fit fell through to `.tobs_sbc_draws_cover()`, which
+  # reads those fields, finds them absent (the nested/sampled routes never
+  # compute them), and reported a converged, finite-vcov fit as
+  # "non-converged or rank-deficient". Refuse by method here instead.
+  if (!((fit$method %||% "laplace") %in% c("laplace", "laplace_sla"))) {
+    stop("SBC on cover() is registered for method = \"laplace\"/\"laplace_",
+         "sla\" only (got \"", fit$method, "\"); it draws the posterior ",
+         "from fit$V_occ/V_pos, the two-Laplace dispatcher's own per-arm ",
+         "covariance, which the nuts / nested_laplace(_sla) routes do not ",
+         "populate. This is a scope limit of the registered draw path, not ",
+         "a sign this fit failed to converge.", call. = FALSE)
   }
   enc <- fit$encoding
   list(presence  = .tobs_sbc_recombine(enc$fe_occ, NULL),
