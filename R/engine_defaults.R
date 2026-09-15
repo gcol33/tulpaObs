@@ -281,6 +281,33 @@
       assign(k, d[[k]], envir = env)
     }
   }
+  if (identical(engine, "pg_gibbs")) .tobs_check_pg_gibbs_budget(env)
+  invisible(NULL)
+}
+
+
+# pg_gibbs's `n.iter` is the TOTAL sweep count (warmup comes out of it), the
+# opposite of the NUTS convention where `n.iter` is the kept draws -- see the
+# CONVENTION note on the pg_gibbs row above. A control list shaped for NUTS
+# (`n.iter` == `n.warmup`, or an `n.iter` too small for the pg_gibbs default
+# `n.warmup`) leaves nothing to keep; every fitter computed that with
+# `seq.int(n.warmup + 1L, n.iter, by = n.thin)`, which errors opaquely
+# ("wrong sign in 'by' argument") instead of naming the convention.
+.tobs_check_pg_gibbs_budget <- function(env) {
+  if (!exists("n.iter", envir = env, inherits = FALSE) ||
+      !exists("n.warmup", envir = env, inherits = FALSE)) {
+    return(invisible(NULL))
+  }
+  n_iter <- get("n.iter", envir = env, inherits = FALSE)
+  n_warmup <- get("n.warmup", envir = env, inherits = FALSE)
+  if (n_iter <= n_warmup) {
+    stop(sprintf(paste(
+      "control$n.iter (%d) must be greater than control$n.warmup (%d) for",
+      "method = \"pg_gibbs\": unlike nuts, pg_gibbs's n.iter is the TOTAL",
+      "sweep count and n.warmup comes out of it, keeping n.iter - n.warmup",
+      "draws. Raise n.iter above n.warmup, e.g. n.iter = %d."
+    ), n_iter, n_warmup, n_warmup + 1500L), call. = FALSE)
+  }
   invisible(NULL)
 }
 
