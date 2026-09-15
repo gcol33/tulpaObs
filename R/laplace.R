@@ -112,13 +112,31 @@
   # unpenalised here -- the SPDE/NNGP solver carries its own fixed-effect prior
   # and tulpa_laplace() rejects `beta_prior` on the spatial path -- so the
   # prior is attached only when there is no spatial term.
+  #
+  # The MI / Gibbs corrections hand tulpa's M-step a hard latent draw where the
+  # EM hands it soft weights, through the same `m_step_encode` callback. The two
+  # need different encodings: the soft state arm is a sharp pseudo-binomial
+  # (M = 1000 trials a site), while a hard draw is complete data and must enter
+  # as the one Bernoulli trial it is. Each draw's M-step Hessian is the
+  # within-imputation variance Rubin's rules pool, so an M-fold encoding would
+  # shrink it M-fold and leave the pooled SE almost entirely between-draw
+  # variance. `draw_z` therefore tags its draw, and the encoder routes a tagged
+  # draw to the family's `hard_encode`.
+  encode <- function(weights, ...) {
+    if (isTRUE(attr(weights, "tobs_hard_draw"))) callbacks$hard_encode(weights, ...)
+    else callbacks$m_step_encode(weights, ...)
+  }
+  draw_z <- function(weights, ...) {
+    z <- callbacks$z_draw(weights, ...)
+    attr(z, "tobs_hard_draw") <- TRUE
+    z
+  }
   m_step_encode <- if (is.null(spatial)) {
     function(weights, ...) {
-      .attach_priors_to_blocks(callbacks$m_step_encode(weights, ...),
-                               model, prior_spec)
+      .attach_priors_to_blocks(encode(weights, ...), model, prior_spec)
     }
   } else {
-    callbacks$m_step_encode
+    encode
   }
 
   # MI / Gibbs draw hard z with R's RNG; seed it so the corrected fit
@@ -129,7 +147,7 @@
   em_result <- tulpa::tulpa_em_laplace(
     e_step        = callbacks$e_step,
     m_step_encode = m_step_encode,
-    draw_z        = callbacks$z_draw,
+    draw_z        = draw_z,
     max_iter      = max_iter,
     tol           = tol,
     damping       = damping,

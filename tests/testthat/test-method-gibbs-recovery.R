@@ -111,3 +111,88 @@ test_that("the prior threads into the Gibbs correction at the small-J ridge", {
   # Penalised correction bias must be materially smaller than unpenalised.
   expect_lt(abs(mean(est_pen) - truth_slope), abs(mean(est_unp) - truth_slope))
 })
+
+# The corrections hand the M-step a hard latent draw. That draw is complete data,
+# so each refit's Hessian is the complete-data information Rubin's rules pool as
+# within-imputation variance. Encoding it through the EM's M = 1000
+# pseudo-binomial shrinks the state arm's within-variance 1000-fold, leaving the
+# pooled SE almost pure between-draw variance, about a third of the exact-marginal
+# SE on the occu fixture below. The reference is the plain Laplace route, whose
+# SEs come from the exact-marginal Hessian. The mean tolerance is in units of that
+# SE, and the band on the SE ratio leaves room for the Monte-Carlo noise of the
+# default draw count.
+.gibbs_vs_laplace <- function(fits, info) {
+  ref <- fits$laplace
+  for (m in c("laplace_gibbs", "laplace_mi")) {
+    f <- fits[[m]]
+    expect_identical(names(f$means), names(ref$means), info = paste(info, m))
+    ratio <- f$sds / ref$sds
+    expect_true(all(ratio > 0.7 & ratio < 1.4),
+                info = sprintf("%s %s SE ratio: %s", info, m,
+                               paste(round(ratio, 2), collapse = " ")))
+    shift <- abs(f$means - ref$means) / ref$sds
+    expect_true(all(shift < 0.75),
+                info = sprintf("%s %s mean shift / SE: %s", info, m,
+                               paste(round(shift, 2), collapse = " ")))
+  }
+}
+
+.fit_three_routes <- function(fit_one) {
+  ms <- c("laplace", "laplace_gibbs", "laplace_mi")
+  stats::setNames(lapply(ms, function(m) fit_one(m, if (m == "laplace")
+    list(verbose = FALSE) else list(verbose = FALSE, seed = 7L))), ms)
+}
+
+test_that("the corrections pool the exact-marginal SEs on single-season occu", {
+  skip_if_fast()
+  skip_on_cran()
+  sim <- simulate_occu(N = 150L, J = 3L, seed = 4L)
+  fits <- .fit_three_routes(function(m, ctl)
+    tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
+         y = sim$y, method = m, control = ctl))
+  .gibbs_vs_laplace(fits, "occu")
+})
+
+test_that("dyn_occu fits under laplace_gibbs / laplace_mi and pools calibrated SEs", {
+  skip_if_fast()
+  skip_on_cran()
+  # A hard draw samples each site's whole occupancy path (forward-filter
+  # backward-sample) and is encoded by counting its transitions. A site with no
+  # interval starting in the origin state contributes no transition trial; a
+  # padded one-trial row per such site pulls gamma about 2.4 SE low here.
+  sim <- simulate_dyn_occu(N = 120L, J = 4L, n_seasons = 4L, seed = 3L)
+  fits <- .fit_three_routes(function(m, ctl)
+    tobs(~ 1, data = sim$data, family = dyn_occu(), detection = ~ 1,
+         colonization = ~ 1, extinction = ~ 1, y = sim$y, method = m,
+         control = ctl))
+  .gibbs_vs_laplace(fits, "dyn_occu")
+
+  sv <- simulate_dyn_occu(N = 150L, J = 3L, n_seasons = 5L,
+                          beta_gamma = c(-1, 0.8), seed = 1L)
+  fits <- .fit_three_routes(function(m, ctl)
+    tobs(~ 1, data = sv$data, family = dyn_occu(), detection = ~ 1,
+         colonization = ~ gamma_cov, extinction = ~ 1, y = sv$y, method = m,
+         control = ctl))
+  .gibbs_vs_laplace(fits, "dyn_occu season-varying")
+})
+
+test_that("the corrections pool the exact-marginal SEs on int_occu", {
+  skip_if_fast()
+  skip_on_cran()
+  N <- 150L
+  set.seed(22L)
+  x_cov <- rnorm(N); det_cov <- rnorm(N)
+  z <- rbinom(N, 1, plogis(0.2 + 0.7 * x_cov))
+  mk <- function(J, p0) {
+    p <- plogis(p0 + 0.4 * det_cov)
+    y <- matrix(0L, N, J)
+    for (i in seq_len(N)) if (z[i] == 1L) y[i, ] <- rbinom(J, 1, p[i])
+    y
+  }
+  dat <- data.frame(occ_cov = x_cov, det_cov = det_cov)
+  yy <- list(src1 = mk(4L, -0.2), src2 = mk(3L, -0.5))
+  fits <- .fit_three_routes(function(m, ctl)
+    tobs(~ occ_cov, data = dat, family = int_occu(), detection = ~ det_cov,
+         y = yy, method = m, control = ctl))
+  .gibbs_vs_laplace(fits, "int_occu")
+})

@@ -10,6 +10,18 @@
   pass on them. Those fits now get the approximation-reliability table and a
   "not applicable" result.
 
+* **`laplace_gibbs` / `laplace_mi` pool calibrated SEs (#334), and `dyn_occu()`
+  fits under both (#327).** The corrections' hard latent draws went through the
+  EM's M = 1000 pseudo-binomial encoding, so each refit's within-imputation
+  variance was ~0 and the pooled occupancy SEs came out at about a third of the
+  exact-marginal SEs (0.057 against 0.207 on a 150-site `occu()` fixture). A draw
+  is now encoded as complete data through the family's `hard_encode`, and the
+  pooled SEs agree with the `laplace` route's on `occu()`, `int_occu()` and
+  `dyn_occu()`. On `dyn_occu()` the correction steps had stopped with
+  `nrow(X) != length(y)`; a draw now samples each site's whole occupancy path
+  by forward-filter backward-sample, and a site with no transition from the
+  origin state contributes no transition trial.
+
 ## 0.2.5 (2026-09-15)
 
 * **Depends on tulpa 0.4.2.** On a joint fit whose outer axis was adaptively

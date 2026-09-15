@@ -358,6 +358,7 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     A00 <- 1 - gam_mat; A01 <- gam_mat                       # transition rows,
     A10 <- eps_mat;     A11 <- 1 - eps_mat                   #   [n_sites x n_int]
     w <- matrix(NA_real_, n_sites, n_seasons)                # smoothed P(z = 1 | y)
+    filt <- matrix(NA_real_, n_sites, n_seasons)             # filtered P(z = 1 | y_1:t)
     col_y <- numeric(n_sites); col_n <- numeric(n_sites)
     ext_y <- numeric(n_sites); ext_n <- numeric(n_sites)
     # Per-interval expected transition counts, kept only when an arm is
@@ -388,6 +389,7 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         v0 <- b0v[t] * pr0; v1 <- b1v[t] * pr1
         ct <- v0 + v1; cs[t] <- ct; a[t, 1] <- v0 / ct; a[t, 2] <- v1 / ct
       }
+      filt[i, ] <- a[, 2]
       # backward (scaled) + smoothed marginals / pairwise joints, T-1 .. 1. The
       # joint at backward step t is over seasons (t, t+1) = interval t.
       bw0 <- 1; bw1 <- 1                                     # beta_T(z) = 1
@@ -412,6 +414,10 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     attr(w, "ext_y") <- ext_y; attr(w, "ext_n") <- ext_n
     attr(w, "col_y_mat") <- col_y_mat; attr(w, "col_n_mat") <- col_n_mat
     attr(w, "ext_y_mat") <- ext_y_mat; attr(w, "ext_n_mat") <- ext_n_mat
+    # The filtered chain and its transition rates, which z_draw() needs to sample
+    # a whole occupancy path per site (forward-filter backward-sample).
+    attr(w, "filtered") <- filt
+    attr(w, "gamma") <- gam_mat; attr(w, "epsilon") <- eps_mat
     list(weights = w)
   }
 
@@ -531,16 +537,28 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
     )
   }
 
+  # A hard draw of the latent occupancy path for the MI / Gibbs corrections,
+  # which tulpa feeds back through m_step_encode() in place of the soft weights.
+  # The seasons of a site are a Markov chain, so they are drawn jointly by
+  # forward-filter backward-sample from the E-step's filtered probabilities and
+  # transition rates: z_T ~ P(z_T | y), then z_t ~ P(z_t | z_{t+1}, y_1:t), which
+  # is proportional to P(z_t | y_1:t) A(z_t, z_{t+1}). Drawing each season from
+  # its smoothed marginal instead would ignore the chain and miscount the
+  # transitions hard_encode() reads off the path.
   z_draw <- function(weights, ...) {
-    w <- weights
+    filt    <- attr(weights, "filtered")
+    gam_mat <- attr(weights, "gamma")
+    eps_mat <- attr(weights, "epsilon")
+    u <- matrix(stats::runif(n_sites * n_seasons), n_sites, n_seasons)
     z <- matrix(0L, n_sites, n_seasons)
-    for (i in seq_len(n_sites)) {
-      for (t in seq_len(n_seasons)) {
-        idx <- (i - 1) * n_seasons + t
-        if (ad[idx]) z[i, t] <- 1L
-        else z[i, t] <- rbinom(1, 1, clamp_w(w[i, t]))
-      }
+    z[, n_seasons] <- as.integer(u[, n_seasons] < filt[, n_seasons])
+    for (t in (n_seasons - 1L):1L) {
+      occ_next <- z[, t + 1L] == 1L
+      a1 <- filt[, t] * ifelse(occ_next, 1 - eps_mat[, t], eps_mat[, t])
+      a0 <- (1 - filt[, t]) * ifelse(occ_next, gam_mat[, t], 1 - gam_mat[, t])
+      z[, t] <- as.integer(u[, t] * (a0 + a1) < a1)
     }
+    z[matrix(ad, n_sites, n_seasons, byrow = TRUE)] <- 1L
     z
   }
 
@@ -571,7 +589,9 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
         }
       }
     }
-    col_n <- pmax(col_n, 1L); ext_n <- pmax(ext_n, 1L)
+    # A site with no interval starting in the origin state has no transition to
+    # score; it stays a zero-trial row, which the engine drops, as in the
+    # season-varying arm.
     col_hard <- if (col_sv)
       list(y = as.integer(as.vector(t(cym))),
            n_trials = as.integer(as.vector(t(cnm))), X = X_col,
