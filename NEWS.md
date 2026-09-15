@@ -22,6 +22,14 @@
   by forward-filter backward-sample, and a site with no transition from the
   origin state contributes no transition trial.
 
+* **The goodness-of-fit doors honour their generics' arguments (#328).**
+  `test_dispersion()`, `test_outliers()`, `test_zero_inflation()` and
+  `check_model()` take tulpa's `nsim` beside `n.samples` and a `seed` that is
+  scoped to the call; `test_dispersion()` takes `alternative` (default
+  `"greater"`, the previous p-value). An unrecognised argument, or a non-NULL
+  `observed`, is now an error on these and on `pit_residuals()` instead of being
+  dropped into `...`.
+
 ## 0.2.5 (2026-09-15)
 
 * **Depends on tulpa 0.4.2.** On a joint fit whose outer axis was adaptively

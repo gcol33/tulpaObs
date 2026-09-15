@@ -7,18 +7,53 @@
 \alias{test_outliers.tobs_fit}
 \title{Goodness-of-fit tests for a tobs fit}
 \usage{
-\method{test_dispersion}{tobs_fit}(object, n.samples = 250, ...)
+\method{test_dispersion}{tobs_fit}(
+  object,
+  n.samples = 250,
+  nsim = NULL,
+  seed = NULL,
+  observed = NULL,
+  alternative = c("greater", "two.sided", "less"),
+  ...
+)
 
-\method{test_zero_inflation}{tobs_fit}(object, n.samples = 250, ...)
+\method{test_zero_inflation}{tobs_fit}(
+  object,
+  n.samples = 250,
+  nsim = NULL,
+  seed = NULL,
+  observed = NULL,
+  ...
+)
 
-\method{test_outliers}{tobs_fit}(object, n.samples = 250, ...)
+\method{test_outliers}{tobs_fit}(
+  object,
+  n.samples = 250,
+  nsim = NULL,
+  seed = NULL,
+  observed = NULL,
+  ...
+)
 }
 \arguments{
 \item{object}{A fitted \code{tobs_fit}.}
 
 \item{n.samples}{Number of posterior-predictive replicates to simulate.}
 
-\item{...}{Unused.}
+\item{nsim}{The same budget under the name the \pkg{tulpa} default methods
+use; overrides \code{n.samples} when given.}
+
+\item{seed}{Optional random seed for the replicates; the caller's RNG stream
+is restored afterwards.}
+
+\item{observed}{Must be \code{NULL}: a tobs fit scores the response it was
+fitted to. Accepted so a call spelled for the tulpa default reaches the
+method.}
+
+\item{alternative}{Tail of the dispersion p-value: \code{"greater"} (default,
+over-dispersion), \code{"two.sided"} or \code{"less"}.}
+
+\item{...}{Must be empty; an unrecognised argument is an error.}
 }
 \value{
 A list with the observed statistic (\code{observed}), its

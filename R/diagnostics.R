@@ -878,30 +878,62 @@ ppc.tobs_fit <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
 #' @param seed Optional RNG seed for the posterior-draw selection, forwarded by
 #'   [tulpa::test_uniformity()]. Set it and repeated calls return the same
 #'   residuals; the caller's RNG stream is restored afterwards.
-#' @param observed Accepted and ignored: [tulpa::test_uniformity()] forwards it
-#'   for models whose response is supplied separately, and a latent-state fit
-#'   carries its own.
-#' @param ... Unused.
+#' @param observed Must be `NULL`, which is what [tulpa::test_uniformity()]
+#'   forwards by default: a latent-state fit scores the response it was fitted
+#'   to.
+#' @param ... Must be empty; an unrecognised argument is an error.
 #' @return Numeric vector of PIT residuals.
 #' @seealso [tulpa::test_uniformity()] for the uniformity test on the result.
 #' @export
 pit_residuals.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
                                    seed = NULL, observed = NULL, ...) {
-  # tulpa::test_uniformity() calls pit_residuals(object, observed=, nsim=,
-  # seed=). None of those is a prefix of `n.samples`, so without these formals
-  # all three fell into `...`: `nsim = 2000` ran at 250 draws and `seed` did not
-  # reach the unseeded draw selection, so the same call gave a different KS
-  # statistic each time.
-  if (!is.null(nsim)) n.samples <- as.integer(nsim)
-  if (!is.null(seed)) {
-    if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
-      old <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
-      on.exit(assign(".Random.seed", old, envir = globalenv()), add = TRUE)
-    } else {
-      on.exit(rm(".Random.seed", envir = globalenv()), add = TRUE)
-    }
-    set.seed(as.integer(seed))
+  n.samples <- .tobs_sim_args("pit_residuals()", n.samples, nsim, observed,
+                              list(...))
+  .tobs_with_seed(seed, .tobs_pit_residuals(object, n.samples))
+}
+
+# The tulpa goodness-of-fit generics take `...`, and their default methods spell
+# the simulation budget `nsim` and take `seed` and `observed`. The tobs methods
+# keep the package's dotted `n.samples` and accept tulpa's spelling beside it,
+# `nsim` winning when both are given; `tulpa::test_uniformity()` forwards all
+# three to pit_residuals(). Anything else that reaches `...` is refused, since
+# the generic would otherwise drop it without a word. `observed` is accepted only
+# as NULL: a latent-state fit scores the response it was fitted to.
+.tobs_sim_args <- function(fn, n.samples, nsim, observed, dots) {
+  if (length(dots)) {
+    nm <- names(dots) %||% character(length(dots))
+    nm[!nzchar(nm)] <- "<unnamed>"
+    stop(sprintf("%s: unused argument%s %s. The budget is `n.samples` (or `nsim`).",
+                 fn, if (length(nm) > 1L) "s" else "",
+                 paste(sprintf("`%s`", nm), collapse = ", ")), call. = FALSE)
   }
+  if (!is.null(observed)) {
+    stop(sprintf(paste0("%s: `observed` is not used on a tobs fit, which scores ",
+                        "the response it was fitted to."), fn), call. = FALSE)
+  }
+  n <- if (is.null(nsim)) n.samples else nsim
+  if (length(n) != 1L || !is.numeric(n) || !is.finite(n) || n < 1) {
+    stop(sprintf("%s: the simulation budget must be one positive number.", fn),
+         call. = FALSE)
+  }
+  as.integer(n)
+}
+
+# Evaluate `code` under `seed`, restoring the caller's RNG stream afterwards. A
+# NULL seed evaluates it on the caller's stream.
+.tobs_with_seed <- function(seed, code) {
+  if (is.null(seed)) return(code)
+  if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+    old <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
+    on.exit(assign(".Random.seed", old, envir = globalenv()), add = TRUE)
+  } else {
+    on.exit(rm(".Random.seed", envir = globalenv()), add = TRUE)
+  }
+  set.seed(as.integer(seed))
+  code
+}
+
+.tobs_pit_residuals <- function(object, n.samples) {
   if (inherits(object, "cover_fit")) {
     return(.tobs_pit_cover(object, n.samples))
   }
@@ -938,7 +970,16 @@ pit_residuals.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
 #'
 #' @param object A fitted `tobs_fit`.
 #' @param n.samples Number of posterior-predictive replicates to simulate.
-#' @param ... Unused.
+#' @param nsim The same budget under the name the \pkg{tulpa} default methods
+#'   use; overrides `n.samples` when given.
+#' @param seed Optional random seed for the replicates; the caller's RNG stream
+#'   is restored afterwards.
+#' @param observed Must be `NULL`: a tobs fit scores the response it was
+#'   fitted to. Accepted so a call spelled for the tulpa default reaches the
+#'   method.
+#' @param alternative Tail of the dispersion p-value: `"greater"` (default,
+#'   over-dispersion), `"two.sided"` or `"less"`.
+#' @param ... Must be empty; an unrecognised argument is an error.
 #' @return A list with the observed statistic (`observed`), its
 #'   posterior-predictive expectation (`expected`), their ratio (`ratio`)
 #'   and a tail p-value (`p.value`). The names are the same on every
@@ -972,22 +1013,51 @@ NULL
 
 #' @rdname tobs_gof_tests
 #' @export
-test_dispersion.tobs_fit <- function(object, n.samples = 250, ...) {
-  if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
-    return(.tobs_test_dispersion_count(object, n.samples))
-  }
-  .tobs_gof_require_single(object, "test_dispersion()")
-  sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
-  obs_var <- var(rowSums(y_obs * (y_obs >= 0), na.rm = TRUE))
-  sim_vars <- vapply(sims, function(ys) var(rowSums(ys * (ys >= 0), na.rm = TRUE)), double(1))
-  list(observed = obs_var, expected = mean(sim_vars),
-       ratio = obs_var / mean(sim_vars), p.value = mean(sim_vars >= obs_var),
-       sim = sim_vars)
+test_dispersion.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
+                                     seed = NULL, observed = NULL,
+                                     alternative = c("greater", "two.sided",
+                                                     "less"), ...) {
+  n.samples   <- .tobs_sim_args("test_dispersion()", n.samples, nsim, observed,
+                                list(...))
+  alternative <- match.arg(alternative)
+  res <- .tobs_with_seed(seed, {
+    if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
+      .tobs_test_dispersion_count(object, n.samples)
+    } else {
+      .tobs_gof_require_single(object, "test_dispersion()")
+      sims <- simulate(object, nsim = n.samples); y_obs <- object$model$y
+      obs_var <- var(rowSums(y_obs * (y_obs >= 0), na.rm = TRUE))
+      sim_vars <- vapply(sims, function(ys) var(rowSums(ys * (ys >= 0), na.rm = TRUE)), double(1))
+      list(observed = obs_var, expected = mean(sim_vars),
+           ratio = obs_var / mean(sim_vars), sim = sim_vars)
+    }
+  })
+  list(observed = res$observed, expected = res$expected, ratio = res$ratio,
+       p.value = .tobs_sim_p_value(res$sim, res$observed, alternative),
+       alternative = alternative, sim = res$sim)
+}
+
+# Simulation tail probability of the observed statistic, under the three
+# alternatives tulpa's test_dispersion() default offers.
+.tobs_sim_p_value <- function(sim, obs, alternative) {
+  p_greater <- mean(sim >= obs)
+  p_less    <- mean(sim <= obs)
+  switch(alternative,
+         greater   = p_greater,
+         less      = p_less,
+         two.sided = min(2 * min(p_greater, p_less), 1))
 }
 
 #' @rdname tobs_gof_tests
 #' @export
-test_zero_inflation.tobs_fit <- function(object, n.samples = 250, ...) {
+test_zero_inflation.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
+                                         seed = NULL, observed = NULL, ...) {
+  n.samples <- .tobs_sim_args("test_zero_inflation()", n.samples, nsim,
+                              observed, list(...))
+  .tobs_with_seed(seed, .tobs_test_zero_inflation(object, n.samples))
+}
+
+.tobs_test_zero_inflation <- function(object, n.samples) {
   if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
     return(.tobs_test_zero_inflation_count(object, n.samples))
   }
@@ -1001,7 +1071,14 @@ test_zero_inflation.tobs_fit <- function(object, n.samples = 250, ...) {
 
 #' @rdname tobs_gof_tests
 #' @export
-test_outliers.tobs_fit <- function(object, n.samples = 250, ...) {
+test_outliers.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
+                                   seed = NULL, observed = NULL, ...) {
+  n.samples <- .tobs_sim_args("test_outliers()", n.samples, nsim, observed,
+                              list(...))
+  .tobs_with_seed(seed, .tobs_test_outliers(object, n.samples))
+}
+
+.tobs_test_outliers <- function(object, n.samples) {
   if ((object$model$model_type %||% "NULL") %in% .tobs_count_gof_families) {
     return(.tobs_test_outliers_count(object, n.samples))
   }
@@ -1038,9 +1115,13 @@ test_outliers.tobs_fit <- function(object, n.samples = 250, ...) {
 #' @param coords Optional `n_sites x 2` coordinate matrix. Adds Moran's I on
 #'   the occupancy residuals and the correlogram panel.
 #' @param n.samples Posterior samples for simulation tests.
+#' @param nsim The same budget under the name [tulpa::check_model()]'s default
+#'   uses; overrides `n.samples` when given.
+#' @param seed Optional random seed for the simulation tests; the caller's RNG
+#'   stream is restored afterwards.
 #' @param plot Draw the panel. `FALSE` prints the report alone, for a log or a
 #'   headless run.
-#' @param ... Unused.
+#' @param ... Must be empty; an unrecognised argument is an error.
 #' @return Invisibly, the diagnostic results: `waic`, `dic`, `cpo`, `ppc`,
 #'   `zero_inflation`, `dispersion`, `pit`, `uniformity`, and `moran` when
 #'   `coords` is supplied.
@@ -1048,7 +1129,12 @@ test_outliers.tobs_fit <- function(object, n.samples = 250, ...) {
 #' @importFrom grDevices adjustcolor
 #' @export
 check_model.tobs_fit <- function(object, coords = NULL, n.samples = 250,
-                                 plot = TRUE, ...) {
+                                 nsim = NULL, seed = NULL, plot = TRUE, ...) {
+  n.samples <- .tobs_sim_args("check_model()", n.samples, nsim, NULL, list(...))
+  .tobs_with_seed(seed, .tobs_check_model(object, coords, n.samples, plot))
+}
+
+.tobs_check_model <- function(object, coords, n.samples, plot) {
   cat("=== tobs Model Diagnostics ===\n\n")
   if (identical(object$method, "nuts")) {
     cat(sprintf("Sampler: %d samples, %d divergent, mean accept = %.3f\n",

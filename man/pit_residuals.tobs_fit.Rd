@@ -26,11 +26,11 @@ forwards under. An explicit \code{nsim} wins, so a uniformity test run at
 \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}}. Set it and repeated calls return the same
 residuals; the caller's RNG stream is restored afterwards.}
 
-\item{observed}{Accepted and ignored: \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}} forwards it
-for models whose response is supplied separately, and a latent-state fit
-carries its own.}
+\item{observed}{Must be \code{NULL}, which is what \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}}
+forwards by default: a latent-state fit scores the response it was fitted
+to.}
 
-\item{...}{Unused.}
+\item{...}{Must be empty; an unrecognised argument is an error.}
 }
 \value{
 Numeric vector of PIT residuals.

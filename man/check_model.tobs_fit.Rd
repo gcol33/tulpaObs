@@ -4,7 +4,15 @@
 \alias{check_model.tobs_fit}
 \title{Comprehensive model checking}
 \usage{
-\method{check_model}{tobs_fit}(object, coords = NULL, n.samples = 250, plot = TRUE, ...)
+\method{check_model}{tobs_fit}(
+  object,
+  coords = NULL,
+  n.samples = 250,
+  nsim = NULL,
+  seed = NULL,
+  plot = TRUE,
+  ...
+)
 }
 \arguments{
 \item{object}{A \code{tobs_fit} object.}
@@ -14,10 +22,16 @@ the occupancy residuals and the correlogram panel.}
 
 \item{n.samples}{Posterior samples for simulation tests.}
 
+\item{nsim}{The same budget under the name \code{\link[tulpa:check_model]{tulpa::check_model()}}'s default
+uses; overrides \code{n.samples} when given.}
+
+\item{seed}{Optional random seed for the simulation tests; the caller's RNG
+stream is restored afterwards.}
+
 \item{plot}{Draw the panel. \code{FALSE} prints the report alone, for a log or a
 headless run.}
 
-\item{...}{Unused.}
+\item{...}{Must be empty; an unrecognised argument is an error.}
 }
 \value{
 Invisibly, the diagnostic results: \code{waic}, \code{dic}, \code{cpo}, \code{ppc},
