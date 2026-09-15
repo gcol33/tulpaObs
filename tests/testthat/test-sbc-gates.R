@@ -54,3 +54,38 @@ test_that("the structured-term half of the gate still fires", {
   attr(f, "tobs_family") <- list(name = "occu")
   expect_error(.tobs_sbc_reject_unsupported(f), "structured term")
 })
+
+test_that("the RE half of the gate fires from `fit$re` alone (#340)", {
+  # `.tobs_em_nested_laplace()` stamps `fit$re` with the term spec (the same
+  # rule `fit$spatial`/`fit$temporal` are caught by) but never populates
+  # `fit$re_effects` -- checking only `re_effects` let a nested_laplace RE fit
+  # pass this gate and reach the nested route's own "requires at least one
+  # latent block" error instead of the intended refusal.
+  f_re <- structure(list(model = list(structured_terms = NULL), re = list(1)),
+                    class = "tobs_fit")
+  attr(f_re, "tobs_family") <- list(name = "occu")
+  expect_error(.tobs_sbc_reject_unsupported(f_re), "structured term \\(re\\)")
+
+  f_reeff <- structure(
+    list(model = list(structured_terms = NULL), re_effects = list(g = 1)),
+    class = "tobs_fit")
+  attr(f_reeff, "tobs_family") <- list(name = "occu")
+  expect_error(.tobs_sbc_reject_unsupported(f_reeff), "structured term \\(re\\)")
+})
+
+test_that("sbc() on a nested_laplace fit with (1 | g) refuses like laplace (#340)", {
+  skip_on_cran()
+  sim <- simulate_occu(N = 60, J = 4, n_occ_covs = 1, seed = 11)
+  d <- sim$data
+  set.seed(6)
+  d$g <- factor(sample(letters[1:6], nrow(d), TRUE))
+  fr <- tobs(~ occ_cov1 + (1 | g), data = d, family = occu(),
+             detection = ~ det_cov1, y = sim$y, method = "nested_laplace",
+             control = list(verbose = FALSE))
+  expect_false(is.null(fr$re))
+  err <- tryCatch(sbc(fr, n.sim = 1L, n.draws = 10L, n.ref = 5L),
+                  error = function(e) e)
+  expect_s3_class(err, "error")
+  expect_match(conditionMessage(err), "structured term \\(re\\)")
+  expect_no_match(conditionMessage(err), "requires at least one latent block")
+})

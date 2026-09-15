@@ -592,7 +592,16 @@
   if (is.list(st)) present <- names(Filter(Negate(is.null), st))
   if (!is.null(fit$spatial))   present <- unique(c(present, "spatial"))
   if (!is.null(fit$temporal))  present <- unique(c(present, "temporal"))
-  if (!is.null(fit$re_effects)) present <- unique(c(present, "re"))
+  # `fit$re` is the term spec every route stamps when a `re()`/`(1|g)` term
+  # is in the formula (laplace.R, em_nested_laplace.R, occu_fit.R,
+  # nuts_chains.R), the same rule spatial/temporal are caught by above.
+  # `fit$re_effects` is only the deterministic-laplace path's computed BLUP
+  # summary -- absent on a nested_laplace RE fit, which is what let one pass
+  # this gate and reach the nested route's "requires at least one latent
+  # block" refusal instead of the intended one below.
+  if (!is.null(fit$re) || !is.null(fit$re_effects)) {
+    present <- unique(c(present, "re"))
+  }
   if (!length(present)) return(invisible(NULL))
   stop("SBC on family ", sQuote(attr(fit, "tobs_family")$name %||% "?"),
        " is registered for a fit whose sites are conditionally independent ",
