@@ -234,6 +234,35 @@ test_that("predict(terms=) varies one term and rejects a longer vector", {
   expect_s3_class(plot(pr), "tobs_prediction")
 })
 
+test_that("predict(terms=)/tobs_marginal_effect() refuse by name on families with no model$X_processes (#339)", {
+  skip_on_cran()
+  # occu_multi() / t_occu() keep their own X_state / X_occ design (not the
+  # generic model$X_processes single-block layout), so the old code read an
+  # empty column, range()'d nothing, and seq() died on infinite bounds.
+  sm <- simulate_occu_multi(S = 2, N = 40, J = 3, seed = 1)
+  fm <- tobs(~ scov1, data = sm$data, family = occu_multi(),
+             detection = ~ 1, y = sm$y, species = sm$species,
+             control = list(verbose = FALSE, progress = FALSE))
+  err <- expect_error(tobs_marginal_effect(fm, "scov1"), "model\\$X_processes")
+  expect_no_match(conditionMessage(err), "finite number")
+
+  # ms_occu() (community): same X_processes gap.
+  smo <- simulate_ms_occu(N = 40, J = 3, n_species = 5, seed = 1)
+  fo <- tobs(~ x, data = smo$data, family = ms_occu(), detection = ~ 1,
+             y = smo$y, species = paste0("sp", 1:5),
+             control = list(verbose = FALSE))
+  expect_error(tobs_marginal_effect(fo, "x"), "model\\$X_processes")
+
+  # occu_categorical() carries no `$model` at all -- the old code reached
+  # sprintf() with a NULL/zero-length argument and stop()'d with an empty
+  # message.
+  sc <- simulate_occu_categorical(N = 200L, seed = 5)
+  dat <- cbind(sc$data, y = sc$y)
+  fc <- tobs(y ~ x, data = dat, family = occu_categorical(), method = "laplace")
+  err2 <- expect_error(tobs_marginal_effect(fc, "x"), "model\\$X_processes")
+  expect_true(nzchar(conditionMessage(err2)))
+})
+
 test_that("predict(quantiles=) drives the levels AND the column names", {
   res <- .fit_simple()
   fit <- res$fit

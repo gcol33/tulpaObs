@@ -1450,10 +1450,40 @@ predict.tobs_fit <- function(object, X.0 = NULL,
 # Terms-based prediction: the response over the range of one design column.
 predict_terms <- function(object, terms, type, quantiles, n_points) {
   model <- object$model
+
+  # This door reads the design off model$X_processes / model$process_info,
+  # the layout the generic single-block observation families
+  # (occu/dyn_occu/int_occu/fp_occu/abun/removal/distance/dyn_abun/ms_abun/
+  # ms_distance) build. Families that store their design elsewhere (ms_occu's
+  # X_occ/X_det, occu_multi's/t_occu's own per-arm designs) or carry no
+  # `$model` at all (occu_categorical, the multiarm-S3 fits) got an empty
+  # column here, `range()` of nothing, and `seq()` failed on infinite bounds
+  # -- or, when `process_info` was NULL too, an empty `stop()` message.
+  # Refuse by name instead of reaching either.
+  if (is.null(model) || is.null(model$X_processes)) {
+    stop(sprintf(paste0(
+      "predict(type = \"terms\") / tobs_marginal_effect() reads the design ",
+      "off model$X_processes, which this fit ('%s', model_type '%s') does ",
+      "not carry. It is wired for occu, dyn_occu, int_occu, fp_occu, abun, ",
+      "removal, distance, dyn_abun, ms_abun and ms_distance; community, ",
+      "multi-species, categorical and cover-family fits keep their design ",
+      "elsewhere and are not yet served by this door."),
+      attr(object, "tobs_family")$name %||% "?",
+      model$model_type %||% "?"), call. = FALSE)
+  }
+
   draws <- object$draws
   pi_list <- model$process_info
 
   proc_idx <- if (type == "detection") 2 else 1
+  if (proc_idx > length(model$X_processes) ||
+      is.null(model$X_processes[[proc_idx]])) {
+    stop(sprintf(paste0(
+      "predict(type = \"terms\") / tobs_marginal_effect() has no design for ",
+      "process %d on this fit ('%s', model_type '%s')."), proc_idx,
+      attr(object, "tobs_family")$name %||% "?",
+      model$model_type %||% "?"), call. = FALSE)
+  }
   p_proc <- pi_list[[proc_idx]]$p
   X_orig <- model$X_processes[[proc_idx]]
   coef_names <- pi_list[[proc_idx]]$coef_names
