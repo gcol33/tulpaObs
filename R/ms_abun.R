@@ -676,6 +676,11 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
     zero_inflated = is_zi,
     zi_omega = if (is_zi) unname(as.numeric(raw$omega)) else NA_real_,
     log_lik = raw$log_lik %||% NA_real_,
+    # Replicated into `log_prob`, which is what logLik() / AIC() / glance()
+    # read, as the single-species abun() fit does; N = observed
+    # (species, site, visit) counts.
+    log_prob = rep(raw$log_lik %||% NA_real_, n_pseudo),
+    N = sum(!is.na(model$y)),
     K_max = raw$K_max,
     ms_community = list(
       Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,

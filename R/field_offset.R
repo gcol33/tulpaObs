@@ -114,15 +114,34 @@
 # a fit that has no usable value at all, which is the PG-Gibbs case: its
 # `log_prob` is all NA, so `mean()` is NaN and `logLik()` / `AIC()` / `BIC()`
 # come back NaN.
+#
+# When no value can be computed, a placeholder `log_prob` holding no finite
+# entry is dropped and the reason recorded, so `logLik()` reports NA with
+# `attr(, "declined")` rather than the NaN its mean would give.
 .tobs_attach_sampled_loglik <- function(fit) {
   cur <- tryCatch(as.numeric(stats::logLik(fit)), error = function(e) NA_real_)
   if (length(cur) == 1L && is.finite(cur)) return(fit)
-  if (!is.matrix(fit[["draws"]]) || !nrow(fit[["draws"]])) return(fit)
-  ll <- tryCatch(sum(as.numeric(.tobs_loglik_at_mean(fit, n.draws = 1L))),
-                 error = function(e) NA_real_)
-  if (!is.finite(ll)) return(fit)
-  fit$log_lik  <- ll
-  fit$log_prob <- rep(ll, max(1L, length(fit$log_prob)))
+  reason <- NULL
+  ll <- NA_real_
+  if (!is.matrix(fit[["draws"]]) || !nrow(fit[["draws"]])) {
+    reason <- "no_posterior_draws"
+  } else {
+    ll <- tryCatch(sum(as.numeric(.tobs_loglik_at_mean(fit, n.draws = 1L))),
+                   error = function(e) {
+                     reason <<- paste("pointwise_loglik_failed:", conditionMessage(e))
+                     NA_real_
+                   })
+    if (is.null(reason) && !is.finite(ll)) reason <- "non_finite_loglik_at_mean"
+  }
+  if (is.finite(ll)) {
+    fit$log_lik  <- ll
+    fit$log_prob <- rep(ll, max(1L, length(fit$log_prob)))
+    return(fit)
+  }
+  if (!is.null(fit$log_prob) && !any(is.finite(fit$log_prob))) {
+    fit$log_prob <- NULL
+    fit$log_evidence_declined <- fit$log_evidence_declined %||% reason
+  }
   fit
 }
 

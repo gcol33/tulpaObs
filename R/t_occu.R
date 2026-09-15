@@ -230,6 +230,41 @@ t_occu <- function() {
   list(psi = psi, p = p, z = z)
 }
 
+# Pointwise log-likelihood [n_draws x n_obs] for t_occu(), one observation per
+# surveyed (site, season): the seasons are conditionally independent given psi,
+# so each is the single-season two-state marginal over z,
+#   psi p^k (1 - p)^(n - k) + (1 - psi) 1{k = 0},
+# with k detections in n visits. The year effect enters psi at its posterior
+# mean (fit$temporal_field), as a sampled field does on the other families'
+# criteria; the coefficient draws carry the rest. A season with no visits is not
+# an observation and has no column.
+.tobs_ploglik_t_occu <- function(object, n.draws = 1000L, n.threads = 1L) {
+  model <- object$model
+  draws <- object$draws
+  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
+    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
+  }
+  p_psi <- model$process_info[[1L]]$p; p_p <- model$process_info[[2L]]$p
+  n_seasons <- model$n_seasons
+  eta_t <- object$temporal_field %||% rep(0, n_seasons)
+  obs <- which(model$nvis > 0L)                      # column-major (site, season)
+  site_of <- (obs - 1L) %% model$n_sites + 1L
+  seas_of <- (obs - 1L) %/% model$n_sites + 1L
+  n <- model$nvis[obs]; k <- model$kdet[obs]
+  detected <- k > 0L
+  t(vapply(seq_len(nrow(draws)), function(d) {
+    eta_psi <- as.vector(model$X_occ %*% draws[d, seq_len(p_psi)])
+    eta_p   <- as.vector(model$X_det %*% draws[d, p_psi + seq_len(p_p)])
+    log_psi   <- stats::plogis(eta_psi[site_of] + eta_t[seas_of], log.p = TRUE)
+    log_1mpsi <- stats::plogis(-(eta_psi[site_of] + eta_t[seas_of]), log.p = TRUE)
+    log_p   <- stats::plogis(eta_p[site_of], log.p = TRUE)
+    log_1mp <- stats::plogis(-eta_p[site_of], log.p = TRUE)
+    occ <- log_psi + k * log_p + (n - k) * log_1mp
+    ifelse(detected, occ, pmax(occ, log_1mpsi) +
+             log1p(exp(-abs(occ - log_1mpsi))))
+  }, numeric(length(obs))))
+}
+
 # residuals() for t_occu(): the per-(site, season) smoothed state posterior
 # against that season's ever-detected indicator -- the same construction
 # .tobs_residuals_dynamic() uses for dyn_occu(), minus the colonization /

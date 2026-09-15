@@ -161,6 +161,7 @@
 "test-jsdm-community.R","smoke",33,4,4.4
 "test-jsdm-spatial.R","full",31,0,32
 "test-jsdm-spatial.R","smoke",4,3,0.1
+"test-loglik-reported.R","smoke",4,3,0.1
 "test-method-gibbs-recovery.R","smoke",0,8,0.1
 "test-methods.R","smoke",150,2,3.3
 "test-ms-abun-factor.R","full",27,0,3807.5

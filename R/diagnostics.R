@@ -289,6 +289,9 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   if (identical(object$model$model_type %||% "NULL", "dyn_int_occu")) {
     return(.tobs_ploglik_dyn_int_occu(object, nd, n.threads = n.threads))
   }
+  if (identical(object$model$model_type %||% "NULL", "t_occu")) {
+    return(.tobs_ploglik_t_occu(object, nd, n.threads = n.threads))
+  }
   # Community occupancy (ms_occu / ms_dyn_occu / ms_int_occu) and community
   # binned distance sampling (ms_distance): per-(species, site) marginal scored
   # over the community-mean pseudo-draws with per-species BLUP deviations
@@ -353,7 +356,8 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
 # posterior-mean evaluation hands it a fit whose `draws` is the single mean row.
 .TOBS_PLOGLIK_FIT_FAMILIES <- c(
   "royle_nichols", "occu_ttd", "occu_multi", "double_observer",
-  "gdistremoval", "distsamp_open", "dyn_int_occu", "ms_distance")
+  "gdistremoval", "distsamp_open", "dyn_int_occu", "ms_distance", "ms_count",
+  "t_occu")
 
 # Pointwise log-likelihood at the posterior mean of the parameters, the plug-in
 # DIC needs (length n_obs). The draw-matrix families evaluate their per-family

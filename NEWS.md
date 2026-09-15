@@ -35,6 +35,14 @@
   Those fits carry no `model$model_type`, and the family-handler lookup failed
   with `argument is of length zero`.
 
+* **`logLik()` is finite on `jsdm()` / `ms_count()` sampler fits, `t_occu()` and
+  `ms_abun()` Laplace fits (#330).** The fill at the `tobs()` tail now reaches
+  the community count kernel, `t_occu()` gains a pointwise log-likelihood (one
+  observation per surveyed site-season, which also gives it `waic()` / `loo()`),
+  and `ms_abun()` Laplace / nested-Laplace fits record `N` and replicate their
+  log marginal into `log_prob`, as `abun()` does. A fit with nothing to fill from
+  now reports `NA` with `attr(, "declined")` rather than `NaN`.
+
 ## 0.2.5 (2026-09-15)
 
 * **Depends on tulpa 0.4.2.** On a joint fit whose outer axis was adaptively
