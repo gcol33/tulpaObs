@@ -2,20 +2,29 @@
 % Please edit documentation in R/methods.R
 \name{update.tobs_fit}
 \alias{update.tobs_fit}
-\title{Update and refit an occupancy model}
+\title{Update and refit a tobs model}
 \usage{
 \method{update}{tobs_fit}(object, ..., evaluate = TRUE)
 }
 \arguments{
-\item{object}{A \code{tobs_fit} object.}
+\item{object}{A \code{tobs_fit} object (built via \code{\link[=tobs]{tobs()}}).}
 
-\item{...}{Named arguments to override in the underlying fit.}
+\item{...}{Named arguments to override; see Details on where each lands.}
 
-\item{evaluate}{If TRUE (default), refit the model.}
+\item{evaluate}{If TRUE (default), refit the model. If FALSE, return the
+unevaluated \code{tobs()} call.}
 }
 \value{
-Updated \code{tobs_fit} object (or call if \code{evaluate = FALSE}).
+Updated \code{tobs_fit} object (or an unevaluated call if \code{evaluate = FALSE}).
 }
 \description{
-Update and refit an occupancy model
+Re-enters \code{\link[=tobs]{tobs()}} with the arguments the fit was originally built from
+(\verb{$tobs_call}, recorded by every family), so the refit keeps the fit's
+family dispatcher, \code{method} and \code{control} instead of dropping to a bare
+Laplace refit of the occupancy state alone. A name in \code{...} that is one of
+\code{\link[=tobs]{tobs()}}'s own arguments (\code{formula}, \code{data}, \code{family}, \code{occurrence},
+\code{detection}, \code{positive}, \code{y}, \code{visits}, \code{method}, \code{priors}, \code{control})
+replaces that argument outright; any other name (\code{n.iter}, \code{seed},
+\code{verbose}, ...) is merged into \code{control}, matching where the recorded fit's
+own value for it lives.
 }

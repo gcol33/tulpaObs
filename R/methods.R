@@ -1589,22 +1589,53 @@ tobs_richness <- function(object) {
 
 # tidy, glance, ranef inherited from tulpa::tulpa_fit
 
-#' Update and refit an occupancy model
-#' @param object A `tobs_fit` object.
-#' @param ... Named arguments to override in the underlying fit.
-#' @param evaluate If TRUE (default), refit the model.
-#' @return Updated `tobs_fit` object (or call if `evaluate = FALSE`).
+#' Update and refit a tobs model
+#'
+#' Re-enters [tobs()] with the arguments the fit was originally built from
+#' (`$tobs_call`, recorded by every family), so the refit keeps the fit's
+#' family dispatcher, `method` and `control` instead of dropping to a bare
+#' Laplace refit of the occupancy state alone. A name in `...` that is one of
+#' [tobs()]'s own arguments (`formula`, `data`, `family`, `occurrence`,
+#' `detection`, `positive`, `y`, `visits`, `method`, `priors`, `control`)
+#' replaces that argument outright; any other name (`n.iter`, `seed`,
+#' `verbose`, ...) is merged into `control`, matching where the recorded fit's
+#' own value for it lives.
+#'
+#' @param object A `tobs_fit` object (built via [tobs()]).
+#' @param ... Named arguments to override; see Details on where each lands.
+#' @param evaluate If TRUE (default), refit the model. If FALSE, return the
+#'   unevaluated `tobs()` call.
+#' @return Updated `tobs_fit` object (or an unevaluated call if `evaluate =
+#'   FALSE`).
 #' @export
 update.tobs_fit <- function(object, ..., evaluate = TRUE) {
-  # Structured terms (spatial / temporal / re / svc / latent) travel with the
-  # model via `model$structured_terms`, so refitting only needs the model plus
-  # any overridden fit controls.
-  args <- list(model = object$model)
-  dots <- list(...)
-  for (nm in names(dots)) args[[nm]] <- dots[[nm]]
+  call_args <- object$tobs_call
+  if (is.null(call_args)) {
+    stop("update() needs the arguments the fit was built from (`$tobs_call`), ",
+         "which this fit does not carry -- it either was not produced by ",
+         "tobs(), or predates this field. Refit with tobs() directly.",
+         call. = FALSE)
+  }
 
-  if (!evaluate) return(args)
-  do.call(.tobs_fit_model, args)
+  dots <- list(...)
+  top_level <- c("formula", "data", "family", "occurrence", "detection",
+                "positive", "y", "visits", "method", "priors", "control")
+  args <- call_args
+  for (nm in names(dots)) {
+    if (nm %in% top_level) {
+      args[[nm]] <- dots[[nm]]
+    } else {
+      # Not one of tobs()'s own arguments: a sampler / fitter control knob
+      # (n.iter, n.warmup, seed, verbose, ...) merges into `control`, the slot
+      # the recorded fit's own value for it lives in -- a bare
+      # `update(fit, n.iter = 50)` then reaches the sampler this fit actually
+      # used rather than a Laplace refit that ignores it (#335).
+      args$control[[nm]] <- dots[[nm]]
+    }
+  }
+
+  if (!evaluate) return(as.call(c(list(quote(tobs)), args)))
+  do.call(tobs, args)
 }
 
 # Model types whose response is a site-by-visit grid with a site-level state

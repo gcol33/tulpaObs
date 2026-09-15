@@ -711,6 +711,22 @@ tobs <- function(formula,
   # unstamped fit as a chain, so a Laplace fit would otherwise have Rhat / ESS
   # computed on its i.i.d. approximation draws and pass `check_diagnostics()`.
   fit$draws_kind <- fit$draws_kind %||% route$draws
+  # The resolved arguments this fit was actually built from -- `formula`/`y`
+  # already LHS-resolved, `method` still the caller's own spelling (including
+  # "auto"), `control` post n.seeds-strip -- so `update.tobs_fit()` can re-enter
+  # `tobs()` through this SAME single-fit path for every family, instead of
+  # calling the internal single-species fitter directly (#335): that skipped
+  # the family dispatcher entirely, so it errored on every family that isn't
+  # occu/dyn_occu/int_occu/fp_occu/abun and silently returned a Laplace refit
+  # on the families that are. `fwd_dots` folds `positive` and every
+  # family-specific extra (`species`, `response`, ...) back in, matching what
+  # dispatch was actually called with above.
+  fit$tobs_call <- c(
+    list(formula = formula, data = data, family = family, detection = detection,
+         y = y, visits = visits, method = method, priors = priors,
+         control = control),
+    fwd_dots
+  )
   # Last stop before the fit reaches the user, and the only point every family
   # passes through: a route whose fitter did not record its field's eta offset
   # gets it derived from the field the fit reports, so no door rebuilds eta
