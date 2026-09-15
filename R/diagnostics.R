@@ -836,7 +836,7 @@ ppc.tobs_fit <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
     return(.tobs_ppc_occu_cover(object, fit.stat, n.samples))
   }
   model <- object$model
-  if (model$model_type != "single") {
+  if (!identical(model$model_type, "single")) {
     stop("ppc() supports single-season occupancy, cover(), and occu_cover() ",
          "fits.", call. = FALSE)
   }
@@ -941,7 +941,7 @@ pit_residuals.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
     return(.tobs_pit_occu_cover(object, n.samples))
   }
   model <- object$model
-  if (model$model_type != "single") {
+  if (!identical(model$model_type, "single")) {
     stop("pit_residuals() supports single-season occupancy, cover(), and ",
          "occu_cover() fits.", call. = FALSE)
   }

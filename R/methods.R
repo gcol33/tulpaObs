@@ -45,8 +45,10 @@ summary.tobs_fit <- function(object, ...) {
 # This resolves one, returning NULL when a family has no handler and the
 # generic's own inline branch (the single-season path) should run instead.
 # `alias` redirects a model type onto the handler of another family that already
-# implements the identical surface.
+# implements the identical surface. A fit whose model records no `model_type`
+# (cover(), occu_categorical()) has no handler.
 .tobs_s3_handler <- function(generic, model_type, alias = character(0)) {
+  if (!is.character(model_type) || length(model_type) != 1L) return(NULL)
   if (model_type %in% names(alias)) model_type <- alias[[model_type]]
   get0(paste0(".tobs_", generic, "_", model_type),
        envir = asNamespace("tulpaObs"), mode = "function", inherits = FALSE)
@@ -790,7 +792,7 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   n_samples <- nrow(draws)
   pi_list <- model$process_info
 
-  if (model$model_type != "single") {
+  if (!identical(model$model_type, "single")) {
     stop("simulate() currently only supports single-season models")
   }
 
@@ -1073,7 +1075,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   }
   # The count GLMMs have a single response, so they take no `type`.
   # (`ms_count` covers jsdm() too -- one model class, bernoulli response.)
-  if (object$model$model_type %in% c("ms_count", "count")) {
+  if ((object$model$model_type %||% "NULL") %in% c("ms_count", "count")) {
     fn <- .tobs_s3_handler("predict", object$model$model_type)
     return(fn(object, newdata = .tobs_resolve_newdata(newdata, X.0)))
   }
@@ -1372,7 +1374,7 @@ tobs_marginal_effect <- function(object, covariate,
 #' }
 #' @export
 tobs_richness <- function(object) {
-  if (!(object$model$model_type %in%
+  if (!((object$model$model_type %||% "NULL") %in%
         c("ms_occu", "ms_dyn_occu", "ms_int_occu"))) {
     stop("tobs_richness() requires a community occupancy fit (ms_occu(), ",
          "ms_dyn_occu(), or ms_int_occu()).", call. = FALSE)

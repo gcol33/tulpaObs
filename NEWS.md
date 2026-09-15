@@ -30,6 +30,11 @@
   `observed`, is now an error on these and on `pit_residuals()` instead of being
   dropped into `...`.
 
+* **`ranef()` on `cover()` / `occu_categorical()` fits returns the empty frame,
+  and `ppc()` / `pit_residuals()` refuse `occu_categorical()` cleanly (#329).**
+  Those fits carry no `model$model_type`, and the family-handler lookup failed
+  with `argument is of length zero`.
+
 ## 0.2.5 (2026-09-15)
 
 * **Depends on tulpa 0.4.2.** On a joint fit whose outer axis was adaptively

@@ -3,6 +3,7 @@
 "test-abun-zip.R","smoke",11,2,1.3
 "test-abun.R","full",109,0,143.3
 "test-abun.R","smoke",15,15,0.8
+"test-accessors-without-model-type.R","smoke",2,2,0.1
 "test-aggregation-scan.R","smoke",27,0,0.5
 "test-aghq-gradient.R","full",6,0,86.2
 "test-aghq-gradient.R","smoke",0,2,0.2
