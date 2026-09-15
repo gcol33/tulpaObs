@@ -177,6 +177,10 @@
   model <- .tobs_build_occu_ttd(
     state_formula = formula, rate_formula = detection, data = data, y = y,
     surveyLength = family$params$surveyLength %||% 1)
+  .tobs_reject_unwired_structs(
+    model, "occu_ttd()",
+    hint = paste0("the censored-exponential time-to-detection marginal is ",
+                  "fitted on fixed effects only, so drop the term"))
   .tobs_fit_occu_ttd(model, verbose = isTRUE(control$verbose),
                     max.iter = control$max.iter, tol = control$tol)
 }

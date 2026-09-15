@@ -75,13 +75,15 @@
   if (any(y != round(y)) || any(y < 0) || any(y > K)) {
     stop("`y` must be integers in 0..K (0 = absent, k = class k).", call. = FALSE)
   }
-  fe <- .tobs_bind_formulas(list(state = formula), data)$fe$state
+  bind <- .tobs_bind_formulas(list(state = formula), data)
+  fe <- bind$fe$state
   X  <- stats::model.matrix(fe, data)
   present <- as.integer(y > 0)
   is_pos  <- present == 1L
   list(present = present, X_occ = X, X_class = X[is_pos, , drop = FALSE],
        cls = as.integer(y[is_pos]), idx_pos = which(is_pos), K = K,
-       formula = fe, N = length(y), data = data, y = as.integer(y))
+       formula = fe, N = length(y), data = data, y = as.integer(y),
+       structured_terms = bind$terms)
 }
 
 
@@ -110,6 +112,12 @@
   class_labels <- classes %||% as.character(seq_len(K))
 
   enc <- .encode_occu_categorical(formula, data, y, K)
+  .tobs_reject_unwired_structs(
+    list(structured_terms = enc$structured_terms,
+         process_info = list(list(name = "occurrence"))),
+    "occu_categorical()",
+    hint = paste0("the presence + multinomial-class marginal is fitted on ",
+                  "fixed effects only, so drop the term"))
   .tobs_check_site_count(length(y), nrow(data), "values")
   if (length(enc$cls) < K) {
     stop("occu_categorical(): only ", length(enc$cls), " present unit(s) for ",

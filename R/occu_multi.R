@@ -243,6 +243,10 @@
   model <- .tobs_build_occu_multi(
     state_formula = formula, det_formula = detection, data = data, y = y,
     species = species)
+  .tobs_reject_unwired_structs(
+    model, "occu_multi()",
+    hint = paste0("the log-linear co-occurrence marginal is fitted on fixed ",
+                  "effects only, so drop the term"))
   .tobs_fit_occu_multi(model, verbose = isTRUE(control$verbose),
                        max.iter = control$max.iter, tol = control$tol)
 }

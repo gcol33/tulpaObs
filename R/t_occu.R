@@ -60,8 +60,9 @@ t_occu <- function() {
   if (n_seasons < 2L)
     stop("t_occu() needs >= 2 seasons; for one season use occu().", call. = FALSE)
 
-  X_occ <- stats::model.matrix(occ_formula, data)
-  X_det <- stats::model.matrix(det_formula, data)
+  bind  <- .tobs_bind_formulas(list(occ = occ_formula, det = det_formula), data)
+  X_occ <- stats::model.matrix(bind$fe$occ, data)
+  X_det <- stats::model.matrix(bind$fe$det, data)
 
   # Per-(site, season) detection sufficient statistics.
   nvis <- kdet <- matrix(0L, n_sites, n_seasons)
@@ -77,7 +78,8 @@ t_occu <- function() {
     n_sites     = n_sites, n_seasons = n_seasons, max_visits = max_visits,
     X_occ       = X_occ, X_det = X_det,
     nvis        = nvis, kdet = kdet, anydet = anydet,
-    formulas    = list(occ = occ_formula, det = det_formula),
+    formulas    = list(occ = bind$fe$occ, det = bind$fe$det),
+    structured_terms = bind$terms,
     data        = data,
     process_info = list(
       list(name = "psi", p = ncol(X_occ), coef_names = colnames(X_occ), link = "logit"),
@@ -326,6 +328,11 @@ t_occu <- function() {
          "or a list of per-season matrices).", call. = FALSE)
   model <- .tobs_build_t_occu(occ_formula = formula, det_formula = detection,
                               data = data, y = y)
+  .tobs_reject_unwired_structs(
+    model, "t_occu()",
+    hint = paste0("t_occu() already carries its own shared AR1 year effect ",
+                  "on occupancy (spOccupancy's tPGOcc); a formula temporal()/",
+                  "icar()/re() term is not wired on top of it, so drop the term"))
   control <- .tobs_control_defaults(control, "pg_gibbs", "t_occu")
   .tobs_fit_t_occu_pg_gibbs(
     model, priors = priors,
