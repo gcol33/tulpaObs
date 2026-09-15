@@ -54,7 +54,7 @@ test_that("dyn_int_occu() fits + full S3 surface", {
   expect_length(predict(fit, type = "state"), 250L)
   expect_true(is.finite(predict(fit, type = "colonization")[1]))
   w <- waic(fit, n.draws = 100L)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   s2 <- simulate(fit, nsim = 1)
   expect_length(s2, 2L)
   expect_equal(dim(s2[[1]]), dim(sim$y[[1]]))

@@ -84,8 +84,8 @@ test_that("count() S3 surface works (fitted / predict / residuals / WAIC)", {
   expect_true(all(diff(pr) > 0))   # monotone increasing in x (positive slope)
   expect_identical(nobs(fit), 250L)
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
-  expect_true(w$p_waic > 0 && w$p_waic < 6)   # ~2 fixed effects
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
+  expect_true(w$estimates["p_waic", "Estimate"] > 0 && w$estimates["p_waic", "Estimate"] < 6)   # ~2 fixed effects
 })
 
 test_that("count() simulate() drives its GOF doors (#271)", {
@@ -225,7 +225,7 @@ test_that("count() S3 surface works for the binomial response", {
   expect_true(all(pr > 0 & pr < 1))
   expect_true(all(diff(pr) > 0))              # monotone in x (positive slope)
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
 })
 
 test_that("binomial count fit recovers truth + 95% CI coverage (trials > 1)", {

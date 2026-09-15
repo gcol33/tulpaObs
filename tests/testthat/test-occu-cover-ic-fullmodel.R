@@ -115,8 +115,8 @@ test_that("occu_cover() joint: pointwise log-lik folds in the spatial field", {
 
   # waic() end-to-end returns the field-folded value, not the FE one.
   w <- waic(fit, n.draws = 300L)
-  expect_lt(abs(w$waic - cr_full$waic), 15)    # MC noise across draw sets
-  expect_gt(abs(w$waic - cr_fe$waic), 5.0)
+  expect_lt(abs(w$estimates["waic", "Estimate"] - cr_full$waic), 15)    # MC noise across draw sets
+  expect_gt(abs(w$estimates["waic", "Estimate"] - cr_fe$waic), 5.0)
 })
 
 test_that("occu_cover() field-folded WAIC/LOO prefers the true strong-field model", {
@@ -131,7 +131,7 @@ test_that("occu_cover() field-folded WAIC/LOO prefers the true strong-field mode
     wn <- waic(o$fit_nofield, n.draws = 600L)
     cf <- cpo(o$fit_field,    n.draws = 600L)
     cn <- cpo(o$fit_nofield,  n.draws = 600L)
-    prefer_waic <- c(prefer_waic, wf$waic < wn$waic)
+    prefer_waic <- c(prefer_waic, wf$estimates["waic", "Estimate"] < wn$estimates["waic", "Estimate"])
     prefer_loo  <- c(prefer_loo,  cf$elpd_loo > cn$elpd_loo)
   }
   # The full-model field score prefers the field model in the clear majority of

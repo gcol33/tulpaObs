@@ -65,7 +65,7 @@ test_that("royle_nichols() S3 surface works", {
   expect_equal(dim(sims[[1]]), c(150L, 5L))
 
   # WAIC / DIC / CPO score the exact per-site marginal.
-  expect_true(is.finite(waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
   expect_true(is.finite(dic(fit)$dic))
   expect_true(is.finite(cpo(fit)$lpml))
 
@@ -141,7 +141,7 @@ test_that("royle_nichols() visit-varying S3 surface works", {
 
   expect_length(residuals(fit)$occ, 150L)
   expect_equal(dim(simulate(fit)), c(150L, 5L))
-  expect_true(is.finite(waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
   expect_true(is.finite(dic(fit)$dic))
 })
 

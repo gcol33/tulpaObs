@@ -770,7 +770,7 @@ comparison <- data.frame(
   detection_arm  = c("yes", "no"),
   alpha_estimate = c(round(fit_oc$means[["alpha"]], 3), NA),
   field_cor      = c(round(field_cor, 3), NA),
-  waic           = c(NA, round(sep_waic$waic, 1))
+  waic           = c(NA, round(sep_waic$estimates["waic", "Estimate"], 1))
 )
 print(comparison, row.names = FALSE)
 ```

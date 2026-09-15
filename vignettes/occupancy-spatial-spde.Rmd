@@ -492,9 +492,9 @@ w_ns <- waic(fit_ns)
 w_sp <- waic(fit_sp)
 data.frame(
   model  = c("non_spatial", "spde"),
-  waic   = round(c(w_ns$waic, w_sp$waic), 1),
-  p_waic = round(c(w_ns$p_waic, w_sp$p_waic), 2),
-  elpd   = round(c(w_ns$elpd, w_sp$elpd), 1)
+  waic   = round(c(w_ns$estimates["waic", "Estimate"], w_sp$estimates["waic", "Estimate"]), 1),
+  p_waic = round(c(w_ns$estimates["p_waic", "Estimate"], w_sp$estimates["p_waic", "Estimate"]), 2),
+  elpd   = round(c(w_ns$estimates["elpd_waic", "Estimate"], w_sp$estimates["elpd_waic", "Estimate"]), 1)
 )
 ```
 
@@ -523,8 +523,8 @@ has no surface to recover. Put the two evidence lines in one table.
 ```{r compare-table}
 data.frame(
   metric      = c("field cor (vs truth)", "WAIC (fixed-effect)"),
-  non_spatial = c(NA_real_,    round(w_ns$waic, 1)),
-  spde        = c(round(corr, 3), round(w_sp$waic, 1))
+  non_spatial = c(NA_real_,    round(w_ns$estimates["waic", "Estimate"], 1)),
+  spde        = c(round(corr, 3), round(w_sp$estimates["waic", "Estimate"], 1))
 )
 ```
 

@@ -137,7 +137,7 @@ test_that("the criteria move with the detection RE and reduce to it at zero", {
   # The public criteria read the same components, so WAIC and LOO land on the
   # scored model rather than the population-mean one.
   w <- waic(fit, n.draws = 400L)
-  expect_gt(w$elpd_waic, off[["elpd"]] + 3)
+  expect_gt(w$estimates["elpd_waic", "Estimate"], off[["elpd"]] + 3)
   cp <- cpo(fit, n.draws = 400L)
   expect_true(is.finite(cp$elpd_loo))
   expect_gt(cp$elpd_loo, off[["elpd"]] + 3)
@@ -192,8 +192,8 @@ test_that("a fit with no random effect keeps the no-offset arithmetic", {
   expect_identical(.ocnl_ll(fit, c0, "zero"), .ocnl_ll(fit, c0, "absent"))
   set.seed(7); w1 <- waic(fit, n.draws = 200L)
   set.seed(7); w2 <- waic(fit, n.draws = 200L)
-  expect_identical(w1$elpd_waic, w2$elpd_waic)
-  expect_true(is.finite(w1$elpd_waic))
+  expect_identical(w1$estimates["elpd_waic", "Estimate"], w2$estimates["elpd_waic", "Estimate"])
+  expect_true(is.finite(w1$estimates["elpd_waic", "Estimate"]))
 })
 
 
@@ -272,8 +272,8 @@ test_that("the criteria score an occupancy-arm random effect", {
   # The public criteria read the same components, so they score the term rather
   # than the population-mean model -- and say nothing about dropping it.
   expect_warning(w <- waic(fit, n.draws = S), NA)
-  expect_lt(abs(w$elpd_waic - on[["elpd"]]),
-            abs(w$elpd_waic - off[["elpd"]]))
+  expect_lt(abs(w$estimates["elpd_waic", "Estimate"] - on[["elpd"]]),
+            abs(w$estimates["elpd_waic", "Estimate"] - off[["elpd"]]))
   cp <- cpo(fit, n.draws = S)
   expect_true(is.finite(cp$elpd_loo))
   expect_lt(abs(cp$elpd_loo - on[["elpd"]]), abs(cp$elpd_loo - off[["elpd"]]))

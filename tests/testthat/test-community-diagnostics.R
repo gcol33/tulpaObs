@@ -35,11 +35,11 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_occu", {
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit); d <- dic(fit); cpo <- cpo(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))
   # WAIC and DIC estimate the same expected deviance; agree to a few percent.
-  expect_lt(abs(w$waic - d$dic) / w$waic, 0.05)
+  expect_lt(abs(w$estimates["waic", "Estimate"] - d$dic) / w$estimates["waic", "Estimate"], 0.05)
   # LPML (sum of per-obs CPO) matches -0.5 * WAIC scale roughly (both log-scores).
   expect_lt(cpo$lpml, 0)
 })
@@ -52,7 +52,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_int_occu", {
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit); d <- dic(fit); cpo <- cpo(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))
 })
@@ -66,7 +66,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_dyn_occu", {
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit); d <- dic(fit); cpo <- cpo(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))
 })

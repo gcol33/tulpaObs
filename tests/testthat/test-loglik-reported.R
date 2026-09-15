@@ -53,7 +53,7 @@ test_that("t_occu() PG fits report logLik and WAIC from the per-(site, season) m
   expect_equal(.tobs_ploglik_t_occu(fit, n.draws = 1L)[1L, 1L], ref,
                tolerance = 1e-10)
 
-  expect_true(is.finite(waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
 })
 
 test_that("ms_abun() Laplace fits surface their log marginal and N", {

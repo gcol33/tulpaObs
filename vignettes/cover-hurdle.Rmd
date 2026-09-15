@@ -518,9 +518,9 @@ on this scoring.
 ```{r compare-table}
 comparison <- data.frame(
   positive = c("lognormal", "beta"),
-  waic     = c(waic_ln$waic, waic_beta$waic),
-  elpd     = c(waic_ln$elpd, waic_beta$elpd),
-  p_waic   = c(waic_ln$p_waic, waic_beta$p_waic)
+  waic     = c(waic_ln$estimates["waic", "Estimate"], waic_beta$estimates["waic", "Estimate"]),
+  elpd     = c(waic_ln$estimates["elpd_waic", "Estimate"], waic_beta$estimates["elpd_waic", "Estimate"]),
+  p_waic   = c(waic_ln$estimates["p_waic", "Estimate"], waic_beta$estimates["p_waic", "Estimate"])
 )
 comparison$delta_waic <- comparison$waic - min(comparison$waic)
 print(comparison, row.names = FALSE, digits = 4)

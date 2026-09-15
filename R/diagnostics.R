@@ -24,11 +24,11 @@
 #' mean of the parameters, supplied by the family-specific
 #' `.tobs_loglik_at_mean()`.
 #'
-#' `waic()` and `loo()` are the \pkg{loo} package's generics, so
-#' [loo::loo_compare()] and the rest of that ecosystem read a `tobs_fit`
-#' directly; `loo()` returns a genuine `loo` object built from the same
-#' pointwise matrix, via PSIS with relative effective sample sizes. `dic()` and
-#' `cpo()` are \pkg{tulpa}'s, and return a `tulpa_criteria` object.
+#' `waic()` and `loo()` are the \pkg{loo} package's generics and build their
+#' objects through [loo::waic()] and [loo::loo()] on the same pointwise matrix
+#' (`loo()` via PSIS with relative effective sample sizes), so
+#' [loo::loo_compare()] and the rest of that ecosystem read them directly.
+#' `dic()` and `cpo()` are \pkg{tulpa}'s, and return a `tulpa_criteria` object.
 #'
 #' @param x,object A `tobs_fit` object.
 #' @param n.draws Posterior draws used to build the pointwise log-likelihood
@@ -58,14 +58,16 @@
 #'   passing `group =` the cell map directly, without hand-building it. `dic()`
 #'   has no cross-validation unit -- it is a plug-in deviance over all
 #'   observations -- and rejects `loo.unit`.
-#' @param ... Forwarded to [tulpa::tulpa_criteria()] (e.g. `chunk_size`, or an
-#'   explicit `group =` for a custom leave-one-group-out unit). `loo()` builds
-#'   its object through [loo::loo()] rather than the criteria layer, so it reads
-#'   `group =` and ignores the rest.
-#' @return `dic()` and `cpo()` return a `tulpa_criteria` object; `waic()`
-#'   returns one carrying `$elpd` as an alias for `elpd_waic`. `loo()` returns
-#'   a `loo` object from the \pkg{loo} package, carrying the cross-validation
-#'   unit it scored in its `"loo_unit"` attribute.
+#' @param ... For `dic()` and `cpo()`, forwarded to [tulpa::tulpa_criteria()]
+#'   (e.g. `chunk_size`, or an explicit `group =` for a custom
+#'   leave-one-group-out unit). `waic()` and `loo()` accept only `group =`,
+#'   which folds the pointwise matrix before the \pkg{loo} call, and reject any
+#'   other argument.
+#' @return `dic()` and `cpo()` return a `tulpa_criteria` object. `waic()`
+#'   returns a `waic` object and `loo()` a `psis_loo` object from the \pkg{loo}
+#'   package; read the estimates from `$estimates` (e.g.
+#'   `waic(fit)$estimates["waic", "Estimate"]`). Both carry the
+#'   cross-validation unit they scored in their `"loo_unit"` attribute.
 #' @seealso [tulpa::tulpa_criteria()], [loo::loo_compare()]
 #' @name tobs_criteria
 NULL
@@ -77,11 +79,10 @@ waic.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
   loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
-  dots <- .tobs_criteria_group(x, loo.unit, list(...))
-  cr <- do.call(tulpa::tulpa_criteria,
-                c(list(ll_mat, criteria = "waic"), dots))
-  cr$elpd <- cr$elpd_waic
-  cr
+  dots <- .tobs_loo_dots(x, loo.unit, list(...), "waic()")
+  out <- loo::waic(.tobs_loglik_fold_group(ll_mat, dots$group))
+  attr(out, "loo_unit") <- loo.unit
+  out
 }
 
 # The PSIS door. loo::loo() wants the pointwise matrix and the relative
@@ -97,7 +98,7 @@ loo.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
   loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
                                    n.threads = .tobs_ploglik_threads(n.threads))
-  dots <- .tobs_criteria_group(x, loo.unit, list(...))
+  dots <- .tobs_loo_dots(x, loo.unit, list(...), "loo()")
   out <- .tobs_loo_one(.tobs_loglik_fold_group(ll_mat, dots$group), x$chain_id)
   attr(out, "loo_unit") <- loo.unit
   out
@@ -163,6 +164,20 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   }
   dots$group <- grp
   dots
+}
+
+# waic() and loo() build their object through the loo package on the folded
+# pointwise matrix, so the only `...` entry they can act on is `group =`.
+.tobs_loo_dots <- function(object, loo.unit, dots, caller) {
+  extra <- setdiff(names(dots), "group")
+  if (length(dots) && (is.null(names(dots)) || any(!nzchar(names(dots))) ||
+                       length(extra))) {
+    bad <- if (length(extra)) paste0("`", extra, "`", collapse = ", ") else
+      "an unnamed argument"
+    stop(caller, " on a tobs_fit accepts `group =` in `...`, not ", bad, ".",
+         call. = FALSE)
+  }
+  .tobs_criteria_group(object, loo.unit, dots)
 }
 
 # The group fold on the PSIS side. tulpa_criteria() reduces a grouped call
@@ -1149,7 +1164,9 @@ check_model.tobs_fit <- function(object, coords = NULL, n.samples = 250,
   }
 
   w <- tryCatch(waic(object), error = function(e) NULL)
-  if (!is.null(w)) cat(sprintf("\nWAIC: %.1f (p_waic = %.1f)\n", w$waic, w$p_waic))
+  if (!is.null(w)) cat(sprintf("\nWAIC: %.1f (p_waic = %.1f)\n",
+                               w$estimates["waic", "Estimate"],
+                               w$estimates["p_waic", "Estimate"]))
 
   d <- tryCatch(dic(object), error = function(e) NULL)
   if (!is.null(d) && is.finite(d$dic))

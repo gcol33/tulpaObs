@@ -23,7 +23,7 @@ test_that("cover() separate-Laplace: WAIC/DIC/CPO + PIT + PPC", {
               family = cover("lognormal"), y = y, method = "laplace")
 
   w <- waic(fit)
-  expect_true(is.finite(w$waic) && is.finite(w$elpd))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["elpd_waic", "Estimate"]))
 
   d <- dic(fit, n.draws = 300L)
   expect_true(is.finite(d$dic) && is.finite(d$p_dic))

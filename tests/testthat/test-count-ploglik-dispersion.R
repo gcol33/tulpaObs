@@ -38,7 +38,7 @@ test_that("abun(mixture = 'zip') scores the structural-zero mixture", {
   no_zi <- th[, setdiff(colnames(th), "logit_omega"), drop = FALSE]
   expect_gt(abs(sum(.tobs_ploglik_from_draws(fit$model, no_zi)) - fit$log_lik), 1)
 
-  expect_true(is.finite(waic(fit)$elpd_waic))
+  expect_true(is.finite(waic(fit)$estimates["elpd_waic", "Estimate"]))
 })
 
 test_that("abun() + (1 | g) scores a finite pointwise log-likelihood", {
@@ -58,7 +58,7 @@ test_that("abun() + (1 | g) scores a finite pointwise log-likelihood", {
               family = abun(), method = "laplace", control = ctl)
   expect_true(any(is.na(fit$draws[, grep("^sigma_", colnames(fit$draws))])))
   expect_true(all(is.finite(.tobs_ploglik_from_draws(fit$model, fit$draws))))
-  expect_true(is.finite(waic(fit)$elpd_waic))
+  expect_true(is.finite(waic(fit)$estimates["elpd_waic", "Estimate"]))
 })
 
 test_that("an areal negbin abun() is scored as negbin, not Poisson", {
@@ -137,7 +137,7 @@ test_that("dyn_abun(mixture = 'zinb') scores both the size and the ZI layer", {
   at_r1 <- th; at_r1[1L, "log_r"] <- 0
   expect_gt(abs(sum(.tobs_ploglik_from_draws(fit$model, at_r1)) - fit$log_lik), 1)
 
-  expect_true(is.finite(waic(fit)$elpd_waic))
+  expect_true(is.finite(waic(fit)$estimates["elpd_waic", "Estimate"]))
 })
 
 test_that("the posterior-mean row carries the draw names the kernels read", {

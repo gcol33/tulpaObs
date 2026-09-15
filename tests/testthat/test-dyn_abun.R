@@ -243,7 +243,7 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
   expect_true(all(abs(est - truth) / se < 4))
   expect_lt(mean(fit$nuts$divergent), 0.2)
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
 })
 
 

@@ -189,8 +189,8 @@ fit2 <- tobs(~ occ_cov1 + occ_cov1_sq, data = dat, family = occu(),
 
 waic_tab <- data.frame(
   model  = c("intercept", "linear", "quadratic"),
-  waic   = c(waic(fit0)$waic, waic(fit)$waic, waic(fit2)$waic),
-  p_waic = c(waic(fit0)$p_waic, waic(fit)$p_waic, waic(fit2)$p_waic)
+  waic   = c(waic(fit0)$estimates["waic", "Estimate"], waic(fit)$estimates["waic", "Estimate"], waic(fit2)$estimates["waic", "Estimate"]),
+  p_waic = c(waic(fit0)$estimates["p_waic", "Estimate"], waic(fit)$estimates["p_waic", "Estimate"], waic(fit2)$estimates["p_waic", "Estimate"])
 )
 waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 2)
 waic_tab[order(waic_tab$waic), ]

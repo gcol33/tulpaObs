@@ -1,5 +1,17 @@
 # tulpaObs NEWS
 
+## 0.2.7 (2026-09-15)
+
+* **`waic()` returns loo's own `waic` object (#333).** It was a
+  `tulpa_criteria`, so `loo::loo_compare(waic(f1), waic(f2))` could not read
+  it. It is now built by `loo::waic()` on the same (group-folded) pointwise
+  matrix, as `loo()` already was through `loo::loo()`, and carries the scored
+  unit in `attr(, "loo_unit")`. Read the numbers from `$estimates`
+  (`waic(fit)$estimates["waic", "Estimate"]`); loo deprecates the old top-level
+  `$waic` / `$p_waic` / `$elpd_waic` fields, and the `$elpd` alias is gone.
+  `waic()` and `loo()` accept only `group =` in `...` and refuse anything else,
+  which they had been dropping.
+
 ## 0.2.6 (2026-09-15)
 
 * **Every fit states what its draws are (#326).** `tobs()` stamps

@@ -43,6 +43,6 @@ test_that("waic() scores the areal field on an occu() fit", {
     control = ctl))
   fit_flat <- suppressMessages(tobs(~ 1, data = s$d, family = occu(),
     detection = ~ 1, y = s$y, method = "laplace", control = ctl))
-  expect_gt(suppressWarnings(waic(fit_field))$elpd_waic,
-            suppressWarnings(waic(fit_flat))$elpd_waic)
+  expect_gt(suppressWarnings(waic(fit_field))$estimates["elpd_waic", "Estimate"],
+            suppressWarnings(waic(fit_flat))$estimates["elpd_waic", "Estimate"])
 })

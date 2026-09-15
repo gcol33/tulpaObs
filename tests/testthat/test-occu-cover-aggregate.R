@@ -217,7 +217,7 @@ test_that("WAIC scores aggregated cover at the unit scale, not per visit (#34)",
   pw <- vapply(c(12L, 60L), function(J) {
     sim <- .agg_sim(seed = 909L, J = J)
     fit <- .agg_fit(sim, cover_aggregate = "mean")
-    waic(fit, n.draws = 200L)$p_waic
+    waic(fit, n.draws = 200L)$estimates["p_waic", "Estimate"]
   }, numeric(1))
   n_sites <- 30L * 5L
   # Effective parameter count stays well below the site count (it scaled past it

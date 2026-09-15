@@ -440,9 +440,9 @@ test_that("tobs(abun(), method='nuts') recovers truth and scores WAIC", {
   expect_lt(mean(fit$divergent), 0.2)
   # WAIC / LOO from the NUTS draws (per-site marginal pointwise log-lik)
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
-  expect_gt(w$p_waic, 0)
-  expect_lt(w$p_waic, nrow(sim$y))            # p_waic < n_sites
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
+  expect_gt(w$estimates["p_waic", "Estimate"], 0)
+  expect_lt(w$estimates["p_waic", "Estimate"], nrow(sim$y))            # p_waic < n_sites
 })
 
 test_that("tobs(abun(mixture='negbin'), method='nuts') recovers dispersion", {

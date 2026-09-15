@@ -113,10 +113,10 @@ test_that("a Poisson areal count fit recovers the field and wires S3", {
   # fit scores better than the fixed-effect-only model on the same data (a wrong
   # FE-only WAIC would ignore the field and not improve).
   w_sp <- waic(fit)
-  expect_true(is.finite(w_sp$waic))
+  expect_true(is.finite(w_sp$estimates["waic", "Estimate"]))
   fit_fe <- tobs(~ x, data = d$data, y = d$y, family = count(),
                  control = list(progress = FALSE, verbose = FALSE))
-  expect_lt(w_sp$waic, waic(fit_fe)$waic)
+  expect_lt(w_sp$estimates["waic", "Estimate"], waic(fit_fe)$estimates["waic", "Estimate"])
 })
 
 
@@ -343,7 +343,7 @@ test_that("areal count recovers a slope under a continuous NNGP gp() field", {
   # S3 surface: fitted / predict / WAIC.
   expect_equal(length(fitted(fit)$mu), n)
   expect_length(predict(fit), n)
-  expect_true(is.finite(waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
 })
 
 test_that("count() spatial-field gates: multiscale_gp and negbin + gp", {

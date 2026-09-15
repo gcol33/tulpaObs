@@ -26,7 +26,7 @@ test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
     detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y_pos = yp,
     visits = od$det.covs, method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit)
-  expect_true(is.finite(w$waic) && is.finite(w$p_waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["p_waic", "Estimate"]))
   expect_error(ppc(fit), "not defined for occu_cover.*gaussian")
   # NUTS is wired for the gaussian arm; a short sample returns a fit rather
   # than routing gaussian through the lognormal dispatch.

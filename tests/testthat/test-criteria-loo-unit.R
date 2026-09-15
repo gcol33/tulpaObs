@@ -3,10 +3,11 @@
 # cpo(). The convenience wrapper that auto-supplies the fit's per-observation cell
 # map as tulpa_criteria(group =) for leave-one-group- out cross-validation
 # (LOGO-CV), so cover() / occu_cover() report plot/site-level (default) AND
-# cell-level LOO without the caller hand-building the cell map. waic() and cpo()
-# reach the fold through tulpa_criteria(group =); loo() builds a psis_loo through
-# loo::loo(), which scores whatever columns it is handed, so it applies the same
-# fold to the pointwise matrix first (.tobs_loglik_fold_group).
+# cell-level LOO without the caller hand-building the cell map. cpo() reaches
+# the fold through tulpa_criteria(group =); waic() and loo() build loo's own
+# objects through loo::waic() / loo::loo(), which score whatever columns they are
+# handed, so they apply the same fold to the pointwise matrix first
+# (.tobs_loglik_fold_group).
 #
 # The first half is structural / dispatch unit tests on the family cell-map
 # plumbing (.tobs_loo_cell_map), the front-door group resolution
@@ -98,6 +99,43 @@ test_that("waic() / loo() / cpo() reject an unknown loo.unit", {
   expect_error(waic(fit, loo.unit = "plot"), "should be one of")
   expect_error(loo(fit,  loo.unit = "plot"), "should be one of")
   expect_error(cpo(fit,  loo.unit = "plot"), "should be one of")
+})
+
+test_that("waic() on a tobs_fit returns loo's waic object, readable by loo_compare()", {
+  set.seed(3L)
+  S <- 400L; N <- 12L
+  ll1 <- matrix(stats::rnorm(S * N, -1.0, 0.3), S, N)
+  ll2 <- matrix(stats::rnorm(S * N, -1.4, 0.3), S, N)
+  f1 <- structure(list(model = list(model_type = "single"), ll = ll1),
+                  class = c("tobs_fit", "tulpa_fit"))
+  f2 <- structure(list(model = list(model_type = "single"), ll = ll2),
+                  class = c("tobs_fit", "tulpa_fit"))
+  local_mocked_bindings(.tobs_pointwise_loglik = function(object, ...) object$ll,
+                        .package = "tulpaObs")
+
+  w1 <- waic(f1)
+  expect_s3_class(w1, "waic")
+  expect_s3_class(w1, "loo")
+  expect_false(inherits(w1, "tulpa_criteria"))
+  expect_equal(w1$estimates, loo::waic(ll1)$estimates)
+  expect_identical(attr(w1, "loo_unit"), "obs")
+
+  cmp <- loo::loo_compare(list(better = w1, worse = waic(f2)))
+  member <- if ("model" %in% colnames(cmp)) cmp$model else rownames(cmp)
+  expect_identical(member[1L], "better")
+  expect_lt(unname(cmp[2L, "elpd_diff"]), 0)
+
+  # An explicit group folds the matrix before loo::waic(), one row per fold.
+  g  <- rep(1:4, each = 3L)
+  wg <- waic(f1, group = g)
+  expect_equal(nrow(wg$pointwise), 4L)
+  expect_equal(wg$estimates,
+               loo::waic(tulpaObs:::.tobs_loglik_fold_group(ll1, g))$estimates)
+
+  # Nothing but `group =` reaches the loo call, so anything else is refused.
+  expect_error(waic(f1, chunk_size = 5L), "accepts `group =`")
+  expect_error(loo(f1, chunk_size = 5L), "accepts `group =`")
+  expect_error(waic(f1, 1000L, "obs", NULL, 5L), "unnamed argument")
 })
 
 test_that("dic() rejects loo.unit instead of forwarding it to tulpa_criteria()", {

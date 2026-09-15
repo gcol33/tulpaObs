@@ -241,7 +241,7 @@ test_that("multiscale fit with missing cover moves the cover arm alone", {
   # loglik already dropped a missing cover, so nothing here goes non-finite.
   ll <- tulpaObs:::.tobs_ploglik_occu_multiscale_cover(mar, n.draws = 50L)
   expect_equal(sum(!is.finite(ll)), 0L)
-  expect_true(is.finite(suppressWarnings(waic(mar))$elpd_waic))
+  expect_true(is.finite(suppressWarnings(waic(mar))$estimates["elpd_waic", "Estimate"]))
   expect_true(is.finite(
     suppressWarnings(loo(mar))$estimates["elpd_loo", "Estimate"]))
   expect_false(anyNA(unlist(fitted(mar))))

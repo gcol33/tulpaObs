@@ -345,7 +345,7 @@ against a simpler model on the same data.
 
 ```{r dyn-waic}
 w <- waic(fit)
-c(waic = round(w$waic, 1), elpd = round(w$elpd, 1), p_waic = round(w$p_waic, 2))
+c(waic = round(w$estimates["waic", "Estimate"], 1), elpd = round(w$estimates["elpd_waic", "Estimate"], 1), p_waic = round(w$estimates["p_waic", "Estimate"], 2))
 ```
 
 The `elpd` is the expected log pointwise predictive density, higher meaning a
@@ -693,10 +693,10 @@ fit_cov_e <- tobs(
 waic_tab <- data.frame(
   model  = c("constant rates", "connectivity on colonisation",
              "connectivity on both rates"),
-  waic   = c(waic(fit)$waic, waic(fit_cov)$waic,
-             waic(fit_cov_e)$waic),
-  p_waic = c(waic(fit)$p_waic, waic(fit_cov)$p_waic,
-             waic(fit_cov_e)$p_waic)
+  waic   = c(waic(fit)$estimates["waic", "Estimate"], waic(fit_cov)$estimates["waic", "Estimate"],
+             waic(fit_cov_e)$estimates["waic", "Estimate"]),
+  p_waic = c(waic(fit)$estimates["p_waic", "Estimate"], waic(fit_cov)$estimates["p_waic", "Estimate"],
+             waic(fit_cov_e)$estimates["p_waic", "Estimate"])
 )
 waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 1)
 waic_tab$waic  <- round(waic_tab$waic, 1)

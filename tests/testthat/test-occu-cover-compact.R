@@ -98,8 +98,8 @@ test_that("compact == dense: byte-identical fit on uncapped data", {
 
   set.seed(11); wd <- waic(fit_d)
   set.seed(11); wc <- waic(fit_c)
-  expect_equal(wc$waic,    wd$waic,    tolerance = 1e-8)
-  expect_equal(wc$se_waic, wd$se_waic, tolerance = 1e-8)
+  expect_equal(wc$estimates["waic", "Estimate"],    wd$estimates["waic", "Estimate"],    tolerance = 1e-8)
+  expect_equal(wc$estimates["waic", "SE"], wd$estimates["waic", "SE"], tolerance = 1e-8)
   expect_equal(wc$n_obs,   wd$n_obs)   # = the site count, shared across species
 })
 
@@ -183,7 +183,7 @@ test_that("WAIC draw-chunking is exact (chunk size does not change the result)",
 
   # And the criterion built on it is unchanged.
   set.seed(11); wa <- waic(fit)
-  expect_true(is.finite(wa$waic) && is.finite(wa$se_waic))
+  expect_true(is.finite(wa$estimates["waic", "Estimate"]) && is.finite(wa$estimates["waic", "SE"]))
 })
 
 

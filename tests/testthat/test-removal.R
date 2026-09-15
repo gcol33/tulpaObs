@@ -222,8 +222,8 @@ test_that("removal NUTS recovers truth and scores WAIC", {
   expect_lt(mean(fit$nuts$divergent), 0.2)
   # WAIC / LOO from the NUTS draws (per-site pointwise marginal log-lik).
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
-  expect_gt(w$p_waic, 0)
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
+  expect_gt(w$estimates["p_waic", "Estimate"], 0)
 })
 
 

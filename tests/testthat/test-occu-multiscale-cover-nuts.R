@@ -209,8 +209,8 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
 
   # Calibrated WAIC from the per-cell draws (the point of the NUTS path).
   w <- waic(fit)
-  expect_s3_class(w, "tulpa_criteria")
-  expect_true(is.finite(w$elpd_waic))
+  expect_s3_class(w, "waic")
+  expect_true(is.finite(w$estimates["elpd_waic", "Estimate"]))
 
   # Sampler ran: real (non-NA) diagnostics.
   expect_false(anyNA(fit$divergent))

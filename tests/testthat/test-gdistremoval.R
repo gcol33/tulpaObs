@@ -90,7 +90,7 @@ test_that("a gdistremoval fit recovers a single data set and wires S3", {
   expect_length(predict(fit, type = "distance"), 300L)
   expect_length(predict(fit, type = "removal"), 300L)
   expect_length(residuals(fit)$occ, 300L)
-  expect_true(is.finite(waic(fit)$waic))
+  expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
   expect_true(is.matrix(simulate(fit)$yDist))
 
   # nobs() counts both response tables: the band allocation and the period

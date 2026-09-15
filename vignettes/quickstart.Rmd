@@ -458,8 +458,8 @@ fit0 <- tobs(~ 1, data = dat, family = occu(),
              detection = ~ det_cov1, y = y, method = "laplace",
              control = list(verbose = FALSE))
 
-c(intercept_only = waic(fit0)$waic,
-  with_covariate = waic(fit)$waic)
+c(intercept_only = waic(fit0)$estimates["waic", "Estimate"],
+  with_covariate = waic(fit)$estimates["waic", "Estimate"])
 ```
 
 The covariate model has the lower WAIC, matching how the data were
@@ -477,16 +477,18 @@ fit_re0 <- tobs(~ x, data = d_re, y = y_re, detection = ~ 1,
                 family = occu(), method = "laplace",
                 control = list(verbose = FALSE))
 
-c(no_random_effect = waic(fit_re0)$waic,
-  with_random_int  = waic(fit_re)$waic)
+c(no_random_effect = waic(fit_re0)$estimates["waic", "Estimate"],
+  with_random_int  = waic(fit_re)$estimates["waic", "Estimate"])
 ```
 
 The clustered model carries the lower WAIC, the random intercept paying
 for its one variance parameter by predicting the between-cluster spread
-the flat model averages away. `waic()` returns more than the headline
-number: `$waic` is the criterion, `$elpd` the expected log pointwise
-predictive density it is built from, and `$p_waic` the effective number of
-parameters, which is what docks a flexible model for its complexity. Read
+the flat model averages away. `waic()` returns a **loo** `waic` object
+whose `$estimates` table carries more than the headline number: `waic` is
+the criterion, `elpd_waic` the expected log pointwise predictive density it
+is built from, and `p_waic` the effective number of parameters, which is
+what docks a flexible model for its complexity. Two fits compare directly
+with `loo::loo_compare(waic(fit0), waic(fit))`. Read
 WAIC as a comparison, not a verdict: a lower value says one model predicts
 the in-sample data better, not that its intervals are calibrated. Pair it
 with a posterior-predictive check (`ppc()`) before trusting a fit.

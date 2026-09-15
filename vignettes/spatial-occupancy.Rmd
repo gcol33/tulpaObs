@@ -619,7 +619,7 @@ field. The table below is worth reading with that scope in mind.
 ```{r waic}
 waic_row <- function(fit) {
   w <- waic(fit)
-  c(waic = round(w$waic, 1), elpd = round(w$elpd, 1), p_waic = round(w$p_waic, 1))
+  c(waic = round(w$estimates["waic", "Estimate"], 1), elpd = round(w$estimates["elpd_waic", "Estimate"], 1), p_waic = round(w$estimates["p_waic", "Estimate"], 1))
 }
 waic_tab <- rbind(
   non_spatial = waic_row(fit_flat),

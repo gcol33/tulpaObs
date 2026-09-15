@@ -693,7 +693,8 @@ ONE verb per diagnostic, owned by whoever owns the CONCEPT; tulpaObs registers a
 alone reaches every door and no session masks anything. Roster:
 `waic()`/`loo()` = **loo**'s generics (so `loo_compare()` reads a `tobs_fit`;
 `loo.tobs_fit` returns a real `psis_loo` via `.tobs_loo_one()`, shared w/
-`tobs_stack()`); `sbc()` `pit_residuals()` `test_uniformity()` `test_dispersion()`
+`tobs_stack()`; `waic.tobs_fit` returns `loo::waic()`'s object, NOT a
+`tulpa_criteria` -- read `$estimates`, loo deprecates `$waic`, #333); `sbc()` `pit_residuals()` `test_uniformity()` `test_dispersion()`
 `test_outliers()` `test_zero_inflation()` `dic()` `cpo()` `check_model()` =
 **tulpa**'s; `ppc()` = tulpaObs's own (no owner elsewhere). Old `tobs_*` spellings
 DELETED, not aliased.

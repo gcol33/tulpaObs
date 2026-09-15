@@ -403,7 +403,7 @@ comparison below, against another model fit to the same data.
 
 ```{r waic}
 w <- waic(fit)
-c(waic = w$waic, elpd = w$elpd, p_waic = w$p_waic)
+c(waic = w$estimates["waic", "Estimate"], elpd = w$estimates["elpd_waic", "Estimate"], p_waic = w$estimates["p_waic", "Estimate"])
 ```
 
 The three numbers are facets of one calculation. `elpd` is the expected log
@@ -626,8 +626,8 @@ fit0 <- tobs(~ 1, data = dat, family = occu(),
 
 waic_tab <- data.frame(
   model  = c("intercept only", "with occ_cov1"),
-  waic   = c(waic(fit0)$waic, waic(fit)$waic),
-  p_waic = c(waic(fit0)$p_waic, waic(fit)$p_waic)
+  waic   = c(waic(fit0)$estimates["waic", "Estimate"], waic(fit)$estimates["waic", "Estimate"]),
+  p_waic = c(waic(fit0)$estimates["p_waic", "Estimate"], waic(fit)$estimates["p_waic", "Estimate"])
 )
 waic_tab$delta <- waic_tab$waic - min(waic_tab$waic)
 waic_tab
@@ -684,9 +684,9 @@ fit_misplaced <- tobs(~ occ_cov1 + det_cov1, data = dat, family = occu(),
                       detection = ~ 1, y = y, method = "laplace",
                       control = list(verbose = FALSE))
 
-c(correct        = waic(fit)$waic,
-  no_det_cov     = waic(fit_det_only)$waic,
-  det_on_occ     = waic(fit_misplaced)$waic)
+c(correct        = waic(fit)$estimates["waic", "Estimate"],
+  no_det_cov     = waic(fit_det_only)$estimates["waic", "Estimate"],
+  det_on_occ     = waic(fit_misplaced)$estimates["waic", "Estimate"])
 ```
 
 The correct model, with `det_cov1` in the detection formula, carries the lowest

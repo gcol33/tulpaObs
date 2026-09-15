@@ -286,9 +286,9 @@ test_that("cover() front door: loo.unit routes to tulpa_criteria(group =), obs i
   # waic() carries the same loo.unit plumbing.
   set.seed(12L); wa <- waic(ff, n.draws = 200L, loo.unit = "cell")
   set.seed(12L); wb <- waic(ff, n.draws = 200L, group = map)
-  expect_equal(wa$waic,      wb$waic)
-  expect_equal(wa$elpd_waic, wb$elpd_waic)
-  expect_equal(wa$n_groups,  16L)
+  expect_equal(wa$estimates["waic", "Estimate"],      wb$estimates["waic", "Estimate"])
+  expect_equal(wa$estimates["elpd_waic", "Estimate"], wb$estimates["elpd_waic", "Estimate"])
+  expect_equal(nrow(wa$pointwise), 16L)
 
   # Passing both an explicit group and loo.unit = "cell" is an error.
   expect_error(cpo(ff, n.draws = 50L, loo.unit = "cell", group = map),

@@ -44,7 +44,7 @@ test_that("double_observer() fits + full S3 surface", {
   expect_length(predict(fit, type = "abundance"), 200L)
   expect_equal(ncol(predict(fit, type = "detection")), 2L)
   w <- waic(fit, n.draws = 200L)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   s2 <- simulate(fit, nsim = 1)
   expect_equal(dim(s2), c(200L, 3L))
   expect_length(residuals(fit)$occ, 200L)
@@ -119,7 +119,7 @@ test_that("double_observer('dependent') constructor, gates, and S3 surface", {
   expect_named(fv, c("lambda", "p1", "p2", "cell_pri", "cell_sec"))
   expect_equal(dim(simulate(fit)), c(60L, 2L))
   expect_length(residuals(fit)$occ, 60L)
-  expect_true(is.finite(waic(fit, n.draws = 100L)$waic))
+  expect_true(is.finite(waic(fit, n.draws = 100L)$estimates["waic", "Estimate"]))
 })
 
 test_that("double_observer('dependent') recovers lambda + both detections", {

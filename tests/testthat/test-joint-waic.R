@@ -33,8 +33,8 @@ test_that("occu_cover() non-spatial: WAIC + pointwise log-lik (#26)", {
   expect_true(all(is.finite(ll)))
 
   w <- waic(fit)
-  expect_true(is.finite(w$waic) && is.finite(w$elpd))
-  expect_gte(w$p_waic, 0)
+  expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["elpd_waic", "Estimate"]))
+  expect_gte(w$estimates["p_waic", "Estimate"], 0)
   # lppd is a sane per-observation magnitude for a hurdle (not absurd).
   expect_lt(abs(w$lppd / N), 5)
 })
@@ -55,7 +55,7 @@ test_that("occu_cover() beta arm: pointwise log-lik is finite (#26)", {
               y = od$y, y_pos = y_pos, visits = od$det.covs,
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   expect_equal(ncol(tulpaObs:::.tobs_pointwise_loglik(fit)), N)
 })
 
@@ -86,8 +86,8 @@ test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
   expect_equal(ncol(ll), N)
   expect_true(all(is.finite(ll)))
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
-  expect_gte(w$p_waic, 0)
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
+  expect_gte(w$estimates["p_waic", "Estimate"], 0)
 })
 
 test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
@@ -116,7 +116,7 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
   expect_equal(ncol(ll), N)                       # per-observation pointwise
   expect_true(all(is.finite(ll)))
   w <- waic(fit)
-  expect_true(is.finite(w$waic) && is.finite(w$elpd))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["elpd_waic", "Estimate"]))
   expect_lt(abs(w$lppd / N), 5)
 
   # Without the stored spatial-unit index the joint log-lik errors clearly.
@@ -135,6 +135,6 @@ test_that("cover() separate-Laplace WAIC is unaffected (#26)", {
   fit <- tobs(formula = ~ x, data = data.frame(x = x),
               family = cover("lognormal"), y = y, method = "laplace")
   w <- waic(fit)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
   expect_equal(ncol(tulpaObs:::.tobs_pointwise_loglik(fit)), N)
 })

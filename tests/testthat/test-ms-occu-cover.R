@@ -348,11 +348,11 @@ test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116
   w <- waic(fit, n.draws = 100L)
   d <- dic(fit, n.draws = 100L)
   cp <- cpo(fit, n.draws = 100L)
-  expect_true(is.finite(w$waic) && w$p_waic > 0)
+  expect_true(is.finite(w$estimates["waic", "Estimate"]) && w$estimates["p_waic", "Estimate"] > 0)
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cp$lpml))
   # WAIC and the DIC plug-in agree to within a few units on a well-constrained fit.
-  expect_lt(abs(w$waic - d$dic), 0.05 * abs(w$waic))
+  expect_lt(abs(w$estimates["waic", "Estimate"] - d$dic), 0.05 * abs(w$estimates["waic", "Estimate"]))
 })
 
 test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127)", {
@@ -365,7 +365,7 @@ test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127
               y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit, n.draws = 100L)
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
 })
 
 test_that("ms_occu_cover(\"gaussian\") simulate() round-trips (#127)", {

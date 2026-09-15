@@ -313,8 +313,8 @@ test_that("ms_abun NUTS S3 methods + WAIC work", {
 
   # WAIC scored over the per-(species, site) NUTS draws.
   w <- waic(fit, n.draws = 200L)
-  expect_true(is.finite(w$waic))
-  expect_gt(w$p_waic, 0)
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
+  expect_gt(w$estimates["p_waic", "Estimate"], 0)
 })
 
 

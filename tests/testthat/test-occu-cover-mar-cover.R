@@ -254,5 +254,5 @@ test_that("MAR cover fits and stays close to full on the spatial compact path", 
 
   # WAIC is defined with NA cover in the data (the pointwise ll drops the term).
   w <- suppressWarnings(waic(f_mar))
-  expect_true(is.finite(w$waic))
+  expect_true(is.finite(w$estimates["waic", "Estimate"]))
 })

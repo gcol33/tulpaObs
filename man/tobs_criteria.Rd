@@ -55,16 +55,18 @@ parallel, so this is the WAIC / LOO analogue of the fit's \code{n.threads.outer}
 \code{NULL} (default) uses all but four logical cores, matching the occu_cover
 fit's own outer-grid default; other families ignore it.}
 
-\item{...}{Forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}} (e.g. \code{chunk_size}, or an
-explicit \verb{group =} for a custom leave-one-group-out unit). \code{loo()} builds
-its object through \code{\link[loo:loo]{loo::loo()}} rather than the criteria layer, so it reads
-\verb{group =} and ignores the rest.}
+\item{...}{For \code{dic()} and \code{cpo()}, forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}
+(e.g. \code{chunk_size}, or an explicit \verb{group =} for a custom
+leave-one-group-out unit). \code{waic()} and \code{loo()} accept only \verb{group =},
+which folds the pointwise matrix before the \pkg{loo} call, and reject any
+other argument.}
 }
 \value{
-\code{dic()} and \code{cpo()} return a \code{tulpa_criteria} object; \code{waic()}
-returns one carrying \verb{$elpd} as an alias for \code{elpd_waic}. \code{loo()} returns
-a \code{loo} object from the \pkg{loo} package, carrying the cross-validation
-unit it scored in its \code{"loo_unit"} attribute.
+\code{dic()} and \code{cpo()} return a \code{tulpa_criteria} object. \code{waic()}
+returns a \code{waic} object and \code{loo()} a \code{psis_loo} object from the \pkg{loo}
+package; read the estimates from \verb{$estimates} (e.g.
+\code{waic(fit)$estimates["waic", "Estimate"]}). Both carry the
+cross-validation unit they scored in their \code{"loo_unit"} attribute.
 }
 \description{
 \code{waic()}, \code{loo()}, \code{dic()}, and \code{cpo()} on a \code{tobs_fit} build the family
@@ -75,11 +77,11 @@ mean of the parameters, supplied by the family-specific
 \code{.tobs_loglik_at_mean()}.
 }
 \details{
-\code{waic()} and \code{loo()} are the \pkg{loo} package's generics, so
-\code{\link[loo:loo_compare]{loo::loo_compare()}} and the rest of that ecosystem read a \code{tobs_fit}
-directly; \code{loo()} returns a genuine \code{loo} object built from the same
-pointwise matrix, via PSIS with relative effective sample sizes. \code{dic()} and
-\code{cpo()} are \pkg{tulpa}'s, and return a \code{tulpa_criteria} object.
+\code{waic()} and \code{loo()} are the \pkg{loo} package's generics and build their
+objects through \code{\link[loo:waic]{loo::waic()}} and \code{\link[loo:loo]{loo::loo()}} on the same pointwise matrix
+(\code{loo()} via PSIS with relative effective sample sizes), so
+\code{\link[loo:loo_compare]{loo::loo_compare()}} and the rest of that ecosystem read them directly.
+\code{dic()} and \code{cpo()} are \pkg{tulpa}'s, and return a \code{tulpa_criteria} object.
 }
 \seealso{
 \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}, \code{\link[loo:loo_compare]{loo::loo_compare()}}
