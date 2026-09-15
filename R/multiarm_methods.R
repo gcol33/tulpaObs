@@ -116,7 +116,7 @@
 #' @param object,x A `tobs_multiarm_fit` (a `cover_fit` or
 #'   `occu_categorical_fit`).
 #' @param parm Ignored (present for `confint()` generic compatibility).
-#' @param level Confidence level for `confint()`.
+#' @param level Confidence level for `confint()` and `summary()` (default 0.95).
 #' @param ... Ignored, or forwarded to `NextMethod()` on the posterior path.
 #' @param arm Optional arm name (`"presence"`, `"positive"` or `"class"`) for
 #'   `coef()`; see [coef.tobs_fit()].
@@ -208,14 +208,13 @@ glance.tobs_multiarm_fit <- function(x, ...) {
 
 # --- tidy coefficient table --------------------------------------------------
 #' @rdname tobs_multiarm_methods
-#' @param conf.level,level Interval level for `tidy()` and `summary()`
-#'   (default 0.95).
+#' @param conf.level Interval level for `tidy()` (default 0.95).
 #' @export
 tidy.tobs_multiarm_fit <- function(x, conf.level = 0.95, ...) {
   if (!is.null(x[["draws"]])) return(NextMethod())
   est <- .tobs_multiarm_flat(x, "estimate")
   se  <- .tobs_multiarm_flat(x, "se")
-  ci  <- confint(x, level = conf.level)
+  ci  <- stats::confint(x, level = conf.level)
   sp  <- .tobs_split_terms(names(est), .tobs_fit_arms(x))
   data.frame(sp, estimate = unname(est), std.error = unname(se),
              conf.low = unname(ci[, 1L]), conf.high = unname(ci[, 2L]),
@@ -228,7 +227,7 @@ tidy.tobs_multiarm_fit <- function(x, conf.level = 0.95, ...) {
 summary.tobs_multiarm_fit <- function(object, level = 0.95, ...) {
   if (!is.null(object[["draws"]])) return(NextMethod())
   est <- .tobs_multiarm_flat(object, "estimate")
-  ci  <- confint(object, level = level)
+  ci  <- stats::confint(object, level = level)
   out <- data.frame(estimate  = unname(est),
                     std.error = unname(.tobs_multiarm_flat(object, "se")),
                     lower     = unname(ci[, 1L]), upper = unname(ci[, 2L]),

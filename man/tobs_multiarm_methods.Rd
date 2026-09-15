@@ -45,10 +45,9 @@
 
 \item{parm}{Ignored (present for \code{confint()} generic compatibility).}
 
-\item{level}{Confidence level for \code{confint()}.}
+\item{level}{Confidence level for \code{confint()} and \code{summary()} (default 0.95).}
 
-\item{conf.level, level}{Interval level for \code{tidy()} and \code{summary()}
-(default 0.95).}
+\item{conf.level}{Interval level for \code{tidy()} (default 0.95).}
 }
 \value{
 The layout every \code{tobs_fit} returns: \code{nobs()} an integer; \code{coef()} a
