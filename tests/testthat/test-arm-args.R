@@ -27,10 +27,10 @@ test_that("arm-formula arguments fit end to end under their bare names", {
              detection = ~ 1, y = sim$y, p10 = ~ 1, certainty = ~ 1,
              control = list(verbose = FALSE))
   expect_s3_class(fp, "tobs_fit")
-  # coef() is a per-arm list (psi / p11 / p10 / b); the p10 and b arms are the
+  # The fit carries the psi / p11 / p10 / b arms; the p10 and b arms are the
   # ones set by the p10 = and certainty = arguments.
-  expect_true(all(c("psi", "p11", "p10", "b") %in% names(coef(fp))))
-  expect_true(all(is.finite(unlist(coef(fp)))))
+  expect_true(all(c("psi", "p11", "p10", "b") %in% tidy(fp)$arm))
+  expect_true(all(is.finite(coef(fp))))
 
   # dyn_occu: the colonization / extinction arms.
   sd <- simulate_dyn_occu(N = 60, J = 3, n_seasons = 3, seed = 8)
@@ -38,10 +38,10 @@ test_that("arm-formula arguments fit end to end under their bare names", {
              y = sd$y, colonization = ~ 1, extinction = ~ 1,
              control = list(verbose = FALSE))
   expect_s3_class(dy, "tobs_fit")
-  # coef() is a per-arm list; gamma / epsilon are the colonization / extinction
-  # arms set by the colonization = and extinction = arguments.
-  expect_true(all(c("psi1", "p", "gamma", "epsilon") %in% names(coef(dy))))
-  expect_true(all(is.finite(unlist(coef(dy)))))
+  # gamma / epsilon are the colonization / extinction arms set by the
+  # colonization = and extinction = arguments.
+  expect_true(all(c("psi1", "p", "gamma", "epsilon") %in% tidy(dy)$arm))
+  expect_true(all(is.finite(coef(dy))))
 })
 
 test_that("a missing required arm argument errors with a pointer", {

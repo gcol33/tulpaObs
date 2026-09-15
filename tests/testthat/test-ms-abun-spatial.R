@@ -76,7 +76,7 @@ test_that("spatial ms_abun S3 surface carries the field", {
   expect_equal(dim(fv$lambda), c(nrow(adj), 6L))
   expect_true(all(fv$lambda > 0))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys), c(nrow(adj), 4L, 6L))
 
   # Spatial hyperparameter posterior is reported.

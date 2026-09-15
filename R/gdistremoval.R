@@ -326,7 +326,6 @@
     .gdr_draw(up$lambda, up$sigma, up$r, model$cutpoints, model$transect,
               model$n_periods)
   }
-  if (nsim == 1L) return(draw_one())
   lapply(seq_len(nsim), function(s) draw_one())
 }
 

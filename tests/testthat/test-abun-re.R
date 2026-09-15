@@ -87,9 +87,9 @@ test_that("S3 surface (coef, vcov, ranef) carries the RE component", {
 
   # coef returns the two fixed-effect arms.
   co <- coef(fit)
-  expect_true(is.list(co))
-  expect_true(all(c("lambda", "p") %in% names(co)))
-  expect_equal(length(co$lambda), 2L)
+  expect_true(is.numeric(co))
+  expect_setequal(unique(tidy(fit)$arm), c("lambda", "p"))
+  expect_equal(length(coef(fit, arm = "lambda")), 2L)
 
   # vcov is the joint fixed-effect cov (no RE point estimates in it).
   V <- vcov(fit)

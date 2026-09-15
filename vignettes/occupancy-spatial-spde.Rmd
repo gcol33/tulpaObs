@@ -253,7 +253,7 @@ fit_sp <- tobs(
 round(fit_sp$means, 3)
 ```
 
-The fixed-effect coefficients come back through `coef()`, split by process:
+The fixed-effect coefficients come back through `coef()`, named by process:
 `psi` for occupancy, `p` for detection. The standard errors and credible
 intervals are in `summary()`, which reports the estimate, standard error, and
 the lower and upper credible bounds for every fixed effect.

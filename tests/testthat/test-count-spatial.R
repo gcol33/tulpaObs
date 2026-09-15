@@ -98,7 +98,7 @@ test_that("a Poisson areal count fit recovers the field and wires S3", {
   expect_true(is.finite(fit$means[["sigma"]]) && fit$means[["sigma"]] > 0)
 
   # S3 surface runs
-  expect_length(unlist(coef(fit)), 2L)
+  expect_length(coef(fit), 2L)
   expect_true(all(is.finite(diag(vcov(fit)))))
   expect_true(all(is.finite(confint(fit))))
   # fitted() is field-aware (in-sample), so it correlates with the counts
@@ -135,7 +135,7 @@ test_that("Poisson areal count recovers coefficients with ~95% coverage", {
     fit <- tobs(~ x + icar(graph = d$graph), data = d$data, y = d$y,
                 family = count(), method = "nested_laplace",
                 control = list(progress = FALSE, verbose = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -180,7 +180,7 @@ test_that("areal count recovers the field + slope under bym2", {
       expect_true("sigma" %in% names(fit$means))
     }
     fcor[s]   <- stats::cor(fit$spatial_field, d$field)
-    slopes[s] <- unname(unlist(coef(fit)))[2L]
+    slopes[s] <- unname(coef(fit))[2L]
   }
   # The bym2 field tracks the simulated (structured) truth, and the abundance
   # slope recovers on average.
@@ -238,7 +238,7 @@ test_that("binomial areal count recovers the field + coefficients (trials>1)", {
                 family = count("binomial"), trials = d$trials,
                 method = "nested_laplace",
                 control = list(progress = FALSE, verbose = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -300,7 +300,7 @@ test_that("areal count recovers a continuous SPDE field + slope", {
   expect_gt(cor(field_at_sites, u), 0.7)
 
   # Abundance slope recovers.
-  expect_lt(abs(unname(unlist(coef(fit)))[2] - 0.5), 0.15)
+  expect_lt(abs(unname(coef(fit))[2] - 0.5), 0.15)
 
   # fitted() projects the mesh field to sites (length n_sites, tracks y).
   ft <- fitted(fit)
@@ -334,7 +334,7 @@ test_that("areal count recovers a slope under a continuous NNGP gp() field", {
 
   expect_identical(fit$method, "nested_laplace")
   # Slope recovers under the field-integrated marginal.
-  expect_lt(abs(unname(unlist(coef(fit)))[2] - 0.6), 0.15)
+  expect_lt(abs(unname(coef(fit))[2] - 0.6), 0.15)
   # The GP hyperparameter posterior (marginal variance + range) is surfaced.
   expect_true(all(c("sigma2", "phi_gp") %in% fit$gp_hyper$theta_names))
   expect_true(all(is.finite(fit$gp_hyper$mean)))

@@ -12,8 +12,11 @@
 \item{...}{Forwarded to \code{summary.tulpa_fit}.}
 }
 \value{
-Data frame as for \code{summary.tulpa_fit}, with extra \code{skew} column
-when \verb{$skew} is present.
+Data frame as for \code{summary.tulpa_fit}, one row per coefficient named
+\verb{<arm>_<term>} as \code{\link[=coef.tobs_fit]{coef.tobs_fit()}} names it, with columns \code{estimate}, \code{std.error}
+and the two interval bounds, plus a \code{skew} column when \verb{$skew} is present
+and \code{rhat}, \code{ess_bulk}, \code{ess_tail} on a sampled fit. Every family, and
+every method within a family, returns this layout.
 }
 \description{
 Extends \code{summary.tulpa_fit} with an extra \code{skew} column populated from

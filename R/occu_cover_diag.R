@@ -801,6 +801,70 @@
        bayesian.p = mean(r$fit.y.rep > r$fit.y))
 }
 
+# simulate() for occu_cover(): per replicate one posterior draw (coefficients,
+# field and observation-arm effects), a site occupancy state, per-visit
+# detections, and cover at the detected visits at the granularity the fit used.
+# Under cover_aggregate = "none" each detected visit draws its own cover; under
+# "mean" / "median" the arm models one cover per detected site, so that draw is
+# written to every detected visit of the site (whose aggregate is then that
+# draw); under "latent" a site cover effect u ~ N(0, disp) is shared by the
+# site's detected visits, each drawn at the within-site dispersion. A dense fit
+# returns list(y, y_pos) on its [sites x visits] grid (NA where no visit was
+# made, and y_pos NA off the detected visits); a compact fit returns the same per
+# visit row with its `site`.
+.tobs_simulate_occu_cover <- function(object, nsim) {
+  model    <- object$model
+  positive <- model$positive %||% "lognormal"
+  mode     <- model$cover_aggregate %||% "none"
+  c0 <- .tobs_occu_cover_components(object, nsim)
+  if (!identical(mode, "none")) .occu_cover_reject_offsets(c0$off_det, c0$off_pos, mode)
+  S  <- nrow(c0$b_occ)
+  vw <- .occu_cover_visit_view(model)
+  site <- vw$site_of_visit
+  comp <- .occu_cover_eta_components(
+    list(X_occ = model$X_occ, X_det_site = model$X_det_site,
+         X_pos_site = model$X_pos_site, X_det_visit = vw$X_det_visit,
+         X_pos_visit = vw$X_pos_visit),
+    c0$b_occ, c0$b_det, c0$b_pos, c0$field_occ, c0$field_pos)
+  disp  <- if (length(c0$disp) == 1L) rep(c0$disp, S) else c0$disp
+  disp2 <- model$cover_latent_disp2 %||% 0
+  cl <- .tobs_clamp_eta
+  draw_rows <- if (S == nsim) seq_len(nsim) else sample.int(S, nsim, replace = TRUE)
+  cells <- if (!isTRUE(model$ragged))
+    which(t(model$valid), arr.ind = TRUE)[, 2:1, drop = FALSE]
+
+  lapply(draw_rows, function(d) {
+    de <- .occu_cover_draw_eta_ragged(comp, d, site)
+    p_eta <- de$p_eta + if (is.null(c0$off_det)) 0 else c0$off_det[, d]
+    ep    <- de$ep    + if (is.null(c0$off_pos)) 0 else c0$off_pos[, d]
+    z   <- stats::rbinom(model$n_sites, 1L, stats::plogis(cl(de$psi_eta)))
+    det <- stats::rbinom(vw$V, 1L, z[site] * stats::plogis(cl(p_eta)))
+    cov <- rep(NA_real_, vw$V)
+    hit <- which(det == 1L)
+    if (length(hit)) {
+      if (identical(mode, "none")) {
+        cov[hit] <- .tobs_draw_positive_cover(ep[hit], disp[d], positive)
+      } else {
+        units <- sort(unique(site[hit]))
+        unit_ep <- comp$eta_pos_site_all[units, d]
+        at <- match(site[hit], units)
+        cov[hit] <- if (identical(mode, "latent")) {
+          u <- stats::rnorm(length(units), 0, disp[d])
+          .tobs_draw_positive_cover(unit_ep[at] + u[at], disp2, positive)
+        } else {
+          .tobs_draw_positive_cover(unit_ep, disp[d], positive)[at]
+        }
+      }
+    }
+    if (isTRUE(model$ragged)) return(list(site = site, y = det, y_pos = cov))
+    y <- matrix(NA_integer_, model$n_sites, model$max_visits)
+    y_pos <- matrix(NA_real_, model$n_sites, model$max_visits)
+    y[cells] <- det
+    y_pos[cells] <- cov
+    list(y = y, y_pos = y_pos)
+  })
+}
+
 # Per-draw CDF limits for the occu_cover() per-site detection summary
 # (any-detection vs all-zero), marginalized over the latent occupancy state with
 # the shared field folded in per site. Returns the [S x n_sites] lower / upper

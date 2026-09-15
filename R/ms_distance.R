@@ -619,7 +619,7 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
     }
     y
   }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  lapply(seq_len(nsim), function(i) one())
 }
 
 

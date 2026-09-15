@@ -299,7 +299,7 @@ test_that("ms_abun NUTS S3 methods + WAIC work", {
   expect_no_error(print(fit))
 
   cf <- coef(fit)
-  expect_setequal(names(cf), c("lambda", "p"))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("lambda", "p"))
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
   expect_equal(nrow(confint(fit)), length(fit$means))

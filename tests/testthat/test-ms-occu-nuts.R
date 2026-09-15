@@ -225,8 +225,7 @@ test_that("ms_occu NUTS S3 methods work, incl. richness", {
   expect_no_error(print(fit))
   expect_no_error(summary(fit))
 
-  cf <- coef(fit)
-  expect_setequal(names(cf), c("psi", "p"))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("psi", "p"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
@@ -241,7 +240,7 @@ test_that("ms_occu NUTS S3 methods work, incl. richness", {
   expect_equal(dim(fv$psi), c(60L, 8L))
   expect_equal(dim(fv$z),   c(60L, 8L))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys), c(60L, 3L, 8L))
 
   rich <- tobs_richness(fit)

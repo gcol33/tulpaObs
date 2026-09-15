@@ -547,7 +547,7 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   `.tobs_fit_nmix_zip` (`R/nmix_zip.R`) L-BFGS-B over theta
   `[beta_lambda|beta_p|logit_omega|(log_r)]`, vcov = inv numeric Hessian. omega
   intercept-only; `logit_omega` a model coord (in `means`/`vcov`/`sds`, surfaced
-  by `summary` like `log_r`, NOT the per-process `coef()` list); `fit$zi_omega`
+  by `summary` like `log_r`, with no arm in `tidy()`); `fit$zi_omega`
   = omega, `fit$zero_inflated`. Box-bounds only the pathological corners
   (`logit_omega`, `log_r`) so a degenerate seed can't diverge on the ZINB
   zero-source ridge; betas unbounded (no interior bias). ZIP recovers cleanly
@@ -685,6 +685,24 @@ shared-field loading (#113); temporal/RE NUTS still gated to n-L.
 
 NUTS crash for component w/ correct `populate_*` here = bug in tulpa
 `hmc_sampler.cpp`, not here. File against `gcol33/tulpa`.
+
+### Stats accessors: ONE layout on every fit (#332)
+
+`coef()` = flat named vector, names `<arm>_<term>` exactly as `vcov()` /
+`confint()` / `summary()` rownames; `coef(fit, arm = "psi")` = one arm,
+unprefixed. `tidy()` = `arm, term, estimate, std.error, conf.low, conf.high`
+(arm `NA` for a coordinate in no arm: `log_r`, `log_sigma_pos`, AR1 hypers).
+Arms + their terms come from `.tobs_fit_arms()` (process_info `coef_names`,
+detection arm also owns `visit_<cov>`; multi-arm fits `presence`/`positive`/
+`class`), split by `.tobs_split_terms()` on DECLARED terms, never prefix alone
+(`mu_log_r` beside arm `mu`; `f_sp1_sp2` beside `f_sp1`). `glance()` = `nobs, df,
+logLik, n_fixed, n_samples, n_divergent, mean_accept, converged` (+ outer grid,
+pareto) via `.tobs_glance_layout()`; multi-arm fits too. `summary()` = one data
+frame on every method (no `summary.cover_fit`). `simulate()` = ALWAYS a list of
+`nsim` (`sim_1`..), `"seed"` attr, stats:::simulate.lm RNG protocol; a family
+handler `.tobs_simulate_<key>(object, nsim)` returns the list, never unwraps at
+nsim = 1. `residuals()` keeps its LEVEL contract `list(occ, det)` -- `det` is
+scored against `z * p`, not a `fitted()` quantity, so it is not renamed.
 
 ### Diagnostic doors = S3 methods, NEVER a second name
 

@@ -501,18 +501,6 @@
   s
 }
 
-.tobs_sbc_draw_positive <- function(eta, disp, positive) {
-  n <- length(eta)
-  if (identical(positive, "beta")) {
-    mu <- stats::plogis(eta)
-    pmin(pmax(stats::rbeta(n, mu * disp, (1 - mu) * disp), 1e-6), 1 - 1e-6)
-  } else if (identical(positive, "gaussian")) {
-    stats::rnorm(n, eta, disp)
-  } else {
-    exp(stats::rnorm(n, eta, disp))
-  }
-}
-
 .tobs_sbc_sim_occu_cover <- function(spec, theta, seed) {
   set.seed(seed)
   m  <- spec$model
@@ -537,7 +525,7 @@
   y_pos <- matrix(0, n, J)
   hit <- which(y == 1L)
   if (length(hit)) {
-    y_pos[hit] <- .tobs_sbc_draw_positive(e$ep_mat[hit], disp, spec$positive)
+    y_pos[hit] <- .tobs_draw_positive_cover(e$ep_mat[hit], disp, spec$positive)
   }
   if (!is.null(m$valid)) { y[!m$valid] <- NA; y_pos[!m$valid] <- NA }
 
@@ -742,7 +730,7 @@
       sp <- .tobs_sbc_spec_simple(fit, fit.control, state = state, det = det)
       sp$extra <- if (is.function(extra)) extra(fit$model) else extra
       sp$replicate <- replicate %||%
-        function(f) stats::simulate(f, nsim = 1L)
+        function(f) stats::simulate(f, nsim = 1L)[[1L]]
       sp$y_vector <- y_vector
       sp
     },
@@ -890,7 +878,7 @@
   if (length(nm$global_cols)) {
     f$means[nm$global_cols] <- theta[nm$global_cols]
   }
-  rep <- stats::simulate(f, nsim = 1L)
+  rep <- stats::simulate(f, nsim = 1L)[[1L]]
   obs <- spec$data_obs
   list(cells  = obs$cells,
        y      = if (y_pos) rep$y else rep,
@@ -1098,7 +1086,7 @@
        p         = .tobs_sbc_recombine(m$formulas$p,      NULL),
        omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
        gamma     = .tobs_sbc_recombine(m$formulas$gamma,  NULL),
-       replicate = function(f) stats::simulate(f, nsim = 1L))
+       replicate = function(f) stats::simulate(f, nsim = 1L)[[1L]])
 }
 
 .tobs_sbc_refit_dyn_abun <- function(spec, data) {
@@ -1257,7 +1245,7 @@
   D <- matrix(theta, nrow = 1L)
   colnames(D) <- names(theta)
   f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)
+  rep <- stats::simulate(f, nsim = 1L)[[1L]]
   list(cells = spec$model$data, y = list(yDist = rep$yDist, yRem = rep$yRem),
        y_pos = NULL, visits = NULL, graph = NULL,
        site = seq_len(spec$model$n_sites))
@@ -1441,7 +1429,7 @@
        omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
        gamma     = .tobs_sbc_recombine(m$formulas$gamma,  NULL),
        cutpoints = m$cutpoints, transect = m$transect,
-       replicate = function(f) stats::simulate(f, nsim = 1L))
+       replicate = function(f) stats::simulate(f, nsim = 1L)[[1L]])
 }
 
 .tobs_sbc_refit_distsamp_open <- function(spec, data) {
@@ -1505,7 +1493,7 @@
   D <- matrix(theta, nrow = 1L)
   colnames(D) <- names(theta)
   f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)
+  rep <- stats::simulate(f, nsim = 1L)[[1L]]
   obs <- spec$data_obs
   list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
        site = obs$site)
@@ -1580,7 +1568,7 @@
   D <- matrix(theta, nrow = 1L)
   colnames(D) <- names(theta)
   f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)
+  rep <- stats::simulate(f, nsim = 1L)[[1L]]
   obs <- spec$data_obs
   list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
        site = obs$site)

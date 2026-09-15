@@ -537,7 +537,7 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
     }
     out
   }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  lapply(seq_len(nsim), function(i) one())
 }
 
 

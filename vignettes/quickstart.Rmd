@@ -177,7 +177,8 @@ knobs stay in one place. Swapping `occu()` for `abun()` and handing it a
 count matrix turns the same call into an N-mixture fit; the shape does
 not change.
 
-`coef()` returns the estimates as a list with one element per process.
+`coef()` returns the estimates as one vector, each name carrying the process
+and the coefficient (`psi_occ_cov1`).
 The occupancy and detection coefficients both land near the simulated
 truth.
 
@@ -185,9 +186,9 @@ truth.
 coef(fit)
 ```
 
-The list has two elements because the model has two processes. `coef(fit)$psi`
+`coef(fit, arm = "psi")`
 holds the occupancy intercept and the slope on `occ_cov1`, both on the
-logit scale, and `coef(fit)$p` holds the detection coefficients. Reading
+logit scale, and `coef(fit, arm = "p")` holds the detection coefficients. Reading
 the occupancy intercept of about 0.3 through `plogis()` gives a baseline
 occupancy near 0.57 at the covariate mean; the slope of about 1.0 says
 occupancy rises steeply with `occ_cov1`. Keep the link in mind whenever
@@ -331,9 +332,9 @@ skewed or weakly identified.
 
 ```{r compare-backends}
 data.frame(
-  term    = names(unlist(coef(fit))),
-  laplace = round(unlist(coef(fit)), 3),
-  nuts    = round(unlist(coef(fit_nuts)), 3),
+  term    = names(coef(fit)),
+  laplace = round(coef(fit), 3),
+  nuts    = round(coef(fit_nuts), 3),
   row.names = NULL
 )
 ```
@@ -418,7 +419,7 @@ effects and `ranef()` the per-group BLUPs.
 fit_re <- tobs(~ x + (1 | g), data = d_re, y = y_re, detection = ~ 1,
                family = occu(), method = "laplace",
                control = list(verbose = FALSE))
-coef(fit_re)$psi
+coef(fit_re, arm = "psi")
 ```
 
 The variance component lands in `fit$means`, named for the group it
@@ -516,10 +517,10 @@ fit
 A bar plot of the two occupancy coefficients against zero reads the model
 at a glance: the slope clears zero, the intercept sits where the baseline
 occupancy puts it. The same picture for the detection arm comes from
-`coef(fit)$p`.
+`coef(fit, arm = "p")`.
 
 ```{r taste-occu-plot, eval = have_gg, fig.alt = "Occupancy coefficients as bars against a zero reference line"}
-co <- data.frame(term = names(coef(fit)$psi), est = coef(fit)$psi)
+co <- data.frame(term = names(coef(fit, arm = "psi")), est = coef(fit, arm = "psi"))
 ggplot(co, aes(x = term, y = est)) +
   geom_col(fill = "steelblue", width = 0.6) +
   geom_hline(yintercept = 0, colour = "grey40") +
@@ -555,7 +556,7 @@ sa <- simulate_abun(N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
 fa <- tobs(~ abund_cov1, data = sa$data, family = abun(),
            detection = ~ det_cov1, y = sa$y, method = "laplace",
            control = list(verbose = FALSE))
-exp(coef(fa)$lambda[["(Intercept)"]])    # baseline expected abundance
+exp(coef(fa, arm = "lambda")[["(Intercept)"]])    # baseline expected abundance
 ```
 
 The back-transformed intercept lands near the simulated baseline of three
@@ -602,7 +603,7 @@ sm <- simulate_ms_occu(N = 120, J = 5, n_species = 8, seed = 3)
 fm <- tobs(~ x, data = sm$data, family = ms_occu(), detection = ~ 1,
            y = sm$y, species = paste0("sp", 1:8), method = "laplace",
            control = list(verbose = FALSE))
-coef(fm)$psi                                # community occupancy mean
+coef(fm, arm = "psi")                                # community occupancy mean
 ```
 
 `tobs_richness()` turns the per-species occupancy posteriors into a
@@ -813,7 +814,7 @@ si <- simulate_int_occu(N_total = 500, n_data = 2, J = c(2, 5),
 fit_int <- tobs(~ x, data = si$data, family = int_occu(), detection = ~ 1,
                 y = list(survey = si$y[[1]], casual = si$y[[2]]),
                 method = "laplace", control = list(verbose = FALSE))
-coef(fit_int)$psi                           # shared occupancy block
+coef(fit_int, arm = "psi")                           # shared occupancy block
 ```
 
 The fit returns one shared occupancy block plus a detection block per
@@ -823,7 +824,7 @@ estimated separately.
 
 ```{r taste-int-plot, eval = have_gg, fig.alt = "Per-source detection probability as bars, one per data source"}
 dp <- data.frame(source = c("survey", "casual"),
-                 p = plogis(c(coef(fit_int)$survey, coef(fit_int)$casual)))
+                 p = plogis(c(coef(fit_int, arm = "survey"), coef(fit_int, arm = "casual"))))
 ggplot(dp, aes(x = source, y = p)) +
   geom_col(fill = "steelblue", width = 0.5) +
   ylim(0, 1) + labs(x = NULL, y = "detection probability") +
@@ -854,12 +855,12 @@ same on a Laplace fit and a NUTS fit; the Laplace tier reports the
 Gaussian approximation at the mode, the sampler tier reports empirical
 posterior summaries. `print()` lays out both processes and the family.
 `summary()` adds the standard deviation and credible bounds, plus `Rhat`
-and effective sample size under NUTS. `coef()` returns the per-process
-estimates as a list, `confint()` the credible intervals as a matrix, and
+and effective sample size under NUTS. `coef()` returns the estimates as a
+named vector, `confint()` the credible intervals as a matrix, and
 `vcov()` the fixed-effect covariance.
 
 ```{r s3-methods}
-co  <- coef(fit)            # list, one element per process
+co  <- coef(fit)            # named <process>_<coefficient>
 ci  <- confint(fit)         # matrix of credible bounds
 vc  <- vcov(fit)            # fixed-effect covariance
 list(coef = names(co), confint_rows = rownames(ci), vcov_dim = dim(vc))

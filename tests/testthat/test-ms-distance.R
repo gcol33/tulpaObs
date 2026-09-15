@@ -164,7 +164,7 @@ test_that("msDS community means are unbiased over seeds with nominal coverage", 
                 family = ms_distance(cutpoints = .msds_cut), y = d$y,
                 species = d$species, method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    e <- c(coef(fit)$lambda, coef(fit)$sigma)
+    e <- c(coef(fit, arm = "lambda"), coef(fit, arm = "sigma"))
     est[s, ] <- e
     hit[s, ] <- abs(e - truth) < 1.96 * fit$sds
   }
@@ -196,7 +196,7 @@ test_that("lfMsDS recovers residual species co-occurrence", {
   off <- upper.tri(d$truth$cor_res)
   expect_gt(stats::cor(fit$ms_factor$residual_cor[off],
                        d$truth$cor_res[off]), 0.7)
-  expect_equal(unname(coef(fit)$lambda), d$truth$mu_lambda, tolerance = 0.3)
+  expect_equal(unname(coef(fit, arm = "lambda")), d$truth$mu_lambda, tolerance = 0.3)
 })
 
 test_that("sfMsDS recovers the shared field alongside the factors", {

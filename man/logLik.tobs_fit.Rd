@@ -15,7 +15,7 @@
 A \code{logLik} object.
 }
 \description{
-The value and degrees of freedom are the engine's (\link[tulpa:tulpa_fit]{tulpa::tulpa_fit}
+The value and degrees of freedom are the engine's (the \code{tulpa_fit}
 method); the \code{"nobs"} attribute is \code{\link[=nobs.tobs_fit]{nobs.tobs_fit()}} on the same fit, so
 \code{stats::BIC()} and anything else reading the attribute counts the
 observations \code{nobs()} reports.

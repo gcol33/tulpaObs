@@ -86,9 +86,8 @@ test_that("ms_occu() S3 methods work, incl. richness", {
   expect_no_error(print(fit))
   expect_no_error(summary(fit))
 
-  cf <- coef(fit)
-  expect_setequal(names(cf), c("psi", "p"))
-  expect_setequal(names(cf$psi), c("(Intercept)", "x"))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("psi", "p"))
+  expect_setequal(names(coef(fit, arm = "psi")), c("(Intercept)", "x"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
@@ -105,7 +104,7 @@ test_that("ms_occu() S3 methods work, incl. richness", {
   expect_equal(dim(fv$z),   c(60L, 8L))
   expect_true(all(fv$psi > 0 & fv$psi < 1))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys), c(60L, 3L, 8L))
 
   rich <- tobs_richness(fit)

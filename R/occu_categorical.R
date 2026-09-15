@@ -218,9 +218,23 @@ print.occu_categorical_fit <- function(x, ...) {
   invisible(x)
 }
 
-#' @export
-coef.occu_categorical_fit <- function(object, ...) {
-  list(presence = object$beta_occ, class = object$beta_class)
+# simulate() for occu_categorical(): per replicate, both arms' coefficients are
+# drawn from their Laplace Gaussians (independent arms), then presence at every
+# row and, where present, a class from the baseline-category softmax on the
+# shared design. The response codes as `y` does: 0 absent, k class k.
+.tobs_simulate_occu_categorical <- function(object, nsim) {
+  enc <- object$encoding
+  X <- enc$X_occ; n <- nrow(X); K <- enc$K
+  B_occ <- .tobs_mvn_draws(object$beta_occ, object$vcov_occ, nsim)
+  B_cls <- .tobs_mvn_draws(as.vector(object$beta_class), object$vcov_class, nsim)
+  lapply(seq_len(nsim), function(s) {
+    present <- stats::rbinom(n, 1L, stats::plogis(as.vector(X %*% B_occ[s, ])))
+    E <- exp(pmin(X %*% matrix(B_cls[s, ], ncol(X), K - 1L), 700))
+    P <- cbind(E, 1) / (1 + rowSums(E))
+    cls <- vapply(seq_len(n), function(i) sample.int(K, 1L, prob = P[i, ]),
+                  integer(1))
+    as.integer(ifelse(present == 1L, cls, 0L))
+  })
 }
 
 #' Predict from an occu_categorical fit

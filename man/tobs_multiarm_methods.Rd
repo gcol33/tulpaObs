@@ -12,12 +12,11 @@
 \alias{summary.tobs_multiarm_fit}
 \alias{fitted.tobs_multiarm_fit}
 \alias{residuals.tobs_multiarm_fit}
-\alias{simulate.tobs_multiarm_fit}
 \title{S3 methods for multi-arm fits}
 \usage{
 \method{nobs}{tobs_multiarm_fit}(object, ...)
 
-\method{coef}{tobs_multiarm_fit}(object, ...)
+\method{coef}{tobs_multiarm_fit}(object, arm = NULL, ...)
 
 \method{vcov}{tobs_multiarm_fit}(object, ...)
 
@@ -27,15 +26,13 @@
 
 \method{glance}{tobs_multiarm_fit}(x, ...)
 
-\method{tidy}{tobs_multiarm_fit}(x, ...)
+\method{tidy}{tobs_multiarm_fit}(x, conf.level = 0.95, ...)
 
-\method{summary}{tobs_multiarm_fit}(object, ...)
+\method{summary}{tobs_multiarm_fit}(object, level = 0.95, ...)
 
 \method{fitted}{tobs_multiarm_fit}(object, ...)
 
 \method{residuals}{tobs_multiarm_fit}(object, ...)
-
-\method{simulate}{tobs_multiarm_fit}(object, nsim = 1, seed = NULL, ...)
 }
 \arguments{
 \item{object, x}{A \code{tobs_multiarm_fit} (a \code{cover_fit} or
@@ -43,19 +40,24 @@
 
 \item{...}{Ignored, or forwarded to \code{NextMethod()} on the posterior path.}
 
+\item{arm}{Optional arm name (\code{"presence"}, \code{"positive"} or \code{"class"}) for
+\code{coef()}; see \code{\link[=coef.tobs_fit]{coef.tobs_fit()}}.}
+
 \item{parm}{Ignored (present for \code{confint()} generic compatibility).}
 
 \item{level}{Confidence level for \code{confint()}.}
 
-\item{nsim, seed}{Present for the \code{simulate()} generic; \code{simulate()} is not
-supported (use the family's \verb{simulate_*()} function).}
+\item{conf.level, level}{Interval level for \code{tidy()} and \code{summary()}
+(default 0.95).}
 }
 \value{
-\code{nobs()} an integer; \code{coef()} a named list of per-arm estimates;
-\code{vcov()} the block-diagonal covariance; \code{confint()} a two-column matrix;
-\code{logLik()} a \code{logLik} object; \code{glance()}/\code{tidy()} a data frame. On a joint
-nested-Laplace fit \code{glance()} also carries \code{outer_grid_placement} and
-\code{outer_grid_recenter_declined}.
+The layout every \code{tobs_fit} returns: \code{nobs()} an integer; \code{coef()} a
+named vector (\code{presence_(Intercept)}, \code{positive_x}, \code{class_2:x}, ...);
+\code{vcov()} the block-diagonal covariance and \code{confint()} a two-column matrix,
+both named as \code{coef()}; \code{logLik()} a \code{logLik} object; \code{tidy()} the
+\code{arm} / \code{term} / \code{estimate} / \code{std.error} / \code{conf.low} / \code{conf.high} table;
+\code{summary()} the estimate / std.error / interval data frame;
+\code{glance()} the one-row column set of \code{\link[=glance.tobs_fit]{glance.tobs_fit()}}.
 }
 \description{
 Coefficient, covariance, and summary accessors for fits that store

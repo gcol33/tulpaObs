@@ -54,9 +54,9 @@ test_that("removal() recovers a known svc() surface on the abundance arm", {
   # Counts identify the surface sharply.
   expect_gt(stats::cor(surf, tr$z), 0.85)
   cf <- coef(fit)
-  expect_lt(abs(cf$lambda[["(Intercept)"]] - 1.6), 0.5)
-  expect_lt(abs(cf$lambda[["x"]] - 0.5), 0.25)
-  expect_lt(abs(stats::plogis(cf$p[["(Intercept)"]]) - p_cap), 0.12)
+  expect_lt(abs(cf[["lambda_(Intercept)"]] - 1.6), 0.5)
+  expect_lt(abs(cf[["lambda_x"]] - 0.5), 0.25)
+  expect_lt(abs(stats::plogis(cf[["p_(Intercept)"]]) - p_cap), 0.12)
 
   # The surface is reported the way the occu() Laplace and NUTS routes report it.
   expect_s3_class(fit$svc, "tobs_svc")
@@ -116,8 +116,8 @@ test_that("fp_occu() recovers a known svc() surface on the psi arm", {
   # the same regime the single-season occu() Laplace route measures (#143).
   expect_gt(stats::cor(surf, tr$z), 0.55)
   cf <- coef(fit)
-  expect_lt(abs(stats::plogis(cf$p11[["(Intercept)"]]) - 0.6), 0.15)
-  expect_lt(stats::plogis(cf$p10[["(Intercept)"]]), 0.2)
+  expect_lt(abs(stats::plogis(cf[["p11_(Intercept)"]]) - 0.6), 0.15)
+  expect_lt(stats::plogis(cf[["p10_(Intercept)"]]), 0.2)
   expect_identical(fit$svc_field_arm, "occupancy")
 })
 
@@ -145,8 +145,8 @@ test_that("distance() recovers a known svc() surface on the abundance arm", {
   expect_length(surf, N)
   expect_gt(stats::cor(surf, tr$z), 0.8)
   cf <- coef(fit)
-  expect_lt(abs(cf$lambda[["(Intercept)"]] - 1.8), 0.5)
-  expect_lt(abs(exp(cf$sigma[["(Intercept)"]]) - sigma) / sigma, 0.3)
+  expect_lt(abs(cf[["lambda_(Intercept)"]] - 1.8), 0.5)
+  expect_lt(abs(exp(cf[["sigma_(Intercept)"]]) - sigma) / sigma, 0.3)
   expect_identical(fit$svc_field_arm, "abundance")
 })
 
@@ -172,9 +172,9 @@ test_that("dyn_abun() recovers a known svc() surface on the initial-abundance ar
   expect_length(surf, N)
   expect_gt(stats::cor(surf, tr$z), 0.8)
   cf <- coef(fit)
-  expect_lt(abs(cf$lambda[["(Intercept)"]] - 1.2), 0.5)
-  expect_lt(abs(stats::plogis(cf$p[["(Intercept)"]]) - p_det), 0.15)
-  expect_lt(abs(stats::plogis(cf$omega[["(Intercept)"]]) - omega), 0.2)
+  expect_lt(abs(cf[["lambda_(Intercept)"]] - 1.2), 0.5)
+  expect_lt(abs(stats::plogis(cf[["p_(Intercept)"]]) - p_det), 0.15)
+  expect_lt(abs(stats::plogis(cf[["omega_(Intercept)"]]) - omega), 0.2)
   expect_identical(fit$svc_field_arm, "abundance")
 })
 
@@ -209,7 +209,7 @@ test_that("an svc() surface composes with an areal field on the same arm", {
   expect_length(fit$spatial_field, N)
   expect_true(all(is.finite(as.numeric(fit$svc_field))))
   expect_true(all(is.finite(fit$spatial_field)))
-  expect_lt(abs(coef(fit)$lambda[["(Intercept)"]] - 1.6), 0.6)
+  expect_lt(abs(coef(fit, arm = "lambda")[["(Intercept)"]] - 1.6), 0.6)
 })
 
 

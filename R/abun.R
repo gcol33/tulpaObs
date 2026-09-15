@@ -650,7 +650,7 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
     as.integer(model$site_idx), as.integer(model$visit_idx),
     model$n_sites, model$max_visits, p_lam, p_p, is_nb,
     if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim), zi_om)
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 # residuals() for N-mixture. A single visit of a Poisson-thinned count is

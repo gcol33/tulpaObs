@@ -98,7 +98,7 @@ test_that("Laplace cover_fit S3 surface: vcov/confint/logLik/tidy/summary (#276)
 
   V <- vcov(fit)
   expect_true(is.matrix(V))
-  expect_true(all(c("presence:(Intercept)", "positive:(Intercept)") %in%
+  expect_true(all(c("presence_(Intercept)", "positive_(Intercept)") %in%
                     rownames(V)))
 
   ci <- confint(fit)
@@ -112,7 +112,7 @@ test_that("Laplace cover_fit S3 surface: vcov/confint/logLik/tidy/summary (#276)
                     "conf.low", "conf.high") %in% names(td)))
   expect_setequal(unique(td$arm), c("presence", "positive"))
 
-  expect_output(print(summary(fit)), "Presence:")
+  expect_identical(rownames(summary(fit)), names(coef(fit)))
 })
 
 test_that("print.cover_fit() reports the fitted arms (#276)", {

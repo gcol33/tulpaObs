@@ -324,7 +324,7 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   res <- cpp_simulate_removal(ab$X[[1L]], ab$X[[2L]], ab$draws,
     as.integer(site_idx), as.integer(visit_idx), n_sites, n_pass, p_lam, p_p,
     is_nb, if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 # residuals() for removal. Under Poisson abundance the pass-k removal is

@@ -89,8 +89,8 @@ test_that("ms_int_occu() S3 methods work", {
   expect_no_error(summary(fit))
 
   cf <- coef(fit)
-  expect_true(is.list(cf))
-  expect_setequal(names(cf), c("psi", "p1", "p2"))
+  expect_identical(names(cf), rownames(vcov(fit)))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("psi", "p1", "p2"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
@@ -107,7 +107,7 @@ test_that("ms_int_occu() S3 methods work", {
   expect_equal(length(fv$p), 2L)
   expect_equal(dim(fv$p$p1), c(80L, 8L))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_length(ys, 2L)
   expect_equal(dim(ys[[1]]), c(80L, 3L, 8L))
   expect_equal(dim(ys[[2]]), c(80L, 4L, 8L))

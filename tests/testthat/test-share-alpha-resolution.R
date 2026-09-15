@@ -298,7 +298,7 @@ test_that("the resolution places the copy axis the fit integrates", {
   # And the finer axis is integrated, not merely declared: more nodes over the
   # same span is a different quadrature of the same posterior.
   expect_gt(length(fine$joint$log_marginal), length(dflt$joint$log_marginal))
-  expect_equal(unname(coef(fine)$occ), unname(coef(dflt)$occ), tolerance = 0.05)
+  expect_equal(unname(coef(fine, arm = "presence")), unname(coef(dflt, arm = "presence")), tolerance = 0.05)
 })
 
 test_that("the trend block carries its own resolution", {

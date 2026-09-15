@@ -340,7 +340,7 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   res <- lapply(res, function(a) {
     dimnames(a) <- list(NULL, NULL, model$species_names); a
   })
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 

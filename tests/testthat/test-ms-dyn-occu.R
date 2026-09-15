@@ -103,8 +103,8 @@ test_that("ms_dyn_occu() S3 methods work", {
   expect_no_error(summary(fit))
 
   cf <- coef(fit)
-  expect_true(is.list(cf))
-  expect_setequal(names(cf), c("psi1", "p", "gamma", "eps"))
+  expect_identical(names(cf), rownames(vcov(fit)))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("psi1", "p", "gamma", "eps"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
@@ -123,7 +123,7 @@ test_that("ms_dyn_occu() S3 methods work", {
   expect_length(fv$eps,   50L)
   expect_true(all(fv$psi1 > 0 & fv$psi1 < 1))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys), c(50L, 3L, 4L, 8L))
 
   expect_type(nobs(fit), "integer")

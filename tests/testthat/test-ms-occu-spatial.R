@@ -138,8 +138,7 @@ test_that("ms_occu spatial S3 works, fitted adds the field offset", {
   expect_true(all(fv$psi > 0 & fv$psi < 1))
   re <- ranef(fit)
   expect_s3_class(re, "data.frame")
-  cf <- coef(fit)
-  expect_setequal(names(cf), c("psi", "p"))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("psi", "p"))
 })
 
 

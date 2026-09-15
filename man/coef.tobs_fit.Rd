@@ -4,24 +4,24 @@
 \alias{coef.tobs_fit}
 \title{Coefficients for a tobs_fit}
 \usage{
-\method{coef}{tobs_fit}(object, ...)
+\method{coef}{tobs_fit}(object, arm = NULL, ...)
 }
 \arguments{
 \item{object}{A \code{tobs_fit} object.}
 
+\item{arm}{Optional name of one linear predictor (\code{"psi"}, \code{"p"}, ...). When
+given, only that arm's coefficients are returned, named by their design
+column without the arm prefix.}
+
 \item{...}{Ignored.}
 }
 \value{
-A per-process coefficient list, one named numeric vector per linear
-predictor, with visit-level detection coefficients appended to the
-detection process when present.
+A named numeric vector.
 }
 \description{
-Returns a per-process coefficient list keyed by the model's process names
-(\code{psi}, \code{p}, \code{gamma}, \code{lambda}, ...), splitting the generic flat fixed-effect
-vector on the \verb{<process>_<coef>} name prefix, and appends the visit-level
-detection coefficients (\verb{p_visit_<cov>}) carried separately from the
-site-level detection design. Coordinates with no process
-prefix (e.g. the \code{log_r} overdispersion nuisance) are not arm coefficients
-and are omitted from the list (they remain in \code{vcov()} / \code{confint()}).
+The fixed-effect estimates as one named numeric vector, named
+\verb{<arm>_<term>} as \code{\link[stats:vcov]{stats::vcov()}} and \code{\link[stats:confint]{stats::confint()}} name them: \code{psi_(Intercept)},
+\code{p_det_cov1}, \code{lambda_elev}, ... The visit-level detection coefficients
+(\verb{p_visit_<cov>}) belong to the detection arm. A coordinate that enters no
+single arm, such as the \code{log_r} overdispersion, keeps its own name.
 }

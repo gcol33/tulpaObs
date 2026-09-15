@@ -2,7 +2,7 @@
 % Please edit documentation in R/methods.R
 \name{simulate.tobs_fit}
 \alias{simulate.tobs_fit}
-\title{Simulate replicate datasets from posterior}
+\title{Simulate replicate datasets from the posterior}
 \usage{
 \method{simulate}{tobs_fit}(object, nsim = 1, seed = NULL, ...)
 }
@@ -11,13 +11,23 @@
 
 \item{nsim}{Number of simulated datasets (default 1).}
 
-\item{seed}{Optional random seed.}
+\item{seed}{Optional random seed. As for \code{\link[stats:simulate]{stats::simulate()}}, a supplied
+seed is set for the call and the caller's random number stream is restored
+afterwards.}
 
-\item{...}{Ignored.}
+\item{...}{Must be empty.}
 }
 \value{
-A list of simulated detection history matrices.
+A list of length \code{nsim}, one simulated response per element (named
+\code{sim_1}, \code{sim_2}, ...), each in the layout the family's \code{y} takes: a
+detection matrix, a \verb{[sites x visits x seasons]} array, a list of source
+or species matrices, and so on. The list carries the \code{"seed"} attribute
+\code{\link[stats:simulate]{stats::simulate()}} specifies: the \code{.Random.seed} in force when \code{seed} is
+\code{NULL}, otherwise \code{seed} with its \code{RNGkind()} as the \code{"kind"} attribute.
+Every family returns this layout, whatever \code{nsim} is.
 }
 \description{
-Simulate replicate datasets from posterior
+Each replicate draws a parameter vector from the fit's posterior draws and
+simulates the latent state and the response from it, so the replicates carry
+parameter uncertainty.
 }

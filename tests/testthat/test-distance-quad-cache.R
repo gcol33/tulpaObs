@@ -179,7 +179,7 @@ test_that("simulate() on a distance fit uses that fit's quad_order", {
   }
   for (order in c(2L, 64L)) {
     set.seed(5L)
-    got <- tulpaObs:::.tobs_simulate_distance(fake(order), nsim = 1L)
+    got <- tulpaObs:::.tobs_simulate_distance(fake(order), nsim = 1L)[[1L]]
     expect_identical(got, direct(order),
                      info = paste("quad_order", order))
   }

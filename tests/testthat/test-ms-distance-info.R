@@ -131,7 +131,7 @@ test_that("the hazard key keeps the finite-difference fallback and still fits", 
               y = d$y, species = d$species, method = "laplace",
               control = list(max.iter = 3L, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
-  expect_true(all(is.finite(coef(fit)$lambda)))
+  expect_true(all(is.finite(coef(fit, arm = "lambda"))))
 })
 
 test_that("supplying the block leaves the community fit unchanged", {

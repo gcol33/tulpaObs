@@ -265,6 +265,25 @@ t_occu <- function() {
   }, numeric(length(obs))))
 }
 
+# simulate() for t_occu(): per (site, season) an independent occupancy draw on
+# the site's predictor plus the season's year effect, then per-visit detections.
+# The year effect is the posterior mean `fit$temporal_field`, as the pointwise
+# log-likelihood above scores it.
+.tobs_simulate_t_occu <- function(object, nsim) {
+  model <- object$model
+  d <- .tobs_simulate_draw_rows(object, nsim)
+  p_psi <- model$process_info[[1L]]$p; p_p <- model$process_info[[2L]]$p
+  n <- model$n_sites; Tn <- model$n_seasons; J <- model$max_visits
+  eta_t <- object$temporal_field %||% rep(0, Tn)
+  lapply(seq_len(nsim), function(s) {
+    eta_psi <- as.vector(model$X_occ %*% d[s, seq_len(p_psi)])
+    p <- stats::plogis(as.vector(model$X_det %*% d[s, p_psi + seq_len(p_p)]))
+    psi <- stats::plogis(outer(eta_psi, eta_t, `+`))
+    z <- matrix(stats::rbinom(n * Tn, 1L, psi), n, Tn)
+    .tobs_simulate_detections(model$y, array(z * p, c(n, Tn, J)))
+  })
+}
+
 # residuals() for t_occu(): the per-(site, season) smoothed state posterior
 # against that season's ever-detected indicator -- the same construction
 # .tobs_residuals_dynamic() uses for dyn_occu(), minus the colonization /

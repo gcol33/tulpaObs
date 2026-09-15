@@ -170,7 +170,7 @@ test_that("ms_dyn_occu NUTS S3 methods work", {
   expect_no_error(summary(fit))
 
   cf <- coef(fit)
-  expect_true(all(c("psi1", "p") %in% names(cf)))
+  expect_true(all(c("psi1", "p") %in% tidy(fit)$arm))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))

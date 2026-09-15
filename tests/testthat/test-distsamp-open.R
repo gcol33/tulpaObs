@@ -81,7 +81,7 @@ test_that("a distsamp_open fit recovers a single data set and wires S3", {
              stats::qlogis(0.6), log(1.8))
   expect_true(all(abs(fit$means - truth) / fit$sds < 3.5))
 
-  expect_length(unlist(coef(fit)), 6L)
+  expect_length(coef(fit), 6L)
   expect_true(all(is.finite(diag(vcov(fit)))))
   fv <- fitted(fit)
   expect_length(fv$lambda, 100L); expect_length(fv$sigma, 100L)
@@ -90,7 +90,7 @@ test_that("a distsamp_open fit recovers a single data set and wires S3", {
   expect_length(predict(fit, type = "survival"), 100L)
   expect_length(residuals(fit)$occ, 100L)
   expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
-  expect_identical(dim(simulate(fit)), dim(sim$y))
+  expect_identical(dim(simulate(fit)[[1L]]), dim(sim$y))
 
   # nobs() counts the observed (site, band, period) counts.
   expect_identical(nobs(fit), sum(!is.na(sim$y)))
@@ -167,13 +167,13 @@ test_that("a distsamp_open(negbin) fit recovers abundance / scale and surfaces r
   expect_true(fit$convergence$converged)
   expect_true("log_r" %in% names(fit$means))
   expect_true(is.finite(fit$r) && fit$r > 0)
-  expect_length(unlist(coef(fit)), 6L)        # log_r is a trailing coord, not an arm
+  expect_length(coef(fit), 7L)        # the six arm coefficients, then log_r
   b <- fit$means; se <- fit$sds
   tgt <- c("lambda_(Intercept)", "lambda_abund_cov1", "sigma_(Intercept)")
   tru <- c(log(8), 0.3, log(18))
   expect_true(all(abs(b[tgt] - tru) / se[tgt] < 3.5))
   expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
-  expect_identical(dim(simulate(fit)), dim(sim$y))
+  expect_identical(dim(simulate(fit)[[1L]]), dim(sim$y))
 })
 
 
@@ -200,7 +200,7 @@ test_that("a distsamp_open(zip) fit recovers abundance / scale and the ZI share"
   tru <- c(log(8), 0.3, log(18))
   expect_true(all(abs(b[tgt] - tru) / se[tgt] < 3.5))
   expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))     # the per-site log_lik_site path
-  expect_identical(dim(simulate(fit)), dim(sim$y))
+  expect_identical(dim(simulate(fit)[[1L]]), dim(sim$y))
 })
 
 test_that("distsamp_open(zinb) recovers the structural-zero share across seeds (#137)", {
@@ -280,7 +280,7 @@ test_that("distsamp_open fits every alternative dynamics and recovers lambda/sig
     expect_length(fv$lambda, 40L); expect_length(fv$sigma, 40L)
     expect_length(predict(fit, type = "abundance"), 40L)
     expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]), info = info)
-    expect_identical(dim(simulate(fit)), dim(sim$y))
+    expect_identical(dim(simulate(fit)[[1L]]), dim(sim$y))
   }
 })
 

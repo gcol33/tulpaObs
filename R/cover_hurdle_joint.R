@@ -513,6 +513,8 @@
         weight_occ = if (slot == 1L && !isTRUE(f$is_intercept)) as.numeric(f$weight) else NULL,
         weight_pos = if (slot == 2L && !isTRUE(f$is_intercept)) as.numeric(f$weight[idx_pos]) else NULL,
         idx_active = as.integer(idx_active),
+        idx_obs    = as.integer(a$idx_obs),
+        weight_obs = if (!isTRUE(f$is_intercept)) as.numeric(f$weight) else NULL,
         n_nodes = as.integer(nrow(a$graph)),
         type = blk$type,
         scale_factor = blk$scale_factor %||% 1.0,

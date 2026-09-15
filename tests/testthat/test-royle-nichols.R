@@ -70,7 +70,7 @@ test_that("royle_nichols() S3 surface works", {
   expect_true(is.finite(cpo(fit)$lpml))
 
   co <- coef(fit)
-  expect_true(is.list(co) || is.numeric(co))
+  expect_identical(names(co), rownames(vcov(fit)))
 
   # nobs() counts the surveyed (site, visit) cells, which is what feeds the
   # per-site (k, n) sufficient statistics.
@@ -140,7 +140,7 @@ test_that("royle_nichols() visit-varying S3 surface works", {
                        newdata = data.frame(w = 0)), "visit-level")
 
   expect_length(residuals(fit)$occ, 150L)
-  expect_equal(dim(simulate(fit)), c(150L, 5L))
+  expect_equal(dim(simulate(fit)[[1L]]), c(150L, 5L))
   expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
   expect_true(is.finite(dic(fit)$dic))
 })

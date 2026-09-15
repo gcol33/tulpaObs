@@ -269,7 +269,7 @@ fit$intercepts
 
 The values land near the simulated truth of $\psi_1 = 0.5$, $\gamma = 0.3$,
 $\epsilon = 0.2$, and $p = 0.5$. `coef()` returns the same four processes on the
-logit scale, the scale the linear predictors live on, with one element per
+logit scale, the scale the linear predictors live on, each name prefixed by its
 process.
 
 ```{r coef}
@@ -563,7 +563,7 @@ fit_cov <- tobs(
   method      = "laplace",
   control     = list(verbose = FALSE)
 )
-coef(fit_cov)$gamma
+coef(fit_cov, arm = "gamma")
 ```
 
 The colonisation process now has an intercept and a `connectivity` slope on the

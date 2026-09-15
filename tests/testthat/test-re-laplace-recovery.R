@@ -53,7 +53,7 @@ test_that("iid intercept RE is fit (not dropped) by the default Laplace engine",
   expect_true(is.finite(fit$means[[sig_nm]]) && fit$means[[sig_nm]] > 0.4 &&
               fit$means[[sig_nm]] < 1.4)
 
-  cf <- coef(fit)$psi
+  cf <- coef(fit, arm = "psi")
   expect_lt(abs(cf[["(Intercept)"]] - 0.3), 0.3)
   expect_lt(abs(cf[["x"]] - (-0.6)), 0.3)
   expect_lt(abs(plogis(fit$means[["p_(Intercept)"]]) - 0.45), 0.08)
@@ -142,7 +142,7 @@ test_that("correlated random slopes (1 + x | g) recover under Laplace", {
   expect_gt(rho_hat, 0.2)
   expect_lt(rho_hat, 0.99)
 
-  cf <- coef(fit)$psi
+  cf <- coef(fit, arm = "psi")
   expect_lt(abs(cf[["(Intercept)"]] - 0.2), 0.3)
   expect_lt(abs(cf[["x"]] - (-0.4)), 0.3)
 

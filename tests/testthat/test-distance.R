@@ -303,7 +303,7 @@ test_that("S3 surface works for distance fits", {
   expect_error(predict(fit, X.0 = cbind(1, 1), type = "lambda"),
                "X.0 has 2 columns but the lambda arm has 3 coefficients")
 
-  ysim <- simulate(fit, seed = 1)
+  ysim <- simulate(fit, seed = 1)[[1L]]
   expect_equal(dim(ysim), dim(sim$y))
   expect_true(all(ysim >= 0))
 
@@ -729,7 +729,7 @@ test_that("distance() DETECTION-arm areal field recovers the log-sigma field (#1
       expect_length(fit$spatial_field, ng)
     }
     fc <- c(fc, abs(stats::cor(fit$spatial_field, phi)))
-    s0 <- c(s0, coef(fit)$sigma[["(Intercept)"]])
+    s0 <- c(s0, coef(fit, arm = "sigma")[["(Intercept)"]])
   }
   expect_gte(length(fc), 3L)
   expect_gt(mean(fc), 0.6)                            # detection field tracks truth

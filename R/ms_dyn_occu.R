@@ -378,7 +378,6 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
   res <- cpp_simulate_ms_dyn_occu(psi1, p, gamma, eps, as.integer(model$valid),
     n_sites, max_visits, n_seasons, n_species, as.integer(nsim))
   dn <- list(NULL, NULL, NULL, model$species_names)
-  if (nsim == 1L) { a <- array(res[, , , , 1], dim = dim(res)[1:4]); dimnames(a) <- dn; return(a) }
   lapply(seq_len(nsim), function(s) { a <- array(res[, , , , s], dim = dim(res)[1:4]); dimnames(a) <- dn; a })
 }
 

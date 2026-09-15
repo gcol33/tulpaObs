@@ -585,7 +585,7 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
     if (is.null(shape)) 0 else as.numeric(shape),
     n_sites, n_bins, p_lam, p_sig, is_nb,
     if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 # residuals() for distance. The bin-b count is marginally

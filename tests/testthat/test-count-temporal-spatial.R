@@ -60,7 +60,7 @@ test_that("removal() areal field + AR1 temporal recovers the slope + both fields
               method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
     expect_identical(f$method, "nested_laplace")
     expect_length(f$temporal_field, Tt)
-    slope[sd]   <- unname(coef(f)$lambda["abund_cov1"])
+    slope[sd]   <- unname(coef(f, arm = "lambda")["abund_cov1"])
     sp_cor[sd]  <- cor(f$spatial_field, phi)
     tmp_cor[sd] <- cor(f$temporal_field, u)
     rho_hat[sd] <- unname(f$temporal_hyper[["rho"]])
@@ -93,7 +93,7 @@ test_that("distance() areal field + AR1 temporal recovers the slope + both field
               detection = ~ 1, y = y, method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
     expect_length(f$temporal_field, Tt)
-    slope[sd]   <- unname(coef(f)$lambda["abund_cov1"])
+    slope[sd]   <- unname(coef(f, arm = "lambda")["abund_cov1"])
     sp_cor[sd]  <- cor(f$spatial_field, phi)
     tmp_cor[sd] <- cor(f$temporal_field, u)
     rho_hat[sd] <- unname(f$temporal_hyper[["rho"]])
@@ -128,7 +128,7 @@ test_that("fp_occu() areal field + AR1 temporal composes and recovers the psi sl
               method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
     expect_length(f$temporal_field, Tt)
     expect_false(is.null(f$temporal_hyper))
-    slope[sd]  <- unname(coef(f)$psi["abund_cov1"])
+    slope[sd]  <- unname(coef(f, arm = "psi")["abund_cov1"])
     sp_cor[sd] <- cor(f$spatial_field, phi)
   }
   expect_lt(abs(median(slope) - 0.7), 0.4)       # psi slope in the right region
@@ -158,7 +158,7 @@ test_that("dyn_abun() areal field + AR1 temporal composes and recovers the lambd
               method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
     expect_length(f$temporal_field, Tt)
     expect_false(is.null(f$temporal_hyper))
-    slope[sd]  <- unname(coef(f)$lambda["abund_cov1"])
+    slope[sd]  <- unname(coef(f, arm = "lambda")["abund_cov1"])
     sp_cor[sd] <- cor(f$spatial_field, phi)
   }
   expect_lt(abs(median(slope) - 0.5), 0.35)

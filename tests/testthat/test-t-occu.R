@@ -44,7 +44,7 @@ test_that("t_occu() gates + S3 surface", {
   expect_true(all(c("psi_(Intercept)", "p_(Intercept)", "log_sigma_ar1",
                     "rho_ar1") %in% names(fit$means)))
   expect_length(fit$temporal_field, 6L)          # one year effect per season
-  expect_true(is.finite(coef(fit)$psi[["(Intercept)"]]))
+  expect_true(is.finite(coef(fit, arm = "psi")[["(Intercept)"]]))
   expect_true(all(is.finite(fit$rhat)))
 
   # nobs() counts the surveyed (site, season, visit) cells, which is what the

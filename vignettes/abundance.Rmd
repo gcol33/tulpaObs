@@ -184,7 +184,7 @@ fa <- tobs(
 )
 ```
 
-`coef()` returns the estimates as a list with one element per arm.
+`coef()` returns the estimates named by arm (`lambda_`, `p_`).
 Read the `lambda` arm with the log link in mind: the intercept is on the
 log scale, so back-transforming with `exp()` gives baseline expected
 abundance.
@@ -194,7 +194,7 @@ coef(fa)
 ```
 
 ```{r coef-exp}
-c(baseline_lambda = exp(coef(fa)$lambda[["(Intercept)"]]),
+c(baseline_lambda = exp(coef(fa, arm = "lambda")[["(Intercept)"]]),
   true_baseline   = 3)
 ```
 
@@ -256,8 +256,8 @@ confirm the estimate is stable.
 fa_k <- tobs(~ abund_cov1, data = dat, family = abun(),
              detection = ~ det_cov1, y = y, method = "laplace",
              control = list(verbose = FALSE), K_max = 200)
-rbind(default_K = coef(fa)$lambda,
-      K_max_200 = coef(fa_k)$lambda)
+rbind(default_K = coef(fa, arm = "lambda"),
+      K_max_200 = coef(fa_k, arm = "lambda"))
 ```
 
 The two fits agree to several decimals, so the default ceiling was already
@@ -478,7 +478,7 @@ fr <- tobs(
   method    = "laplace",
   control   = list(n.quad = 5, verbose = FALSE)
 )
-coef(fr)$lambda
+coef(fr, arm = "lambda")
 ```
 
 The abundance intercept and slope recover near the simulated 0.6 and 0.4

@@ -98,8 +98,8 @@ test_that("a latent-factor community N-mixture recovers residual co-occurrence",
   off <- upper.tri(d$cor_res)
   expect_gt(stats::cor(fit$ms_factor$residual_cor[off], d$cor_res[off]), 0.7)
   # community means recovered on both arms
-  expect_equal(unname(coef(fit)$lambda), d$mu_lambda, tolerance = 0.3)
-  expect_equal(unname(coef(fit)$p), d$mu_p, tolerance = 0.35)
+  expect_equal(unname(coef(fit, arm = "lambda")), d$mu_lambda, tolerance = 0.3)
+  expect_equal(unname(coef(fit, arm = "p")), d$mu_p, tolerance = 0.35)
   # per-species structure + S3
   expect_equal(dim(fit$ms_community$coef_lambda), c(8L, 2L))
   expect_true(all(is.finite(unlist(vcov(fit)))))

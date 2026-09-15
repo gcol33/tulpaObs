@@ -94,7 +94,7 @@ test_that("ms_abun S3 methods work", {
   expect_equal(dim(fv$lambda), c(40L, 8L))
   expect_true(all(fv$lambda > 0))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys), c(40L, 3L, 8L))
 
   expect_type(nobs(fit), "integer")

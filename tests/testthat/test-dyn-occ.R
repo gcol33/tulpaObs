@@ -202,7 +202,7 @@ test_that("dyn_occu recovers season-varying gamma/epsilon + ~95% coverage", {
                 detection = ~ 1, colonization = ~ gamma_cov,
                 extinction = ~ eps_cov, method = "laplace",
                 control = list(progress = FALSE, verbose = FALSE))
-    cc <- unlist(coef(fit)); se <- sqrt(diag(vcov(fit)))
+    cc <- coef(fit); se <- sqrt(diag(vcov(fit)))
     idx <- c(which(names(cc) == "gamma.(Intercept)"),
              which(names(cc) == "gamma.gamma_cov"),
              which(names(cc) == "epsilon.(Intercept)"),
@@ -270,7 +270,7 @@ test_that("dyn_occu recovers season-varying detection + ~95% coverage", {
     fit <- tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y,
                 detection = ~ det_cov, colonization = ~ 1, extinction = ~ 1,
                 method = "laplace", control = list(progress = FALSE, verbose = FALSE))
-    cc <- unlist(coef(fit)); se <- sqrt(diag(vcov(fit)))
+    cc <- coef(fit); se <- sqrt(diag(vcov(fit)))
     idx <- c(which(names(cc) == "p.(Intercept)"),
              which(names(cc) == "p.det_cov"))
     b <- cc[idx]; s_e <- se[idx]

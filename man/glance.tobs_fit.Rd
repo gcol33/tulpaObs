@@ -12,7 +12,7 @@
 \item{...}{Ignored.}
 }
 \value{
-The base one-row \code{glance} data frame. A joint-coupled fit adds two
+The one-row \code{glance} data frame. A joint-coupled fit adds two
 outer-grid placement columns, reported whether or not the grid moved so an
 inert auto-recenter is visible in a batch summary:
 \describe{
@@ -41,9 +41,11 @@ samples on a spread grid.}
 }
 }
 \description{
-Extends the generic \code{tulpa_fit} glance with the joint nested-Laplace outer
-grid placement and the outer Pareto-k diagnostic when present. The
-joint-coupled families (\code{occu_cover()}, \code{cover()}, \code{occu()} spatial,
-\code{occu_multiscale_cover()}) carry both at the fit top level; every other
-family glances exactly as before.
+Every family, and every method within a family, glances to one column set:
+\code{nobs}, \code{df}, \code{logLik}, \code{n_fixed}, \code{n_samples}, \code{n_divergent},
+\code{mean_accept} and \code{converged}, the sampler columns \code{NA} on a fit with no
+draws. The joint nested-Laplace fits add the outer grid placement and, when
+requested, the outer Pareto-k diagnostic. The joint-coupled families
+(\code{occu_cover()}, \code{cover()}, \code{occu()} spatial, \code{occu_multiscale_cover()})
+carry both at the fit top level.
 }

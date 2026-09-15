@@ -51,7 +51,7 @@ test_that("count() accepts the response on a two-sided formula LHS", {
   fit <- tobs(yy ~ x, data = df, family = count("poisson"),
               control = list(progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
-  expect_equal(unname(unlist(coef(fit))), sim$truth$beta, tolerance = 0.15)
+  expect_equal(unname(coef(fit)), sim$truth$beta, tolerance = 0.15)
   # the response given twice must error
   expect_error(
     tobs(yy ~ x, data = df, family = count("poisson"), y = sim$y),
@@ -95,7 +95,7 @@ test_that("count() simulate() drives its GOF doors (#271)", {
   fit <- tobs(~ x, data = sim$data, family = count("poisson"), y = sim$y,
               control = list(progress = FALSE))
 
-  s1 <- simulate(fit, seed = 1)
+  s1 <- simulate(fit, seed = 1)[[1L]]
   expect_length(s1, 200L)
   expect_true(all(s1 >= 0))
   s3 <- simulate(fit, nsim = 3L, seed = 1)
@@ -122,7 +122,7 @@ test_that("Poisson count fit recovers truth + 95% CI coverage", {
                           seed = 100 + s)
     fit <- tobs(~ x + x2, data = sim$data, family = count("poisson"),
                 y = sim$y, control = list(progress = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -144,7 +144,7 @@ test_that("Negative-binomial count fit recovers coefficients + size", {
                           size = size, seed = 200 + s)
     fit <- tobs(~ x, data = sim$data, family = count("negbin"), y = sim$y,
                 control = list(progress = FALSE))
-    est[s, ] <- unname(unlist(coef(fit)))
+    est[s, ] <- unname(coef(fit))
     siz[s]   <- fit$count_dispersion$phi
   }
   expect_equal(colMeans(est), beta, tolerance = 0.06)
@@ -165,7 +165,7 @@ test_that("Gaussian count fit recovers coefficients + residual variance", {
                           sd = sd_true, seed = 300 + s)
     fit <- tobs(~ x, data = sim$data, family = count("gaussian"), y = sim$y,
                 control = list(progress = FALSE))
-    est[s, ] <- unname(unlist(coef(fit)))
+    est[s, ] <- unname(coef(fit))
     vr[s]    <- fit$count_dispersion$phi
   }
   expect_equal(colMeans(est), beta, tolerance = 0.05)
@@ -240,7 +240,7 @@ test_that("binomial count fit recovers truth + 95% CI coverage (trials > 1)", {
                           trials = 10, seed = 400 + s)
     fit <- tobs(~ x + x2, data = sim$data, family = count("binomial"),
                 y = sim$y, trials = 10, control = list(progress = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -263,7 +263,7 @@ test_that("Bernoulli count fit recovers truth + coverage (trials = 1)", {
                           trials = 1, seed = 500 + s)
     fit <- tobs(~ x, data = sim$data, family = count("binomial"),
                 y = sim$y, trials = 1, control = list(progress = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)

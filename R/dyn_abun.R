@@ -907,8 +907,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
     p[1], p[2], p[3], p[4], is_nb,
     if (is_nb && is.finite(r_disp)) as.numeric(r_disp) else NA_real_,
     as.integer(nsim))
-  if (nsim == 1L) { dim(res) <- c(n_sites, J, T); return(res) }
-  lapply(seq_len(nsim), function(s) res[, , , s])
+  lapply(seq_len(nsim), function(s) array(res[, , , s], dim = c(n_sites, J, T)))
 }
 
 # residuals() for dyn_abun, on the marginal expected count mu_itj = E[N_t] * p.

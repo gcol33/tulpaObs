@@ -81,7 +81,7 @@ test_that("a gdistremoval fit recovers a single data set and wires S3", {
   expect_true(all(abs(fit$means - truth) / fit$sds < 3))
 
   # S3 surface runs
-  expect_length(unlist(coef(fit)), 6L)
+  expect_length(coef(fit), 6L)
   expect_true(all(is.finite(diag(vcov(fit)))))
   fv <- fitted(fit)
   expect_length(fv$lambda, 300L); expect_length(fv$sigma, 300L)
@@ -91,7 +91,7 @@ test_that("a gdistremoval fit recovers a single data set and wires S3", {
   expect_length(predict(fit, type = "removal"), 300L)
   expect_length(residuals(fit)$occ, 300L)
   expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
-  expect_true(is.matrix(simulate(fit)$yDist))
+  expect_true(is.matrix(simulate(fit)[[1L]]$yDist))
 
   # nobs() counts both response tables: the band allocation and the period
   # allocation are separate multinomial factors of the marginal.

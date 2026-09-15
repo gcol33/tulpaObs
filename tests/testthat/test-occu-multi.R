@@ -41,7 +41,7 @@ test_that("occu_multi() fits + full S3 surface (S = 2)", {
   expect_equal(predict(fit, type = "state"), fv$psi)
   w <- waic(fit, n.draws = 100L)
   expect_true(is.finite(w$estimates["waic", "Estimate"]))
-  s2 <- simulate(fit, nsim = 1)
+  s2 <- simulate(fit, nsim = 1)[[1L]]
   expect_length(s2, 2L)
   expect_equal(dim(residuals(fit)$occ), c(300L, 2L))
 

@@ -69,7 +69,7 @@ test_that("ms_abun(mixture = 'zip') fits, exposes + recovers the structural-zero
   expect_true("omega" %in% re$arm)
 
   # simulate() replicates the 3D community array (with structural zeros).
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys), c(60L, 5L, 6L))
 
   # Recovery: community abundance mean + the structural-zero share.

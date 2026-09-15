@@ -898,11 +898,11 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
                    control = list(verbose = FALSE, n.iter = 800L,
                                   n.warmup = 600L, n.chains = 1L, seed = 1L))
   np <- length(nut$means)
-  # coef() returns the per-arm coefficient list (psi / p / pos); the flattened
-  # length is the coefficient count (the trailing log-dispersion is not a coef).
+  # coef() is the flat coefficient vector over the psi / p / pos arms; the
+  # trailing log-dispersion enters no arm.
   cf <- coef(nut)
-  expect_true(is.list(cf))
-  expect_equal(length(unlist(cf)), np - 1L)
+  expect_identical(names(cf), rownames(vcov(nut)))
+  expect_equal(sum(!is.na(tidy(nut)$arm)), np - 1L)
   expect_equal(dim(vcov(nut)), c(np, np))
   expect_equal(nrow(confint(nut)), np)
   expect_equal(length(nut$spatial_field), inp$N)

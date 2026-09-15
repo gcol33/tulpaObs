@@ -155,5 +155,5 @@
       stop("simulate() for count() is not wired for response = '", response,
            "'.", call. = FALSE))
   }
-  if (nsim == 1L) one() else lapply(seq_len(nsim), function(i) one())
+  lapply(seq_len(nsim), function(i) one())
 }

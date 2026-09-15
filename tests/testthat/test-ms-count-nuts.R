@@ -73,7 +73,7 @@ test_that("community count Poisson NUTS recovers community means + agrees with L
   real <- colMeans(sim$truth$beta_species)
   expect_community_mean(nut, real, c(0.14, 0.12))
   # NUTS agrees closely with the Laplace mode (the discriminating check).
-  expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
+  expect_equal(unname(coef(nut)), unname(coef(lap)),
                tolerance = 0.08)
   # S3 surface
   expect_true(all(is.finite(diag(vcov(nut)))))
@@ -131,7 +131,7 @@ test_that("community count negbin NUTS recovers community means + dispersion", {
   # Seed 6 itself sits at 0.025 / 0.000, well inside it.
   real <- colMeans(sim$truth$beta_species)
   expect_community_mean(nut, real, c(0.45, 0.75))
-  expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
+  expect_equal(unname(coef(nut)), unname(coef(lap)),
                tolerance = 0.12)
   expect_identical(nut$ms_dispersion$response, "negbin")
   expect_length(nut$ms_dispersion$r_s, 12L)
@@ -208,7 +208,7 @@ test_that("community count NUTS accepts missing (NA) entries and matches Laplace
   # budget. Seed 21 itself sits at 0.037 / 0.015 on the unmasked fixture.
   real <- colMeans(sim$truth$beta_species)
   expect_community_mean(nut, real, c(0.14, 0.12))
-  expect_equal(unname(unlist(coef(nut))), unname(unlist(coef(lap))),
+  expect_equal(unname(coef(nut)), unname(coef(lap)),
                tolerance = 0.1)
   expect_true(is.finite(waic(nut)$estimates["waic", "Estimate"]))
 })

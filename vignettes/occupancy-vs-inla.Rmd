@@ -92,7 +92,7 @@ structure, choose the inference, and pull summaries off the result.
 | | | `method = "nested_laplace"` | outer grid over hyperparameters, INLA's recipe |
 | | | `method = "nuts"` | exact HMC, no INLA analogue |
 | | | `method = "laplace_gibbs"` / `"laplace_mi"` | Laplace body + MCMC bias correction |
-| Coefficient summary | `m$summary.fixed` | `coef()`, `summary()`, `confint()` | per-process lists, `psi_` / `p_` prefixes |
+| Coefficient summary | `m$summary.fixed` | `coef()`, `summary()`, `confint()` | one vector, `psi_` / `p_` prefixes |
 | Fitted / predicted | `m$summary.fitted.values` | `fitted()` (`psi`, `p`, `z`), `predict(X.0 = )` | `z` is posterior occupancy given the history |
 | Marginal effect | manual `inla.tmarginal()` | `tobs_marginal_effect()` | inverse-link curve with credible band |
 | Model comparison | `control.compute = list(waic = TRUE)` | `waic()` | WAIC from the pointwise marginal log-lik |
@@ -446,8 +446,8 @@ extra cost in tulpaObs buys the exact-MCMC option when you want it.
 `summary.hyperpar`, and `summary.fitted.values`, each a data frame of
 posterior summaries, with the full marginal densities available through
 `inla.tmarginal()` and friends. tulpaObs returns a fitted object that
-answers the standard R generics. `coef()` gives per-process coefficient
-lists with `psi_` and `p_` prefixes so the two arms never run together;
+answers the standard R generics. `coef()` gives one coefficient vector
+with `psi_` and `p_` prefixes so the two arms never run together;
 `summary()` adds SDs and credible bounds (plus Rhat and ESS under NUTS);
 `confint()` and `vcov()` read the fixed-effect block; `fitted()` returns
 per-site `psi`, `p`, and the posterior occupancy `z`; `predict(X.0 = )`

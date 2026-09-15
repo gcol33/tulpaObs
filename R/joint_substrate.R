@@ -1077,20 +1077,29 @@
 #
 # Per-arm per-observation node map; `seq_len(n_rows)` when the arm has no field
 # (the amplitude check in `.tobs_joint_arm_eta` then never indexes it).
-.tobs_armspec_obs_units <- function(object, slot, n_rows) {
+# `all_rows = TRUE` reads the node of every observation row rather than of the
+# rows the arm is fit on (the positive rows, for the positive arm).
+.tobs_armspec_obs_units <- function(object, slot, n_rows, all_rows = FALSE) {
   for (m in object$armspec_blocks) {
-    if (isTRUE(m$slot == slot)) return(as.integer(m$idx_active))
+    if (!isTRUE(m$slot == slot)) next
+    if (!all_rows) return(as.integer(m$idx_active))
+    if (is.null(m$idx_obs)) {
+      stop("This arm-specific cover() fit predates the per-observation node map ",
+           "on its field blocks; refit it with the current tulpaObs.",
+           call. = FALSE)
+    }
+    return(as.integer(m$idx_obs))
   }
   seq_len(n_rows)
 }
 
 # Per-arm weight lookup (column name -> per-observation weight) for the trend /
 # SVC blocks on this arm; NULL when the arm carries no weighted block.
-.tobs_armspec_obs_wfun <- function(object, slot) {
+.tobs_armspec_obs_wfun <- function(object, slot, all_rows = FALSE) {
   lut <- list()
   for (m in object$armspec_blocks) {
     if (!isTRUE(m$slot == slot) || isTRUE(m$is_intercept)) next
-    w <- if (slot == 1L) m$weight_occ else m$weight_pos
+    w <- if (all_rows) m$weight_obs else if (slot == 1L) m$weight_occ else m$weight_pos
     if (!is.null(w)) lut[[m$column_name]] <- as.numeric(w)
   }
   if (length(lut) == 0L) return(NULL)

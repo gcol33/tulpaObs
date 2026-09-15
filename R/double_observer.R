@@ -322,7 +322,6 @@
             stats::rpois(model$n_sites, up$lambda * up$p1 * up$p2))
     }
   }
-  if (nsim == 1L) return(draw_one())
   lapply(seq_len(nsim), function(s) draw_one())
 }
 

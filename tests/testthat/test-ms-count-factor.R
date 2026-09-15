@@ -112,7 +112,7 @@ test_that("latent-factor count recovers the loading magnitude + mean over seeds"
                 species = colnames(d$y), method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     c(sqrt(sum(fit$ms_factor$loadings^2)) / sqrt(sum(d$lam^2)),
-      unname(unlist(coef(fit))) - d$beta_real)
+      unname(coef(fit)) - d$beta_real)
   }, numeric(3))
   mag <- out[1L, ]
   dev <- t(out[-1L, , drop = FALSE])

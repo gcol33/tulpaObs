@@ -29,7 +29,6 @@
   obs[is.na(obs)] <- 0
 
   sims <- simulate(object, nsim = n.samples)
-  if (n.samples == 1L) sims <- list(sims)
   # A plain response vector (count()'s simulate()) already carries one value
   # per site; the matrix / array shapes the other families' simulate() return
   # need reducing to that same per-site total.

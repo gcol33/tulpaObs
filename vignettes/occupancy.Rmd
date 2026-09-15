@@ -226,9 +226,9 @@ fit <- tobs(
 )
 ```
 
-`coef()` returns the estimates as a list with one element per process, so the
-occupancy and detection coefficients stay clearly separated rather than running
-together in one flat vector. Both arms land near the simulated truth: occupancy
+`coef()` returns the estimates as one vector whose names carry the process
+(`psi_` for occupancy, `p_` for detection), so the occupancy and detection
+coefficients stay clearly separated. Both arms land near the simulated truth: occupancy
 intercept near 0.3, slope near 1.0, detection intercept near 0.7, slope near
 0.6. That the fit recovers all four from detection histories alone, never
 observing the latent state, is the payoff of the marginalisation: the
@@ -311,9 +311,9 @@ shows exactly where the line falls.
 
 ```{r compare-backends}
 data.frame(
-  term    = names(unlist(coef(fit))),
-  laplace = round(unlist(coef(fit)),      3),
-  nuts    = round(unlist(coef(fit_nuts)), 3),
+  term    = names(coef(fit)),
+  laplace = round(coef(fit),      3),
+  nuts    = round(coef(fit_nuts), 3),
   row.names = NULL
 )
 ```
@@ -753,10 +753,10 @@ fit_hmc <- tobs(~ occ_cov1, data = sim_hard$data, family = occu(),
                                verbose = FALSE))
 
 data.frame(
-  term    = names(unlist(coef(fit_lap))),
+  term    = names(coef(fit_lap)),
   truth   = c(0.3, 1.0, -1.5, 0.3),
-  laplace = round(unlist(coef(fit_lap)), 2),
-  nuts    = round(unlist(coef(fit_hmc)), 2),
+  laplace = round(coef(fit_lap), 2),
+  nuts    = round(coef(fit_hmc), 2),
   row.names = NULL
 )
 ```

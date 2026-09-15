@@ -274,7 +274,7 @@ test_that("cover NUTS fit supports the S3 method surface", {
   # The flat coefficient surface (presence + positive + log_disp) is finite.
   cf <- coef(nut)
   expect_equal(length(cf), np)
-  expect_true(all(is.finite(unlist(cf))))
+  expect_true(all(is.finite(cf)))
   expect_equal(dim(vcov(nut)), c(np, np))
   expect_equal(nrow(confint(nut)), np)
   expect_true(is.finite(as.numeric(logLik(nut))))

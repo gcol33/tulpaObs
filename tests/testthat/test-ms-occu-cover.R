@@ -184,11 +184,11 @@ test_that("ms_occu_cover() S3 methods work", {
   expect_no_error(print(fit))
   expect_no_error(summary(fit))
 
-  # coef(): per-process list (community means by arm).
+  # coef(): the community means, named <arm>_<term> as vcov() names them.
   cf <- coef(fit)
-  expect_true(is.list(cf))
-  expect_setequal(names(cf), c("psi", "p", "pos"))
-  expect_setequal(names(cf$psi), c("(Intercept)", "occ_cov1"))
+  expect_identical(names(cf), rownames(vcov(fit)))
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("psi", "p", "pos"))
+  expect_setequal(names(coef(fit, arm = "psi")), c("(Intercept)", "occ_cov1"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
@@ -208,7 +208,7 @@ test_that("ms_occu_cover() S3 methods work", {
   expect_true(all(fv$psi > 0 & fv$psi < 1))
   expect_true(all(fv$cover > 0))
 
-  ys <- simulate(fit, nsim = 1)
+  ys <- simulate(fit, nsim = 1)[[1L]]
   expect_equal(dim(ys$y),     c(45L, 3L, 8L))
   expect_equal(dim(ys$y_pos), c(45L, 3L, 8L))
 

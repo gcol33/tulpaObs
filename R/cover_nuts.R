@@ -307,42 +307,13 @@
   ), class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit"))
 
   # Per-parameter split-R-hat / bulk + tail ESS, through the writer every sampled
-  # path shares, so summary.cover_fit surfaces them per parameter; `fit$nuts`
-  # carries the same two vectors alongside the sampler diagnostics.
+  # path shares, so summary() surfaces them per parameter; `fit$nuts` carries
+  # the same two vectors alongside the sampler diagnostics.
   fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws,
                                        par_names = par_names)
   fit$nuts$rhat <- fit$convergence$rhat
   fit$nuts$ess  <- fit$convergence$ess_bulk
   fit
-}
-
-
-# Per-parameter posterior summary for a cover NUTS fit: posterior mean / sd and
-# 2.5% / 50% / 97.5% quantiles from the draws, plus the cross-chain Rhat / ESS
-# the convergence list carries (NA on a single chain). Mirrors the generic
-# summary.tobs_fit table so the sampler diagnostics are visible for the cover_fit
-# class (which has its own bespoke list-style summary on the Laplace path).
-.tobs_cover_nuts_summary <- function(object) {
-  draws <- object$draws
-  nm    <- colnames(draws)
-  q     <- t(apply(draws, 2L, stats::quantile, probs = c(0.025, 0.5, 0.975),
-                   names = FALSE))
-  cv    <- object$convergence
-  idx   <- match(nm, cv$parameter)
-  data.frame(
-    parameter = nm,
-    mean      = colMeans(draws),
-    sd        = apply(draws, 2L, stats::sd),
-    `2.5%`    = q[, 1L],
-    `50%`     = q[, 2L],
-    `97.5%`   = q[, 3L],
-    rhat      = cv$rhat[idx],
-    ess_bulk  = cv$ess_bulk[idx],
-    ess_tail  = cv$ess_tail[idx],
-    row.names = nm,
-    check.names = FALSE,
-    stringsAsFactors = FALSE
-  )
 }
 
 # Pointwise data log-likelihood (length N) at the posterior-mean coefficients

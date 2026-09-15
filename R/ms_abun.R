@@ -829,7 +829,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   res <- lapply(res, function(a) {
     dimnames(a) <- list(NULL, NULL, model$species_names); a
   })
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 

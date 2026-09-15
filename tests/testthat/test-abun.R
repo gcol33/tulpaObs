@@ -94,7 +94,7 @@ test_that("S3 surface works for N-mixture fits", {
   expect_true(all(diff(pr$mean) > 0))   # increasing in abund_cov1
 
   # simulate() returns a count matrix respecting the NA pattern.
-  ysim <- simulate(fit, seed = 1)
+  ysim <- simulate(fit, seed = 1)[[1L]]
   expect_equal(dim(ysim), dim(sim$y))
   expect_true(all(ysim >= 0))
 
@@ -137,8 +137,8 @@ test_that("negbin N-mixture recovers truth, surfaces dispersion, covers CIs", {
   expect_equal(fit$nmix_dispersion$r, exp(fit$nmix_dispersion$log_r),
                tolerance = 1e-6)
   cf <- coef(fit)
-  expect_named(cf, c("lambda", "p"))
-  expect_length(unlist(cf), 5L)
+  expect_setequal(unique(stats::na.omit(tidy(fit)$arm)), c("lambda", "p"))
+  expect_length(c(coef(fit, arm = "lambda"), coef(fit, arm = "p")), 5L)
 
   # --- CI coverage across seeds (5 betas + log dispersion) ---
   n_seed <- 25L

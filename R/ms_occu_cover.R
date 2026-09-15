@@ -620,7 +620,7 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
     dn <- list(NULL, NULL, model$species_names)
     dimnames(r$y) <- dn; dimnames(r$y_pos) <- dn; r
   })
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 

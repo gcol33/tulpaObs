@@ -810,10 +810,8 @@ test_that("tobs() front door routes icar() on the occupancy arm to the spatial f
   expect_gt(stats::cor(fit$spatial$field, tr$w), 0.75)
   expect_gt(stats::cor(as.numeric(fit$spatial$loadings), tr$L), 0.8)
 
-  # Generic accessors work: coef() splits into the per-arm community means.
-  cf <- coef(fit)
-  expect_true(is.list(cf))
-  psi_int <- cf[[1L]][["(Intercept)"]]
+  # Generic accessors work: coef(arm =) reads one arm's community means.
+  psi_int <- coef(fit, arm = "psi")[["(Intercept)"]]
   expect_lt(abs(unname(psi_int) - tr$mu_occ[1L]), 0.5)
 
   # Community RE scale is reported and finite.
@@ -1548,7 +1546,7 @@ test_that("simulate() reproduces the per-species data structure", {
               species = sim$species, method = "laplace",
               control = list(n.factors = 2L, sd.load = 1.2, max.iter = 30L))
 
-  s1 <- simulate(fit, nsim = 1, seed = 7)
+  s1 <- simulate(fit, nsim = 1, seed = 7)[[1L]]
   expect_named(s1, c("y", "y_pos"))
   expect_identical(dim(s1$y), dim(sim$y))
   expect_identical(dim(s1$y_pos), dim(sim$y_pos))

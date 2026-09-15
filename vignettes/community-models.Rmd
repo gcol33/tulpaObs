@@ -180,9 +180,9 @@ fm <- tobs(
 )
 ```
 
-`coef()` returns the community means, one element per process. The `psi` element
-is the community occupancy mean $\mu$; the `p` element is the community detection
-mean. These are the assemblage-level fixed effects.
+`coef()` returns the community means, named by process. The `psi_` coefficients
+are the community occupancy mean $\mu$; the `p_` coefficients are the community
+detection mean. These are the assemblage-level fixed effects.
 
 ```{r ms-occu-coef}
 coef(fm)
@@ -194,7 +194,7 @@ Read the occupancy means against the truth. The simulated community intercept wa
 ```{r ms-occu-recovery}
 data.frame(
   term      = c("intercept", "slope_x"),
-  estimate  = round(coef(fm)$psi, 3),
+  estimate  = round(coef(fm, arm = "psi"), 3),
   truth     = sm$truth$beta_comm_mean,
   row.names = NULL
 )
@@ -350,14 +350,14 @@ fab <- tobs(
 )
 ```
 
-`coef()` returns the community means: the `lambda` element on the log scale, the
-`p` element on the logit scale. The log link on the abundance arm matters for
+`coef()` returns the community means: the `lambda_` coefficients on the log scale,
+the `p_` coefficients on the logit scale. The log link on the abundance arm matters for
 reading the intercept. A community abundance intercept near $\log 3 \approx 1.1$
 back-transforms to about three individuals; do not read it as a count directly.
 
 ```{r ms-abun-coef}
 coef(fab)
-exp(coef(fab)$lambda["(Intercept)"])   # community mean abundance at covariate mean
+exp(coef(fab, arm = "lambda")["(Intercept)"])   # community mean abundance at covariate mean
 ```
 
 Compare the community means to the truth. The abundance arm is on the log scale,
@@ -367,7 +367,7 @@ the detection arm on the logit scale.
 data.frame(
   arm      = c("lambda", "lambda", "p", "p"),
   term     = c("intercept", "abund_cov1", "intercept", "det_cov1"),
-  estimate = round(c(coef(fab)$lambda, coef(fab)$p), 3),
+  estimate = round(c(coef(fab, arm = "lambda"), coef(fab, arm = "p")), 3),
   truth    = round(c(sab$truth$mu_lambda, sab$truth$mu_p), 3),
   row.names = NULL
 )

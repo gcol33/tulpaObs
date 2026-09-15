@@ -162,7 +162,7 @@ fit <- tobs(
 ```
 
 `coef()` returns the shared occupancy block plus one detection block per
-source, keyed by the names you gave `y`.
+source, each prefixed by the name you gave that source in `y`.
 
 ```{r coef}
 coef(fit)
@@ -194,7 +194,7 @@ fit_survey <- tobs(
   detection = ~ 1, y = si$y[[1]],
   method = "laplace", control = list(verbose = FALSE)
 )
-coef(fit_survey)$psi
+coef(fit_survey, arm = "psi")
 ```
 
 The point estimates are in the same neighbourhood, so the comparison that
@@ -293,7 +293,7 @@ fit2 <- tobs(
 data.frame(
   source       = c("survey", "casual"),
   true_p       = round(plogis(c(1.2, -0.8)), 2),
-  fitted_p     = round(plogis(c(coef(fit2)$survey, coef(fit2)$casual)), 2),
+  fitted_p     = round(plogis(c(coef(fit2, arm = "survey"), coef(fit2, arm = "casual"))), 2),
   row.names    = NULL
 )
 ```

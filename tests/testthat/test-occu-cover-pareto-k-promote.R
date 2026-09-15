@@ -51,7 +51,7 @@ test_that(".tobs_promote_pareto_k is inert when diagnose.k was off (all NA)", {
 .pkp_fit <- function(jf = NULL) {
   structure(list(
     n_fixed = 4L, n_samples = 1000L, log_prob = -120.5, converged = TRUE,
-    joint_fit = jf
+    joint_fit = jf, model = list(model_type = "single", y = matrix(0L, 2L, 2L))
   ), class = c("tobs_fit", "tulpa_fit"))
 }
 

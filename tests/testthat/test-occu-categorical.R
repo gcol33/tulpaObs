@@ -107,12 +107,12 @@ test_that("occu_categorical_fit S3 surface: coef/vcov/confint/logLik/glance/tidy
 
   expect_identical(nobs(fit), 300L)
 
-  # coef.occu_categorical_fit() overrides the generic multiarm coef() and
-  # returns the raw (p x (K-1)) matrix, not the flattened arm-blocks vector.
+  # coef() is the flat arm-blocks vector; the class arm is the (p x (K-1))
+  # matrix read column-major.
   cf <- coef(fit)
-  expect_named(cf, c("presence", "class"))
-  expect_equal(unname(cf$presence), unname(fit$beta_occ))
-  expect_equal(cf$class, fit$beta_class)
+  expect_identical(names(cf), rownames(vcov(fit)))
+  expect_equal(unname(coef(fit, arm = "presence")), unname(fit$beta_occ))
+  expect_equal(unname(coef(fit, arm = "class")), as.vector(fit$beta_class))
 
   # vcov()/confint()/tidy() have no family override, so they DO go through
   # `.tobs_arm_blocks_categorical()`, which reshapes the (p x (K-1)) beta_class
@@ -122,7 +122,7 @@ test_that("occu_categorical_fit S3 surface: coef/vcov/confint/logLik/glance/tidy
   V <- vcov(fit)
   se_flat <- sqrt(diag(V))
   for (cl in cls_labels) for (co in coef_labels) {
-    key <- paste0("class:", cl, ":", co)
+    key <- paste0("class_", cl, ":", co)
     expect_equal(unname(V[key, key]), unname(fit$se_class[co, cl])^2, tolerance = 1e-8)
     expect_equal(unname(se_flat[[key]]), unname(fit$se_class[co, cl]), tolerance = 1e-8)
   }
@@ -135,7 +135,7 @@ test_that("occu_categorical_fit S3 surface: coef/vcov/confint/logLik/glance/tidy
   expect_identical(attr(ll, "nobs"), 300L)
 
   g <- glance(fit)
-  expect_true(all(c("n", "logLik", "df", "converged") %in% names(g)))
+  expect_true(all(c("nobs", "logLik", "df", "converged") %in% names(g)))
 
   td <- tidy(fit)
   expect_true(all(c("arm", "term", "estimate", "std.error",
@@ -143,5 +143,5 @@ test_that("occu_categorical_fit S3 surface: coef/vcov/confint/logLik/glance/tidy
   expect_setequal(unique(td$arm), c("presence", "class"))
 
   expect_output(print(fit), "occu_categorical")
-  expect_output(summary(fit), "presence arm")
+  expect_identical(rownames(summary(fit)), names(coef(fit)))
 })

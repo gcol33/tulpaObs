@@ -193,6 +193,48 @@
   0
 }
 
+# simulate() for occu_multiscale_cover(): per replicate one posterior draw, then
+# the three levels in turn -- cell occupancy, plot availability given an
+# occupied cell, per-visit detection given an available plot -- and cover at the
+# detected visits. The field and its copy amplitude enter as the point values
+# fitted() uses, since a draw carries no field realization. Returns list(y,
+# y_pos) on the [plots x visits] grid, NA where no visit was made and y_pos NA
+# off the detected visits.
+.tobs_simulate_occu_multiscale_cover <- function(object, nsim) {
+  model <- object$model
+  idx <- .tobs_occu_mscale_cover_nuts_layout(model)
+  np <- model$n_plots; J <- model$max_visits; pc <- model$plot_cell
+  field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))
+  alpha <- unname(object$means["alpha"]); if (!is.finite(alpha)) alpha <- 0
+  positive <- model$positive %||% "lognormal"
+  d <- .tobs_simulate_draw_rows(object, nsim)
+  # The spatial route reports the dispersion on its natural scale (`phi_pos`),
+  # the non-spatial routes on the log scale (`log_*`), as
+  # .occu_mscale_cover_sigma_pos() reads them.
+  on_log <- startsWith(colnames(d)[idx$disp] %||% "log_", "log_")
+  lapply(seq_len(nsim), function(s) {
+    par <- d[s, ]
+    disp <- if (on_log) exp(par[[idx$disp]]) else par[[idx$disp]]
+    psi   <- stats::plogis(as.numeric(model$X_psi %*% par[idx$psi]) + field)
+    theta <- stats::plogis(as.numeric(model$X_theta %*% par[idx$theta]))
+    p <- stats::plogis(.occu_ms_eta_visit(model$X_p_site, par[idx$p_site],
+                                          model$X_p_visit, par[idx$p_visit], np, J))
+    ep <- .occu_ms_eta_visit(model$X_pos_site, par[idx$pos_site],
+                             model$X_pos_visit, par[idx$pos_visit], np, J) +
+      alpha * field[pc]
+    z <- stats::rbinom(model$n_cells, 1L, psi)
+    a <- stats::rbinom(np, 1L, theta * z[pc])
+    y <- matrix(NA_integer_, np, J); y_pos <- matrix(NA_real_, np, J)
+    v <- model$valid
+    y[v] <- stats::rbinom(sum(v), 1L, (a * p)[v])
+    hit <- v & y == 1L
+    if (any(hit)) {
+      y_pos[hit] <- .tobs_draw_positive_cover(ep[hit], disp, positive)
+    }
+    list(y = y, y_pos = y_pos)
+  })
+}
+
 # residuals() for occu_multiscale_cover(): the CELL-level residual of the
 # fitted psi against the ever-detected indicator (any plot in the cell, at
 # any visit) -- occupancy is a cell-level state that gates plot availability,

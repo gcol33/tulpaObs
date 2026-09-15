@@ -800,7 +800,6 @@
               model$transect, model$n_seasons, r = up$r %||% NULL,
               zi = up$zi_omega %||% 0)
   }
-  if (nsim == 1L) return(draw_one())
   lapply(seq_len(nsim), function(s) draw_one())
 }
 

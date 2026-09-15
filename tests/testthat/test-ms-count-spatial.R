@@ -58,7 +58,7 @@ test_that("a community-spatial count fit recovers the field and wires S3", {
   expect_gt(stats::cor(fit$spatial_field, d$field), 0.8)
   expect_true(is.finite(fit$spatial_hyper$sigma) && fit$spatial_hyper$sigma > 0)
 
-  expect_length(unlist(coef(fit)), 2L)
+  expect_length(coef(fit), 2L)
   expect_true(all(is.finite(diag(vcov(fit)))))
   # fitted() is field-aware -> tracks the counts
   ft <- fitted(fit)$mu
@@ -80,7 +80,7 @@ test_that("community-spatial count recovers community means + field over seeds",
     fit <- tobs(~ x + icar(graph = d$graph), data = d$data, family = ms_count(),
                 y = d$y, species = colnames(d$y), method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -132,7 +132,7 @@ test_that("community field recovers under bym2 (scaled structured + iid)", {
   # reused here at side = 9 (Ns = 81) as a close proxy -- one fewer site per
   # side changes the field's precision by ~1.1x, not enough to move this
   # budget.
-  cf_dev <- unname(unlist(coef(fit))) - colMeans(d$bs)
+  cf_dev <- unname(coef(fit)) - colMeans(d$bs)
   expect_lt(abs(cf_dev[1L]), 0.05)
   expect_lt(abs(cf_dev[2L]), 0.06)
   # bym2 is the single shared intercept field only: an SVC bar errors
@@ -169,7 +169,7 @@ test_that("community field recovers under group_var (sites > cells)", {
   # c(1, 0.5) (#155). Budget = 3 sd of the deviation from colMeans(bs) over a
   # 12-seed measurement of this exact group_var fixture (side = 8, R = 2,
   # S = 12): intercept sd 0.016 (max 0.033), slope sd 0.013 (max 0.023).
-  cf_dev <- unname(unlist(coef(fit))) - colMeans(bs)
+  cf_dev <- unname(coef(fit)) - colMeans(bs)
   expect_lt(abs(cf_dev[1L]), 0.05)
   expect_lt(abs(cf_dev[2L]), 0.04)
 })
@@ -190,7 +190,7 @@ test_that("community field recovers under car_proper (proper CAR)", {
   # c(1, 0.5) (#155). Budget = 3 sd of the deviation from colMeans(bs) over a
   # 16-seed measurement of this exact fixture (side = 10, S = 12): intercept sd
   # 0.016 (max 0.034), slope sd 0.019 (max 0.050).
-  cf_dev <- unname(unlist(coef(fit))) - colMeans(d$bs)
+  cf_dev <- unname(coef(fit)) - colMeans(d$bs)
   expect_lt(abs(cf_dev[1L]), 0.05)
   expect_lt(abs(cf_dev[2L]), 0.06)
 })

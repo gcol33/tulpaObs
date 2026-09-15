@@ -136,7 +136,7 @@ The fixed effects come back from `coef()` as usual. The occupancy
 intercept and slope land near the simulated 0.3 and -0.6.
 
 ```{r coef-intercept}
-coef(fit)$psi
+coef(fit, arm = "psi")
 ```
 
 The variance component is a hyperparameter in `fit$means`, named for the
@@ -318,7 +318,7 @@ fit_cr <- tobs(~ x + (1 | g:h), data = d_cr, y = y, detection = ~ 1,
                family = occu(), method = "laplace",
                control = list(verbose = FALSE))
 nrow(ranef(fit_cr))      # one BLUP per observed g:h combination
-coef(fit_cr)$psi
+coef(fit_cr, arm = "psi")
 ```
 
 The crossed term `(1 | g:h)` collapses to a single interaction factor, so

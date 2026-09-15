@@ -328,7 +328,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     dn <- list(NULL, NULL, model$species_names)
     dimnames(r$y) <- dn; dimnames(r$y_pos) <- dn; r
   })
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 

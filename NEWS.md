@@ -12,6 +12,32 @@
   `waic()` and `loo()` accept only `group =` in `...` and refuse anything else,
   which they had been dropping.
 
+* **One layout for the stats accessors on every fit (#332).** Breaking:
+  - `coef()` is a named numeric vector, named `<arm>_<term>` as `vcov()`,
+    `confint()` and `summary()` name the same coordinates (`psi_(Intercept)`,
+    `p_det_cov1`). One arm, without the prefix: `coef(fit, arm = "psi")`
+    (replaces `coef(fit)$psi`). Cover and `occu_categorical()` fits follow the
+    same rule, so their names change from `presence:(Intercept)` to
+    `presence_(Intercept)`. An arm is assigned only where it declares the
+    term, which also fixes `occu_multi()`, whose pairwise coefficients
+    `f_sp1_sp2_*` had been listed under `f_sp1`.
+  - `tidy()` has `arm` and `term` columns on every family (arm `NA` for a
+    coordinate that enters no arm, such as `log_r`).
+  - `glance()` has one column set: `nobs`, `df`, `logLik`, `n_fixed`,
+    `n_samples`, `n_divergent`, `mean_accept`, `converged`.
+  - `summary()` is the same estimate / std.error / interval data frame on
+    every method; `cover()` no longer has a separate `summary.cover_fit` object
+    under `laplace` and a `mean` / `sd` table under `nuts`.
+  - `simulate()` always returns a list of `nsim` responses (`sim_1`, ...)
+    carrying the `"seed"` attribute of `stats::simulate()`, including at
+    `nsim = 1`, where most families had returned the bare response. A supplied
+    `seed` no longer moves the caller's random number stream. `simulate()` now
+    works on `dyn_occu()`, `int_occu()`, `t_occu()`, `occu_cover()`,
+    `occu_multiscale_cover()`, `cover()` and `occu_categorical()`, which had
+    refused.
+  - `residuals()` keeps its `list(occ, det)` contract: `det` is scored against
+    `z * p`, which is not one of the `fitted()` quantities.
+
 * **`logLik()` and `nobs()` count the same observations (#331).** The `"nobs"`
   attribute of `logLik()` came from the engine's `fit$N`, which the detection
   families record as sites, while `nobs()` counts observed response entries

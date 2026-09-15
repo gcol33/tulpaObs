@@ -261,7 +261,6 @@
     }
     yy
   }
-  if (nsim == 1L) return(draw_one())
   lapply(seq_len(nsim), function(s) draw_one())
 }
 

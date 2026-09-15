@@ -16,9 +16,10 @@ test_that("S3 methods work on single-season fit", {
   fit <- res$fit; y <- res$y; n <- res$n
 
   cf <- coef(fit)
-  expect_type(cf, "list")
-  expect_length(cf$psi, 2)
-  expect_length(cf$p, 1)
+  expect_type(cf, "double")
+  expect_identical(names(cf), rownames(vcov(fit)))
+  expect_length(coef(fit, arm = "psi"), 2)
+  expect_length(coef(fit, arm = "p"), 1)
 
   ci <- confint(fit)
   expect_true(nrow(ci) >= 3)
@@ -45,7 +46,7 @@ test_that("S3 methods work on single-season fit", {
   expect_length(r$occ, n)
   expect_equal(dim(r$det), c(n, 3))
 
-  y_sim <- simulate(fit, nsim = 1, seed = 1)
+  y_sim <- simulate(fit, nsim = 1, seed = 1)[[1L]]
   expect_equal(dim(y_sim), dim(y))
 
   pred <- predict(fit)

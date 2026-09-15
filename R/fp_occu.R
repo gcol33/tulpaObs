@@ -586,7 +586,7 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   p <- ab$p
   res <- cpp_simulate_fp_occu(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],
     ab$draws, n_sites, J, p[1], p[2], p[3], p[4], as.integer(nsim))
-  if (nsim == 1L) res[[1]] else res
+  res
 }
 
 # residuals() for fp_occu, on the marginal probability of any detection

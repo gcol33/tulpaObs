@@ -26,8 +26,8 @@ test_that("method = 'laplace_gibbs' recovers occupancy/detection fixed effects",
   # The seed used for the stochastic correction is recorded for reproducibility.
   expect_identical(fit$seed, 123L)
 
-  cf_psi <- coef(fit)$psi
-  cf_p   <- coef(fit)$p
+  cf_psi <- coef(fit, arm = "psi")
+  cf_p   <- coef(fit, arm = "p")
   expect_lt(abs(cf_psi[["(Intercept)"]] - s$truth$beta_occ[1]), 0.35)
   expect_lt(abs(cf_psi[["occ_cov1"]]    - s$truth$beta_occ[2]), 0.35)
   expect_lt(abs(cf_p[["(Intercept)"]]   - s$truth$beta_det[1]), 0.35)
@@ -55,7 +55,7 @@ test_that("method = 'laplace_mi' recovers fixed effects and records its seed", {
   expect_identical(fit$method, "laplace_mi")
   expect_identical(fit$seed, 99L)
   expect_s3_class(fit$priors, "occu_priors")
-  cf_psi <- coef(fit)$psi
+  cf_psi <- coef(fit, arm = "psi")
   expect_lt(abs(cf_psi[["(Intercept)"]] - s$truth$beta_occ[1]), 0.35)
   expect_lt(abs(cf_psi[["occ_cov1"]]    - s$truth$beta_occ[2]), 0.35)
 })
@@ -67,7 +67,7 @@ test_that("priors = FALSE recovers the unpenalised Gibbs correction", {
               family = occu(), method = "laplace_gibbs", priors = FALSE,
               control = list(seed = 123, verbose = FALSE))
   expect_null(fit$priors)
-  cf_psi <- coef(fit)$psi
+  cf_psi <- coef(fit, arm = "psi")
   expect_lt(abs(cf_psi[["occ_cov1"]] - s$truth$beta_occ[2]), 0.35)
 })
 

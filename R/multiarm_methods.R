@@ -117,14 +117,16 @@
 #'   `occu_categorical_fit`).
 #' @param parm Ignored (present for `confint()` generic compatibility).
 #' @param level Confidence level for `confint()`.
-#' @param nsim,seed Present for the `simulate()` generic; `simulate()` is not
-#'   supported (use the family's `simulate_*()` function).
 #' @param ... Ignored, or forwarded to `NextMethod()` on the posterior path.
-#' @return `nobs()` an integer; `coef()` a named list of per-arm estimates;
-#'   `vcov()` the block-diagonal covariance; `confint()` a two-column matrix;
-#'   `logLik()` a `logLik` object; `glance()`/`tidy()` a data frame. On a joint
-#'   nested-Laplace fit `glance()` also carries `outer_grid_placement` and
-#'   `outer_grid_recenter_declined`.
+#' @param arm Optional arm name (`"presence"`, `"positive"` or `"class"`) for
+#'   `coef()`; see [coef.tobs_fit()].
+#' @return The layout every `tobs_fit` returns: `nobs()` an integer; `coef()` a
+#'   named vector (`presence_(Intercept)`, `positive_x`, `class_2:x`, ...);
+#'   `vcov()` the block-diagonal covariance and `confint()` a two-column matrix,
+#'   both named as `coef()`; `logLik()` a `logLik` object; `tidy()` the
+#'   `arm` / `term` / `estimate` / `std.error` / `conf.low` / `conf.high` table;
+#'   `summary()` the estimate / std.error / interval data frame;
+#'   `glance()` the one-row column set of [glance.tobs_fit()].
 #' @name tobs_multiarm_methods
 #' @export
 nobs.tobs_multiarm_fit <- function(object, ...) {
@@ -136,10 +138,18 @@ nobs.tobs_multiarm_fit <- function(object, ...) {
 # defer to the draw-based tulpa_fit method so the flat surface is preserved.
 #' @rdname tobs_multiarm_methods
 #' @export
-coef.tobs_multiarm_fit <- function(object, ...) {
+coef.tobs_multiarm_fit <- function(object, arm = NULL, ...) {
   if (!is.null(object[["draws"]])) return(NextMethod())
+  flat <- .tobs_multiarm_flat(object, "estimate")
+  if (is.null(arm)) flat else .tobs_arm_coef(flat, object, arm)
+}
+
+# One per-arm block field ("estimate" or "se") as a flat `<arm>_<term>` vector.
+.tobs_multiarm_flat <- function(object, field) {
   blocks <- .tobs_arm_blocks(object)
-  lapply(blocks, `[[`, "estimate")
+  unlist(lapply(names(blocks), function(a)
+    stats::setNames(blocks[[a]][[field]],
+                    paste0(a, "_", names(blocks[[a]][[field]])))))
 }
 
 # --- block-diagonal covariance ----------------------------------------------
@@ -149,8 +159,7 @@ vcov.tobs_multiarm_fit <- function(object, ...) {
   if (!is.null(object[["draws"]])) return(NextMethod())
   blocks <- .tobs_arm_blocks(object)
   arms   <- names(blocks)
-  labels <- unlist(lapply(arms, function(a)
-    paste0(a, ":", names(blocks[[a]][["estimate"]]))), use.names = FALSE)
+  labels <- names(.tobs_multiarm_flat(object, "estimate"))
   p  <- length(labels)
   V  <- matrix(0, p, p, dimnames = list(labels, labels))
   at <- 0L
@@ -168,13 +177,8 @@ vcov.tobs_multiarm_fit <- function(object, ...) {
 #' @export
 confint.tobs_multiarm_fit <- function(object, parm, level = 0.95, ...) {
   if (!is.null(object[["draws"]])) return(NextMethod())
-  blocks <- .tobs_arm_blocks(object)
-  est <- unlist(lapply(names(blocks), function(a)
-    stats::setNames(blocks[[a]][["estimate"]],
-                    paste0(a, ":", names(blocks[[a]][["estimate"]])))))
-  se  <- unlist(lapply(names(blocks), function(a)
-    stats::setNames(blocks[[a]][["se"]],
-                    paste0(a, ":", names(blocks[[a]][["se"]])))))
+  est <- .tobs_multiarm_flat(object, "estimate")
+  se  <- .tobs_multiarm_flat(object, "se")
   z   <- stats::qnorm(1 - (1 - level) / 2)
   ci  <- cbind(est - z * se, est + z * se)
   colnames(ci) <- paste0(format(100 * c((1 - level) / 2, 1 - (1 - level) / 2),
@@ -198,61 +202,39 @@ logLik.tobs_multiarm_fit <- function(object, ...) {
 #' @rdname tobs_multiarm_methods
 #' @export
 glance.tobs_multiarm_fit <- function(x, ...) {
-  ll <- logLik(x)
-  g <- data.frame(
-    n         = as.integer(x[["n_total"]] %||% NA_integer_),
-    logLik    = as.numeric(ll),
-    df        = attr(ll, "df"),
-    converged = isTRUE(x[["convergence"]][["converged"]] %||% x[["converged"]]),
-    stringsAsFactors = FALSE
-  )
-  # This method is terminal for cover_fit, so the joint outer-grid placement
-  # has to be added here as well as in glance.tobs_fit().
-  .tobs_glance_outer_grid(g, x)
+  if (!is.null(x[["draws"]])) return(NextMethod())
+  .tobs_glance_layout(x, list(n_fixed = length(.tobs_multiarm_flat(x, "estimate"))))
 }
 
 # --- tidy coefficient table --------------------------------------------------
 #' @rdname tobs_multiarm_methods
+#' @param conf.level,level Interval level for `tidy()` and `summary()`
+#'   (default 0.95).
 #' @export
-tidy.tobs_multiarm_fit <- function(x, ...) {
+tidy.tobs_multiarm_fit <- function(x, conf.level = 0.95, ...) {
   if (!is.null(x[["draws"]])) return(NextMethod())
-  blocks <- .tobs_arm_blocks(x)
-  do.call(rbind, lapply(names(blocks), function(a) {
-    b <- blocks[[a]]
-    z <- stats::qnorm(0.975)
-    data.frame(
-      arm       = a,
-      term      = names(b[["estimate"]]),
-      estimate  = as.numeric(b[["estimate"]]),
-      std.error = as.numeric(b[["se"]]),
-      conf.low  = as.numeric(b[["estimate"]] - z * b[["se"]]),
-      conf.high = as.numeric(b[["estimate"]] + z * b[["se"]]),
-      row.names = NULL, stringsAsFactors = FALSE
-    )
-  }))
+  est <- .tobs_multiarm_flat(x, "estimate")
+  se  <- .tobs_multiarm_flat(x, "se")
+  ci  <- confint(x, level = conf.level)
+  sp  <- .tobs_split_terms(names(est), .tobs_fit_arms(x))
+  data.frame(sp, estimate = unname(est), std.error = unname(se),
+             conf.low = unname(ci[, 1L]), conf.high = unname(ci[, 2L]),
+             row.names = NULL, stringsAsFactors = FALSE)
 }
 
-# --- summary (serves occu_categorical_fit; cover_fit has its own) ------------
+# --- summary -------------------------------------------------------------------
 #' @rdname tobs_multiarm_methods
 #' @export
-summary.tobs_multiarm_fit <- function(object, ...) {
+summary.tobs_multiarm_fit <- function(object, level = 0.95, ...) {
   if (!is.null(object[["draws"]])) return(NextMethod())
-  td  <- tidy(object)
-  fam <- object[["family"]][["name"]] %||% "multi-arm"
-  cat(sprintf("<%s: %d observations>\n", fam,
-              as.integer(object[["n_total"]] %||% NA_integer_)))
-  for (a in unique(td$arm)) {
-    sub <- td[td$arm == a, , drop = FALSE]
-    tab <- data.frame(
-      Estimate   = sub$estimate,
-      `Std.Error` = sub$std.error,
-      z          = sub$estimate / sub$std.error,
-      `Pr(>|z|)` = 2 * stats::pnorm(-abs(sub$estimate / sub$std.error)),
-      row.names  = sub$term, check.names = FALSE)
-    cat(sprintf("\n  %s arm:\n", a))
-    print(round(tab, 4))
-  }
-  invisible(td)
+  est <- .tobs_multiarm_flat(object, "estimate")
+  ci  <- confint(object, level = level)
+  out <- data.frame(estimate  = unname(est),
+                    std.error = unname(.tobs_multiarm_flat(object, "se")),
+                    lower     = unname(ci[, 1L]), upper = unname(ci[, 2L]),
+                    row.names = names(est))
+  names(out)[3:4] <- colnames(ci)
+  out
 }
 
 # --- response-scale methods that need a design / RNG decision ----------------
@@ -265,8 +247,3 @@ fitted.tobs_multiarm_fit <- function(object, ...)
 #' @export
 residuals.tobs_multiarm_fit <- function(object, ...)
   .tobs_multiarm_unsupported("residuals", object)
-
-#' @rdname tobs_multiarm_methods
-#' @export
-simulate.tobs_multiarm_fit <- function(object, nsim = 1, seed = NULL, ...)
-  .tobs_multiarm_unsupported("simulate", object)

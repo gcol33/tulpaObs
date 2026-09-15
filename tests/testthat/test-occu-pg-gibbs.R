@@ -43,7 +43,7 @@ test_that("occu() pg_gibbs posterior matches the Laplace fit (calibration)", {
              y = sim$y, method = "pg_gibbs",
              control = list(n.iter = 3000L, n.warmup = 1500L, n.chains = 3L,
                             seed = 7, verbose = FALSE))
-  lap_m <- c(unlist(coef(fl)$psi), unlist(coef(fl)$p))
+  lap_m <- c(coef(fl, arm = "psi"), coef(fl, arm = "p"))
   # Posterior means within ~1 Laplace-SE of the Laplace MLE.
   expect_true(all(abs(fg$means - lap_m) < fl$sds))
   # Posterior SDs match the observed-Fisher SEs within 20%.

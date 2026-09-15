@@ -147,7 +147,7 @@ test_that("S3 surface works for dyn_abun fits", {
   expect_true(all(pr$mean > 0) && all(diff(pr$mean) > 0))
   expect_true(all(pr$q2.5 <= pr$mean & pr$mean <= pr$q97.5))
 
-  ysim <- simulate(fit, seed = 1)
+  ysim <- simulate(fit, seed = 1)[[1L]]
   expect_equal(dim(ysim), dim(sim$y))
   expect_true(all(ysim >= 0))
 

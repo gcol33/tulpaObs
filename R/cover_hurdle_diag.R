@@ -122,9 +122,13 @@
 # path: sample the grid-integrated joint and project the shared field at each
 # observation's spatial unit (`spi_full` / `spi_pos`); the dispersion is then the
 # per-draw grid value. Returns list(eta_occ, eta_pos, disp).
-.tobs_cover_eta_draws <- function(object, n.draws = 1000L) {
+.tobs_cover_eta_draws <- function(object, n.draws = 1000L,
+                                  rows = c("scored", "all")) {
+  rows     <- match.arg(rows)
+  all_rows <- identical(rows, "all")
   enc      <- object$encoding
   positive <- object$positive %||% "lognormal"
+  X_pos    <- if (all_rows) .tobs_cover_pos_design_all(object) else enc$pos_data$X
   if (!is.null(.tobs_joint_fit(object))) {
     bundle  <- .tobs_joint_draws(object, n = n.draws)
     # Reshape the arm coefficient blocks to the simplified-Laplace marginals
@@ -140,11 +144,11 @@
       # lookup from `armspec_blocks` and hands them to .tobs_joint_arm_eta
       # exactly as the shared-field path passes spi_* / wfun.
       u_occ  <- .tobs_armspec_obs_units(object, 1L, nrow(enc$occ_data$X))
-      u_pos  <- .tobs_armspec_obs_units(object, 2L, nrow(enc$pos_data$X))
+      u_pos  <- .tobs_armspec_obs_units(object, 2L, nrow(X_pos), all_rows)
       wf_occ <- .tobs_armspec_obs_wfun(object, 1L)
-      wf_pos <- .tobs_armspec_obs_wfun(object, 2L)
+      wf_pos <- .tobs_armspec_obs_wfun(object, 2L, all_rows)
       eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", u_occ, wf_occ))
-      eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", u_pos, wf_pos))
+      eta_pos <- t(.tobs_joint_arm_eta(bundle, X_pos, "pos", u_pos, wf_pos))
       return(list(eta_occ = eta_occ, eta_pos = eta_pos, disp = bundle$disp))
     }
     spi_full <- object$spi_full
@@ -160,11 +164,12 @@
     # fit has no trend field, in which case .tobs_joint_arm_eta never calls it.
     w_occ_fun <- if (!is.null(object$trend_w_occ))
                    function(col) as.numeric(object$trend_w_occ) else NULL
-    w_pos_fun <- if (!is.null(object$trend_w_pos))
-                   function(col) as.numeric(object$trend_w_pos) else NULL
+    w_pos <- if (all_rows) object$trend_w_occ else object$trend_w_pos
+    w_pos_fun <- if (!is.null(w_pos)) function(col) as.numeric(w_pos) else NULL
     eta_occ <- t(.tobs_joint_arm_eta(bundle, enc$occ_data$X, "occ", spi_full,
                                      wfun = w_occ_fun))
-    eta_pos <- t(.tobs_joint_arm_eta(bundle, enc$pos_data$X, "pos", spi_pos,
+    eta_pos <- t(.tobs_joint_arm_eta(bundle, X_pos, "pos",
+                                     if (all_rows) spi_full else spi_pos,
                                      wfun = w_pos_fun))
     return(list(eta_occ = eta_occ, eta_pos = eta_pos, disp = bundle$disp))
   }
@@ -177,12 +182,12 @@
     if (!is.null(n.draws) && n.draws < nrow(draws)) {
       draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
     }
-    p_pres <- ncol(enc$occ_data$X); p_pos <- ncol(enc$pos_data$X)
+    p_pres <- ncol(enc$occ_data$X); p_pos <- ncol(X_pos)
     B_occ <- draws[, seq_len(p_pres), drop = FALSE]
     B_pos <- draws[, p_pres + seq_len(p_pos), drop = FALSE]
     disp  <- exp(draws[, ncol(draws)])
     return(list(eta_occ = B_occ %*% t(enc$occ_data$X),
-                eta_pos = B_pos %*% t(enc$pos_data$X), disp = disp))
+                eta_pos = B_pos %*% t(X_pos), disp = disp))
   }
   if (is.null(enc) || is.null(object$occ$mode) || is.null(object$occ$H_beta) ||
       is.null(object$pos$mode) || is.null(object$pos$H_beta)) {
@@ -193,7 +198,6 @@
          call. = FALSE)
   }
   X_occ <- enc$occ_data$X
-  X_pos <- enc$pos_data$X
   p_occ <- ncol(X_occ); p_pos <- ncol(X_pos)
   mode_occ   <- object$occ$mode[seq_len(p_occ)]
   mode_pos   <- object$pos$mode[seq_len(p_pos)]
@@ -212,6 +216,68 @@
   disp  <- if (positive %in% c("lognormal", "gaussian")) object$sigma_pos
            else object$phi_pos
   list(eta_occ = B_occ %*% t(X_occ), eta_pos = B_pos %*% t(X_pos), disp = disp)
+}
+
+# The positive arm's design at every observation row, on the scale the arm was
+# fit on (its autoscale is taken from the positive rows).
+.tobs_cover_pos_design_all <- function(object) {
+  enc <- object$encoding
+  X <- .apply_scale_to_X(stats::model.matrix(enc$fe_pos, enc$data), enc$scale_pos)
+  if (ncol(X) != ncol(enc$pos_data$X)) {
+    stop("simulate(): the positive-arm design over every plot has ", ncol(X),
+         " columns but the fitted arm has ", ncol(enc$pos_data$X), " (a factor ",
+         "level absent from the positive plots).", call. = FALSE)
+  }
+  X
+}
+
+# One positive-part draw per element of `eta`, from the cover arm's family:
+# `disp` is the residual SD on the Gaussian-scale arms (log cover for lognormal
+# / lognormal_trunc / ordinal, raw cover for gaussian) and the precision on the
+# beta arms. lognormal_trunc draws the log cover below its ceiling log(1) = 0 by
+# inverting the truncated CDF; an ordinal draw is a cover value, which the fit
+# censors to its class band exactly as it censors an observed one. beta_oi puts
+# `pi_one` of its mass at the ceiling, cover = 1.
+.tobs_draw_positive_cover <- function(eta, disp, positive, pi_one = 0) {
+  n <- length(eta)
+  switch(positive,
+    beta = ,
+    beta_oi = {
+      mu <- stats::plogis(eta)
+      v  <- pmin(pmax(stats::rbeta(n, mu * disp, (1 - mu) * disp), 1e-6), 1 - 1e-6)
+      if (identical(positive, "beta_oi")) v[stats::runif(n) < pi_one] <- 1
+      v
+    },
+    gaussian = stats::rnorm(n, eta, disp),
+    lognormal_trunc = {
+      u <- stats::runif(n) * stats::pnorm(0, eta, disp)
+      exp(pmin(stats::qnorm(u, eta, disp), 0))
+    },
+    exp(stats::rnorm(n, eta, disp)))
+}
+
+# simulate() for cover(): per replicate one posterior draw of both arms at every
+# plot, presence from the occurrence probability and, where present, a cover
+# value from the positive arm. The response is laid out as `y`: 0 where absent,
+# NA on a row the fit dropped.
+.tobs_simulate_cover <- function(object, nsim) {
+  enc <- object$encoding
+  positive <- object$positive %||% "lognormal"
+  e <- .tobs_cover_eta_draws(object, nsim, rows = "all")
+  S <- nrow(e$eta_occ)
+  idx <- if (S == nsim) seq_len(nsim) else sample.int(S, nsim, replace = TRUE)
+  disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
+  keep <- enc$obs_keep %||% rep(TRUE, ncol(e$eta_occ))
+  lapply(idx, function(s) {
+    present <- stats::rbinom(ncol(e$eta_occ), 1L, stats::plogis(e$eta_occ[s, ]))
+    v <- numeric(length(present))
+    on <- present == 1L
+    v[on] <- .tobs_draw_positive_cover(e$eta_pos[s, on], disp[s], positive,
+                                       object$pi_one %||% 0)
+    out <- rep(NA_real_, length(keep))
+    out[keep] <- v
+    out
+  })
 }
 
 # Pointwise log-likelihood [n_draws x N] for a cover hurdle fit (separate-Laplace
@@ -488,56 +554,8 @@ print.cover_fit <- function(x, ...) {
   invisible(x)
 }
 
-#' @export
-summary.cover_fit <- function(object, ...) {
-  # NUTS fit: return the per-parameter posterior table (mean / sd / quantiles
-  # plus the cross-chain Rhat / ESS the convergence list carries), matching the
-  # generic NUTS summary surface so the sampler diagnostics are visible.
-  if (!is.null(object$nuts) && !is.null(object$draws)) {
-    return(.tobs_cover_nuts_summary(object))
-  }
-  # Arm labels: the two hurdle arms are `presence` (the y > 0 Bernoulli arm)
-  # and `positive` (the y | y > 0 arm). The `to =` argument of a spatial()
-  # bar validates against these labels, so summary() prints the same names
-  # (formula label == output label).
-  out <- list(
-    family       = object$family,
-    positive     = object$positive %||% "lognormal",
-    n_total      = object$n_total,
-    n_positive   = object$n_positive,
-    sigma_pos    = object$sigma_pos,
-    phi_pos      = object$phi_pos,
-    converged    = object$converged,
-    presence     = .coef_table(object$beta_occ, object$se_occ),
-    positive_arm = .coef_table(object$beta_pos, object$se_pos),
-    log_marginal = object$log_marginal,
-    hyperpar     = object$hyperpar
-  )
-  class(out) <- "summary.cover_fit"
-  out
-}
-
-#' @export
-print.summary.cover_fit <- function(x, ...) {
-  cat("Cover hurdle fit summary\n")
-  cat(sprintf("  positive part: %s\n", x$positive))
-  cat(sprintf("  N total = %d, N positive = %d\n", x$n_total, x$n_positive))
-  if (x$positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
-    cat(sprintf("  sigma_pos = %.4f\n", x$sigma_pos))
-  } else {
-    cat(sprintf("  phi_pos   = %.4f\n", x$phi_pos))
-  }
-  cat(sprintf("  log marginal: occ = %.3f, pos = %.3f\n",
-              x$log_marginal["occ"], x$log_marginal["pos"]))
-  cat("\nPresence:\n"); print(x$presence)
-  cat("\n", .cover_pos_header(x$positive), "\n", sep = "")
-  print(x$positive_arm)
-  invisible(x)
-}
-
-# Header naming the positive-arm density and the support it is fit on. Shared by
-# print.cover_fit() and print.summary.cover_fit() so a new `positive` family is
-# labelled once. The unmatched default is the lognormal arm (Gaussian on log y).
+# Header naming the positive-arm density and the support it is fit on, so a new
+# `positive` family is labelled once. The unmatched default is the lognormal arm (Gaussian on log y).
 .cover_pos_header <- function(positive) {
   switch(positive,
     beta     = "Positive (beta, logit link, on y > 0):",

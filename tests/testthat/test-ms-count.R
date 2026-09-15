@@ -57,7 +57,7 @@ test_that("ms_count() S3 surface works (coef / ranef / fitted / simulate / WAIC)
               species = colnames(sim$y), method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
-  expect_length(unlist(coef(fit)), 2L)
+  expect_length(coef(fit), 2L)
   expect_true(all(is.finite(diag(vcov(fit)))))
   expect_true(all(is.finite(confint(fit))))
   rf <- ranef(fit)
@@ -66,7 +66,7 @@ test_that("ms_count() S3 surface works (coef / ranef / fitted / simulate / WAIC)
   expect_equal(dim(ft), c(120L, 8L))
   # per-species fitted correlates with the observed counts
   expect_gt(stats::cor(as.numeric(ft), as.numeric(sim$y)), 0.4)
-  sm <- simulate(fit)
+  sm <- simulate(fit)[[1L]]
   expect_equal(dim(sm), c(120L, 8L))
   w <- waic(fit)
   expect_true(is.finite(w$estimates["waic", "Estimate"]))
@@ -84,7 +84,7 @@ test_that("ms_count() Laplace fit accepts missing (NA) site x species entries", 
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
   expect_equal(fit$N, sum(!is.na(y)))                    # N counts observed entries
-  expect_true(all(is.finite(unlist(coef(fit)))))
+  expect_true(all(is.finite(coef(fit))))
   expect_true(all(is.finite(diag(vcov(fit)))))
   expect_true(is.finite(waic(fit)$estimates["waic", "Estimate"]))
 })
@@ -103,7 +103,7 @@ test_that("Poisson community count recovers community means with ~95% coverage",
     fit <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
                 species = colnames(sim$y), method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -135,7 +135,7 @@ test_that("binomial community count recovers means with ~95% coverage (#125)", {
     fit <- tobs(~ x, data = sim$data, family = ms_count("binomial"), y = sim$y,
                 species = colnames(sim$y), trials = 10, method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    b  <- unname(unlist(coef(fit)))
+    b  <- unname(coef(fit))
     se <- sqrt(diag(vcov(fit)))
     est[s, ]   <- b
     cover[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
@@ -163,7 +163,7 @@ test_that("Gaussian + negbin community count recover means + dispersion", {
     fit <- tobs(~ x, data = sim$data, family = ms_count("gaussian"), y = sim$y,
                 species = colnames(sim$y), method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    b  <- unname(unlist(coef(fit))); se <- sqrt(diag(vcov(fit)))
+    b  <- unname(coef(fit)); se <- sqrt(diag(vcov(fit)))
     est_g[s, ] <- b
     cov_g[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
     vr[s]      <- mean(fit$ms_dispersion$variance)
@@ -184,7 +184,7 @@ test_that("Gaussian + negbin community count recover means + dispersion", {
     fit <- tobs(~ x, data = sim$data, family = ms_count("negbin"), y = sim$y,
                 species = colnames(sim$y), method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
-    b  <- unname(unlist(coef(fit))); se <- sqrt(diag(vcov(fit)))
+    b  <- unname(coef(fit)); se <- sqrt(diag(vcov(fit)))
     est_n[s, ] <- b
     cov_n[s, ] <- (beta >= b - 1.96 * se) & (beta <= b + 1.96 * se)
     mlr[s]     <- fit$ms_dispersion$mu_log_r

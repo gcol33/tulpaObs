@@ -1,9 +1,8 @@
 # ============================================================================
 # tobs_fit-specific S3 methods.
-# Generic S3 (coef, confint, vcov, logLik, tidy, glance, ranef, plot) are
-# inherited from tulpa::tulpa_fit via class = c("tobs_fit", "tulpa_fit").
-# `summary` is overridden below to surface the simplified-Laplace skewness
-# coefficients when present.
+# vcov and confint are inherited from tulpa::tulpa_fit via
+# class = c("tobs_fit", "tulpa_fit"). coef, tidy, glance, summary and logLik
+# take the engine's value and put it on the one tobs layout below.
 # ============================================================================
 
 #' Summary for tobs_fit, with skewness column when simplified Laplace is used
@@ -17,8 +16,11 @@
 #'
 #' @param object A `tobs_fit` object.
 #' @param ... Forwarded to `summary.tulpa_fit`.
-#' @return Data frame as for `summary.tulpa_fit`, with extra `skew` column
-#'   when `$skew` is present.
+#' @return Data frame as for `summary.tulpa_fit`, one row per coefficient named
+#'   `<arm>_<term>` as [coef.tobs_fit()] names it, with columns `estimate`, `std.error`
+#'   and the two interval bounds, plus a `skew` column when `$skew` is present
+#'   and `rhat`, `ess_bulk`, `ess_tail` on a sampled fit. Every family, and
+#'   every method within a family, returns this layout.
 #' @export
 summary.tobs_fit <- function(object, ...) {
   s <- NextMethod()
@@ -126,7 +128,7 @@ nobs.tobs_fit <- function(object, ...) {
 
 #' Log-likelihood of a tobs fit
 #'
-#' The value and degrees of freedom are the engine's ([tulpa::tulpa_fit]
+#' The value and degrees of freedom are the engine's (the `tulpa_fit`
 #' method); the `"nobs"` attribute is [nobs.tobs_fit()] on the same fit, so
 #' `stats::BIC()` and anything else reading the attribute counts the
 #' observations `nobs()` reports.
@@ -207,17 +209,67 @@ tulpa::tidy
 #' @export
 tulpa::glance
 
+#' Coefficient table for a tobs_fit
+#'
+#' @param x A fitted `tobs_fit`.
+#' @param conf.level Interval level (default 0.95).
+#' @param ... Ignored.
+#' @return A data frame with one row per coefficient: `arm` (the linear
+#'   predictor it enters, `NA` for a coordinate that enters none), `term` (its
+#'   design column, without the arm prefix), `estimate`, `std.error`,
+#'   `conf.low` and `conf.high`. Every family returns this layout.
+#' @export
+tidy.tobs_fit <- function(x, conf.level = 0.95, ...) {
+  .tobs_tidy_layout(NextMethod(), x)
+}
+
+# Replace a flat `term` column by `arm` + `term`, keeping the table's other
+# columns and attributes.
+.tobs_tidy_layout <- function(tab, x) {
+  sp  <- .tobs_split_terms(as.character(tab$term), .tobs_fit_arms(x))
+  out <- cbind(sp, as.data.frame(tab)[setdiff(names(tab), "term")])
+  keep <- setdiff(names(attributes(tab)), c("names", "row.names", "class"))
+  for (a in keep) attr(out, a) <- attr(tab, a)
+  out
+}
+
+# The one glance() column set: `base` supplies the sampler columns, which a
+# fit with no draws reports as NA.
+.tobs_glance_layout <- function(x, base) {
+  ll <- stats::logLik(x)
+  g <- data.frame(
+    nobs        = nobs(x),
+    df          = as.integer(attr(ll, "df") %||% NA_integer_),
+    logLik      = as.numeric(ll),
+    n_fixed     = as.integer(base$n_fixed %||% NA_integer_),
+    n_samples   = as.integer(base$n_samples %||% NA_integer_),
+    n_divergent = as.integer(base$n_divergent %||% NA_integer_),
+    mean_accept = as.numeric(base$mean_accept %||% NA_real_),
+    converged   = tryCatch(converged(x), error = function(e) NA),
+    stringsAsFactors = FALSE
+  )
+  g <- .tobs_glance_outer_grid(g, x)
+  pk <- .tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
+  if (is.null(pk)) return(g)
+  if (!is.null(pk$pareto_k))        g$pareto_k <- pk$pareto_k
+  if (!is.null(pk$pareto_k_is_ess)) g$pareto_k_is_ess <- pk$pareto_k_is_ess
+  g$pareto_k_proposal_source <- pk$pareto_k_proposal_source %||% NA_character_
+  g
+}
+
 #' One-row model summary for a tobs_fit
 #'
-#' Extends the generic `tulpa_fit` glance with the joint nested-Laplace outer
-#' grid placement and the outer Pareto-k diagnostic when present. The
-#' joint-coupled families (`occu_cover()`, `cover()`, `occu()` spatial,
-#' `occu_multiscale_cover()`) carry both at the fit top level; every other
-#' family glances exactly as before.
+#' Every family, and every method within a family, glances to one column set:
+#' `nobs`, `df`, `logLik`, `n_fixed`, `n_samples`, `n_divergent`,
+#' `mean_accept` and `converged`, the sampler columns `NA` on a fit with no
+#' draws. The joint nested-Laplace fits add the outer grid placement and, when
+#' requested, the outer Pareto-k diagnostic. The joint-coupled families
+#' (`occu_cover()`, `cover()`, `occu()` spatial, `occu_multiscale_cover()`)
+#' carry both at the fit top level.
 #'
 #' @param x A fitted `tobs_fit`.
 #' @param ... Ignored.
-#' @return The base one-row `glance` data frame. A joint-coupled fit adds two
+#' @return The one-row `glance` data frame. A joint-coupled fit adds two
 #'   outer-grid placement columns, reported whether or not the grid moved so an
 #'   inert auto-recenter is visible in a batch summary:
 #'   \describe{
@@ -247,20 +299,10 @@ tulpa::glance
 #'   }
 #' @export
 glance.tobs_fit <- function(x, ...) {
-  g <- NextMethod()
   # A sampled fit keeps its verdict at `x$convergence$converged`, not at the
-  # top-level `x$converged` the inherited method reads; `converged()` reads both
-  # layouts.
-  g$converged <- tryCatch(converged(x), error = function(e) NA)
-  # Prefer the promoted top-level fields; fall back to the nested joint object so a
-  # fit saved before the promotion still glances its k-hat.
-  g <- .tobs_glance_outer_grid(g, x)
-  pk <-.tobs_promote_pareto_k(x) %||% .tobs_promote_pareto_k(.tobs_joint_fit(x))
-  if (is.null(pk)) return(g)
-  if (!is.null(pk$pareto_k))        g$pareto_k <- pk$pareto_k
-  if (!is.null(pk$pareto_k_is_ess)) g$pareto_k_is_ess <- pk$pareto_k_is_ess
-  g$pareto_k_proposal_source <- pk$pareto_k_proposal_source %||% NA_character_
-  g
+  # top-level `x$converged` the inherited method reads; the layout reads it
+  # through `converged()`, which reads both.
+  .tobs_glance_layout(x, NextMethod())
 }
 
 #' Convergence record for a fitted model
@@ -396,57 +438,88 @@ ranef.tobs_fit <- function(object, ...) {
   NextMethod()
 }
 
-#' Coefficients for a tobs_fit
-#'
-#' Returns a per-process coefficient list keyed by the model's process names
-#' (`psi`, `p`, `gamma`, `lambda`, ...), splitting the generic flat fixed-effect
-#' vector on the `<process>_<coef>` name prefix, and appends the visit-level
-#' detection coefficients (`p_visit_<cov>`) carried separately from the
-#' site-level detection design. Coordinates with no process
-#' prefix (e.g. the `log_r` overdispersion nuisance) are not arm coefficients
-#' and are omitted from the list (they remain in `vcov()` / `confint()`).
-#'
-#' @param object A `tobs_fit` object.
-#' @param ... Ignored.
-#' @return A per-process coefficient list, one named numeric vector per linear
-#'   predictor, with visit-level detection coefficients appended to the
-#'   detection process when present.
-#' @export
-coef.tobs_fit <- function(object, ...) {
-  cf <- NextMethod()
-  if (!is.list(cf)) cf <- .tobs_coef_by_process(cf, object$process_info)
-
-  vn <- object$model$det_visit_names
-  if (!is.null(vn) && length(vn) > 0L && is.list(cf)) {
-    det_name <- object$process_info[[2]]$name
-    pv <- object$means[paste0("p_visit_", vn)]
-    names(pv) <- paste0("visit_", vn)
-    if (!is.null(cf[[det_name]])) {
-      cf[[det_name]] <- c(cf[[det_name]], pv)
-    } else {
-      cf[["p_visit"]] <- pv
+# One coefficient layout for every fit: a flat name `<arm>_<term>`, where the arm
+# is the linear predictor the coefficient enters (`psi`, `p`, `lambda`, ... on a
+# tobs fit; `presence`, `positive`, `class` on a multi-arm fit) and the term is
+# its design column. coef(), vcov(), confint() and summary() name coordinates
+# this way; tidy() reports the two halves as `arm` and `term` columns. A
+# coordinate that enters no single arm (a dispersion, an AR1 hyperparameter)
+# keeps its own name and has no arm.
+# The arms of a fit, as a named list: each arm's name maps to the design columns
+# it declares (NULL when its process records none, which matches on the prefix
+# alone). The detection arm (the second process) also owns the visit-level
+# coefficients, named `visit_<cov>` after its `p_visit_` prefix.
+.tobs_fit_arms <- function(object) {
+  if (inherits(object, "tobs_multiarm_fit")) {
+    if (is.null(object[["draws"]])) {
+      return(lapply(.tobs_arm_blocks(object), function(b) names(b$estimate)))
     }
+    enc <- object$encoding
+    return(list(presence = colnames(enc$occ_data$X),
+                positive = colnames(enc$pos_data$X)))
   }
-  cf
+  pi_list <- object$process_info %||% object$model$process_info
+  arms <- lapply(pi_list, function(p) p$coef_names)
+  names(arms) <- vapply(pi_list, function(p) as.character(p$name), character(1))
+  vn <- object$model$det_visit_names
+  if (length(vn) && length(arms) >= 2L && !is.null(arms[[2L]])) {
+    arms[[2L]] <- c(arms[[2L]], paste0("visit_", vn))
+  }
+  arms
 }
 
-# Split a flat fixed-effect coefficient vector into a per-process list keyed by
-# process name. Each name is "<process>_<coef>"; group by prefix in
-# process_info order and strip the prefix from the inner names. Returns the
-# input unchanged when there is no process_info or no name matches a prefix.
-.tobs_coef_by_process <- function(flat, pi_list) {
-  if (is.null(pi_list) || is.null(names(flat))) return(flat)
-  nm <- names(flat)
-  cf <- list()
-  for (pp in pi_list) {
-    prefix <- paste0(pp$name, "_")
-    hit <- startsWith(nm, prefix)
-    if (!any(hit)) next
-    vals <- flat[hit]
-    names(vals) <- sub(paste0("^", prefix), "", nm[hit])
-    cf[[pp$name]] <- vals
+# Split flat names into `arm` and `term`: a name is `<arm>_<term>` when the arm
+# declares that term. Checking the term, not only the prefix, keeps an arm whose
+# name extends another's (`f_sp1_sp2` beside `f_sp1`) and a nuisance coordinate
+# that happens to start with an arm name (`mu_log_r` beside the arm `mu`) apart.
+.tobs_split_terms <- function(names, arms) {
+  arm  <- rep(NA_character_, length(names))
+  term <- names
+  for (a in names(arms)[order(-nchar(names(arms)))]) {
+    pre  <- paste0(a, "_")
+    rest <- substring(names, nchar(pre) + 1L)
+    hit  <- is.na(arm) & startsWith(names, pre) &
+      (is.null(arms[[a]]) | rest %in% arms[[a]])
+    arm[hit]  <- a
+    term[hit] <- rest[hit]
   }
-  if (length(cf) == 0L) flat else cf
+  data.frame(arm = arm, term = term, stringsAsFactors = FALSE)
+}
+
+.tobs_arm_coef <- function(flat, object, arm) {
+  arms <- .tobs_fit_arms(object)
+  if (!is.character(arm) || length(arm) != 1L || !arm %in% names(arms)) {
+    stop("`arm` must be one of ", paste0("\"", names(arms), "\"", collapse = ", "),
+         " for this fit.", call. = FALSE)
+  }
+  sp  <- .tobs_split_terms(names(flat), arms)
+  hit <- !is.na(sp$arm) & sp$arm == arm
+  stats::setNames(unname(flat[hit]), sp$term[hit])
+}
+
+#' Coefficients for a tobs_fit
+#'
+#' The fixed-effect estimates as one named numeric vector, named
+#' `<arm>_<term>` as [stats::vcov()] and [stats::confint()] name them: `psi_(Intercept)`,
+#' `p_det_cov1`, `lambda_elev`, ... The visit-level detection coefficients
+#' (`p_visit_<cov>`) belong to the detection arm. A coordinate that enters no
+#' single arm, such as the `log_r` overdispersion, keeps its own name.
+#'
+#' @param object A `tobs_fit` object.
+#' @param arm Optional name of one linear predictor (`"psi"`, `"p"`, ...). When
+#'   given, only that arm's coefficients are returned, named by their design
+#'   column without the arm prefix.
+#' @param ... Ignored.
+#' @return A named numeric vector.
+#' @export
+coef.tobs_fit <- function(object, arm = NULL, ...) {
+  flat <- NextMethod()
+  vn <- object$model$det_visit_names
+  if (length(vn) && !is.null(object$means)) {
+    pv <- object$means[paste0("p_visit_", vn)]
+    flat <- c(flat, pv[!is.na(pv) & !names(pv) %in% names(flat)])
+  }
+  if (is.null(arm)) flat else .tobs_arm_coef(flat, object, arm)
 }
 
 #' Fitted values (occupancy and detection probabilities)
@@ -793,35 +866,150 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
   list(occ = .tobs_resid_binary(z_obs, fitted(object)$z, type), det = NULL)
 }
 
-#' Simulate replicate datasets from posterior
+#' Simulate replicate datasets from the posterior
+#'
+#' Each replicate draws a parameter vector from the fit's posterior draws and
+#' simulates the latent state and the response from it, so the replicates carry
+#' parameter uncertainty.
+#'
 #' @param object A `tobs_fit` object.
 #' @param nsim Number of simulated datasets (default 1).
-#' @param seed Optional random seed.
-#' @param ... Ignored.
-#' @return A list of simulated detection history matrices.
+#' @param seed Optional random seed. As for [stats::simulate()], a supplied
+#'   seed is set for the call and the caller's random number stream is restored
+#'   afterwards.
+#' @param ... Must be empty.
+#' @return A list of length `nsim`, one simulated response per element (named
+#'   `sim_1`, `sim_2`, ...), each in the layout the family's `y` takes: a
+#'   detection matrix, a `[sites x visits x seasons]` array, a list of source
+#'   or species matrices, and so on. The list carries the `"seed"` attribute
+#'   [stats::simulate()] specifies: the `.Random.seed` in force when `seed` is
+#'   `NULL`, otherwise `seed` with its `RNGkind()` as the `"kind"` attribute.
+#'   Every family returns this layout, whatever `nsim` is.
 #' @export
 simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
-  if (!is.null(seed)) set.seed(seed)
-  model <- object$model
-  fn <- .tobs_s3_handler("simulate", model$model_type)
-  if (!is.null(fn)) return(fn(object, nsim))
-  draws <- object$draws
-  n_samples <- nrow(draws)
-  pi_list <- model$process_info
-
-  if (!identical(model$model_type, "single")) {
-    stop("simulate() currently only supports single-season models")
+  if (length(list(...))) {
+    stop("simulate() on a tobs_fit takes no further arguments; got ",
+         paste0("`", names(list(...)) %||% "?", "`", collapse = ", "), ".",
+         call. = FALSE)
+  }
+  if (!is.numeric(nsim) || length(nsim) != 1L || !is.finite(nsim) || nsim < 1) {
+    stop("`nsim` must be a single positive integer.", call. = FALSE)
+  }
+  nsim <- as.integer(nsim)
+  key <- .tobs_simulate_key(object)
+  fn  <- if (!is.na(key)) .tobs_s3_handler("simulate", key)
+  if (is.null(fn)) {
+    stop("simulate() has no handler registered for '", key, "'. Register ",
+         "`.tobs_simulate_", key, "(object, nsim)` returning a list of nsim ",
+         "responses.", call. = FALSE)
   }
 
-  # The posterior-draw selection (R_unif_index, the sample.int primitive) and the
-  # z / y_rep Bernoulli draws run in cpp_simulate_single from R's RNG stream in
-  # the same order, so the simulation is byte-identical under a fixed seed.
+  # The RNG protocol of stats:::simulate.lm.
+  if (!exists(".Random.seed", envir = globalenv(), inherits = FALSE)) stats::runif(1)
+  if (is.null(seed)) {
+    rng_state <- get(".Random.seed", envir = globalenv())
+  } else {
+    caller <- get(".Random.seed", envir = globalenv())
+    on.exit(assign(".Random.seed", caller, envir = globalenv()))
+    set.seed(seed)
+    rng_state <- structure(seed, kind = as.list(RNGkind()))
+  }
+
+  sims <- fn(object, nsim)
+  if (!is.list(sims) || is.data.frame(sims) || length(sims) != nsim) {
+    stop("`.tobs_simulate_", key, "()` must return a list of ", nsim,
+         " simulated responses.", call. = FALSE)
+  }
+  names(sims) <- paste0("sim_", seq_len(nsim))
+  attr(sims, "seed") <- rng_state
+  sims
+}
+
+# The handler a fit simulates through: its model type, or for a multi-arm fit
+# (which records none) its family.
+.tobs_simulate_key <- function(object) {
+  if (inherits(object, "tobs_multiarm_fit")) {
+    return(if (inherits(object, "occu_categorical_fit")) "occu_categorical"
+           else "cover")
+  }
+  object$model$model_type %||% NA_character_
+}
+
+# The posterior-draw selection (R_unif_index, the sample.int primitive) and the
+# z / y_rep Bernoulli draws run in cpp_simulate_single from R's RNG stream in
+# the same order, so the simulation is byte-identical under a fixed seed.
+# One posterior draw per replicate, sampled with replacement.
+.tobs_simulate_draw_rows <- function(object, nsim) {
+  object$draws[sample.int(nrow(object$draws), nsim, replace = TRUE), , drop = FALSE]
+}
+
+# A detection grid replicate: an observed cell (0/1) is redrawn as
+# Bernoulli(prob), an unsurveyed cell keeps its NA / -1 marker.
+.tobs_simulate_detections <- function(y, prob) {
+  seen <- !is.na(y) & y >= 0
+  out <- y
+  out[seen] <- stats::rbinom(sum(seen), 1L, prob[seen])
+  storage.mode(out) <- "integer"
+  out
+}
+
+# dyn_occu(): season-1 occupancy, then the colonization / extinction chain, then
+# per-visit detections. A season- or interval-varying arm's long-form design is
+# site-major, period-minor (`.tobs_period_arm_design()`), so it reshapes byrow;
+# a per-site arm is constant over periods.
+.tobs_simulate_dynamic <- function(object, nsim) {
+  model <- object$model
+  n <- model$n_sites; Tn <- model$n_seasons; J <- dim(model$y)[2L]
+  d <- .tobs_simulate_draw_rows(object, nsim)
+  arm <- function(k, n_per, sv) {
+    pr <- stats::plogis(.tobs_eta_draws(model, d, k))
+    lapply(seq_len(nsim), function(s) matrix(pr[s, ], n, n_per, byrow = isTRUE(sv)))
+  }
+  psi1 <- arm(1L, 1L, FALSE)
+  p    <- arm(2L, Tn, model$det_season_varying)
+  gam  <- arm(3L, Tn - 1L, model$col_season_varying)
+  eps  <- arm(4L, Tn - 1L, model$ext_season_varying)
+  lapply(seq_len(nsim), function(s) {
+    z <- matrix(0L, n, Tn)
+    z[, 1L] <- stats::rbinom(n, 1L, psi1[[s]][, 1L])
+    for (t in seq_len(Tn - 1L)) {
+      stay <- 1 - eps[[s]][, t]
+      z[, t + 1L] <- stats::rbinom(n, 1L, ifelse(z[, t] == 1L, stay, gam[[s]][, t]))
+    }
+    prob <- aperm(array(z * p[[s]], c(n, Tn, J)), c(1L, 3L, 2L))
+    .tobs_simulate_detections(model$y, prob)
+  })
+}
+
+# int_occu(): one shared occupancy state per site, detected by every source
+# through that source's own design, at the rows its site map places there.
+.tobs_simulate_integrated <- function(object, nsim) {
+  model <- object$model
+  d <- .tobs_simulate_draw_rows(object, nsim)
+  psi <- stats::plogis(.tobs_eta_draws(model, d, 1L))
+  p_src <- lapply(seq_len(model$n_sources), function(s)
+    stats::plogis(.tobs_eta_draws(model, d, 1L + s)))
+  lapply(seq_len(nsim), function(s) {
+    z <- stats::rbinom(model$n_sites, 1L, psi[s, ])
+    out <- lapply(seq_len(model$n_sources), function(k) {
+      ys   <- model$y_sources[[k]]
+      site <- model$site_maps[[k]] + 1L
+      .tobs_simulate_detections(ys, matrix(z[site] * p_src[[k]][s, site],
+                                           nrow(ys), ncol(ys)))
+    })
+    names(out) <- names(model$y_sources)
+    out
+  })
+}
+
+.tobs_simulate_single <- function(object, nsim) {
+  model <- object$model
+  pi_list <- model$process_info
   p_occ <- pi_list[[1]]$p; p_det <- pi_list[[2]]$p
   yint <- model$y; storage.mode(yint) <- "integer"
-  res <- cpp_simulate_single(model$X_processes[[1]], model$X_processes[[2]],
-                             draws[, seq_len(p_occ + p_det), drop = FALSE],
-                             yint, p_occ, p_det, as.integer(nsim))
-  if (nsim == 1) res[[1]] else res
+  cpp_simulate_single(model$X_processes[[1]], model$X_processes[[2]],
+                      object$draws[, seq_len(p_occ + p_det), drop = FALSE],
+                      yint, p_occ, p_det, nsim)
 }
 
 # `quantiles` states the credible levels a predictor reports, and it drives both
