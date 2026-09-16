@@ -16,6 +16,7 @@
 \alias{check_model}
 \alias{dic}
 \alias{cpo}
+\alias{pointwise_loglik}
 \alias{waic}
 \alias{loo}
 \title{Objects exported from other packages}
@@ -27,7 +28,7 @@ below to see their documentation.
 \describe{
   \item{loo}{\code{\link[loo:loo]{loo()}}, \code{\link[loo:waic]{waic()}}}
 
-  \item{tulpa}{\code{\link[tulpa:check_model]{check_model()}}, \code{\link[tulpa:cpo]{cpo()}}, \code{\link[tulpa:dic]{dic()}}, \code{\link[tulpa:glance]{glance}}, \code{\link[tulpa:pit_residuals]{pit_residuals()}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:sbc]{sbc()}}, \code{\link[tulpa:test_dispersion]{test_dispersion()}}, \code{\link[tulpa:test_outliers]{test_outliers()}}, \code{\link[tulpa:test_uniformity]{test_uniformity()}}, \code{\link[tulpa:test_zero_inflation]{test_zero_inflation()}}, \code{\link[tulpa:tidy]{tidy}}}
+  \item{tulpa}{\code{\link[tulpa:check_model]{check_model()}}, \code{\link[tulpa:cpo]{cpo()}}, \code{\link[tulpa:dic]{dic()}}, \code{\link[tulpa:glance]{glance}}, \code{\link[tulpa:pit_residuals]{pit_residuals()}}, \code{\link[tulpa:pointwise_loglik]{pointwise_loglik()}}, \code{\link[tulpa:ranef]{ranef()}}, \code{\link[tulpa:sbc]{sbc()}}, \code{\link[tulpa:test_dispersion]{test_dispersion()}}, \code{\link[tulpa:test_outliers]{test_outliers()}}, \code{\link[tulpa:test_uniformity]{test_uniformity()}}, \code{\link[tulpa:test_zero_inflation]{test_zero_inflation()}}, \code{\link[tulpa:tidy]{tidy}}}
 
   \item{tulpaMesh}{\code{\link[tulpaMesh:fem_matrices]{fem_matrices()}}}
 }}

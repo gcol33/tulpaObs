@@ -50,6 +50,10 @@ tulpa::dic
 #' @export
 tulpa::cpo
 
+#' @importFrom tulpa pointwise_loglik
+#' @export
+tulpa::pointwise_loglik
+
 #' @importFrom loo waic
 #' @export
 loo::waic

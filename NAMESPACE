@@ -24,6 +24,7 @@ S3method(pit_residuals,tobs_fit)
 S3method(plot,tobs_aggregation_scan)
 S3method(plot,tobs_data)
 S3method(plot,tobs_prediction)
+S3method(pointwise_loglik,tobs_fit)
 S3method(ppc,tobs_fit)
 S3method(predict,cover_fit)
 S3method(predict,occu_categorical_fit)
@@ -105,6 +106,7 @@ export(occu_multiscale_cover)
 export(occu_priors)
 export(occu_ttd)
 export(pit_residuals)
+export(pointwise_loglik)
 export(ppc)
 export(ranef)
 export(removal)
@@ -215,6 +217,7 @@ importFrom(tulpa,
   dic,
   glance,
   pit_residuals,
+  pointwise_loglik,
   ranef,
   sbc,
   test_dispersion,

@@ -143,6 +143,18 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
   cr
 }
 
+# The pointwise-log-likelihood door tulpa::compare_models() / model_average()
+# dispatch through, so a tobs_fit reaches model comparison and averaging the
+# same way it reaches waic() / loo() / dic() / cpo() above -- by handing back
+# the matrix those already compute, at tulpa::pointwise_loglik()'s own default
+# draw budget rather than the doors' 1000L (compare_models() calls no fold /
+# unit argument, so there is nothing to forward here).
+#' @rdname tobs_criteria
+#' @export
+pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
+  .tobs_pointwise_loglik(object, n.draws = ndraws)
+}
+
 # loo.unit = "cell" -> a leave-one-group-out (LOGO-CV) criteria call: aggregate
 # each cell's pointwise log-likelihood columns into one fold. The cell map is
 # auto-supplied from the fit, so the caller need not hand-build it. The

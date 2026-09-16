@@ -6,6 +6,7 @@
 \alias{loo.tobs_fit}
 \alias{dic.tobs_fit}
 \alias{cpo.tobs_fit}
+\alias{pointwise_loglik.tobs_fit}
 \title{Model criteria for occupancy / cover models}
 \usage{
 \method{waic}{tobs_fit}(x, n.draws = 1000L, loo.unit = c("obs", "cell"), n.threads = NULL, ...)
@@ -21,6 +22,8 @@
   n.threads = NULL,
   ...
 )
+
+\method{pointwise_loglik}{tobs_fit}(object, ndraws = NULL, ...)
 }
 \arguments{
 \item{x, object}{A \code{tobs_fit} object.}
