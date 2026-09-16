@@ -922,9 +922,7 @@
   # Per-observation PSIS leave-one-out weighting of the CDF limits + a uniform
   # jitter, batched in tulpa's cpp_psis_loo_pit (PSIS columns parallel, the runif
   # in index order), so it is byte-identical to the former per-column R loop.
-  tail_len <- getFromNamespace(".psis_tail_len", "tulpa")(nrow(ll), NULL)
-  getFromNamespace("cpp_psis_loo_pit", "tulpa")(
-    ll, Fl, Fu, as.integer(tail_len), 1L)
+  tulpa::tulpa_pit(cdf = Fu, cdf_lower = Fl, log_lik = ll, n_threads = 1L)
 }
 
 

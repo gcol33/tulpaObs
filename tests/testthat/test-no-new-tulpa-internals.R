@@ -8,8 +8,9 @@
 # contract: a signature change in the engine breaks tulpaObs at run time with
 # no version constraint able to catch it (#324 was exactly this). The fix is
 # tracked upstream in gcol33/tulpa (exported doors / C-callables for each);
-# most are not exported yet (only `tulpa_hyper_draws()` is, as of this
-# writing), so the 38 existing sites stay until each door lands.
+# most are not exported yet (`tulpa_hyper_draws()` and, since #810,
+# `tulpa_pit(log_lik = )` for the LOO-PIT kernel are), so the remaining
+# audited sites stay until each further door lands.
 #
 # What this guards is the ONE thing available right now: the surface cannot
 # grow past what is already audited. A new call site -- a new file reaching
@@ -46,7 +47,6 @@
   "nmix_laplace_re_spatial.R"   = 2L,
   "nmix_laplace_spde.R"         = 2L,
   "occu_cover_batch.R"          = 1L,
-  "occu_cover_diag.R"           = 2L,
   "occu_cover_nuts.R"           = 6L,
   "occu_multiscale_cover.R"     = 1L,
   "occu_pg_gibbs.R"             = 2L,
