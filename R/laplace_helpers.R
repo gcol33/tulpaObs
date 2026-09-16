@@ -49,9 +49,13 @@
          call. = FALSE)
   }
   if (!identical(spatial$type, "spde")) {
-    stop(sprintf(
-      ".tobs_laplace currently supports spatial$type == 'spde' only (got '%s'). Use method = 'nuts' for other spatial types.",
-      spatial$type), call. = FALSE)
+    nuts_hint <- if (identical(model_type, "single"))
+      ", or method = \"nuts\" (icar() only, on single-season occu())" else ""
+    stop(sprintf(paste0(
+      "method = \"laplace\" fits a continuous spde() field only (got %s()). ",
+      "Use method = \"nested_laplace\" for an areal field (icar() / bym2() / ",
+      "car_proper())%s."),
+      spatial$type, nuts_hint), call. = FALSE)
   }
   on_occ <- isTRUE(spatial$shared[1])
   on_det <- length(spatial$shared) >= 2 && isTRUE(spatial$shared[2])
@@ -88,21 +92,25 @@
   re_list <- if (inherits(re, "tobs_re")) list(re) else re
 
   if (!identical(model$model_type, "single")) {
-    stop(sprintf(
-      "Random effects under method = 'laplace' are wired for single-season occupancy only (got model_type = '%s'). Use method = 'nuts' for random effects on this family.",
-      model$model_type), call. = FALSE)
+    family_label <- switch(model$model_type,
+      dynamic = "dyn_occu()", integrated = "int_occu()", model$model_type)
+    stop(sprintf(paste0(
+      "Random effects under method = \"laplace\" are wired for single-season ",
+      "occu() only (got %s). Use method = \"nested_laplace\" for random ",
+      "effects on this family, or method = \"nuts\"."),
+      family_label), call. = FALSE)
   }
   if (!is.null(spatial)) {
-    stop("A random effect combined with a spatial term is not supported on the Laplace path. Use method = 'nuts'.",
+    stop("A random effect combined with a spatial term is not supported on the Laplace path. Use method = \"nested_laplace\" or method = \"nuts\".",
          call. = FALSE)
   }
   if (!is.null(model$X_det_visit)) {
-    stop("Random effects with visit-level detection covariates are not supported on the Laplace path. Use method = 'nuts'.",
+    stop("Random effects with visit-level detection covariates are not supported on the Laplace path. Use method = \"nuts\".",
          call. = FALSE)
   }
   for (r in re_list) {
     if (length(r$shared) >= 2L && isTRUE(r$shared[1]) && isTRUE(r$shared[2])) {
-      stop("A single random effect shared across occupancy and detection is not supported on the Laplace path (each arm fits its own RE block). Use method = 'nuts'.",
+      stop("A single random effect shared across occupancy and detection is not supported on the Laplace path (each arm fits its own RE block). Use method = \"nuts\".",
            call. = FALSE)
     }
   }
