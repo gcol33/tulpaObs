@@ -401,6 +401,16 @@
   pos_formula    <- lifted$pos
   arm_fields     <- lifted$arm_fields
 
+  # lme4 bars on the occupancy formula (`(1 | g)`) desugar to `re()` here, once,
+  # before anything downstream reads `formula`. `.occu_cover_spatial_fields()`
+  # would desugar again internally (via `.tobs_bind_formulas`, a no-op on an
+  # already-desugared `re()` term) for the nested_laplace / spatial path; the
+  # non-spatial `fe_formula <- formula` fallback below did NOT desugar, so a bar
+  # reached `stats::model.matrix()` directly, where `|` is not meaningful for
+  # factors and produced a non-finite optim start instead of the clear "occu_cover()
+  # v1 does not support structured terms (re)" refusal `re(g)` gets.
+  formula <- .tobs_desugar_bars(formula)
+
   if (is.null(pos_formula)) pos_formula <- detection
 
   # Observation-arm random intercept: a `(1 | g)` / `re(g)` on the detection or
