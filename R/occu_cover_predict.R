@@ -336,6 +336,69 @@
   apply(m, 1L, stats::quantile, probs = 1 - (1 - level) / 2, names = FALSE)
 .tobs_draw_sd <- function(m) apply(m, 1L, stats::sd)
 
+# Coefficient-level predict() for a non-joint occu_cover() fit (laplace / nuts,
+# `.tobs_joint_fit(object)` is NULL). Reuses `.tobs_occu_cover_components()`,
+# the per-draw arm coefficients / field / random-effect offsets fitted() and
+# WAIC / LOO already share (`R/occu_cover_diag.R`), and builds the new design
+# at `newdata` with `.tobs_joint_arm_design()` -- which reads the fit's own
+# formulas rather than the joint substrate, so it works unchanged here. A
+# shared spatial field or a detection/cover-arm random effect is tied to the
+# fitted cell graph / grouping, so newdata prediction (kriging to an unseen
+# cell or an unseen level) is refused for those; the in-sample surface (no
+# `newdata`) is unaffected -- predict.tobs_fit() routes that to fitted()
+# instead of here, which already folds in the field and every random effect
+# (#351).
+.tobs_predict_occu_cover_coef <- function(object, newdata, type, level, nsim) {
+  type <- match.arg(type, c("occurrence", "detection", "cover_cond",
+                            "cover_exp", "change"))
+  if (identical(type, "change")) {
+    stop("predict(type = \"change\") needs a joint nested-Laplace fit ",
+         "(method = \"nested_laplace\"); this fit carries no joint object.",
+         call. = FALSE)
+  }
+  cmp <- .tobs_occu_cover_components(object, n.draws = nsim)
+  if (any(cmp$field_occ != 0) || any(cmp$field_pos != 0)) {
+    stop("predict(newdata = ) is not supported for this occu_cover() fit: it ",
+         "carries a shared spatial field, which is tied to the fitted cell ",
+         "graph and cannot be evaluated at a new location. Call predict() ",
+         "with no `newdata` for the in-sample fit, or refit with method = ",
+         "\"nested_laplace\" for a field-aware newdata / change-map ",
+         "predictor.", call. = FALSE)
+  }
+  if ((!is.null(cmp$off_det) && ncol(cmp$off_det) > 0L) ||
+      (!is.null(cmp$off_pos) && ncol(cmp$off_pos) > 0L)) {
+    stop("predict(newdata = ) is not supported for this occu_cover() fit: it ",
+         "carries a detection / cover-arm random effect, which is tied to the ",
+         "fitted grouping. Call predict() with no `newdata` for the in-sample ",
+         "fit.", call. = FALSE)
+  }
+  p_occ <- ncol(cmp$b_occ); p_det <- ncol(cmp$b_det); p_pos <- ncol(cmp$b_pos)
+  X_occ   <- .tobs_joint_arm_design(object, newdata, "occ", p_occ)
+  eta_occ <- tcrossprod(X_occ, cmp$b_occ)
+  p_mat   <- stats::plogis(eta_occ)
+
+  mat <- switch(
+    type,
+    occurrence = p_mat,
+    detection  = {
+      X_det <- .tobs_joint_arm_design(object, newdata, "det", p_det)
+      stats::plogis(tcrossprod(X_det, cmp$b_det))
+    },
+    cover_cond = ,
+    cover_exp  = {
+      X_pos   <- .tobs_joint_arm_design(object, newdata, "pos", p_pos)
+      eta_pos <- tcrossprod(X_pos, cmp$b_pos)
+      mu      <- .occu_cover_mu_from_eta(eta_pos, cmp$disp, object$model$positive)
+      if (identical(type, "cover_exp")) p_mat * mu else mu
+    })
+
+  tbl <- .occu_cover_summ(mat, seq_len(nrow(newdata)), level)
+  attr(tbl, "quantity") <- type
+  attr(tbl, "draws") <- stats::setNames(list(mat), type)
+  class(tbl) <- c("tobs_prediction", "data.frame")
+  tbl
+}
+
 # Core predict handler for the joint cover-family fits. `object` is an
 # occu_cover() fit (3-arm) or a cover() hurdle fit on the nested-Laplace path
 # (2-arm); both expose a joint nested-Laplace object via `.tobs_joint_fit()`.

@@ -387,13 +387,49 @@
   M
 }
 
+# The non-joint Laplace route to the same table. `.tobs_fit_occu_cover()` (the
+# plain Laplace fitter, `R/occu_cover.R`) carries no shared field -- that
+# composition is nested-Laplace only -- so its MVN pseudo-draws in `fit$draws`
+# already sit on the naming convention the joint / NUTS tables share
+# (`psi_*`/`p_*`/`pos_*` plus a trailing `log_phi`/`log_sigma_pos`), and the
+# field columns are always the zero the other two routes report for a fit with
+# no copy (#293).
+.tobs_sbc_draws_laplace_occu_cover <- function(fit, n) {
+  D <- fit$draws
+  S <- nrow(D)
+  if (is.null(D) || !S)
+    stop("This fit carries no posterior draw matrix to score.", call. = FALSE)
+  take <- sample.int(S, n, replace = n > S)
+
+  pi_l <- fit$process_info
+  cn <- function(k, pre) paste0(pre, "_", pi_l[[k]]$coef_names)
+  nms <- c(cn(1L, "psi"), cn(2L, "p"), cn(3L, "pos"))
+  miss <- setdiff(nms, colnames(D))
+  if (length(miss))
+    stop("This fit's draws carry no column for: ",
+         paste(miss, collapse = ", "), ".", call. = FALSE)
+  M <- D[take, nms, drop = FALSE]
+  blocks <- list(occ = cn(1L, "psi"), det = cn(2L, "p"), pos = cn(3L, "pos"))
+  M <- cbind(M, sigma = 0, sigma_pos_field = 0, alpha = 0)
+
+  disp_col <- if (identical(fit$model$positive, "beta")) "log_phi"
+              else "log_sigma_pos"
+  if (!disp_col %in% colnames(D))
+    stop("This fit's draws carry no `", disp_col, "` column.", call. = FALSE)
+  M <- cbind(M, disp = exp(as.numeric(D[take, disp_col])))
+
+  attr(M, "blocks") <- blocks
+  M
+}
+
 # One entry in the registry, because the family is one family. Which route a
 # fit took is a property of the fit, and reading it here is what lets the same
 # 11 quantities be scored on the grid-integrated and the sampled posterior and
 # compared.
 .tobs_sbc_draws_occu_cover <- function(fit, n) {
-  if (identical(fit$method, "nuts")) .tobs_sbc_draws_nuts_occu_cover(fit, n)
-  else .tobs_sbc_draws_joint_occu_cover(fit, n)
+  if (identical(fit$method, "nuts")) return(.tobs_sbc_draws_nuts_occu_cover(fit, n))
+  if (!is.null(.tobs_joint_fit(fit))) return(.tobs_sbc_draws_joint_occu_cover(fit, n))
+  .tobs_sbc_draws_laplace_occu_cover(fit, n)
 }
 
 

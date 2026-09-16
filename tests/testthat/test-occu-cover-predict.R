@@ -345,3 +345,88 @@ test_that("change CI covers the known per-cell occupancy change", {
     # the point estimate tracks the true change in sign and magnitude.
     expect_gt(stats::cor(pr$delta_p, delta_true), 0.5)
 })
+
+# ---------------------------------------------------------------------------
+# predict() for a NON-joint occu_cover() fit (method = "laplace" / "nuts"):
+# `.tobs_joint_fit(object)` is NULL, so there is no grid-integrated posterior to
+# sample from `.tobs_predict_joint()`'s trend-block bundle. In-sample reduces to
+# fitted(); newdata prediction goes through the coefficient-level draws
+# `.tobs_occu_cover_components()` already assembles for WAIC / fitted() (#351).
+# ---------------------------------------------------------------------------
+
+.ocp_build_coef_fit <- function(method = "laplace", N = 60L, J = 4L, seed = 21L,
+                                ctl = list()) {
+    sim <- simulate_occu_cover(
+        N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+        beta_occ = c(0.3, 0.8), beta_p = c(0.2, -0.5), beta_pos = c(-1, 0.4),
+        positive = "lognormal", sigma_pos = 0.4, seed = seed)
+    y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+    fit <- tobs(~ occ_cov1, data = sim$data, family = occu_cover("lognormal"),
+               detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+               y_pos = y_pos, visits = sim$visit_data, method = method,
+               control = utils::modifyList(list(verbose = FALSE), ctl))
+    list(fit = fit, sim = sim)
+}
+
+test_that("predict() with no newdata reduces to fitted() on a laplace fit", {
+    skip_on_cran()
+    f <- .ocp_build_coef_fit("laplace")
+    expect_null(tulpaObs:::.tobs_joint_fit(f$fit))
+    expect_identical(predict(f$fit), fitted(f$fit))
+})
+
+test_that("predict() at newdata works on a laplace fit and matches in-sample", {
+    skip_on_cran()
+    f <- .ocp_build_coef_fit("laplace")
+    nd <- f$sim$data[1:3, , drop = FALSE]
+    pr <- predict(f$fit, type = "occurrence", newdata = nd)
+    expect_s3_class(pr, "tobs_prediction")
+    expect_equal(nrow(pr), 3L)
+    # Same design, same fitted coefficients -> the in-sample psi at those rows.
+    expect_equal(pr$mean, unname(fitted(f$fit)$psi[1:3]), tolerance = 1e-8)
+
+    pr_cover <- predict(f$fit, type = "cover_exp", newdata = nd)
+    expect_true(all(pr_cover$mean > 0))
+})
+
+test_that("predict() with no newdata reduces to fitted() on a nuts fit", {
+    skip_on_cran()
+    skip_if_fast()
+    f <- .ocp_build_coef_fit("nuts", ctl = list(n.iter = 200L, n.warmup = 200L,
+                                                n.chains = 1L))
+    expect_null(tulpaObs:::.tobs_joint_fit(f$fit))
+    expect_identical(predict(f$fit), fitted(f$fit))
+})
+
+test_that("predict(newdata = ) refuses a fit carrying a shared field or RE", {
+    skip_on_cran()
+    skip_if_fast()
+    rook <- function(n) {
+        A <- matrix(0L, n * n, n * n); id <- function(r, c) (r - 1) * n + c
+        for (r in 1:n) for (c in 1:n) {
+            i <- id(r, c)
+            if (r < n) { j <- id(r + 1, c); A[i, j] <- A[j, i] <- 1L }
+            if (c < n) { j <- id(r, c + 1); A[i, j] <- A[j, i] <- 1L }
+        }
+        A
+    }
+    side <- 4L; adj <- rook(side)
+    sim <- simulate_occu_cover(
+        N = side * side, J = 4, positive = "lognormal",
+        beta_occ = c(qlogis(0.5), 0.8), beta_p = c(0.3, 0.5),
+        beta_pos = c(log(0.12), -0.4), sigma_pos = 0.4,
+        adj = adj, sigma = 0.8, alpha = 0.7, seed = 1L)
+    y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+    f <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
+             family = occu_cover("lognormal"), detection = ~ det_cov1,
+             positive = ~ pos_cov1 + share(spatial()), y = sim$y, y_pos = y_pos,
+             visits = sim$visit_data, method = "nuts",
+             control = list(n.iter = 150L, n.warmup = 150L, n.chains = 1L,
+                            verbose = FALSE))
+    expect_null(tulpaObs:::.tobs_joint_fit(f))
+    # In-sample still works (fitted() already folds the field in).
+    expect_length(predict(f)$psi, side * side)
+    expect_error(
+        predict(f, type = "occurrence", newdata = sim$data[1:3, , drop = FALSE]),
+        "shared spatial field")
+})

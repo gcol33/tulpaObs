@@ -1257,9 +1257,19 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     oc_type <- if (missing(type) || length(type) > 1L) "occurrence" else type
     nd <- newdata
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
-    return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
-                               times = times, level = level, nsim = nsim,
-                               draws = draws, time_col = time_col))
+    if (!is.null(.tobs_joint_fit(object))) {
+      return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
+                                 times = times, level = level, nsim = nsim,
+                                 draws = draws, time_col = time_col))
+    }
+    # Non-joint occu_cover() fit (laplace / nuts): there is no joint
+    # nested-Laplace object for .tobs_predict_joint()'s trend-block bundle to
+    # sample. In-sample (no newdata / X.0) reduces to fitted(), which already
+    # folds in a sampled field or random effect; newdata prediction goes
+    # through the coefficient-level draws `.tobs_occu_cover_components()`
+    # already assembles for WAIC / fitted() (#351).
+    if (is.null(nd)) return(fitted(object))
+    return(.tobs_predict_occu_cover_coef(object, nd, oc_type, level, nsim))
   }
   if (identical(object$model$model_type, "occu_multiscale_cover")) {
     if (!is.null(X.0) || !is.null(terms) || !is.null(newdata)) {

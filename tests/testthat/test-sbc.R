@@ -457,3 +457,31 @@ test_that("occu_cover scores the same quantities on the sampled and grid routes"
   # `disp` is cover()'s own surface on both: a beta precision, not a log one.
   expect_gt(median(M_nuts[, "disp"]), 1)
 })
+
+# A non-joint occu_cover() fit (method = "laplace", no spatial term) carries no
+# `joint_fit` for `.tobs_sbc_draws_joint_occu_cover()` to sample; the draws come
+# straight off `fit$draws` (the MVN pseudo-draws), which already sit on the
+# `psi_*`/`p_*`/`pos_*` naming the joint / nuts routes use, with the field
+# columns pinned at 0 -- that composition is nested-Laplace only (#351).
+test_that("sbc() runs end to end on a non-joint (field-free) laplace fit", {
+  skip_on_cran()
+  sim <- simulate_occu_cover(
+    N = 60L, J = 4L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    beta_occ = c(0.3, 0.8), beta_p = c(0.2, -0.5), beta_pos = c(-1, 0.4),
+    positive = "lognormal", sigma_pos = 0.4, seed = 21L)
+  y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
+  f <- tobs(~ occ_cov1, data = sim$data, family = occu_cover("lognormal"),
+           detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
+           y_pos = y_pos, visits = sim$visit_data, method = "laplace",
+           control = list(verbose = FALSE))
+  expect_null(tulpaObs:::.tobs_joint_fit(f))
+
+  M <- tulpaObs:::.tobs_sbc_draws_occu_cover(f, 40L)
+  expect_identical(nrow(M), 40L)
+  expect_true(all(c("sigma", "sigma_pos_field", "alpha", "disp") %in% colnames(M)))
+  expect_true(all(M[, c("sigma", "sigma_pos_field", "alpha")] == 0))
+  expect_true(all(M[, "disp"] > 0))
+
+  res <- sbc(f, n.sim = 2L, n.draws = 50L, n.ref = 20L)
+  expect_s3_class(res, "sbc")
+})
