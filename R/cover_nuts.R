@@ -302,6 +302,12 @@
     log_lik      = ll_mean,
     N            = enc$N,
     method       = "nuts",
+    # Top-level, not just under `$nuts`: tulpa's `n_divergent()` / `check_model()`
+    # read `object$divergent` / `object$accept_prob` at top level, else they
+    # fall through to a silent `0` / `NA` regardless of what the sampler did
+    # (gcol33/tulpaObs#343).
+    accept_prob  = accept,
+    divergent    = divergent,
     nuts         = nuts,
     convergence  = list(converged = NA, n_iter = as.integer(n.iter))
   ), class = c("cover_fit", "tobs_multiarm_fit", "tobs_fit", "tulpa_fit"))

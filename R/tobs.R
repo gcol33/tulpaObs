@@ -711,6 +711,15 @@ tobs <- function(formula,
   # unstamped fit as a chain, so a Laplace fit would otherwise have Rhat / ESS
   # computed on its i.i.d. approximation draws and pass `check_diagnostics()`.
   fit$draws_kind <- fit$draws_kind %||% route$draws
+  # tulpa's sampler-diagnostic gates (plot_energy() / plot_divergences() /
+  # diagnostic_summary()) read `fit$backend == "hmc"`; every tulpaObs NUTS
+  # fitter runs the engine's HMC/NUTS sampler and none of them stamp this
+  # themselves, so those gates read "unknown" and refuse even on a fit that
+  # ran the sampler and has real `divergent`/`accept_prob` to show
+  # (gcol33/tulpaObs#343).
+  if (identical(route$engine, "nuts")) {
+    fit$backend <- fit$backend %||% "hmc"
+  }
   # The resolved arguments this fit was actually built from -- `formula`/`y`
   # already LHS-resolved, `method` still the caller's own spelling (including
   # "auto"), `control` post n.seeds-strip -- so `update.tobs_fit()` can re-enter
