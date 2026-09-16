@@ -10,6 +10,7 @@
 \alias{glance.tobs_multiarm_fit}
 \alias{tidy.tobs_multiarm_fit}
 \alias{summary.tobs_multiarm_fit}
+\alias{plot.tobs_multiarm_fit}
 \alias{fitted.tobs_multiarm_fit}
 \alias{residuals.tobs_multiarm_fit}
 \title{S3 methods for multi-arm fits}
@@ -29,6 +30,8 @@
 \method{tidy}{tobs_multiarm_fit}(x, conf.level = 0.95, ...)
 
 \method{summary}{tobs_multiarm_fit}(object, level = 0.95, ...)
+
+\method{plot}{tobs_multiarm_fit}(x, ...)
 
 \method{fitted}{tobs_multiarm_fit}(object, ...)
 
@@ -56,7 +59,8 @@ named vector (\code{presence_(Intercept)}, \code{positive_x}, \code{class_2:x}, 
 both named as \code{coef()}; \code{logLik()} a \code{logLik} object; \code{tidy()} the
 \code{arm} / \code{term} / \code{estimate} / \code{std.error} / \code{conf.low} / \code{conf.high} table;
 \code{summary()} the estimate / std.error / interval data frame;
-\code{glance()} the one-row column set of \code{\link[=glance.tobs_fit]{glance.tobs_fit()}}.
+\code{glance()} the one-row column set of \code{\link[=glance.tobs_fit]{glance.tobs_fit()}}; \code{plot()} one
+Gaussian-density panel per coefficient (up to 4), invisibly.
 }
 \description{
 Coefficient, covariance, and summary accessors for fits that store

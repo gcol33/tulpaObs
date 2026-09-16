@@ -196,6 +196,7 @@ fit_occu_categorical <- function(enc, class_labels, priors, control, family) {
       n_present   = length(enc$cls),
       loglik      = c(occ = as.numeric(m_occ$log_marginal %||% NA_real_),
                       class = mc$loglik),
+      penalized   = !is.null(occ_bp),
       converged   = isTRUE(m_occ$converged) && isTRUE(mc$converged),
       convergence = list(converged = isTRUE(m_occ$converged) && isTRUE(mc$converged),
                          n_iter = mc$n_iter),

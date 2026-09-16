@@ -126,7 +126,8 @@
 #'   both named as `coef()`; `logLik()` a `logLik` object; `tidy()` the
 #'   `arm` / `term` / `estimate` / `std.error` / `conf.low` / `conf.high` table;
 #'   `summary()` the estimate / std.error / interval data frame;
-#'   `glance()` the one-row column set of [glance.tobs_fit()].
+#'   `glance()` the one-row column set of [glance.tobs_fit()]; `plot()` one
+#'   Gaussian-density panel per coefficient (up to 4), invisibly.
 #' @name tobs_multiarm_methods
 #' @export
 nobs.tobs_multiarm_fit <- function(object, ...) {
@@ -188,14 +189,35 @@ confint.tobs_multiarm_fit <- function(object, parm, level = 0.95, ...) {
 }
 
 # --- log-likelihood ----------------------------------------------------------
+# What .tobs_multiarm_loglik_val() actually computed, so AIC()/BIC()'s
+# `quantity == "log_likelihood"` gate reads a stated quantity instead of an
+# unrecorded one. occu_categorical's two Laplace arms are an unpenalized MLE
+# only when neither carries a caller-supplied prior (`fit_occu_categorical()`
+# stamps `penalized`); a prior-carrying fit reports a log posterior mode
+# instead, which AIC/BIC do not accept. Other multiarm families (cover) are
+# not established either way, so they keep declining as before.
+.tobs_multiarm_loglik_quantity <- function(object) {
+  if (inherits(object, "occu_categorical_fit")) {
+    if (isTRUE(object[["penalized"]])) {
+      return(list(value = NA_character_, declined = "prior_attached"))
+    }
+    return(list(value = "log_likelihood", declined = NA_character_))
+  }
+  list(value = NA_character_, declined = "unrecorded")
+}
+
 #' @rdname tobs_multiarm_methods
 #' @export
 logLik.tobs_multiarm_fit <- function(object, ...) {
   if (!is.null(object[["draws"]])) return(NextMethod())
   val <- .tobs_multiarm_loglik_val(object)
-  structure(val, df = .tobs_multiarm_npar(object),
-            nobs = as.integer(object[["n_total"]] %||% NA_integer_),
-            class = "logLik")
+  q   <- .tobs_multiarm_loglik_quantity(object)
+  ll  <- structure(val, df = .tobs_multiarm_npar(object),
+                   nobs = as.integer(object[["n_total"]] %||% NA_integer_),
+                   class = "logLik")
+  attr(ll, "quantity") <- q$value
+  if (!is.na(q$declined)) attr(ll, "declined") <- q$declined
+  ll
 }
 
 # --- one-row model summary ---------------------------------------------------
@@ -234,6 +256,35 @@ summary.tobs_multiarm_fit <- function(object, level = 0.95, ...) {
                     row.names = names(est))
   names(out)[3:4] <- colnames(ci)
   out
+}
+
+# --- coefficient plot --------------------------------------------------------
+# Same no-draws branch as plot.tulpa_fit (tulpa's `.fit_fixed_table()` /
+# Gaussian-density panel), read off the flat multiarm estimate/se instead of
+# a single fixed-effect table, so the generic doesn't fall through to
+# plot.tulpa_fit and hit its "carries no $draws, $mode/$H_beta, $cov, or
+# $means" refusal.
+#' @rdname tobs_multiarm_methods
+#' @export
+plot.tobs_multiarm_fit <- function(x, ...) {
+  if (!is.null(x[["draws"]])) return(NextMethod())
+  est <- .tobs_multiarm_flat(x, "estimate")
+  se  <- .tobs_multiarm_flat(x, "se")
+  np  <- length(est)
+  n_panel <- min(np, 4L)
+  old_par <- graphics::par(mfrow = c(n_panel, 1L), mar = c(4, 4, 1, 1))
+  on.exit(graphics::par(old_par))
+  for (j in seq_len(n_panel)) {
+    m <- est[j]; s <- se[j]
+    if (!is.finite(s) || s <= 0) {
+      plot(m, 0, type = "p", xlab = names(est)[j], ylab = "density")
+      next
+    }
+    xs <- seq(m - 4 * s, m + 4 * s, length.out = 200)
+    plot(xs, stats::dnorm(xs, m, s), type = "l", xlab = names(est)[j], ylab = "density")
+    graphics::abline(v = m, col = "red", lty = 2)
+  }
+  invisible(x)
 }
 
 # --- response-scale methods that need a design / RNG decision ----------------
