@@ -133,8 +133,9 @@
            "only.", call. = FALSE)
     if (!is.null(temporal) || !is.null(re) || !is.null(latent) || !is.null(svc))
       stop("method = \"pg_gibbs\" does not yet support temporal / RE / latent / ",
-           "svc terms (an areal icar() field IS supported -- spPGOcc, ",
-           ").", call. = FALSE)
+           "svc terms (an areal icar() field IS supported, matching spPGOcc). ",
+           "Use method = \"nested_laplace\" for temporal / RE terms, or ",
+           "method = \"nuts\".", call. = FALSE)
     if (!is.null(spatial)) {
       # spPGOcc: an intrinsic areal (ICAR) field on the occupancy logit, jointly
       # updated with the coefficients as a Gaussian Markov random field.
