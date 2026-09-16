@@ -217,6 +217,7 @@
       }
       return(.tobs_finalize_family_fit(fit))
     }
+    .tobs_check_areal_engine(method, has_field = !is.null(spatial), family = "abun")
     nmix_method <- if (is.null(spatial)) "laplace" else "nested_laplace"
     fit <- .tobs_fit_nmix(fit_model, method = nmix_method, spatial = spatial,
                           temporal = temporal, re = re, priors = priors,
@@ -236,6 +237,9 @@
       .tobs_check_count_temporal(temporal, spatial, method, "removal", "abundance",
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
+    .tobs_check_areal_engine(
+      method, has_field = !is.null(spatial) || !is.null(temporal) || !is.null(svc),
+      family = "removal")
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the abundance arm: icar() / car_proper() / bym2() under
       # the nested-Laplace driver, optionally composed with a temporal() block
@@ -295,6 +299,9 @@
       .tobs_check_count_temporal(temporal, spatial, method, "distance", "abundance",
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
+    .tobs_check_areal_engine(
+      method, has_field = !is.null(spatial) || !is.null(temporal) || !is.null(svc),
+      family = "distance")
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the abundance arm: icar() / car_proper() (half-normal or
       # hazard key) under the nested-Laplace driver, optionally composed with a
@@ -427,6 +434,9 @@
       .tobs_check_count_temporal(temporal, spatial, method, "fp_occu", "occupancy",
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
+    .tobs_check_areal_engine(
+      method, has_field = !is.null(spatial) || !is.null(temporal) || !is.null(svc),
+      family = "fp_occu")
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
       # nested-Laplace two-state driver, optionally composed with a temporal()

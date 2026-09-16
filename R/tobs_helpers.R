@@ -663,6 +663,36 @@
   )
 }
 
+# Gate the resolved `method` against whether the formula carries a structured
+# (spatial / temporal / svc) term, for the four observation families whose
+# Laplace and nested-Laplace fitters share one dispatch branch in
+# `.tobs_fit_model()` (abun, removal, distance, fp_occu; #354). Those branches
+# used to pick the engine from `has_field` alone and stamp the REQUESTED
+# `method` on the fit regardless -- `method = "nested_laplace"` on a field-free
+# formula silently ran plain Laplace, and `method = "laplace"` with a field
+# silently ran the areal fit -- exactly the mislabelling
+# `.tobs_family_methods` was meant to make impossible. Mirrors `.dispatch_count`
+# ("a field needs nested_laplace; nested_laplace needs a field"). NUTS is
+# skipped here: each family's own NUTS branch decides which structures it
+# supports (some take a field, some do not), and is not rejected by this gate.
+.tobs_check_areal_engine <- function(method, has_field, family) {
+  if (identical(method, "nuts")) return(invisible(NULL))
+  if (has_field && !identical(method, "nested_laplace")) {
+    stop(sprintf(paste0(
+      "%s(): a spatial() / temporal() / svc() term needs method = ",
+      "\"nested_laplace\" (or \"nuts\", where supported). Drop the term for ",
+      "a non-spatial fit, or set method = \"nested_laplace\"."),
+      family), call. = FALSE)
+  }
+  if (!has_field && identical(method, "nested_laplace")) {
+    stop(sprintf(paste0(
+      "%s(): method = \"nested_laplace\" needs a spatial() / temporal() / ",
+      "svc() term on the formula. For a non-spatial fit use ",
+      "method = \"laplace\"."), family), call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 # Normalize the user's `visits` argument to the shape `.tobs_build_single`
 # expects: a long data frame with `n_sites * max_visits` rows in site-major
 # order (row `r` corresponds to site `(r-1) %/% max_visits + 1`, visit
