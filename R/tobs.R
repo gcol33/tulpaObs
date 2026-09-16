@@ -467,6 +467,10 @@ tobs <- function(formula,
       stop("Give the state-process formula as `occurrence`, not both ",
            "`occurrence` and `formula`.", call. = FALSE)
     }
+    if (!is.null(list(...)$presence)) {
+      stop("Give the state-process formula as `occurrence`, not both ",
+           "`occurrence` and `presence`.", call. = FALSE)
+    }
     formula <- occurrence
   }
   if (missing(formula) || is.null(formula)) {

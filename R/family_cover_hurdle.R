@@ -313,6 +313,13 @@ encode_cover_hurdle <- function(formula, data, y,
   copy_prior <- NULL
   per_arm <- !is.null(presence_formula) || !is.null(positive_formula)
   if (per_arm) {
+    # `positive =` given with no explicit `presence =` (e.g. `occurrence = ` /
+    # `formula = ` paired with `positive = `) reuses the shared state `formula`
+    # for the presence arm, so `occurrence`/`formula` reads the same on
+    # cover() as it does on occu_cover().
+    if (is.null(presence_formula) && !is.null(positive_formula)) {
+      presence_formula <- formula
+    }
     if (is.null(presence_formula) || is.null(positive_formula)) {
       stop("cover(): give BOTH `presence` and `positive` per-arm formulas, or a ",
            "single shared formula (not one arm only).", call. = FALSE)
