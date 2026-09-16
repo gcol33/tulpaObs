@@ -664,7 +664,7 @@
 }
 
 # Gate the resolved `method` against whether the formula carries a structured
-# (spatial / temporal / svc) term, for the four observation families whose
+# (spatial / temporal) term, for the four observation families whose
 # Laplace and nested-Laplace fitters share one dispatch branch in
 # `.tobs_fit_model()` (abun, removal, distance, fp_occu; #354). Those branches
 # used to pick the engine from `has_field` alone and stamp the REQUESTED
@@ -675,16 +675,25 @@
 # ("a field needs nested_laplace; nested_laplace needs a field"). NUTS is
 # skipped here: each family's own NUTS branch decides which structures it
 # supports (some take a field, some do not), and is not rejected by this gate.
-.tobs_check_areal_engine <- function(method, has_field, family) {
+#
+# `svc` is NOT `has_field`: unlike spatial()/temporal(), a continuous NNGP
+# varying coefficient on these four families is documented and dispatch-wired
+# to fit under EITHER method = "laplace" or "nested_laplace" (#144;
+# `svc_wired` a few lines above this function's call sites), so it must not
+# force `nested_laplace` the way spatial/temporal do. It still needs to
+# satisfy "nested_laplace needs a field on the formula" when it is the only
+# structured term present -- pass it via `has_svc`, which relaxes only that
+# second check (#360).
+.tobs_check_areal_engine <- function(method, has_field, family, has_svc = FALSE) {
   if (identical(method, "nuts")) return(invisible(NULL))
   if (has_field && !identical(method, "nested_laplace")) {
     stop(sprintf(paste0(
-      "%s(): a spatial() / temporal() / svc() term needs method = ",
+      "%s(): a spatial() / temporal() term needs method = ",
       "\"nested_laplace\" (or \"nuts\", where supported). Drop the term for ",
       "a non-spatial fit, or set method = \"nested_laplace\"."),
       family), call. = FALSE)
   }
-  if (!has_field && identical(method, "nested_laplace")) {
+  if (!has_field && !has_svc && identical(method, "nested_laplace")) {
     stop(sprintf(paste0(
       "%s(): method = \"nested_laplace\" needs a spatial() / temporal() / ",
       "svc() term on the formula. For a non-spatial fit use ",

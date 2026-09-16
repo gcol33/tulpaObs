@@ -238,8 +238,8 @@
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
     .tobs_check_areal_engine(
-      method, has_field = !is.null(spatial) || !is.null(temporal) || !is.null(svc),
-      family = "removal")
+      method, has_field = !is.null(spatial) || !is.null(temporal),
+      family = "removal", has_svc = !is.null(svc))
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the abundance arm: icar() / car_proper() / bym2() under
       # the nested-Laplace driver, optionally composed with a temporal() block
@@ -300,8 +300,8 @@
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
     .tobs_check_areal_engine(
-      method, has_field = !is.null(spatial) || !is.null(temporal) || !is.null(svc),
-      family = "distance")
+      method, has_field = !is.null(spatial) || !is.null(temporal),
+      family = "distance", has_svc = !is.null(svc))
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the abundance arm: icar() / car_proper() (half-normal or
       # hazard key) under the nested-Laplace driver, optionally composed with a
@@ -435,8 +435,8 @@
                                  allow_temporal_only = TRUE,
                                  allow_nuts_temporal = TRUE)
     .tobs_check_areal_engine(
-      method, has_field = !is.null(spatial) || !is.null(temporal) || !is.null(svc),
-      family = "fp_occu")
+      method, has_field = !is.null(spatial) || !is.null(temporal),
+      family = "fp_occu", has_svc = !is.null(svc))
     if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
       # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
       # nested-Laplace two-state driver, optionally composed with a temporal()
