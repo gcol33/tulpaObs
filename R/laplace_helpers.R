@@ -282,6 +282,15 @@
     means        = means,
     sds          = sds,
     vcov         = V,
+    # `cov` + `reported_posterior` are the field names tulpa's coefficient
+    # summary reads (`.reports_gaussian_posterior()`): this is a single fixed
+    # Gaussian, not a chain or a hyperparameter mixture, so coef()/confint()/
+    # summary()/tidy() should read (means, cov) directly rather than the
+    # Monte Carlo mean/SD/quantiles of `draws`, which is a finite unseeded
+    # sample FROM that same Gaussian and would otherwise report sampling
+    # noise as the estimate (gcol33/tulpaObs#346).
+    cov          = V,
+    reported_posterior = "gaussian",
     n_samples    = n_draws,
     n_params     = length(means),
     log_prob     = rep(-opt$value, n_draws),
@@ -894,8 +903,24 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # is `means` without the trailing random-effect sigma + BLUP block. Set
   # explicitly because an empty `mode` would otherwise resolve df to 0.
   n_re_block <- if (!is.null(re_block)) length(re_block$means) else 0L
+  # `cov` + `reported_posterior` are the field names tulpa's coefficient summary
+  # reads (`.reports_gaussian_posterior()`): a plain Gaussian-Laplace fit's
+  # `draws` are an unseeded finite sample FROM the fixed (means, V_draw)
+  # Gaussian this function already reports, so coef()/confint()/summary()/
+  # tidy() should read that Gaussian directly instead of the draws' Monte
+  # Carlo mean/SD/quantiles (gcol33/tulpaObs#346). A simplified-Laplace fit
+  # replaced `draws` with a skew-normal marginal (`.sla_replace_draws()`), so
+  # it keeps reporting off the draws, where the skew quantiles are the point.
+  reported_posterior <- if (identical(sla_status, "simplified_laplace")) NULL
+                        else "gaussian"
+  # Restricted to the fixed-effect block: a random-effect variance component
+  # with an unavailable SE (NA) lives in `V_draw`'s trailing block, and tulpa's
+  # reader rejects the whole `cov` matrix on any NA, fixed block included.
+  fixed_idx <- seq_len(n_params - n_re_block)
+  cov_fixed <- V_draw[fixed_idx, fixed_idx, drop = FALSE]
   structure(c(list(
-    draws = draws, means = means, sds = sds,
+    draws = draws, means = means, sds = sds, cov = cov_fixed,
+    reported_posterior = reported_posterior,
     skew = sla_gamma, sla_status = sla_status,
     n_samples = n_pseudo, n_params = n_params,
     n_fixed  = n_params - n_re_block,
