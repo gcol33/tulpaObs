@@ -861,7 +861,8 @@
   class(fit) <- c("tobs_fit", "tulpa_fit")
   fit <- .tobs_nuts_attach_convergence(
     fit, .tobs_nuts_chains_from_ids(fit$draws, fit$chain_id),
-    par_names = colnames(fit$draws), n_iter = as.integer(n.iter))
+    par_names = colnames(fit$draws), n_iter = as.integer(n.iter),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
   fit
 }
 

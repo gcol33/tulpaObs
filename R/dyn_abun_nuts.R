@@ -149,5 +149,6 @@
 
   .tobs_count_nuts_attach(
     fit, run, ev_mean$log_lik, n.chains, re_info,
-    extra = list(sigma_beta = sigma.beta, K_max = model$K_max))
+    extra = list(sigma_beta = sigma.beta, K_max = model$K_max),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

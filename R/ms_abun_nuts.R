@@ -503,6 +503,7 @@
   fit$log_prob <- rep(ll_mean, nrow(draws))
 
   .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                            sampler_control = .tobs_sampler_control_snapshot(environment()),
                             is_nb = is_nb, K_max = K_max,
                             K_site = K_site, K_site_check = k_check,
                             sigma_beta = sigma.beta, sigma_logr = sigma.logr)
@@ -691,6 +692,7 @@
   fit$log_prob <- rep(ll_mean, nrow(draws))
   fit$spatial_field <- field_mean
   .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
+                            sampler_control = .tobs_sampler_control_snapshot(environment()),
                             n_field_units = n_sites, is_nb = FALSE, K_max = K_max,
                             K_site = K_site, K_site_check = k_check,
                             field_tau = fl$tau, field_rho = fl$rho,

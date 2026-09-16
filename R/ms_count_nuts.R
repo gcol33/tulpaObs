@@ -325,9 +325,10 @@
   # The reported coefficients are the community beta means; the sampler also
   # carries the per-species z blocks, the packed community Cholesky and (negbin)
   # the community mean log_r, which no summary row names.
-  fit <- .tobs_nuts_attach_convergence(fit, chains, par_names = nms,
-                                       cols = lay$beta,
-                                       n_iter = as.integer(n.iter))
+  fit <- .tobs_nuts_attach_convergence(
+    fit, chains, par_names = nms, cols = lay$beta,
+    n_iter = as.integer(n.iter),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
   # Top-level aliases for the per-parameter record.
   fit$rhat <- fit$convergence$rhat
   fit$ess  <- fit$convergence$ess_bulk

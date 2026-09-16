@@ -297,7 +297,8 @@
     # mean log-dispersion (the RE layout names those blocks mu_coef / mu_ld).
     return(.ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
                                      par_cols = c(lay$mu_coef, lay$mu_ld),
-                                     sigma_beta = sigma.beta))
+                                     sigma_beta = sigma.beta,
+                                     sampler_control = .tobs_sampler_control_snapshot(environment())))
   }
 
   lay    <- .tobs_ms_occu_cover_nuts_layout(P_occ, P_p, P_pos, S)
@@ -356,7 +357,8 @@
   # log-dispersion.
   .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
                             par_cols = c(lay$mu, lay$log_disp),
-                            sigma_beta = sigma.beta)
+                            sigma_beta = sigma.beta,
+                            sampler_control = .tobs_sampler_control_snapshot(environment()))
 }
 
 

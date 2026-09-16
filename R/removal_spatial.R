@@ -498,5 +498,6 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     fit, run, ll_mean, n.chains,
     prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
     field_map = field_map,
-    temporal = if (temporal_only) temporal else NULL)
+    temporal = if (temporal_only) temporal else NULL,
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

@@ -121,5 +121,6 @@
   .tobs_count_nuts_attach(
     fit, run, ev_mean$log_lik, n.chains, re_info,
     extra = list(sigma_beta = sigma.beta,
-                 re_arm = if (!is.null(re_info)) re_info$arm else -1L))
+                 re_arm = if (!is.null(re_info)) re_info$arm else -1L),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

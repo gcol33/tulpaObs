@@ -396,5 +396,6 @@
   # shared colonisation / extinction globals.
   .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains,
                             par_cols = c(lay$mu, lay$global),
+                            sampler_control = .tobs_sampler_control_snapshot(environment()),
                             sigma_beta = sigma.beta)
 }

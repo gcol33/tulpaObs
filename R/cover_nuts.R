@@ -315,8 +315,9 @@
   # Per-parameter split-R-hat / bulk + tail ESS, through the writer every sampled
   # path shares, so summary() surfaces them per parameter; `fit$nuts` carries
   # the same two vectors alongside the sampler diagnostics.
-  fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws,
-                                       par_names = par_names)
+  fit <- .tobs_nuts_attach_convergence(
+    fit, per_chain_draws, par_names = par_names,
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
   fit$nuts$rhat <- fit$convergence$rhat
   fit$nuts$ess  <- fit$convergence$ess_bulk
   fit

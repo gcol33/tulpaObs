@@ -169,6 +169,22 @@
 
 .tobs_sbc_default_control <- function() list(verbose = FALSE, progress = TRUE)
 
+# The refit control every spec below starts from (#358). A NUTS fit records
+# the sampler knobs it ACTUALLY resolved on `fit$sampler_control` (every NUTS
+# fit-assembly writer stamps it -- see `.tobs_sampler_control_snapshot()` in
+# engine_defaults.R); defaulting the replicate control from that instead of
+# the (engine, family) table's sampler-sized defaults means a fit built with
+# a short chain (for speed, or because that is what converges at a given N)
+# is refit at that same size across the n.sim replicates, not at a size meant
+# for one real fit. The caller's own `fit.control` still wins over both, via
+# the same `modifyList()` precedence the old two-argument call had.
+.tobs_sbc_control <- function(fit, fit.control) {
+  base <- .tobs_sbc_default_control()
+  if (identical(fit$method, "nuts") && length(fit$sampler_control))
+    base <- utils::modifyList(base, fit$sampler_control)
+  utils::modifyList(base, as.list(fit.control))
+}
+
 .tobs_sbc_spec <- function(fit, fit.control) {
   m  <- fit$model
   fm <- m$formulas
@@ -179,8 +195,7 @@
          "an intrinsic `icar()` field; this fit carries a ", spatial$type,
          " field. Refit with icar() to run SBC on it.", call. = FALSE)
   }
-  ctl <- utils::modifyList(.tobs_sbc_default_control(),
-                           as.list(fit.control))
+  ctl <- .tobs_sbc_control(fit, fit.control)
   if (!is.null(fit$joint_fit) && is.null(ctl$engine)) ctl$engine <- "joint"
   list(model      = m,
        family     = fam,
@@ -705,8 +720,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        state   = .tobs_sbc_recombine(m$formulas[[state]], NULL),
        det     = if (is.null(det)) NULL else
                    .tobs_sbc_recombine(m$formulas[[det]], NULL))
@@ -1017,8 +1031,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        occ = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det = .tobs_sbc_recombine(m$formulas$det, NULL),
        col = .tobs_sbc_recombine(m$formulas$col, NULL),
@@ -1130,8 +1143,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
        p         = .tobs_sbc_recombine(m$formulas$p,      NULL),
        omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
@@ -1177,8 +1189,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det_list  = lapply(src_nm, function(nm) .tobs_sbc_recombine(m$formulas[[nm]], NULL)),
        src_names = src_nm)
@@ -1264,8 +1275,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
        detection = .tobs_sbc_recombine(m$formulas$sigma,  NULL),
        removal   = .tobs_sbc_recombine(m$formulas$r,      NULL))
@@ -1492,8 +1502,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
        sigma     = .tobs_sbc_recombine(m$formulas$sigma,  NULL),
        omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
@@ -1543,8 +1552,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        state     = .tobs_sbc_recombine(m$formulas$state, NULL),
        det       = .tobs_sbc_recombine(m$formulas$det,   NULL),
        species   = m$species)
@@ -1615,8 +1623,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        state     = .tobs_sbc_recombine(m$formulas$psi,   NULL),
        col       = .tobs_sbc_recombine(m$formulas$gamma, NULL),
        ext       = .tobs_sbc_recombine(m$formulas$eps,   NULL),
@@ -1687,8 +1694,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det     = .tobs_sbc_recombine(m$formulas$det, NULL))
 }
@@ -1834,8 +1840,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det     = .tobs_sbc_recombine(m$formulas$det, NULL),
        species = m$species_names)
@@ -1924,8 +1929,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det     = .tobs_sbc_recombine(m$formulas$det, NULL),
        pos     = .tobs_sbc_recombine(m$formulas$pos, NULL),
@@ -2035,8 +2039,7 @@
        positive  = .tobs_sbc_recombine(enc$fe_pos, NULL),
        family    = attr(fit, "tobs_family"),
        method    = fit$method %||% "laplace",
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        sigma_pos = fit$sigma_pos,
        fit_obs   = fit)
 }
@@ -2142,8 +2145,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det_list  = lapply(m$formulas$det, function(f) .tobs_sbc_recombine(f, NULL)),
        species   = m$species_names,
@@ -2240,8 +2242,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method %||% "laplace",
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        psi     = .tobs_sbc_recombine(m$formulas$psi,   NULL),
        theta   = .tobs_sbc_recombine(m$formulas$theta, NULL),
        det     = .tobs_sbc_recombine(m$formulas$p,     NULL),
@@ -2364,8 +2365,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        formula = .tobs_sbc_recombine(m$formulas$mu, NULL),
        species = m$species_names)
 }
@@ -2411,8 +2411,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        formula = .tobs_sbc_recombine(m$formulas$mu, NULL),
        species = m$species_names)
 }
@@ -2472,8 +2471,7 @@
        fit_obs   = fit,
        family    = attr(fit, "tobs_family"),
        method    = fit$method,
-       control   = utils::modifyList(.tobs_sbc_default_control(),
-                                     as.list(fit.control)),
+       control   = .tobs_sbc_control(fit, fit.control),
        lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
        sigma     = .tobs_sbc_recombine(m$formulas$sigma, NULL),
        cutpoints = m$cutpoints, key = m$key, transect = m$transect,
@@ -2577,8 +2575,7 @@
        fit_obs = fit,
        family  = attr(fit, "tobs_family"),
        method  = fit$method,
-       control = utils::modifyList(.tobs_sbc_default_control(),
-                                   as.list(fit.control)),
+       control = .tobs_sbc_control(fit, fit.control),
        occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
        det     = .tobs_sbc_recombine(m$formulas$det, NULL),
        col     = .tobs_sbc_recombine(m$formulas$col, NULL),
@@ -2683,7 +2680,7 @@
   # Preserve the ORIGINAL fit's engine choice on refit -- the default
   # optimizer = "em" (n.quad = 1) does not expose Cinv/Bf at all, so a refit
   # that silently dropped back to it would break every downstream draw.
-  ctl <- utils::modifyList(.tobs_sbc_default_control(), as.list(fit.control))
+  ctl <- .tobs_sbc_control(fit, fit.control)
   ctl$optimizer <- cm$optimizer
   ctl[["n.quad"]] <- cm$n_quad
   list(model   = m,

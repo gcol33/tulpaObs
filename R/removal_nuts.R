@@ -158,5 +158,6 @@
     fit, run, ll_mean, n.chains, re_info,
     extra = list(is_nb = is_nb, K_max = K_max,
                  re_arm = if (!is.null(re_info)) re_info$arm else -1L,
-                 sigma_beta = sigma.beta, sigma_logr = sigma.logr))
+                 sigma_beta = sigma.beta, sigma_logr = sigma.logr),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

@@ -286,6 +286,27 @@
 }
 
 
+# The sampler knobs a NUTS fitter actually resolved, read back out of its own
+# environment after `.tobs_fill_sampler()` filled it. Every NUTS fit-assembly
+# writer (`.tobs_nuts_attach_convergence()` and its wrappers) is handed this so
+# `fit$sampler_control` records what the fit ACTUALLY ran, not the (engine,
+# family) table's defaults -- `sbc()` reads it back to size a fit's own
+# refits instead of defaulting them to a sampler-sized chain (#358).
+.TOBS_SAMPLER_CONTROL_KEYS <- c("n.iter", "n.warmup", "n.chains", "n.thin",
+                                "n.threads", "n.threads.grad",
+                                "max.treedepth", "adapt.delta", "seed")
+
+.tobs_sampler_control_snapshot <- function(env) {
+  out <- list()
+  for (k in .TOBS_SAMPLER_CONTROL_KEYS) {
+    if (!exists(k, envir = env, inherits = FALSE)) next
+    v <- get(k, envir = env, inherits = FALSE)
+    if (!is.null(v)) out[[k]] <- v
+  }
+  out
+}
+
+
 # pg_gibbs's `n.iter` is the TOTAL sweep count (warmup comes out of it), the
 # opposite of the NUTS convention where `n.iter` is the kept draws -- see the
 # CONVENTION note on the pg_gibbs row above. A control list shaped for NUTS

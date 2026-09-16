@@ -231,5 +231,6 @@
     fit, run, ev_mean$log_lik, n.chains,
     prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
     field_map = field_map,
-    temporal = if (temporal_only) temporal else NULL)
+    temporal = if (temporal_only) temporal else NULL,
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

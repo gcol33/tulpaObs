@@ -57,7 +57,8 @@
 # otherwise it is the spatial field. `fl` is the field loading (its fixed `tau`
 # / `rho` are recorded so the fit says which hyperparameters it sampled under).
 .tobs_nuts_field_attach <- function(fit, run, log_lik, n_chains, prior_type, fl,
-                                    field_map, temporal = NULL) {
+                                    field_map, temporal = NULL,
+                                    sampler_control = NULL) {
   b_idx <- run$b_idx
   fit$draws <- run$draws[, b_idx, drop = FALSE]
   fit$means <- run$par[b_idx]
@@ -93,7 +94,7 @@
   # The whitened field `raw` coordinates are sampled but carry no reported
   # parameter, so they are summarised through the field they map to.
   .tobs_nuts_attach_convergence(fit, run$chains, par_names = run$nms[b_idx],
-                                cols = b_idx)
+                                cols = b_idx, sampler_control = sampler_control)
 }
 
 
@@ -164,7 +165,7 @@
 # (`is_nb`, `K_max`, `re_arm`, the prior scales, ...), appended after the common
 # sampler diagnostics.
 .tobs_count_nuts_attach <- function(fit, run, log_lik, n_chains, re_info = NULL,
-                                    extra = list()) {
+                                    extra = list(), sampler_control = NULL) {
   n_draws <- nrow(run$draws)
   fit$draws <- run$draws
   fit <- .tobs_count_nuts_re_finish(fit, run$draws, run$par, run$cov, run$nms,
@@ -183,7 +184,8 @@
                 extra)
   # Every sampled coordinate here is a reported model parameter (the coefficients
   # plus the trailing log_r / RE block), so the record covers all of them.
-  .tobs_nuts_attach_convergence(fit, run$chains, par_names = run$nms)
+  .tobs_nuts_attach_convergence(fit, run$chains, par_names = run$nms,
+                                sampler_control = sampler_control)
 }
 
 
@@ -425,7 +427,9 @@
 # parameter yielded a finite R-hat. `max_rhat` / `min_ess` are the scalar summary
 # `print.tobs_fit` falls back to.
 .tobs_nuts_attach_convergence <- function(fit, chains, par_names = NULL,
-                                          cols = NULL, n_iter = NULL) {
+                                          cols = NULL, n_iter = NULL,
+                                          sampler_control = NULL) {
+  if (!is.null(sampler_control)) fit$sampler_control <- sampler_control
   mats <- .tobs_nuts_chain_mats(chains, cols)
   tab  <- .tobs_nuts_diag_mats(mats, par_names)
   if (is.null(tab)) return(fit)

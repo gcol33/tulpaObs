@@ -790,9 +790,9 @@
   # path shares, so summary.tobs_fit surfaces them per parameter; `fit$nuts`
   # carries the same two vectors alongside the sampler diagnostics. Reported over
   # the coefficient block, the coordinates `summary()` puts on its rows.
-  fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws,
-                                       par_names = par_names,
-                                       cols = seq_len(n_par))
+  fit <- .tobs_nuts_attach_convergence(
+    fit, per_chain_draws, par_names = par_names, cols = seq_len(n_par),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
   fit$nuts$rhat <- fit$convergence$rhat
   fit$nuts$ess  <- fit$convergence$ess_bulk
   fit
@@ -1815,8 +1815,9 @@
 
   # Diagnostics over the coefficient block (the coordinates the fit reports);
   # the whitened field `raw` coordinates carry no named parameter.
-  fit <- .tobs_nuts_attach_convergence(fit, per_chain_draws, par_names = par_names,
-                                       cols = b_idx)
+  fit <- .tobs_nuts_attach_convergence(
+    fit, per_chain_draws, par_names = par_names, cols = b_idx,
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
   fit$nuts$rhat <- fit$convergence$rhat
   fit$nuts$ess  <- fit$convergence$ess_bulk
   fit

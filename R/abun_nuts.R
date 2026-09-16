@@ -212,7 +212,8 @@
     fit, run, ll_mean, n.chains, re_info,
     extra = list(is_nb = is_nb, K_max = K_max,
                  re_arm = if (has_re) re_info$arm else -1L,
-                 sigma_beta = sigma.beta, sigma_logr = sigma.logr))
+                 sigma_beta = sigma.beta, sigma_logr = sigma.logr),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }
 
 
@@ -322,5 +323,6 @@
   fit <- build_nmix_fit(raw_fit, model, spatial = spatial)
   .tobs_nuts_field_attach(fit, run, ll_mean, n.chains,
                           prior_type = spatial$type, fl = fl,
-                          field_map = seq_len(n_sites))
+                          field_map = seq_len(n_sites),
+                          sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

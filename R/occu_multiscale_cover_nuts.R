@@ -183,5 +183,7 @@
 
   # Every sampled coordinate is a reported parameter here (the four arms plus
   # the cover dispersion), so the record covers all of them.
-  .tobs_nuts_attach_convergence(fit, per_chain, par_names = par_names)
+  .tobs_nuts_attach_convergence(
+    fit, per_chain, par_names = par_names,
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

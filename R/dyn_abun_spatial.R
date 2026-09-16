@@ -189,7 +189,8 @@
     .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
   .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
                           prior_type = spatial$type, fl = fl,
-                          field_map = seq_len(n_sites))
+                          field_map = seq_len(n_sites),
+                          sampler_control = .tobs_sampler_control_snapshot(environment()))
 }
 
 # Coefficient + whitened-field column names for a field dyn_abun NUTS run.
@@ -294,5 +295,6 @@
     .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
   .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
                           prior_type = temporal$type, fl = fl,
-                          field_map = ti, temporal = temporal)
+                          field_map = ti, temporal = temporal,
+                          sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

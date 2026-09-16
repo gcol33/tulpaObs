@@ -240,5 +240,6 @@
     extra = list(is_nb = is_nb, hazard = hazard, K_max = K_max,
                  headroom = headroom,
                  sigma_beta = sigma.beta, sigma_shape = sigma.shape,
-                 sigma_logr = sigma.logr))
+                 sigma_logr = sigma.logr),
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }

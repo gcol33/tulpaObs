@@ -671,7 +671,7 @@
 # these builders, so the convergence record has to be computed from the sampler's
 # own chains, not from `fit$draws`.
 .ms_ocs_finalize_nuts_fit <- function(fit, rc, lay, n_chains, par_cols = lay$mu,
-                                      ...) {
+                                      sampler_control = NULL, ...) {
   # Top-level, not just under `$nuts`: tulpa's `n_divergent()` / `check_model()`
   # read `object$divergent` / `object$accept_prob` at top level (the same
   # fields `.tobs_nuts_field_attach()` sets for the field-NUTS families), else
@@ -698,7 +698,8 @@
   }
   .tobs_nuts_attach_convergence(
     fit, rc$chains, cols = par_cols,
-    par_names = fit$fixed_names %||% colnames(fit$draws))
+    par_names = fit$fixed_names %||% colnames(fit$draws),
+    sampler_control = sampler_control)
 }
 
 # Fit the spatial-factor community occu_cover by NUTS: a short Laplace-EM warm
@@ -768,6 +769,12 @@
     fit$nuts$min_ess  <- min(rhat_ess$ess,  na.rm = TRUE)
     fit$nuts$divergent_total <- res$divergent_total
   }
+  # Resolved here from `control` rather than `.tobs_fill_sampler()` (this
+  # fitter takes a control LIST, not sampler-knob formals), same keys as
+  # every other NUTS writer's `fit$sampler_control` (#358).
+  fit$sampler_control <- list(n.iter = n_sample, n.warmup = n_warmup,
+                              n.chains = n_chains, max.treedepth = md,
+                              adapt.delta = ad, seed = seed)
   fit
 }
 
@@ -776,7 +783,9 @@
 # `draws` are moment-matched around that mean). The reported parameters are the
 # community means followed by the log-dispersion, and the packed inner latent is
 # `c(mu[P], b[S*P], L, w, ld)`, so those sit at the head and tail of `lay$inner`.
-.ms_ocs_attach_spatial_convergence <- function(out, nd, P) {
+.ms_ocs_attach_spatial_convergence <- function(out, nd, P,
+                                               sampler_control = NULL) {
+  if (!is.null(sampler_control)) out$sampler_control <- sampler_control
   lay <- nd$layout
   if (is.null(lay) || is.null(lay$inner) || is.null(nd$draws)) return(out)
   inner <- lay$inner
@@ -790,7 +799,8 @@
                                         drop = FALSE])
   .tobs_nuts_attach_convergence(out, chains, cols = sel,
                                 par_names = out$fixed_names %||%
-                                  colnames(out$draws))
+                                  colnames(out$draws),
+                                sampler_control = sampler_control)
 }
 
 

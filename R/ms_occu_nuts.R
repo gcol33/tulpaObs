@@ -311,5 +311,6 @@
   fit$method <- "nuts"
   fit$log_prob <- rep(ll_mean, nrow(draws))
 
-  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains, sigma_beta = sigma.beta)
+  .ms_ocs_finalize_nuts_fit(fit, rc, lay, n.chains, sigma_beta = sigma.beta,
+                            sampler_control = .tobs_sampler_control_snapshot(environment()))
 }
