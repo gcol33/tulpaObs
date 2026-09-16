@@ -4,6 +4,12 @@
 # Helpers
 # ---------------------------------------------------------------------------
 
+# The `mu_` prefix on a community-mean coefficient name (fit-level `means` /
+# `vcov` / `sds` / draws), distinguishing it from the bare design-column name
+# used on the per-species blocks (`coef_mu` / `blup_mu` / `Sigma_mu`). One
+# definition for every community output that reports a mean-coefficient arm
+# (EM, NUTS, PG-Gibbs) so the three cannot drift apart.
+.tobs_community_mean_names <- function(cn) paste0("mu_", cn)
 # Log-determinant of a symmetric matrix via Cholesky, with an eigenvalue
 # fallback flooring eigenvalues at 1e-12 for near-singular input.
 .tobs_cem_logdet <- function(M) {

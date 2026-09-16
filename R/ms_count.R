@@ -365,7 +365,7 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 
   # Report only the mean-coefficient arm as the community-mean coefficients; the
   # negbin log_r community mean rides fit$ms_dispersion.
-  par_names <- paste0("mu_", cn)
+  par_names <- .tobs_community_mean_names(cn)
   means <- fit$mu[beta_idx]
   V <- fit$Vf[beta_idx, beta_idx, drop = FALSE]
 

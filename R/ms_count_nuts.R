@@ -270,7 +270,7 @@
   # Community means + covariance from the beta-coefficient mu draws.
   mu_draws <- draws_all[, lay$beta, drop = FALSE]
   cn  <- model$process_info[[1L]]$coef_names
-  nms <- paste0("mu_", cn)
+  nms <- .tobs_community_mean_names(cn)
   means <- colMeans(mu_draws); names(means) <- nms
   V <- stats::cov(mu_draws); dimnames(V) <- list(nms, nms)
   sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nms

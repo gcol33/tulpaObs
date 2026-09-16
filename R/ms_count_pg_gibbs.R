@@ -44,7 +44,8 @@
   Xs <- lapply(seq_len(S), function(s) X[vi[[s]], , drop = FALSE])
 
   n_keep <- length(seq.int(n.warmup + 1L, n.iter, by = n.thin))
-  cn <- model$process_info[[1L]]$coef_names
+  cn       <- model$process_info[[1L]]$coef_names
+  mu_names <- .tobs_community_mean_names(cn)
   run_chain <- function(chain_id) {
     set.seed(seed + chain_id)
     b  <- matrix(stats::rnorm(S * p, 0, 0.2), S, p)
@@ -69,19 +70,20 @@
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
-  summ <- .tobs_pg_summarize(lapply(chains, `[[`, "mu"), cn)
+  summ <- .tobs_pg_summarize(lapply(chains, `[[`, "mu"), mu_names)
 
   tau_all <- do.call(rbind, lapply(chains, `[[`, "tau"))
   sd_mu <- apply(tau_all, 2L, stats::median); names(sd_mu) <- cn
+  Sigma_mu <- diag(sd_mu^2, p); dimnames(Sigma_mu) <- list(cn, cn)
 
   coef_mu <- Reduce(`+`, lapply(chains, `[[`, "b")) / n.chains
   rownames(coef_mu) <- model$species_names; colnames(coef_mu) <- cn
   blup_mu <- sweep(coef_mu, 2L, summ$means, "-")
 
   .tobs_pg_finalize_fit(
-    summ, cn, model, model$process_info, N = sum(model$valid),
+    summ, mu_names, model, model$process_info, N = sum(model$valid),
     n.iter = n.iter, n.chains = n.chains,
     extra = list(ms_community = list(
-      Sigma_mu = diag(sd_mu^2, p), sd_mu = sd_mu,
+      Sigma_mu = Sigma_mu, sd_mu = sd_mu,
       coef_mu = coef_mu, blup_mu = blup_mu)))
 }
