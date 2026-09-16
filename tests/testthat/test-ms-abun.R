@@ -73,13 +73,15 @@ test_that("ms_abun S3 methods work", {
   expect_s3_class(fit, "tobs_fit")
   expect_no_error(print(fit))
 
-  # coef.tobs_fit returns the per-process list (community means by arm), the
-  # same contract every other tobs family uses.
+  # coef.tobs_fit returns a flat named vector (community means, prefixed by
+  # arm), the same layout every tobs family uses (#332); coef(fit, arm =)
+  # returns one arm's coefficients, unprefixed.
   cf <- coef(fit)
-  expect_true(is.list(cf))
-  expect_setequal(names(cf), c("lambda", "p"))
-  expect_setequal(names(cf$lambda), c("(Intercept)", "abund_cov1"))
-  expect_setequal(names(cf$p),      c("(Intercept)", "det_cov1"))
+  expect_false(is.list(cf))
+  expect_setequal(names(cf), c("lambda_(Intercept)", "lambda_abund_cov1",
+                               "p_(Intercept)", "p_det_cov1"))
+  expect_setequal(names(coef(fit, arm = "lambda")), c("(Intercept)", "abund_cov1"))
+  expect_setequal(names(coef(fit, arm = "p")),      c("(Intercept)", "det_cov1"))
 
   V <- vcov(fit)
   expect_equal(nrow(V), length(fit$means))
