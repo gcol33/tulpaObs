@@ -230,7 +230,15 @@ test_that("a multi-node phi.grid.pos is integrated on the stated nodes", {
   expect_true("phi_pos" %in% names(fixed$means))
   expect_null(fixed$model$cover_pos_disp)
   d <- tulpaObs:::.tobs_joint_draws(fixed, n = 4000L)$disp
-  expect_true(all(d^2 %in% stated^2))
+  # gcol33/tulpaObs#359: `d` is the fit's own continuized within-cell marginal
+  # (`tulpa::tulpa_hyper_draws()`), not the raw grid-node atom, so a draw is
+  # no longer restricted to `stated` exactly -- it lands anywhere in the
+  # axis's within-cell span, including the outermost cell's extension past
+  # its node (a `density`-support axis carries `outside = "extend"`). Check
+  # draws stay within a wide but real span around the stated nodes, and take
+  # far more distinct values than the axis has nodes (the atom's signature).
+  expect_true(all(d > 0.5 * min(stated) & d < 1.5 * max(stated)))
+  expect_gt(length(unique(d)), length(stated))
   expect_equal(mean(d), fixed$means[["phi_pos"]], tolerance = 0.05)
 
   # The refinement passes densify inside the stated span and drop no node.

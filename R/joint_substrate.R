@@ -614,6 +614,24 @@
   g
 }
 
+# A per-draw read of one outer-grid axis column (gcol33/tulpaObs#359): `hyper`
+# -- `attr(tulpa::tulpa_posterior_draws(jf, ...), "theta")`, i.e.
+# `tulpa::tulpa_hyper_draws()` run in the SAME cells the latent half of the
+# draw came from -- carries the axis CONTINUIZED within its cell, one value
+# per draw. `theta_grid[cells, col]` is the bare grid-node coordinate: on a
+# 3- to 15-node axis every draw takes one of that few values, an atom rather
+# than a marginal, whatever the sample size (the defect gcol33/tulpa#823 fixed
+# engine-side). `hyper` is used whenever it carries the column; the raw grid
+# read is kept ONLY as the fallback for a fit where `tulpa_hyper_draws()`
+# declined to continuize that axis (recorded in `theta_declined`) or was not
+# computed at all, so a draw set still resolves rather than erroring.
+.tobs_hyper_col <- function(hyper, theta_grid, cells, col) {
+  if (!is.null(hyper) && col %in% colnames(hyper)) {
+    return(as.numeric(hyper[, col]))
+  }
+  as.numeric(theta_grid[cells, col])
+}
+
 # Resolve a grid amplitude axis to a per-draw vector. A multi-block fit prefixes
 # the axis with its block (`b<k>.sigma`); a single-block fit uses the bare name.
 # `cells` is the outer-grid cell each draw came from, so the returned length-n
@@ -623,13 +641,15 @@
 # when the block is copied onto another arm, `b<k>.tau` (SD = 1/sqrt(tau)) when
 # it is not. Every consumer of a field amplitude goes through this, so the two
 # parameterizations cannot drift apart.
-.tobs_joint_field_sd <- function(theta_grid, cells, block) {
+.tobs_joint_field_sd <- function(theta_grid, cells, hyper, block) {
   cn <- colnames(theta_grid)
   sig_col <- sprintf("b%d.sigma", block)
   tau_col <- sprintf("b%d.tau", block)
-  if (sig_col %in% cn) return(as.numeric(theta_grid[cells, sig_col]))
-  if (tau_col %in% cn) return(1.0 / sqrt(as.numeric(theta_grid[cells, tau_col])))
-  .tobs_joint_amp(theta_grid, cells, block, "sigma")
+  if (sig_col %in% cn) return(.tobs_hyper_col(hyper, theta_grid, cells, sig_col))
+  if (tau_col %in% cn) {
+    return(1.0 / sqrt(.tobs_hyper_col(hyper, theta_grid, cells, tau_col)))
+  }
+  .tobs_joint_amp(theta_grid, cells, hyper, block, "sigma")
 }
 
 # The cover-arm dispersion on cover()'s own surface, per draw.
@@ -642,8 +662,14 @@
 # dispersion and an INTEGRATED axis arrive on the same scale, and so a family
 # whose phi is already an SD (truncated / interval gaussian) or a precision
 # (beta) passes through untouched.
-.tobs_joint_disp <- function(jf, cells, positive) {
-  .cover_phi_to_sd(.tobs_joint_phi_at(jf, cells),
+#
+# `hyper` (default `NULL`) is the continuized per-draw axis matrix from
+# `.tobs_hyper_col()`'s caller -- passed by every posterior-draws consumer in
+# this file. The grid-quadrature callers (`sla_cover_hurdle_joint.R`, which
+# reads a raw outer-grid NODE index `k`, not a draw) never pass it, so they
+# keep the exact node value quadrature requires.
+.tobs_joint_disp <- function(jf, cells, positive, hyper = NULL) {
+  .cover_phi_to_sd(.tobs_joint_phi_at(jf, cells, hyper = hyper),
                    .cover_pos_engine_family(positive))
 }
 
@@ -669,10 +695,10 @@
   as.numeric(v)
 }
 
-.tobs_joint_phi_at <- function(jf, cells) {
+.tobs_joint_phi_at <- function(jf, cells, hyper = NULL) {
   col <- .tobs_joint_phi_col(jf)
   if (is.na(col)) return(rep(.tobs_joint_held_phi(jf), length(cells)))
-  as.numeric(jf$theta_grid[cells, col])
+  .tobs_hyper_col(hyper, jf$theta_grid, cells, col)
 }
 
 # Posterior mean and SD of the engine-scale dispersion: the engine's own axis
@@ -691,12 +717,12 @@
   .cover_phi_to_sd(.tobs_joint_held_phi(jf), .cover_pos_engine_family(positive))
 }
 
-.tobs_joint_amp <- function(theta_grid, cells, block, name, default = 1) {
+.tobs_joint_amp <- function(theta_grid, cells, hyper, block, name, default = 1) {
   cn <- colnames(theta_grid)
   j  <- match(paste0("b", block, ".", name), cn)
   if (is.na(j)) j <- match(name, cn)
   if (is.na(j)) return(rep(default, length(cells)))
-  as.numeric(theta_grid[cells, j])
+  .tobs_hyper_col(hyper, theta_grid, cells, cn[j])
 }
 
 # Draw the grid-integrated joint posterior and normalize it into a family-
@@ -758,6 +784,7 @@
   idx   <- c(idx_occ, idx_det, unlist(field_idx))
   D     <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
   cells <- attr(D, "cells")
+  hyper <- attr(D, "theta")
 
   off  <- 0L
   take <- function(k) { v <- D[, off + seq_len(k), drop = FALSE]; off <<- off + k; v }
@@ -772,8 +799,11 @@
     # detection arm carries no field (amp_pos = 0, the 0-sentinel node index at
     # fit time already excluded it).
     tau_col <- sprintf("b%d.tau", b)
-    amp <- if (tau_col %in% cn) 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
-           else rep(1.0, length(cells))
+    amp <- if (tau_col %in% cn) {
+      1.0 / sqrt(.tobs_hyper_col(hyper, tg, cells, tau_col))
+    } else {
+      rep(1.0, length(cells))
+    }
     list(z = z, amp_occ = amp, amp_pos = rep(0, length(cells)),
          weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
   })
@@ -794,7 +824,6 @@
 # its own arm only. A non-intercept (slope) field also carries its per-arm weight.
 .tobs_joint_draws_cover_armspecific <- function(object, jf, layout, n) {
   tg       <- jf$theta_grid
-  cn       <- colnames(tg)
   positive <- object$positive %||% "lognormal"
   p        <- layout$p
   bstart   <- layout$beta_start
@@ -821,6 +850,7 @@
   idx <- c(idx_occ, idx_pos, unlist(field_idx))
   D   <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
   cells <- attr(D, "cells")
+  hyper <- attr(D, "theta")
   off <- 0L
   take <- function(k) { v <- D[, off + seq_len(k), drop = FALSE]; off <<- off + k; v }
   b_occ <- take(p[1L]); b_pos <- take(p[2L])
@@ -830,22 +860,14 @@
     # Field amplitude on the outer grid: b<b>.sigma (bym2) or 1/sqrt(b<b>.tau)
     # (icar / car_proper), per draw cell. The active arm scales z by this; the
     # inactive arm by 0 (no copy).
-    sig_col <- sprintf("b%d.sigma", b)
-    tau_col <- sprintf("b%d.tau", b)
-    if (sig_col %in% cn) {
-      amp <- as.numeric(tg[cells, sig_col])
-    } else if (tau_col %in% cn) {
-      amp <- 1.0 / sqrt(as.numeric(tg[cells, tau_col]))
-    } else {
-      amp <- rep(1.0, length(cells))
-    }
+    amp <- .tobs_joint_field_sd(tg, cells, hyper, b)
     if (is_bym2[b]) {
       # Reconstruct the rho-mixed unit field from the two sub-blocks, the way
       # the shared-field path does: z = sqrt(rho) * sf * phi + sqrt(1-rho) * theta.
       raw   <- take(2L * nn)
       phi   <- raw[, seq_len(nn), drop = FALSE]
       theta <- raw[, nn + seq_len(nn), drop = FALSE]
-      rho   <- as.numeric(tg[cells, sprintf("b%d.rho", b)])
+      rho   <- .tobs_hyper_col(hyper, tg, cells, sprintf("b%d.rho", b))
       sf    <- meta[[b]]$scale_factor %||% 1.0
       z <- sweep(phi, 1L, sqrt(pmax(rho, 0) + 1e-10) * sf, "*") +
            sweep(theta, 1L, sqrt(pmax(1 - rho, 0) + 1e-10), "*")
@@ -866,7 +888,7 @@
   })
 
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(jf, cells, positive),
+       disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = blocks, n_cells = n_nodes[1L])
 }
@@ -902,6 +924,7 @@
   idx   <- c(idx_occ, idx_det, idx_pos, unlist(field_idx), unlist(re_idx))
   D     <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
   cells <- attr(D, "cells")
+  hyper <- attr(D, "theta")
 
   off  <- 0L
   take <- function(k) {
@@ -916,22 +939,21 @@
   # `field_specs` labels every block; older fits (no field_specs) fall back to the
   # all-shared convention.
   field_specs <- object$field_specs
-  cn <- colnames(tg)
   blocks <- lapply(seq_len(n_field), function(b) {
     z     <- take(n_cells)
     spec  <- if (!is.null(field_specs) && b <= length(field_specs))
                field_specs[[b]] else NULL
     if (!is.null(spec) && identical(spec$arm, "pos")) {
       # Non-copied ICAR: amplitude is its own SD, from b<k>.sigma or 1/sqrt(b<k>.tau).
-      amp <- .tobs_joint_field_sd(tg, cells, b)
+      amp <- .tobs_joint_field_sd(tg, cells, hyper, b)
       list(z = z, amp_occ = rep(0, length(cells)), amp_pos = amp,
            weight = spec$weight)
     } else {
-      sigma <- .tobs_joint_field_sd(tg, cells, b)
+      sigma <- .tobs_joint_field_sd(tg, cells, hyper, b)
       # No alpha axis = the block is not copied onto the pos arm, so its
       # amplitude there is 0. Defaulting to 1 would turn a decoupled fit into a
       # full-amplitude copy in the draws.
-      alpha <- .tobs_joint_amp(tg, cells, b, "alpha", default = 0)
+      alpha <- .tobs_joint_amp(tg, cells, hyper, b, "alpha", default = 0)
       wt <- if (!is.null(spec)) spec$weight
             else if (b == 1L) NULL else trend_cols[[b - 1L]]
       list(z = z, amp_occ = sigma, amp_pos = alpha * sigma, weight = wt)
@@ -970,7 +992,7 @@
   # grid (control$phi.grid.pos, or the latent path's sigma_u); otherwise the
   # dispersion the arm held.
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(jf, cells, positive),
+       disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
        b = list(occ = b_occ, det = b_det, pos = b_pos),
        blocks = blocks, n_cells = n_cells, re = re_draws)
 }
@@ -1004,22 +1026,23 @@
     idx <- c(idx_occ, idx_pos, unlist(field_idx))
     D   <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
     cells <- attr(D, "cells")
+    hyper <- attr(D, "theta")
     off <- 0L
     take <- function(k) { v <- D[, off + seq_len(k), drop = FALSE]; off <<- off + k; v }
     b_occ <- take(p[1L]); b_pos <- take(p[2L])
     trend_cols <- object$trend_weights %||% list(object$trend_weight)
     blocks <- lapply(seq_len(n_field), function(b) {
       z     <- take(n_cells)
-      sigma <- .tobs_joint_field_sd(tg, cells, b)
+      sigma <- .tobs_joint_field_sd(tg, cells, hyper, b)
       # No alpha axis = the block is not copied onto the pos arm, so its
       # amplitude there is 0. Defaulting to 1 would turn a decoupled fit into a
       # full-amplitude copy in the draws.
-      alpha <- .tobs_joint_amp(tg, cells, b, "alpha", default = 0)
+      alpha <- .tobs_joint_amp(tg, cells, hyper, b, "alpha", default = 0)
       list(z = z, amp_occ = sigma, amp_pos = alpha * sigma,
            weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
     })
     return(list(n = n, positive = positive, cells = cells,
-                disp = .tobs_joint_disp(jf, cells, positive),
+                disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
                 b = list(occ = b_occ, det = NULL, pos = b_pos),
                 blocks = blocks, n_cells = n_cells))
   }
@@ -1036,6 +1059,7 @@
   idx   <- c(idx_occ, idx_pos, phi_idx, theta_idx)
   D     <- tulpa::tulpa_posterior_draws(jf, idx = idx, n = n)
   cells <- attr(D, "cells")
+  hyper <- attr(D, "theta")
 
   off  <- 0L
   take <- function(k) {
@@ -1049,7 +1073,7 @@
   has_rho <- "rho" %in% cn
   if (has_theta && has_rho) {
     theta <- take(length(theta_idx))
-    rho   <- as.numeric(tg[cells, "rho"])
+    rho   <- .tobs_hyper_col(hyper, tg, cells, "rho")
     sf    <- as.numeric(attr(jf, "scale_factor") %||% 1.0)
     z <- sweep(phi, 1L, sqrt(pmax(rho, 0) + 1e-10) * sf, "*") +
          sweep(theta, 1L, sqrt(pmax(1 - rho, 0) + 1e-10), "*")
@@ -1057,12 +1081,12 @@
     z <- phi
   }
 
-  amp_occ <- .tobs_joint_amp(tg, cells, 1L, "sigma_occ")
-  amp_pos <- .tobs_joint_amp(tg, cells, 1L, "sigma_pos")
+  amp_occ <- .tobs_joint_amp(tg, cells, hyper, 1L, "sigma_occ")
+  amp_pos <- .tobs_joint_amp(tg, cells, hyper, 1L, "sigma_pos")
   block <- list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = NULL)
 
   list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(jf, cells, positive),
+       disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = list(block), n_cells = n_phi)
 }

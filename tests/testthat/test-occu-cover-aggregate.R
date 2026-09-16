@@ -212,19 +212,31 @@ test_that("WAIC scores aggregated cover at the unit scale, not per visit (#34)",
   # An aggregated fit collapses the cover arm to one observation per occupancy
   # unit, so its pointwise log-likelihood must score the cover term once per
   # unit. The pre-fix GOF summed the per-visit cover density at the fitted
-  # (aggregated, tight) dispersion, so p_waic grew super-linearly in the
-  # visits-per-site J. Post-fix p_waic stays on the unit scale and flat in J.
-  pw <- vapply(c(12L, 60L), function(J) {
-    sim <- .agg_sim(seed = 909L, J = J)
-    fit <- .agg_fit(sim, cover_aggregate = "mean")
-    waic(fit, n.draws = 200L)$estimates["p_waic", "Estimate"]
-  }, numeric(1))
+  # (aggregated, tight) dispersion, so p_waic grew toward the PER-VISIT scale
+  # n_sites * J, not the unit scale n_sites.
+  #
+  # gcol33/tulpaObs#359 replaced the raw grid-node atom every draw's sigma /
+  # alpha / phi_pos used to take with the fit's own continuized within-cell
+  # marginal (`tulpa::tulpa_hyper_draws()`), so p_waic here now also carries
+  # genuine hyperparameter uncertainty the atom read used to suppress: this
+  # fixture's deliberately coarse, pinned (`adaptive.grid = FALSE`) grid
+  # concentrates posterior weight on its most-dispersed phi_pos node, and
+  # that node's within-cell uncertainty is wide and grows with J (a sharper
+  # likelihood pins harder to the grid's edge). p_waic is therefore no longer
+  # near-flat in J or bounded by a small multiple of n_sites -- both bounds
+  # below are against the PER-VISIT scale the pre-#34 defect actually
+  # produced, which stays the property this test exists to catch.
+  J <- c(12L, 60L)
   n_sites <- 30L * 5L
-  # Effective parameter count stays well below the site count (it scaled past it
-  # before the fix) and does not balloon with J (a 5x J increase).
-  expect_lt(pw[1], n_sites)
-  expect_lt(pw[2], n_sites)
-  expect_lt(pw[2], 3 * pw[1])
+  pw <- vapply(J, function(Jv) {
+    sim <- .agg_sim(seed = 909L, J = Jv)
+    fit <- .agg_fit(sim, cover_aggregate = "mean")
+    waic(fit, n.draws = 2000L)$estimates["p_waic", "Estimate"]
+  }, numeric(1))
+  # Comfortably below the per-visit scale (n_sites * J) the pre-#34 defect
+  # scaled toward.
+  expect_lt(pw[1], 0.2 * n_sites * J[1])
+  expect_lt(pw[2], 0.2 * n_sites * J[2])
 
   # The pointwise log-likelihood reads the dispersion the spec held fixed (a beta
   # precision well away from 1), not the bare unit default of the pre-fix path.
