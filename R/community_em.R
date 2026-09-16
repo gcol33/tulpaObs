@@ -276,10 +276,20 @@
   # (u_draw - u_hat) while its covariance stays exactly Cinv_s), and the marginal
   # fixed-effect information Sf (Schur complement of the b-block, Vf =
   # solve(Sf)).
+  # `stuck` (list()$stuck below) records a Newton iteration whose line search
+  # -- undamped AND Levenberg-damped -- accepted no step: the direction is not
+  # an ascent direction at any scale tried, distinct from a converged `ok =
+  # TRUE, delta < 1e-7` break. #349: without this, `mu`/`b_list` return
+  # unchanged from their input, the caller's M-step keeps shrinking Sigma
+  # toward its eigenvalue floor every EM iteration regardless, and the
+  # resulting slow drift in `logML` (from Sigma alone, not the mode) eventually
+  # satisfies the EM's relative-change test -- certifying convergence at the
+  # cold-start values.
   solve_mode <- function(mu, global, b_list, Sinv) {
     F_cur <- total_F(mu, global, b_list, Sinv)
     Cinv_list <- vector("list", S)
     Sf <- NULL
+    stuck <- FALSE
     for (it in seq_len(newton_max)) {
       sumg_theta <- numeric(P); sumg_glob <- numeric(G)
       A11  <- matrix(0, P, P)
@@ -319,31 +329,43 @@
         Sf  <- Sf  - M %*% t(Bf_list[[s]])
         rhs <- rhs - as.numeric(M %*% gb_list[[s]])
       }
-      du <- tryCatch(solve(Sf, rhs), error = function(e) {
-        solve(Sf + diag(1e-6, U), rhs)
-      })
-      db <- lapply(seq_len(S), function(s) {
-        as.numeric(Cinv_list[[s]] %*% (gb_list[[s]] -
-                     t(Bf_list[[s]]) %*% du))
-      })
-      # Backtracking line search on the penalized objective.
-      step <- 1; ok <- FALSE
-      for (ls in 1:25) {
-        u_new    <- u + step * du
-        mu_n     <- u_new[seq_len(P)]
-        global_n <- u_new[P + glob_seq]
-        b_n      <- lapply(seq_len(S), function(s) b_list[[s]] + step * db[[s]])
-        F_n      <- total_F(mu_n, global_n, b_n, Sinv)
-        if (is.finite(F_n) && F_n >= F_cur - 1e-8) { ok <- TRUE; break }
-        step <- step / 2
+      # Backtracking line search on the penalized objective, escalating to a
+      # Levenberg-damped Newton direction (ridge added to the Schur complement
+      # Sf) when the undamped direction is not an ascent direction at any step
+      # size down to 1/2^24 -- an indefinite Sf (from subtracting the per-
+      # species Schur terms) or a non-finite F_n (likelihood overflow near a
+      # cold start) both show up this way. `db` is recomputed from the
+      # damped `du` each escalation, since it depends on it.
+      ok <- FALSE; step <- 1; lambda <- 0
+      for (damp in 0:6) {
+        Sf_d <- if (lambda == 0) Sf else Sf + diag(lambda, U)
+        du_d <- tryCatch(solve(Sf_d, rhs), error = function(e) {
+          solve(Sf_d + diag(max(lambda, 1e-6), U), rhs)
+        })
+        db_d <- lapply(seq_len(S), function(s) {
+          as.numeric(Cinv_list[[s]] %*% (gb_list[[s]] -
+                       t(Bf_list[[s]]) %*% du_d))
+        })
+        step <- 1
+        for (ls in 1:25) {
+          u_new    <- u + step * du_d
+          mu_n     <- u_new[seq_len(P)]
+          global_n <- u_new[P + glob_seq]
+          b_n      <- lapply(seq_len(S), function(s) b_list[[s]] + step * db_d[[s]])
+          F_n      <- total_F(mu_n, global_n, b_n, Sinv)
+          if (is.finite(F_n) && F_n >= F_cur - 1e-8) { ok <- TRUE; break }
+          step <- step / 2
+        }
+        if (ok) break
+        lambda <- if (lambda == 0) 1e-4 else lambda * 10
       }
-      if (!ok) break
-      delta <- max(abs(c(step * du, unlist(db) * step)))
+      if (!ok) { stuck <- TRUE; break }
+      delta <- max(abs(c(step * du_d, unlist(db_d) * step)))
       mu <- mu_n; global <- global_n; b_list <- b_n; F_cur <- F_n
       if (delta < 1e-7) break
     }
     list(mu = mu, global = global, b_list = b_list, Cinv = Cinv_list,
-         Bf = Bf_list, Sf = Sf, F = F_cur)
+         Bf = Bf_list, Sf = Sf, F = F_cur, stuck = stuck)
   }
 
   # ---- initialization ----
@@ -365,7 +387,7 @@
   }
 
   # ---- EM loop ----
-  converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf
+  converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf; mode_stuck <- FALSE
   # Progress + ETA for the community EM iterations; ON by default, reusing tulpa's
   # shared reporter so the heartbeat file matches every other fitting loop. ETA is
   # the upper bound to max_iter, finalised on convergence.
@@ -375,6 +397,7 @@
     Sinv <- blockdiag_inv(Sigma)
     res  <- solve_mode(mu, global, b_list, Sinv)
     mu <- res$mu; global <- res$global; b_list <- res$b_list
+    mode_stuck <- isTRUE(res$stuck)
 
     logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
 
@@ -401,7 +424,11 @@
       message(sprintf("[community EM %d] logML=%.4f  rel_change=%.2e",
                       em, logML, rel))
     }
-    if (em > 1L && rel < tol) { converged <- TRUE; break }
+    # Convergence needs BOTH a small relative change in the objective AND an
+    # accepted inner Newton step this iteration -- a stuck mode-find can still
+    # produce a small `rel` (the M-step's Sigma shrink alone moves logML a
+    # little every pass, per #349), which is not the mode having converged.
+    if (em > 1L && rel < tol && !mode_stuck) { converged <- TRUE; break }
     logML_prev <- logML
   }
   .prog$finish()
@@ -410,6 +437,14 @@
   Sinv <- blockdiag_inv(Sigma)
   res  <- solve_mode(mu, global, b_list, Sinv)
   mu <- res$mu; global <- res$global; b_list <- res$b_list
+  if (isTRUE(res$stuck)) {
+    converged <- FALSE
+    warning(paste0(
+      "community EM: the Newton mode-find never accepted a step (undamped or ",
+      "Levenberg-damped); the coefficients did not move from their starting ",
+      "values. Reporting converged = FALSE rather than certifying the fit off ",
+      "the M-step's objective drift alone."), call. = FALSE)
+  }
   Vf <- tryCatch(solve(res$Sf), error = function(e) .tobs_cem_ginv(res$Sf))
   Vf <- (Vf + t(Vf)) / 2
   logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
