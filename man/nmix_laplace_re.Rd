@@ -88,9 +88,10 @@ joint reference.}
 \code{logit_omega_s ~ N(mu_omega, sigma_omega)}; a share \code{omega_s} of a species'
 sites is structurally empty). None of \code{"NB"} / \code{"ZIP"} / \code{"ZINB"} has a
 closed-form EM, so each defaults \code{optimizer} to \code{"joint_grad"} and errors on
-\code{optimizer = "em"}. The default \code{n_quad} when unsupplied is \code{5} for \code{"NB"}
-and \code{3} for the zero-inflated \code{"ZIP"} / \code{"ZINB"} (which carry an extra
-per-species RE coordinate, so a coarser grid keeps the tensor tractable).}
+\code{optimizer = "em"}. The default \code{n_quad} when unsupplied is \code{3} for \code{"NB"}
+and the zero-inflated \code{"ZIP"} / \code{"ZINB"} (the tensor grid is
+\verb{n_quad^(p_lambda + p_p + [NB] + [ZI])}, so a coarser grid keeps it
+tractable; #355).}
 
 \item{r_init}{Initial community-mean negative-binomial size for the joint
 optimizer (\code{mixture = "NB"} only; default \code{10}, a moderate overdispersion

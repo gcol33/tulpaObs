@@ -185,8 +185,8 @@
   # community means as a fixed effect with its own trailing per-species RE
   # coordinate, joint-optimised via the analytic-gradient AGHQ path. Neither has a
   # closed-form EM, so when the user does not pin them, switch the EM defaults to
-  # the joint_grad / n_quad = 5 defaults (matching nmix_laplace_re()'s own
-  # missing()-driven NB / ZI defaults).
+  # the joint_grad defaults (matching nmix_laplace_re()'s own missing()-driven
+  # NB / ZI defaults).
   mix_code <- switch(mixture,
                      poisson = "P", negbin = "NB", zip = "ZIP", zinb = "ZINB",
                      stop("Community N-mixture supports mixture = \"poisson\", ",
@@ -194,10 +194,14 @@
                           "\").", call. = FALSE))
   needs_joint <- mix_code %in% c("NB", "ZIP", "ZINB")
   if (needs_joint && identical(optimizer, "em")) optimizer <- "joint_grad"
-  # ZI adds a per-species RE coordinate on top of NB, so its default AGHQ grid is
-  # coarser (3 vs 5) to keep the n_quad^d tensor tractable; the user can raise it.
-  if (needs_joint && n_quad == 1L)
-    n_quad <- if (mix_code %in% c("ZIP", "ZINB")) 3L else 5L
+  # The RE dimension is p_lambda + p_p + 1 (the per-species log_r_s / logit_omega_s
+  # coordinate), and the tensor grid is n_quad^d -- at d = 5 (one abundance + one
+  # detection covariate) a default of 5 is 5^5 = 3125 nodes per species per
+  # objective evaluation, against 3^5 = 243 at n_quad = 3 (#355: a fixture at that
+  # dimension ran past 20 minutes at the old default, where Poisson finishes in
+  # 9s). ZI was already at 3 for the identical reason; NB gets the same default.
+  # The user can still raise it.
+  if (needs_joint && n_quad == 1L) n_quad <- 3L
   lf  <- .tobs_ms_nmix_longform(model)
   raw <- nmix_laplace_re(
     y = lf$y, site_idx = lf$site_idx, species_idx = lf$species_idx,
