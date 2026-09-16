@@ -386,6 +386,14 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
   "gdistremoval", "distsamp_open", "dyn_int_occu", "ms_distance", "ms_count",
   "t_occu")
 
+# Community NUTS families whose per-(species, unit) pointwise kernel needs the
+# per-species deviations off `object$nuts$draws` -- the community-mean draws in
+# `object$draws` omit them (ms_nmix, ms_occu_cover_spatial), so the "posterior
+# mean" plug-in DIC needs is the mean of the ACTUAL NUTS draws, not of the
+# moment-matched pseudo-draws every other Laplace-community family reports in
+# `object$draws`.
+.TOBS_PLOGLIK_NUTS_MEAN_FAMILIES <- c("ms_nmix", "ms_occu_cover_spatial")
+
 # Pointwise log-likelihood at the posterior mean of the parameters, the plug-in
 # DIC needs (length n_obs). The draw-matrix families evaluate their per-family
 # kernel at the column-mean draw; the cover / occu_cover families plug in the
@@ -410,6 +418,22 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
                              dimnames = list(NULL, colnames(object$draws)))
     fn <- get0(paste0(".tobs_ploglik_", mt), envir = asNamespace("tulpaObs"),
                mode = "function", inherits = FALSE)
+    return(as.numeric(fn(obj_mean, n.draws = 1L)))
+  }
+  # Community NUTS families whose pointwise kernel reads `object$nuts$draws`
+  # (the actual sampled draws, not `object$draws`): mean-collapse THOSE, the
+  # same one-row trick as the FIT_FAMILIES branch above, one level down. A fit
+  # with no NUTS draws (the Laplace community-mean route) is not identified for
+  # this plug-in either, so the family's own kernel raises that -- not
+  # duplicated here.
+  if (mt %in% .TOBS_PLOGLIK_NUTS_MEAN_FAMILIES) {
+    fn <- get0(paste0(".tobs_ploglik_", mt), envir = asNamespace("tulpaObs"),
+               mode = "function", inherits = FALSE)
+    nd <- object$nuts
+    if (is.null(nd) || is.null(nd$draws)) return(as.numeric(fn(object, n.draws = 1L)))
+    obj_mean <- object
+    obj_mean$nuts$draws <- matrix(colMeans(nd$draws), nrow = 1L,
+                                  dimnames = list(NULL, colnames(nd$draws)))
     return(as.numeric(fn(obj_mean, n.draws = 1L)))
   }
   draws <- object$draws

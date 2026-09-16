@@ -70,3 +70,51 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_dyn_occu", {
   expect_true(is.finite(d$dic))
   expect_true(is.finite(cpo$lpml))
 })
+
+# dic() needs the pointwise log-likelihood at the posterior mean
+# (.tobs_loglik_at_mean()). ms_abun() nuts (model_type "ms_nmix") and the
+# spatial-factor ms_occu_cover() nuts (model_type "ms_occu_cover_spatial")
+# score their per-(species, unit) marginal off the actual NUTS draws
+# (object$nuts$draws), not the community-mean pseudo-draws in object$draws, so
+# the plug-in needs the mean of THOSE -- waic() / loo() / cpo() already read
+# them correctly; only the posterior-mean collapse was missing (#353).
+test_that("dic() works on ms_abun nuts (ms_nmix)", {
+  skip_on_cran()
+  skip_if_fast()
+  sim <- simulate_ms_abun(n_species = 5, N = 25, J = 3, seed = 3)
+  fit <- tobs(~ abund_cov1, data = sim$data, family = ms_abun(),
+              detection = ~ det_cov1, y = sim$y, species = sim$species,
+              method = "nuts",
+              control = list(n.iter = 150L, n.warmup = 150L, n.chains = 1L,
+                             seed = 1L, verbose = FALSE))
+  expect_identical(fit$model$model_type, "ms_nmix")
+  d <- dic(fit)
+  expect_true(is.finite(d$dic))
+})
+
+test_that("dic() works on the spatial-factor ms_occu_cover() nuts fit", {
+  skip_on_cran()
+  skip_if_fast()
+  rook_adj <- function(n) {
+    A <- matrix(0L, n * n, n * n); id <- function(r, c) (r - 1) * n + c
+    for (r in 1:n) for (c in 1:n) {
+      i <- id(r, c)
+      if (r < n) { j <- id(r + 1, c); A[i, j] <- A[j, i] <- 1L }
+      if (c < n) { j <- id(r, c + 1); A[i, j] <- A[j, i] <- 1L }
+    }
+    A
+  }
+  adj <- rook_adj(5L)
+  sims <- simulate_ms_occu_cover_spatial(adj, n_species = 5L, J = 4L, K = 1L,
+                                         sd_occ = 0.5, sd_load = 1.1,
+                                         sigma_pos = 0.4, seed = 3L)
+  fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sims$data,
+              family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
+              positive = ~ pos_cov1, y = sims$y, y_pos = sims$y_pos,
+              species = sims$species, method = "nuts",
+              control = list(n.iter = 200L, n.warmup = 200L, n.chains = 1L,
+                             n.factors = 1L, verbose = FALSE))
+  expect_identical(fit$model$model_type, "ms_occu_cover_spatial")
+  d <- dic(fit)
+  expect_true(is.finite(d$dic))
+})
