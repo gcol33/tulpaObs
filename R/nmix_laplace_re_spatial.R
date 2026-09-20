@@ -313,7 +313,7 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
   build_Q <- function(range_val, sigma_val) {
     kappa    <- sqrt(8 * ts$nu) / range_val
     tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
-    Q <- Matrix::forceSymmetric(tulpa:::.spde_precision_Q(ts, kappa, tau_spde))
+    Q <- Matrix::forceSymmetric(tulpa::tulpa_spde_precision_Q(ts, kappa, tau_spde))
     list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
   }
 
@@ -332,7 +332,7 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
       key <- paste0(theta_grid[k, 1L], "_", theta_grid[k, 2L])
       if (is.null(cache[[key]])) cache[[key]] <- build_Q(theta_grid[k, 1L], theta_grid[k, 2L])
       Q_list[[k]] <- cache[[key]]$Q; log_dets[k] <- cache[[key]]$log_det
-      pc_lp[k] <- tulpa:::.spde_log_hyperprior(
+      pc_lp[k] <- tulpa::tulpa_spde_log_hyperprior(
         theta_grid[k, 1L], theta_grid[k, 2L],
         list(prior_range = prior_range, prior_sigma = prior_sigma))
     }

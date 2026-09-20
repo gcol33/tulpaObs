@@ -616,7 +616,7 @@
                    error = function(e) NULL)
     if (!is.null(cc)) {
       nn  <- nrow(cc$nodes)
-      prog <- tulpa:::.tulpa_iter_progress(label, nn, unit = "cells")
+      prog <- tulpa::tulpa_iter_progress(label, nn, unit = "cells")
       res <- vector("list", nn); logm <- rep(-Inf, nn)
       for (k in seq_len(nn)) {
         r <- solve_cell(list(field$make_cell(cc$nodes[k, ])))
@@ -635,7 +635,7 @@
   # Product grid over the blocks' per-cell grids.
   cell_grid <- .tobs_block_cell_product(blocks)
   n_grid <- length(cell_grid)
-  prog <- tulpa:::.tulpa_iter_progress(label, n_grid, unit = "cells")
+  prog <- tulpa::tulpa_iter_progress(label, n_grid, unit = "cells")
   res <- vector("list", n_grid); logm <- rep(-Inf, n_grid)
   for (k in seq_len(n_grid)) {
     r <- solve_cell(cell_grid[[k]])

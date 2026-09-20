@@ -15,7 +15,7 @@
 # request.
 
 engine_alpha_axis <- function(n = NULL) {
-  as.numeric(tulpa:::.nl_grid_axis("copy_alpha", n = n))
+  as.numeric(tulpa::tulpa_grid_axis("copy_alpha", n = n))
 }
 
 # The copy-axis coordinates a fit actually integrated. `theta_grid` labels its

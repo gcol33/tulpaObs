@@ -68,7 +68,7 @@
 # positive node to anchor it.
 .ochf_copy_slab_rate <- function(upper) {
   if (length(upper) != 1L || !is.finite(upper) || upper <= 0) return(NULL)
-  d <- tulpa:::.hyper_copy_slab_density(upper)
+  d <- tulpa::tulpa_hyper_copy_slab_density(upper)
   if (is.null(d)) return(NULL)
   as.numeric(d(0) - d(1))
 }
@@ -78,7 +78,7 @@
 # same model unless the caller says otherwise; "flat" asks for the alternative
 # the grid also accepts, flat in log alpha over the span its nodes tile.
 .occu_cover_nuts_copy_slab <- function(x) {
-  if (is.null(x)) return(tulpa:::.hyper_check_copy_slab(NULL))
+  if (is.null(x)) return(tulpa::tulpa_hyper_check_copy_slab(NULL))
   if (!is.character(x) || length(x) != 1L || is.na(x) ||
       !x %in% c("flat", "exponential")) {
     stop("control$copy.slab must be \"flat\" or \"exponential\".", call. = FALSE)
@@ -993,7 +993,7 @@
     # named here to be thinned on the same terms -- over its own span, so the
     # sampled rho's prior support is the one the engine would have integrated.
     bym2_rho_grid <- if (identical(type, "bym2"))
-      thin(tulpa::auto_grid(tulpa:::.nl_grid_axis("bym2_rho"))) else NULL
+      thin(tulpa::auto_grid(tulpa::tulpa_grid_axis("bym2_rho"))) else NULL
   }
   # Single-block (multi = FALSE): the pos arm carries
   # field_coef = list(name = "alpha", grid = alpha_grid), so the copy alpha axis
@@ -1235,9 +1235,9 @@
       # declared on, and the span off the cell measure, refinement slice cells
       # included.
       refining <- warm$joint_fit$refining_axis
-      base <- !nzchar(tulpa:::.hyper_slice_home(refining, nrow(tg)))
-      specs <- tulpa:::.joint_axis_specs_from_grid(tg[base, , drop = FALSE])
-      r <- tulpa:::.hyper_grid_supports(tg, specs, refining = refining)[[a]]
+      base <- !nzchar(tulpa::tulpa_hyper_slice_home(refining, nrow(tg)))
+      specs <- tulpa::tulpa_joint_axis_specs_from_grid(tg[base, , drop = FALSE])
+      r <- tulpa::tulpa_hyper_grid_supports(tg, specs, refining = refining)[[a]]
     }
     if (is.null(r)) return(NULL)
     r <- sort(as.numeric(r))

@@ -397,7 +397,7 @@
   # Progress + ETA for the community EM iterations; ON by default, reusing tulpa's
   # shared reporter so the heartbeat file matches every other fitting loop. ETA is
   # the upper bound to max_iter, finalised on convergence.
-  .prog <- tulpa:::.tulpa_iter_progress("community-em", max_iter, unit = "iter")
+  .prog <- tulpa::tulpa_iter_progress("community-em", max_iter, unit = "iter")
   for (em in seq_len(max_iter)) {
     n_iter <- em
     Sinv <- blockdiag_inv(Sigma)

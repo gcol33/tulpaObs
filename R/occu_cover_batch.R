@@ -182,7 +182,7 @@
   })
   op <- options(tulpaObs.compress_nodet = FALSE)
   on.exit(options(op), add = TRUE)
-  fits <- tryCatch(tulpa:::tulpa_joint_grid_batch(species_fits),
+  fits <- tryCatch(tulpa::tulpa_joint_grid_batch(species_fits),
                    tulpa_grid_batch_ineligible = function(e) NULL)
   if (is.null(fits)) return(NULL)
   names(fits) <- labels

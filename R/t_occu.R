@@ -14,7 +14,7 @@
 # as spPGOcc's ICAR precision is for a spatial field), then beta_p, then the AR1
 # hyperparameters (sigma^2 conjugate Inverse-Gamma, rho on a grid). The year
 # effect is centred sum-to-zero each sweep with its level moved to the intercept.
-# PG draws use tulpa's Polson-Scott-Windle sampler (tulpa:::cpp_rpg).
+# PG draws use tulpa's Polson-Scott-Windle sampler (tulpa::tulpa_rpg).
 #
 # v1: site-level occupancy + detection covariates (broadcast across seasons),
 # method = "pg_gibbs" only (this IS spOccupancy's engine for the family).
@@ -104,7 +104,7 @@ t_occu <- function() {
   # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
-  rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg   <- tulpa::tulpa_rpg
   X_occ <- model$X_occ; X_det <- model$X_det
   n <- model$n_sites; T_s <- model$n_seasons
   p_psi <- ncol(X_occ); p_p <- ncol(X_det)

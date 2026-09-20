@@ -8,7 +8,7 @@
 #' @importFrom stats model.matrix optim quantile runif sd setNames var
 #' @importFrom stats logLik rpois
 #' @importFrom methods as
-#' @importFrom utils modifyList getFromNamespace
+#' @importFrom utils modifyList
 NULL
 
 # `.data` is the rlang/dplyr pronoun used inside conditional dplyr/ggplot2

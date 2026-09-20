@@ -14,7 +14,7 @@
 #                     kappa = k_i - n_i/2; beta_p ~ N(V X'kappa, V) over those sites
 #
 # with weakly-informative N(0, sigma.beta^2) coefficient priors. The PG draws use
-# tulpa's tested Polson-Scott-Windle sampler (`tulpa:::cpp_rpg`). v1: single
+# tulpa's tested Polson-Scott-Windle sampler (`tulpa::tulpa_rpg`). v1: single
 # season, site-level detection, no random effects / spatial field (those are the
 # PG-spatial extensions -- pg_binomial_{icar,bym2,...} exist in tulpa and are the
 # documented follow-up).
@@ -29,7 +29,7 @@
   if (!is.null(model$X_det_visit))
     stop("occu() method = \"pg_gibbs\" supports site-level detection only in v1 ",
          "(visit-level detection covariates are a follow-up).", call. = FALSE)
-  rpg <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg <- tulpa::tulpa_rpg
 
   y      <- model$y                              # [n x mv], -1 = NA
   X_psi  <- model$X_processes[[1L]]
@@ -108,7 +108,7 @@
          "v1 (bym2 / car_proper are follow-ups).", call. = FALSE)
   if (!is.null(model$X_det_visit))
     stop("occu() pg_gibbs supports site-level detection only.", call. = FALSE)
-  rpg <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg <- tulpa::tulpa_rpg
   adj <- as.matrix(spatial$graph)
   n   <- model$n_sites
   if (nrow(adj) != n)

@@ -33,9 +33,9 @@ test_that("the alpha and sigma defaults read the engine's axes (#209)", {
   # engine too -- a literal here would drift exactly as the helpers' own copies
   # would have.
   expect_equal(as.numeric(tulpaObs:::.tobs_default_alpha_grid()),
-               as.numeric(tulpa:::.nl_grid_axis("copy_alpha")))
+               as.numeric(tulpa::tulpa_grid_axis("copy_alpha")))
   expect_equal(as.numeric(tulpaObs:::.tobs_default_sigma_grid()),
-               as.numeric(tulpa:::.nl_grid_axis("field_sd")))
+               as.numeric(tulpa::tulpa_grid_axis("field_sd")))
   # The copy axis carries an exact 0, so the uncoupled model is ON the grid
   # rather than a limit of it. That is the engine's `prepend`, and reading the
   # axis is what keeps it.
@@ -262,7 +262,7 @@ test_that("arm-specific bym2 defaults rho to the engine's axis (#206)", {
   # does. The assertion reads the engine too: a literal here would drift out of
   # step exactly as the block's own copy did when extended the axis to cover a
   # rho near 1.
-  engine_rho <- tulpa:::.nl_grid_axis("bym2_rho")
+  engine_rho <- tulpa::tulpa_grid_axis("bym2_rho")
   b <- .agp_block("bym2", list())
   expect_equal(as.numeric(unique(b$rho_grid)), as.numeric(engine_rho))
   # Paired, not two separate axes: the block carries one (sigma, rho) cell per

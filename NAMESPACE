@@ -228,8 +228,5 @@ importFrom(tulpa,
   tidy
 )
 importFrom(tulpaMesh,fem_matrices)
-importFrom(utils,
-  getFromNamespace,
-  modifyList
-)
+importFrom(utils,modifyList)
 useDynLib(tulpaObs, .registration = TRUE)

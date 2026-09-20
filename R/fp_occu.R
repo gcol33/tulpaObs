@@ -179,7 +179,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   # Progress + ETA; ON by default. BFGS calls the gradient ~once per
   # quasi-Newton iteration, so ticking there approximates iteration progress
   # (maxit is the ETA denominator); finalised after optim returns.
-  .prog <- tulpa:::.tulpa_iter_progress("fp-occu-laplace", as.integer(max_iter), unit = "iter")
+  .prog <- tulpa::tulpa_iter_progress("fp-occu-laplace", as.integer(max_iter), unit = "iter")
   neg_grad_p <- function(theta) { .prog$tick(); neg_grad(theta) }
   opt <- stats::optim(theta0, neg_ll, neg_grad_p, method = "BFGS",
                       control = list(maxit = as.integer(max_iter), reltol = tol))

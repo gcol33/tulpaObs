@@ -331,7 +331,7 @@
   # Analytic-gradient BFGS over the exact ZIP marginal (the ZI logit and, for
   # ZINB, log_r are the only runaway corners; a huge NB overdispersion mimics
   # structural zeros, so the ZINB seed is warm-started at the no-ZI dispersion).
-  .prog <- tulpa:::.tulpa_iter_progress("dyn-abun-zip", as.integer(max_iter), unit = "iter")
+  .prog <- tulpa::tulpa_iter_progress("dyn-abun-zip", as.integer(max_iter), unit = "iter")
   opt <- stats::optim(theta0, neg_ll,
                       gr = function(th) { .prog$tick(); neg_grad(th) },
                       method = "BFGS",
@@ -737,7 +737,7 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
   # Progress + ETA; ON by default. BFGS calls the gradient ~once per
   # quasi-Newton iteration, so ticking there approximates iteration progress
   # (maxit is the ETA denominator); finalised after optim returns.
-  .prog <- tulpa:::.tulpa_iter_progress("dyn-abun-laplace", as.integer(max_iter), unit = "iter")
+  .prog <- tulpa::tulpa_iter_progress("dyn-abun-laplace", as.integer(max_iter), unit = "iter")
   neg_grad_p <- function(theta) { .prog$tick(); neg_grad(theta) }
   opt <- stats::optim(theta0, neg_ll, neg_grad_p, method = "BFGS",
                       control = list(maxit = as.integer(max_iter), reltol = tol))

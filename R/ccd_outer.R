@@ -12,10 +12,10 @@
 #
 # `.tobs_ccd_outer_grid()` reuses the engine's EXPORTED CCD primitives
 # (`tulpa::ccd_grid` / `ccd_to_theta` / `ccd_weights`) and PSIS outer-accuracy
-# diagnostic (`tulpa:::.nested_is_pareto_k`) so the node layout, design weights,
+# diagnostic (`tulpa::tulpa_batched_pareto_k`) so the node layout, design weights,
 # and k-hat are the single source of truth shared with the engine. It owns only
-# the per-site mode-find (an inner solve per evaluation, mirrored from
-# `tulpa:::fit_spde_nested_ccd`).
+# the per-site mode-find (an inner solve per evaluation, mirrored from the
+# engine's own `fit_spde_nested_ccd()`).
 #
 # Each axis declares its physical box and a transform so the integral is taken in
 # an unconstrained coordinate with a flat prior there -- log for a positive scale
@@ -133,7 +133,7 @@
       lm <- tryCatch(eval_logm(phys(U[i, ])), error = function(e) NA_real_)
       if (is.finite(lm)) lm else -Inf
     }, 0.0)
-    kd <- tryCatch(tulpa:::.nested_is_pareto_k(u_hat, L, lt, as.integer(k_samples)),
+    kd <- tryCatch(tulpa::tulpa_batched_pareto_k(u_hat, L, lt, as.integer(k_samples)),
                    error = function(e) list(pareto_k = NA_real_))
     pareto_k <- kd$pareto_k
   }

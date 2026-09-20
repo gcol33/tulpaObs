@@ -87,7 +87,7 @@ grid is normalised into posterior weights. The Matern PC priors on
 \eqn{(\mathrm{range}, \sigma)} (from the \code{spde()} term) enter each grid
 point's log-marginal, mirroring \code{fit_spde()}. The precision \eqn{Q} (and its
 \eqn{\log|Q|}) is built once per grid point on the R side via the same FEM
-assembly the occupancy SPDE path uses (\code{tulpa:::.spde_precision_Q}), so the
+assembly the occupancy SPDE path uses (\code{tulpa::tulpa_spde_precision_Q}), so the
 C++ kernel stays agnostic to the precision parameterisation.
 
 Unlike the intrinsic ICAR field, \eqn{Q} is full rank, so the

@@ -1251,7 +1251,7 @@ Backend -> reporter:
   never RNG). `make_nuts_progress` reads option (unit "iter").
 - EM-Laplace (occu/dyn/int/jsdm), community EM (ms_occu/ms_dyn/ms_int, ms_occu_cover),
   RE-EM (em_laplace_re.R), fp_occu/dyn_abun optim -> tulpa R loop via
-  `tulpa:::.tulpa_iter_progress` (R/progress_iter.R).
+  `tulpa::tulpa_iter_progress()` (R/progress_iter.R).
 - count-marginal Laplace (abun/removal/distance) + community N-mixture EM (ms_abun,
   cpp_nmix_community_em) -> C++ `make_grid_progress_from_option` (nmix_progress.h).
 

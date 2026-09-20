@@ -1,5 +1,23 @@
 # tulpaObs NEWS
 
+## 0.2.8 (2026-09-20)
+
+* **Every engine computation is reached through an exported door (#357).** The
+  57 call sites that read tulpa internals via `tulpa:::`,
+  `get(, envir = asNamespace("tulpa"))` and `getFromNamespace()` now call
+  `tulpa::tulpa_rpg()`, `tulpa_joint_inner_vcov_blocks()`,
+  `tulpa_iter_progress()`, `tulpa_grid_axis()`, `tulpa_grid_log_quad()`,
+  `tulpa_theta_matrix()`, `tulpa_normalise_weights_safe()`,
+  `tulpa_batched_pareto_k()`, `tulpa_spde_precision_Q()`,
+  `tulpa_spde_log_hyperprior()`, `tulpa_joint_grid_batch()`,
+  `tulpa_joint_axis_specs_from_grid()` and the four `tulpa_hyper_*()` doors
+  (gcol33/tulpa#826-#834). An unexported symbol carries no stability contract:
+  the engine had already renamed `.tulpa_iter_progress` to the exported
+  `tulpa_iter_progress()`, so the eight progress reaches would have errored on
+  any engine past the pin. `Imports`/`Remotes` move to tulpa 0.4.12, the first
+  version carrying all of them, and `test-no-new-tulpa-internals.R` now asserts
+  the surface is empty rather than capping it at an audited ceiling.
+
 ## 0.2.7 (2026-09-15)
 
 * **`waic()` returns loo's own `waic` object (#333).** It was a

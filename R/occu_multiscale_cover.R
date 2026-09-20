@@ -533,7 +533,7 @@
     ll <- .occu_mscale_cover_nonspatial_ll(par, model, idx)
     -(ll - 0.5 * sum(pprec * par^2))
   }
-  .prog <- tulpa:::.tulpa_iter_progress("occu-ms-cover-laplace",
+  .prog <- tulpa::tulpa_iter_progress("occu-ms-cover-laplace",
                                         as.integer(max.iter), unit = "iter")
   neg_pen_p <- function(par) { .prog$tick(); neg_pen(par) }
   opt <- stats::optim(start, neg_pen_p, method = "BFGS",

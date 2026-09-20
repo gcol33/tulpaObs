@@ -389,7 +389,7 @@ test_that("occu_cover spatial NUTS copy slab defaults to the engine's own", {
   model$site_cell <- seq_len(N)
 
   expect_identical(tulpaObs:::.occu_cover_nuts_copy_slab(NULL),
-                   tulpa:::.hyper_check_copy_slab(NULL))
+                   tulpa::tulpa_hyper_check_copy_slab(NULL))
 
   warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
     model, adj, NULL, type = "car_proper", max.iter = 60L)
@@ -397,7 +397,7 @@ test_that("occu_cover spatial NUTS copy slab defaults to the engine's own", {
     adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE)
   fb_declared <- tulpaObs:::.occu_cover_nuts_field_block(
     adj, "car_proper", N, seq_len(N), warm, sample_hyper = TRUE,
-    copy.slab = tulpa:::.hyper_check_copy_slab(NULL))
+    copy.slab = tulpa::tulpa_hyper_check_copy_slab(NULL))
   expect_identical(fb_default$entries, fb_declared$entries)
 
   # `copy.slab = "flat"` is the alternative the grid also accepts: it declares
@@ -935,7 +935,7 @@ test_that("occu_cover spatial NUTS fit exposes the S3 surface", {
   v  <- as.numeric(nodes); v <- v[is.finite(v) & v > 0]
   tg <- matrix(v, ncol = 1L, dimnames = list(NULL, "alpha"))
   as.numeric(tulpa:::.hyper_axis_support(
-    v, tulpa:::.joint_axis_specs_from_grid(tg)[[1L]]))
+    v, tulpa::tulpa_joint_axis_specs_from_grid(tg)[[1L]]))
 }
 
 test_that("occu_cover spatial NUTS honours a share()'s fixed amplitude (#210)", {
@@ -1194,7 +1194,7 @@ test_that("occu_cover spatial NUTS bounds are the engine's own declared support"
 
   # The same helper the engine weights its cells with produces those spans, so
   # a fit written before the support was recorded reads the same interval.
-  specs <- tulpa:::.joint_axis_specs_from_grid(tg)
+  specs <- tulpa::tulpa_joint_axis_specs_from_grid(tg)
   for (sp in specs) {
     r <- tulpa:::.hyper_axis_support(tg[, sp$name], sp)
     if (is.null(r) || is.null(sup[[sp$name]])) next

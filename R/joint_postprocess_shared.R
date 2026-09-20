@@ -37,10 +37,10 @@
   lm <- if (is.null(log_marginal)) fit$log_marginal else log_marginal
   lq <- fit$log_quad
   if (is.null(lq)) {
-    lq <- tulpa:::.nl_grid_log_quad(tulpa:::.nl_theta_matrix(fit),
+    lq <- tulpa::tulpa_grid_log_quad(tulpa::tulpa_theta_matrix(fit),
                                     refining = fit$refining_axis)
   }
-  tulpa:::.nl_normalise_weights_safe(lm, what, log_quad = lq)
+  tulpa::tulpa_normalise_weights_safe(lm, what, log_quad = lq)
 }
 
 

@@ -26,7 +26,7 @@
   # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
-  rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg   <- tulpa::tulpa_rpg
   Xp1   <- model$X_psi1; Xp <- model$X_p; Xg <- model$X_gamma; Xe <- model$X_eps
   n     <- model$n_sites; T_s <- model$n_seasons; S <- model$n_species
   p_p1  <- ncol(Xp1); p_pd <- ncol(Xp); p_g <- ncol(Xg); p_e <- ncol(Xe)

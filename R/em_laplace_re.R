@@ -346,7 +346,7 @@
   occ_fit <- NULL; det_fit <- NULL
   # Progress + ETA for the variance-component RE-EM iterations; ON by
   # default, finalised on convergence.
-  .prog <- tulpa:::.tulpa_iter_progress("re-em", max_iter, unit = "iter")
+  .prog <- tulpa::tulpa_iter_progress("re-em", max_iter, unit = "iter")
   for (it in seq_len(max_iter)) {
     # ---- E-step: psi and p both carry their arm's RE posterior mode. ----
     eta_occ <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design_occ, b_occ)

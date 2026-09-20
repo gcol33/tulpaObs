@@ -432,7 +432,7 @@
     # default is what every other route gets. A copy of its nodes goes stale
     # the moment the engine moves them, which upstream has already done once.
     rho_auto <- is.null(control$rho.grid)
-    rho_vals <- as.numeric(control$rho.grid %||% tulpa:::.nl_grid_axis("bym2_rho"))
+    rho_vals <- as.numeric(control$rho.grid %||% tulpa::tulpa_grid_axis("bym2_rho"))
     gr <- expand.grid(sigma = sort(sigma_grid), rho = rho_vals,
                       KEEP.OUT.ATTRS = FALSE)
     block$sigma_grid   <- .tobs_mark_auto(gr$sigma, sigma_auto)

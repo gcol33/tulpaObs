@@ -45,8 +45,8 @@ test_that("a refined grid's rebuilt weights follow its cell-by-cell measure", {
 
   # The tensor-product rule on the same cells gives every sigma level the width
   # of a whole column, which is a different answer on this grid.
-  tensor <- tulpa:::.nl_normalise_weights_safe(
-    lm, "outer grid", log_quad = tulpa:::.nl_grid_log_quad(tg))
+  tensor <- tulpa::tulpa_normalise_weights_safe(
+    lm, "outer grid", log_quad = tulpa::tulpa_grid_log_quad(tg))
   expect_gt(max(abs(tensor - want)), 1e-3)
 
   # A caller-supplied log-marginal is weighted by the same measure.
@@ -60,8 +60,8 @@ test_that("a grid without slice cells keeps the tensor-product weights", {
   g  <- .gwr_grid()
   tg <- g$theta_grid[1:9, , drop = FALSE]
   lm <- seq(-1, 0, length.out = 9L)
-  tensor <- tulpa:::.nl_normalise_weights_safe(
-    lm, "outer grid", log_quad = tulpa:::.nl_grid_log_quad(tg))
+  tensor <- tulpa::tulpa_normalise_weights_safe(
+    lm, "outer grid", log_quad = tulpa::tulpa_grid_log_quad(tg))
   expect_equal(tulpaObs:::.tobs_grid_weights(list(theta_grid = tg,
                                                   log_marginal = lm)),
                tensor, tolerance = 1e-12)
@@ -119,7 +119,7 @@ test_that("the areal product grid is measured on its named hyperparameters", {
 
   lm <- numeric(nrow(M))
   w  <- tulpaObs:::.tobs_grid_weights(list(theta_grid = M), log_marginal = lm)
-  lq <- tulpa:::.nl_grid_log_quad(M)
+  lq <- tulpa::tulpa_grid_log_quad(M)
   expect_equal(w, exp(lq) / sum(exp(lq)), tolerance = 1e-12)
   expect_gt(max(abs(w - 1 / nrow(M))), 1e-3)
 

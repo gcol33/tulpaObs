@@ -31,7 +31,7 @@
          "(jsdm() / count(response = \"binomial\")); for Poisson / negbin / ",
          "gaussian use method = \"laplace\" or \"nuts\".", call. = FALSE)
   }
-  rpg <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg <- tulpa::tulpa_rpg
   X   <- model$X; y <- model$y; nt <- model$n_trials; valid <- model$valid
   S   <- model$n_species; p <- ncol(X)
 

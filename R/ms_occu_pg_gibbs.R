@@ -14,7 +14,7 @@
 # Inverse-Gamma community variance tau^2 per coordinate. This gives a calibrated
 # community-VARIANCE posterior -- the Laplace-EM (R/community_em.R) leaves those
 # components with small-cluster attenuation (a documented lower bound); the Gibbs
-# does not. PG draws use tulpa's Polson-Scott-Windle sampler (tulpa:::cpp_rpg).
+# does not. PG draws use tulpa's Polson-Scott-Windle sampler (tulpa::tulpa_rpg).
 #
 # v1: single-season community occupancy, site-level detection, no structured
 # terms / spatial field (the shared-field sfMsPGOcc is a follow-up).
@@ -26,7 +26,7 @@
   # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
-  rpg    <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg    <- tulpa::tulpa_rpg
   X_psi  <- model$X_occ
   X_p    <- model$X_det
   y      <- model$y                              # [n x mv x S]

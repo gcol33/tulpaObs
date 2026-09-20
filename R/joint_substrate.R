@@ -70,7 +70,7 @@
 # dropped the marker, which is the failure filed, and a restated copy loses the
 # belt the moment the engine moves the nodes the way moved `bym2_rho`.
 .tobs_default_alpha_grid <- function(n = NULL) {
-  ax <- tulpa:::.nl_grid_axis("copy_alpha", n = n)
+  ax <- tulpa::tulpa_grid_axis("copy_alpha", n = n)
   # `n` is the caller naming the axis, so only the unresolved read carries the
   # "nothing was named here" mark.
   if (is.null(n)) tulpa::auto_grid(ax) else ax
@@ -330,7 +330,7 @@
 }
 
 .tobs_default_sigma_grid <- function() {
-  tulpa::auto_grid(tulpa:::.nl_grid_axis("field_sd"))
+  tulpa::auto_grid(tulpa::tulpa_grid_axis("field_sd"))
 }
 
 # The arm-specific (cover / detection) field's own SD axis. Denser than the
@@ -342,7 +342,7 @@
 # distinct values, both grid nodes, against a truth lying between them. Nine
 # nodes over the same span step by 1.53 and the estimates leave the nodes.
 .tobs_default_armspec_sigma_grid <- function() {
-  span <- range(as.numeric(tulpa:::.nl_grid_axis("field_sd")))
+  span <- range(as.numeric(tulpa::tulpa_grid_axis("field_sd")))
   tulpa::auto_grid(exp(seq(log(span[1L]), log(span[2L]), length.out = 9L)))
 }
 

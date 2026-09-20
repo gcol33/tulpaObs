@@ -22,7 +22,7 @@
 #' \eqn{(\mathrm{range}, \sigma)} (from the `spde()` term) enter each grid
 #' point's log-marginal, mirroring `fit_spde()`. The precision \eqn{Q} (and its
 #' \eqn{\log|Q|}) is built once per grid point on the R side via the same FEM
-#' assembly the occupancy SPDE path uses (`tulpa:::.spde_precision_Q`), so the
+#' assembly the occupancy SPDE path uses (`tulpa::tulpa_spde_precision_Q`), so the
 #' C++ kernel stays agnostic to the precision parameterisation.
 #'
 #' Unlike the intrinsic ICAR field, \eqn{Q} is full rank, so the
@@ -122,7 +122,7 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
   build_Q <- function(range_val, sigma_val) {
     kappa    <- sqrt(8 * ts$nu) / range_val
     tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
-    Q <- tulpa:::.spde_precision_Q(ts, kappa, tau_spde)
+    Q <- tulpa::tulpa_spde_precision_Q(ts, kappa, tau_spde)
     Q <- Matrix::forceSymmetric(Q)
     list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
   }
@@ -140,7 +140,7 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
     if (is.null(cache[[key]])) cache[[key]] <- build_Q(grid$range[k], grid$sigma[k])
     Q_list[[k]]  <- cache[[key]]$Q
     log_dets[k]  <- cache[[key]]$log_det
-    pc_lp[k]     <- tulpa:::.spde_log_hyperprior(
+    pc_lp[k]     <- tulpa::tulpa_spde_log_hyperprior(
       grid$range[k], grid$sigma[k],
       list(prior_range = prior_range, prior_sigma = prior_sigma))
   }

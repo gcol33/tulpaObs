@@ -15,7 +15,7 @@
 # then the conjugate community mean + Inverse-Gamma variance per coordinate per
 # arm. This gives a calibrated community-VARIANCE posterior -- the community
 # Laplace-EM leaves those components with small-cluster attenuation. PG draws use
-# tulpa's Polson-Scott-Windle sampler (tulpa:::cpp_rpg).
+# tulpa's Polson-Scott-Windle sampler (tulpa::tulpa_rpg).
 #
 # v1: full/partial source coverage (site_maps folded into the per-species n_valid
 # summaries -- an uncovered (site, source) has n_valid = 0 and drops out), site-
@@ -28,7 +28,7 @@
   # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "pg_gibbs")
 
-  rpg   <- get("cpp_rpg", envir = asNamespace("tulpa"))
+  rpg   <- tulpa::tulpa_rpg
   X_psi <- model$X_psi; X_p <- model$X_p            # X_p: list of D designs
   D     <- model$n_sources; S <- model$n_species
   n     <- model$n_sites; p_psi <- ncol(X_psi)
