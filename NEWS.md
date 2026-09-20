@@ -12,7 +12,7 @@
   `sigma.grid` then came back
   `outer_grid_recenter_declined == "axis_pinned"`. It is now declared with
   `tulpa::auto_grid(place = FALSE)`: the same integration, reported as ours.
-  Needs tulpa (>= 0.4.13). `.tobs_mark_auto()` / `.tobs_num_auto()` carry both
+  Needs tulpa (>= 0.5.0). `.tobs_mark_auto()` / `.tobs_num_auto()` carry both
   halves of a declaration, and `occu_multiscale_cover()` keeps a stated
   `auto_grid()` marker across its SD-to-variance conversion instead of dropping
   it in `as.numeric()`.
