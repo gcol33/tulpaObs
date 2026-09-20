@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.2.9 (2026-09-20)
+
+* **The cover dispersion axis stops reporting as the user's pin (#361).**
+  `occu_cover()` defaults `phi.grid.pos` to a three-node band about the
+  residual pre-fit and, measured, integrates it as written -- placing it costs
+  a pilot plus a second full grid solve (178s against 80s on
+  `test-occu-cover-joint.R`) and buys nothing on a span that already brackets
+  the truth. The only way to ask the engine for that was to leave the axis
+  unmarked, which declares it a PIN THE USER WROTE, and a fit with a defaulted
+  `sigma.grid` then came back
+  `outer_grid_recenter_declined == "axis_pinned"`. It is now declared with
+  `tulpa::auto_grid(place = FALSE)`: the same integration, reported as ours.
+  Needs tulpa (>= 0.4.13). `.tobs_mark_auto()` / `.tobs_num_auto()` carry both
+  halves of a declaration, and `occu_multiscale_cover()` keeps a stated
+  `auto_grid()` marker across its SD-to-variance conversion instead of dropping
+  it in `as.numeric()`.
+
 ## 0.2.8 (2026-09-20)
 
 * **Every engine computation is reached through an exported door (#357).** The

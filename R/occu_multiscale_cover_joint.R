@@ -313,12 +313,18 @@
 
   # Stated in the same surface as the pre-fit above, so it takes the same
   # conversion -- without it a stated axis explores variances over a span meant
-  # for SDs.
+  # for SDs. The conversion goes through `as.numeric()`, which drops the
+  # caller's declaration, so it is re-applied on the converted vector: a plain
+  # vector stays a pin, and a caller who wrapped theirs in `auto_grid()` keeps
+  # both halves of what they declared.
   phi_grid_pos <- dots$phi.grid.pos
   phi_grid_arg <- if (!is.null(phi_grid_pos) && is.null(phi_pos_pin))
-                    list(pos = .cover_phi_sd_to_engine(
-                      as.numeric(phi_grid_pos),
-                      .cover_pos_engine_family(model$positive)))
+                    list(pos = .tobs_mark_auto(
+                      .cover_phi_sd_to_engine(
+                        as.numeric(phi_grid_pos),
+                        .cover_pos_engine_family(model$positive)),
+                      auto  = tulpa::is_auto_grid(phi_grid_pos),
+                      place = tulpa::auto_grid_place(phi_grid_pos)))
                   else NULL
 
   fit_call <- list(

@@ -39,17 +39,24 @@
 #
 # `auto` is the "the user named nothing here" test, so a site reads
 # `.tobs_mark_auto(<grid>, is.null(control$sigma.grid))`.
-.tobs_mark_auto <- function(x, auto) {
-  if (isTRUE(auto)) tulpa::auto_grid(x) else x
+#
+# `place` is the SECOND question the engine asks, and the two are independent:
+# `auto` says whose nodes these are, `place` whether the engine may move them.
+# An axis we default and have measured as the one to integrate passes
+# `place = FALSE` -- the engine then leaves it exactly where a pin would be
+# left, and reports it as OUR default rather than as the reader's pin.
+.tobs_mark_auto <- function(x, auto, place = TRUE) {
+  if (isTRUE(auto)) tulpa::auto_grid(x, place = place) else x
 }
 
 # `as.numeric()` on a grid whose provenance is already settled: coerce, then
-# carry the source vector's own marker onto the coerced copy. Every site that
-# writes `as.numeric(g)` into a block after resolving `control$*.grid %||%
-# <default>()` reads this instead, so the coerce-and-lose-the-marker step has
-# one spelling.
+# carry the source vector's own declaration -- both halves -- onto the coerced
+# copy. Every site that writes `as.numeric(g)` into a block after resolving
+# `control$*.grid %||% <default>()` reads this instead, so the
+# coerce-and-lose-the-marker step has one spelling.
 .tobs_num_auto <- function(x) {
-  .tobs_mark_auto(as.numeric(x), tulpa::is_auto_grid(x))
+  .tobs_mark_auto(as.numeric(x), tulpa::is_auto_grid(x),
+                  place = tulpa::auto_grid_place(x))
 }
 
 #
