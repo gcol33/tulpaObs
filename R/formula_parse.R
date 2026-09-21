@@ -140,11 +140,22 @@
   Reduce(function(a, b) call("+", a, b), re_calls)
 }
 
+# Is `e` a binary `+`, or a binary `-` (a term removal such as the `- 1` that
+# drops an intercept)? The additive walkers descend into both operands of `+`
+# and into the kept (left) operand of `-`.
+.tobs_is_additive <- function(e, op) {
+  is.call(e) && identical(e[[1L]], as.name(op)) && length(e) == 3L
+}
+
 # Walk the additive structure of an expression, rewriting bars in place.
 .tobs_rewrite_bars <- function(e) {
-  if (is.call(e) && identical(e[[1L]], as.name("+")) && length(e) == 3L) {
+  if (.tobs_is_additive(e, "+")) {
     e[[2L]] <- .tobs_rewrite_bars(e[[2L]])
     e[[3L]] <- .tobs_rewrite_bars(e[[3L]])
+    return(e)
+  }
+  if (.tobs_is_additive(e, "-")) {
+    e[[2L]] <- .tobs_rewrite_bars(e[[2L]])
     return(e)
   }
   bar <- .tobs_bar_spec(e)
@@ -171,8 +182,11 @@
 .tobs_collect_bar_groups <- function(formula) {
   out <- character(0)
   walk <- function(e) {
-    if (is.call(e) && identical(e[[1L]], as.name("+")) && length(e) == 3L) {
+    if (.tobs_is_additive(e, "+")) {
       walk(e[[2L]]); walk(e[[3L]]); return(invisible())
+    }
+    if (.tobs_is_additive(e, "-")) {
+      walk(e[[2L]]); return(invisible())
     }
     bar <- .tobs_bar_spec(e)
     if (!is.null(bar)) {
@@ -391,6 +405,36 @@
   list(fe = parsed$fe, terms = .tobs_resolve_terms(parsed$terms))
 }
 
+# Split a visit-level formula into its fixed-effect part and the random effects
+# it carries over visit rows. Bars and re() calls are evaluated against the
+# per-visit frame, so each term's `group_idx` (and a slope's covariate) has one
+# entry per unit-visit row in unit-major order, NA where the visit is padding.
+# The terms come back tagged for `process` with `level = "visit"`, in the shape
+# `.tobs_resolve_terms()` returns, so they append to a builder's
+# `structured_terms`. Any other structured term over visit rows is refused.
+.tobs_parse_visit_formula <- function(visit_formula, visit_data, process,
+                                      proc_name, arm) {
+  if (is.null(visit_formula) || is.null(visit_data)) {
+    return(list(formula = visit_formula, terms = list()))
+  }
+  parsed <- .tobs_parse_formula(visit_formula, data = visit_data)
+  is_re <- vapply(parsed$terms, inherits, logical(1), what = "tobs_re")
+  if (!all(is_re)) {
+    labels <- vapply(parsed$terms[!is_re], function(s) s$term_call %||% "",
+                     character(1))
+    stop(sprintf(paste0(
+      "%s visit-level formula: only random effects can be written over visit ",
+      "rows; move %s to the site-level formula."),
+      arm, paste(sQuote(labels, FALSE), collapse = ", ")), call. = FALSE)
+  }
+  terms <- lapply(parsed$terms, function(spec) {
+    spec$level <- "visit"
+    list(spec = spec, process = process, proc_name = proc_name,
+         processes = process)
+  })
+  list(formula = parsed$fe_formula, terms = terms)
+}
+
 # Build a visit-level (long-form) detection / cover design matrix from a
 # per-visit data frame. The data frame is in unit-major order (row k belongs to
 # unit (k - 1) %/% max_per_unit + 1, visit (k - 1) %% max_per_unit + 1) and must
@@ -408,12 +452,14 @@
                                 drop_intercept = TRUE) {
   if (is.null(visit_formula) || is.null(visit_data)) return(NULL)
   # model.matrix() would read a bar as the logical `1 | g` and return a
-  # fixed-effect column, so a random effect over visit rows is refused here.
+  # fixed-effect column. A family that fits random effects over visit rows
+  # splits them off with .tobs_parse_visit_formula() before calling this, so a
+  # bar still present here belongs to a family that does not.
   bar_groups <- .tobs_collect_bar_groups(visit_formula)
   if (length(bar_groups)) {
     stop(sprintf(paste0(
-      "%s visit-level formula: random-effect bars are not supported over ",
-      "visit rows (grouping factor %s). Give the grouping factor as a ",
+      "%s visit-level formula: random effects over visit rows (grouping ",
+      "factor %s) are fitted for occu() only. Give the grouping factor as a ",
       "site-level column of `data` to fit it as a site-level random effect."),
       arm, paste(sQuote(bar_groups, FALSE), collapse = ", ")), call. = FALSE)
   }

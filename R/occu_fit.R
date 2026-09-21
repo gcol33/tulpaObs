@@ -87,6 +87,18 @@
   svc      <- structs$svc
   latent   <- structs$latent
 
+  # A random effect over visit rows is fitted by the Laplace random-effect EM
+  # (per-visit detection rows) and on the single-season NUTS sampler (extra
+  # parameters of the likelihood). The nested-Laplace route builds its latent
+  # blocks from per-site group indices and would mis-index a visit-row term.
+  if (any(vapply(re %||% list(), function(r) identical(r$level, "visit"),
+                 logical(1))) &&
+      !method %in% c("laplace", "nuts")) {
+    stop(sprintf(paste0(
+      "A random effect over visit rows is fitted with method = \"laplace\" or ",
+      "\"nuts\", not method = \"%s\"."), method), call. = FALSE)
+  }
+
   # svc() (the continuous NNGP spatially-varying coefficient) is a latent field
   # block on the state arm, so every family whose marginal exposes a per-site eta
   # gradient to the shared areal-BFGS nested-Laplace driver (R/areal_bfgs.R) fits
@@ -664,12 +676,35 @@
   })
 
   # ---- Model-type-specific fields ----
+  # Random effects over visit rows are the likelihood's own extra parameters;
+  # the engine's random-effect block carries the site-level terms.
+  re_visit <- NULL
+  if (!is.null(re)) {
+    if (inherits(re, "tobs_re")) re <- list(re)
+    is_visit <- vapply(re, function(r) identical(r$level, "visit"), logical(1))
+    if (any(is_visit)) re_visit <- re[is_visit]
+    re <- if (any(!is_visit)) re[!is_visit] else NULL
+  }
+  visit_design <- NULL
+  if (!is.null(re_visit)) {
+    visit_design <- .tobs_re_design(re_visit, model)
+    for (t in seq_along(visit_design)) {
+      visit_design[[t]]$group_label <- sprintf("v%d", t)
+    }
+  }
+
   if (model_type == "single") {
     spec$y <- model$y
+    extra_names <- character(0)
     if (!is.null(model$X_det_visit)) {
       spec$X_det_visit <- model$X_det_visit
-      spec$extra_param_names <- paste0("p_visit_", model$det_visit_names)
+      extra_names <- paste0("p_visit_", model$det_visit_names)
     }
+    if (!is.null(visit_design)) {
+      spec$visit_re <- .tobs_visit_re_spec(visit_design, re_visit)
+      extra_names <- c(extra_names, .tobs_re_nuts_param_names(visit_design))
+    }
+    if (length(extra_names)) spec$extra_param_names <- extra_names
 
   } else if (model_type == "dynamic") {
     spec$y_flat <- model$y_flat
@@ -709,10 +744,8 @@
     spec$temporal_spec <- temp_spec
   }
 
-  # ---- Random effects ----
+  # ---- Random effects (site level; the visit-level terms were split off above) ----
   if (!is.null(re)) {
-    # Accept single tobs_re or list of tobs_re
-    if (inherits(re, "tobs_re")) re <- list(re)
     re_spec <- build_re_spec(re, model)
     spec$re_spec <- re_spec
   }
@@ -769,18 +802,17 @@
   fit <- .unscale_fit_per_process(fit, scales, process_info)
 
   # ---- Build R parameter names ----
+  # The engine's random-effect block follows the fixed effects directly; the
+  # likelihood's extra parameters (visit coefficients, visit-level random
+  # effects) come last and are named by the engine at their layout position.
   param_names <- unlist(spec$process_names)
-  if (!is.null(model$det_visit_names) && length(model$det_visit_names) > 0) {
-    param_names <- c(param_names, paste0("p_visit_", model$det_visit_names))
-  }
 
   # Name the random-effect block (log_sigma / chol / z, type-blocked per
   # tulpa's layout) and reconstruct per-group BLUPs into `re_effects` so
   # summary() / ranef() label them instead of showing param[i]. Counts
   # and positions are unchanged.
   if (!is.null(re)) {
-    re_design <- .tobs_re_design(if (inherits(re, "tobs_re")) list(re) else re,
-                                 model)
+    re_design <- .tobs_re_design(re, model)
     n_lead <- length(param_names)
     re_nms <- .tobs_re_nuts_param_names(re_design)
     if (n_lead + length(re_nms) <= length(fit$means)) {
@@ -817,13 +849,26 @@
   }
   fit$param_names <- param_names
 
+  # Per-group table of the visit-level random effects, read at the position the
+  # engine named the block.
+  if (!is.null(visit_design)) {
+    n_lead_v <- match(.tobs_re_nuts_param_names(visit_design)[1L],
+                      colnames(fit$draws)) - 1L
+    if (is.na(n_lead_v)) {
+      stop("The visit-level random-effect block is missing from the NUTS draws.",
+           call. = FALSE)
+    }
+    fit$re_effects <- c(fit$re_effects,
+                        .tobs_re_nuts_effects(fit$draws, visit_design, n_lead_v))
+  }
+
   # ---- Compute probability-scale intercepts (on natural-scale means) ----
   fit$intercepts <- compute_intercepts(model, fit$means)
 
   fit$model <- model
   fit$spatial <- spatial
   fit$temporal <- temporal
-  fit$re <- re
+  fit$re <- c(re, re_visit)
   fit$svc <- svc
   if (!is.null(svc)) {
     # `svc_cols` was resolved above against the design the surfaces were packed

@@ -564,15 +564,28 @@ plot.tobs_data <- function(x, ...) {
 #' @param n_det_covs Number of detection covariates (default 1).
 #' @param beta_occ Occupancy coefficients (auto-generated if NULL).
 #' @param beta_det Detection coefficients (auto-generated if NULL).
+#' @param n_visit_groups Number of groups a visit can belong to (an observer,
+#'   say), each adding an effect to the detection logit of the visits it made.
+#'   Visits are assigned to groups uniformly at random. `0` (default) simulates
+#'   no such effect.
+#' @param sigma_visit Standard deviation of the per-group detection effects,
+#'   drawn from `N(0, sigma_visit^2)`.
 #' @param seed Random seed.
-#' @return A list with `y`, `data`, and `truth`.
+#' @return A list with `y`, `data`, and `truth`. With `n_visit_groups > 0` it
+#'   also carries `visits`, a data frame with one row per site-visit in
+#'   site-major order and the factor column `visit_group`, and `truth` gains
+#'   `b_visit` (the group effects) and `sigma_visit`.
 #' @examples
 #' sim <- simulate_occu(N = 50, J = 3, seed = 1)
 #' dim(sim$y)
+#'
+#' obs <- simulate_occu(N = 50, J = 3, n_visit_groups = 5, seed = 1)
+#' table(obs$visits$visit_group)
 #' @export
 simulate_occu <- function(N = 100, J = 4,
                           n_occ_covs = 2, n_det_covs = 1,
                           beta_occ = NULL, beta_det = NULL,
+                          n_visit_groups = 0L, sigma_visit = 1,
                           seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
@@ -588,19 +601,35 @@ simulate_occu <- function(N = 100, J = 4,
   X_det <- cbind(1, as.matrix(det_covs))
 
   psi <- plogis(as.vector(X_occ %*% beta_occ))
-  p <- plogis(as.vector(X_det %*% beta_det))
+  eta_det <- as.vector(X_det %*% beta_det)
+  p <- plogis(eta_det)
   z <- rbinom(N, 1, psi)
 
+  truth <- list(beta_occ = beta_occ, beta_det = beta_det, psi = psi, p = p, z = z)
   y <- matrix(NA_integer_, N, J)
+  if (n_visit_groups > 0L) {
+    group <- sample.int(n_visit_groups, N * J, replace = TRUE)
+    b_visit <- rnorm(n_visit_groups, 0, sigma_visit)
+    p_ij <- matrix(plogis(rep(eta_det, each = J) + b_visit[group]),
+                   N, J, byrow = TRUE)
+    for (i in seq_len(N)) {
+      y[i, ] <- rbinom(J, 1, z[i] * p_ij[i, ])
+    }
+    truth$b_visit <- b_visit
+    truth$sigma_visit <- sigma_visit
+    return(list(
+      y = y,
+      data = data,
+      visits = data.frame(visit_group = factor(group,
+                                               levels = seq_len(n_visit_groups))),
+      truth = truth
+    ))
+  }
   for (i in seq_len(N)) {
     y[i, ] <- rbinom(J, 1, z[i] * p[i])
   }
 
-  list(
-    y = y,
-    data = data,
-    truth = list(beta_occ = beta_occ, beta_det = beta_det, psi = psi, p = p, z = z)
-  )
+  list(y = y, data = data, truth = truth)
 }
 
 #' Simulate multi-species occupancy data

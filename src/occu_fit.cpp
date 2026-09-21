@@ -70,11 +70,26 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
             }
         }
 
+        // Random effects over visit rows: extra parameters after the visit
+        // coefficients, with their own prior.
+        int n_visit_re = 0;
+        if (spec_r.containsElementNamed("visit_re")) {
+            SEXP vre = spec_r["visit_re"];
+            if (!Rf_isNull(vre)) {
+                n_visit_re = tulpaObs::add_visit_re(occ_response,
+                                                    Rcpp::as<Rcpp::List>(vre));
+            }
+        }
+
         spec.name = "occupancy";
         spec.ll_double = tulpaObs::occ_log_likelihood<double>;
         spec.ll_arena  = tulpaObs::occ_log_likelihood<tulpa::arena::Var>;
         spec.residual_fn = tulpaObs::occ_residual;
-        spec.n_extra_params = p_det_visit;
+        spec.n_extra_params = p_det_visit + n_visit_re;
+        if (n_visit_re > 0) {
+            spec.extra_prior = tulpaObs::occ_visit_re_log_prior<double>;
+            spec.extra_prior_arena = tulpaObs::occ_visit_re_log_prior<tulpa::arena::Var>;
+        }
         response_ptr = &occ_response;
 
     } else if (model_type == "dynamic") {
@@ -259,6 +274,9 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
 
     // ---- Compute layout and run NUTS ----
     tulpa::ParamLayout layout = tulpa::compute_layout(data);
+    if (model_type == "single" && !occ_response.visit_re.empty()) {
+        tulpaObs::set_visit_re_positions(occ_response, layout.extra_offset);
+    }
 
     Rcpp::List result = tulpaObs::run_nuts_and_collect(
         data, layout, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose);
@@ -278,15 +296,18 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         }
     }
 
-    if (spec_r.containsElementNamed("extra_param_names")) {
+    for (int k = idx; k < n_params; k++)
+        col_names[k] = "param[" + std::to_string(k + 1) + "]";
+
+    // The likelihood's extra parameters sit at layout.extra_offset, after every
+    // engine block, not after the fixed effects.
+    if (spec_r.containsElementNamed("extra_param_names") && layout.extra_offset >= 0) {
         CharacterVector extra = Rcpp::as<CharacterVector>(spec_r["extra_param_names"]);
         for (int j = 0; j < extra.size(); j++) {
-            if (idx < n_params) col_names[idx++] = extra[j];
+            int k = layout.extra_offset + j;
+            if (k < n_params) col_names[k] = extra[j];
         }
     }
-
-    for (; idx < n_params; idx++)
-        col_names[idx] = "param[" + std::to_string(idx + 1) + "]";
 
     // ---- Name the SVC block ----
     // The engine exports the SVC offsets on ParamLayout, so the block is named

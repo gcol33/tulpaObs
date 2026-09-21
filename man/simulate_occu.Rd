@@ -11,6 +11,8 @@ simulate_occu(
   n_det_covs = 1,
   beta_occ = NULL,
   beta_det = NULL,
+  n_visit_groups = 0L,
+  sigma_visit = 1,
   seed = NULL
 )
 }
@@ -27,10 +29,21 @@ simulate_occu(
 
 \item{beta_det}{Detection coefficients (auto-generated if NULL).}
 
+\item{n_visit_groups}{Number of groups a visit can belong to (an observer,
+say), each adding an effect to the detection logit of the visits it made.
+Visits are assigned to groups uniformly at random. \code{0} (default) simulates
+no such effect.}
+
+\item{sigma_visit}{Standard deviation of the per-group detection effects,
+drawn from \code{N(0, sigma_visit^2)}.}
+
 \item{seed}{Random seed.}
 }
 \value{
-A list with \code{y}, \code{data}, and \code{truth}.
+A list with \code{y}, \code{data}, and \code{truth}. With \code{n_visit_groups > 0} it
+also carries \code{visits}, a data frame with one row per site-visit in
+site-major order and the factor column \code{visit_group}, and \code{truth} gains
+\code{b_visit} (the group effects) and \code{sigma_visit}.
 }
 \description{
 Simulate single-species occupancy data
@@ -38,4 +51,7 @@ Simulate single-species occupancy data
 \examples{
 sim <- simulate_occu(N = 50, J = 3, seed = 1)
 dim(sim$y)
+
+obs <- simulate_occu(N = 50, J = 3, n_visit_groups = 5, seed = 1)
+table(obs$visits$visit_group)
 }

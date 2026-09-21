@@ -79,6 +79,11 @@
   # in R/em_laplace_re.R; everything else errors with a pointer to NUTS rather
   # than being silently dropped.
   if (!is.null(re)) {
+    if (!correction %in% c("auto", "none")) {
+      stop("The random-effect Laplace fit has no MI/Gibbs correction. Use ",
+           "method = \"laplace\", or method = \"nuts\" for a sampled posterior.",
+           call. = FALSE)
+    }
     .validate_re_laplace(re, model, spatial)
     em_result <- .tobs_em_laplace_re(model, re, priors = priors,
                                      max_iter = max_iter, tol = tol,
@@ -88,7 +93,8 @@
     re_block <- .tobs_re_param_block(em_result$re_post)
     fit <- build_laplace_fit(em_result, model, spatial,
                              c(occ = ncol(model$X_processes[[1]]),
-                               det = ncol(model$X_processes[[2]])),
+                               det = ncol(model$X_processes[[2]]) +
+                                 length(model$det_visit_names)),
                              prior_spec = NULL, approx = approx,
                              re_block = re_block)
     fit$re <- if (inherits(re, "tobs_re")) list(re) else re

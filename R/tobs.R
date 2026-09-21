@@ -132,6 +132,12 @@
 #'   (e.g. visit-level effort plus site-level observer category), pass a
 #'   long data frame with `attr(visits, "formula") = ~ effort` and use
 #'   `detection = ~ observer` for the site-level terms.
+#'
+#'   For [occu()], a random-effect bar in the visit-level formula is a random
+#'   effect over visit rows: `detection = ~ effort + (1 | observer)` with
+#'   `observer` a column of `visits` gives each observer its own shift of the
+#'   detection logit on the visits it made. It is fitted with
+#'   `method = "laplace"` or `"nuts"`, and other families refuse it.
 #' @param method inference route, naming a fully-specified path rather than a
 #'   pair of orthogonal knobs:
 #'   * `"auto"` -- the family's default route (see `default_engine`).

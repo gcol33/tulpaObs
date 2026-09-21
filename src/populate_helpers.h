@@ -483,6 +483,65 @@ inline void add_visit_covariates(
     }
 }
 
+// Add the random effects over visit rows. `terms` is a list of terms, each with
+// `group` (per unit-major visit row, 0-based, -1 where the visit is absent),
+// `Z` (visit rows x n_coefs), `n_groups`, `correlated` and `sigma_scale`.
+// Returns the number of extra parameters the terms add.
+inline int add_visit_re(tulpaObs::OccResponseData& occ, Rcpp::List terms) {
+    const int n_rows = occ.n_sites * occ.max_visits;
+    int n_params = 0;
+    occ.visit_re.clear();
+    for (int t = 0; t < terms.size(); t++) {
+        Rcpp::List tr = terms[t];
+        tulpaObs::OccResponseData::VisitReTerm term;
+        term.group = Rcpp::as<std::vector<int>>(tr["group"]);
+        Rcpp::NumericMatrix Z = Rcpp::as<Rcpp::NumericMatrix>(tr["Z"]);
+        term.n_groups = Rcpp::as<int>(tr["n_groups"]);
+        term.n_coefs = Z.ncol();
+        term.correlated = Rcpp::as<bool>(tr["correlated"]) && term.n_coefs > 1;
+        term.sigma_scale = Rcpp::as<double>(tr["sigma_scale"]);
+        if ((int) term.group.size() != n_rows || Z.nrow() != n_rows) {
+            Rcpp::stop("visit random effect %d: %d group entries and %d design rows "
+                       "for %d visit rows.", t + 1, (int) term.group.size(),
+                       Z.nrow(), n_rows);
+        }
+        term.Z.resize((std::size_t) n_rows * term.n_coefs);
+        for (int r = 0; r < n_rows; r++) {
+            for (int c = 0; c < term.n_coefs; c++) {
+                term.Z[(std::size_t) r * term.n_coefs + c] = Z(r, c);
+            }
+        }
+        n_params += term.n_coefs
+                    + (term.correlated ? term.n_coefs * (term.n_coefs - 1) / 2 : 0)
+                    + term.n_groups * term.n_coefs;
+        occ.visit_re.push_back(std::move(term));
+    }
+    return n_params;
+}
+
+// Absolute positions of the visit random-effect parameters, which follow the
+// `p_det_visit` visit coefficients at the start of the extra block.
+inline void set_visit_re_positions(tulpaObs::OccResponseData& occ,
+                                   int extra_offset) {
+    int pos = extra_offset + occ.p_det_visit;
+    for (auto& term : occ.visit_re) {
+        term.log_sigma_idx.resize(term.n_coefs);
+        for (int c = 0; c < term.n_coefs; c++) term.log_sigma_idx[c] = pos++;
+    }
+    for (auto& term : occ.visit_re) {
+        if (term.correlated) {
+            term.chol_start = pos;
+            pos += term.n_coefs * (term.n_coefs - 1) / 2;
+        } else {
+            term.chol_start = -1;
+        }
+    }
+    for (auto& term : occ.visit_re) {
+        term.re_start = pos;
+        pos += term.n_groups * term.n_coefs;
+    }
+}
+
 // ============================================================================
 // Build DynOccResponseData from R vectors
 // ============================================================================

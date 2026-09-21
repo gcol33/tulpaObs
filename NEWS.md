@@ -1,5 +1,42 @@
 # tulpaObs NEWS
 
+## 0.2.10
+
+* **Random effects over visit rows on the detection logit (#363).** A bar in
+  the visit-level detection formula, `detection = ~ effort + (1 | observer)`
+  with `visits =` a per-visit frame, is a random effect on the visit's
+  detection logit: the classic case is an observer who changes between visits
+  to the same site. `method = "laplace"` fits it in the random-effect EM on
+  one Bernoulli detection row per observed visit, weighted by the site's
+  occupancy weight; the per-group AGHQ debias does not factor over visit rows
+  and records `fit$aghq$declined = "visit_rows"`. `method = "nuts"` samples it
+  as extra parameters of the occupancy likelihood under tulpa's own
+  random-effect term prior (`<tulpa/re_term_prior.h>`, tulpa >= 0.5.1). On
+  250 sites x 4 visits x 10 observers (true SD 1) both recover the SD (Laplace
+  0.90, NUTS 0.96, realised 1.00) and the observer effects (correlation 0.97
+  with the truth), and agree with each other. The nested-Laplace route refuses
+  the term; other families with visit covariates refuse a bar over visit rows
+  (#362). A site-level random effect alongside visit covariates, refused on
+  the Laplace path until now, is fitted the same way. `simulate_occu()` gains
+  `n_visit_groups` / `sigma_visit`.
+* **Visit-coefficient names on the occu() NUTS path (#364).** tulpa lays a
+  likelihood's extra parameters out last; they were named right after the
+  fixed effects, so with any other block (a random effect, a field) every
+  `p_visit_*` name and the names after it were shifted by the block's size.
+* **The NUTS random-effect table uses the sampler's Cholesky map (#365).** It
+  was rebuilt with the direct `tanh` map, which agrees with tulpa's
+  partial-correlation map for two coefficients and not from three; it now calls
+  `tulpa::build_L_from_raw()`.
+* **A correction on a random-effect Laplace fit is refused (#366).**
+  `method = "laplace_gibbs"` / `"laplace_mi"` with a formula random effect
+  returned the plain fit labelled with the correction's method.
+* **ms_abun() builds its visit design with the shared builder (#367).** Its own
+  `model.matrix()` gave a factor visit covariate all k dummies, or kept an
+  intercept column, beside the site intercept.
+* The random-effect bar walkers now read through a `- 1`, which is how every
+  visit formula arrives; the #362 refusal did not reach a bar written through
+  `tobs(visits =)` before.
+
 ## 0.2.9 (2026-09-20)
 
 * **The cover dispersion axis stops reporting as the user's pin (#361).**

@@ -27,6 +27,7 @@
 #include <tulpa/param_layout.h>
 #include <tulpa/autodiff_arena.h>
 #include <tulpa/autodiff_fwd.h>
+#include <tulpa/re_term_prior.h>
 
 namespace tulpaObs {
 
@@ -65,14 +66,46 @@ inline T log1m_inv_logit(const T& x) {
     return T(0.0) - safe_log1pexp(x);
 }
 
+// The SDs and correlation factors of the visit-level random-effect terms,
+// evaluated once per site call and read by every visit of the site, with a
+// per-term scratch buffer for one group's effect.
+template<typename T>
+struct OccVisitReScales {
+    std::vector<std::vector<T>> sigmas;
+    std::vector<std::vector<T>> L;
+    std::vector<std::vector<T>> effect;
+};
+
+template<typename T>
+inline void occ_visit_re_scales(const OccResponseData* occ,
+                                const std::vector<T>& params,
+                                OccVisitReScales<T>& s) {
+    const int n_terms = (int) occ->visit_re.size();
+    s.sigmas.resize(n_terms);
+    s.L.resize(n_terms);
+    s.effect.resize(n_terms);
+    for (int t = 0; t < n_terms; t++) {
+        const auto& term = occ->visit_re[t];
+        const int nc = term.n_coefs;
+        s.sigmas[t].assign(nc, T(0.0));
+        s.L[t].assign(term.correlated ? nc * nc : 0, T(0.0));
+        s.effect[t].assign(nc, T(0.0));
+        tulpa::priors::re_term_scales(params.data(), term.log_sigma_idx.data(), nc,
+                                      term.chol_start, s.sigmas[t].data(),
+                                      s.L[t].data());
+    }
+}
+
 // The detection logit for visit j at site i: the site-level eta[1] plus the
-// visit-level design row. Templated because the log-likelihood assembles it in
+// visit-level design row plus the visit's random effects (`re` is null when
+// the model has none). Templated because the log-likelihood assembles it in
 // autodiff Var and the residual in plain double; T = double is the trivial
 // instantiation and compiles to the same arithmetic.
 template<typename T>
 inline T occ_visit_logit_p(const OccResponseData* occ, const T* eta,
                            const std::vector<T>& params,
-                           const tulpa::ParamLayout& layout, int i, int j) {
+                           const tulpa::ParamLayout& layout, int i, int j,
+                           OccVisitReScales<T>* re = nullptr) {
     T logit_p_ij = eta[1];
     if (occ->p_det_visit > 0) {
         const int base = i * occ->max_visits * occ->p_det_visit + j * occ->p_det_visit;
@@ -81,7 +114,50 @@ inline T occ_visit_logit_p(const OccResponseData* occ, const T* eta,
             logit_p_ij = logit_p_ij + T(occ->X_det_visit[base + c]) * params[beta_offset + c];
         }
     }
+    if (re != nullptr) {
+        const int row = i * occ->max_visits + j;
+        for (int t = 0; t < (int) occ->visit_re.size(); t++) {
+            const auto& term = occ->visit_re[t];
+            const int g = term.group[row];
+            if (g < 0) continue;
+            const int nc = term.n_coefs;
+            tulpa::priors::re_term_group_effect(params.data(), re->sigmas[t].data(),
+                                                re->L[t].data(), nc, term.correlated,
+                                                term.re_start, g,
+                                                re->effect[t].data());
+            for (int c = 0; c < nc; c++) {
+                logit_p_ij = logit_p_ij
+                             + T(term.Z[(std::size_t) row * nc + c]) * re->effect[t][c];
+            }
+        }
+    }
     return logit_p_ij;
+}
+
+// Prior of the visit-level random-effect terms, the likelihood spec's
+// extra_prior (T = double) and extra_prior_arena (T = arena::Var).
+template<typename T>
+inline T occ_visit_re_log_prior(const std::vector<T>& params,
+                                const tulpa::ParamLayout& layout,
+                                const void* model_data) {
+    (void) layout;
+    // Cross-DLL arena sync, as in occ_log_likelihood(): the T(0.0) below must
+    // find the arena the engine is recording on.
+    if constexpr (std::is_same_v<T, tulpa::arena::Var>) {
+        if (!params.empty()) tulpa::arena::current_arena() = params[0].arena_;
+    }
+    const auto* occ = static_cast<const OccResponseData*>(model_data);
+    T log_post = T(0.0);
+    std::vector<T> re_vals;
+    for (const auto& term : occ->visit_re) {
+        re_vals.assign((std::size_t) term.n_groups * term.n_coefs, T(0.0));
+        tulpa::priors::re_term_log_prior_add(params.data(), term.log_sigma_idx.data(),
+                                             term.n_coefs, term.chol_start,
+                                             term.re_start, term.n_groups,
+                                             /*noncentered=*/true, term.sigma_scale,
+                                             log_post, re_vals.data());
+    }
+    return log_post;
 }
 
 // ============================================================================
@@ -122,11 +198,18 @@ T occ_log_likelihood(
     T log_p_det_given_occ = T(0.0);  // sum_j [y_ij*log(p_ij) + (1-y_ij)*log(1-p_ij)]
     T sum_log1m_p = T(0.0);          // sum_j log(1 - p_ij)
 
+    OccVisitReScales<T> re_scales;
+    OccVisitReScales<T>* re = nullptr;
+    if (!occ->visit_re.empty()) {
+        occ_visit_re_scales(occ, params, re_scales);
+        re = &re_scales;
+    }
+
     for (int j = 0; j < occ->max_visits; j++) {
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;  // Missing visit
 
-        T logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j);
+        T logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j, re);
 
         T log_p = log_inv_logit(logit_p_ij);
         T log1m_p = log1m_inv_logit(logit_p_ij);
@@ -197,11 +280,18 @@ inline void occ_residual(
     int nv = 0;
     double d_logit_p_sum = 0.0;
 
+    OccVisitReScales<double> re_scales;
+    OccVisitReScales<double>* re = nullptr;
+    if (!occ->visit_re.empty()) {
+        occ_visit_re_scales(occ, params, re_scales);
+        re = &re_scales;
+    }
+
     for (int j = 0; j < occ->max_visits; j++) {
         int y_ij = occ->y[i * occ->max_visits + j];
         if (y_ij < 0) continue;
 
-        double logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j);
+        double logit_p_ij = occ_visit_logit_p(occ, eta, params, layout, i, j, re);
         eta_p[nv++] = logit_p_ij;
 
         // d(ll_det)/d(logit_p_ij) = y_ij - p_ij (for the part that goes through eta[1])

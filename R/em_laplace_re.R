@@ -54,19 +54,24 @@
 # Build the per-term RE design the deterministic driver and the variance-
 # component update share. Each element carries the 1-based group index, the
 # n_obs x n_coefs design Z (intercept column first when the block keeps the
-# group intercept, then the slope columns), and the coefficient labels.
+# group intercept, then the slope columns), and the coefficient labels. A term
+# over visit rows (`level = "visit"`) has one row per unit-visit, unit-major,
+# and resolves a named slope covariate against the per-visit frame; a site term
+# has one row per site.
 .tobs_re_design <- function(re_list, model) {
   N <- model$N %||% model$n_sites
   lapply(seq_along(re_list), function(t) {
     re <- re_list[[t]]
     idx <- as.integer(re$group_idx)
+    level <- re$level %||% "site"
+    rows_data <- if (identical(level, "visit")) model$det_visit_data else model$data
     has_int <- isTRUE(re$intercept)
     if (identical(re$type, "slope") && !is.null(re$covariate)) {
-      Xs <- .tobs_re_slope_matrix(re$covariate, model$data)
+      Xs <- .tobs_re_slope_matrix(re$covariate, rows_data)
       Z <- if (has_int) cbind(1, Xs) else Xs
       coef_names <- if (has_int) c("(Intercept)", colnames(Xs)) else colnames(Xs)
     } else {
-      Z <- matrix(1, N, 1L)
+      Z <- matrix(1, if (identical(level, "visit")) length(idx) else N, 1L)
       coef_names <- "(Intercept)"
       has_int <- TRUE
     }
@@ -74,11 +79,25 @@
     # Group label for naming sigma / BLUP rows: the term's group is an integer
     # code (the original factor levels are not retained), so label terms g1,
     # g2, ... in formula order.
-    list(idx = idx, n_groups = as.integer(re$n_groups %||% max(idx)),
+    list(idx = idx, n_groups = as.integer(re$n_groups %||% max(idx, na.rm = TRUE)),
          n_coefs = ncol(Z), Z = Z, coef_names = coef_names,
-         has_intercept = has_int,
+         has_intercept = has_int, level = level,
          correlated = isTRUE(re$correlated) && ncol(Z) > 1L,
          group_label = sprintf("g%d", t))
+  })
+}
+
+
+# The same design over unit-major visit rows: a site term's group index and
+# design rows are repeated for each of the site's `max_visits` rows, a visit term
+# is already indexed that way.
+.tobs_re_design_visit_rows <- function(design, n_sites, max_visits) {
+  site_of_row <- rep(seq_len(n_sites), each = max_visits)
+  lapply(design, function(d) {
+    if (identical(d$level, "visit")) return(d)
+    d$idx <- d$idx[site_of_row]
+    d$Z   <- d$Z[site_of_row, , drop = FALSE]
+    d
   })
 }
 
@@ -330,11 +349,37 @@
   }
   keep <- n_valid > 0
 
+  # The detection arm is fitted per (site, visit) row when a visit covariate or
+  # a random effect over visit rows is present, and per site otherwise. On visit
+  # rows every detection term is indexed by row, a site term repeated across its
+  # site's visits.
+  X_det_visit <- model$X_det_visit
+  p_det_visit <- if (is.null(X_det_visit)) 0L else ncol(X_det_visit)
+  J <- ncol(y)
+  visit_rows <- p_det_visit > 0L ||
+    any(vapply(design_det, function(d) identical(d$level, "visit"), logical(1)))
+  if (visit_rows) {
+    design_det  <- .tobs_re_design_visit_rows(design_det, N, J)
+    site_of_row <- rep(seq_len(N), each = J)
+    y_row       <- as.vector(t(y))
+    valid_row   <- y_row >= 0
+    valid_mat   <- y >= 0
+    X_det_row   <- X_det[site_of_row, , drop = FALSE]
+    if (p_det_visit > 0L) X_det_row <- cbind(X_det_row, X_det_visit)
+    for (d in design_det) {
+      if (anyNA(d$idx[valid_row]) || anyNA(d$Z[valid_row, ])) {
+        stop("A detection random effect has a missing grouping factor or slope ",
+             "covariate on an observed visit.", call. = FALSE)
+      }
+    }
+  }
+  p_det_total <- p_det + p_det_visit
+
   # State. Each arm carries its own latent block b and per-term covariance;
   # a starting diagonal sigma = 0.5 mirrors the historical single-arm path.
   init <- glm_init(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det)
   beta_occ <- init$occ$beta
-  beta_det <- init$det$beta
+  beta_det <- c(init$det$beta, rep(0, p_det_visit))
   n_lat <- function(d) sum(vapply(d, function(x) x$n_groups * x$n_coefs, integer(1)))
   b_occ <- numeric(n_lat(design_occ))
   b_det <- numeric(n_lat(design_det))
@@ -350,10 +395,16 @@
   for (it in seq_len(max_iter)) {
     # ---- E-step: psi and p both carry their arm's RE posterior mode. ----
     eta_occ <- as.numeric(X_occ %*% beta_occ) + .tobs_re_offset(design_occ, b_occ)
-    eta_det <- as.numeric(X_det %*% beta_det) + .tobs_re_offset(design_det, b_det)
     psi <- plogis(eta_occ)
-    p_site <- plogis(eta_det)
-    w <- occ_weights(psi, p_site, N, n_valid, n_det, any_det)
+    if (visit_rows) {
+      eta_row <- as.numeric(X_det_row %*% beta_det) +
+        .tobs_re_offset(design_det, b_det)
+      w <- occ_weights_visit(psi, matrix(eta_row, N, J, byrow = TRUE),
+                             valid_mat, n_valid, any_det)
+    } else {
+      eta_det <- as.numeric(X_det %*% beta_det) + .tobs_re_offset(design_det, b_det)
+      w <- occ_weights(psi, plogis(eta_det), N, n_valid, n_det, any_det)
+    }
     weights <- w
 
     # ---- M-step (occupancy): pseudo-binomial, RE prior rescaled by M. ----
@@ -375,16 +426,28 @@
     # still returns one latent block per detection group. The fit is a genuine
     # binomial (no M-inflation), so its posterior cov is natural-scale already.
     w_det <- w; w_det[any_det] <- 1
-    keep_det <- keep & (w_det > 1e-6)
-    fd <- tulpa::tulpa_laplace(
-      y = n_det[keep_det], n_trials = n_valid[keep_det],
-      X = X_det[keep_det, , drop = FALSE], weights = w_det[keep_det],
-      re_list = .re_list_for_tulpa(design_det, Sigma_det, rows = keep_det,
-                                   inflate = 1),
-      family = "binomial", return_hessian = TRUE,
-      return_re_cov = length(design_det) > 0L)
-    beta_det_new <- fd$mode[seq_len(p_det)]
-    b_det_new <- if (length(design_det)) fd$mode[-seq_len(p_det)] else numeric(0)
+    if (visit_rows) {
+      # One Bernoulli row per observed visit, weighted by its site's w_i.
+      rows <- valid_row & (w_det[site_of_row] > 1e-6)
+      fd <- tulpa::tulpa_laplace(
+        y = as.integer(y_row[rows]), n_trials = rep(1L, sum(rows)),
+        X = X_det_row[rows, , drop = FALSE], weights = w_det[site_of_row][rows],
+        re_list = .re_list_for_tulpa(design_det, Sigma_det, rows = rows,
+                                     inflate = 1),
+        family = "binomial", return_hessian = TRUE,
+        return_re_cov = length(design_det) > 0L)
+    } else {
+      keep_det <- keep & (w_det > 1e-6)
+      fd <- tulpa::tulpa_laplace(
+        y = n_det[keep_det], n_trials = n_valid[keep_det],
+        X = X_det[keep_det, , drop = FALSE], weights = w_det[keep_det],
+        re_list = .re_list_for_tulpa(design_det, Sigma_det, rows = keep_det,
+                                     inflate = 1),
+        family = "binomial", return_hessian = TRUE,
+        return_re_cov = length(design_det) > 0L)
+    }
+    beta_det_new <- fd$mode[seq_len(p_det_total)]
+    b_det_new <- if (length(design_det)) fd$mode[-seq_len(p_det_total)] else numeric(0)
     Sigma_det_new <- if (length(design_det)) {
       .tobs_re_sigma_update(design_det, b_det_new,
                             .tobs_re_cov_natural(fd$cov_blocks, design_det, 1))
@@ -430,6 +493,14 @@
     .tobs_re_occ_fixed_se(X_occ, eta_mode, weights, design_occ, Sigma_occ)
   else .se_from_laplace_fit(occ_fit, p_occ)
   aghq_status <- list(applied = FALSE)
+  # The quadrature factors the marginal into independent per-group integrals.
+  # On visit rows the site's occupancy state couples every visit of the site,
+  # and a group over visits (or a visit covariate) spans sites, so the integrand
+  # does not factor by group and the EM result stands.
+  if (isTRUE(aghq) && visit_rows) {
+    aghq <- FALSE
+    aghq_status <- list(applied = FALSE, declined = "visit_rows")
+  }
 
   # ---- AGHQ debias of the variance components (R/re_aghq.R). ----
   # The EM integrates b by Laplace, which attenuates sigma/correlation for

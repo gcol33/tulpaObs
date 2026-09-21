@@ -9,25 +9,26 @@
 #   [psi_(Intercept), p_(Intercept), log_sigma(1..q), chol_raw(1..k(k-1)/2),
 #    z_effects(group-major: g * q + c)]
 # with q = re_n_coefs and the non-centered effects recovered as
-#   b_{g,c} = sigma_c * (L %*% z_g)_c,  L = tanh-Cholesky(chol_raw).
+#   b_{g,c} = sigma_c * (L %*% z_g)_c,  L = build_L_from_raw(chol_raw).
 # The tests assert the total parameter count (guards against layout drift, and
 # pins the k(k-1)/2 Cholesky size from populate_helpers.h) and that the
 # reconstructed group effects correlate with the simulated truth.
 
-# Reconstruct the lower-triangular tanh-Cholesky factor from the off-diagonal
-# raw parameters (strictly-lower, row-major), mirroring tulpa_priors_re.h.
-tanh_chol <- function(raw, k) {
-  L <- matrix(0, k, k)
-  idx <- 1L
-  for (r in seq_len(k)) {
-    s2 <- 0
-    for (cc in seq_len(r - 1L)) {
-      L[r, cc] <- tanh(raw[idx]); s2 <- s2 + L[r, cc]^2; idx <- idx + 1L
-    }
-    L[r, r] <- sqrt(max(1 - s2, 1e-10))
-  }
-  L
-}
+# The correlation Cholesky factor the sampler drew, through the engine's
+# partial-correlation map.
+re_chol <- function(raw, k) tulpaObs:::.tobs_re_chol_factor(raw, k)
+
+test_that("the rebuilt Cholesky factor is the engine's partial-correlation map (#365)", {
+  raw <- c(0.4, -0.7, 0.9)
+  z <- tanh(raw)
+  L <- re_chol(raw, 3L)
+  # L[i, j] = z[i, j] sqrt(prod_{k<j} (1 - z[i, k]^2)), unit-norm rows
+  expect_equal(L[2, 1], z[1])
+  expect_equal(L[3, 1], z[2])
+  expect_equal(L[3, 2], z[3] * sqrt(1 - z[2]^2))
+  expect_equal(rowSums(L^2), rep(1, 3))
+  expect_equal(L[upper.tri(L)], rep(0, 3))
+})
 
 # Draw ng x k correlated effects with covariance Sigma (no MASS dependency).
 rmvn_rows <- function(ng, Sigma) {
@@ -68,7 +69,7 @@ test_that("(1 + x + z | g) recovers a 3x3 correlated RE block", {
   expect_true(all(is.finite(sig_hat)) && all(sig_hat > 0))
   expect_true(all(sig_hat < 2))                  # not blown up
 
-  L <- tanh_chol(m[6:8], 3L)
+  L <- re_chol(m[6:8], 3L)
   zoff <- 8L
   Bhat <- t(vapply(seq_len(ng), function(gg) {
     as.numeric(sig_hat * (L %*% m[zoff + (gg - 1L) * 3L + 1:3]))

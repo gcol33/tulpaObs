@@ -247,7 +247,6 @@
 #' # not carry. `data` is site-level, `visits` visit-level.
 #' sim <- simulate_occu(N = 30, J = 3, seed = 1)
 #' d   <- transform(sim$data, cell = seq_len(30),
-#'                  observer = factor(rep(c("a", "b", "c"), length.out = 30)),
 #'                  lon = runif(30), lat = runif(30))
 #'
 #' # A chain graph over the 30 cells: neighbours are consecutive indices.
@@ -264,10 +263,11 @@
 #'             method = "nested_laplace", control = ctrl)
 #' fit$spatial_field[1:5]
 #'
-#' # Detection random effect by observer
-#' fit_re <- tobs(~ occ_cov1, data = d, family = occu(),
-#'                detection = ~ (1 | observer), y = sim$y,
-#'                method = "laplace", control = ctrl)
+#' # Detection random effect by observer, who changes between visits
+#' obs <- simulate_occu(N = 60, J = 3, n_visit_groups = 4, seed = 1)
+#' fit_re <- tobs(~ occ_cov1, data = obs$data, family = occu(),
+#'                detection = ~ (1 | visit_group), y = obs$y,
+#'                visits = obs$visits, method = "laplace", control = ctrl)
 #' coef(fit_re)
 #'
 #' # Areal spatially varying coefficient on `occ_cov2`

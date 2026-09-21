@@ -146,7 +146,13 @@ formula and the site-level detection design matrix is an intercept
 only. To split visit-level and site-level detection covariates
 (e.g. visit-level effort plus site-level observer category), pass a
 long data frame with \code{attr(visits, "formula") = ~ effort} and use
-\code{detection = ~ observer} for the site-level terms.}
+\code{detection = ~ observer} for the site-level terms.
+
+For \code{\link[=occu]{occu()}}, a random-effect bar in the visit-level formula is a random
+effect over visit rows: \code{detection = ~ effort + (1 | observer)} with
+\code{observer} a column of \code{visits} gives each observer its own shift of the
+detection logit on the visits it made. It is fitted with
+\code{method = "laplace"} or \code{"nuts"}, and other families refuse it.}
 
 \item{method}{inference route, naming a fully-specified path rather than a
 pair of orthogonal knobs:

@@ -417,6 +417,10 @@ cpp_occu_mscale_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, 
     .Call(`_tulpaObs_cpp_occu_mscale_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
+cpp_re_chol_factor <- function(raw, n) {
+    .Call(`_tulpaObs_cpp_re_chol_factor`, raw, n)
+}
+
 cpp_removal_laplace_fixed <- function(y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max) {
     .Call(`_tulpaObs_cpp_removal_laplace_fixed`, y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max)
 }

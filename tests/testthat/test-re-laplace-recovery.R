@@ -184,12 +184,12 @@ test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
     tulpaObs:::.validate_re_laplace(re_both, stub2, NULL),
     "shared|nuts")
 
-  # RE + visit-level detection covariates also stays NUTS-only.
+  # RE + visit-level detection covariates is fitted on per-visit detection rows
+  # (#363), so the validator accepts it.
   stub3 <- list(model_type = "single", data = s$d,
                 X_det_visit = matrix(0, nrow(s$d), 1L))
-  expect_error(
-    tulpaObs:::.validate_re_laplace(re_det, stub3, NULL),
-    "visit|nuts")
+  expect_silent(
+    tulpaObs:::.validate_re_laplace(re_det, stub3, NULL))
 })
 
 test_that("AGHQ variance-component debias runs by default and is toggleable", {

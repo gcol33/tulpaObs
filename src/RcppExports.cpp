@@ -2029,6 +2029,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_re_chol_factor
+Rcpp::NumericMatrix cpp_re_chol_factor(Rcpp::NumericVector raw, int n);
+RcppExport SEXP _tulpaObs_cpp_re_chol_factor(SEXP rawSEXP, SEXP nSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type raw(rawSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_re_chol_factor(raw, n));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_removal_laplace_fixed
 Rcpp::List cpp_removal_laplace_fixed(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R, Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init, int K_max, int max_iter, double tol, bool verbose, bool nb, double log_r_init, double theta_max);
 RcppExport SEXP _tulpaObs_cpp_removal_laplace_fixed(SEXP ySEXP, SEXP site_idxSEXP, SEXP X_lambda_RSEXP, SEXP X_p_RSEXP, SEXP beta_lambda_initSEXP, SEXP beta_p_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP nbSEXP, SEXP log_r_initSEXP, SEXP theta_maxSEXP) {
@@ -2590,6 +2602,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_occu_mscale_cover_ploglik", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_ploglik, 26},
     {"_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost, 4},
     {"_tulpaObs_cpp_occu_mscale_cover_nuts", (DL_FUNC) &_tulpaObs_cpp_occu_mscale_cover_nuts, 11},
+    {"_tulpaObs_cpp_re_chol_factor", (DL_FUNC) &_tulpaObs_cpp_re_chol_factor, 2},
     {"_tulpaObs_cpp_removal_laplace_fixed", (DL_FUNC) &_tulpaObs_cpp_removal_laplace_fixed, 13},
     {"_tulpaObs_cpp_removal_total_log_lik", (DL_FUNC) &_tulpaObs_cpp_removal_total_log_lik, 6},
     {"_tulpaObs_cpp_removal_nuts_joint_logpost", (DL_FUNC) &_tulpaObs_cpp_removal_nuts_joint_logpost, 4},

@@ -2,32 +2,42 @@
 # Shared random-effect parameter layout, naming, and BLUP reconstruction.
 #
 # The NUTS sampler lays the random-effect parameters out TYPE-BLOCKED (see
-# tulpa hmc_param_layout.cpp), after the fixed-effect + visit-level columns:
+# tulpa hmc_param_layout.cpp): the engine's block right after the fixed-effect
+# columns, and a likelihood's own random effects (occu() visit-level terms)
+# among its extra parameters at the end, in the same order:
 #   [ all terms' log_sigma(n_coefs) ]
 #   [ all correlated terms' chol_raw(n_coefs*(n_coefs-1)/2) ]
 #   [ all terms' z(n_groups * n_coefs, group-major: index (g-1)*n_coefs + c) ]
 # with the non-centred group effects recovered as
-#   b_{g,c} = sigma_c * (L %*% z_g)_c,   L = tanh-Cholesky(chol_raw)
+#   b_{g,c} = sigma_c * (L %*% z_g)_c,   L = build_L_from_raw(chol_raw)
 # (L = I for an uncorrelated block). This module names those columns and
 # reconstructs the per-group BLUP table `re_effects` consumed by
 # ranef.tobs_fit(). The deterministic Laplace path builds the same
 # `re_effects` shape directly in .tobs_re_param_block().
 # =============================================================================
 
-# Lower-triangular tanh-Cholesky factor from strictly-lower raw parameters
-# (row-major), mirroring tulpa_priors_re.h. The diagonal is derived from the
-# unit-norm row constraint.
-.tobs_tanh_chol <- function(raw, k) {
-  L <- matrix(0, k, k)
-  idx <- 1L
-  for (r in seq_len(k)) {
-    s2 <- 0
-    for (cc in seq_len(r - 1L)) {
-      L[r, cc] <- tanh(raw[idx]); s2 <- s2 + L[r, cc]^2; idx <- idx + 1L
-    }
-    L[r, r] <- sqrt(max(1 - s2, 1e-10))
-  }
-  L
+# Lower-triangular correlation Cholesky factor from its strictly-lower raw
+# parameters (row-major), through the engine's partial-correlation map
+# (tulpa::build_L_from_raw), so the rebuilt effects use the L the sampler drew.
+.tobs_re_chol_factor <- function(raw, k) {
+  cpp_re_chol_factor(as.numeric(raw), as.integer(k))
+}
+
+# The random effects over visit rows as `cpp_occu_fit` reads them: per term the
+# 0-based group of each unit-major visit row (-1 where the visit is absent), the
+# visit-row design, the group count, the correlation flag and the SD prior
+# scale. `design` is .tobs_re_design() of the visit-level terms.
+.tobs_visit_re_spec <- function(design, re_list) {
+  lapply(seq_along(design), function(t) {
+    d <- design[[t]]
+    group <- d$idx - 1L
+    group[is.na(group)] <- -1L
+    Z <- d$Z
+    Z[is.na(Z)] <- 0
+    list(group = as.integer(group), Z = Z, n_groups = d$n_groups,
+         correlated = isTRUE(d$correlated),
+         sigma_scale = as.numeric(re_list[[t]]$sigma_scale %||% 1))
+  })
 }
 
 # Section sizes per term, used by both the namer and the reconstructor so the
@@ -63,7 +73,7 @@
 
 # Reconstruct the per-group BLUP table from NUTS draws (marginalising over the
 # posterior: b is reconstructed per draw, then summarised). `n_lead` is the
-# number of columns before the RE block (fixed effects + visit-level). Returns
+# number of columns before the RE block. Returns
 # a named list of per-term data.frames with group/level/term/estimate/std.error.
 .tobs_re_nuts_effects <- function(draws, design, n_lead) {
   sz <- .tobs_re_section_sizes(design)
@@ -85,7 +95,7 @@
 
     B <- array(0, dim = c(nd, ng, nc))
     for (s in seq_len(nd)) {
-      L <- if (!is.null(chol_draws)) .tobs_tanh_chol(chol_draws[s, ], nc) else diag(nc)
+      L <- if (!is.null(chol_draws)) .tobs_re_chol_factor(chol_draws[s, ], nc) else diag(nc)
       sig_s <- sig_draws[s, ]
       for (gi in seq_len(ng)) {
         zg <- z_draws[s, (gi - 1L) * nc + seq_len(nc)]

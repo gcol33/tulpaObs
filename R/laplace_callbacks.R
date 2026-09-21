@@ -142,23 +142,7 @@ build_single_callbacks <- function(model, spatial = NULL, latent_prior = NULL) {
     # eta_visit_long is in site-major order: reshape so [i, j] = visit (i, j)
     eta_visit_mat <- matrix(eta_visit_long, n_sites, max_visits, byrow = TRUE)
     logit_p_ij <- matrix(eta_site, n_sites, max_visits) + eta_visit_mat
-    logit_p_ij <- .tobs_clamp_eta(logit_p_ij)
-    # log(1 - plogis(eta)) = -log1pexp(eta) computed stably as -pmax(eta,0) - log1p(exp(-|eta|))
-    log_1mp <- -(pmax(logit_p_ij, 0) + log1p(exp(-abs(logit_p_ij))))
-    log_1mp[!valid_mat] <- 0
-    log_prod_1mp <- rowSums(log_1mp)
-    weights <- numeric(n_sites)
-    for (i in seq_len(n_sites)) {
-      if (any_det[i]) {
-        weights[i] <- 1
-      } else if (n_valid[i] == 0L) {
-        weights[i] <- psi[i]
-      } else {
-        num <- psi[i] * exp(log_prod_1mp[i])
-        weights[i] <- num / (num + (1 - psi[i]))
-      }
-    }
-    list(weights = weights)
+    list(weights = occ_weights_visit(psi, logit_p_ij, valid_mat, n_valid, any_det))
   }
 
   m_step_encode <- function(weights, ...) {

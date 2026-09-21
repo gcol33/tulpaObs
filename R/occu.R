@@ -94,7 +94,10 @@
   X_occ <- model.matrix(bind$fe$psi, data)
   X_det <- model.matrix(bind$fe$p, data)
 
-  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
+  visit <- .tobs_parse_visit_formula(det_visit_formula, det_visit_data,
+                                     process = 2L, proc_name = "p",
+                                     arm = "detection")
+  X_det_visit <- .tobs_build_visit_X(visit$formula, det_visit_data,
                                      nrow(y), ncol(y), arm = "detection")
 
   y_int <- matrix(as.integer(y), nrow = nrow(y), ncol = ncol(y))
@@ -108,8 +111,9 @@
     X_processes = list(X_occ, X_det),
     X_det_visit = X_det_visit,
     formulas = list(occ = bind$fe$psi, det = bind$fe$p),
-    structured_terms = bind$terms,
+    structured_terms = c(bind$terms, visit$terms),
     data = data,
+    det_visit_data = if (length(visit$terms)) det_visit_data,
     n_sites = nrow(y),
     max_visits = ncol(y),
     process_info = list(

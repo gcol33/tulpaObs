@@ -104,10 +104,6 @@
     stop("A random effect combined with a spatial term is not supported on the Laplace path. Use method = \"nested_laplace\" or method = \"nuts\".",
          call. = FALSE)
   }
-  if (!is.null(model$X_det_visit)) {
-    stop("Random effects with visit-level detection covariates are not supported on the Laplace path. Use method = \"nuts\".",
-         call. = FALSE)
-  }
   for (r in re_list) {
     if (length(r$shared) >= 2L && isTRUE(r$shared[1]) && isTRUE(r$shared[2])) {
       stop("A single random effect shared across occupancy and detection is not supported on the Laplace path (each arm fits its own RE block). Use method = \"nuts\".",
@@ -604,6 +600,29 @@ occ_weights <- function(psi, p, N, n_valid, n_det, any_det) {
     else {
       prod_1mp <- (1 - p[i])^n_valid[i]
       num <- psi[i] * prod_1mp
+      weights[i] <- num / (num + (1 - psi[i]))
+    }
+  }
+  weights
+}
+
+# Posterior occupancy weight P(z_i = 1 | y_i) when detection varies by visit.
+# `logit_p` is the [n_sites x max_visits] detection logit and `valid` the
+# matching mask of observed visits; an undetected site weighs
+# psi prod_j (1 - p_ij) against 1 - psi, with log(1 - p) evaluated stably.
+occ_weights_visit <- function(psi, logit_p, valid, n_valid, any_det) {
+  logit_p <- .tobs_clamp_eta(logit_p)
+  log_1mp <- -(pmax(logit_p, 0) + log1p(exp(-abs(logit_p))))
+  log_1mp[!valid] <- 0
+  log_prod_1mp <- rowSums(log_1mp)
+  weights <- numeric(length(psi))
+  for (i in seq_along(psi)) {
+    if (any_det[i]) {
+      weights[i] <- 1
+    } else if (n_valid[i] == 0L) {
+      weights[i] <- psi[i]
+    } else {
+      num <- psi[i] * exp(log_prod_1mp[i])
       weights[i] <- num / (num + (1 - psi[i]))
     }
   }

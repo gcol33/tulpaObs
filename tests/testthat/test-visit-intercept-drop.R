@@ -63,14 +63,30 @@ test_that("occu / abun / removal drop the visit intercept (no double intercept)"
   expect_true("x" %in% dn_r)
 })
 
-test_that("a random-effect bar over visit rows is refused, not read as a column (#362)", {
+test_that("a family without visit random effects refuses a bar over visit rows (#362)", {
   n <- 6L; J <- 3L
   vd <- data.frame(observer = factor(rep(c("a", "b", "c"), length.out = n * J)))
+  # `- 1` is how tobs() hands a `detection` formula to the visit path.
   expect_error(
-    tulpaObs:::.tobs_build_visit_X(~ (1 | observer), vd, n, J, "detection"),
-    "random-effect bars are not supported over visit rows")
+    tulpaObs:::.tobs_build_visit_X(~ (1 | observer) - 1, vd, n, J, "detection"),
+    "fitted for occu() only", fixed = TRUE)
   expect_error(
     tulpaObs:::.tobs_build_visit_X(~ x + (1 || observer), cbind(vd, x = 1),
                                    n, J, "detection"),
     "'observer'")
+})
+
+test_that("ms_abun() builds its visit design with the shared builder (#367)", {
+  n <- 6L; J <- 3L
+  y <- array(rpois(n * J * 2L, 1), c(n, J, 2L))
+  d <- data.frame(x = rnorm(n))
+  vd <- data.frame(obs = factor(rep(c("a", "b", "c"), length.out = n * J)),
+                   effort = runif(n * J))
+  m <- tulpaObs:::.tobs_build_ms_abun(~ x, ~ 1, d, y, NULL, ~ obs - 1, vd)
+  expect_equal(colnames(m$X_det_visit), c("obsb", "obsc"))
+  m <- tulpaObs:::.tobs_build_ms_abun(~ x, ~ 1, d, y, NULL, ~ effort, vd)
+  expect_equal(colnames(m$X_det_visit), "effort")
+  expect_error(
+    tulpaObs:::.tobs_build_ms_abun(~ x, ~ 1, d, y, NULL, ~ (1 | obs) - 1, vd),
+    "fitted for occu() only", fixed = TRUE)
 })
