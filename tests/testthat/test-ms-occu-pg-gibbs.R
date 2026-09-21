@@ -21,6 +21,7 @@
 }
 
 test_that("ms_occu() method = 'pg_gibbs' S3 + convergence", {
+  skip_on_cran()
   sim <- .mspg_sim(1, ns = 12)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", seq_len(12)), method = "pg_gibbs",

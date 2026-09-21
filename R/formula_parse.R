@@ -407,6 +407,16 @@
                                 n_units, max_per_unit, arm,
                                 drop_intercept = TRUE) {
   if (is.null(visit_formula) || is.null(visit_data)) return(NULL)
+  # model.matrix() would read a bar as the logical `1 | g` and return a
+  # fixed-effect column, so a random effect over visit rows is refused here.
+  bar_groups <- .tobs_collect_bar_groups(visit_formula)
+  if (length(bar_groups)) {
+    stop(sprintf(paste0(
+      "%s visit-level formula: random-effect bars are not supported over ",
+      "visit rows (grouping factor %s). Give the grouping factor as a ",
+      "site-level column of `data` to fit it as a site-level random effect."),
+      arm, paste(sQuote(bar_groups, FALSE), collapse = ", ")), call. = FALSE)
+  }
   # Compact (ragged) input passes one row per VALID visit and signals it with
   # max_per_unit = NULL: there is no padded grid to size against, so skip the
   # n_units * max_per_unit row check. The dense path keeps the exact-grid check.

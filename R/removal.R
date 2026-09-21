@@ -387,6 +387,9 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x K removal matrix), `data` (covariate data frame),
 #'   and `truth` (coefficients, per-site `lambda`, `p`, latent `N`, mixture/size).
+#' @examples
+#' sim <- simulate_removal(N = 50, K = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_removal <- function(N = 100, K = 4,
                              n_abund_covs = 2, n_det_covs = 1,

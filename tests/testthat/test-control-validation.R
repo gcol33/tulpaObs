@@ -90,9 +90,9 @@ test_that("validation fires through tobs() ahead of dispatch", {
   )
 })
 
-# The console progress bar defaults ON, and a batch caller that cannot pass
-# `control` down to each individual fit -- a test suite, a CI job, any
-# redirected run -- silences the whole process with TULPAOBS_PROGRESS.
+# The console progress bar defaults to interactive(), and a caller that cannot
+# pass `control` down to each individual fit sets it for the whole process with
+# TULPAOBS_PROGRESS.
 
 # Evaluate `code` with TULPAOBS_PROGRESS set to `value` (NA unsets it),
 # restoring whatever was there. Base R, since the package declares no withr.
@@ -108,10 +108,11 @@ with_progress_env <- function(value, code) {
   force(code)
 }
 
-test_that("console progress defaults on when the env var is unset", {
+test_that("console progress follows interactive() when the env var is unset", {
   with_progress_env(NA_character_, {
-    expect_true(tulpaObs:::.tobs_progress_default())
-    expect_true(tulpaObs:::.tobs_progress_opt(list())$progress)
+    expect_identical(tulpaObs:::.tobs_progress_default(), interactive())
+    expect_identical(tulpaObs:::.tobs_progress_opt(list())$progress,
+                     interactive())
   })
 })
 
@@ -126,7 +127,7 @@ test_that("TULPAOBS_PROGRESS turns the console default off", {
   }
 })
 
-test_that("any other TULPAOBS_PROGRESS value leaves the default on", {
+test_that("any other TULPAOBS_PROGRESS value turns the default on", {
   for (v in c("1", "true", "yes", "on")) {
     with_progress_env(v, {
       expect_true(tulpaObs:::.tobs_progress_default(), info = paste("value:", v))

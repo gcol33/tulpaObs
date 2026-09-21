@@ -96,3 +96,10 @@ loadings \code{L_s} on the occupancy state predictor and Gaussian community prio
 on the per-species arm coefficients. This is the ground-truth generator for
 the Stage-1 reduced-rank spatial JSDM.
 }
+\examples{
+adj <- matrix(0, 10, 10)
+adj[cbind(1:9, 2:10)] <- 1
+adj <- adj + t(adj)
+sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4, J = 3, seed = 1)
+dim(sim$y)
+}

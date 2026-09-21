@@ -48,6 +48,7 @@ indep_community_laplace <- function(d, mu, sig_l, sig_p, K) {
 }
 
 test_that("community N-mixture marginal matches an independent Laplace", {
+  skip_on_cran()
   skip_if_fast()
   d <- simulate_community(1L, S = 12L, n_sites = 12L, J = 6L,
                           mu_l = log(8), mu_p = qlogis(0.6), sig_l = 0.6, sig_p = 0.5)
@@ -62,6 +63,7 @@ test_that("community N-mixture marginal matches an independent Laplace", {
 })
 
 test_that("community N-mixture returns the documented contract", {
+  skip_on_cran()
   skip_if_fast()
   d <- simulate_community(2L, S = 8L, n_sites = 10L, J = 5L,
                           mu_l = log(6), mu_p = qlogis(0.5), sig_l = 0.5, sig_p = 0.4)

@@ -4,7 +4,8 @@
 # the repositories DESCRIPTION itself names -- so a floor is never committed
 # before the version it demands exists to install.
 #
-# tulpa and tulpaMesh resolve from https://gcol33.r-universe.dev, declared in
+# tulpa and tulpaMesh resolve from CRAN; a floor above the CRAN release has to
+# come from https://gcol33.r-universe.dev, which then needs declaring in
 # Additional_repositories. r-universe builds an engine's DEFAULT-BRANCH HEAD on
 # its own poll schedule: a git tag and a GitHub release publish nothing, and R's
 # resolver can install from neither. Between pushing an engine release and
@@ -24,12 +25,9 @@
 # the package declares. This one needs nothing installed, and asks whether the
 # declaration is installable at all.
 #
-# Policy this encodes: DESCRIPTION currently pins tulpa by an exact Remotes tag
-# (gcol33/tulpa@v<ver>) as well as an Imports floor, so a resolver that honours
-# Remotes installs the tag directly and never hits this window for tulpa itself.
-# The gate still matters for every OTHER hard dependency (tulpaMesh, loo, ...),
-# none of which carry a Remotes tag, and for tulpa on a resolver that ignores
-# Remotes and falls back to the Imports floor served from r-universe.
+# Policy this encodes: DESCRIPTION declares every dependency by an Imports floor
+# alone, with no Remotes tag, so each floor has to be served by CRAN or by a
+# repository Additional_repositories names.
 #
 # Repositories come from DESCRIPTION rather than from options("repos"), so the
 # gate measures what a user installing this package resolves, not what a

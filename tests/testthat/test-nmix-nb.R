@@ -69,6 +69,7 @@ test_that("analytic theta score matches a central difference of the marginal log
 })
 
 test_that("joint H_obs equals the numerical Hessian of the analytic gradient at the mode", {
+  skip_on_cran()
   dat <- simulate_nmix_nb(seed = 13)
   fit <- nmix_laplace(
     y = dat$y, site_idx = dat$site_idx,

@@ -110,6 +110,7 @@ test_that("an out-of-range position still errors against the design width", {
 # ---------------------------------------------------------------------------
 
 test_that("a name-selected continuous SVC fits occu() and reports its column", {
+  skip_on_cran()
   skip_if_fast()
   set.seed(11)
   n <- 60L; J <- 5L

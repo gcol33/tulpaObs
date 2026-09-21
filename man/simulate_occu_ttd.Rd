@@ -40,3 +40,7 @@ Draws from the \code{\link[=occu_ttd]{occu_ttd()}} model: site occupancy \code{z
 at occupied sites, exponential time-to-detection at rate \code{lambda} over a
 survey of length \code{Tmax} (a non-detection is censored at \code{Tmax}).
 }
+\examples{
+sim <- simulate_occu_ttd(N = 50, J = 3, seed = 1)
+dim(sim$y)
+}

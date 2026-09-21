@@ -45,9 +45,13 @@ per-group AGHQ solve status on the families fitted by that engine), and
 \code{converged()} returns the single logical.
 }
 \examples{
-\dontrun{
-fit <- tobs(y ~ 1, data = d, family = occu(), detection = ~1)
-converged(fit)        # TRUE / FALSE, same call for every family
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+converged(fit)
 convergence(fit)$n_iter
 }
 }

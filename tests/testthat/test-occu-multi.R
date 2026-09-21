@@ -26,6 +26,7 @@ test_that("occu_multi() constructor + gates", {
 })
 
 test_that("occu_multi() fits + full S3 surface (S = 2)", {
+  skip_on_cran()
   sim <- simulate_occu_multi(S = 2, N = 300, J = 5, seed = 3)
   fit <- tobs(~ scov1, data = sim$data, family = occu_multi(), detection = ~ 1,
               y = sim$y, species = sim$species,

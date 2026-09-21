@@ -43,3 +43,7 @@ unoccupied site a visit yields a false-positive ambiguous detection (state 1)
 with probability \code{p10}. Returns an \verb{N x J} integer matrix in \verb{\{0, 1, 2\}}
 suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=fp_occu]{fp_occu()}}.
 }
+\examples{
+sim <- simulate_fp_occu(N = 50, J = 4, seed = 1)
+table(sim$y)
+}

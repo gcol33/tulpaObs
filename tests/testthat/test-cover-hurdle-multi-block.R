@@ -123,6 +123,7 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
 }
 
 test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
+  skip_on_cran()
   skip_if_fast()
   sim <- simulate_cover_multi_block(N = 400, seed = 7001)
   fit <- .mb_fit(sim)
@@ -164,6 +165,7 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
 
 
 test_that("cover(): each multi-block hyperparameter follows its own truth", {
+  skip_on_cran()
   skip_if_fast()
   # Same grid, two truths. A is the fixture's own configuration; B raises the
   # copy coefficient and both non-spatial SDs, lowers the field SD, and makes
@@ -291,6 +293,7 @@ test_that("cover(): multi-block rejects method = 'laplace'", {
 
 
 test_that("cover(): multi-block resolves character group / time columns", {
+  skip_on_cran()
   skip_if_fast()
   # Smoke test that the temporal()/re() terms resolve both factor (region,
   # obs) and plain integer (year) columns to index codes. The full fit runs

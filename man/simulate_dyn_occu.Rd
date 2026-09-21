@@ -59,3 +59,7 @@ returned \code{data}, and the rate is \code{plogis(beta[1] + beta[2] * cov)}. Fi
 with \code{colonization = ~ gamma_cov} / \code{extinction = ~ eps_cov} (the matrix
 column drives the interval-indexed rate).
 }
+\examples{
+sim <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 4, seed = 1)
+dim(sim$y)
+}

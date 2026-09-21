@@ -308,6 +308,7 @@ test_that("spatial-slope 95% CI covers truth across seeds (calibration)", {
 })
 
 test_that("spatial N-mixture carries cross-arm (lambda,p) covariance", {
+  skip_on_cran()
   skip_if_fast()
   # under the spatial path the coefficient covariance must NOT be
   # block-diagonal across the abundance and detection arms -- the cross-arm

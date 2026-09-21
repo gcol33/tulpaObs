@@ -60,6 +60,7 @@
 
 
 test_that("occu_cover trend smoke fit runs end-to-end and exposes both fields", {
+  skip_on_cran()
   skip_if_fast()
   N <- 30L; J <- 4L
   adj <- chain_adj(N)
@@ -104,6 +105,7 @@ test_that("occu_cover trend smoke fit runs end-to-end and exposes both fields", 
 
 
 test_that("trend field via a weighted formula term matches the control$trend route", {
+  skip_on_cran()
   skip_if_fast()
   N <- 30L; J <- 4L
   adj <- chain_adj(N)

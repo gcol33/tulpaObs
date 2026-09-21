@@ -17,7 +17,7 @@
 #' @param spatial Optional `tobs_spatial` spec (NULL for non-spatial).
 #' @param priors Optional prior spec from [occu_priors()]. `NULL` -> use
 #'   the package defaults. Pass `FALSE` (or `"none"`) to disable the prior
-#'   and recover the historical unpenalised MAP behavior — the penalised
+#'   and recover the historical unpenalised MAP behavior -- the penalised
 #'   objective is `Q(beta) = -log L(beta) + sum (beta_j - mu_j)^2 / (2 sd_j^2)`,
 #'   so `sd_j = Inf` yields a zero penalty term.
 #' @param sigma_beta Reserved for future use (NUTS-side beta prior); ignored

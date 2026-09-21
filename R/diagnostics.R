@@ -4,15 +4,19 @@
 # model_average) are in tulpa — inherited via tulpa_fit class.
 # ============================================================================
 
-# Thread count for the parallel occu_cover pointwise-loglik kernel. An explicit
-# n.threads wins; NULL falls back to the occu_cover fit's own outer-grid default
-# (all but four logical cores), so WAIC / LOO reuse the machine budget the fit
-# used. detectCores() can return NA on exotic platforms, so guard it.
-.tobs_ploglik_threads <- function(n.threads = NULL) {
+# Default thread count for the kernels that spread over the machine by default:
+# the parallel pointwise-loglik kernel and the occu() SVC outer grid. An explicit
+# n.threads wins; NULL takes all but four logical cores, capped at two when
+# R CMD check limits cores (`_R_CHECK_LIMIT_CORES_`, set by --as-cran).
+# detectCores() can return NA on exotic platforms, so guard it.
+.tobs_default_threads <- function(n.threads = NULL) {
   if (!is.null(n.threads)) return(max(1L, as.integer(n.threads)))
   nc <- parallel::detectCores()
   if (is.na(nc)) nc <- 1L
-  max(1L, as.integer(nc) - 4L)
+  nc <- max(1L, as.integer(nc) - 4L)
+  limit <- Sys.getenv("_R_CHECK_LIMIT_CORES_", "")
+  if (nzchar(limit) && !identical(tolower(limit), "false")) nc <- min(nc, 2L)
+  nc
 }
 
 #' Model criteria for occupancy / cover models
@@ -37,8 +41,10 @@
 #' @param n.threads Threads for the parallel `occu_cover()` pointwise
 #'   log-likelihood (the compact / ragged path). The draw loop is embarrassingly
 #'   parallel, so this is the WAIC / LOO analogue of the fit's `n.threads.outer`.
-#'   `NULL` (default) uses all but four logical cores, matching the occu_cover
-#'   fit's own outer-grid default; other families ignore it.
+#'   `NULL` (default) uses all but four logical cores, at most two under
+#'   `R CMD check`; other families ignore it.
+#' @param ndraws For `pointwise_loglik()`, the posterior draws used to build the
+#'   matrix, as `n.draws` above. `NULL` (default) uses 1000.
 #' @param loo.unit The cross-validation unit for `waic()` / `loo()` / `cpo()`.
 #'   `"obs"` (default) is the family's pointwise unit -- one column of the
 #'   log-likelihood per plot (cover) or site (occu_cover) -- and is byte-identical
@@ -78,7 +84,7 @@ waic.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
                           n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
-                                   n.threads = .tobs_ploglik_threads(n.threads))
+                                   n.threads = .tobs_default_threads(n.threads))
   dots <- .tobs_loo_dots(x, loo.unit, list(...), "waic()")
   out <- loo::waic(.tobs_loglik_fold_group(ll_mat, dots$group))
   attr(out, "loo_unit") <- loo.unit
@@ -97,7 +103,7 @@ loo.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
                          n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
-                                   n.threads = .tobs_ploglik_threads(n.threads))
+                                   n.threads = .tobs_default_threads(n.threads))
   dots <- .tobs_loo_dots(x, loo.unit, list(...), "loo()")
   out <- .tobs_loo_one(.tobs_loglik_fold_group(ll_mat, dots$group), x$chain_id)
   attr(out, "loo_unit") <- loo.unit
@@ -116,7 +122,7 @@ dic.tobs_fit <- function(object, n.draws = 1000L, n.threads = NULL, ...) {
          "waic(), loo() and cpo().", call. = FALSE)
   }
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
-                                   n.threads = .tobs_ploglik_threads(n.threads))
+                                   n.threads = .tobs_default_threads(n.threads))
   lam <- .tobs_loglik_at_mean(object, n.draws = n.draws)
   tulpa::tulpa_criteria(ll_mat, criteria = "dic", loglik_at_mean = lam, ...)
 }
@@ -127,7 +133,7 @@ cpo.tobs_fit <- function(object, n.draws = 1000L, loo.unit = c("obs", "cell"),
                          n.threads = NULL, ...) {
   loo.unit <- match.arg(loo.unit)
   ll_mat <- .tobs_pointwise_loglik(object, n.draws = n.draws,
-                                   n.threads = .tobs_ploglik_threads(n.threads))
+                                   n.threads = .tobs_default_threads(n.threads))
   dots <- .tobs_criteria_group(object, loo.unit, list(...))
   cr <- do.call(tulpa::tulpa_criteria,
                 c(list(ll_mat, criteria = c("loo", "cpo", "lpml"),
@@ -874,6 +880,14 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
 #' @param n.samples Number of posterior samples (default 500).
 #' @param ... Passed to methods.
 #' @return A list with `fit.y`, `fit.y.rep`, and `bayesian.p`.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 60, J = 3, seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE))
+#' ppc(fit, n.samples = 100)$bayesian.p
+#' }
 #' @export
 ppc <- function(object, ...) {
   UseMethod("ppc")

@@ -12,6 +12,7 @@ test_that("occu_cover(response = 'gaussian') constructor is wired through", {
 })
 
 test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
+  skip_on_cran()
   N <- 120L; J <- 5L
   sim <- simulate_occu_cover(N = N, J = J, positive = "gaussian",
     beta_pos = c(2.0, -0.4), sigma_pos = 0.5, seed = 11L)

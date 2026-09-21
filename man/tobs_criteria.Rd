@@ -55,14 +55,17 @@ observations -- and rejects \code{loo.unit}.}
 \item{n.threads}{Threads for the parallel \code{occu_cover()} pointwise
 log-likelihood (the compact / ragged path). The draw loop is embarrassingly
 parallel, so this is the WAIC / LOO analogue of the fit's \code{n.threads.outer}.
-\code{NULL} (default) uses all but four logical cores, matching the occu_cover
-fit's own outer-grid default; other families ignore it.}
+\code{NULL} (default) uses all but four logical cores, at most two under
+\verb{R CMD check}; other families ignore it.}
 
 \item{...}{For \code{dic()} and \code{cpo()}, forwarded to \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}
 (e.g. \code{chunk_size}, or an explicit \verb{group =} for a custom
 leave-one-group-out unit). \code{waic()} and \code{loo()} accept only \verb{group =},
 which folds the pointwise matrix before the \pkg{loo} call, and reject any
 other argument.}
+
+\item{ndraws}{For \code{pointwise_loglik()}, the posterior draws used to build the
+matrix, as \code{n.draws} above. \code{NULL} (default) uses 1000.}
 }
 \value{
 \code{dic()} and \code{cpo()} return a \code{tulpa_criteria} object. \code{waic()}

@@ -223,6 +223,7 @@ test_that("a single field is byte-identical under both block spellings (#214)", 
 
 
 test_that("the two-field flat vector is exactly n_raw + n_hyper wide (#214)", {
+  skip_on_cran()
   # The engine takes the inverse metric as a bare pointer with no length check,
   # so a metric sized from anything but the actual coordinate count reads past
   # its end (the #204 bug, where a bym2 block's n_raw = 2n - 1 met a metric sized

@@ -172,3 +172,7 @@ eta_pos_ij = X_pos[i, ] \%*\% beta_pos + alpha * sigma * f[i]
 
 matching the v2 nested-Laplace fit's parameterisation.
 }
+\examples{
+sim <- simulate_occu_cover(N = 50, J = 3, seed = 1)
+dim(sim$y)
+}

@@ -51,6 +51,10 @@
 #'
 #' @return A `tobs_family` object.
 #' @keywords internal
+#' @examples
+#' f <- obs_family("my_occu", "custom occupancy", latent = "bernoulli",
+#'                 observation = "binomial_detection")
+#' f
 #' @export
 obs_family <- function(name,
                        class_long,
@@ -129,6 +133,9 @@ occu <- function() {
 #'
 #' @return A `tobs_family` object.
 #' @export
+#' @examples
+#' f <- dyn_occu()
+#' f
 dyn_occu <- function() {
   obs_family(
     name           = "dyn_occu",
@@ -155,6 +162,9 @@ dyn_occu <- function() {
 #'
 #' @return A `tobs_family` object.
 #' @export
+#' @examples
+#' f <- int_occu()
+#' f
 int_occu <- function() {
   obs_family(
     name           = "int_occu",
@@ -171,10 +181,13 @@ int_occu <- function() {
 #' Joint species distribution family (no detection process)
 #'
 #' Multivariate occurrence with shared latent factors. No observation
-#' replication — treats observed presence/absence as the response.
+#' replication -- treats observed presence/absence as the response.
 #'
 #' @return A `tobs_family` object.
 #' @export
+#' @examples
+#' f <- jsdm()
+#' f
 jsdm <- function() {
   obs_family(
     name           = "jsdm",
@@ -845,6 +858,9 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
 #' @seealso [occu_cover()] (single species), [ms_occu()] (community occupancy,
 #'   no cover), [ms_abun()] (community N-mixture).
 #' @export
+#' @examples
+#' f <- ms_occu_cover(response = "lognormal")
+#' f
 ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
   positive <- match.arg(response)
   obs_family(
@@ -951,6 +967,9 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' @return A `tobs_family` object.
 #' @seealso [occu_cover()] (two-level), [cover()] (plot hurdle, no detection).
 #' @export
+#' @examples
+#' f <- occu_multiscale_cover(response = "beta")
+#' f
 occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian")) {
   positive <- match.arg(response)
   obs_family(
@@ -1354,6 +1373,9 @@ dyn_int_occu <- function() {
 #' small systematic shift under it (`mu_log_r` by -0.006, p = 0.001).
 #' @return A `tobs_family` object.
 #' @export
+#' @examples
+#' f <- ms_abun(mixture = "negbin")
+#' f
 ms_abun <- function(K_max = NULL,
                     mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
@@ -1411,6 +1433,9 @@ ms_abun <- function(K_max = NULL,
 #' @references Dail, D., Madsen, L. (2011). Models for estimating abundance from
 #'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.
 #' @export
+#' @examples
+#' f <- dyn_abun(mixture = "negbin")
+#' f
 dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
   obs_family(
@@ -1536,6 +1561,10 @@ distance <- function(key = c("halfnorm", "hazard"),
 #' @return A `tobs_family` object.
 #' @seealso [distance()] (single species), [ms_abun()] (community N-mixture).
 #' @export
+#' @examples
+#' f <- ms_distance(key = "halfnorm", transect = "line",
+#'                  cutpoints = c(0, 25, 50, 75, 100))
+#' f
 ms_distance <- function(key = c("halfnorm", "hazard"),
                         transect = c("line", "point"),
                         cutpoints = NULL,
@@ -1587,6 +1616,9 @@ ms_distance <- function(key = c("halfnorm", "hazard"),
 #' Dorazio, R. M., Jelks, H. L., Jordan, F. (2005). Improving removal-based
 #'   estimates of abundance. *Biometrics* 61, 1093-1101.
 #' @export
+#' @examples
+#' f <- removal(K_max = 100)
+#' f
 removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
   mixture <- match.arg(mixture)
   obs_family(
@@ -1630,6 +1662,9 @@ removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' Royle, J. A., Link, W. A. (2006). Generalized site occupancy models allowing
 #'   for false positive and false negative errors. *Ecology* 87, 835-841.
 #' @export
+#' @examples
+#' f <- fp_occu()
+#' f
 fp_occu <- function() {
   obs_family(
     name           = "fp_occu",
@@ -1681,6 +1716,9 @@ fp_occu <- function() {
 #'   probability during avian point counts. *The Auk* 131, 476-494.
 #' @seealso [distance()], [removal()], [double_observer()].
 #' @export
+#' @examples
+#' f <- gdistremoval(transect = "point", cutpoints = c(0, 10, 20, 30, 40))
+#' f
 gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
   transect <- match.arg(transect)
   obs_family(
@@ -1760,6 +1798,10 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 #' @seealso [gdistremoval()] (single-season), [dyn_abun()] (open N-mixture),
 #'   [distance()].
 #' @export
+#' @examples
+#' f <- distsamp_open(transect = "line", cutpoints = c(0, 10, 20, 30, 40),
+#'                    dynamics = "notrend")
+#' f
 distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
                           K_max = NULL,
                           mixture = c("poisson", "negbin", "zip", "zinb"),
@@ -1819,6 +1861,9 @@ distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
 #' @seealso [cover()] (presence + magnitude), [fp_occu()] (two-state
 #'   false-positive detection).
 #' @export
+#' @examples
+#' f <- occu_categorical(classes = c("red", "green", "blue"))
+#' f
 occu_categorical <- function(classes = NULL) {
   if (!is.null(classes) &&
       (!is.character(classes) || length(classes) < 2L || anyNA(classes))) {
@@ -1844,7 +1889,7 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' Latent presence (Bernoulli) plus conditional positive cover (beta or
 #' lognormal). Does not share the replicate-detection assumption of the other
-#' families — see `vignette("families")` for the conceptual caveat.
+#' families -- see `vignette("families")` for the conceptual caveat.
 #'
 #' @section Response on the formula left-hand side:
 #' The cover response is a single length-N vector, so it may sit on the top
@@ -1870,7 +1915,7 @@ occu_categorical <- function(classes = NULL) {
 #' that per-arm formulas and share() address. The LHS is evaluated against `data`
 #' (then the calling environment), so it may be a bare column or an expression.
 #'
-#' @section Joint nested-Laplace engine — spatial-prior parameterisation:
+#' @section Joint nested-Laplace engine -- spatial-prior parameterisation:
 #' When fitted with `method = "nested_laplace"` and an areal spatial term in
 #' the latent-presence formula (`bym2(graph = adj)`, or `car()` /
 #' `car_proper()`), the engine identifies a single latent field `z` per region

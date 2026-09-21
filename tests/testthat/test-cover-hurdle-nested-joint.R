@@ -32,6 +32,7 @@ simulate_joint_lognormal_cover <- function(N = 250, n_s = 30,
 }
 
 test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
+  skip_on_cran()
   skip_if_fast()
     sim <- simulate_joint_lognormal_cover(N = 200, n_s = 25, seed = 13)
 
@@ -71,6 +72,7 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
 # ---- ICAR + CAR_proper backends through cover() -------------------------- #
 
 test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
+  skip_on_cran()
   skip_if_fast()
     sim <- simulate_joint_lognormal_cover(N = 200, n_s = 25, seed = 17)
 
@@ -135,6 +137,7 @@ simulate_joint_beta_cover <- function(N = 250, n_s = 30,
 }
 
 test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
+  skip_on_cran()
   skip_if_fast()
     sim <- simulate_joint_beta_cover(N = 220, n_s = 25, seed = 27)
 
@@ -172,6 +175,7 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
 })
 
 test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
+  skip_on_cran()
   skip_if_fast()
     sim <- simulate_joint_beta_cover(N = 220, n_s = 25, seed = 31)
 

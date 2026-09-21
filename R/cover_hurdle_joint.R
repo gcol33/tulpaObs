@@ -776,7 +776,7 @@
 #' Override the per-arm phi grid via `control$phi.grid`.
 #'
 #' @param enc Output of [encode_cover_hurdle()].
-#' @param data The original (un-subsetted) data frame — required to resolve
+#' @param data The original (un-subsetted) data frame -- required to resolve
 #'   the spatial spec (group_var lookup, n_spatial_units check).
 #' @param positive `"lognormal"` or `"beta"`.
 #' @param control List with optional `max_iter`, `tol`, `n_threads`,
@@ -788,7 +788,7 @@
 #'   amplitude `alpha * sigma`, so `alpha_grid` is the cover-arm
 #'   amplitude axis and `sigma_grid` the donor's. Regularizing hyperpriors on the joint
 #'   (sigma, alpha) axes can be set via `prior_sigma` (donor amplitude)
-#'   and `prior_alpha` (copy coefficient) — each a length-2 list
+#'   and `prior_alpha` (copy coefficient) -- each a length-2 list
 #'   `list(family, params)` matching tulpa's `prior_sigma` / `prior_alpha`
 #'   args. The prior on alpha directly regularizes the copy scalar at small
 #'   `n_pos`, replacing the per-arm `prior_sigma_pos` of the pre-reparam

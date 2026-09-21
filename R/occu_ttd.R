@@ -306,6 +306,9 @@
 #' @param Tmax Survey length (scalar). Default 3.
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J TTD matrix), `data`, `Tmax`, and `truth`.
+#' @examples
+#' sim <- simulate_occu_ttd(N = 50, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_occu_ttd <- function(N = 200, J = 4, n_psi_covs = 1, n_rate_covs = 1,
                               beta_psi = NULL, beta_rate = NULL, Tmax = 3,

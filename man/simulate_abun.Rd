@@ -59,3 +59,7 @@ variance \code{lambda + lambda^2 / size}) with \verb{log lambda_i = X_lambda bet
 \verb{logit p_i = X_p beta_p} (site-level detection). The returned \code{y} is an
 \verb{N x J} integer count matrix suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=abun]{abun()}}.
 }
+\examples{
+sim <- simulate_abun(N = 50, J = 3, seed = 1)
+dim(sim$y)
+}

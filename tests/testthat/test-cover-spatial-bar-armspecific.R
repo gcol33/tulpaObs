@@ -305,6 +305,7 @@ test_that("a single-arm || bar requires the nested-Laplace method", {
 })
 
 test_that("a single-arm correlated `|` bar fits on that arm alone (no copy, #109)", {
+  skip_on_cran()
   d <- .as_small()
   fit <- suppressWarnings(tobs(
     presence = ~ x, positive = ~ x + spatial(~ 1 + x | cell, graph = d$adj),
@@ -343,6 +344,7 @@ test_that("two arm-specific fields on the SAME arm error", {
 })
 
 test_that("a presence-only single-arm bar is accepted and fits", {
+  skip_on_cran()
   d <- .as_small()
   fit <- suppressWarnings(tobs(
     presence = ~ x + spatial(~ 1 || cell, graph = d$adj), positive = ~ x,

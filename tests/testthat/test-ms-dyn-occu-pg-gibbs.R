@@ -11,6 +11,7 @@
 # =============================================================================
 
 test_that("ms_dyn_occu() method = 'pg_gibbs' S3 + convergence", {
+  skip_on_cran()
   sim <- simulate_ms_dyn_occu(N = 70, J = 3, n_species = 8, n_seasons = 4,
                               beta_comm_mean = c(stats::qlogis(0.5)),
                               beta_comm_sd = c(0.6), gamma = 0.3, epsilon = 0.2,

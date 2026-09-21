@@ -17,3 +17,27 @@ The single-species \code{tobs_fit} for that species.
 \description{
 Extract one species' fit from a batched occu_cover fit.
 }
+\examples{
+\donttest{
+sim_a <- simulate_occu_cover(N = 30, J = 3, seed = 1)
+sim_b <- simulate_occu_cover(N = 30, J = 3, seed = 2)
+long <- rbind(
+  data.frame(site = rep(1:30, each = 3), visit = rep(1:3, 30), sp = "a",
+             occur = as.vector(t(sim_a$y)),
+             cover = as.vector(t(ifelse(is.na(sim_a$y_pos), 0,
+                                        sim_a$y_pos)))),
+  data.frame(site = rep(1:30, each = 3), visit = rep(1:3, 30), sp = "b",
+             occur = as.vector(t(sim_b$y)),
+             cover = as.vector(t(ifelse(is.na(sim_b$y_pos), 0,
+                                        sim_b$y_pos)))))
+long$det_cov1 <- rep(sim_a$visit_data$det_cov1, 2)
+long$occ_cov1 <- rep(rep(sim_a$data$occ_cov1, each = 3), 2)
+fit <- tobs(~ occ_cov1, data = long, family = occu_cover("lognormal"),
+            detection = ~ det_cov1, positive = ~ 1, method = "laplace",
+            by = "sp", site = "site", visit = "visit", response = "occur",
+            y_pos = "cover", det.covs = "det_cov1",
+            control = list(verbose = FALSE))
+fit_a <- tobs_get(fit, "a")
+coef(fit_a)
+}
+}

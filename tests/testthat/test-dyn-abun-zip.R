@@ -10,6 +10,7 @@
 # =============================================================================
 
 test_that("dyn_abun(mixture='zip') gates + S3 surface", {
+  skip_on_cran()
   sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n_abund_covs = 1,
                            beta_lambda = c(log(6), 0.3), p = 0.5, omega = 0.6,
                            gamma = 1.0, zi = 0.3, seed = 1)

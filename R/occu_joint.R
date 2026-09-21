@@ -288,7 +288,7 @@
       # parallelism (leaving a few cores) rather than serial, since a standalone
       # occu() SVC fit on real data is the EVA-scale workload this path targets.
       n_threads_outer = as.integer(
-        dots$n.threads.outer %||% max(1L, parallel::detectCores() - 4L)),
+        .tobs_default_threads(dots$n.threads.outer)),
       force_sparse    = isTRUE(dots$force.sparse),
       var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
       var_of_means_min_ess      = dots$var.of.means.min.ess,
@@ -323,7 +323,7 @@
               has_trend = has_trend, n_trend = n_trend,
               coupled_trends = coupled_trends, model = model,
               n_threads = as.integer(
-                dots$n.threads.outer %||% max(1L, parallel::detectCores() - 4L)))
+                .tobs_default_threads(dots$n.threads.outer)))
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
   .occu_jc_postprocess(fit, ctx)

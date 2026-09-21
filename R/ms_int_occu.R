@@ -592,6 +592,9 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
 #' @return A `tobs_family` object.
 #' @seealso [int_occu()], [ms_occu()]
 #' @export
+#' @examples
+#' f <- ms_int_occu()
+#' f
 ms_int_occu <- function() {
   obs_family(
     name           = "ms_int_occu",

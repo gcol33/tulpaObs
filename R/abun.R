@@ -717,6 +717,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 #' @return A list with `y` (N x J count matrix), `data` (covariate data frame),
 #'   and `truth` (the coefficients, per-site `lambda`, `p`, latent `N`, and the
 #'   `mixture` / `size` used).
+#' @examples
+#' sim <- simulate_abun(N = 50, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_abun <- function(N = 100, J = 4,
                           n_abund_covs = 2, n_det_covs = 1,

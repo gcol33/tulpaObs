@@ -26,3 +26,14 @@ pre-fit checks are reported as not applicable rather than silently skipped
 -- an empty \code{issues} on a family the checks never ran on is not a clean bill
 of health. The post-fit sampler checks apply to any NUTS fit.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+chk <- tobs_check_id(fit$model, fit)
+chk$identifiable
+}
+}

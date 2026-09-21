@@ -11,6 +11,7 @@
 # =============================================================================
 
 test_that("ms_int_occu() method = 'pg_gibbs' gates + S3", {
+  skip_on_cran()
   sim <- simulate_ms_int_occu(N = 120, J = c(3, 4), n_species = 6, n_data = 2,
                               seed = 1)
   fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,

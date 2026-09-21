@@ -31,6 +31,7 @@
 })
 
 test_that("a pg_gibbs fit carries the chain convergence record", {
+  skip_on_cran()
   skip_if_fast()
   g <- .sfr_fits()$pg_gibbs
   expect_true(all(c("parameter", "rhat", "ess_bulk", "ess_tail") %in%

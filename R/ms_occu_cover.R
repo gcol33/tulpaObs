@@ -662,6 +662,9 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 #'   (per-visit covariate frame, `N*J` rows in site-major order), `species`
 #'   (species names), and `truth` (community means / SDs, per-species
 #'   coefficients, the dispersion, and the latent state).
+#' @examples
+#' sim <- simulate_ms_occu_cover(n_species = 4, N = 30, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
                                    n_occ_covs = 1, n_det_covs = 1, n_pos_covs = 1,

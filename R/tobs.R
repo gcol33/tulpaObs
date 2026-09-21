@@ -108,10 +108,10 @@
 #'   Family-dependent: required for [occu()] and [abun()], ignored for
 #'   [jsdm()] and (currently) [cover()].
 #' @param y response. Shape depends on family:
-#'   * [occu()] — N x J detection-history matrix.
-#'   * [abun()] — N x J integer count matrix.
-#'   * `ms_*` — S x N x J array.
-#'   * [cover()] — length-N vector of cover proportions in \[0, 1\].
+#'   * [occu()] -- N x J detection-history matrix.
+#'   * [abun()] -- N x J integer count matrix.
+#'   * `ms_*` -- S x N x J array.
+#'   * [cover()] -- length-N vector of cover proportions in \[0, 1\].
 #'
 #'   For a single-vector-response family ([cover()]) the response may instead
 #'   be written on the `formula` left-hand side (`response ~ predictors`), in
@@ -121,7 +121,7 @@
 #' @param visits optional visit-level detection covariates. Accepts
 #'   either:
 #'   * a named list of `[n_sites, max_visits]` matrices (the shape returned by
-#'     `tobs_data()` in `det.covs`) — flattened internally to a long data
+#'     `tobs_data()` in `det.covs`) -- flattened internally to a long data
 #'     frame in site-major order;
 #'   * a data frame with `nrow(y) * ncol(y)` rows in site-major order.
 #'
@@ -134,25 +134,25 @@
 #'   `detection = ~ observer` for the site-level terms.
 #' @param method inference route, naming a fully-specified path rather than a
 #'   pair of orthogonal knobs:
-#'   * `"auto"` — the family's default route (see `default_engine`).
-#'   * `"laplace"` — EM + Laplace with Gaussian marginals (fast default).
-#'   * `"laplace_sla"` — Laplace with skew-corrected (simplified-Laplace)
+#'   * `"auto"` -- the family's default route (see `default_engine`).
+#'   * `"laplace"` -- EM + Laplace with Gaussian marginals (fast default).
+#'   * `"laplace_sla"` -- Laplace with skew-corrected (simplified-Laplace)
 #'     marginals.
-#'   * `"laplace_gibbs"` / `"laplace_mi"` — Laplace with a post-EM Gibbs /
+#'   * `"laplace_gibbs"` / `"laplace_mi"` -- Laplace with a post-EM Gibbs /
 #'     multiple-imputation correction. The fixed-effect prior threads into the
 #'     correction refits, so these use the same
 #'     weakly-informative default prior as `"laplace"`; pass `priors = FALSE`
 #'     for the unpenalised correction.
-#'   * `"pg_gibbs"` — a Polya-Gamma Gibbs sampler over the exact single-season
+#'   * `"pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact single-season
 #'     occupancy posterior (the spOccupancy `PGOcc` engine). A real MCMC chain
 #'     (with `Rhat` / `ESS` diagnostics), distinct from `"laplace_gibbs"` (a
 #'     stochastic-EM variance correction). Sampler controls (`n.iter`,
 #'     `n.warmup`, `n.chains`, `n.thin`, `seed`, `sigma.beta`). v1: single-season
 #'     `occu()`, site-level detection, no structured terms.
-#'   * `"nested_laplace"` — multi-block nested Laplace (single-season
+#'   * `"nested_laplace"` -- multi-block nested Laplace (single-season
 #'     occupancy and cover-hurdle joint).
-#'   * `"nested_laplace_sla"` — nested Laplace with skew-corrected marginals.
-#'   * `"nuts"` — HMC / NUTS sampler (every structure; reports Rhat / ESS).
+#'   * `"nested_laplace_sla"` -- nested Laplace with skew-corrected marginals.
+#'   * `"nuts"` -- HMC / NUTS sampler (every structure; reports Rhat / ESS).
 #'   Not every method is available for every family (e.g. the cover hurdle has
 #'   no `"nuts"` path; `"nested_laplace"` is occupancy- and cover-only). An
 #'   unsupported method errors with the list of methods that family supports.
@@ -173,36 +173,36 @@
 #'   community entries, both are given.
 #'
 #'   Sampler controls (`method = "nuts"`):
-#'   * `n.iter` — post-warmup sampling iterations kept per chain (default 1000);
+#'   * `n.iter` -- post-warmup sampling iterations kept per chain (default 1000);
 #'     the total run per chain is `n.iter + n.warmup`.
-#'   * `n.warmup` — warmup / adaptation iterations per chain, discarded
+#'   * `n.warmup` -- warmup / adaptation iterations per chain, discarded
 #'     (default 1000).
-#'   * `n.thin` — keep every `n.thin`-th post-warmup draw (default 1). The
+#'   * `n.thin` -- keep every `n.thin`-th post-warmup draw (default 1). The
 #'     kept draws and the per-iteration diagnostics (`divergent`,
 #'     `accept_prob`, `treedepth`) are thinned by the same stride.
-#'   * `n.chains` — number of chains, run with offset seeds and pooled
+#'   * `n.chains` -- number of chains, run with offset seeds and pooled
 #'     (default 1). Split-Rhat / bulk / tail ESS are reported on `$convergence`.
-#'   * `n.threads` — chains to run in parallel (default 1, sequential). Values
+#'   * `n.threads` -- chains to run in parallel (default 1, sequential). Values
 #'     `> 1` use a PSOCK cluster and require tulpaObs to be installed. This is
 #'     chain parallelism; it does not change the thread count inside a single
 #'     gradient evaluation.
-#'   * `n.threads.grad` — OpenMP threads inside ONE gradient evaluation of a
+#'   * `n.threads.grad` -- OpenMP threads inside ONE gradient evaluation of a
 #'     community NUTS target (`ms_occu()`, `ms_count()` / `jsdm()`,
 #'     `ms_abun()`, `ms_dyn_occu()`), whose per-species loop is parallel.
 #'     Default 0 leaves the count to OpenMP. The per-species reduction is
 #'     serial and order-fixed, so the gradient is the same at any count.
-#'   * `adapt.delta` — target acceptance probability (default 0.8 on the
+#'   * `adapt.delta` -- target acceptance probability (default 0.8 on the
 #'     single-species families, 0.9 on the community samplers).
-#'   * `max.treedepth` — NUTS maximum tree depth (default 10).
-#'   * `seed` — base RNG seed; chain `c` uses `seed + c - 1` (default 42 on the
+#'   * `max.treedepth` -- NUTS maximum tree depth (default 10).
+#'   * `seed` -- base RNG seed; chain `c` uses `seed + c - 1` (default 42 on the
 #'     single-species families, 1 on the community samplers).
 #'     The resolved per-chain seeds are stored on `$seeds`.
-#'   * `sigma.beta` — prior SD on the coefficients (default 10 on the
+#'   * `sigma.beta` -- prior SD on the coefficients (default 10 on the
 #'     single-species families and on the log-link community samplers
 #'     `ms_count()` / `jsdm()` / `ms_abun()`, whose unit change is
 #'     multiplicative; 5 on the logit-link community samplers `ms_occu()`,
 #'     `ms_dyn_occu()`, `ms_int_occu()`, `ms_occu_cover()`).
-#'   * `sigma.logr` — prior SD on the community-mean log-dispersion `mu_log_r`
+#'   * `sigma.logr` -- prior SD on the community-mean log-dispersion `mu_log_r`
 #'     (default 1.5), on the negative-binomial samplers that carry one
 #'     (`ms_abun()`, `ms_count()`, `jsdm()`). At the default this is an
 #'     informative prior on the dispersion scale, so raise it to compare the
@@ -215,18 +215,18 @@
 #'   sweeps and warmup comes out of it, so the chain keeps `n.iter - n.warmup`
 #'   draws, where under `"nuts"` it is the kept count and the run is
 #'   `n.iter + n.warmup` long.
-#'   * `n.iter` — total sweeps per chain (default 3000).
-#'   * `n.warmup` — sweeps discarded from the front (default 1500), leaving
+#'   * `n.iter` -- total sweeps per chain (default 3000).
+#'   * `n.warmup` -- sweeps discarded from the front (default 1500), leaving
 #'     1500 kept draws.
-#'   * `n.thin` — keep every `n.thin`-th post-warmup sweep (default 1).
-#'   * `n.chains` — number of chains (default 2, so split-Rhat is available
+#'   * `n.thin` -- keep every `n.thin`-th post-warmup sweep (default 1).
+#'   * `n.chains` -- number of chains (default 2, so split-Rhat is available
 #'     without a second call).
-#'   * `seed` — base RNG seed (default 1).
-#'   * `sigma.beta` — coefficient prior SD (default 2.5; tighter than the NUTS
+#'   * `seed` -- base RNG seed (default 1).
+#'   * `sigma.beta` -- coefficient prior SD (default 2.5; tighter than the NUTS
 #'     one because a conjugate update has no step-size adaptation to absorb a
 #'     wide prior). There is deliberately no `adapt.delta` / `max.treedepth`:
 #'     those are HMC knobs.
-#'   * `n.seeds` — number of seed-offset refits to fit and LOO-stack into a
+#'   * `n.seeds` -- number of seed-offset refits to fit and LOO-stack into a
 #'     `tobs_stack` ensemble (default 1, a single fit). Member `k` uses base
 #'     seed `seed + k - 1`. Only meaningful for the stochastic routes
 #'     (`"nuts"`, `"laplace_gibbs"`, `"laplace_mi"`); the deterministic Laplace
@@ -237,7 +237,7 @@
 #'
 #'   Laplace controls (`method = "laplace"` / `"laplace_sla"` /
 #'   `"nested_laplace"`): `max.iter`, `tol`, `damping`, `sigma.beta`.
-#'   * `logr.sigma.prior` — Penalized-Complexity prior `c(U, alpha)`
+#'   * `logr.sigma.prior` -- Penalized-Complexity prior `c(U, alpha)`
 #'     (`P(sigma_log_r > U) = alpha`) on the per-species log-dispersion SD under
 #'     `ms_abun(mixture = "negbin" / "zinb")`. Default `NULL`, pure maximum
 #'     likelihood. `sigma_log_r` is one scalar variance over species and at few
@@ -247,12 +247,12 @@
 #'     variance and does default to `c(1, 0.05)`; when both are set they must be
 #'     equal, since one Penalized-Complexity prior is applied across every
 #'     regularized block.
-#'   * `re.aghq` — for a formula random effect under `method = "laplace"`, run
+#'   * `re.aghq` -- for a formula random effect under `method = "laplace"`, run
 #'     the adaptive Gauss-Hermite debias of the variance components after the
 #'     EM converges (default `TRUE`). Removes the Laplace small-cluster
 #'     attenuation of `sigma` / the RE correlation for binary occupancy; set
 #'     `FALSE` for the raw EM (Laplace, `nAGQ = 1`) fit.
-#'   * `n.quad` — quadrature points. One name across several routes, each
+#'   * `n.quad` -- quadrature points. One name across several routes, each
 #'     integrating a different marginal over a different latent dimension, so
 #'     the default is per route rather than one number. `n.quad = 1` is always
 #'     the plain Laplace (`nAGQ = 1`) marginal; higher values refine it toward
@@ -278,28 +278,28 @@
 #'     marginal integrates the factor scores on. Both the loading magnitude and
 #'     the score-matched offset are insensitive to it (argmax stable to < 0.4%
 #'     against 21 nodes).
-#'   * `max.outer` — for a community family whose `latent()` factors or shared
+#'   * `max.outer` -- for a community family whose `latent()` factors or shared
 #'     areal field are fit by block coordinate ascent, the cap on the outer
 #'     alternation between the community EM and the field / factor update. A field
 #'     block reaches `tol` and stops early, so its default 25 is only a cap; a
 #'     factor block does not, and each family sets its own budget from a measured
 #'     bias curve (150 on `ms_count()` / `jsdm()` / `ms_occu()`, 25 elsewhere).
-#'   * `factor.starts` — candidate starting directions the first factor pass
+#'   * `factor.starts` -- candidate starting directions the first factor pass
 #'     selects over, on the joint marginal. Each costs a full loading EM against
 #'     that family's oracle, so the default is per family: 1 on `ms_abun()`
 #'     (measured to buy nothing there against a 2.0-2.3x cost), 8 elsewhere.
 #'     Accepted only by the families fit this way; the resolved value, and
 #'     `max.outer` / `n.quad` alongside it, is reported as `fit$latent_control`.
-#'   * `re.lkj` — LKJ shape (`eta`) regularizing a *correlated* random slope's
+#'   * `re.lkj` -- LKJ shape (`eta`) regularizing a *correlated* random slope's
 #'     correlation in the `re.aghq` refine (default 1.5). Pulls a
 #'     weakly-identified RE correlation off the `+-1` boundary toward 0 without
 #'     touching the marginal SDs; `re.lkj = 1` disables it (uniform). No effect
 #'     on intercept / uncorrelated terms.
-#'   * `sd.load` — prior SD on a spatial-factor loading in the community
+#'   * `sd.load` -- prior SD on a spatial-factor loading in the community
 #'     occupancy-cover fit (default 1). The auto-rank ladder selects `K` by
 #'     marginal evidence under this prior, so the selection fit and the final
 #'     fit necessarily read the same value.
-#'   * `inner.solver` — for a spatial community N-mixture (`ms_abun()` with an
+#'   * `inner.solver` -- for a spatial community N-mixture (`ms_abun()` with an
 #'     `icar()` / `bym2()` / `car_proper()` field on the abundance arm), the
 #'     inner solver integrating the shared field given the community: `"em"`
 #'     (default) the closed-form Laplace-EM M-step, or `"newton"` the exact-
@@ -308,7 +308,7 @@
 #'     same fit object; `"newton"` is Poisson- and areal-only, and markedly
 #'     slower (an FD-gradient profile loop per grid node) -- an accuracy /
 #'     validation alternative, not the production default.
-#'   * `integration` — how the in-package spatial / community nested-Laplace
+#'   * `integration` -- how the in-package spatial / community nested-Laplace
 #'     fitters integrate the outer field hyperparameters (`tau`, `rho`, `sigma`,
 #'     `range`): `"grid"` (default) a fixed tensor grid, or `"ccd"` a mode-centred
 #'     central-composite design placed at the marginal-likelihood mode and scaled
@@ -320,7 +320,7 @@
 #'     saving on these coarse grids -- it is opt-in, most useful when a
 #'     multi-axis hyperparameter posterior is well identified.
 #'   * `adaptive.grid.cutoff`, `adaptive.grid.stride`, `adaptive.grid.max.frac`,
-#'     `adaptive.grid.min.cells` — tuning for `integration = "grid_adaptive"` on
+#'     `adaptive.grid.min.cells` -- tuning for `integration = "grid_adaptive"` on
 #'     the joint-coupled spatial families (`occu_cover()`, `cover()`, `occu()`
 #'     spatial, `occu_multiscale_cover()`), which the engine hosts alongside
 #'     `"grid"` and `"ccd"`. That integrator evaluates a strict subset of the
@@ -340,7 +340,7 @@
 #'     fit carries several outer axes -- two spatial arms (a shared field plus an
 #'     arm-specific one) put three on the grid, which `integration = "auto"`
 #'     resolves to the dense tensor.
-#'   * `diagnose.k` — for the joint-coupled spatial families (`occu_cover()`,
+#'   * `diagnose.k` -- for the joint-coupled spatial families (`occu_cover()`,
 #'     `occu()` spatial, `occu_multiscale_cover()`), whether to score the outer
 #'     hyperparameter Gaussian summary with an importance-sampling Pareto-k.
 #'     Defaults `FALSE` (it re-solves the inner Laplace on the full field
@@ -360,13 +360,15 @@
 #'   on `$seed`).
 #'
 #'   Progress controls (every method): `progress` toggles the console
-#'   iteration / grid bar (default `TRUE`), `progress.every` and
+#'   iteration / grid bar (default `TRUE` in an interactive session, `FALSE`
+#'   otherwise), `progress.every` and
 #'   `progress.throttle` set its emit cadence, and `progress.file` names a
 #'   heartbeat file rewritten with `"<done> <total> <elapsed_s> <eta_s>"`. The
 #'   file is the channel that survives a detached run, where a console flush
 #'   does not, and it is written whenever it is set regardless of `progress`.
-#'   Setting the environment variable `TULPAOBS_PROGRESS=0` flips the console
-#'   default off for the whole session -- for a batch or CI run whose caller
+#'   The environment variable `TULPAOBS_PROGRESS` sets the console default
+#'   for the whole session: `0` (also `false` / `no` / `off`) turns it off,
+#'   any other value turns it on -- for a batch or CI run whose caller
 #'   cannot pass `control` to each individual fit; an explicit
 #'   `control$progress` still wins.
 #'
@@ -418,15 +420,20 @@
 #'   `tobs_batch` of per-species fits is returned (see [tobs_get()]).
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Single-season occupancy
+#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#'                      seed = 1)
 #' fit <- tobs(
-#'   formula   = ~ elev,
-#'   data      = sites,
+#'   formula   = ~ occ_cov1,
+#'   data      = sim$data,
 #'   family    = occu(),
-#'   detection = ~ effort,
-#'   y         = y_matrix
+#'   detection = ~ det_cov1,
+#'   y         = sim$y,
+#'   method    = "laplace",
+#'   control   = list(verbose = FALSE, progress = FALSE)
 #' )
+#' summary(fit)
 #' }
 #'
 #' @export
@@ -770,11 +777,11 @@ tobs <- function(formula,
 }
 
 # Default for the console progress bar, used when a fit does not set
-# `control$progress` either way. On, except where the caller cannot reach the
-# individual fits to silence them: a test suite or any redirected batch run
-# emits every fit's bar into one log, which buries the output that is actually
-# read there. `TULPAOBS_PROGRESS=0` (also `false` / `no` / `off`) flips the
-# default off for the whole process.
+# `control$progress` either way. On in an interactive session, off otherwise:
+# a test suite, a knitted document or any redirected batch run would emit every
+# fit's bar into one log, burying the output that is actually read there.
+# `TULPAOBS_PROGRESS` overrides that for the whole process: `0` (also `false` /
+# `no` / `off`) turns it off, any other non-empty value turns it on.
 #
 # An explicit `control$progress` still wins in both directions, so a fit that
 # asks for the bar keeps it under the env var, and the heartbeat file
@@ -783,6 +790,7 @@ tobs <- function(formula,
 # with it.
 .tobs_progress_default <- function() {
   v <- tolower(trimws(Sys.getenv("TULPAOBS_PROGRESS", "")))
+  if (!nzchar(v)) return(interactive())
   !(v %in% c("0", "false", "no", "off"))
 }
 

@@ -53,6 +53,7 @@ test_that("cover() reads n.threads by exact key, not as a prefix of n.threads.ou
 }
 
 test_that("no control$ read is a strict prefix of another accepted control key", {
+  skip_on_cran()
   ns <- asNamespace("tulpaObs")
   reads <- list()
   keys  <- character(0)

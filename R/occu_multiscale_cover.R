@@ -760,6 +760,10 @@
 #' @param seed optional RNG seed.
 #' @return A list with `y`, `y_pos` (`[n_plots x visits_per_plot]`), the
 #'   plot-level `data` (cell id `cell`, covariates), `adj`, and `truth`.
+#' @examples
+#' sim <- simulate_occu_multiscale_cover(n_cells = 10, plots_per_cell = 2,
+#'                                       visits_per_plot = 2, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_occu_multiscale_cover <- function(n_cells = 60L,
                                            plots_per_cell = 4L,

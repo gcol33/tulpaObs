@@ -110,7 +110,7 @@
 #'
 #' Returns per-coefficient SLA gamma for each of the two arms of a cover
 #' hurdle fit. Each arm's gamma is computed via [`.sla_gamma_fd()`] using
-#' the arm's `solve(H_beta)` as Sigma (no Louis correction — both arms are
+#' the arm's `solve(H_beta)` as Sigma (no Louis correction -- both arms are
 #' real likelihoods at the mode under the single-Laplace path).
 #'
 #' phi (beta arm) / sigma_pos (lognormal arm) are treated as fixed nuisance

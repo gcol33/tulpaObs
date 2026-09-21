@@ -55,12 +55,17 @@ nested-Laplace path to combine the two.
 }
 
 \examples{
-\dontrun{
 # regularise the occurrence arm, leave the positive arm unpenalised
-fit <- tobs(~ x, data = d, family = cover(response = "lognormal"),
-            y = cov, method = "laplace",
-            priors = cover_priors(pos_intercept = list(mean = 0, sd = Inf),
-                                  pos_slope     = list(mean = 0, sd = Inf)))
+priors <- cover_priors(pos_intercept = list(mean = 0, sd = Inf),
+                       pos_slope     = list(mean = 0, sd = Inf))
+priors
+
+\donttest{
+sim <- simulate_cover(N = 150, seed = 1)
+fit <- tobs(cover ~ x, data = sim$data,
+            family = cover(response = "lognormal"),
+            method = "laplace", priors = priors)
+coef(fit)
 }
 }
 \seealso{

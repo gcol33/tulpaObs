@@ -119,10 +119,10 @@ detection design).}
 
 \item{y}{response. Shape depends on family:
 \itemize{
-\item \code{\link[=occu]{occu()}} — N x J detection-history matrix.
-\item \code{\link[=abun]{abun()}} — N x J integer count matrix.
-\item \verb{ms_*} — S x N x J array.
-\item \code{\link[=cover]{cover()}} — length-N vector of cover proportions in [0, 1].
+\item \code{\link[=occu]{occu()}} -- N x J detection-history matrix.
+\item \code{\link[=abun]{abun()}} -- N x J integer count matrix.
+\item \verb{ms_*} -- S x N x J array.
+\item \code{\link[=cover]{cover()}} -- length-N vector of cover proportions in [0, 1].
 }
 
 For a single-vector-response family (\code{\link[=cover]{cover()}}) the response may instead
@@ -135,7 +135,7 @@ via \verb{y =} only.}
 either:
 \itemize{
 \item a named list of \verb{[n_sites, max_visits]} matrices (the shape returned by
-\code{tobs_data()} in \code{det.covs}) — flattened internally to a long data
+\code{tobs_data()} in \code{det.covs}) -- flattened internally to a long data
 frame in site-major order;
 \item a data frame with \code{nrow(y) * ncol(y)} rows in site-major order.
 }
@@ -151,25 +151,25 @@ long data frame with \code{attr(visits, "formula") = ~ effort} and use
 \item{method}{inference route, naming a fully-specified path rather than a
 pair of orthogonal knobs:
 \itemize{
-\item \code{"auto"} — the family's default route (see \code{default_engine}).
-\item \code{"laplace"} — EM + Laplace with Gaussian marginals (fast default).
-\item \code{"laplace_sla"} — Laplace with skew-corrected (simplified-Laplace)
+\item \code{"auto"} -- the family's default route (see \code{default_engine}).
+\item \code{"laplace"} -- EM + Laplace with Gaussian marginals (fast default).
+\item \code{"laplace_sla"} -- Laplace with skew-corrected (simplified-Laplace)
 marginals.
-\item \code{"laplace_gibbs"} / \code{"laplace_mi"} — Laplace with a post-EM Gibbs /
+\item \code{"laplace_gibbs"} / \code{"laplace_mi"} -- Laplace with a post-EM Gibbs /
 multiple-imputation correction. The fixed-effect prior threads into the
 correction refits, so these use the same
 weakly-informative default prior as \code{"laplace"}; pass \code{priors = FALSE}
 for the unpenalised correction.
-\item \code{"pg_gibbs"} — a Polya-Gamma Gibbs sampler over the exact single-season
+\item \code{"pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact single-season
 occupancy posterior (the spOccupancy \code{PGOcc} engine). A real MCMC chain
 (with \code{Rhat} / \code{ESS} diagnostics), distinct from \code{"laplace_gibbs"} (a
 stochastic-EM variance correction). Sampler controls (\code{n.iter},
 \code{n.warmup}, \code{n.chains}, \code{n.thin}, \code{seed}, \code{sigma.beta}). v1: single-season
 \code{occu()}, site-level detection, no structured terms.
-\item \code{"nested_laplace"} — multi-block nested Laplace (single-season
+\item \code{"nested_laplace"} -- multi-block nested Laplace (single-season
 occupancy and cover-hurdle joint).
-\item \code{"nested_laplace_sla"} — nested Laplace with skew-corrected marginals.
-\item \code{"nuts"} — HMC / NUTS sampler (every structure; reports Rhat / ESS).
+\item \code{"nested_laplace_sla"} -- nested Laplace with skew-corrected marginals.
+\item \code{"nuts"} -- HMC / NUTS sampler (every structure; reports Rhat / ESS).
 Not every method is available for every family (e.g. the cover hurdle has
 no \code{"nuts"} path; \code{"nested_laplace"} is occupancy- and cover-only). An
 unsupported method errors with the list of methods that family supports.
@@ -194,36 +194,36 @@ community entries, both are given.
 
 Sampler controls (\code{method = "nuts"}):
 \itemize{
-\item \code{n.iter} — post-warmup sampling iterations kept per chain (default 1000);
+\item \code{n.iter} -- post-warmup sampling iterations kept per chain (default 1000);
 the total run per chain is \code{n.iter + n.warmup}.
-\item \code{n.warmup} — warmup / adaptation iterations per chain, discarded
+\item \code{n.warmup} -- warmup / adaptation iterations per chain, discarded
 (default 1000).
-\item \code{n.thin} — keep every \code{n.thin}-th post-warmup draw (default 1). The
+\item \code{n.thin} -- keep every \code{n.thin}-th post-warmup draw (default 1). The
 kept draws and the per-iteration diagnostics (\code{divergent},
 \code{accept_prob}, \code{treedepth}) are thinned by the same stride.
-\item \code{n.chains} — number of chains, run with offset seeds and pooled
+\item \code{n.chains} -- number of chains, run with offset seeds and pooled
 (default 1). Split-Rhat / bulk / tail ESS are reported on \verb{$convergence}.
-\item \code{n.threads} — chains to run in parallel (default 1, sequential). Values
+\item \code{n.threads} -- chains to run in parallel (default 1, sequential). Values
 \verb{> 1} use a PSOCK cluster and require tulpaObs to be installed. This is
 chain parallelism; it does not change the thread count inside a single
 gradient evaluation.
-\item \code{n.threads.grad} — OpenMP threads inside ONE gradient evaluation of a
+\item \code{n.threads.grad} -- OpenMP threads inside ONE gradient evaluation of a
 community NUTS target (\code{ms_occu()}, \code{ms_count()} / \code{jsdm()},
 \code{ms_abun()}, \code{ms_dyn_occu()}), whose per-species loop is parallel.
 Default 0 leaves the count to OpenMP. The per-species reduction is
 serial and order-fixed, so the gradient is the same at any count.
-\item \code{adapt.delta} — target acceptance probability (default 0.8 on the
+\item \code{adapt.delta} -- target acceptance probability (default 0.8 on the
 single-species families, 0.9 on the community samplers).
-\item \code{max.treedepth} — NUTS maximum tree depth (default 10).
-\item \code{seed} — base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42 on the
+\item \code{max.treedepth} -- NUTS maximum tree depth (default 10).
+\item \code{seed} -- base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42 on the
 single-species families, 1 on the community samplers).
 The resolved per-chain seeds are stored on \verb{$seeds}.
-\item \code{sigma.beta} — prior SD on the coefficients (default 10 on the
+\item \code{sigma.beta} -- prior SD on the coefficients (default 10 on the
 single-species families and on the log-link community samplers
 \code{ms_count()} / \code{jsdm()} / \code{ms_abun()}, whose unit change is
 multiplicative; 5 on the logit-link community samplers \code{ms_occu()},
 \code{ms_dyn_occu()}, \code{ms_int_occu()}, \code{ms_occu_cover()}).
-\item \code{sigma.logr} — prior SD on the community-mean log-dispersion \code{mu_log_r}
+\item \code{sigma.logr} -- prior SD on the community-mean log-dispersion \code{mu_log_r}
 (default 1.5), on the negative-binomial samplers that carry one
 (\code{ms_abun()}, \code{ms_count()}, \code{jsdm()}). At the default this is an
 informative prior on the dispersion scale, so raise it to compare the
@@ -238,18 +238,18 @@ sweeps and warmup comes out of it, so the chain keeps \code{n.iter - n.warmup}
 draws, where under \code{"nuts"} it is the kept count and the run is
 \code{n.iter + n.warmup} long.
 \itemize{
-\item \code{n.iter} — total sweeps per chain (default 3000).
-\item \code{n.warmup} — sweeps discarded from the front (default 1500), leaving
+\item \code{n.iter} -- total sweeps per chain (default 3000).
+\item \code{n.warmup} -- sweeps discarded from the front (default 1500), leaving
 1500 kept draws.
-\item \code{n.thin} — keep every \code{n.thin}-th post-warmup sweep (default 1).
-\item \code{n.chains} — number of chains (default 2, so split-Rhat is available
+\item \code{n.thin} -- keep every \code{n.thin}-th post-warmup sweep (default 1).
+\item \code{n.chains} -- number of chains (default 2, so split-Rhat is available
 without a second call).
-\item \code{seed} — base RNG seed (default 1).
-\item \code{sigma.beta} — coefficient prior SD (default 2.5; tighter than the NUTS
+\item \code{seed} -- base RNG seed (default 1).
+\item \code{sigma.beta} -- coefficient prior SD (default 2.5; tighter than the NUTS
 one because a conjugate update has no step-size adaptation to absorb a
 wide prior). There is deliberately no \code{adapt.delta} / \code{max.treedepth}:
 those are HMC knobs.
-\item \code{n.seeds} — number of seed-offset refits to fit and LOO-stack into a
+\item \code{n.seeds} -- number of seed-offset refits to fit and LOO-stack into a
 \code{tobs_stack} ensemble (default 1, a single fit). Member \code{k} uses base
 seed \code{seed + k - 1}. Only meaningful for the stochastic routes
 (\code{"nuts"}, \code{"laplace_gibbs"}, \code{"laplace_mi"}); the deterministic Laplace
@@ -262,7 +262,7 @@ model average.
 Laplace controls (\code{method = "laplace"} / \code{"laplace_sla"} /
 \code{"nested_laplace"}): \code{max.iter}, \code{tol}, \code{damping}, \code{sigma.beta}.
 \itemize{
-\item \code{logr.sigma.prior} — Penalized-Complexity prior \code{c(U, alpha)}
+\item \code{logr.sigma.prior} -- Penalized-Complexity prior \code{c(U, alpha)}
 (\code{P(sigma_log_r > U) = alpha}) on the per-species log-dispersion SD under
 \code{ms_abun(mixture = "negbin" / "zinb")}. Default \code{NULL}, pure maximum
 likelihood. \code{sigma_log_r} is one scalar variance over species and at few
@@ -272,12 +272,12 @@ there. \code{omega.sigma.prior} is the same knob for the structural-zero
 variance and does default to \code{c(1, 0.05)}; when both are set they must be
 equal, since one Penalized-Complexity prior is applied across every
 regularized block.
-\item \code{re.aghq} — for a formula random effect under \code{method = "laplace"}, run
+\item \code{re.aghq} -- for a formula random effect under \code{method = "laplace"}, run
 the adaptive Gauss-Hermite debias of the variance components after the
 EM converges (default \code{TRUE}). Removes the Laplace small-cluster
 attenuation of \code{sigma} / the RE correlation for binary occupancy; set
 \code{FALSE} for the raw EM (Laplace, \code{nAGQ = 1}) fit.
-\item \code{n.quad} — quadrature points. One name across several routes, each
+\item \code{n.quad} -- quadrature points. One name across several routes, each
 integrating a different marginal over a different latent dimension, so
 the default is per route rather than one number. \code{n.quad = 1} is always
 the plain Laplace (\code{nAGQ = 1}) marginal; higher values refine it toward
@@ -303,28 +303,28 @@ Community \code{latent()} factors: 5, the Gauss-Hermite nodes the joint site
 marginal integrates the factor scores on. Both the loading magnitude and
 the score-matched offset are insensitive to it (argmax stable to < 0.4\%
 against 21 nodes).
-\item \code{max.outer} — for a community family whose \code{latent()} factors or shared
+\item \code{max.outer} -- for a community family whose \code{latent()} factors or shared
 areal field are fit by block coordinate ascent, the cap on the outer
 alternation between the community EM and the field / factor update. A field
 block reaches \code{tol} and stops early, so its default 25 is only a cap; a
 factor block does not, and each family sets its own budget from a measured
 bias curve (150 on \code{ms_count()} / \code{jsdm()} / \code{ms_occu()}, 25 elsewhere).
-\item \code{factor.starts} — candidate starting directions the first factor pass
+\item \code{factor.starts} -- candidate starting directions the first factor pass
 selects over, on the joint marginal. Each costs a full loading EM against
 that family's oracle, so the default is per family: 1 on \code{ms_abun()}
 (measured to buy nothing there against a 2.0-2.3x cost), 8 elsewhere.
 Accepted only by the families fit this way; the resolved value, and
 \code{max.outer} / \code{n.quad} alongside it, is reported as \code{fit$latent_control}.
-\item \code{re.lkj} — LKJ shape (\code{eta}) regularizing a \emph{correlated} random slope's
+\item \code{re.lkj} -- LKJ shape (\code{eta}) regularizing a \emph{correlated} random slope's
 correlation in the \code{re.aghq} refine (default 1.5). Pulls a
 weakly-identified RE correlation off the \code{+-1} boundary toward 0 without
 touching the marginal SDs; \code{re.lkj = 1} disables it (uniform). No effect
 on intercept / uncorrelated terms.
-\item \code{sd.load} — prior SD on a spatial-factor loading in the community
+\item \code{sd.load} -- prior SD on a spatial-factor loading in the community
 occupancy-cover fit (default 1). The auto-rank ladder selects \code{K} by
 marginal evidence under this prior, so the selection fit and the final
 fit necessarily read the same value.
-\item \code{inner.solver} — for a spatial community N-mixture (\code{ms_abun()} with an
+\item \code{inner.solver} -- for a spatial community N-mixture (\code{ms_abun()} with an
 \code{icar()} / \code{bym2()} / \code{car_proper()} field on the abundance arm), the
 inner solver integrating the shared field given the community: \code{"em"}
 (default) the closed-form Laplace-EM M-step, or \code{"newton"} the exact-
@@ -333,7 +333,7 @@ Both integrate the field hyperparameter on the outer grid and return the
 same fit object; \code{"newton"} is Poisson- and areal-only, and markedly
 slower (an FD-gradient profile loop per grid node) -- an accuracy /
 validation alternative, not the production default.
-\item \code{integration} — how the in-package spatial / community nested-Laplace
+\item \code{integration} -- how the in-package spatial / community nested-Laplace
 fitters integrate the outer field hyperparameters (\code{tau}, \code{rho}, \code{sigma},
 \code{range}): \code{"grid"} (default) a fixed tensor grid, or \code{"ccd"} a mode-centred
 central-composite design placed at the marginal-likelihood mode and scaled
@@ -345,7 +345,7 @@ node is a full inner solve, so \code{"ccd"} adds a mode-find without a node
 saving on these coarse grids -- it is opt-in, most useful when a
 multi-axis hyperparameter posterior is well identified.
 \item \code{adaptive.grid.cutoff}, \code{adaptive.grid.stride}, \code{adaptive.grid.max.frac},
-\code{adaptive.grid.min.cells} — tuning for \code{integration = "grid_adaptive"} on
+\code{adaptive.grid.min.cells} -- tuning for \code{integration = "grid_adaptive"} on
 the joint-coupled spatial families (\code{occu_cover()}, \code{cover()}, \code{occu()}
 spatial, \code{occu_multiscale_cover()}), which the engine hosts alongside
 \code{"grid"} and \code{"ccd"}. That integrator evaluates a strict subset of the
@@ -365,7 +365,7 @@ two compose and neither implies the other. The saving is largest where a
 fit carries several outer axes -- two spatial arms (a shared field plus an
 arm-specific one) put three on the grid, which \code{integration = "auto"}
 resolves to the dense tensor.
-\item \code{diagnose.k} — for the joint-coupled spatial families (\code{occu_cover()},
+\item \code{diagnose.k} -- for the joint-coupled spatial families (\code{occu_cover()},
 \code{occu()} spatial, \code{occu_multiscale_cover()}), whether to score the outer
 hyperparameter Gaussian summary with an importance-sampling Pareto-k.
 Defaults \code{FALSE} (it re-solves the inner Laplace on the full field
@@ -386,13 +386,15 @@ on \verb{$seed}).
 }
 
 Progress controls (every method): \code{progress} toggles the console
-iteration / grid bar (default \code{TRUE}), \code{progress.every} and
+iteration / grid bar (default \code{TRUE} in an interactive session, \code{FALSE}
+otherwise), \code{progress.every} and
 \code{progress.throttle} set its emit cadence, and \code{progress.file} names a
 heartbeat file rewritten with \code{"<done> <total> <elapsed_s> <eta_s>"}. The
 file is the channel that survives a detached run, where a console flush
 does not, and it is written whenever it is set regardless of \code{progress}.
-Setting the environment variable \code{TULPAOBS_PROGRESS=0} flips the console
-default off for the whole session -- for a batch or CI run whose caller
+The environment variable \code{TULPAOBS_PROGRESS} sets the console default
+for the whole session: \code{0} (also \code{false} / \code{no} / \code{off}) turns it off,
+any other value turns it on -- for a batch or CI run whose caller
 cannot pass \code{control} to each individual fit; an explicit
 \code{control$progress} still wins.
 
@@ -452,15 +454,20 @@ template. The specific model is chosen via the \code{family} argument; the engin
 (Laplace / nested Laplace / NUTS) via \code{engine}.
 }
 \examples{
-\dontrun{
+\donttest{
 # Single-season occupancy
+sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+                     seed = 1)
 fit <- tobs(
-  formula   = ~ elev,
-  data      = sites,
+  formula   = ~ occ_cov1,
+  data      = sim$data,
   family    = occu(),
-  detection = ~ effort,
-  y         = y_matrix
+  detection = ~ det_cov1,
+  y         = sim$y,
+  method    = "laplace",
+  control   = list(verbose = FALSE, progress = FALSE)
 )
+summary(fit)
 }
 
 }

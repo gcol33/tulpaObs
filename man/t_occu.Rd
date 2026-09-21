@@ -19,3 +19,7 @@ Polya-Gamma Gibbs sampler spOccupancy uses); \code{y} is a 3D array
 \verb{[n_sites x max_visits]} matrices), the occupancy \code{formula} and \code{detection}
 formula are site-level.
 }
+\examples{
+f <- t_occu()
+f
+}

@@ -33,6 +33,7 @@
 
 
 test_that("all-NA sites are flagged held-out and dropped from the likelihood", {
+  skip_on_cran()
   skip_if_fast()
   d <- .make_grid_occu()
   heldout <- seq(2, d$n, by = 4)
@@ -53,6 +54,7 @@ test_that("all-NA sites are flagged held-out and dropped from the likelihood", {
 
 
 test_that("held-out occupancy is recovered by spatial interpolation (icar)", {
+  skip_on_cran()
   skip_if_fast()
   d <- .make_grid_occu()
   heldout <- seq(2, d$n, by = 4)
@@ -73,6 +75,7 @@ test_that("held-out occupancy is recovered by spatial interpolation (icar)", {
 
 
 test_that("held-out occupancy is recovered for a bym2 field too", {
+  skip_on_cran()
   skip_if_fast()
   # bym2's predictor mixes structured + unstructured components with
   # hyperparameter-dependent scales, so it cannot be reconstructed from the

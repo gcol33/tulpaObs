@@ -499,6 +499,7 @@ test_that("occu_cover NUTS samples icar; rejects an RE term; advertises nuts", {
 
 
 test_that("occu_cover NUTS samples a single bar-form field (#203)", {
+  skip_on_cran()
   inp  <- .ocsn_inputs(side = 5L, J = 4L, seed = 11L)
   dat  <- cbind(inp$cell_dat, cell_idx = seq_len(inp$N))
   adj  <- inp$adj
@@ -751,6 +752,7 @@ test_that("occu_cover spatial NUTS recovers betas + field (beta arm, smoke)", {
 
 
 test_that("occu_cover spatial NUTS reports its hypers honestly per fit (#204)", {
+  skip_on_cran()
   inp <- .ocsn_inputs(side = 5L, J = 4L, seed = 11L)
   ctl <- list(verbose = FALSE, n.iter = 200L, n.warmup = 200L, n.chains = 1L,
               seed = 1L)

@@ -49,3 +49,7 @@ Per-species GLMM with Gaussian community hyperpriors on the coefficients (the
 \code{beta_s ~ N(beta_comm_mean, diag(beta_comm_sd^2))}, \verb{y_\{s,i\}} drawn Poisson /
 negative-binomial (log link) or Gaussian (identity). No detection.
 }
+\examples{
+sim <- simulate_ms_count(N = 50, n_species = 4, seed = 1)
+head(sim$y)
+}

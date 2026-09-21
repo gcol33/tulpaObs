@@ -382,6 +382,9 @@
 #' @param seed Optional random seed.
 #' @return A list with `y` (a length-`S` list of `N x J` matrices), `data`,
 #'   `species`, and `truth`.
+#' @examples
+#' sim <- simulate_occu_multi(S = 2, N = 50, J = 3, seed = 1)
+#' length(sim$y)
 #' @export
 simulate_occu_multi <- function(S = 2, N = 300, J = 4, n_state_covs = 1,
                                 beta_first = NULL, beta_second = NULL,

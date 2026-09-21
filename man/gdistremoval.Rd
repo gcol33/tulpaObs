@@ -45,6 +45,10 @@ distance scale \code{sigma} (\code{detection}), and logit per-period removal cap
 The per-site row totals must match (the same detected birds cross-classified).
 }
 
+\examples{
+f <- gdistremoval(transect = "point", cutpoints = c(0, 10, 20, 30, 40))
+f
+}
 \references{
 Amundson, C. L., Royle, J. A., Handel, C. M. (2014). A hierarchical model
 combining distance sampling and time removal to estimate detection

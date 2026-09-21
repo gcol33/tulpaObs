@@ -1114,7 +1114,7 @@ fit_cover_hurdle <- function(enc, positive = enc$positive,
 #' cover-hurdle SLA gamma is
 #' computed via [`.sla_compute_cover_hurdle()`]: a per-arm 5-point FD of
 #' the *original* Bernoulli / Beta / Lognormal log-likelihood against the
-#' arm's `solve(H_beta)` Sigma (raw Hessian — no Louis correction needed
+#' arm's `solve(H_beta)` Sigma (raw Hessian -- no Louis correction needed
 #' here because both arms run real likelihoods at the mode, not the
 #' pseudo-binomial M-step encoding). Per-arm pseudo-draws are then
 #' resampled from skew-normals fit by moment-matching `(beta_arm,

@@ -11,6 +11,7 @@
 # =============================================================================
 
 test_that("jsdm()/ms_count() method='pg_gibbs' gates + S3", {
+  skip_on_cran()
   sim <- simulate_jsdm(N = 60, n_species = 8, seed = 1)
   fit <- tobs(~ x, data = sim$data, family = jsdm(), y = sim$y,
               species = paste0("sp", seq_len(8)), method = "pg_gibbs",

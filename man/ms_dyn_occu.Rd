@@ -35,6 +35,10 @@ follow-up; \code{method = "nuts"} errors from the dispatcher with a pointer rath
 than silently downgrading.
 }
 
+\examples{
+f <- ms_dyn_occu()
+f
+}
 \seealso{
 \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=ms_occu]{ms_occu()}}
 }

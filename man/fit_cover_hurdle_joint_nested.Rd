@@ -18,7 +18,7 @@ fit_cover_hurdle_joint_nested(
 \arguments{
 \item{enc}{Output of \code{\link[=encode_cover_hurdle]{encode_cover_hurdle()}}.}
 
-\item{data}{The original (un-subsetted) data frame — required to resolve
+\item{data}{The original (un-subsetted) data frame -- required to resolve
 the spatial spec (group_var lookup, n_spatial_units check).}
 
 \item{positive}{\code{"lognormal"} or \code{"beta"}.}
@@ -32,7 +32,7 @@ pre-fit when \code{positive = "beta"}). For ICAR / CAR_proper backends
 amplitude \code{alpha * sigma}, so \code{alpha_grid} is the cover-arm
 amplitude axis and \code{sigma_grid} the donor's. Regularizing hyperpriors on the joint
 (sigma, alpha) axes can be set via \code{prior_sigma} (donor amplitude)
-and \code{prior_alpha} (copy coefficient) — each a length-2 list
+and \code{prior_alpha} (copy coefficient) -- each a length-2 list
 \code{list(family, params)} matching tulpa's \code{prior_sigma} / \code{prior_alpha}
 args. The prior on alpha directly regularizes the copy scalar at small
 \code{n_pos}, replacing the per-arm \code{prior_sigma_pos} of the pre-reparam

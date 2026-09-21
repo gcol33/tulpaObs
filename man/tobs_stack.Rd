@@ -63,13 +63,19 @@ ensemble of pure seed-variants, e.g. from \code{tobs(..., control = list(n.seeds
 identical, so the weights come out roughly uniform.)
 }
 \examples{
-\dontrun{
-f1 <- tobs(~ elev,          data = sites, family = occu(),
-           detection = ~ effort, y = y, method = "nuts")
-f2 <- tobs(~ elev + forest, data = sites, family = occu(),
-           detection = ~ effort, y = y, method = "nuts")
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 2, n_det_covs = 1,
+                     seed = 1)
+ctrl <- list(verbose = FALSE, progress = FALSE)
+f1 <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+           detection = ~ det_cov1, y = sim$y, method = "laplace",
+           control = ctrl)
+f2 <- tobs(~ occ_cov1 + occ_cov2, data = sim$data, family = occu(),
+           detection = ~ det_cov1, y = sim$y, method = "laplace",
+           control = ctrl)
 ens <- tobs_stack(simple = f1, full = f2)
 ens$weights
-predict(ens)            # weight-combined in-sample psi / p / z
+# weight-combined in-sample psi / p / z
+str(predict(ens))
 }
 }

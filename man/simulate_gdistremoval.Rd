@@ -45,3 +45,8 @@ Draws from the \code{\link[=gdistremoval]{gdistremoval()}} model: site abundance
 the detected birds cross-classified by a distance band (half-normal key, scale
 \code{sigma}) and by a removal period (per-period capture \code{r}).
 }
+\examples{
+sim <- simulate_gdistremoval(N = 50, seed = 1)
+dim(sim$y)
+dim(sim$y_rem)
+}

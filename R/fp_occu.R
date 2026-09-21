@@ -646,6 +646,9 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J state matrix), `data` (occupancy covariates),
 #'   and `truth` (coefficients, per-site `psi`, scalar `p11`/`p10`/`b`, latent `z`).
+#' @examples
+#' sim <- simulate_fp_occu(N = 50, J = 4, seed = 1)
+#' table(sim$y)
 #' @export
 simulate_fp_occu <- function(N = 300, J = 5, n_occ_covs = 1, beta_psi = NULL,
                              p11 = 0.6, p10 = 0.05, b = 0.5, seed = NULL) {

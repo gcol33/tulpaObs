@@ -110,6 +110,7 @@ test_that(".cover_aggregate_occ collapses exchangeable rows to exact sufficient 
                  adaptive.grid = FALSE)))
 
 test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
+  skip_on_cran()
   skip_if_fast()
   s <- .aoc_sim_single()
 
@@ -158,6 +159,7 @@ test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
                  phi.grid = c(0.3, 0.5), adaptive.grid = FALSE)))
 
 test_that("aggregate.occ reduces and preserves the coupled-trend cover() fit", {
+  skip_on_cran()
   skip_if_fast()
   for (seed in c(7L, 19L)) {
     s <- .aoc_sim_trend(seed = seed)

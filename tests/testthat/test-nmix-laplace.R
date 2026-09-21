@@ -98,6 +98,7 @@ test_that("Multi-seed coverage of 95% Wald CIs is near nominal", {
 })
 
 test_that("Cross-check against unmarked::pcount", {
+  skip_on_cran()
   skip_if_fast()
   skip_if_not_installed("unmarked")
   # unmarked fits are S4. Every unmarked call below is namespace-qualified
@@ -170,6 +171,7 @@ test_that("print method runs without error", {
 # --------------------------------------------------------------------------
 
 test_that("NB fit converges and estimates a finite dispersion", {
+  skip_on_cran()
   skip_if_fast()
   dat <- simulate_nmix(seed = 5, n_sites = 250, r = 2)
   fit <- nmix_laplace(
@@ -192,6 +194,7 @@ test_that("NB fit converges and estimates a finite dispersion", {
 })
 
 test_that("NB log-lik exceeds Poisson on overdispersed data; matches on Poisson data", {
+  skip_on_cran()
   skip_if_fast()
   dat_nb <- simulate_nmix(seed = 6, n_sites = 250, r = 1.5)
   fit_nb <- nmix_laplace(dat_nb$y, dat_nb$site_idx, dat_nb$X_lambda, dat_nb$X_p,
@@ -238,6 +241,7 @@ test_that("NB multi-seed recovery: slopes and dispersion, near-nominal coverage"
 })
 
 test_that("NB cross-check against unmarked::pcount(mixture = 'NB')", {
+  skip_on_cran()
   skip_if_fast()
   skip_if_not_installed("unmarked")
   dat <- simulate_nmix(seed = 5, n_sites = 250, r = 2)

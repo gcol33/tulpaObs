@@ -371,6 +371,10 @@
 #' @param seed Optional random seed.
 #' @return A list with `y` (distance-band counts), `y_rem` (removal-period
 #'   counts), `data`, and `truth`.
+#' @examples
+#' sim <- simulate_gdistremoval(N = 50, seed = 1)
+#' dim(sim$y)
+#' dim(sim$y_rem)
 #' @export
 simulate_gdistremoval <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
                                   n_periods = 4L, transect = "line",

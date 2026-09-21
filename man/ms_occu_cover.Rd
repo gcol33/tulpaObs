@@ -142,6 +142,10 @@ unknown sign. \code{fit$ms_community$var_attenuation$debias} records \code{"aghq
 the EM case.
 }
 
+\examples{
+f <- ms_occu_cover(response = "lognormal")
+f
+}
 \seealso{
 \code{\link[=occu_cover]{occu_cover()}} (single species), \code{\link[=ms_occu]{ms_occu()}} (community occupancy,
 no cover), \code{\link[=ms_abun]{ms_abun()}} (community N-mixture).

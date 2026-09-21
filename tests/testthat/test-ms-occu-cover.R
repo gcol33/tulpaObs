@@ -333,6 +333,7 @@ test_that("ms_occu_cover() recovers community means + sigma_pos (gaussian, #127)
 })
 
 test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116)", {
+  skip_on_cran()
   sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
                                 mu_pos = c(log(0.12), 0.4), positive = "lognormal",
                                 sigma_pos = 0.4, seed = 7)
@@ -356,6 +357,7 @@ test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116
 })
 
 test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127)", {
+  skip_on_cran()
   sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
                                 mu_pos = c(2.0, 0.4), positive = "gaussian",
                                 sigma_pos = 0.4, seed = 9)

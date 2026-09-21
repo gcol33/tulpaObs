@@ -15,6 +15,7 @@
 }
 
 test_that("JSDM model fits", {
+  skip_on_cran()
   skip_if_fast()
   set.seed(42)
   n <- 20; sp <- 3
@@ -130,6 +131,7 @@ test_that("tobs_check reports Moran's I when coords are supplied", {
 })
 
 test_that("tobs_ppc is calibrated for a correct occupancy model", {
+  skip_on_cran()
   skip_if_fast()
   # The latent state is sampled from its full conditional given the detection
   # history, so the Bayesian p-value sits near 0.5 for a correct fit. Drawing

@@ -27,6 +27,10 @@ community-mean intervals carry the mild Laplace under-dispersion typical of
 occupancy data (measured 95\% CI coverage ~0.89 at small per-species n).
 }
 
+\examples{
+f <- ms_int_occu()
+f
+}
 \seealso{
 \code{\link[=int_occu]{int_occu()}}, \code{\link[=ms_occu]{ms_occu()}}
 }

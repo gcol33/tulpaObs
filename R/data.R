@@ -7,6 +7,12 @@
 #' @param coords Optional n_sites x 2 coordinate matrix.
 #' @param species Optional character or integer species identifier.
 #' @return An `tobs_data` object.
+#' @examples
+#' sim <- simulate_occu(N = 50, J = 3, seed = 1)
+#' dat <- tobs_format(sim$y,
+#'                    occ.covs = sim$data[, c("occ_cov1", "occ_cov2")],
+#'                    det.covs = list(det_cov1 = sim$data$det_cov1))
+#' dat
 #' @export
 tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
                         coords = NULL, species = NULL) {
@@ -76,6 +82,16 @@ tobs_format <- function(y, occ.covs = NULL, det.covs = NULL,
 #'   occurrence response and a cover response can be paired directly.
 #' @return An `tobs_data` object. With `compact = TRUE` its `$y` is a
 #'   `tobs_ragged` carrier and its `$det.covs` are length-V vectors.
+#' @examples
+#' sim <- simulate_occu(N = 30, J = 3, seed = 1)
+#' long <- data.frame(site = rep(seq_len(30), times = 3),
+#'                    visit = rep(1:3, each = 30),
+#'                    det = as.vector(sim$y),
+#'                    occ_cov1 = sim$data$occ_cov1,
+#'                    effort = runif(90))
+#' dat <- tobs_data(long, y = "det", site = "site", visit = "visit",
+#'                  occ.covs = "occ_cov1", det.covs = "effort")
+#' dat
 #' @export
 tobs_data <- function(df, y, site, visit,
                       type = c("occurrence", "abundance", "cover", "positive"),
@@ -294,6 +310,11 @@ tobs_data <- function(df, y, site, visit,
 #' @param coords Optional n_sites x 2 coordinate matrix.
 #' @param species_names Optional character vector of species names.
 #' @return An `tobs_data` object with multi-species structure.
+#' @examples
+#' sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+#' dat <- tobs_format_ms(sim$y, occ.covs = sim$data,
+#'                       species_names = paste0("sp", 1:4))
+#' dat$n_species
 #' @export
 tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
                            coords = NULL, species_names = NULL) {
@@ -527,6 +548,14 @@ plot.tobs_data <- function(x, ...) {
 # Simulation functions
 # ============================================================================
 
+# N rows of `n` independent standard-normal covariates named prefix1..prefixn;
+# n = 0 gives an N-row frame with no columns.
+.sim_normal_covs <- function(N, n, prefix) {
+  covs <- as.data.frame(matrix(rnorm(N * n), N, n))
+  if (n > 0) names(covs) <- paste0(prefix, seq_len(n))
+  covs
+}
+
 #' Simulate single-species occupancy data
 #'
 #' @param N Number of sites (default 100).
@@ -537,6 +566,9 @@ plot.tobs_data <- function(x, ...) {
 #' @param beta_det Detection coefficients (auto-generated if NULL).
 #' @param seed Random seed.
 #' @return A list with `y`, `data`, and `truth`.
+#' @examples
+#' sim <- simulate_occu(N = 50, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_occu <- function(N = 100, J = 4,
                           n_occ_covs = 2, n_det_covs = 1,
@@ -548,14 +580,12 @@ simulate_occu <- function(N = 100, J = 4,
   if (is.null(beta_det)) beta_det <- c(0, runif(n_det_covs, -1, 1))
 
   # Covariates
-  occ_covs <- data.frame(matrix(rnorm(N * n_occ_covs), N, n_occ_covs))
-  names(occ_covs) <- paste0("occ_cov", seq_len(n_occ_covs))
-  det_covs <- data.frame(matrix(rnorm(N * n_det_covs), N, n_det_covs))
-  names(det_covs) <- paste0("det_cov", seq_len(n_det_covs))
+  occ_covs <- .sim_normal_covs(N, n_occ_covs, "occ_cov")
+  det_covs <- .sim_normal_covs(N, n_det_covs, "det_cov")
   data <- cbind(occ_covs, det_covs)
 
-  X_occ <- model.matrix(~ ., occ_covs)
-  X_det <- model.matrix(~ ., det_covs)
+  X_occ <- cbind(1, as.matrix(occ_covs))
+  X_det <- cbind(1, as.matrix(det_covs))
 
   psi <- plogis(as.vector(X_occ %*% beta_occ))
   p <- plogis(as.vector(X_det %*% beta_det))
@@ -584,6 +614,9 @@ simulate_occu <- function(N = 100, J = 4,
 #' @param alpha_comm_sd Community SD for detection (default c(0.5)).
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
+#' @examples
+#' sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
                      beta_comm_mean = c(0, 0.5),
@@ -658,6 +691,9 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
 #'   10.
 #' @param seed Optional RNG seed.
 #' @return A list with `y` (an `N x n_species` matrix), `data`, and `truth`.
+#' @examples
+#' sim <- simulate_ms_count(N = 50, n_species = 4, seed = 1)
+#' head(sim$y)
 #' @export
 simulate_ms_count <- function(N = 120, n_species = 10,
                               beta_comm_mean = c(1, 0.5),
@@ -924,6 +960,9 @@ simulate_royle_nichols <- function(N = 200, J = 5,
 #'   (a `[N x T]` matrix column of `data`); fit with `detection = ~ det_cov`.
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
+#' @examples
+#' sim <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 4, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
                     beta_occ = c(0.5), beta_det = c(0),
@@ -1003,6 +1042,9 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
 #' @param seed Random seed.
 #' @return A list with `y` (list of matrices, each row named by the site of
 #'   `data` it measures), `data`, `site_maps`, and `truth`.
+#' @examples
+#' sim <- simulate_int_occu(N_total = 60, n_shared = 10, seed = 1)
+#' lapply(sim$y, dim)
 #' @export
 simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
                       n_shared = 20,
@@ -1074,6 +1116,10 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #' @param seed Random seed.
 #' @return A list with `y` (4D array), `data`, and `truth`.
 #' @seealso [ms_dyn_occu()], the family this simulates for.
+#' @examples
+#' sim <- simulate_ms_dyn_occu(N = 30, J = 2, n_species = 3, n_seasons = 3,
+#'                             seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
                       beta_comm_mean = c(0), beta_comm_sd = c(0.5),
@@ -1136,6 +1182,9 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
 #' @param seed Random seed.
 #' @return A list with `y` (list of 3D arrays), `data`, and `truth`.
 #' @seealso [ms_int_occu()], the family this simulates for.
+#' @examples
+#' sim <- simulate_ms_int_occu(N = 40, n_species = 3, seed = 1)
+#' lapply(sim$y, dim)
 #' @export
 simulate_ms_int_occu <- function(N = 100, J = c(3, 4), n_species = 5,
                         n_data = 2, seed = NULL) {

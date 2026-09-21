@@ -48,6 +48,10 @@ variant (the K-class generalisation of \code{\link[=fp_occu]{fp_occu()}}, a conf
 observed label) are documented follow-ups.
 }
 
+\examples{
+f <- occu_categorical(classes = c("red", "green", "blue"))
+f
+}
 \seealso{
 \code{\link[=cover]{cover()}} (presence + magnitude), \code{\link[=fp_occu]{fp_occu()}} (two-state
 false-positive detection).

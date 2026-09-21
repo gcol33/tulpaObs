@@ -60,3 +60,7 @@ Draws from the \code{\link[=dyn_int_occu]{dyn_int_occu()}} model: a dynamic (mul
 process (\code{psi1}, colonization \code{gamma}, extinction \code{eps}) observed by \code{S}
 detection sources with per-source detection probability.
 }
+\examples{
+sim <- simulate_dyn_int_occu(N = 40, T_seasons = 3, seed = 1)
+lapply(sim$y, dim)
+}

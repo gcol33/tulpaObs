@@ -82,3 +82,7 @@ distance bins by the half-normal detection function. The returned \code{y} is a 
 array \verb{[n_sites x n_bins x n_species]} suitable for \code{\link[=tobs]{tobs()}} with
 \code{\link[=ms_distance]{ms_distance()}}.
 }
+\examples{
+sim <- simulate_ms_distance(n_species = 4, N = 30, seed = 1)
+dim(sim$y)
+}

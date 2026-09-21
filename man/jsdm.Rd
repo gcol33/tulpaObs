@@ -11,5 +11,9 @@ A \code{tobs_family} object.
 }
 \description{
 Multivariate occurrence with shared latent factors. No observation
-replication — treats observed presence/absence as the response.
+replication -- treats observed presence/absence as the response.
+}
+\examples{
+f <- jsdm()
+f
 }

@@ -653,6 +653,9 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
 #' @return A list with `y` (N x n_bins count matrix), `data` (covariates),
 #'   `cutpoints`, and `truth` (coefficients, per-site `lambda` / `sigma`, latent
 #'   `N`, key/transect/mixture/shape/size).
+#' @examples
+#' sim <- simulate_distance(N = 50, seed = 1)
+#' head(sim$y)
 #' @export
 simulate_distance <- function(N = 200, cutpoints = seq(0, 1, length.out = 6),
                               key = c("halfnorm", "hazard"),

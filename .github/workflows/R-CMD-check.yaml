@@ -90,12 +90,9 @@ jobs:
       - name: Verify floor availability
         run: Rscript .github/scripts/check-floor-served.R
 
-      # DESCRIPTION pins tulpa to an exact Remotes tag, so this resolves and
-      # compiles it from that GitHub tag rather than taking r-universe's
-      # prebuilt default-branch binary -- CI tests exactly the engine version
-      # the package declares (issue #150). tulpaMesh carries no such tag and
-      # still resolves from gcol33.r-universe.dev by Imports floor alone.
-      # The action caches the built library, which is where the expensive
+      # tulpa and tulpaMesh resolve by their Imports floors, from CRAN or from
+      # gcol33.r-universe.dev; check-engine-pin.R below records which version
+      # was installed (issue #150). The action caches the built library, which is where the expensive
       # third-party compiles (RcppEigen) are amortised.
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:

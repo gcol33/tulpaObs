@@ -57,6 +57,7 @@ test_that("tobs(engine='nested_laplace') runs with spatial only", {
 
 
 test_that("tobs(engine='nested_laplace') runs with icar and car_proper", {
+  skip_on_cran()
   # car_proper drives the proper-CAR multi-block kernel: its term constructor
   # must carry the CSR adjacency (icar/bym2 do; car_proper used to omit it,
   # which crashed cpp_nested_laplace_multi with an empty adjacency).
@@ -78,6 +79,7 @@ test_that("tobs(engine='nested_laplace') runs with icar and car_proper", {
 
 
 test_that("tobs(engine='nested_laplace') runs with spatial + temporal + re", {
+  skip_on_cran()
   d <- simulate_panel_occu()
   adj <- d$adj
 

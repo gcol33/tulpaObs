@@ -38,6 +38,10 @@ A list with \code{y} (3D array \verb{[N x T x J]}), \code{data}, and \code{truth
 \description{
 Simulate multi-season occupancy with an AR1 year effect (tPGOcc)
 }
+\examples{
+sim <- simulate_t_occu(N = 30, T_seasons = 4, J = 2, seed = 1)
+dim(sim$y)
+}
 \seealso{
 \code{\link[=t_occu]{t_occu()}}, the family this simulates for.
 }

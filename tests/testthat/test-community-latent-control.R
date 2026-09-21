@@ -70,6 +70,7 @@
 # The three settings a caller can set, on the families whose oracle is a
 # closed-form density and so cheap enough to fit three times here.
 test_that("max.outer / factor.starts / n.quad reach the latent driver", {
+  skip_on_cran()
   ctl <- list(max.outer = 1L, factor.starts = 3L, n.quad = 7L,
               verbose = FALSE, progress = FALSE)
 
@@ -106,6 +107,7 @@ test_that("max.outer / factor.starts / n.quad reach the latent driver", {
 # against the family's own measured `factor.outer` when a factor block is present,
 # so what a fit ran under is not readable off the call.
 test_that("the reported settings carry each family's own resolved defaults", {
+  skip_on_cran()
   d <- .clc_count_sim()
 
   # ms_count sets factor.outer = 150 from its measured intercept-bias curve

@@ -35,3 +35,7 @@ A list with \code{y}, \code{data}, and \code{truth}.
 \description{
 Simulate single-species occupancy data
 }
+\examples{
+sim <- simulate_occu(N = 50, J = 3, seed = 1)
+dim(sim$y)
+}

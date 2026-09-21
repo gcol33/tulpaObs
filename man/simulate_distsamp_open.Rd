@@ -73,3 +73,7 @@ Draws from the \code{\link[=distsamp_open]{distsamp_open()}} model: an open meta
 (\code{N_1 ~ Poisson / NB(lambda)}, \verb{N_t = Binomial(N_\{t-1\}, omega) + Poisson(gamma)}) observed by distance sampling (half-normal key, scale
 \code{sigma}) at each primary period.
 }
+\examples{
+sim <- simulate_distsamp_open(N = 40, n_seasons = 3, seed = 1)
+dim(sim$y)
+}

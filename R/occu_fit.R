@@ -12,7 +12,7 @@
 #' user-facing; called from `tobs()` via the per-family `.dispatch_*` helpers.
 #' Spatial / temporal / random-effect / SVC / latent structure is read from
 #' the structured terms the formula carried (`model$structured_terms`), not
-#' from arguments — there is a single user-facing specification path.
+#' from arguments -- there is a single user-facing specification path.
 #'
 #' @keywords internal
 .tobs_fit_model <- function(model,

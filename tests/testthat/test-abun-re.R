@@ -60,6 +60,7 @@ test_that("RE on the lambda arm fits and surfaces sigma_g + BLUPs", {
 })
 
 test_that("RE on the p arm fits and the sigma carries the p<t> label", {
+  skip_on_cran()
   skip_if_fast()
   sp <- sim_abun_p_re(N = 60, J = 3, ngrp = 6,
                      beta_lambda = 1.5, beta_p = c(0, 0.4),

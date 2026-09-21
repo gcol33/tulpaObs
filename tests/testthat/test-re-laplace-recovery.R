@@ -39,6 +39,7 @@ sim_occu_re_corr <- function(seed = 404, ng = 40L, per = 25L, J = 6L,
 }
 
 test_that("iid intercept RE is fit (not dropped) by the default Laplace engine", {
+  skip_on_cran()
   skip_if_fast()
   s <- sim_occu_re_intercept()
   fit <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
@@ -70,6 +71,7 @@ test_that("iid intercept RE is fit (not dropped) by the default Laplace engine",
 })
 
 test_that("uncorrelated random slopes (1 + x || g) recover under Laplace", {
+  skip_on_cran()
   skip_if_fast()
   set.seed(202)
   ng <- 30L; per <- 30L; N <- ng * per; J <- 6L
@@ -191,6 +193,7 @@ test_that("RE forms the deterministic engine cannot fit error toward NUTS", {
 })
 
 test_that("AGHQ variance-component debias runs by default and is toggleable", {
+  skip_on_cran()
   s <- sim_occu_re_intercept(seed = 21, ng = 25L, per = 12L)
   args <- list(formula = ~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
                family = occu(), method = "laplace")
@@ -285,6 +288,7 @@ sim_det_re_intercept <- function(seed = 1, N = 400L, J = 6L, ng = 40L,
 }
 
 test_that("a detection random intercept is fit on its own arm (AGHQ arm = det)", {
+  skip_on_cran()
   skip_if_fast()
   s <- sim_det_re_intercept(seed = 1)
   fit <- tobs(~ occ_cov, detection = ~ (1 | observer), family = occu(),

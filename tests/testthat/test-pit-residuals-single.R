@@ -19,6 +19,7 @@ test_that("pit_residuals() on occu() is not degenerate at 1 for detected sites",
 })
 
 test_that("pit_residuals() KS p-values are not degenerate over seeds (calibration)", {
+  skip_on_cran()
   skip_if_fast()
   n_seeds <- 20L
   pvals <- vapply(seq_len(n_seeds), function(seed) {

@@ -576,6 +576,9 @@
 #' @param seed Optional random seed.
 #' @return A list with `y` (a length-`S` list of `[N x J x T]` arrays), `data`,
 #'   `sources`, and `truth`.
+#' @examples
+#' sim <- simulate_dyn_int_occu(N = 40, T_seasons = 3, seed = 1)
+#' lapply(sim$y, dim)
 #' @export
 simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
                                   psi1 = 0.5, gamma = 0.3, eps = 0.2,

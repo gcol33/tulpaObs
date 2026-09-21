@@ -38,3 +38,7 @@ A list with \code{y} (3D array), \code{data}, and \code{truth}.
 \description{
 Simulate multi-species occupancy data
 }
+\examples{
+sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+dim(sim$y)
+}

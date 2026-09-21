@@ -8,6 +8,12 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
+# The model fits below run when the article is built locally, in CI and for
+# the pkgdown site, all of which set NOT_CRAN. CRAN's check farm gives the
+# whole check a ten-minute budget these fits do not fit inside, so there the
+# code is shown without being run.
+EVAL_FITS <- identical(Sys.getenv("NOT_CRAN"), "true")
+knitr::opts_chunk$set(eval = EVAL_FITS)
 knitr::opts_chunk$set(
   collapse  = TRUE,
   comment   = "#>",
@@ -20,8 +26,8 @@ set.seed(20260529)
 library(tulpaObs)
 ```
 
-```{r ggtheme, include = FALSE}
-have_gg <- requireNamespace("ggplot2", quietly = TRUE)
+```{r ggtheme, include = FALSE, eval = TRUE}
+have_gg <- EVAL_FITS && requireNamespace("ggplot2", quietly = TRUE)
 if (have_gg) {
   library(ggplot2)
   transparent <- theme(

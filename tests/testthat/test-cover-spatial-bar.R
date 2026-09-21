@@ -197,6 +197,7 @@ test_that("`to =` is not a bar argument (retired: arm chosen by placement)", {
 })
 
 test_that("a correlated `|` bar fits an MCAR field", {
+  skip_on_cran()
   d <- .bar_small_data()
   # Tiny smoke data: the outer CCD over Sigma is weakly identified and declines
   # to the tensor grid (a benign grid-size note); the assertion is plumbing
@@ -218,6 +219,7 @@ test_that("a correlated `|` bar fits an MCAR field", {
 })
 
 test_that("a single-arm correlated `|` bar fits on the occurrence arm alone (#109)", {
+  skip_on_cran()
   d <- .bar_small_data()
   # Placement: the correlated bar written in the presence formula only is the
   # free-Sigma field on that arm, with no cross-arm copy.
@@ -245,6 +247,7 @@ test_that("a correlated `|` bar cannot co-exist with another areal term", {
 })
 
 test_that("a single-arm || placement is wired as an arm-specific separate latent", {
+  skip_on_cran()
   # an INDEPENDENT (`||`) bar placed in one arm's formula fits an arm-specific
   # separate field on that arm only, with its own precision and no cross-arm
   # copy. Recovery lives in test-cover-spatial-bar-armspecific.R; here the

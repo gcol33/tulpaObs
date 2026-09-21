@@ -81,3 +81,14 @@ only as much as identifiability requires. When no candidate is identifiable
 the data cannot support a standard occupancy model and a Royle-Nichols or
 count model is the alternative.
 }
+\examples{
+set.seed(1)
+d <- data.frame(east = runif(200), north = runif(200),
+                year = sample(2001:2006, 200, replace = TRUE),
+                detected = rbinom(200, 1, 0.3))
+scan <- occu_aggregation_scan(d, response = "detected",
+                              coords = c("east", "north"), year = "year",
+                              cell_sizes = c(0.2, 0.4),
+                              block_lengths = c(2, 3))
+scan
+}

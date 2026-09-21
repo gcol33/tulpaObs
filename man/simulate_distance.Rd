@@ -58,3 +58,7 @@ individual lands in a distance bin (or goes undetected) by the multinomial
 cell probabilities. Returns an \verb{N x n_bins} integer matrix of per-bin counts
 suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=distance]{distance()}}.
 }
+\examples{
+sim <- simulate_distance(N = 50, seed = 1)
+head(sim$y)
+}

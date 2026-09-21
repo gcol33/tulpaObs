@@ -22,6 +22,7 @@
 }
 
 test_that("fitted()$psi carries the areal field on an occu() fit", {
+  skip_on_cran()
   s <- .ofo_data()
   adj <- s$adj
   fit <- suppressMessages(tobs(~ 1 + icar(graph = adj), data = s$d,
@@ -35,6 +36,7 @@ test_that("fitted()$psi carries the areal field on an occu() fit", {
 })
 
 test_that("waic() scores the areal field on an occu() fit", {
+  skip_on_cran()
   s <- .ofo_data()
   adj <- s$adj
   ctl <- list(progress = FALSE, verbose = FALSE)

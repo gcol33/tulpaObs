@@ -46,7 +46,7 @@ A \code{tobs_family} object.
 \description{
 Latent presence (Bernoulli) plus conditional positive cover (beta or
 lognormal). Does not share the replicate-detection assumption of the other
-families — see \code{vignette("families")} for the conceptual caveat.
+families -- see \code{vignette("families")} for the conceptual caveat.
 }
 \section{Response on the formula left-hand side}{
 
@@ -73,7 +73,7 @@ that per-arm formulas and share() address. The LHS is evaluated against \code{da
 (then the calling environment), so it may be a bare column or an expression.
 }
 
-\section{Joint nested-Laplace engine — spatial-prior parameterisation}{
+\section{Joint nested-Laplace engine -- spatial-prior parameterisation}{
 
 When fitted with \code{method = "nested_laplace"} and an areal spatial term in
 the latent-presence formula (\code{bym2(graph = adj)}, or \code{car()} /

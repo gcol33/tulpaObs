@@ -69,3 +69,7 @@ shared across species (community covariates). The returned \code{y} / \code{y_po
 3D arrays \verb{[n_sites x J x n_species]} suitable for \code{\link[=tobs]{tobs()}} with
 \code{\link[=ms_occu_cover]{ms_occu_cover()}} (\code{y_pos} is \code{NA} where not detected).
 }
+\examples{
+sim <- simulate_ms_occu_cover(n_species = 4, N = 30, J = 3, seed = 1)
+dim(sim$y)
+}

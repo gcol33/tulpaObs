@@ -20,7 +20,7 @@ List(gamma_occ, gamma_pos, valid, reason).
 \description{
 Returns per-coefficient SLA gamma for each of the two arms of a cover
 hurdle fit. Each arm's gamma is computed via \code{\link[=.sla_gamma_fd]{.sla_gamma_fd()}} using
-the arm's \code{solve(H_beta)} as Sigma (no Louis correction — both arms are
+the arm's \code{solve(H_beta)} as Sigma (no Louis correction -- both arms are
 real likelihoods at the mode under the single-Laplace path).
 }
 \details{

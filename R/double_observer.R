@@ -351,6 +351,9 @@
 #' @return A list with `y` (`N x 3` cell counts for `"independent"`, `N x 2` for
 #'   `"dependent"`), `data`, `primary` (the per-site primary observer, for
 #'   `"dependent"`), and `truth`.
+#' @examples
+#' sim <- simulate_double_observer(N = 50, seed = 1)
+#' head(sim$y)
 #' @export
 simulate_double_observer <- function(N = 200,
                                      type = c("independent", "dependent"),

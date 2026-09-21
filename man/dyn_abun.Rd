@@ -44,6 +44,10 @@ transition interval) on \code{omega} / \code{gamma} gives interval-specific vita
 rates. The response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or
 a list of per-season count matrices); missing visits are \code{NA}.
 }
+\examples{
+f <- dyn_abun(mixture = "negbin")
+f
+}
 \references{
 Dail, D., Madsen, L. (2011). Models for estimating abundance from
 repeated counts of an open metapopulation. \emph{Biometrics} 67, 577-587.

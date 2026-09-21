@@ -212,6 +212,7 @@ test_that("areal count recovers the field + slope under bym2", {
 }
 
 test_that("count('binomial') is identified against an areal field (not gated)", {
+  skip_on_cran()
   d <- .count_sim_areal_binom(side = 8L, seed = 11L)
   # binomial does NOT hit the non-Poisson dispersion gate
   fit <- tobs(~ x + icar(graph = d$graph), data = d$data, y = d$y,

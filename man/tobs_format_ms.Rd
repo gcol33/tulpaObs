@@ -29,3 +29,9 @@ An \code{tobs_data} object with multi-species structure.
 \description{
 Format multi-species occupancy data
 }
+\examples{
+sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+dat <- tobs_format_ms(sim$y, occ.covs = sim$data,
+                      species_names = paste0("sp", 1:4))
+dat$n_species
+}

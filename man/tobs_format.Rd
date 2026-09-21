@@ -24,3 +24,10 @@ An \code{tobs_data} object.
 \description{
 Format occupancy data from matrices/lists
 }
+\examples{
+sim <- simulate_occu(N = 50, J = 3, seed = 1)
+dat <- tobs_format(sim$y,
+                   occ.covs = sim$data[, c("occ_cov1", "occ_cov2")],
+                   det.covs = list(det_cov1 = sim$data$det_cov1))
+dat
+}

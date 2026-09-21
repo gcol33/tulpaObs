@@ -668,6 +668,9 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
 #'   with factors -- the `loadings`, `factors` and the implied residual
 #'   correlation `cor_res`). The latent `N` is drawn inside the shared C++
 #'   simulator and is not returned.
+#' @examples
+#' sim <- simulate_ms_distance(n_species = 4, N = 30, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_ms_distance <- function(n_species = 10, N = 100,
                                  cutpoints = c(0, 25, 50, 75, 100),

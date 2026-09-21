@@ -8,6 +8,12 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
+# The model fits below run when the article is built locally, in CI and for
+# the pkgdown site, all of which set NOT_CRAN. CRAN's check farm gives the
+# whole check a ten-minute budget these fits do not fit inside, so there the
+# code is shown without being run.
+EVAL_FITS <- identical(Sys.getenv("NOT_CRAN"), "true")
+knitr::opts_chunk$set(eval = EVAL_FITS)
 knitr::opts_chunk$set(
   collapse  = TRUE,
   comment   = "#>",
@@ -168,7 +174,7 @@ source, each prefixed by the name you gave that source in `y`.
 coef(fit)
 ```
 
-The occupancy slope on `x` lands near the simulated `r si$truth$beta_occ[2]`.
+The occupancy slope on `x` lands near the simulated 0.9.
 The two detection intercepts come back separately, one labelled `survey` and
 one `casual`, because each source carries its own detection process.
 `summary()` adds the posterior standard deviation and credible bounds; the
@@ -222,12 +228,12 @@ fit_survey_nuts <- tobs(
 
 Read the occupancy slope from each posterior. The integrated fit borrows the
 deeper source's visits and the extra sites it covers, so its slope sits closer
-to the truth of `r si$truth$beta_occ[2]` and carries a smaller standard
+to the truth of 0.9 and carries a smaller standard
 deviation and a narrower credible interval.
 
 ```{r payoff-table}
 row_x <- function(f) {
-  s <- summary(f)["psi_x", c("estimate", "std.error", "2.5%", "97.5%")]
+  s <- summary(f)["psi_x", c("estimate", "std.error", "2.5 %", "97.5 %")]
   s <- as.numeric(s)
   c(estimate = s[1], sd = s[2], lower = s[3], upper = s[4],
     width = s[4] - s[3])

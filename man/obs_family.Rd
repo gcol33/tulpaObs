@@ -69,4 +69,9 @@ Low-level constructor for \code{tobs_family} objects. End users should call the
 specific family functions (\code{\link[=occu]{occu()}}, \code{\link[=abun]{abun()}}, \code{\link[=cover]{cover()}}, ...) rather than
 this directly.
 }
+\examples{
+f <- obs_family("my_occu", "custom occupancy", latent = "bernoulli",
+                observation = "binomial_detection")
+f
+}
 \keyword{internal}

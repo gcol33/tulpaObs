@@ -86,6 +86,12 @@
 #'   covariate frame), `species`, and `truth` (the canonical-form generating
 #'   parameters: `mu_*`, `sd_*`, per-species `b_*`, loadings `L`, field `w`,
 #'   `psi`, `z`).
+#' @examples
+#' adj <- matrix(0, 10, 10)
+#' adj[cbind(1:9, 2:10)] <- 1
+#' adj <- adj + t(adj)
+#' sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_ms_occu_cover_spatial <- function(adj,
                                            n_species  = 8L,

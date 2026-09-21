@@ -65,3 +65,8 @@ Draws cell occupancy \code{z_c ~ Bernoulli(psi_c)}, plot availability
 occupancy (\code{sigma}) and cover (\code{alpha * sigma}) arms. The data-generating
 process for \code{\link[=occu_multiscale_cover]{occu_multiscale_cover()}} recovery tests.
 }
+\examples{
+sim <- simulate_occu_multiscale_cover(n_cells = 10, plots_per_cell = 2,
+                                      visits_per_plot = 2, seed = 1)
+dim(sim$y)
+}

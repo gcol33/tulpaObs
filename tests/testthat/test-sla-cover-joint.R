@@ -74,6 +74,7 @@ suppressPackageStartupMessages({
 # ---------------------------------------------------------------------------
 
 test_that("joint SLA path no longer falls back via message", {
+  skip_on_cran()
   skip_if_fast()
     set.seed(101)
     sim <- .make_cover_data(seed = 101, N = 200, n_s = 25)
@@ -110,6 +111,7 @@ test_that("joint SLA path no longer falls back via message", {
 # ---------------------------------------------------------------------------
 
 test_that("SLA joint fit exposes skew + draws fields", {
+  skip_on_cran()
   skip_if_fast()
     set.seed(102)
     sim <- .make_cover_data(seed = 102, N = 200, n_s = 25)
@@ -163,6 +165,7 @@ test_that("SLA joint fit exposes skew + draws fields", {
 # ---------------------------------------------------------------------------
 
 test_that("approx='gaussian_laplace' leaves SLA fields off", {
+  skip_on_cran()
   skip_if_fast()
     set.seed(103)
     sim <- .make_cover_data(seed = 103, N = 200, n_s = 25)

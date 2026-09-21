@@ -22,6 +22,7 @@ simulate_beta_cover_pp <- function(N = 240, n_s = 25, sigma = 0.5, rho = 0.7,
 }
 
 test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
+  skip_on_cran()
   skip_if_fast()
     sim <- simulate_beta_cover_pp(N = 240, n_s = 25, phi = 30, seed = 27)
     adj <- chain_adj(nlevels(sim$data$region))

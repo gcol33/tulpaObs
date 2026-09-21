@@ -264,36 +264,44 @@ the region that hyperparameter's flat prior is supported on.
 # `occu()` takes the detection history as `y` and a ONE-sided state formula:
 # a two-sided formula would be resolved against a response the family does
 # not carry. `data` is site-level, `visits` visit-level.
-sim <- simulate_occu(N = 60, J = 3, seed = 1)
-d   <- transform(sim$data, cell = seq_len(nrow(sim$data)))
+sim <- simulate_occu(N = 30, J = 3, seed = 1)
+d   <- transform(sim$data, cell = seq_len(30),
+                 observer = factor(rep(c("a", "b", "c"), length.out = 30)),
+                 lon = runif(30), lat = runif(30))
 
-# A chain graph over the 60 cells: neighbours are consecutive indices.
-adj <- matrix(0L, 60, 60)
-adj[cbind(1:59, 2:60)] <- 1L
-adj[cbind(2:60, 1:59)] <- 1L
+# A chain graph over the 30 cells: neighbours are consecutive indices.
+adj <- matrix(0L, 30, 30)
+adj[cbind(1:29, 2:30)] <- 1L
+adj[cbind(2:30, 1:29)] <- 1L
+
+\donttest{
+ctrl <- list(verbose = FALSE, progress = FALSE)
 
 # Areal field on occupancy
 fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
             data = d, family = occu(), detection = ~ 1, y = sim$y,
-            method = "nested_laplace",
-            control = list(verbose = FALSE, progress = FALSE))
+            method = "nested_laplace", control = ctrl)
 fit$spatial_field[1:5]
 
-\dontrun{
-# Detection random effect by observer (a visit-level grouping)
-tobs(~ occ_cov1, data = d, family = occu(),
-     detection = ~ (1 | observer), y = sim$y, visits = v)
+# Detection random effect by observer
+fit_re <- tobs(~ occ_cov1, data = d, family = occu(),
+               detection = ~ (1 | observer), y = sim$y,
+               method = "laplace", control = ctrl)
+coef(fit_re)
 
-# Areal spatially varying coefficient on `year`
-tobs(~ year + spatial(~ 1 + year || cell, graph = adj),
-     data = d, family = occu(), detection = ~ 1, y = sim$y,
-     method = "nested_laplace")
+# Areal spatially varying coefficient on `occ_cov2`
+fit_svc <- tobs(~ occ_cov2 + spatial(~ 1 + occ_cov2 || cell, graph = adj),
+                data = d, family = occu(), detection = ~ 1, y = sim$y,
+                method = "nested_laplace", control = ctrl)
+coef(fit_svc)
 
-# Continuous NNGP varying coefficient on the elev slope
-tobs(~ elev + spatial(lon, lat, model = "svc", coefficients = "elev",
-                      prior_range = c(50, 0.05)),
-     data = d, family = occu(), detection = ~ 1, y = sim$y,
-     method = "laplace")
+# Continuous NNGP varying coefficient on the `occ_cov2` slope
+fit_nngp <- tobs(~ occ_cov2 + spatial(lon, lat, model = "svc",
+                                      coefficients = "occ_cov2",
+                                      prior_range = c(0.5, 0.05)),
+                 data = d, family = occu(), detection = ~ 1, y = sim$y,
+                 method = "laplace", control = ctrl)
+coef(fit_nngp)
 }
 }
 \seealso{

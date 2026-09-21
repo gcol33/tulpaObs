@@ -75,6 +75,7 @@
 
 
 test_that("occu_cover group_var runs with more sites than field nodes", {
+  skip_on_cran()
   skip_if_fast()
   n_cells <- 16L; n_per <- 4L; J <- 12L
   adj <- chain_adj(n_cells)

@@ -29,6 +29,10 @@ intercept-only and are set with the \code{p10 = ~ ...} and \code{certainty = ~ .
 arguments to \code{\link[=tobs]{tobs()}} (\code{certainty} is the \code{b} arm). The response \code{y} is an
 \verb{n_sites x J} integer matrix in \verb{\{0, 1, 2\}} (NA visits dropped).
 }
+\examples{
+f <- fp_occu()
+f
+}
 \references{
 Miller, D. A. W., Nichols, J. D., McClintock, B. T., Grant, E. H. C., Bailey,
 L. L., Weir, L. A. (2011). Improving occupancy estimation when two types of

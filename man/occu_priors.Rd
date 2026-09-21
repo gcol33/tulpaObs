@@ -44,12 +44,17 @@ N >= 600 with informative covariates. Setting any \code{sd} to \code{Inf} disabl
 that component of the prior (same penalised objective, just \code{1/Inf^2 = 0}).
 }
 \examples{
-\dontrun{
-# default weakly-informative priors
-fit <- tobs(~ x, data = d, family = occu(), detection = ~ z, y = y,
-            method = "laplace", priors = occu_priors())
-
-# disable detection-slope penalty
+# disable the detection-slope penalty
 priors <- occu_priors(p_slope = list(mean = 0, sd = Inf))
+priors
+
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            priors = occu_priors(),
+            control = list(verbose = FALSE, progress = FALSE))
+coef(fit)
 }
 }

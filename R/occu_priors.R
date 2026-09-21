@@ -91,13 +91,18 @@
 #'   `list(mean = 0, sd = 5)`.
 #' @return An `occu_priors` object, ready to pass to `tobs(..., priors = ...)`.
 #' @examples
-#' \dontrun{
-#' # default weakly-informative priors
-#' fit <- tobs(~ x, data = d, family = occu(), detection = ~ z, y = y,
-#'             method = "laplace", priors = occu_priors())
-#'
-#' # disable detection-slope penalty
+#' # disable the detection-slope penalty
 #' priors <- occu_priors(p_slope = list(mean = 0, sd = Inf))
+#' priors
+#'
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             priors = occu_priors(),
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' coef(fit)
 #' }
 #' @export
 occu_priors <- function(p_intercept       = list(mean = 0, sd = 1.5),
@@ -388,12 +393,17 @@ print.occu_priors <- function(x, ...) {
 #' @return A `cover_priors` object, ready to pass to `tobs(..., priors = ...)`.
 #' @seealso [occu_priors()]
 #' @examples
-#' \dontrun{
 #' # regularise the occurrence arm, leave the positive arm unpenalised
-#' fit <- tobs(~ x, data = d, family = cover(response = "lognormal"),
-#'             y = cov, method = "laplace",
-#'             priors = cover_priors(pos_intercept = list(mean = 0, sd = Inf),
-#'                                   pos_slope     = list(mean = 0, sd = Inf)))
+#' priors <- cover_priors(pos_intercept = list(mean = 0, sd = Inf),
+#'                        pos_slope     = list(mean = 0, sd = Inf))
+#' priors
+#'
+#' \donttest{
+#' sim <- simulate_cover(N = 150, seed = 1)
+#' fit <- tobs(cover ~ x, data = sim$data,
+#'             family = cover(response = "lognormal"),
+#'             method = "laplace", priors = priors)
+#' coef(fit)
 #' }
 #' @export
 cover_priors <- function(occ_intercept = list(mean = 0, sd = 2),

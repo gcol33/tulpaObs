@@ -66,6 +66,11 @@ block-coordinate engine as the other community families.
 predictor, and \code{species} the species labels.
 }
 
+\examples{
+f <- ms_distance(key = "halfnorm", transect = "line",
+                 cutpoints = c(0, 25, 50, 75, 100))
+f
+}
 \seealso{
 \code{\link[=distance]{distance()}} (single species), \code{\link[=ms_abun]{ms_abun()}} (community N-mixture).
 }

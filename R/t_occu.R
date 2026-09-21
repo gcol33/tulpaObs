@@ -31,6 +31,9 @@
 #' formula are site-level.
 #'
 #' @return A `tobs_family` object.
+#' @examples
+#' f <- t_occu()
+#' f
 #' @export
 t_occu <- function() {
   obs_family(
@@ -377,6 +380,9 @@ t_occu <- function() {
 #' @param seed Optional random seed.
 #' @return A list with `y` (3D array `[N x T x J]`), `data`, and `truth`.
 #' @seealso [t_occu()], the family this simulates for.
+#' @examples
+#' sim <- simulate_t_occu(N = 30, T_seasons = 4, J = 2, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_t_occu <- function(N = 150, T_seasons = 8, J = 3, beta_occ = c(0.2),
                             p = 0.4, rho = 0.6, sigma = 0.7, seed = NULL) {

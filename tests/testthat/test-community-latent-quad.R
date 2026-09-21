@@ -143,6 +143,7 @@ test_that("the factor scale recovers the magnitude on a POISSON oracle", {
 
 
 test_that("the factor scale reports a bracket it could not close", {
+  skip_on_cran()
   # The old search clamped to a fixed [0.2, 1.5] window and returned the boundary
   # as though it were an optimum, so a run whose loadings had drifted reported a
   # plausible number instead of a saturated one. The bracket now expands, so a

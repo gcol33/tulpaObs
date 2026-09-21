@@ -288,6 +288,9 @@ predict.occu_categorical_fit <- function(object, newdata, ...) {
 #' @param seed optional RNG seed.
 #' @return A list with `data` (a data frame with `x`), `y` (length-N integer in
 #'   `0..K`), and `truth`.
+#' @examples
+#' sim <- simulate_occu_categorical(N = 100, seed = 1)
+#' table(sim$y)
 #' @export
 simulate_occu_categorical <- function(N = 500L, beta_occ = c(0.2, 0.8),
                                       beta_class = NULL, seed = NULL) {

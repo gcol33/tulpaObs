@@ -81,3 +81,7 @@ It is off by default because the fits that were already calibrated pick up a
 small systematic shift under it (\code{mu_log_r} by -0.006, p = 0.001).
 }
 
+\examples{
+f <- ms_abun(mixture = "negbin")
+f
+}

@@ -99,6 +99,10 @@ two. \code{control$alpha.grid[.trend]} / \code{control$alpha.n[.trend]} are the 
 format these compile into and are refused as user input.
 }
 
+\examples{
+f <- occu_multiscale_cover(response = "beta")
+f
+}
 \seealso{
 \code{\link[=occu_cover]{occu_cover()}} (two-level), \code{\link[=cover]{cover()}} (plot hurdle, no detection).
 }

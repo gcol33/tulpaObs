@@ -23,6 +23,6 @@ Extends \code{summary.tulpa_fit} with an extra \code{skew} column populated from
 \code{object$skew} when the fit was produced with an SLA method
 (\code{method = "laplace_sla"} / \code{"nested_laplace_sla"}).
 All quantile / mean / sd columns come from \code{object$draws}, which under
-simplified Laplace are skew-normal samples — so 2.5\%/97.5\% quantiles are
+simplified Laplace are skew-normal samples -- so 2.5\%/97.5\% quantiles are
 already SLA-corrected.
 }

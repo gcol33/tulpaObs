@@ -109,6 +109,9 @@
 #'   frame, N*J rows in site-major order), and `truth` (the coefficients,
 #'   dispersion, and field(s) if generated; `f2`, `sigma_trend`, `alpha_trend`,
 #'   and `time` when `trend = TRUE`).
+#' @examples
+#' sim <- simulate_occu_cover(N = 50, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_occu_cover <- function(N             = 200L,
                                  J             = 4L,

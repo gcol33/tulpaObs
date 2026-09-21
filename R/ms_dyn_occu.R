@@ -414,6 +414,9 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
 #' @return A `tobs_family` object.
 #' @seealso [dyn_occu()], [ms_occu()]
 #' @export
+#' @examples
+#' f <- ms_dyn_occu()
+#' f
 ms_dyn_occu <- function() {
   obs_family(
     name           = "ms_dyn_occu",

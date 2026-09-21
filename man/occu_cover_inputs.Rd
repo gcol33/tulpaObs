@@ -63,6 +63,20 @@ detected): in the dense grid absent / unsampled cover cells are set to \code{0},
 and in the compact (ragged) carrier they are \code{NA} in the values and never
 read by the joint engine.
 }
+\examples{
+sim <- simulate_occu_cover(N = 20, J = 3, seed = 1)
+long <- data.frame(site = rep(1:20, each = 3), visit = rep(1:3, 20),
+                   occur = as.vector(t(sim$y)),
+                   cover = as.vector(t(ifelse(is.na(sim$y_pos), 0,
+                                              sim$y_pos))),
+                   det_cov1 = sim$visit_data$det_cov1,
+                   occ_cov1 = rep(sim$data$occ_cov1, each = 3))
+inp <- occu_cover_inputs(long, site = "site", visit = "visit",
+                         response = "occur", y_pos = "cover",
+                         det.covs = "det_cov1", compact = FALSE,
+                         positive = "lognormal")
+dim(inp$y)
+}
 \seealso{
 \code{\link[=tobs]{tobs()}}, \code{\link[=tobs_data]{tobs_data()}}.
 }

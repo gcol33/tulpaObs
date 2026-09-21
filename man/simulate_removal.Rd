@@ -49,3 +49,7 @@ individuals still present, with \verb{logit p_\{ik\} = X_p beta_p} (site-level
 detection here). The returned \code{y} is an \verb{N x K} integer matrix of per-pass
 removals suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=removal]{removal()}}.
 }
+\examples{
+sim <- simulate_removal(N = 50, K = 3, seed = 1)
+dim(sim$y)
+}

@@ -20,3 +20,7 @@ spatially-structured detection field, broadcast to every source, under
 \code{fit$spatial_field_det}. All sources must share one detection formula; areal
 terms belong on the state arm.
 }
+\examples{
+f <- int_occu()
+f
+}

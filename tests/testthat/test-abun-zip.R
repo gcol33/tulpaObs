@@ -22,6 +22,7 @@ test_that("abun(mixture = 'zip' / 'zinb') constructor + gates", {
 })
 
 test_that("abun(mixture = 'zip') fits + exposes the structural-zero logit", {
+  skip_on_cran()
   sim <- simulate_abun(N = 150, J = 5, n_abund_covs = 1, n_det_covs = 1,
                        beta_lambda = c(log(6), 0.5), beta_p = c(0.3, -0.3),
                        mixture = "zip", omega = 0.35, seed = 2)

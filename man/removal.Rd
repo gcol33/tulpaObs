@@ -40,6 +40,10 @@ the per-pass detection (\verb{logit p}) model. The response \code{y} is an
 \verb{n_sites x K} integer matrix of per-pass removals with the passes in column
 order; complete pass sequences are required (no \code{NA}).
 }
+\examples{
+f <- removal(K_max = 100)
+f
+}
 \references{
 Royle, J. A. (2004). N-mixture models for estimating population size from
 spatially replicated counts. \emph{Biometrics} 60, 108-115.

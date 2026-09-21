@@ -72,6 +72,7 @@ test_that("ms_occu() + latent() gates unsupported combinations", {
 # surface on a small fixture, with nothing asserted against truth so there is no
 # calibrated threshold tied to the size.
 test_that("lfMsPGOcc wires the factor block and S3", {
+  skip_on_cran()
   d   <- .msof_sim(N = 50L, S = 5L, Q = 1L, J = 3L, seed = 4L)
   fit <- tobs(~ x + latent(1), data = d$data, family = ms_occu(),
               detection = ~ 1, y = d$y, species = paste0("sp", seq_len(5L)),

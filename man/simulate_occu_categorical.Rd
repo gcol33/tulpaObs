@@ -29,3 +29,7 @@ A list with \code{data} (a data frame with \code{x}), \code{y} (length-N integer
 \description{
 Simulate from an occu_categorical model
 }
+\examples{
+sim <- simulate_occu_categorical(N = 100, seed = 1)
+table(sim$y)
+}

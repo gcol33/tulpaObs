@@ -45,3 +45,7 @@ misses (two cell counts, primary-detected and secondary-only); the primary
 observer alternates across sites (role-swapping) so \code{p1} and \code{p2} are
 identifiable, and the per-site primary indicator is returned as \code{primary}.
 }
+\examples{
+sim <- simulate_double_observer(N = 50, seed = 1)
+head(sim$y)
+}

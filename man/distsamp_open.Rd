@@ -76,6 +76,11 @@ default.
 at each primary period (secondary occasions absorbed into the period total).
 }
 
+\examples{
+f <- distsamp_open(transect = "line", cutpoints = c(0, 10, 20, 30, 40),
+                   dynamics = "notrend")
+f
+}
 \references{
 Dail, D., Madsen, L. (2011). Models for estimating abundance from repeated
 counts of an open metapopulation. \emph{Biometrics} 67, 577-587.

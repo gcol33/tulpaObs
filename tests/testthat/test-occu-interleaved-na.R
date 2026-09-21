@@ -32,6 +32,7 @@
 }
 
 test_that("single-season occu: leading vs trailing NA give identical fits", {
+  skip_on_cran()
   skip_if_fast()
   set.seed(20260612)
   N <- 200L; psi_t <- 0.70; p_t <- 0.45
@@ -65,6 +66,7 @@ test_that("single-season occu: leading vs trailing NA give identical fits", {
 
 
 test_that("dynamic occu: leading vs trailing NA give identical fits", {
+  skip_on_cran()
   skip_if_fast()
   set.seed(20260612)
   N <- 150L; T_seasons <- 2L

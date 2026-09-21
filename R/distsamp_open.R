@@ -895,6 +895,9 @@
 #' @param seed Optional random seed.
 #' @return A list with `y` (`[n_sites x n_bins x n_seasons]` distance-band
 #'   counts), `data`, and `truth`.
+#' @examples
+#' sim <- simulate_distsamp_open(N = 40, n_seasons = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_distsamp_open <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
                                    n_seasons = 4L, transect = "line",

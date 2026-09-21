@@ -29,6 +29,10 @@ A list with \code{y} (list of 3D arrays), \code{data}, and \code{truth}.
 \description{
 Simulate integrated multi-species occupancy data
 }
+\examples{
+sim <- simulate_ms_int_occu(N = 40, n_species = 3, seed = 1)
+lapply(sim$y, dim)
+}
 \seealso{
 \code{\link[=ms_int_occu]{ms_int_occu()}}, the family this simulates for.
 }

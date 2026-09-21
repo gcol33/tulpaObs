@@ -95,6 +95,7 @@ test_that("convergence()/converged() read one record across families", {
 })
 
 test_that("non-NUTS fits report NA sampler diagnostics, NUTS reports numeric", {
+  skip_on_cran()
   skip_if_fast()
   # a Laplace / nested-Laplace fit ran no HMC trajectory, so the NUTS-only
   # sampler-health fields (acceptance, divergence, tree depth, step size) must

@@ -31,6 +31,7 @@
 # ---------------------------------------------------------------------------
 
 test_that("every registry entry supplies the callbacks the driver reads", {
+  skip_on_cran()
   reg <- tulpaObs:::.TOBS_SBC_REGISTRY
   req <- tulpaObs:::.TOBS_SBC_REQUIRED
   expect_gt(length(reg), 0L)

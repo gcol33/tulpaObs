@@ -1030,6 +1030,9 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #'   the `[N x (T-1)]` `season_cov` matrix column when a season-varying rate is
 #'   used), and `truth` (coefficients, per-site `lambda`, the realised
 #'   `omega` / `gamma` rates, and `r` under `"negbin"`).
+#' @examples
+#' sim <- simulate_dyn_abun(N = 40, T = 3, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
                               beta_lambda = NULL, p = 0.5, omega = 0.6,

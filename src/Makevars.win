@@ -1,14 +1,26 @@
 CXX_STD = CXX17
 PKG_CPPFLAGS = -I../inst/include
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -Wa,-mbig-obj
+
+# -Wa,-mbig-obj selects the bigobj COFF variant, whose section count is bounded
+# by 2^31 instead of the 32767 a plain COFF object holds. gcc emits one comdat
+# section per template instantiation and merges none of them at -O0, so a build
+# that does not optimize (pkgbuild::compile_dll(debug = TRUE), the path
+# devtools::load_all() takes) needs it. An optimizing build does not get it:
+# R CMD check reports -Wa,-mbig-obj as a non-portable flag whenever a compile
+# command carries it. The test is expanded when a compile rule runs, after
+# Makeconf and any user Makevars have been read, and reads the flags that rule
+# compiles with, including the per-object -O1 overrides below.
+comma := ,
+BIGOBJ_FLAG = $(if $(filter -O1 -O2 -O3 -Os -Ofast,$(CXXFLAGS)),,-Wa$(comma)-mbig-obj)
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) $(BIGOBJ_FLAG)
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 # At -O2 the community N-mixture EM driver's template/inline instantiation
 # (Eigen + the nmix_kernel.h inlines + std) overflows the COFF COMDAT section
-# table even with -Wa,-mbig-obj (section-name truncation -> "file format not
-# recognized" at link on rtools45). The per-species marginal it calls is
-# out-of-line at -O2 in nmix_community_oracle.cpp, so building only this driver
-# at -O1 keeps the object within section limits at no runtime cost.
+# table even with -Wa,-mbig-obj (section-name truncation -> "file format not recognized" at link on
+# rtools45). The per-species marginal it calls is out-of-line at -O2 in
+# nmix_community_oracle.cpp, so building only this driver at -O1 keeps the
+# object within section limits at no runtime cost.
 nmix_community_em.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))
 nmix_community_spatial.o: CXXFLAGS := $(patsubst -O2,-O1,$(CXXFLAGS))
 # The single-species areal / SPDE spatial drivers carry the same Eigen + nmix

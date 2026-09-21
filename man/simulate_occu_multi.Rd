@@ -45,3 +45,7 @@ Draws from the \code{\link[=occu_multi]{occu_multi()}} model: a joint occupancy 
 from the log-linear (first + second order) occupancy model, then per-species
 site-level detections at the observed visit pattern.
 }
+\examples{
+sim <- simulate_occu_multi(S = 2, N = 50, J = 3, seed = 1)
+length(sim$y)
+}

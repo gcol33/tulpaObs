@@ -83,6 +83,7 @@ test_that("C++ dyn_abun NUTS log-posterior matches the R oracle byte-for-byte", 
 })
 
 test_that("dyn_abun Laplace recovers truth", {
+  skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(6), 0.4)
   sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n_abund_covs = 1,
@@ -126,6 +127,7 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
 })
 
 test_that("S3 surface works for dyn_abun fits", {
+  skip_on_cran()
   skip_if_fast()
   sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n_abund_covs = 1,
                            beta_lambda = c(log(6), 0.4), seed = 3)

@@ -15,6 +15,7 @@
 # =============================================================================
 
 test_that("t_occu() gates + S3 surface", {
+  skip_on_cran()
   sim <- simulate_t_occu(N = 80, T_seasons = 6, J = 3, beta_occ = c(0.2),
                          p = 0.4, rho = 0.6, sigma = 0.7, seed = 1)
 
@@ -76,6 +77,7 @@ test_that("t_occu() gates + S3 surface", {
 })
 
 test_that("t_occu() fits at the documented default method = 'auto'", {
+  skip_on_cran()
   # t_occu() is the one family whose default_engine is "pg_gibbs"; every other
   # block here passes `method` explicitly, so the default route needs its own
   # assertion.
@@ -91,6 +93,7 @@ test_that("t_occu() fits at the documented default method = 'auto'", {
 })
 
 test_that("t_occu() accepts a list of per-season matrices", {
+  skip_on_cran()
   sim <- simulate_t_occu(N = 50, T_seasons = 5, J = 3, seed = 2)
   ylist <- lapply(seq_len(5L), function(t) sim$y[, t, ])
   fit <- tobs(~ 1, family = t_occu(), detection = ~ 1, y = ylist,

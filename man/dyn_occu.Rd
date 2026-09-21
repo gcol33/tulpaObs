@@ -20,3 +20,7 @@ the \code{detection} formula gives per-season detection. All season-varying path
 run under \code{method = "laplace"} (the exact HMM-forward marginal refine
 calibrates the coefficients); they are gated under \code{"nuts"} with a pointer.
 }
+\examples{
+f <- dyn_occu()
+f
+}

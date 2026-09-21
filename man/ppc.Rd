@@ -29,3 +29,12 @@ statistic to give a Bayesian p-value. This is a test, not a plot, so it is
 its own generic rather than a method on \code{\link[tulpa:pp_check]{tulpa::pp_check()}}, which draws the
 graphical check.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 60, J = 3, seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE))
+ppc(fit, n.samples = 100)$bayesian.p
+}
+}

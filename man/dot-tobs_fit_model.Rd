@@ -44,6 +44,6 @@ Dispatches to Laplace (default) or NUTS for a built \code{tobs_model}. Not
 user-facing; called from \code{tobs()} via the per-family \verb{.dispatch_*} helpers.
 Spatial / temporal / random-effect / SVC / latent structure is read from
 the structured terms the formula carried (\code{model$structured_terms}), not
-from arguments — there is a single user-facing specification path.
+from arguments -- there is a single user-facing specification path.
 }
 \keyword{internal}

@@ -917,6 +917,9 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   `_real` entries are supplied so the split does not have to be rebuilt at
 #'   each call site; `tests/testthat/helper-community-mean.R` is the assertion
 #'   that consumes them.
+#' @examples
+#' sim <- simulate_ms_abun(n_species = 4, N = 30, J = 3, seed = 1)
+#' dim(sim$y)
 #' @export
 simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
                              n_abund_covs = 1, n_det_covs = 1,

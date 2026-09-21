@@ -44,6 +44,7 @@ test_that("integrated occupancy fits nested_laplace with a spatial field", {
 
 
 test_that("dynamic occupancy fits nested_laplace with a spatial field on psi1", {
+  skip_on_cran()
   set.seed(3)
   n_sites <- 36; n_seasons <- 3; J <- 3; adj <- chain_adj(n_sites)
   elev <- rnorm(n_sites)

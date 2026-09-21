@@ -52,6 +52,11 @@ A list with \code{y} (4D array), \code{data}, and \code{truth}.
 \description{
 Simulate temporal multi-species occupancy data
 }
+\examples{
+sim <- simulate_ms_dyn_occu(N = 30, J = 2, n_species = 3, n_seasons = 3,
+                            seed = 1)
+dim(sim$y)
+}
 \seealso{
 \code{\link[=ms_dyn_occu]{ms_dyn_occu()}}, the family this simulates for.
 }

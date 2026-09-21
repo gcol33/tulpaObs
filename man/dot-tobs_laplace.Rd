@@ -33,7 +33,7 @@
 
 \item{priors}{Optional prior spec from \code{\link[=occu_priors]{occu_priors()}}. \code{NULL} -> use
 the package defaults. Pass \code{FALSE} (or \code{"none"}) to disable the prior
-and recover the historical unpenalised MAP behavior — the penalised
+and recover the historical unpenalised MAP behavior -- the penalised
 objective is \verb{Q(beta) = -log L(beta) + sum (beta_j - mu_j)^2 / (2 sd_j^2)},
 so \code{sd_j = Inf} yields a zero penalty term.}
 

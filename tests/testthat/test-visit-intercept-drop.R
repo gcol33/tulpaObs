@@ -62,3 +62,15 @@ test_that("occu / abun / removal drop the visit intercept (no double intercept)"
   expect_equal(sum(dn_r == "(Intercept)"), 1L)
   expect_true("x" %in% dn_r)
 })
+
+test_that("a random-effect bar over visit rows is refused, not read as a column (#362)", {
+  n <- 6L; J <- 3L
+  vd <- data.frame(observer = factor(rep(c("a", "b", "c"), length.out = n * J)))
+  expect_error(
+    tulpaObs:::.tobs_build_visit_X(~ (1 | observer), vd, n, J, "detection"),
+    "random-effect bars are not supported over visit rows")
+  expect_error(
+    tulpaObs:::.tobs_build_visit_X(~ x + (1 || observer), cbind(vd, x = 1),
+                                   n, J, "detection"),
+    "'observer'")
+})

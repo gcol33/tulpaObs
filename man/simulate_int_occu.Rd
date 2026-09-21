@@ -36,3 +36,7 @@ A list with \code{y} (list of matrices, each row named by the site of
 \description{
 Simulate integrated (multi-source) occupancy data
 }
+\examples{
+sim <- simulate_int_occu(N_total = 60, n_shared = 10, seed = 1)
+lapply(sim$y, dim)
+}

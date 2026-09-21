@@ -82,6 +82,7 @@ expect_on_scale <- function(est, truth, wrong, label) {
 
 
 test_that("occu_cover() joint reports the lognormal cover SD, not its square", {
+  skip_on_cran()
   lo <- .phi_of(.phi_scale_fit("lognormal", 0.40, 101L))
   hi <- .phi_of(.phi_scale_fit("lognormal", 0.70, 101L))
 
@@ -95,6 +96,7 @@ test_that("occu_cover() joint reports the lognormal cover SD, not its square", {
 
 
 test_that("occu_cover() joint reports the gaussian cover SD, not its square", {
+  skip_on_cran()
   lo <- .phi_of(.phi_scale_fit("gaussian", 0.40, 102L))
   hi <- .phi_of(.phi_scale_fit("gaussian", 0.70, 102L))
 
@@ -106,6 +108,7 @@ test_that("occu_cover() joint reports the gaussian cover SD, not its square", {
 
 
 test_that("occu_cover() joint leaves the beta precision unconverted", {
+  skip_on_cran()
   lo <- .phi_of(.phi_scale_fit("beta", 5, 101L))
   hi <- .phi_of(.phi_scale_fit("beta", 20, 101L))
 
@@ -121,6 +124,7 @@ test_that("occu_cover() joint leaves the beta precision unconverted", {
 
 
 test_that("occu_cover() joint agrees between its reported and per-draw dispersion", {
+  skip_on_cran()
   # The tree passed through a state where the per-draw axis was converted and
   # the reported one was not, and nothing said so: `$disp` is what the SBC
   # simulator, the WAIC/LOO/CPO pointwise log-likelihood, the PPC and
@@ -159,6 +163,7 @@ test_that("occu_cover() joint agrees between its reported and per-draw dispersio
 
 
 test_that("occu_multiscale_cover() joint reports the cover SD, not its square", {
+  skip_on_cran()
   lo <- .phi_of(.phi_scale_ms_fit(0.40, 101L))
   hi <- .phi_of(.phi_scale_ms_fit(0.70, 101L))
 
@@ -173,6 +178,7 @@ test_that("occu_multiscale_cover() joint reports the cover SD, not its square", 
 
 
 test_that("occu_multiscale_cover() agrees across all three of its dispersion reads", {
+  skip_on_cran()
   # The reported entry, the helper that turns it into a conditional mean, and
   # the per-draw axis the diagnostics read are one quantity or the fit is not
   # coherent. They disagreed in the tree once, between two commits of #309, and

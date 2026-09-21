@@ -72,3 +72,7 @@ depend on a per-(site, interval) season covariate \code{z}: \verb{omega_\{i,t\} 
 \verb{[N x (T-1)]} matrix column \code{season_cov} of \code{data}, ready for
 \code{omega = ~ season_cov}.
 }
+\examples{
+sim <- simulate_dyn_abun(N = 40, T = 3, J = 3, seed = 1)
+dim(sim$y)
+}

@@ -11,7 +11,7 @@
 #' `object$skew` when the fit was produced with an SLA method
 #' (`method = "laplace_sla"` / `"nested_laplace_sla"`).
 #' All quantile / mean / sd columns come from `object$draws`, which under
-#' simplified Laplace are skew-normal samples — so 2.5%/97.5% quantiles are
+#' simplified Laplace are skew-normal samples -- so 2.5%/97.5% quantiles are
 #' already SLA-corrected.
 #'
 #' @param object A `tobs_fit` object.
@@ -331,9 +331,13 @@ glance.tobs_fit <- function(x, ...) {
 #'   estimates of anything; filter on these rather than on the text of the
 #'   warning the engine raises. `converged()`: a single `TRUE` / `FALSE`.
 #' @examples
-#' \dontrun{
-#' fit <- tobs(y ~ 1, data = d, family = occu(), detection = ~1)
-#' converged(fit)        # TRUE / FALSE, same call for every family
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' converged(fit)
 #' convergence(fit)$n_iter
 #' }
 #' @export
@@ -1709,6 +1713,16 @@ update.tobs_fit <- function(object, ..., evaluate = TRUE) {
 #' @param fit Optional `tobs_fit` object (for post-fit diagnostics).
 #' @return A list with `identifiable`, the `issues` messages, and
 #'   `prefit_checked` (`FALSE` where the family carries no site-by-visit grid).
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' chk <- tobs_check_id(fit$model, fit)
+#' chk$identifiable
+#' }
 #' @export
 tobs_check_id <- function(model, fit = NULL) {
   issues <- character()
@@ -2058,6 +2072,22 @@ tobs_check_id <- function(model, fit = NULL) {
 #' @return A data.frame with `mean`, `sd`, and one column per requested quantile
 #'   level (on the response scale: occupancy probability or abundance
 #'   intensity), carrying the levels used in `attr(, "quantiles")`.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 30, J = 3, n_occ_covs = 1, seed = 1)
+#' d   <- transform(sim$data, cell = seq_len(30))
+#' adj <- matrix(0L, 30, 30)
+#' adj[cbind(1:29, 2:30)] <- 1L
+#' adj[cbind(2:30, 1:29)] <- 1L
+#' fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+#'             data = d, family = occu(), detection = ~ 1, y = sim$y,
+#'             method = "nested_laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' # the chain graph's nodes placed at 1, ..., 30 on a line
+#' tobs_predict_spatial(fit, newcoords = cbind(c(5.5, 20.5), 0),
+#'                      newocc.covs = data.frame(occ_cov1 = c(0, 1)),
+#'                      node.coords = cbind(1:30, 0))
+#' }
 #' @export
 tobs_predict_spatial <- function(object, newcoords, newocc.covs = NULL,
                                  quantiles = c(0.025, 0.5, 0.975),

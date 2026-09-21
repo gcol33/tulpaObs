@@ -603,6 +603,19 @@
 #'   `n_sites`, `max_visits`, `n_visits`, and `compact`.
 #'
 #' @seealso [tobs()], [tobs_data()].
+#' @examples
+#' sim <- simulate_occu_cover(N = 20, J = 3, seed = 1)
+#' long <- data.frame(site = rep(1:20, each = 3), visit = rep(1:3, 20),
+#'                    occur = as.vector(t(sim$y)),
+#'                    cover = as.vector(t(ifelse(is.na(sim$y_pos), 0,
+#'                                               sim$y_pos))),
+#'                    det_cov1 = sim$visit_data$det_cov1,
+#'                    occ_cov1 = rep(sim$data$occ_cov1, each = 3))
+#' inp <- occu_cover_inputs(long, site = "site", visit = "visit",
+#'                          response = "occur", y_pos = "cover",
+#'                          det.covs = "det_cov1", compact = FALSE,
+#'                          positive = "lognormal")
+#' dim(inp$y)
 #' @export
 occu_cover_inputs <- function(data, site, visit, response, y_pos,
                               occ.covs = NULL, det.covs = NULL,
@@ -687,6 +700,29 @@ coef.tobs_batch <- function(object, ...) {
 #' @param x A `tobs_batch`.
 #' @param species Species label (character) or index (integer).
 #' @return The single-species `tobs_fit` for that species.
+#' @examples
+#' \donttest{
+#' sim_a <- simulate_occu_cover(N = 30, J = 3, seed = 1)
+#' sim_b <- simulate_occu_cover(N = 30, J = 3, seed = 2)
+#' long <- rbind(
+#'   data.frame(site = rep(1:30, each = 3), visit = rep(1:3, 30), sp = "a",
+#'              occur = as.vector(t(sim_a$y)),
+#'              cover = as.vector(t(ifelse(is.na(sim_a$y_pos), 0,
+#'                                         sim_a$y_pos)))),
+#'   data.frame(site = rep(1:30, each = 3), visit = rep(1:3, 30), sp = "b",
+#'              occur = as.vector(t(sim_b$y)),
+#'              cover = as.vector(t(ifelse(is.na(sim_b$y_pos), 0,
+#'                                         sim_b$y_pos)))))
+#' long$det_cov1 <- rep(sim_a$visit_data$det_cov1, 2)
+#' long$occ_cov1 <- rep(rep(sim_a$data$occ_cov1, each = 3), 2)
+#' fit <- tobs(~ occ_cov1, data = long, family = occu_cover("lognormal"),
+#'             detection = ~ det_cov1, positive = ~ 1, method = "laplace",
+#'             by = "sp", site = "site", visit = "visit", response = "occur",
+#'             y_pos = "cover", det.covs = "det_cov1",
+#'             control = list(verbose = FALSE))
+#' fit_a <- tobs_get(fit, "a")
+#' coef(fit_a)
+#' }
 #' @export
 tobs_get <- function(x, species) {
   if (!inherits(x, "tobs_batch")) {

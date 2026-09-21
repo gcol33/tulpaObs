@@ -310,6 +310,16 @@
 #' @return A `tobs_aggregation_scan` object: `candidates` (scored data.frame),
 #'   `recommended` (chosen row or `NULL`), `segmentation` (auto changepoint
 #'   blocks, if used), and scan metadata.
+#' @examples
+#' set.seed(1)
+#' d <- data.frame(east = runif(200), north = runif(200),
+#'                 year = sample(2001:2006, 200, replace = TRUE),
+#'                 detected = rbinom(200, 1, 0.3))
+#' scan <- occu_aggregation_scan(d, response = "detected",
+#'                               coords = c("east", "north"), year = "year",
+#'                               cell_sizes = c(0.2, 0.4),
+#'                               block_lengths = c(2, 3))
+#' scan
 #' @export
 occu_aggregation_scan <- function(data, response, coords, year, plot = NULL,
                                   cell_sizes = NULL, block_lengths = NULL,

@@ -121,6 +121,7 @@ test_that("the sign inside v is pinned, not inherited from the N-mixture", {
 })
 
 test_that("the hazard key keeps the finite-difference fallback and still fits", {
+  skip_on_cran()
   # grad_b / info_b come back already summed over sites and the per-site
   # detection cross terms are not exported, so the shared log-shape global cannot
   # be sandwiched. The fitter passes sp_info = NULL there.
@@ -135,6 +136,7 @@ test_that("the hazard key keeps the finite-difference fallback and still fits", 
 })
 
 test_that("supplying the block leaves the community fit unchanged", {
+  skip_on_cran()
   # Same closures, same start, same iteration budget: the only difference is
   # which Hessian the Newton step uses. Both must land on the same mode, the same
   # community covariances and the same standard errors -- the FD Hessian was

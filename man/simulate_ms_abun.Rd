@@ -118,3 +118,7 @@ Per-species Royle (2004) N-mixture with Gaussian community hyperpriors:
 \verb{y_\{s,i,j\} ~ Binomial(N_\{s,i\}, p_\{s,i,j\})}. The returned \code{y} is a 3D array
 \verb{[n_sites x J x n_species]} suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=ms_abun]{ms_abun()}}.
 }
+\examples{
+sim <- simulate_ms_abun(n_species = 4, N = 30, J = 3, seed = 1)
+dim(sim$y)
+}
