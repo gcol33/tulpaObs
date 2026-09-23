@@ -760,6 +760,11 @@
     prior         = prior_arg,
     phi_grid      = phi_grid_arg,
     cell_coupling = spec_name,
+    # Which density an outer axis carries when the call states none. A formal
+    # of the driver, not a control knob. The sampler puts a flat prior on its
+    # field hypers, so the two routes are only comparable when this can be set
+    # (gcol33/tulpa#862, #865).
+    hyperprior    = dots$hyperprior %||% "proper",
     control = c(list(
       max_iter  = as.integer(max.iter),
       tol       = as.numeric(tol),

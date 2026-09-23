@@ -513,7 +513,14 @@
                            # Regularizing hyperpriors on the outer grid axes,
                            # forwarded to the joint driver's prior_sigma / _alpha
                            # / _phi (e.g. a PC prior on the spatial field SD).
-                           "prior.sigma", "prior.alpha", "prior.phi"),
+                           "prior.sigma", "prior.alpha", "prior.phi",
+                           # Which density an outer axis carries when the call
+                           # states none: "proper" (the engine's PC default) or
+                           # "flat" (the axis's own cell measure alone). The
+                           # sampler puts a flat prior on its field hypers, so
+                           # without this the two routes cannot be compared
+                           # like for like (gcol33/tulpa#862, #865).
+                           "hyperprior"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
                  # OpenMP threads inside ONE gradient evaluation of the
