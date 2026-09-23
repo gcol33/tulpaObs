@@ -445,8 +445,11 @@
                               means, sds, par_names, Vj, hyper_sd = hr$sd)
 
   n_draws <- 1000L
+  # An engine-corrected fixed-effect block replaces the mixture draw for those
+  # coordinates; the hyperparameter tail is built from it the same way.
   draws <- .tobs_grid_mixture_draws(n_draws, w, modes[, bfv$beta_idx, drop = FALSE],
-                                    bfv$beta_covs, means, V)
+                                    bfv$beta_covs, means, V,
+                                    lead = .tobs_engine_debias_draws(fit, p_beta))
   colnames(draws) <- par_names
 
   fs <- .tobs_joint_field_split(field_demeaned, field_sd, n_cells, n_fields,

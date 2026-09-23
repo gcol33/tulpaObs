@@ -99,8 +99,21 @@
 # Gaussian conditional under `V` given the leading draw, which reproduces `V`'s
 # trailing block and its cross-covariance with the leading block exactly, since
 # the mixture's own covariance is `V`'s leading block.
+# `lead` short-circuits the mixture draw for the fixed-effect block: when the
+# engine has already sampled those coordinates exactly -- its subspace debias
+# returns a corrected `$draws` -- re-drawing them from the per-cell Gaussians
+# throws that sample away and reports the approximation the correction was
+# asked to replace (gcol33/tulpa#862). The conditional hyperparameter tail is
+# built by the same helper either way.
 .tobs_grid_mixture_draws <- function(n, weights, modes, covs, means = NULL,
-                                     V = NULL) {
+                                     V = NULL, lead = NULL) {
+  if (!is.null(lead)) {
+    lead <- as.matrix(lead)
+    if (nrow(lead) != n) {
+      lead <- lead[sample.int(nrow(lead), n, replace = TRUE), , drop = FALSE]
+    }
+    return(.tobs_grid_draw_tail(lead, means, V, ncol(lead), n))
+  }
   if (is.null(covs)) return(.rmvn(n, means, V))
   modes <- as.matrix(modes)
   if (!is.null(means) && ncol(modes) > length(means)) {
@@ -126,6 +139,13 @@
     pos <- pos + counts[k]
   }
   lead <- lead[sample.int(n), , drop = FALSE]
+  .tobs_grid_draw_tail(lead, means, V, p, n)
+}
+
+# The hyperparameter block, drawn from its Gaussian conditional on the
+# fixed-effect draws it is handed. Split out so the mixture path and the
+# engine-corrected path cannot build it differently.
+.tobs_grid_draw_tail <- function(lead, means, V, p, n) {
   if (is.null(V) || ncol(V) <= p) return(lead)
 
   b <- seq_len(p); h <- (p + 1L):ncol(V)

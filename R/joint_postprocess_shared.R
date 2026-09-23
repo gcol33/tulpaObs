@@ -341,6 +341,31 @@
   V
 }
 
+# The fixed-effect draws the ENGINE already corrected, or NULL.
+#
+# `control$subspace_debias` runs exact Metropolis on the latent coordinates the
+# inner-layer diagnostics flagged and writes the result to the engine fit's
+# `$draws`. A postprocessor that re-synthesizes its own draws from the per-cell
+# modes and covariances discards that sample and reports the very Gaussian the
+# correction was asked to replace -- measured on an occu_cover fit at J = 3, a
+# 17-minute correction moved the reported `psi` SD from 0.4144 to 0.4028 while
+# the sampler read 1.8028, because nothing downstream ever looked at it
+# (gcol33/tulpa#862).
+#
+# NULL unless a debias actually completed: a declined record leaves the engine's
+# `$draws` as whatever the plain path produced, which the mixture draw already
+# describes better.
+.tobs_engine_debias_draws <- function(fit, p_beta) {
+    rec <- fit$subspace_debias
+    if (is.null(rec) || !is.na(rec$declined %||% NA_character_)) return(NULL)
+    if (!length(rec$idx %||% integer(0))) return(NULL)
+    d <- fit$draws
+    if (is.null(d)) return(NULL)
+    d <- as.matrix(d)
+    if (ncol(d) < p_beta || !nrow(d)) return(NULL)
+    d[, seq_len(p_beta), drop = FALSE]
+}
+
 .tobs_joint_param_vcov <- function(modes, w, beta_idx, beta_block, p_beta,
                                    hyper_names, hyper_vals, hyper_means,
                                    means, sds, par_names, Vj, hyper_sd = NULL) {

@@ -567,8 +567,11 @@
   # Draws from the outer-grid mixture, so a reported interval carries the shape
   # the weighted cells describe and not only their first two moments.
   n_draws <- 1000L
+  # An engine-corrected fixed-effect block replaces the mixture draw for those
+  # coordinates; the hyperparameter tail is built from it the same way.
   draws <- .tobs_grid_mixture_draws(n_draws, w, modes[, bfv$beta_idx, drop = FALSE],
-                                    bfv$beta_covs, means, V)
+                                    bfv$beta_covs, means, V,
+                                    lead = .tobs_engine_debias_draws(fit, p_beta))
   colnames(draws) <- par_names
 
   # Split the stacked per-field summaries into one block of n_cells per coupled
