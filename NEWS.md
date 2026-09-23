@@ -1,5 +1,14 @@
 # tulpaObs NEWS
 
+## 0.3.0
+
+* **Pinned to tulpa (>= 0.6.0)** in both `Imports:` and `LinkingTo:`. The draws
+  and diagnostics this version reports read engine surface that release
+  carries: the corrected fixed-effect block the subspace debias writes to
+  `$draws`, the `$subspace_debias` record (`$idx` / `$declined`) that says
+  whether a correction completed rather than declined, and the outer-grid
+  facts `diagnostic_summary()` reports.
+
 ## 0.2.10
 
 * **Random effects over visit rows on the detection logit (#363).** A bar in
