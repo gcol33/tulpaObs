@@ -409,82 +409,68 @@ extract_beta <- function(sub, p) {
   I_obs
 }
 
-# Marginal Louis observed Fisher info for the SITE-LEVEL detection block of a
-# single-season fit (detection arm). The detection M-step fits a weighted
-# binomial whose returned H_beta = X_det' diag(w n_valid p(1-p)) X_det is the
-# *complete-data* info: it treats the soft occupancy weight w_i = P(z_i = 1 |
-# y) as known and so under-states the SE (the M-step Hessian is the wrong
-# object for SEs, exactly as on the psi arm). The occupancy and detection
-# estimating equations both depend on the latent z, so the detection SE must
-# come from the JOINT (psi, det) Louis observed info, marginalized over psi --
-# the diagonal det block alone fixes the intercept but leaves the slope
-# under-dispersed.
+# Joint Louis observed Fisher info for the (occupancy, site-level detection)
+# coefficients of a single-season fit. Neither M-step Hessian is the object for
+# SEs: each is complete-data info that treats the soft occupancy weight
+# w_i = P(z_i = 1 | y) as known. Both estimating equations depend on the latent
+# z, so the arms are coupled and the observed info is joint.
 #
 # Complete-data scores: s_psi,i = x_psi,i (z_i - psi_i),
 # s_det,i = z_i (n_det_i - n_valid_i p_i) x_det,i. With z_i | y ~ Bern(w_i) the
-# Louis identity (E[I_complete | y] - Var(s_complete | y)) gives the joint
-# observed info in three blocks (the complete-data cross block is 0):
+# Louis identity (E[I_complete | y] - Var(s_complete | y)) gives three blocks
+# (the complete-data cross block is 0):
 #
 #   I_pp = X_psi' diag( psi(1-psi) - w(1-w) ) X_psi                 (+ psi prior)
 #   I_dd = X_det' diag( w n_valid p(1-p) - (n_valid p)^2 w(1-w) ) X_det (+ p prior)
-#   I_pd = - X_psi' diag( n_valid p w(1-w) ) X_det
+#   I_pd = X_psi' diag( n_valid p w(1-w) ) X_det
 #
-# (a detected site has w_i = 1 so its w(1-w) terms vanish.) The marginal
-# detection info is the Schur complement I_dd - I_pd' I_pp^{-1} I_pd, whose
-# inverse is the (beta_det) block of the full joint covariance.
-.louis_info_det_single <- function(X_occ, beta_psi, X_det, beta_det,
-                                   weights, n_valid, prior_spec = NULL,
-                                   occ_coef_names = NULL, det_coef_names = NULL,
-                                   spatial = NULL, spatial_fit = NULL) {
+# (a detected site has w_i = 1 so its w(1-w) terms vanish). The cross block is
+# minus Cov(s_psi, s_det | y), and at an undetected site s_det = -z n_valid p
+# x_det, so it is positive. The inverse of the
+# assembled matrix is the joint covariance of (beta_psi, beta_det): each arm's
+# marginal block, and the cross-arm block that a derived quantity combining the
+# two arms needs. I_pp is `.louis_info_psi_single()`, so the occupancy block is
+# built in one place. A field on the occupancy arm enters as its fitted offset.
+# Returns NULL when an input is unavailable.
+.louis_info_joint_single <- function(X_occ, beta_psi, X_det, beta_det,
+                                     weights, n_valid, prior_spec = NULL,
+                                     occ_coef_names = NULL, det_coef_names = NULL,
+                                     spatial = NULL, spatial_fit = NULL) {
   p_det <- length(beta_det)
   p_psi <- length(beta_psi)
-  if (p_det == 0L) return(NULL)
+  if (p_det == 0L || p_psi == 0L) return(NULL)
   if (is.null(X_det) || nrow(X_det) == 0L) return(NULL)
+  if (is.null(X_occ) || nrow(X_occ) != nrow(X_det)) return(NULL)
   if (is.null(weights) || length(weights) != nrow(X_det)) return(NULL)
   if (is.null(n_valid) || length(n_valid) != nrow(X_det)) return(NULL)
+
+  I_pp <- .louis_info_psi_single(X_occ, beta_psi, weights,
+                                 spatial = spatial, spatial_fit = spatial_fit,
+                                 prior_spec = prior_spec,
+                                 coef_names = occ_coef_names)
+  if (is.null(I_pp)) return(NULL)
 
   w  <- weights
   nv <- as.numeric(n_valid)
   p  <- plogis(.tobs_clamp_eta(as.numeric(X_det %*% beta_det)))
 
-  add_prior <- function(I, arm, p_k, coef_names, Xcols) {
-    if (is.null(prior_spec)) return(I)
-    if (is.null(coef_names)) coef_names <- Xcols %||% paste0("x", seq_len(p_k))
-    pr <- .prior_for_submodel(prior_spec, arm, coef_names)
-    if (!is.null(pr)) {
-      pen <- ifelse(is.finite(pr$sd), 1 / (pr$sd^2), 0)
-      diag(I) <- diag(I) + pen[seq_len(p_k)]
-    }
-    I
-  }
-
-  # Detection diagonal block.
   d_dd <- w * nv * p * (1 - p) - (nv * p)^2 * w * (1 - w)
   d_dd[nv <= 0] <- 0
-  I_dd <- add_prior(as.matrix(crossprod(X_det, d_dd * X_det)),
-                    "p", p_det, det_coef_names, colnames(X_det))
-
-  # Couple with the occupancy block via the joint Louis cross term, then
-  # marginalize psi out by Schur complement. Skip when the occupancy inputs are
-  # unavailable (fall back to the diagonal block, which still fixes the level).
-  if (p_psi > 0L && !is.null(X_occ) && nrow(X_occ) == nrow(X_det)) {
-    eta_o <- as.numeric(X_occ %*% beta_psi)
-    sp_off <- .spatial_eta_offset(spatial, spatial_fit, p_psi)
-    if (length(sp_off) == nrow(X_occ)) eta_o <- eta_o + sp_off
-    psi <- plogis(.tobs_clamp_eta(eta_o))
-
-    d_pp <- psi * (1 - psi) - w * (1 - w)
-    I_pp <- add_prior(as.matrix(crossprod(X_occ, d_pp * X_occ)),
-                      "psi", p_psi, occ_coef_names, colnames(X_occ))
-    d_pd <- -nv * p * w * (1 - w)
-    d_pd[nv <= 0] <- 0
-    I_pd <- as.matrix(crossprod(X_occ, d_pd * X_det))    # p_psi x p_det
-
-    schur <- tryCatch(I_dd - crossprod(I_pd, solve(I_pp, I_pd)),
-                      error = function(e) NULL)
-    if (!is.null(schur)) I_dd <- schur
+  I_dd <- as.matrix(crossprod(X_det, d_dd * X_det))
+  if (!is.null(prior_spec)) {
+    nm <- det_coef_names %||% colnames(X_det) %||% paste0("x", seq_len(p_det))
+    pr <- .prior_for_submodel(prior_spec, "p", nm)
+    if (!is.null(pr)) {
+      pen <- ifelse(is.finite(pr$sd), 1 / (pr$sd^2), 0)
+      diag(I_dd) <- diag(I_dd) + pen[seq_len(p_det)]
+    }
   }
-  I_dd
+
+  d_pd <- nv * p * w * (1 - w)
+  d_pd[nv <= 0] <- 0
+  I_pd <- as.matrix(crossprod(X_occ, d_pd * X_det))    # p_psi x p_det
+
+  rbind(cbind(I_pp, I_pd), cbind(t(I_pd), I_dd))
 }
 
 # Marginal standard errors from a covariance block.
@@ -656,16 +642,51 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   spatial_occ <- .spatial_for_arm(spatial, 1L)
   spatial_det <- .spatial_for_arm(spatial, 2L)
 
-  # Collect betas from correction (if available) or EM fits. Each arm also
-  # contributes its within-arm covariance block (`prec_k` = the precision the
-  # arm's SEs came from), so the pseudo-draws carry the joint correlation rather
-  # than a diagonal stand-in. Cross-arm covariance stays zero, matching the EM's
-  # separate-arm M-step factorization.
+  # Collect betas from correction (if available) or EM fits. Each arm
+  # contributes its covariance block (`prec_k` = the precision the arm's SEs
+  # came from), so the pseudo-draws carry the within-arm correlation. The EM's
+  # M-step fits each arm on its own, so a covariance ACROSS arms exists only
+  # where the joint observed information is assembled: the single-season
+  # (occupancy, site-level detection) pair below. Elsewhere the cross-arm block
+  # is zero because no joint information is available there, not because the
+  # arms are independent in the posterior.
   means <- numeric()
   sds <- numeric()
   nms <- character()
-  louis_psi_se <- NULL
   cov_blocks <- list()
+
+  # Joint Louis covariance of (beta_psi, beta_det) on the single-season path
+  # with a site-level detection design and no field on the detection arm.
+  V_joint <- NULL
+  if (identical(model$model_type, "single") &&
+      is.null(spatial_det) && is.null(re_block) &&
+      is.null(model$X_det_visit) &&
+      !is.list(em_result$pooled) &&
+      !is.null(em_result$fits[["occ"]]) && !is.null(em_result$fits[["det"]]) &&
+      !is.null(em_result$weights) &&
+      nrow(model$X_processes[[2]]) == length(em_result$weights)) {
+    p_psi_j <- pi_list[[1]]$p; p_det_j <- pi_list[[2]]$p
+    J <- .louis_info_joint_single(
+      X_occ          = model$X_processes[[1]],
+      beta_psi       = extract_beta(em_result$fits[["occ"]], p_psi_j),
+      X_det          = model$X_processes[[2]],
+      beta_det       = extract_beta(em_result$fits[["det"]], p_det_j),
+      weights        = em_result$weights,
+      n_valid        = rowSums(model$y >= 0),
+      prior_spec     = prior_spec,
+      occ_coef_names = pi_list[[1]]$coef_names,
+      det_coef_names = pi_list[[2]]$coef_names,
+      spatial        = spatial_occ,
+      spatial_fit    = em_result$fits[["occ"]])
+    V_joint <- if (is.null(J)) NULL else tryCatch(solve(J), error = function(e) NULL)
+    if (!is.null(V_joint)) {
+      V_joint <- (V_joint + t(V_joint)) / 2
+      d_j <- diag(V_joint)
+      if (!all(is.finite(V_joint)) || any(d_j <= 0)) V_joint <- NULL
+    }
+  }
+  joint_idx <- if (is.null(V_joint)) NULL
+               else list(occ = seq_len(p_psi_j), det = p_psi_j + seq_len(p_det_j))
 
   for (k in seq_along(pi_list)) {
     pi <- pi_list[[k]]
@@ -708,7 +729,11 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
                    identical(sub_name, "occ") &&
                    !is.null(em_result$weights) &&
                    is.null(re_block)
-      if (!is.null(re_block) && identical(sub_name, "occ")) {
+      if (!is.null(joint_idx) && sub_name %in% names(joint_idx)) {
+        ii <- joint_idx[[sub_name]]
+        sds_k  <- sqrt(diag(V_joint)[ii])
+        prec_k <- NULL
+      } else if (!is.null(re_block) && identical(sub_name, "occ")) {
         # Occupancy fixed-effect SE on the RE path: natural-scale observed info
         # marginalised over the random-effect block (the M-step H_beta is
         # M-inflated). Computed in .tobs_re_occ_fixed_se().
@@ -728,44 +753,8 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
           prior_spec  = prior_spec,
           coef_names  = pi$coef_names
         )
-        louis_psi_se <- .se_from_info(I_obs, pi$p)
-        sds_k <- louis_psi_se
+        sds_k <- .se_from_info(I_obs, pi$p)
         prec_k <- I_obs
-      } else if (identical(model$model_type, "single") &&
-                 identical(sub_name, "det") &&
-                 is.null(spatial_det) &&
-                 is.null(re_block) &&
-                 is.null(model$X_det_visit) &&
-                 !is.null(em_result$weights) &&
-                 nrow(model$X_processes[[2]]) == length(em_result$weights)) {
-        # Site-level detection SE via the marginal Louis observed info
-        # (detection arm). The detection M-step's H_beta is the
-        # complete-data info (soft occupancy weight treated as known), which
-        # under-states the SE the same way the psi arm did; recompute the
-        # observed info, marginalizing over the coupled occupancy block.
-        beta_psi_fit <- extract_beta(em_result$fits[["occ"]],
-                                     ncol(model$X_processes[[1]]))
-        I_obs <- .louis_info_det_single(
-          X_occ          = model$X_processes[[1]],
-          beta_psi       = beta_psi_fit,
-          X_det          = model$X_processes[[2]],
-          beta_det       = beta,
-          weights        = em_result$weights,
-          n_valid        = rowSums(model$y >= 0),
-          prior_spec     = prior_spec,
-          occ_coef_names = pi_list[[1]]$coef_names,
-          det_coef_names = pi$coef_names,
-          spatial        = spatial_occ,
-          spatial_fit    = em_result$fits[["occ"]]
-        )
-        se_det <- .se_from_info(I_obs, pi$p)
-        if (any(!is.finite(se_det))) {
-          sds_k <- .se_from_laplace_fit(fi, pi$p)
-          prec_k <- fi$H_beta
-        } else {
-          sds_k <- se_det
-          prec_k <- I_obs
-        }
       } else {
         sds_k <- .se_from_laplace_fit(fi, pi$p)
         prec_k <- fi$H_beta
@@ -831,13 +820,17 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   names(sds)   <- nms
   n_params <- length(means)
 
-  # Pseudo-draws from the block-diagonal joint covariance: full within each
-  # fixed-effect arm (so derived quantities like predicted psi = plogis(X beta)
-  # propagate the coefficient correlation), zero across arms. Coordinates with
-  # an unavailable SE (NA) floor to a near-constant point mass, the same as the
-  # previous per-coefficient draw.
+  # Pseudo-draws from the assembled covariance: full within each fixed-effect
+  # arm, and across the (occupancy, detection) pair wherever the joint Louis
+  # covariance exists, so a quantity combining the arms (psi * p, an expected
+  # detection count) carries their correlation. Coordinates with an unavailable
+  # SE (NA) draw as a near-constant point mass.
   n_pseudo <- 1000L
   V_draw <- .assemble_block_diag(cov_blocks, n_params)
+  if (!is.null(V_joint)) {
+    jj <- c(joint_idx$occ, joint_idx$det)
+    V_draw[jj, jj] <- V_joint
+  }
   dimnames(V_draw) <- list(nms, nms)
   draws <- .rmvn(n_pseudo, means, V_draw)
   colnames(draws) <- nms
