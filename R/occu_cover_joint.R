@@ -850,6 +850,14 @@
       # an opt-in validation pass, matching the occu_joint path. Set
       # control$diagnose.k = TRUE to compute it (control$diagnose.draws sizes the
       # importance batch).
+      # The engine's two inner-layer debias instruments, forwarded because this
+      # is the route whose inner layer bands `unreliable` on a weakly
+      # identified psi/p ridge (gcol33/tulpa#862) and the corrections were
+      # unreachable from here: this control list is a whitelist, so a knob it
+      # does not name cannot be requested at all. Both keep the engine's own
+      # default of off, so a fit that asks for neither is unchanged.
+      subspace_debias = dots$subspace.debias %||% FALSE,
+      cila            = dots$cila %||% FALSE,
       diagnose_k = dots$diagnose.k %||% FALSE,
       # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy
       # alias). The outer Pareto-k is scored ONCE over this many importance draws.

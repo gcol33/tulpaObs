@@ -502,6 +502,12 @@
                            "adaptive.grid.max.frac", "adaptive.grid.min.cells",
                            "var.of.means.consistency",
                            "var.of.means.min.ess", "diagnose.k", "diagnose.draws",
+                           # The engine's two inner-layer debias instruments.
+                           # This route is where the inner layer bands
+                           # `unreliable` on a weakly identified psi/p ridge
+                           # (gcol33/tulpa#862), and both were unreachable from
+                           # here because this vocabulary did not name them.
+                           "subspace.debias", "cila",
                            "k.samples", "k.bootstrap", "k.tail.points", "k.conf.bands",
                            "force.sparse", "inner.refresh", "checkpoint",
                            # Regularizing hyperpriors on the outer grid axes,
