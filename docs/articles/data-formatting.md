@@ -1,0 +1,475 @@
+# Shaping data for tobs()
+
+``` r
+
+library(tulpaObs)
+```
+
+## Two pieces: the response and the site table
+
+Every [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md)
+call takes a detection response `y` and a per-site `data` frame. The
+formula on the left of the call names columns in `data`; the `detection`
+formula names columns there too. The shape of `y` is what changes
+between families, and getting it right is most of the work.
+
+For single-season occupancy, `y` is an `N x J` matrix: one row per site,
+one column per visit, holding `0` (surveyed, not detected), `1`
+(detected), or `NA` (not surveyed). The `data` frame has exactly `N`
+rows, one per site, aligned to the rows of `y`. A small simulated
+dataset shows the layout.
+
+``` r
+
+sim <- simulate_occu(
+  N = 120, J = 5,
+  n_occ_covs = 1, n_det_covs = 1,
+  beta_occ = c(0.2, 0.9),
+  beta_det = c(0.5, 0.4),
+  seed = 1
+)
+y   <- sim$y
+dat <- sim$data
+dim(y)
+y[1:4, ]
+head(dat, 4)
+```
+
+The matrix has 120 rows to match the 120 rows in `dat`. Row `i` of `y`
+is the detection history for the site described by row `i` of `dat`.
+That alignment is the contract
+[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) checks
+first, and it is the one to get right before anything else.
+
+The other families reshape the same idea:
+
+| Family                             | `y` shape                        |
+|------------------------------------|----------------------------------|
+| Single-season occupancy, N-mixture | `N x J` matrix                   |
+| Community (`ms_occu`, `ms_abun`)   | `N x J x species` array          |
+| Dynamic (`dyn_occu`)               | `N x J x season` array           |
+| Integrated (`int_occu`)            | list of matrices, one per source |
+
+In every case the leading dimension is the site, the second is the
+visit, and `data` carries one row per site.
+
+## Site-level versus visit-level covariates
+
+Occupancy covariates describe a site and do not change between visits,
+so they live as plain columns in `data`. Detection covariates can vary
+by visit (effort, observer, weather). When `data` has one row per site,
+a detection covariate named in the `detection` formula is read from that
+single row and broadcast across all `J` visits. That is the common case,
+and it is what the simulators produce.
+
+``` r
+
+fit <- tobs(
+  ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  method    = "laplace",
+  control   = list(verbose = FALSE)
+)
+coef(fit)
+```
+
+`occ_cov1` and `det_cov1` both came out of `dat`. The occupancy slope
+used the value once per site; the detection slope used the same value
+for each of the five visits at that site. When a detection covariate
+genuinely changes between visits you supply a per-visit design instead
+of a single site value, which the
+[`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
+helper below builds for you from a long table.
+
+## Building `y` from a long detection table
+
+Field data rarely arrives as a wide matrix. The usual starting point is
+a long table with one row per site-visit: a site id, a visit number, and
+a 0/1 detection. Reshaping that into the `N x J` matrix is a
+[`reshape()`](https://rdrr.io/r/stats/reshape.html) or a matrix-indexing
+step.
+
+``` r
+
+long <- data.frame(
+  site     = rep(paste0("S", 1:6), each = 3),
+  visit    = rep(1:3, times = 6),
+  detected = rbinom(18, 1, 0.4),
+  elev     = rep(rnorm(6), each = 3)   # a site-level covariate
+)
+head(long, 6)
+```
+
+The direct route fills a matrix by indexing on the site and visit
+positions. Build the empty matrix at the right size, then scatter each
+row of the long table into its `[site, visit]` cell.
+
+``` r
+
+sites  <- sort(unique(long$site))
+visits <- sort(unique(long$visit))
+ymat   <- matrix(NA_integer_, length(sites), length(visits),
+                 dimnames = list(sites, paste0("V", visits)))
+si <- match(long$site,  sites)
+vi <- match(long$visit, visits)
+ymat[cbind(si, vi)] <- as.integer(long$detected)
+ymat
+```
+
+The site-level table then takes one row per site, in the same site order
+as the matrix rows.
+
+``` r
+
+site_dat <- long[match(sites, long$site), "elev", drop = FALSE]
+rownames(site_dat) <- NULL
+site_dat
+```
+
+[`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
+packages both steps. Hand it the long frame and the column names; it
+returns a `tobs_data` object carrying the detection matrix, the
+site-level covariates, and any visit-level detection covariates as their
+own `N x J` matrices.
+
+``` r
+
+obs <- tobs_data(
+  long,
+  y     = "detected",
+  site  = "site",
+  visit = "visit",
+  occ.covs = "elev"
+)
+obs
+str(obs$y)
+```
+
+`obs$y` is the same `6 x 3` matrix, with site ids on the rows.
+`obs$occ.covs` holds the per-site `elev` column. A detection covariate
+passed through `det.covs` would come back as its own `N x J` matrix
+rather than a single column, so a per-visit value lands in the right
+visit slot.
+
+The `type` argument controls what the response column means. The
+default, `"occurrence"`, builds an integer 0/1 matrix; `"abundance"`
+keeps integer counts; `"cover"` keeps a continuous proportion in
+`[0, 1]` without coercing it to integer. Picking the wrong one is a
+common quiet error: a cover value of `0.6` run through the integer path
+truncates to `0`. The same long frame can feed an occurrence and a cover
+model side by side as long as each call names the matching column and
+`type`.
+
+``` r
+
+cov_long <- data.frame(
+  site  = rep(paste0("S", 1:4), each = 2),
+  visit = rep(1:2, times = 4),
+  cover = round(runif(8, 0, 0.8), 2)
+)
+cov_obs <- tobs_data(cov_long, y = "cover", site = "site", visit = "visit",
+                     type = "cover")
+cov_obs$y
+```
+
+## Building a `tobs_data` object by hand
+
+When the matrix and covariates already sit in the right shape, skip the
+long frame and assemble the object directly.
+[`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md)
+is the low-level constructor: it wraps a detection matrix, a
+site-covariate frame, and a named list of detection-covariate matrices
+into the `tobs_data` class with no reshaping. The named elements it
+expects are `y` (the `N x J` matrix), `occ.covs` (a per-site data
+frame), and `det.covs` (a named list of `N x J` matrices, one per
+visit-varying covariate).
+
+``` r
+
+N <- 5; J <- 3
+y_hand   <- matrix(rbinom(N * J, 1, 0.4), N, J,
+                   dimnames = list(paste0("S", 1:N), paste0("V", 1:J)))
+occ_hand <- data.frame(elev = round(rnorm(N), 2))
+eff_hand <- matrix(round(runif(N * J, 1, 4)), N, J)   # per-visit effort
+obs_hand <- tobs_format(y = y_hand, occ.covs = occ_hand,
+                        det.covs = list(effort = eff_hand))
+obs_hand
+str(obs_hand$y)
+```
+
+`obs_hand$det.covs$effort` carries one effort value per site-visit cell,
+so the detection formula `~ effort` reads a genuinely per-visit
+covariate rather than a broadcast site value. The site covariate `elev`
+stays a single column in `occ.covs`. A scalar detection covariate that
+does not vary by visit can still go through `det.covs` as an `N x J`
+matrix with the same value down each row, or through `occ.covs` if it is
+constant within a site, since
+[`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md)
+stores whatever layout you hand it.
+
+For the array families the named elements are the same except `y`
+carries an extra dimension and
+[`tobs_format_ms()`](https://gillescolling.com/tulpaObs/reference/tobs_format_ms.md)
+is the constructor. It accepts either a 3D `N x J x species` array or a
+named list of per-species matrices, and records `species_names` and
+`n_species` alongside `y`, `occ.covs`, and `det.covs`.
+
+``` r
+
+sp_list <- lapply(1:3, function(s) matrix(rbinom(N * J, 1, 0.3), N, J))
+names(sp_list) <- c("warbler", "finch", "wren")
+ms_hand <- tobs_format_ms(sp_list, occ.covs = occ_hand)
+dim(ms_hand$y)          # sites x visits x species
+ms_hand$species_names
+```
+
+The list-of-matrices form is convenient when species come from separate
+files: each matrix is one species, the list names become the species
+dimension. Passing a pre-built `N x J x species` array works the same
+way, with `species_names` supplied separately or defaulted to `sp1`,
+`sp2`, and so on.
+
+Which constructor to reach for follows from where the data already sits.
+[`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
+takes a long site-visit table and does the reshape for you, which suits
+raw field exports.
+[`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md)
+takes matrices you have already shaped, which suits data that arrives
+wide or that you built in an earlier step.
+[`tobs_format_ms()`](https://gillescolling.com/tulpaObs/reference/tobs_format_ms.md)
+is the multi-species counterpart of
+[`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md).
+All three return the same `tobs_data` class, so the
+[`print()`](https://rdrr.io/r/base/print.html),
+[`summary()`](https://rdrr.io/r/base/summary.html), and
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html) methods and the
+[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) fitter
+treat their output identically.
+
+## Inspecting a `tobs_data` object
+
+[`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md)
+is the lower-level constructor: it wraps an existing matrix, a
+site-covariate frame, and a named list of detection-covariate matrices
+into the same `tobs_data` class without any reshaping. Reach for it when
+your `y` is already a matrix.
+
+``` r
+
+obs2 <- tobs_format(
+  y        = y,
+  occ.covs = dat["occ_cov1"],
+  det.covs = list(det_cov1 = matrix(dat$det_cov1, nrow(y), ncol(y)))
+)
+obs2
+```
+
+The [`summary()`](https://rdrr.io/r/base/summary.html) method reports
+the naive occupancy and detection rates, the distribution of detections
+per site, and the per-visit detection rate. Naive occupancy is the
+fraction of sites with any detection, which sits below true occupancy
+because an occupied site can be missed on every visit.
+
+``` r
+
+summary(obs2)
+```
+
+The [`plot()`](https://rdrr.io/r/graphics/plot.default.html) method
+draws the same information: detections per site, detection rate by
+visit, and visit completeness (the share of sites actually surveyed on
+each visit).
+
+``` r
+
+plot(obs2)
+```
+
+These summaries are a quick check that the reshape did what you meant. A
+visit column that is mostly empty, or a naive occupancy of zero, usually
+points to a site or visit id that did not line up during the reshape.
+
+## Missing visits
+
+Sites are not always visited the same number of times. A site surveyed
+three times in a five-visit design has two `NA` entries in its row. The
+fitter handles this directly: each `NA` becomes a missing marker
+internally, and the likelihood sums only over the visits that were
+actually observed. No imputation, no dropped sites.
+
+``` r
+
+y_miss <- y
+y_miss[1, 4:5] <- NA   # site 1 surveyed 3 times
+y_miss[2, 5]   <- NA   # site 2 surveyed 4 times
+y_miss[1:3, ]
+```
+
+The fit runs unchanged on the gappy matrix, and the estimates stay close
+to the truth because the present visits still carry their information.
+
+``` r
+
+fit_miss <- tobs(
+  ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y_miss,
+  method    = "laplace",
+  control   = list(verbose = FALSE)
+)
+coef(fit_miss)
+```
+
+A site with every visit missing is a special case: with no observations
+it contributes nothing to the detection likelihood, and under the
+spatial nested-Laplace engine it becomes a held-out site whose occupancy
+is interpolated from the latent field. The single-season Laplace fit
+simply carries it with no detection information.
+
+## Validation
+
+[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) checks
+the response shape before it builds anything, so a malformed input fails
+with a named error rather than a confusing fit failure several steps
+later. The two slips that catch people are a wrong `y` type and a
+row-count mismatch between `y` and `data`.
+
+A single-season `y` must be a matrix. Passing a data frame or a bare
+vector stops the build with the expected shape spelled out.
+
+``` r
+
+tobs(~ occ_cov1, data = dat, family = occu(),
+     detection = ~ det_cov1, y = as.data.frame(y),
+     method = "laplace", control = list(verbose = FALSE))
+```
+
+If the matrix has a different number of rows than `data`, the error
+quotes both counts so you can see which side is wrong.
+
+``` r
+
+tobs(~ occ_cov1, data = dat[1:100, , drop = FALSE], family = occu(),
+     detection = ~ det_cov1, y = y,
+     method = "laplace", control = list(verbose = FALSE))
+```
+
+[`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
+validates earlier, while it is still reshaping the long frame. Naming a
+covariate column that is not in the frame stops with the missing name
+quoted, before any matrix is built.
+
+``` r
+
+tobs_data(long, y = "detected", site = "site", visit = "visit",
+          occ.covs = "elevation")   # column is named 'elev', not 'elevation'
+```
+
+The `type` argument is checked against the response values. An
+occurrence response carrying a `2` is rejected, since occurrence data is
+0/1; an abundance response with a negative count and a cover response
+outside `[0, 1]` fail the same way against their own domains.
+
+``` r
+
+bad <- long
+bad$detected[1] <- 2
+tobs_data(bad, y = "detected", site = "site", visit = "visit",
+          type = "occurrence")
+```
+
+The community and dynamic builders apply the matching check on their own
+shapes. A
+[`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md)
+fit wants a 3D `[site x visit x season]` array, and handing it a 2D
+matrix reports the array requirement directly.
+
+``` r
+
+tobs(~ 1, data = dat, family = dyn_occu(), detection = ~ 1, y = y,
+     colonization = ~ 1, extinction = ~ 1,
+     method = "laplace", control = list(verbose = FALSE))
+```
+
+The pattern is the same across families: declare the site table and the
+response, let the builder reconcile them, and read the error when they
+do not match. When a fit refuses to start, checking `dim(y)` against
+`nrow(data)` resolves most of it before any inference runs.
+
+## Response shapes per family
+
+The wide-matrix logic extends to the array and list families, and the
+named elements stay constant: `y` holds the response, `occ.covs` the
+per-site covariate frame, `det.covs` the per-visit covariate matrices.
+Only the shape of `y` moves. A single-season
+[`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) or
+[`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md) fit
+reads an `N x J` matrix; a community
+[`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md)
+or
+[`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md)
+fit reads an `N x J x species` array; a dynamic
+[`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md)
+fit reads an `N x J x season` array; an integrated
+[`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md)
+fit reads a list of matrices, one per source, that may differ in their
+visit counts. The simulators are the fastest way to see each shape,
+since they return a `y` already in the form the matching family expects.
+
+A community model stacks species on a third dimension.
+[`simulate_ms_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_occu.md)
+returns an `N x J x species` array, and `species` names that dimension.
+
+``` r
+
+sm <- simulate_ms_occu(N = 80, J = 4, n_species = 6, seed = 3)
+dim(sm$y)   # sites x visits x species
+```
+
+An integrated model has one detection matrix per data source, with a
+shared occupancy state across sources.
+[`simulate_int_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_int_occu.md)
+returns `y` as a list of matrices that differ in their visit counts.
+
+``` r
+
+si <- simulate_int_occu(N_total = 100, n_data = 2, J = c(4, 3),
+                        n_shared = 20, seed = 42)
+vapply(si$y, dim, integer(2))   # each source: sites x its own visit count
+```
+
+A dynamic model adds the season as a third dimension.
+[`simulate_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_dyn_occu.md)
+returns an `N x J x season` array, and the fit needs `colonization` and
+`extinction` for the colonisation and extinction processes.
+
+``` r
+
+sd <- simulate_dyn_occu(N = 60, J = 3, n_seasons = 4, seed = 1)
+dim(sd$y)   # sites x visits x seasons
+```
+
+Each of those families has its own vignette that fits the model end to
+end. This one stops at the data shape, which is the part that is the
+same whether you go on to a Laplace fit or a full NUTS posterior.
+
+## See also
+
+- [`?tobs_data`](https://gillescolling.com/tulpaObs/reference/tobs_data.md),
+  [`?tobs_format`](https://gillescolling.com/tulpaObs/reference/tobs_format.md),
+  [`?tobs_format_ms`](https://gillescolling.com/tulpaObs/reference/tobs_format_ms.md)
+  for the constructors.
+
+- The getting-started vignette for the fit, extract, and predict
+  workflow.
+
+- The family vignettes
+  ([`vignette("community-models")`](https://gillescolling.com/tulpaObs/articles/community-models.md),
+  [`vignette("integrated-occupancy")`](https://gillescolling.com/tulpaObs/articles/integrated-occupancy.md),
+  [`vignette("dynamic-occupancy")`](https://gillescolling.com/tulpaObs/articles/dynamic-occupancy.md))
+  for the array and list responses fit end to end.

@@ -1,0 +1,793 @@
+# tulpaObs
+
+*false zeros from imperfect detection*
+
+[![Lifecycle:
+stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![License:
+MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![R-CMD-check](https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml)
+[![smoke](https://github.com/gcol33/tulpaObs/actions/workflows/smoke.yaml/badge.svg)](https://github.com/gcol33/tulpaObs/actions/workflows/smoke.yaml)
+
+**Hierarchical observation models on the
+[tulpa](https://github.com/gcol33/tulpa) inference engine: occupancy,
+N-mixture abundance, distance, removal, cover.**
+
+A site reads zero because the species is absent, or because you visited
+on the wrong day. `tulpaObs` fits the models that hold those two apart:
+a latent ecological state under an imperfect detection process, with the
+state integrated out exactly so occupancy and detection come back as
+separate estimates. One fitter, one family object per model, and the
+spatial fields, temporal structure, random effects, and latent factors
+written inside the formula.
+
+``` r
+
+library(tulpaObs)
+
+fit <- tobs(
+  ~ elevation + spatial(graph = adj), # occupancy: fixed effects + a spatial field
+  data      = camera_data,
+  family    = occu(),                # MacKenzie et al. (2002) single-season
+  detection = ~ wind + time,         # the detection process
+  y         = y                      # N x J detection-history matrix
+)
+
+summary(fit)
+predict(fit, newdata = grid)         # marginalized per-site psi
+```
+
+## One fitter, every family
+
+[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) is the
+only fitter; the family object chooses the model, and the response shape
+follows from it.
+
+``` r
+
+tobs(~ forest, data = sites, family = abun(K_max = 50), detection = ~ effort, y = counts)
+tobs(~ moisture, data = plots, family = cover(response = "beta"), y = pct_cover)
+tobs(~ elev, data = sites, family = ms_occu(), detection = ~ effort, y = y_array,
+     species = species_id)
+```
+
+| Constructor | Model | Reference |
+|----|----|----|
+| [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) | Single-season occupancy | MacKenzie et al. (2002) |
+| [`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md) | Dynamic occupancy (colonization / extinction) | MacKenzie et al. (2003) |
+| [`t_occu()`](https://gillescolling.com/tulpaObs/reference/t_occu.md) | Multi-season occupancy, AR1 year effect | spOccupancy `tPGOcc` |
+| [`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md) | Integrated multi-source occupancy | Miller et al. (2019) |
+| [`dyn_int_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_int_occu.md) | Multi-season integrated occupancy | spOccupancy `tIntPGOcc` |
+| [`fp_occu()`](https://gillescolling.com/tulpaObs/reference/fp_occu.md) | False-positive occupancy | Miller et al. (2011) |
+| [`royle_nichols()`](https://gillescolling.com/tulpaObs/reference/royle_nichols.md) | Abundance-induced detection heterogeneity | Royle & Nichols (2003) |
+| [`occu_ttd()`](https://gillescolling.com/tulpaObs/reference/occu_ttd.md) | Time-to-detection occupancy | Garrard et al. (2008) |
+| [`occu_multi()`](https://gillescolling.com/tulpaObs/reference/occu_multi.md) | Multi-species co-occurrence occupancy | Rota et al. (2016) |
+| [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md) | Joint species distribution (no detection) |  |
+| [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md) | N-mixture abundance (Poisson / negbin) | Royle (2004) |
+| [`dyn_abun()`](https://gillescolling.com/tulpaObs/reference/dyn_abun.md) | Open (Dail-Madsen) N-mixture | Dail & Madsen (2011) |
+| [`count()`](https://gillescolling.com/tulpaObs/reference/count.md) | Count / relative-abundance GLMM (no detection) | spAbundance `abund` |
+| [`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md) | Community relative-abundance GLMM (no detection) | spAbundance `msAbund` |
+| [`distance()`](https://gillescolling.com/tulpaObs/reference/distance.md) | Binned distance sampling | Buckland et al. (2001) |
+| [`distsamp_open()`](https://gillescolling.com/tulpaObs/reference/distsamp_open.md) | Open-population distance sampling | Sollmann et al. (2015) |
+| [`gdistremoval()`](https://gillescolling.com/tulpaObs/reference/gdistremoval.md) | Joint distance + removal | Amundson et al. (2014) |
+| [`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md) | Removal sampling | Dorazio et al. (2005) |
+| [`double_observer()`](https://gillescolling.com/tulpaObs/reference/double_observer.md) | Double-observer abundance | Nichols et al. (2000) |
+| [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md) | Cover hurdle (beta / lognormal / ordinal) |  |
+| [`occu_categorical()`](https://gillescolling.com/tulpaObs/reference/occu_categorical.md) | Presence + nominal-class hurdle |  |
+| [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md) | Joint occupancy + cover hurdle |  |
+| [`occu_multiscale_cover()`](https://gillescolling.com/tulpaObs/reference/occu_multiscale_cover.md) | Three-level (cell / plot / visit) + cover | Nichols et al. (2008) |
+| [`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md) | Community occupancy | spOccupancy `msPGOcc` |
+| [`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md) | Community dynamic occupancy |  |
+| [`ms_int_occu()`](https://gillescolling.com/tulpaObs/reference/ms_int_occu.md) | Community integrated occupancy |  |
+| [`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md) | Community N-mixture | spAbundance `msNMix` |
+| [`ms_distance()`](https://gillescolling.com/tulpaObs/reference/ms_distance.md) | Community distance sampling | Sollmann et al. (2016) |
+| [`ms_occu_cover()`](https://gillescolling.com/tulpaObs/reference/ms_occu_cover.md) | Community joint occupancy + cover |  |
+
+Every family carries the same structured-effect vocabulary, so any of
+them composes with the engine’s spatial, temporal, and latent structure.
+
+## Structured effects inside the formula
+
+Structured terms are written *in* the formula, the way `lme4`, `mgcv`,
+and `INLA` do. The parser resolves bare symbols against `data` columns,
+so a spatial field is one term in the formula:
+
+``` r
+
+~ elevation +
+  spatial(graph = adj) +               # areal: icar / bym2 / car / car_proper
+  spatial(lon, lat, model = "spde") +  # continuous: spde / gp / multiscale_gp
+  temporal(year, type = "ar1") +       # temporal: ar1 / rw1 / rw2 / iid
+  (1 | observer)                       # random intercept (lme4 bar syntax)
+```
+
+[`spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+and
+[`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+are the two front doors: `model =` picks the spatial model (`"icar"` by
+default), `type =` the temporal one.
+
+A coefficient that varies over space is a spatial field, so it is
+written under
+[`spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+and `model =` says whether space is a graph or a set of coordinates. The
+areal form is a bar over graph nodes and has the broad family coverage:
+
+``` r
+
+~ spatial(~ 1 + year || cell, graph = adj)   # areal SVC, method = "nested_laplace"
+```
+
+The continuous form names the varying coefficients directly and asks for
+a range prior (`P(range < r0) = alpha`):
+
+``` r
+
+~ elevation + spatial(lon, lat, model = "svc",
+                      coefficients = "elevation", prior_range = c(50, 0.05))
+```
+
+The continuous form fits on single-season
+[`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) under
+`laplace` / `nested_laplace` / `nuts`, and on
+[`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md),
+[`distance()`](https://gillescolling.com/tulpaObs/reference/distance.md),
+[`fp_occu()`](https://gillescolling.com/tulpaObs/reference/fp_occu.md)
+and
+[`dyn_abun()`](https://gillescolling.com/tulpaObs/reference/dyn_abun.md)
+under `laplace` / `nested_laplace`; the surfaces come back as
+`fit$svc_field`. Elsewhere the term errors and points at the areal bar.
+`svc(lon, lat, coefficients = )` is the direct constructor, as
+[`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+is for `spatial(model = "icar")`.
+
+A term enters whichever process it is written in, so
+`detection = ~ (1 | observer)` puts the random effect on detection.
+`share("id")` shares one realization across both processes.
+[`?tobs_terms`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+documents every term and its arguments;
+[`?svc`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) and
+[`?icar`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+land there too. Bar syntax follows `lme4` throughout: `(1 | site)`,
+`(x | site)` for a correlated random slope, `(x || site)` uncorrelated,
+`(1 | g:h)` and `(1 | g/h)` for crossed and nested factors.
+
+Advanced usage: each spatial model also has a direct constructor, and
+[`spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+forwards its arguments to it, so the two forms build the same term.
+
+``` r
+
+icar(graph = adj)                     # spatial(graph = adj)
+bym2(graph = adj)                     # spatial(graph = adj, model = "bym2")
+spde(lon, lat)                        # spatial(lon, lat, model = "spde")
+gp(lon, lat, cov = "matern",          # spatial(lon, lat, model = "gp", cov = "matern",
+   prior_range = c(0.1, 0.05))        #         prior_range = c(0.1, 0.05))
+```
+
+Model-specific arguments are checked against the model named in
+`model =`, so an argument that model does not take is an error.
+[`gp()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+requires a PC prior on the range: `prior_range = c(r0, alpha)` encodes
+`P(range < r0) = alpha` in the units of the coordinates.
+
+## The latent state integrates out
+
+An occupancy site contributes a mixture over its latent state: occupied
+with probability `psi` and detected on a Bernoulli schedule, or
+unoccupied and silent. `tulpaObs` evaluates that marginalized likelihood
+directly, and the same holds for the N-mixture abundance `N`, so `psi`
+and `p` come back as separate processes. Fitting the detection histories
+as one stacked binomial identifies only their product `psi * p`; the
+[occupancy-vs-INLA
+vignette](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd)
+runs that head-to-head on simulated data with known truth.
+
+## Choose the inference route
+
+`method` names one fully specified route. Laplace is fast and the
+default; the stochastic corrections debias it where it is biased; NUTS
+gives the full posterior and fits every structure.
+
+``` r
+
+tobs(..., method = "laplace")         # EM + Laplace, deterministic
+tobs(..., method = "laplace_sla")     # skew-corrected marginals, adds a `skew` column
+tobs(..., method = "laplace_gibbs")   # post-EM Gibbs chain, Rubin-pooled
+tobs(..., method = "nested_laplace")  # multi-block: areal fields, joint cover hurdle
+tobs(..., method = "nuts")            # HMC, reports split-Rhat and bulk / tail ESS
+```
+
+Occupancy families also take `method = "pg_gibbs"`, an exact Polya-Gamma
+Gibbs sampler that recovers the community variance components the
+Laplace EM attenuates. `fit$method` records the resolved route, and an
+unsupported combination errors with a pointer to the methods that family
+accepts.
+
+Random-effect variance components carry the Laplace small-cluster bias
+for binary data (the `glmer` `nAGQ = 1` regime). An adaptive
+Gauss-Hermite refinement on the exact per-group marginal runs by default
+(`re.aghq`), cutting the occupancy per-group-`n = 8` sigma bias from
+~18% to ~4% and the detection-arm bias from ~70% to ~1%, both against
+NUTS.
+
+## The data shape you already have
+
+Detection histories arrive as matrices, as long tables with one row per
+site-visit, or as species arrays. Three helpers build the same
+`tobs_data` object from any of them:
+
+``` r
+
+tobs_format(y, occ.covs = sites, det.covs = list(wind = wind_mat), coords = xy)
+tobs_data(visits_df, y = "detected", site = "site_id", visit = "visit")
+tobs_format_ms(y_array, occ.covs = sites, species_names = spp)
+
+occu_cover_inputs(plot_df, site = "plot", visit = "visit",
+                  response = "present", y_pos = "cover")
+```
+
+[`summary()`](https://rdrr.io/r/base/summary.html),
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html), and
+[`print()`](https://rdrr.io/r/base/print.html) on a `tobs_data` report
+naive occupancy and detection, per-visit rates, completeness, and a
+detection map when coordinates are present. Three fixed-seed example
+datasets ship with a known `truth` attached: `peatland_occu`,
+`foray_counts`, and `meadow_cover`.
+
+## Simulate, fit, recover
+
+Every family has a matching simulator that returns `y`, `data`, and the
+`truth` that generated them, so a model can be checked against known
+parameters before it meets real data. The package’s own recovery tests
+are built on these:
+
+``` r
+
+sim <- simulate_occu(N = 200, J = 4,
+                     beta_occ = c(-0.5, 1.2, 0.4),
+                     beta_det = c(0.2, -0.8),
+                     seed = 1)
+
+fit <- tobs(~ occ_cov1 + occ_cov2, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y)
+
+coef(fit)
+sim$truth
+```
+
+[`simulate_abun()`](https://gillescolling.com/tulpaObs/reference/simulate_abun.md),
+[`simulate_cover()`](https://gillescolling.com/tulpaObs/reference/simulate_cover.md),
+[`simulate_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_dyn_occu.md),
+[`simulate_ms_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_occu.md),
+[`simulate_distance()`](https://gillescolling.com/tulpaObs/reference/simulate_distance.md),
+and the rest cover the remaining families, including a
+[`simulate_cover_joint()`](https://gillescolling.com/tulpaObs/reference/simulate_cover_joint.md)
+that shares a demeaned BYM2 field across both hurdle arms.
+
+## The usual R surface
+
+A fit is an ordinary R model object, whichever route produced it:
+
+``` r
+
+coef(fit); confint(fit); vcov(fit); logLik(fit)
+fitted(fit); residuals(fit); predict(fit); simulate(fit)
+ranef(fit); tidy(fit); glance(fit); update(fit)
+converged(fit); convergence(fit)
+```
+
+[`fitted()`](https://rdrr.io/r/stats/fitted.values.html) returns
+`list(psi, p, z)` at the posterior mean,
+[`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html)
+per-group BLUPs with standard errors, and
+[`predict()`](https://rdrr.io/r/stats/predict.html) works in-sample, on
+a design matrix (`X.0=`), or on terms (`terms=`, which returns a
+`tobs_prediction` with a
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html) method).
+Spatial fits interpolate to new coordinates through
+[`tobs_predict_spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_predict_spatial.md).
+`$` accessors (`beta.samples`, `psi.samples`, `z.samples`, `run.time`)
+follow spOccupancy naming.
+
+## Diagnostics and identifiability
+
+``` r
+
+check_model(fit, coords = xy)    # roll-up: sampler, WAIC, PPC, zero-inflation, Moran's I
+tobs_check_id(fit$model)         # confounding, low detection, sparse data
+
+waic(fit); dic(fit); cpo(fit)
+ppc(fit, fit.stat = "chi-squared")
+test_dispersion(fit); test_zero_inflation(fit); test_outliers(fit)
+test_uniformity(pit_residuals(fit))
+```
+
+[`waic()`](https://mc-stan.org/loo/reference/waic.html) and
+[`loo()`](https://mc-stan.org/loo/reference/loo.html) are the loo
+generics, so
+[`loo::loo_compare()`](https://mc-stan.org/loo/reference/loo_compare.html)
+reads a `tobs_fit` directly.
+
+Moran’s I, Durbin-Watson, variograms, and `spatial_range` /
+`temporal_corr` for the latent structure come through from tulpa.
+[`tobs_stack()`](https://gillescolling.com/tulpaObs/reference/tobs_stack.md)
+LOO-weights two or more fits on the same observations into an ensemble
+whose [`predict()`](https://rdrr.io/r/stats/predict.html) returns the
+combined predictive.
+
+## Longitudinal and community extras
+
+[`within_between()`](https://gillescolling.com/tulpaObs/reference/within_between.md)
+splits a covariate into its per-group mean and within-group deviation,
+so `~ x_btw + x_wtn` separates the cross-site gradient from change
+inside a site across a resurvey:
+
+``` r
+
+d <- within_between(plots, group = "plot", vars = c("temperature", "grazing"))
+tobs(~ temperature_btw + temperature_wtn, data = d, family = cover(), y = d$cover)
+```
+
+For community fits,
+[`tobs_richness()`](https://gillescolling.com/tulpaObs/reference/tobs_richness.md)
+returns posterior species richness and
+[`tobs_associations()`](https://gillescolling.com/tulpaObs/reference/tobs_associations.md)
+the residual species-association matrix from the latent factors.
+
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+GitHub (declared in `Remotes:`). A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, `r-base-dev` on Linux); both `tulpa`
+and `tulpaObs` compile their backends on first install.
+
+## Documentation
+
+Getting started
+
+- [Quickstart](https://github.com/gcol33/tulpaObs/blob/main/vignettes/quickstart.Rmd)
+- [Data
+  formatting](https://github.com/gcol33/tulpaObs/blob/main/vignettes/data-formatting.Rmd)
+- [Occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy.Rmd)
+- [Occupancy vs
+  INLA](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd)
+
+Model families
+
+- [Abundance
+  (N-mixture)](https://github.com/gcol33/tulpaObs/blob/main/vignettes/abundance.Rmd)
+- [Dynamic
+  occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/dynamic-occupancy.Rmd)
+- [Integrated
+  occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/integrated-occupancy.Rmd)
+- [Community
+  models](https://github.com/gcol33/tulpaObs/blob/main/vignettes/community-models.Rmd)
+- [Cover
+  hurdle](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle.Rmd)
+- [Cover hurdle,
+  motivated](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-motivate.Rmd)
+- [Cover hurdle vs
+  INLA](https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-vs-inla.Rmd)
+
+Structure
+
+- [Spatial
+  occupancy](https://github.com/gcol33/tulpaObs/blob/main/vignettes/spatial-occupancy.Rmd)
+- [Spatial occupancy with
+  SPDE](https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-spatial-spde.Rmd)
+- [Random
+  effects](https://github.com/gcol33/tulpaObs/blob/main/vignettes/random-effects.Rmd)
+- [Diagnostics](https://github.com/gcol33/tulpaObs/blob/main/vignettes/diagnostics.Rmd)
+
+[API.md](https://github.com/gcol33/tulpaObs/blob/main/API.md) is the
+full reference: every argument of
+[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md), the
+term registry, the method table, the `control` list, and the complete
+export list.
+
+## Status
+
+The public API
+([`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md), the
+family constructors, and the `tobs_*` S3 classes) is stable. Internal
+entry points
+([`.tobs_build_model()`](https://gillescolling.com/tulpaObs/reference/dot-tobs_build_model.md),
+[`.tobs_fit_model()`](https://gillescolling.com/tulpaObs/reference/dot-tobs_fit_model.md),
+[`.tobs_laplace()`](https://gillescolling.com/tulpaObs/reference/dot-tobs_laplace.md))
+and the C++ surface follow tulpa’s ABI version and may change between
+releases.
+
+## Support
+
+> “Software is like sex: it’s better when it’s free.”
+>
+> Linus Torvalds
+
+I’m a PhD student who builds R packages in my free time because I
+believe good tools should be free and open. I started these projects for
+my own work and figured others might find them useful too.
+
+If this package saved you some time, buying me a coffee is a nice way to
+say thanks. It helps with my coffee addiction.
+
+[![Buy Me A
+Coffee](https://img.shields.io/badge/-Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/gcol33)
+
+## License
+
+MIT (see the LICENSE file)
+
+## Citation
+
+``` bibtex
+@software{tulpaObs,
+  author = {Colling, Gilles},
+  title  = {tulpaObs: Hierarchical Latent-State Observation Models via tulpa},
+  year   = {2026},
+  url    = {https://github.com/gcol33/tulpaObs}
+}
+```
+
+# Package index
+
+## Front door
+
+One fitter; the model is chosen by the family object.
+
+- [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) : Fit
+  a hierarchical latent-state observation model
+- [`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
+  : Convert long-format data to a site x visit observation object
+- [`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md)
+  : Format occupancy data from matrices/lists
+- [`tobs_format_ms()`](https://gillescolling.com/tulpaObs/reference/tobs_format_ms.md)
+  : Format multi-species occupancy data
+- [`tobs_check_id()`](https://gillescolling.com/tulpaObs/reference/tobs_check_id.md)
+  : Check model identifiability
+- [`tobs_terms`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`icar`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`bym2`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`car_proper`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`gp`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`multiscale_gp`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`spde`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`svc`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`re`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`temporal`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`latent`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  [`spatial`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  : Structured terms inside a tobs() formula
+- [`tobs_get()`](https://gillescolling.com/tulpaObs/reference/tobs_get.md)
+  : Extract one species' fit from a batched occu_cover fit.
+- [`print(`*`<tobs_family>`*`)`](https://gillescolling.com/tulpaObs/reference/print.tobs_family.md)
+  : Print method for tobs_family
+
+## Occupancy families
+
+- [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) :
+  Single-season occupancy family
+- [`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md)
+  : Dynamic (multi-season) occupancy family
+- [`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md)
+  : Integrated occupancy family
+- [`dyn_int_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_int_occu.md)
+  : Multi-season integrated occupancy family
+- [`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md)
+  : Multispecies (community) single-season occupancy family
+- [`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md)
+  : Community (multispecies) dynamic occupancy family
+- [`ms_int_occu()`](https://gillescolling.com/tulpaObs/reference/ms_int_occu.md)
+  : Community (multispecies) integrated occupancy family
+- [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md) :
+  Joint species distribution family (no detection process)
+- [`t_occu()`](https://gillescolling.com/tulpaObs/reference/t_occu.md) :
+  Multi-season occupancy with a temporal (AR1) year effect (tPGOcc)
+- [`fp_occu()`](https://gillescolling.com/tulpaObs/reference/fp_occu.md)
+  : Multistate false-positive occupancy family
+- [`fp_occu_laplace()`](https://gillescolling.com/tulpaObs/reference/fp_occu_laplace.md)
+  : Maximum-likelihood fit of the multistate false-positive occupancy
+  model
+- [`royle_nichols()`](https://gillescolling.com/tulpaObs/reference/royle_nichols.md)
+  : Royle-Nichols occupancy family
+- [`occu_ttd()`](https://gillescolling.com/tulpaObs/reference/occu_ttd.md)
+  : Time-to-detection occupancy family
+- [`occu_multi()`](https://gillescolling.com/tulpaObs/reference/occu_multi.md)
+  : Multi-species co-occurrence occupancy family
+- [`occu_categorical()`](https://gillescolling.com/tulpaObs/reference/occu_categorical.md)
+  : Presence + nominal class hurdle family
+- [`occu_priors()`](https://gillescolling.com/tulpaObs/reference/occu_priors.md)
+  : Weakly-informative priors for occupancy Laplace fits
+
+## Abundance, distance and removal families
+
+- [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md) :
+  N-mixture abundance family
+- [`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md)
+  : Multispecies N-mixture family
+- [`dyn_abun()`](https://gillescolling.com/tulpaObs/reference/dyn_abun.md)
+  : Open-population (Dail-Madsen) N-mixture family
+- [`dyn_abun_laplace()`](https://gillescolling.com/tulpaObs/reference/dyn_abun_laplace.md)
+  : Maximum-likelihood fit of the Dail-Madsen open N-mixture
+- [`count()`](https://gillescolling.com/tulpaObs/reference/count.md) :
+  Count / relative-abundance GLMM family (no detection process)
+- [`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md)
+  : Multispecies (community) relative-abundance GLMM family
+- [`distance()`](https://gillescolling.com/tulpaObs/reference/distance.md)
+  : Binned distance-sampling family
+- [`distance_laplace()`](https://gillescolling.com/tulpaObs/reference/distance_laplace.md)
+  : Laplace fit of the binned distance-sampling abundance model
+- [`ms_distance()`](https://gillescolling.com/tulpaObs/reference/ms_distance.md)
+  : Community (multispecies) binned distance-sampling family
+- [`distsamp_open()`](https://gillescolling.com/tulpaObs/reference/distsamp_open.md)
+  : Open-population distance-sampling family
+- [`gdistremoval()`](https://gillescolling.com/tulpaObs/reference/gdistremoval.md)
+  : Joint distance + removal sampling family
+- [`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md)
+  : Removal-sampling family
+- [`removal_laplace()`](https://gillescolling.com/tulpaObs/reference/removal_laplace.md)
+  : Laplace fit of the removal-sampling abundance model
+- [`double_observer()`](https://gillescolling.com/tulpaObs/reference/double_observer.md)
+  : Double-observer abundance family
+- [`nmix_laplace()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace.md)
+  : Laplace fit of the Royle (2004) N-mixture model
+- [`nmix_laplace_bym2()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_bym2.md)
+  : BYM2 Royle (2004) N-mixture model via nested Laplace
+- [`nmix_laplace_car_proper()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_car_proper.md)
+  : Proper CAR Royle (2004) N-mixture model via nested Laplace
+- [`nmix_laplace_icar()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_icar.md)
+  : Spatial Royle (2004) N-mixture model via nested Laplace
+- [`nmix_laplace_re()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_re.md)
+  : Community / multispecies N-mixture by Laplace
+- [`nmix_site_marginal()`](https://gillescolling.com/tulpaObs/reference/nmix_site_marginal.md)
+  : Per-site N-mixture marginal as a composable random-effect callback
+
+## Cover families
+
+- [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md) :
+  Cover hurdle family (vegetation cover, MOTIVATE pattern)
+- [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+  : Joint occupancy-detection + cover hurdle family
+- [`occu_cover_inputs()`](https://gillescolling.com/tulpaObs/reference/occu_cover_inputs.md)
+  : Build occu_cover() model inputs from a long, plot-level frame
+- [`ms_occu_cover()`](https://gillescolling.com/tulpaObs/reference/ms_occu_cover.md)
+  : Community (multispecies) joint occupancy-detection + cover family
+- [`occu_multiscale_cover()`](https://gillescolling.com/tulpaObs/reference/occu_multiscale_cover.md)
+  : Three-level (multiscale) occupancy + cover hurdle family
+- [`cover_priors()`](https://gillescolling.com/tulpaObs/reference/cover_priors.md)
+  : Weakly-informative priors for cover-hurdle Laplace fits
+- [`occu_aggregation_scan()`](https://gillescolling.com/tulpaObs/reference/occu_aggregation_scan.md)
+  : Suggest spatial and temporal aggregation for an identifiable
+  occupancy model
+- [`plot(`*`<tobs_aggregation_scan>`*`)`](https://gillescolling.com/tulpaObs/reference/plot.tobs_aggregation_scan.md)
+  : Plot an occupancy aggregation scan
+
+## Fit accessors
+
+S3 methods on `tobs_fit`.
+
+- [`print(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/print.tobs_fit.md)
+  : Print method for tobs_fit
+- [`summary(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/summary.tobs_fit.md)
+  : Summary for tobs_fit, with skewness column when simplified Laplace
+  is used
+- [`coef(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/coef.tobs_fit.md)
+  : Coefficients for a tobs_fit
+- [`coef(`*`<tobs_batch>`*`)`](https://gillescolling.com/tulpaObs/reference/coef.tobs_batch.md)
+  : Per-species coefficients from a batched occu_cover fit.
+- [`print(`*`<tobs_batch>`*`)`](https://gillescolling.com/tulpaObs/reference/print.tobs_batch.md)
+  : Print a batched multi-response occu_cover fit.
+- [`tidy(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tidy.tobs_fit.md)
+  : Coefficient table for a tobs_fit
+- [`glance(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/glance.tobs_fit.md)
+  : One-row model summary for a tobs_fit
+- [`fitted(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/fitted.tobs_fit.md)
+  : Fitted values (occupancy and detection probabilities)
+- [`residuals(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/residuals.tobs_fit.md)
+  : Residuals from occupancy model
+- [`ranef(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/ranef.tobs_fit.md)
+  : Random-effect estimates (BLUPs) for a tobs_fit
+- [`logLik(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/logLik.tobs_fit.md)
+  : Log-likelihood of a tobs fit
+- [`nobs(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/nobs.tobs_fit.md)
+  : Number of observations
+- [`update(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/update.tobs_fit.md)
+  : Update and refit a tobs model
+- [`predict(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/predict.tobs_fit.md)
+  : Predict from occupancy model
+- [`predict(`*`<cover_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/predict.cover_fit.md)
+  : Predict cover from a cover_fit
+- [`predict(`*`<occu_categorical_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/predict.occu_categorical_fit.md)
+  : Predict from an occu_categorical fit
+- [`simulate(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/simulate.tobs_fit.md)
+  : Simulate replicate datasets from the posterior
+- [`` `$`( ``*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/cash-.tobs_fit.md)
+  : Access spOccupancy-compatible fields from tobs fits
+- [`tobs_predict_spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_predict_spatial.md)
+  : Predict the state process at new spatial locations
+- [`tobs_marginal_effect()`](https://gillescolling.com/tulpaObs/reference/tobs_marginal_effect.md)
+  : Compute marginal effect of a covariate
+- [`tobs_richness()`](https://gillescolling.com/tulpaObs/reference/tobs_richness.md)
+  : Estimate species richness from community model
+- [`tobs_associations()`](https://gillescolling.com/tulpaObs/reference/tobs_associations.md)
+  : Residual species-association matrices from a spatial-factor
+  community fit
+- [`nobs(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`coef(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`vcov(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`confint(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`logLik(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`glance(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`tidy(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`summary(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`plot(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`fitted(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  [`residuals(`*`<tobs_multiarm_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_multiarm_methods.md)
+  : S3 methods for multi-arm fits
+
+## Diagnostics and model comparison
+
+- [`check_model(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/check_model.tobs_fit.md)
+  : Comprehensive model checking
+- [`pit_residuals(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/pit_residuals.tobs_fit.md)
+  : PIT residuals for a tobs fit
+- [`ppc()`](https://gillescolling.com/tulpaObs/reference/ppc.md) :
+  Posterior predictive check
+- [`sbc(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/sbc.tobs_fit.md)
+  : Simulation-based calibration for a fitted tobs model
+- [`test_dispersion(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_gof_tests.md)
+  [`test_zero_inflation(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_gof_tests.md)
+  [`test_outliers(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_gof_tests.md)
+  : Goodness-of-fit tests for a tobs fit
+- [`waic(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_criteria.md)
+  [`loo(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_criteria.md)
+  [`dic(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_criteria.md)
+  [`cpo(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_criteria.md)
+  [`pointwise_loglik(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_criteria.md)
+  : Model criteria for occupancy / cover models
+- [`tobs_stack()`](https://gillescolling.com/tulpaObs/reference/tobs_stack.md)
+  [`print(`*`<tobs_stack>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_stack.md)
+  [`fitted(`*`<tobs_stack>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_stack.md)
+  [`predict(`*`<tobs_stack>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_stack.md)
+  : Stack fitted models into a LOO-weighted ensemble
+- [`convergence()`](https://gillescolling.com/tulpaObs/reference/convergence.md)
+  [`converged()`](https://gillescolling.com/tulpaObs/reference/convergence.md)
+  : Convergence record for a fitted model
+
+## Simulation
+
+- [`simulate_abun()`](https://gillescolling.com/tulpaObs/reference/simulate_abun.md)
+  : Simulate Royle (2004) N-mixture abundance data
+- [`simulate_count()`](https://gillescolling.com/tulpaObs/reference/simulate_count.md)
+  : Simulate count / relative-abundance GLMM data
+- [`simulate_cover()`](https://gillescolling.com/tulpaObs/reference/simulate_cover.md)
+  : Simulate cover-hurdle data (lognormal positive part)
+- [`simulate_cover_joint()`](https://gillescolling.com/tulpaObs/reference/simulate_cover_joint.md)
+  : Simulate cover-hurdle data with a shared BYM2 spatial field
+- [`simulate_distance()`](https://gillescolling.com/tulpaObs/reference/simulate_distance.md)
+  : Simulate binned distance-sampling abundance data
+- [`simulate_distsamp_open()`](https://gillescolling.com/tulpaObs/reference/simulate_distsamp_open.md)
+  : Simulate an open-population distance-sampling data set
+- [`simulate_double_observer()`](https://gillescolling.com/tulpaObs/reference/simulate_double_observer.md)
+  : Simulate a double-observer abundance data set
+- [`simulate_dyn_abun()`](https://gillescolling.com/tulpaObs/reference/simulate_dyn_abun.md)
+  : Simulate Dail-Madsen open N-mixture data
+- [`simulate_dyn_int_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_dyn_int_occu.md)
+  : Simulate a multi-season integrated occupancy data set
+- [`simulate_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_dyn_occu.md)
+  : Simulate temporal (multi-season) occupancy data
+- [`simulate_fp_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_fp_occu.md)
+  : Simulate multistate false-positive occupancy data
+- [`simulate_gdistremoval()`](https://gillescolling.com/tulpaObs/reference/simulate_gdistremoval.md)
+  : Simulate a joint distance + removal data set
+- [`simulate_int_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_int_occu.md)
+  : Simulate integrated (multi-source) occupancy data
+- [`simulate_jsdm()`](https://gillescolling.com/tulpaObs/reference/simulate_jsdm.md)
+  : Simulate joint species distribution (presence/absence) data
+- [`simulate_ms_abun()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_abun.md)
+  : Simulate community (multispecies) N-mixture abundance data
+- [`simulate_ms_count()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_count.md)
+  : Simulate community relative-abundance (count / continuous) data
+- [`simulate_ms_distance()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_distance.md)
+  : Simulate community (multispecies) binned distance-sampling data
+- [`simulate_ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_dyn_occu.md)
+  : Simulate temporal multi-species occupancy data
+- [`simulate_ms_int_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_int_occu.md)
+  : Simulate integrated multi-species occupancy data
+- [`simulate_ms_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_occu.md)
+  : Simulate multi-species occupancy data
+- [`simulate_ms_occu_cover()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_occu_cover.md)
+  : Simulate community (multispecies) joint occupancy-cover data
+- [`simulate_ms_occu_cover_spatial()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_occu_cover_spatial.md)
+  : Simulate a reduced-rank spatial-factor community occu_cover data set
+  (K = 1)
+- [`simulate_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_occu.md)
+  : Simulate single-species occupancy data
+- [`simulate_occu_categorical()`](https://gillescolling.com/tulpaObs/reference/simulate_occu_categorical.md)
+  : Simulate from an occu_categorical model
+- [`simulate_occu_cover()`](https://gillescolling.com/tulpaObs/reference/simulate_occu_cover.md)
+  : Simulate joint occupancy-detection + cover data
+- [`simulate_occu_multi()`](https://gillescolling.com/tulpaObs/reference/simulate_occu_multi.md)
+  : Simulate a multi-species co-occurrence occupancy data set
+- [`simulate_occu_multiscale_cover()`](https://gillescolling.com/tulpaObs/reference/simulate_occu_multiscale_cover.md)
+  : Simulate a three-level occupancy + cover hurdle data set
+- [`simulate_occu_ttd()`](https://gillescolling.com/tulpaObs/reference/simulate_occu_ttd.md)
+  : Simulate a time-to-detection occupancy data set
+- [`simulate_removal()`](https://gillescolling.com/tulpaObs/reference/simulate_removal.md)
+  : Simulate removal-sampling abundance data
+- [`simulate_royle_nichols()`](https://gillescolling.com/tulpaObs/reference/simulate_royle_nichols.md)
+  : Simulate Royle-Nichols occupancy data
+- [`simulate_t_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_t_occu.md)
+  : Simulate multi-season occupancy with an AR1 year effect (tPGOcc)
+
+## Data and utilities
+
+- [`foray_counts`](https://gillescolling.com/tulpaObs/reference/foray_counts.md)
+  : Repeated point-count abundance survey (synthetic)
+- [`meadow_cover`](https://gillescolling.com/tulpaObs/reference/meadow_cover.md)
+  : Grassland vegetation-cover panel (synthetic)
+- [`peatland_occu`](https://gillescolling.com/tulpaObs/reference/peatland_occu.md)
+  : Peatland occupancy survey (synthetic)
+- [`summary(`*`<tobs_data>`*`)`](https://gillescolling.com/tulpaObs/reference/summary.tobs_data.md)
+  : Summarise occupancy data
+- [`plot(`*`<tobs_data>`*`)`](https://gillescolling.com/tulpaObs/reference/plot.tobs_data.md)
+  : Plot detection history patterns
+- [`within_between()`](https://gillescolling.com/tulpaObs/reference/within_between.md)
+  : Within / between (Mundlak) decomposition for longitudinal data
+
+# Articles
+
+### Start here
+
+- [Getting started with
+  tulpaObs](https://gillescolling.com/tulpaObs/articles/quickstart.md):
+- [Shaping data for
+  tobs()](https://gillescolling.com/tulpaObs/articles/data-formatting.md):
+
+### Occupancy
+
+- [Single-season
+  occupancy](https://gillescolling.com/tulpaObs/articles/occupancy.md):
+- [Dynamic (multi-season)
+  occupancy](https://gillescolling.com/tulpaObs/articles/dynamic-occupancy.md):
+- [Integrated occupancy: combining data
+  sources](https://gillescolling.com/tulpaObs/articles/integrated-occupancy.md):
+- [Random effects with lme4 bar
+  syntax](https://gillescolling.com/tulpaObs/articles/random-effects.md):
+- [Areal spatial occupancy with ICAR, BYM2, and
+  CAR](https://gillescolling.com/tulpaObs/articles/spatial-occupancy.md):
+- [Occupancy with a continuous SPDE spatial
+  field](https://gillescolling.com/tulpaObs/articles/occupancy-spatial-spde.md):
+- [Occupancy: tulpaObs vs INLA
+  aggregated-binomial](https://gillescolling.com/tulpaObs/articles/occupancy-vs-inla.md):
+
+### Abundance and communities
+
+- [N-mixture abundance with
+  tulpaObs](https://gillescolling.com/tulpaObs/articles/abundance.md):
+- [Community models in
+  tulpaObs](https://gillescolling.com/tulpaObs/articles/community-models.md):
+
+### Cover
+
+- [Cover hurdle (independent
+  arms)](https://gillescolling.com/tulpaObs/articles/cover-hurdle.md):
+- [Cover hurdle on resurvey panels (MOTIVATE
+  reduction)](https://gillescolling.com/tulpaObs/articles/cover-hurdle-motivate.md):
+- [Cover hurdle: tulpaObs vs INLA on simulated cover
+  data](https://gillescolling.com/tulpaObs/articles/cover-hurdle-vs-inla.md):
+
+### Checking fits
+
+- [Diagnostics: checking, comparing, and
+  residuals](https://gillescolling.com/tulpaObs/articles/diagnostics.md):

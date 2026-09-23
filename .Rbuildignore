@@ -36,3 +36,4 @@
 ^cran-comments\.md$
 ^_.*\.(R|log)$
 ^\.Rhistory$
+^build_site\.R$

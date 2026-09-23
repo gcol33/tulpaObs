@@ -43,7 +43,7 @@
 #' @return An object of class `tobs_stack`: a list with `weights` (named
 #'   numeric, summing to 1), `fits` (the members), `loo` (per-member
 #'   [loo::loo()] objects), `comparison` (a data frame of `elpd_loo`, `weight`,
-#'   and worst Pareto-k per member), and `method`. [predict()] / [fitted()] on
+#'   and worst Pareto-k per member), and `method`. [stats::predict()] / [stats::fitted()] on
 #'   the result return the weight-combined predictive.
 #'
 #' @examples

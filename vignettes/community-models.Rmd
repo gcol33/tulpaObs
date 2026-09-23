@@ -679,6 +679,7 @@ yet carry.
 ## Where to go next
 
 - Single-season occupancy end to end: `vignette("occupancy")`.
+
 - N-mixture abundance, negative binomial, and areal spatial counts:
   `vignette("abundance")`.
 - Random effects with `lme4` bar syntax, the single-species analogue of community

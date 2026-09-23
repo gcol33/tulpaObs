@@ -1,0 +1,127 @@
+# Three-level (multiscale) occupancy + cover hurdle family
+
+A cell-level occupancy gate, a plot-level availability gate, per-visit
+detection, and the cover hurdle, for data where a site's "visits" are
+spatially distinct plots aggregated into a `(cell, period)` rather than
+temporal revisits (the EVA / MOTIVATE vegetation layout; Nichols et al.
+2008; Mordecai et al. 2011).
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+treats plots as detection replicates of one occupancy state, which on
+spatial subunits conflates within-cell prevalence into the detection arm
+(Kendall & White 2009); this family separates them with an explicit
+middle level:
+
+## Usage
+
+``` r
+occu_multiscale_cover(response = c("beta", "lognormal", "gaussian"))
+```
+
+## Arguments
+
+- response:
+
+  likelihood for the positive cover arm. `"beta"` (cover in (0, 1)),
+  `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an identity-link
+  Gaussian magnitude, the delta-normal hurdle; for a pre-transformed /
+  unbounded positive response, not raw cover fractions).
+
+## Value
+
+A `tobs_family` object.
+
+## Details
+
+    z_c        ~ Bernoulli(psi_c)                 # cell / range occupancy
+    a_cj | z=1 ~ Bernoulli(theta_cj)              # plot availability / use
+    y_cjv|a=1  ~ Bernoulli(p_cjv)                 # detection
+    cover|y=1  ~ f_pos(.; eta_pos, disp)          # cover hurdle (beta / lognormal)
+
+Both `z` (over cells) and `a` (over plots) marginalize in closed form
+(two states each), so the joint marginal log-likelihood is exact and
+reuses the same nested-Laplace cell-coupling machinery as
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md).
+
+## Inputs
+
+`y` / `y_pos` are `[n_plots x max_visits]` matrices (plots are the rows,
+the availability units; visits the columns). The state-process `formula`
+is the cell-level occupancy predictor and MUST carry an areal field
+naming the per-plot cell column,
+`icar(graph = adj, group_var = "cell")`. `availability = ~ ...` is the
+plot-level theta predictor (default `~ 1`); `detection` the per-visit p
+predictor; `positive = ~ ...` the cover predictor (default the detection
+formula). `y_pos` is read only where `y == 1`.
+
+A detected visit (`y_cjv = 1`) with a missing cover (`y_pos_cjv = NA`)
+keeps its detection term but drops the `f_pos` factor: cover is taken
+missing-at-random, so the cover likelihood runs over the detected visits
+with an observed cover. This is the rule
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+applies, and it holds on every engine below.
+
+## Identifiability
+
+The availability (`theta`) and detection (`p`) levels separate only with
+replication WITHIN a plot. Single releves supply none, so a plain fit
+identifies `psi` (cell) and the product `theta * p` (plot) – it reduces
+to
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+with `p := theta * p`. Within-plot temporal replication (e.g. a resurvey
+of the same plot in a later period) makes the third level estimable.
+
+## Scope
+
+Three engines. `method = "nested_laplace"` carries a single shared areal
+field coupled across the occupancy (`sigma`) and cover (`alpha * sigma`)
+arms, integrated over the outer `(sigma, alpha)` grid.
+`method = "laplace"` and `method = "nuts"` are the non-spatial path (iid
+cells, no field): the exact three-level marginal (z over cells, a over
+plots both summed in closed form) optimised directly (`"laplace"`, a
+Gaussian observed-Fisher posterior) or sampled (`"nuts"`, the exact
+coefficient posterior with calibrated intervals and WAIC / LOO). Cells
+are declared the same way on every path, via an
+`icar(graph = adj, group_var = "<cell>")` term (the graph drives the
+field under `"nested_laplace"` and supplies only the plot -\> cell map
+under `"laplace"` / `"nuts"`). On the `"nested_laplace"` path additional
+weighted areal terms in the psi formula
+(`icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)`)
+add spatially-varying-coefficient trend fields, each coupled onto the
+cover arm with its own `alpha_trend`; the fitted fields are in
+`fit$trend_field` / `fit$trend_fields`. The coupled / trend field is not
+sampled, so `method = "nuts"` takes a single cell-declaring areal term
+only.
+
+The coupling is written as `share(spatial())` in the `positive` formula,
+the same spelling
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+takes; it needs a field to copy, so it is accepted under
+`method = "nested_laplace"` and refused on the two non-spatial engines,
+which fix the field at 0. Omitting it decouples the arms: the block is
+pinned at `alpha = 0` and the field rides occupancy alone, the same
+meaning the absence has on
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md).
+There is no implicit default coupling.
+
+The copy amplitude's axis carries prior structure – a point mass at
+`alpha = 0` and a log-spaced slab above it – so
+`share(alpha = grid(...))` STATES its nodes, while
+`share(alpha = grid(n = ))` states a RESOLUTION: the engine re-reads its
+own axis with that many slab nodes, point mass and bounds unchanged.
+`terms =` gives either, per block; one block takes one of the two.
+`control$alpha.grid[.trend]` / `control$alpha.n[.trend]` are the wire
+format these compile into and are refused as user input.
+
+## See also
+
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+(two-level),
+[`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md) (plot
+hurdle, no detection).
+
+## Examples
+
+``` r
+f <- occu_multiscale_cover(response = "beta")
+f
+```

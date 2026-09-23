@@ -18,7 +18,7 @@ Description: Fits Bayesian models for species observed with imperfect
     (NUTS) using automatic differentiation. Simulation, prediction and
     diagnostic functions (posterior predictive checks, leave-one-out
     cross-validation, simulation-based calibration) accompany each model.
-URL: https://github.com/gcol33/tulpaObs
+URL: https://gillescolling.com/tulpaObs/, https://github.com/gcol33/tulpaObs
 BugReports: https://github.com/gcol33/tulpaObs/issues
 SystemRequirements: C++17
 Roxygen: list(markdown = TRUE)

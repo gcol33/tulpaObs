@@ -1,0 +1,64 @@
+# Generic community Laplace-EM engine
+
+Generic community Laplace-EM engine
+
+## Usage
+
+``` r
+.tobs_community_em(
+  S,
+  P,
+  arm_idx,
+  sp_ll,
+  sp_grad = NULL,
+  init_mu,
+  init_global = numeric(0),
+  penalize_global = FALSE,
+  sigma_beta = 5,
+  priors = NULL,
+  sigma_init = 0.3,
+  max_iter = 200L,
+  tol = 1e-04,
+  newton_max = 30L,
+  verbose = TRUE,
+  sp_info = NULL,
+  init_b = NULL,
+  init_Sigma = NULL,
+  re_aghq = FALSE,
+  n_quad = 5L,
+  re_aghq_maxdim = 4L
+)
+```
+
+## Arguments
+
+- sp_info:
+
+  Optional `function(s, theta, global)` returning species `s`'s
+  `(P + G) x (P + G)` marginal observed information at
+  `c(theta, global)`. Defaults to `NULL`, which finite-differences
+  `sp_grad` – passing neither leaves a fit byte-identical. Supply it
+  when the family's kernel already exposes the per-site marginal
+  observed information (the N-mixture / distance Louis block): the FD
+  path spends `2 (P + G)` full marginal sweeps per species per Newton
+  step to rediscover it.
+
+- init_b, init_Sigma:
+
+  Optional warm starts for the per-species deviations and the per-arm
+  community covariances. Both default to `NULL`, which is the cold start
+  (`b_s = 0`, `Sigma = sigma_init^2 I`) – passing neither leaves a fit
+  byte-identical. A block-coordinate caller that re-enters this EM once
+  per outer pass (R/community_latent.R) passes the previous pass's
+  state, so the EM resumes from a near-converged point instead of
+  rediscovering it; it is the dominant cost when the per-species
+  likelihood is expensive (an N-mixture / distance marginal sums over
+  the latent count).
+
+- re_aghq:
+
+  Debias `Sigma`/`Cinv` by adaptive Gauss-Hermite quadrature of the
+  exact per-species RE posterior, gated to `P <= re_aghq_maxdim` (tensor
+  AGHQ over the joint b couples the arms). Defaults `FALSE` – every
+  existing caller is byte-identical unless it opts in. `n_quad` sets the
+  per-dimension node count.

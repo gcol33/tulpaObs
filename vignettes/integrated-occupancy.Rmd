@@ -394,6 +394,7 @@ them separately.
 - Single-season occupancy, identifiability, and model comparison:
   `vignette("occupancy")`.
 - Many species at once, with community hyperpriors: `vignette("community-models")`.
+
 - Posterior-predictive checks and residual diagnostics on any fit:
   `vignette("diagnostics")`.
 - The shared engine, tiers, and how the Laplace and NUTS backends differ:

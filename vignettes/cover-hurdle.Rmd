@@ -48,6 +48,7 @@ against a truth.
 The fit uses two independent Laplace approximations through `tulpa`:
 
 * a binomial GLM on the occurrence indicator $\mathbf{1}\{y_i > 0\}$;
+
 * a Gaussian GLM on $\log y_i$ for the sites where $y_i > 0$.
 
 The shared-field joint model -- occurrence, detection, and cover arms coupled

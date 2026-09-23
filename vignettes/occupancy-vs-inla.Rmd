@@ -528,4 +528,5 @@ For everything else, INLA is a fine place to stay.
 * `example/info.md` — Michael's note on why a proper single-species
   occupancy model is hard in INLA (the marginalization problem).
 * `?tobs` and `?occu` — the tulpaObs entry points used here.
+
 * `?simulate_occu` — the detection-history simulator.

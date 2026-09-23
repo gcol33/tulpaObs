@@ -1,0 +1,106 @@
+# Predict the state process at new spatial locations
+
+Generates state-process predictions at new coordinates, including the
+fitted spatial field interpolated to those locations by inverse-distance
+weighting over its five nearest nodes. The returned scale follows the
+family's state-process link: occupancy probability for occupancy
+families, abundance intensity (lambda) for the count families.
+
+## Usage
+
+``` r
+tobs_predict_spatial(
+  object,
+  newcoords,
+  newocc.covs = NULL,
+  quantiles = c(0.025, 0.5, 0.975),
+  node.coords = NULL
+)
+```
+
+## Arguments
+
+- object:
+
+  A `tobs_fit` object fitted with a spatial component.
+
+- newcoords:
+
+  Matrix of new coordinates (n_new x 2).
+
+- newocc.covs:
+
+  Optional data.frame of state-process covariates at the new locations,
+  one row per row of `newcoords`, on the scale and in the variables the
+  fit's state formula names.
+
+- quantiles:
+
+  Quantile levels for credible intervals (default 0.025, 0.5, 0.975).
+  Strictly increasing, each in (0, 1); one column is reported per level,
+  named from that level (`q2.5`, `q50`, `q97.5`).
+
+- node.coords:
+
+  Optional matrix of coordinates for the fitted field's nodes (n_nodes x
+  2), required for an areal field and ignored when the term already
+  carries its own coordinates.
+
+## Value
+
+A data.frame with `mean`, `sd`, and one column per requested quantile
+level (on the response scale: occupancy probability or abundance
+intensity), carrying the levels used in `attr(, "quantiles")`.
+
+## Details
+
+The field is taken from the sampled field columns of `object$draws` when
+the fit has them (the NUTS paths), so the reported `sd` and quantiles
+carry the field's own posterior variance. On the deterministic backends
+(`laplace` / `nested_laplace`) the draws hold only the coefficients, so
+the posterior-mean surface in `object$spatial_field` is used instead: it
+enters every draw as the same offset, and the reported spread is then
+the coefficients' alone.
+
+A continuous term
+([`gp()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
+[`spde()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
+[`svc()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md))
+carries the coordinates of its own nodes, so nothing extra is needed. An
+areal term
+([`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
+[`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
+`car()`) has graph nodes and no geometry, so interpolating it to a new
+point is only defined once the nodes are placed: pass `node.coords`, one
+row per element of `object$spatial_field`. Without it the call is an
+error rather than a prediction that quietly drops the field.
+
+`newocc.covs` is expanded through the fit's own state-process formula
+and its columns are then keyed to the fitted coefficient names, so the
+frame may hold its covariates in any order and may carry factors,
+interactions and transforms. It needs one row per row of `newcoords`.
+
+`newocc.covs = NULL` predicts at the fitted covariate MEANS, which the
+intercept-plus-zeros design expresses only where the state covariates
+were centred. A fit whose state design is not centred is an error rather
+than a prediction at covariate values the caller did not choose.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 30, J = 3, n_occ_covs = 1, seed = 1)
+d   <- transform(sim$data, cell = seq_len(30))
+adj <- matrix(0L, 30, 30)
+adj[cbind(1:29, 2:30)] <- 1L
+adj[cbind(2:30, 1:29)] <- 1L
+fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+            data = d, family = occu(), detection = ~ 1, y = sim$y,
+            method = "nested_laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+# the chain graph's nodes placed at 1, ..., 30 on a line
+tobs_predict_spatial(fit, newcoords = cbind(c(5.5, 20.5), 0),
+                     newocc.covs = data.frame(occ_cov1 = c(0, 1)),
+                     node.coords = cbind(1:30, 0))
+# }
+```

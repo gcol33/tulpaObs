@@ -864,7 +864,10 @@ because the number invites a confidence the design never earned.
 - N-mixture abundance, negative binomial, and areal spatial counts:
   `vignette("abundance")`.
 - Many species at once with community hyperpriors: `vignette("community-models")`.
+
 - Colonisation and extinction across seasons: `vignette("dynamic-occupancy")`.
+
 - Random effects with `lme4` bar syntax: `vignette("random-effects")`.
+
 - Posterior-predictive checks, WAIC, and spatial residual diagnostics in depth:
   `vignette("diagnostics")`.

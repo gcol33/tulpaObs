@@ -1,0 +1,40 @@
+# Replace Gaussian pseudo-draws with SN-sampled draws per coefficient
+
+For each parameter j, fit skew-normal (xi_j, omega_j, alpha_j) by
+moment- matching (mu_j, sigma_j, gamma_j), and replace the column of
+`draws` with skew-normal samples arranged in the same rank order as the
+incoming column. The incoming draws are the correlated Gaussian
+pseudo-draws, so the reordering is a Gaussian-copula transform: the
+skew-normal marginals are exact and the joint rank-correlation of the
+Laplace covariance is preserved (a derived quantity such as predicted
+psi keeps the coefficient dependence). A column whose gamma is a no-op
+keeps its correlated Gaussian draw unchanged.
+
+## Usage
+
+``` r
+.sla_replace_draws(draws, means, sds, gamma, cap = 0.5)
+```
+
+## Details
+
+Behaviour by gamma:
+
+- non-finite gamma, or `|gamma| < 1e-6`: the column keeps its incoming
+  correlated Gaussian draw (the correction is a no-op there).
+
+- `|gamma| <= cap`: SN draws via moment match at gamma.
+
+- `|gamma| > cap`: SN draws with gamma clipped to `sign(gamma) * cap`,
+  and the column is named in the `sla_clipped` attribute. The default
+  `cap = 0.5` aligns with the validity envelope identified in
+  dev_notes/simplified_laplace_derivation.md sec.2.6 – the cumulant
+  expansion saturates above \|gamma\| ~ 0.5 and overstates magnitude.
+  Clipping there avoids over-correcting CIs in the high-skew regime
+  where SLA itself is unreliable. There is no magnitude above which the
+  correction is abandoned: clipping covers every finite gamma.
+
+Returns the modified draws matrix with attributes: attr "sla_clipped" –
+character vector of param names whose gamma was capped attr
+"sla_fallback" – character vector of param names whose moment match
+errored, so the column kept its Gaussian draw

@@ -43,7 +43,7 @@ mode); each member contributes a share proportional to its weight.}
 An object of class \code{tobs_stack}: a list with \code{weights} (named
 numeric, summing to 1), \code{fits} (the members), \code{loo} (per-member
 \code{\link[loo:loo]{loo::loo()}} objects), \code{comparison} (a data frame of \code{elpd_loo}, \code{weight},
-and worst Pareto-k per member), and \code{method}. \code{\link[=predict]{predict()}} / \code{\link[=fitted]{fitted()}} on
+and worst Pareto-k per member), and \code{method}. \code{\link[stats:predict]{stats::predict()}} / \code{\link[stats:fitted]{stats::fitted()}} on
 the result return the weight-combined predictive.
 }
 \description{

@@ -1,0 +1,71 @@
+# Compute SLA skewness coefficients for a single-season occu fit
+
+Evaluates l_i”' at the *original* single-season occupancy log-likelihood
+at the EM-converged beta, NOT at the M-step pseudo-binomial encoding.
+
+## Usage
+
+``` r
+.sla_compute_occu_single(model, em_result, spatial = NULL, prior_spec = NULL)
+```
+
+## Arguments
+
+- model:
+
+  A `tobs_model` (model_type = "single").
+
+- em_result:
+
+  The EM-Laplace return list (with `$fits$occ`, `$fits$det`,
+  `$weights`).
+
+- spatial:
+
+  Optional `tobs_spatial`. When set, the skewness correction is
+  intentionally NOT applied and the fit keeps Gaussian marginals – this
+  is the correct conservative behaviour, not a stub: the third-cumulant
+  correction (Rue, Martino & Chopin 2009 sec.3.2) captures the skewness
+  of the fixed-effect (hyperparameter-free) marginals, but for a spatial
+  latent field the dominant marginal skewness comes from integrating
+  over the field-precision hyperparameter, which a correction
+  conditioned on a single hyperparameter value does not capture.
+  Validated against NUTS: every simplified-Laplace construction
+  (modal-hyper, grid-mixture, mixture of skew-normals) disagreed with
+  the NUTS posterior skewness in sign and/or magnitude, so applying one
+  would be worse than the Gaussian fallback.
+
+- prior_spec:
+
+  Optional prior spec; passed to `.louis_info_psi_single()` so the
+  penalty is included in I_obs.
+
+## Value
+
+List(gamma, valid, reason).
+
+## Details
+
+Why this matters: the EM M-step encodes the occupancy block as a pseudo-
+binomial with M = 1000 pseudo-trials per site. That encoding's Hessian
+is M-inflated and would give Sigma_pseudo ~ Sigma_true / M, so any SLA
+formula using it would be wrong by factor M^(3/2). The correct posterior
+precision for the occ block is the Louis observed information I_obs =
+X_occ' diag(psi(1-psi) - w(1-w)) X_occ (+ prior penalty) which the
+package already computes via `.louis_info_psi_single()`. We use
+Sigma_occ = solve(I_obs).
+
+For the detection block: the EM M-step encodes a real weighted binomial
+(y = n_det, n_trials = n_valid, weights = w_i), no pseudo-trial
+inflation, so `fit_det$H_beta` is approximately the correct
+detection-posterior precision and `Sigma_det = solve(fit_det$H_beta)` is
+used directly.
+
+For the occ process:
+
+- "any-detection" sites (z = 1 forced): l_i”' wrt logit(psi) is the
+  Bernoulli l”' = -psi(1-psi)(1-2\*psi).
+
+- "no-detection" sites: l_i = log(psi\*q + (1-psi)) with q = prod(1-p).
+  The closed-form third derivative is derived from l(eta) = log(1 -
+  sigma(eta) \* (1 - q_i)).

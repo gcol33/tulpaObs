@@ -1,0 +1,154 @@
+url: https://gillescolling.com/tulpaObs/
+template:
+  bootstrap: 5
+  bootswatch: sandstone
+  light-switch: yes
+  includes:
+    in_header: |
+      <script>
+      (function () {
+        var D = String.fromCharCode(36);
+        window.MathJax = {
+          tex: {
+            inlineMath: [[D, D], ["\\(", "\\)"]],
+            displayMath: [[D + D, D + D], ["\\[", "\\]"]]
+          },
+          chtml: { linebreaks: { automatic: true, width: "90% container" } },
+          svg: { linebreaks: { automatic: true, width: "90% container" } },
+          options: { renderActions: { addMenu: [] } }
+        };
+      })();
+      </script>
+figures:
+  dev: svglite::svglite
+  fig.ext: svg
+  bg: '#F5F6F8'
+reference:
+- title: Front door
+  desc: One fitter; the model is chosen by the family object.
+  contents:
+  - tobs
+  - tobs_data
+  - tobs_format
+  - tobs_format_ms
+  - tobs_check_id
+  - tobs_terms
+  - tobs_get
+  - print.tobs_family
+- title: Occupancy families
+  contents:
+  - occu
+  - dyn_occu
+  - int_occu
+  - dyn_int_occu
+  - ms_occu
+  - ms_dyn_occu
+  - ms_int_occu
+  - jsdm
+  - t_occu
+  - fp_occu
+  - fp_occu_laplace
+  - royle_nichols
+  - occu_ttd
+  - occu_multi
+  - occu_categorical
+  - occu_priors
+- title: Abundance, distance and removal families
+  contents:
+  - abun
+  - ms_abun
+  - dyn_abun
+  - dyn_abun_laplace
+  - count
+  - ms_count
+  - distance
+  - distance_laplace
+  - ms_distance
+  - distsamp_open
+  - gdistremoval
+  - removal
+  - removal_laplace
+  - double_observer
+  - starts_with("nmix_")
+- title: Cover families
+  contents:
+  - cover
+  - occu_cover
+  - occu_cover_inputs
+  - ms_occu_cover
+  - occu_multiscale_cover
+  - cover_priors
+  - occu_aggregation_scan
+  - plot.tobs_aggregation_scan
+- title: Fit accessors
+  desc: S3 methods on `tobs_fit`.
+  contents:
+  - print.tobs_fit
+  - summary.tobs_fit
+  - coef.tobs_fit
+  - coef.tobs_batch
+  - print.tobs_batch
+  - tidy.tobs_fit
+  - glance.tobs_fit
+  - fitted.tobs_fit
+  - residuals.tobs_fit
+  - ranef.tobs_fit
+  - logLik.tobs_fit
+  - nobs.tobs_fit
+  - update.tobs_fit
+  - predict.tobs_fit
+  - predict.cover_fit
+  - predict.occu_categorical_fit
+  - simulate.tobs_fit
+  - "`$.tobs_fit`"
+  - tobs_predict_spatial
+  - tobs_marginal_effect
+  - tobs_richness
+  - tobs_associations
+  - tobs_multiarm_methods
+- title: Diagnostics and model comparison
+  contents:
+  - check_model.tobs_fit
+  - pit_residuals.tobs_fit
+  - ppc
+  - sbc.tobs_fit
+  - tobs_gof_tests
+  - tobs_criteria
+  - tobs_stack
+  - convergence
+- title: Simulation
+  contents: starts_with("simulate_")
+- title: Data and utilities
+  contents:
+  - foray_counts
+  - meadow_cover
+  - peatland_occu
+  - summary.tobs_data
+  - plot.tobs_data
+  - within_between
+articles:
+- title: Start here
+  navbar: ~
+  contents:
+  - quickstart
+  - data-formatting
+- title: Occupancy
+  contents:
+  - occupancy
+  - dynamic-occupancy
+  - integrated-occupancy
+  - random-effects
+  - spatial-occupancy
+  - occupancy-spatial-spde
+  - occupancy-vs-inla
+- title: Abundance and communities
+  contents:
+  - abundance
+  - community-models
+- title: Cover
+  contents:
+  - cover-hurdle
+  - cover-hurdle-motivate
+  - cover-hurdle-vs-inla
+- title: Checking fits
+  contents: diagnostics

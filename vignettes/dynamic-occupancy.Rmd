@@ -843,6 +843,9 @@ sampler, or a longer survey, will settle the rates.
 ## Where to go next
 
 - Single-season occupancy, detection, and the latent state: `vignette("occupancy")`.
+
 - Many species surveyed at once: `vignette("community-models")`.
+
 - Combining detection histories from several sources: `vignette("integrated-occupancy")`.
+
 - Posterior-predictive checks, WAIC, and residual diagnostics: `vignette("diagnostics")`.

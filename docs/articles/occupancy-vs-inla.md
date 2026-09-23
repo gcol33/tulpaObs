@@ -1,0 +1,539 @@
+# Occupancy: tulpaObs vs INLA aggregated-binomial
+
+This is a migration guide for anyone who fits occupancy or related
+detection models in
+[`INLA::inla()`](https://rdrr.io/pkg/INLA/man/inla.html) and wants to
+know what changes when the same model moves to tulpaObs. It maps the
+INLA constructs onto their tulpaObs equivalents, shows the same model
+fit both ways on simulated data, lays out where the two engines differ,
+and closes with the cases where INLA is the better tool and you should
+stay put.
+
+The short version: INLA fits a latent Gaussian model with a row-wise
+likelihood, and a single-season occupancy model is neither. Its
+likelihood is a two-component mixture at the site level, not a GLM
+family INLA recognises, so the standard route is a row-stacked binomial
+that fits the wrong quantity. tulpaObs writes the marginalised occupancy
+likelihood directly and integrates the hyperparameters with the same
+nested-Laplace recipe INLA uses, plus an exact-MCMC option INLA does not
+have. Where your model *is* a latent Gaussian model with a Gaussian or
+standard-exponential-family likelihood, INLA stays the faster, more
+mature choice, and the closing section says so plainly.
+
+A proper single-season occupancy model has a latent occupancy state
+$`z_i \sim \text{Bernoulli}(\psi_i)`$ and a conditional detection
+process $`y_{ij} \mid z_i \sim \text{Bernoulli}(z_i \, p_{ij})`$. The
+site-level marginal likelihood is
+
+``` math
+L_i
+\;=\;
+\psi_i \prod_{j=1}^{J} p_{ij}^{y_{ij}} (1 - p_{ij})^{1 - y_{ij}}
+\;+\;
+\mathbf{1}\!\left\{\sum_{j} y_{ij} = 0\right\}
+(1 - \psi_i).
+```
+
+That mixture cannot be written as a row-wise GLM likelihood, so
+[`INLA::inla()`](https://rdrr.io/pkg/INLA/man/inla.html) cannot fit it
+directly without `inla.rgeneric`. Michael Glaser’s `example/info.md` is
+the same observation: in INLA, occupancy at the site level and detection
+at the visit level don’t share a row structure, and the marginalization
+over $`z_i`$ has to be programmed explicitly.
+
+The practical workaround in `MOT_abund_data.Rmd` §“VISIT-LEVEL BERNOULLI
+MODEL” is to fit a single binomial on the row-stacked detection
+histories. This vignette shows what’s lost compared to the true
+marginalized fit.
+
+## Function mapping
+
+The table below maps the INLA constructs you would reach for against the
+tulpaObs call that does the same job. The grouping mirrors how an INLA
+workflow is built: format the data, name the likelihood, write the
+latent structure, choose the inference, and pull summaries off the
+result.
+
+| Step | `INLA` construct | tulpaObs equivalent | Notes |
+|----|----|----|----|
+| Format data | [`inla.stack()`](https://rdrr.io/pkg/INLA/man/inla.stack.html), hand-built long frame | [`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md), [`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md), or pass `data` + `y` directly to [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) | tulpaObs keeps the N x J detection matrix as `y`; no row-stacking |
+| Single-season occupancy | none (needs `inla.rgeneric` for the mixture) | `tobs(family = occu())` | the mixture likelihood is built in, not user-coded |
+| Multi-season / dynamic | none direct | `tobs(family = dyn_occu())` with `colonization` / `extinction` | colonisation + extinction HMM |
+| Multispecies / community | per-species `f(species, model = "iid")` hyperpriors | `tobs(family = ms_occu(), species = ...)` | community random effects over species coefficients |
+| Integrated (multi-source) | shared latent field across stacks | `tobs(family = int_occu())` | one occupancy state, per-source detection |
+| Joint species distribution | latent-factor `f(..., model = "iid")` | `tobs(family = jsdm(), species = ...)` | shared latent factors, probit link |
+| N-mixture abundance | none direct | `tobs(family = abun())` | Royle binomial-N marginal, Poisson or `mixture = "negbin"` |
+| Likelihood family | `family = "binomial"` / `"poisson"` / … | the `family` argument: [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md), [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md), [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md), … | a tulpaObs family encodes the *whole* latent-state model, not just the response distribution |
+| Areal spatial field | `f(region, model = "bym2", graph = adj)` | `bym2(graph = adj)` term in the `formula` | also [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md), `car()`, [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) |
+| Continuous spatial field | [`inla.spde2.pcmatern()`](https://rdrr.io/pkg/INLA/man/inla.spde2.pcmatern.html) + `f(field, model = spde)` | `spde(lon, lat)` term in the `formula` | SPDE mesh built via tulpaMesh |
+| Gaussian process | none (SPDE is the GP) | `gp(lon, lat)` term | exact GP, separate from the SPDE term |
+| IID random effect | `f(group, model = "iid")` | `re(group)` or `(1 | group)` bar syntax | `lme4`-style bars are sugar for [`re()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) |
+| Random slope | `f(group, x, model = "iid")` | `(x | group)` (correlated) / `(x \|\| group)` | correlation toggled by single vs double bar |
+| Temporal field | `f(time, model = "ar1" / "rw1")` | `temporal(time, type = ...)` | AR1 / RW kernels |
+| Shared field across arms | `copy = ...` in a second [`f()`](https://rdrr.io/pkg/INLA/man/f.html) | `id = "u"` tag + `share("u")` in the other formula | the occupancy / detection arms share one realisation |
+| Prior on fixed effect | `control.fixed = list(...)` | `priors =` ([`occu_priors()`](https://gillescolling.com/tulpaObs/reference/occu_priors.md)) or `control$sigma.beta` | weakly-informative quadratic prior by default |
+| Hyperparameter prior | `hyper = list(prec = list(prior = "pc.prec"))` | PC priors built per block by the engine | default PC + LKJ on covariance blocks |
+| Inference | (only) nested Laplace | `method = "laplace"` (default) | nested approximation, no debias |
+|  |  | `method = "nested_laplace"` | outer grid over hyperparameters, INLA’s recipe |
+|  |  | `method = "nuts"` | exact HMC, no INLA analogue |
+|  |  | `method = "laplace_gibbs"` / `"laplace_mi"` | Laplace body + MCMC bias correction |
+| Coefficient summary | `m$summary.fixed` | [`coef()`](https://rdrr.io/r/stats/coef.html), [`summary()`](https://rdrr.io/r/base/summary.html), [`confint()`](https://rdrr.io/r/stats/confint.html) | one vector, `psi_` / `p_` prefixes |
+| Fitted / predicted | `m$summary.fitted.values` | [`fitted()`](https://rdrr.io/r/stats/fitted.values.html) (`psi`, `p`, `z`), `predict(X.0 = )` | `z` is posterior occupancy given the history |
+| Marginal effect | manual [`inla.tmarginal()`](https://rdrr.io/pkg/INLA/man/marginal.html) | [`tobs_marginal_effect()`](https://gillescolling.com/tulpaObs/reference/tobs_marginal_effect.md) | inverse-link curve with credible band |
+| Model comparison | `control.compute = list(waic = TRUE)` | [`waic()`](https://mc-stan.org/loo/reference/waic.html) | WAIC from the pointwise marginal log-lik |
+| Held-out prediction | `NA` response rows | `NA` rows in `y` under `method = "nested_laplace"` | same convention as INLA |
+
+The one structural difference to keep in mind from the start: in INLA
+the `family` argument names a response distribution, while a tulpaObs
+family names a complete latent-state generative model.
+[`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) is not
+“the binomial family”; it is the occupancy-state-plus-detection model
+whose likelihood is the mixture below. That is why
+[`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) has no
+INLA one-liner equivalent and the next sections fit it side by side.
+
+## Simulate detection histories with known $`\psi`$ and $`p`$
+
+``` r
+
+library(tulpaObs)
+
+sim <- simulate_occu(
+  N          = 600,
+  J          = 6,
+  n_occ_covs = 1,
+  n_det_covs = 1,
+  beta_occ   = c(0.5, 1.2),    # intercept + slope on occ_cov1
+  beta_det   = c(0.0, 0.8),    # intercept + slope on det_cov1
+  seed       = 42
+)
+
+dat   <- sim$data
+y     <- sim$y                 # N x J detection-history matrix
+truth <- sim$truth
+
+c(naive_occ      = mean(rowSums(y) > 0),
+  true_psi_mean  = mean(truth$psi),
+  true_p_mean    = mean(truth$p))
+```
+
+The naive proportion of sites with any detection is biased low by
+$`(1 - p)^J`$ at each occupied site — exactly the bias an occupancy
+model is supposed to correct.
+
+## tulpaObs: true occupancy fit via `tobs(family = occu())`
+
+``` r
+
+fit_tulpa_lap <- tobs(
+  formula   = ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  method    = "laplace",
+  control   = list(verbose = FALSE)
+)
+```
+
+For the parameter-recovery story below the EM-Laplace point estimates
+underestimate detection in this small-J setting (the joint MAP picks one
+mode of the $`\psi`$-$`p`$ ambiguity rather than integrating over both).
+NUTS samples the full posterior and is unbiased:
+
+``` r
+
+fit_tulpa_nuts <- tobs(
+  formula   = ~ occ_cov1,
+  data      = dat,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y,
+  method    = "nuts",
+  control   = list(n.iter = 1500, n.warmup = 750, seed = 42, verbose = FALSE)
+)
+fit_tulpa_nuts
+```
+
+## INLA workaround: row-stack the detection histories, fit a single binomial
+
+This is the structural shape Michael’s `mod.visit` uses. Each site
+contributes `J` Bernoulli rows; site-level occupancy covariates
+broadcast across the J visits.
+
+``` r
+
+N <- nrow(y)
+J <- ncol(y)
+
+long <- data.frame(
+  y        = as.integer(t(y)),
+  site     = rep(seq_len(N), each = J),
+  visit    = rep(seq_len(J), times = N),
+  occ_cov1 = rep(dat$occ_cov1, each = J),
+  det_cov1 = rep(dat$det_cov1, each = J)
+)
+
+head(long)
+```
+
+``` r
+
+library(INLA)
+
+m_inla <- INLA::inla(
+  y ~ occ_cov1 + det_cov1,
+  family = "binomial",
+  data   = long,
+  control.compute = list(waic = TRUE)
+)
+
+inla_fixed <- m_inla$summary.fixed[, c("mean", "0.025quant", "0.975quant")]
+inla_fixed
+```
+
+## What the workaround estimates
+
+Site $`i`$ contributes $`J`$ Bernoulli rows with success probability
+$`\psi_i\, p_{ij}`$. Because the response is binary and the model is
+row-wise, the linear predictor $`\eta_{ij}`$ fits
+
+``` math
+P(y_{ij} = 1)
+\;=\;
+\psi_i \, p_{ij}.
+```
+
+There is no factor that separates the $`\psi_i`$ contribution from the
+$`p_{ij}`$ contribution: the workaround can identify the product, never
+the two factors. The `occ_cov1` coefficient is pulled toward zero by the
+detection probability, and the `det_cov1` coefficient soaks up whatever
+signal is left.
+
+``` r
+
+compare <- data.frame(
+  parameter        = c("(occ Intercept)", "occ_cov1",
+                       "(det Intercept)", "det_cov1"),
+  truth            = c(truth$beta_occ, truth$beta_det),
+  tulpaObs_NUTS    = c(
+    fit_tulpa_nuts$means["psi_(Intercept)"],
+    fit_tulpa_nuts$means["psi_occ_cov1"],
+    fit_tulpa_nuts$means["p_(Intercept)"],
+    fit_tulpa_nuts$means["p_det_cov1"]
+  ),
+  tulpaObs_Laplace = c(
+    fit_tulpa_lap$means["psi_(Intercept)"],
+    fit_tulpa_lap$means["psi_occ_cov1"],
+    fit_tulpa_lap$means["p_(Intercept)"],
+    fit_tulpa_lap$means["p_det_cov1"]
+  ),
+  INLA_workaround  = c(
+    inla_fixed["(Intercept)", "mean"],
+    inla_fixed["occ_cov1",    "mean"],
+    NA_real_,    # no separate detection intercept exists
+    inla_fixed["det_cov1",    "mean"]
+  ),
+  row.names = NULL
+)
+compare
+```
+
+NUTS lands on the truth on both processes. Laplace gives biased point
+estimates with this $`J = 6`$ setting — the joint MAP underestimates
+detection probability when sites are weakly identified. INLA’s
+workaround returns *one* intercept that mixes occupancy and detection,
+and the slopes on occupancy-side and detection-side covariates pull
+toward each other.
+
+## Predictive divergence at the site level
+
+Despite the Laplace point-estimate bias, the predicted *per-site*
+occupancy probability still correlates strongly with the truth — the
+bias mostly cancels in the linear predictor. The INLA workaround cannot
+recover site-level $`\psi`$ even in principle, because what it estimates
+is not $`\psi`$.
+
+``` r
+
+# tulpaObs returns per-site psi_hat. fitted() also returns $p (per-site
+# detection probability) and $z (posterior occupancy probability given
+# the detection history); $psi is the right comparator for true psi.
+psi_hat_nuts <- fitted(fit_tulpa_nuts)$psi
+psi_hat_lap  <- fitted(fit_tulpa_lap)$psi
+
+# INLA workaround: predicted "any-visit detection" probability at the
+# site, back-projected to a single row per site. This is the product
+# psi * p, not psi.
+X_site       <- model.matrix(~ occ_cov1 + det_cov1, data = dat)
+eta_site     <- as.numeric(X_site %*% inla_fixed[, "mean"])
+psi_hat_inla <- plogis(eta_site)
+
+cor_with_truth <- c(
+  tulpaObs_NUTS    = cor(psi_hat_nuts, truth$psi),
+  tulpaObs_Laplace = cor(psi_hat_lap,  truth$psi),
+  INLA_workaround  = cor(psi_hat_inla, truth$psi),
+  naive_any        = cor(as.numeric(rowSums(y) > 0), truth$psi)
+)
+round(cor_with_truth, 3)
+```
+
+For population-trend questions (“did $`\psi`$ change?”) the workaround
+answers a different question (“did $`\psi \cdot p`$ change?”), and its
+trend can be driven by detection improvements that have nothing to do
+with the species’ actual occupancy.
+
+``` r
+
+op <- par(mfrow = c(1, 2))
+plot(truth$psi, psi_hat_nuts, pch = 16, col = rgb(0, 0, 0, 0.4),
+     xlab = "true psi", ylab = "tulpaObs psi_hat (NUTS)",
+     main = "occu(): recovers psi")
+abline(0, 1, col = 2, lwd = 2)
+plot(truth$psi, psi_hat_inla, pch = 16, col = rgb(0, 0, 0, 0.4),
+     xlab = "true psi", ylab = "INLA aggregated p(detection)",
+     main = "binomial workaround: confounds psi and p")
+abline(0, 1, col = 2, lwd = 2)
+par(op)
+```
+
+## What about the “detectability proxies” trick?
+
+Michael’s `mod.visit` adds plot-level fixed effects (`area.sc`,
+`richness.sc`, `sample.density.sc`, `sample.extent.sc`) to the same
+linear predictor that drives the occupancy-side covariates. Those
+proxies *can* improve fit if they correlate with $`p`$, but their
+coefficients are still confounded with the occupancy coefficients on the
+same linear predictor — there is no hierarchical structure in the model
+that attributes one slope to $`\psi`$ and another to $`p`$. The
+workaround does not become an occupancy model by adding more covariates.
+
+The only way to recover $`\psi`$ and $`p`$ separately from a row-wise
+INLA likelihood is `inla.rgeneric`: a custom likelihood that implements
+the mixture above. That is the same level of work as building tulpaObs’s
+EM/NUTS engine; if you’re going to write the marginalized likelihood,
+you may as well use the package that already has it.
+
+## A second example: an IID site random effect both ways
+
+The first comparison was a model INLA cannot fit at all. This one is a
+model both packages fit, so it shows the migration on equal footing: a
+single-season occupancy model with an extra site-level random effect on
+occupancy. In INLA that random effect is `f(site, model = "iid")` on the
+linear predictor; in tulpaObs it is an `re(site)` term, or the
+`lme4`-style `(1 | site)` bar, written straight into the occupancy
+formula. The detection process keeps a covariate so there are two arms
+to separate.
+
+``` r
+
+sim2 <- simulate_occu(
+  N          = 400,
+  J          = 5,
+  n_occ_covs = 1,
+  n_det_covs = 1,
+  beta_occ   = c(0.2, 0.9),
+  beta_det   = c(0.4, 0.5),
+  seed       = 7
+)
+
+dat2 <- sim2$data
+y2   <- sim2$y
+dat2$site <- factor(seq_len(nrow(dat2)))   # one group per site
+```
+
+The tulpaObs side reads the random effect as a formula term. When a
+random effect carries no slope, the Laplace path debiases the variance
+component with adaptive Gauss-Hermite quadrature by default; `re(site)`
+and `(1 | site)` are the same term written two ways.
+
+``` r
+
+fit_re <- tobs(
+  formula   = ~ occ_cov1 + (1 | site),
+  data      = dat2,
+  family    = occu(),
+  detection = ~ det_cov1,
+  y         = y2,
+  method    = "laplace",
+  control   = list(verbose = FALSE)
+)
+coef(fit_re)
+```
+
+The same model in INLA needs the mixture likelihood it does not have, so
+the honest INLA-side comparison is again the row-stacked binomial, now
+with the site random effect added as `f(site, model = "iid")`. The
+random effect absorbs the same site-level heterogeneity, but it rides on
+the confounded $`\psi \cdot p`$ linear predictor rather than on the
+occupancy process alone.
+
+``` r
+
+N2 <- nrow(y2); J2 <- ncol(y2)
+long2 <- data.frame(
+  y        = as.integer(t(y2)),
+  site     = rep(seq_len(N2), each = J2),
+  occ_cov1 = rep(dat2$occ_cov1, each = J2),
+  det_cov1 = rep(dat2$det_cov1, each = J2)
+)
+
+m_inla_re <- INLA::inla(
+  y ~ occ_cov1 + det_cov1 + f(site, model = "iid"),
+  family = "binomial",
+  data   = long2,
+  control.compute = list(waic = TRUE)
+)
+m_inla_re$summary.fixed[, c("mean", "0.025quant", "0.975quant")]
+```
+
+Two practical points make the migration easier here. First, the grouping
+factor is a plain factor column in the site-level `data`, the same way
+INLA wants an integer or factor index for `f(site, ...)`, so the data
+preparation is identical on both sides. Second, the term placement
+carries meaning: an `re(site)` written in the occupancy `formula` is a
+site effect on occupancy, while the same term written in the `detection`
+formula would be a site effect on detection, and the two are different
+models. INLA makes the same distinction by which linear predictor the
+[`f()`](https://rdrr.io/pkg/INLA/man/f.html) enters, so the habit
+transfers directly. If you want one shared site effect across both arms,
+tag it with `id` and `share()` it into the second formula, which is the
+tulpaObs spelling of INLA’s `copy` feature.
+
+The migration is mechanical for the structured terms: every `f(...)` in
+the INLA formula becomes a term inside the tulpaObs `formula`, and the
+term enters whichever linear predictor it is written in. What does not
+migrate is the likelihood. The INLA fit still estimates the product
+$`\psi \cdot p`$ on a single linear predictor, so its `occ_cov1` slope
+is attenuated toward zero for the reason the first example showed, and
+its random-effect variance mixes site-level occupancy heterogeneity with
+site-level detection heterogeneity. The tulpaObs fit keeps the two
+processes apart and the random effect lives on occupancy alone.
+
+## Key differences
+
+**Algorithm.** INLA is a nested Laplace approximation with no debiasing
+step: it approximates each latent marginal by a (skew-corrected)
+Gaussian at the conditional mode and integrates the hyperparameters on
+an outer grid. That is exact when the latent field is Gaussian and the
+approximation degrades smoothly as the conditional posterior departs
+from Gaussian. tulpaObs offers the same nested-Laplace path
+(`method = "nested_laplace"`), and its default `method = "laplace"` is
+an EM-Laplace loop that marginalises the latent occupancy state in
+closed form. On top of that it adds two things INLA does not have: an
+exact HMC sampler (`method = "nuts"`) that integrates the full posterior
+rather than sitting at a mode, and Laplace-plus-correction routes
+(`method = "laplace_gibbs"` / `"laplace_mi"`) that run a short MCMC or
+multiple-imputation correction on the residual non-Gaussian directions.
+The design is the nested approximation INLA pioneered, with an optional
+debias layer bolted on for the directions where the approximation is
+biased.
+
+**Speed.** The Laplace and nested-Laplace paths are deterministic and
+return in a fraction of a second on a few hundred sites, the same order
+of cost as an INLA call on a comparable latent Gaussian model; both pay
+for the outer hyperparameter grid the same way. NUTS costs more because
+it samples, and the `occupancy.Rmd` vignette puts a short NUTS run on a
+few hundred sites at seconds rather than the sub-second Laplace fit. The
+package ships timing scripts under `tests/benchmark*.R`, but they are
+live-timing harnesses rather than recorded results, so this guide does
+not quote a head-to-head number; run them on your own hardware if you
+need the figure for your data size. The honest summary is that for the
+deterministic paths the two engines are in the same ballpark, and the
+extra cost in tulpaObs buys the exact-MCMC option when you want it.
+
+**Output format.** INLA returns marginals: `summary.fixed`,
+`summary.hyperpar`, and `summary.fitted.values`, each a data frame of
+posterior summaries, with the full marginal densities available through
+[`inla.tmarginal()`](https://rdrr.io/pkg/INLA/man/marginal.html) and
+friends. tulpaObs returns a fitted object that answers the standard R
+generics. [`coef()`](https://rdrr.io/r/stats/coef.html) gives one
+coefficient vector with `psi_` and `p_` prefixes so the two arms never
+run together; [`summary()`](https://rdrr.io/r/base/summary.html) adds
+SDs and credible bounds (plus Rhat and ESS under NUTS);
+[`confint()`](https://rdrr.io/r/stats/confint.html) and
+[`vcov()`](https://rdrr.io/r/stats/vcov.html) read the fixed-effect
+block; [`fitted()`](https://rdrr.io/r/stats/fitted.values.html) returns
+per-site `psi`, `p`, and the posterior occupancy `z`; `predict(X.0 = )`
+evaluates occupancy at a chosen design;
+[`tobs_marginal_effect()`](https://gillescolling.com/tulpaObs/reference/tobs_marginal_effect.md)
+returns an inverse-link response curve with a credible band; and
+[`waic()`](https://mc-stan.org/loo/reference/waic.html) gives WAIC from
+the pointwise marginal log-likelihood. The mental shift is from “pull a
+marginal off a list” to “call the accessor the model type provides”.
+
+**Prior specification.** INLA priors are set through `control.fixed` for
+the fixed effects and `hyper` lists per
+[`f()`](https://rdrr.io/pkg/INLA/man/f.html) term, with PC priors the
+modern default. tulpaObs uses weakly-informative quadratic priors on the
+fixed effects by default (they break the $`\psi`$-$`p`$ identifiability
+ridge at small $`J`$, which is why the detection intercept is pulled
+toward $`p = 0.5`$); you override them with a `priors` argument built
+from
+[`occu_priors()`](https://gillescolling.com/tulpaObs/reference/occu_priors.md),
+or disable them with `priors = FALSE` to recover the unpenalised MAP, or
+rescale the Gaussian width with `control$sigma.beta`. Hyperparameter
+priors on the covariance and spatial blocks are PC-and-LKJ by
+construction, built per block by the engine, the same family of priors
+INLA recommends. The difference is mostly where you write them: INLA
+threads priors through `control.*` lists, tulpaObs threads them through
+the `priors` argument and a small number of `control` knobs.
+
+## When NOT to switch
+
+INLA is the better tool in several honest cases, and this guide would be
+dishonest to hide them.
+
+**Your model is a genuine latent Gaussian model with a standard
+likelihood.** If you are fitting a spatial GLM, a disease-mapping BYM2
+model, a geostatistical SPDE, or any model whose likelihood is one of
+INLA’s built-in families on a Gaussian latent field, INLA does exactly
+that, fast, and with a decade of validation behind it. tulpaObs is built
+for latent-state observation models where the latent state is discrete
+(occupancy, abundance) and marginalises out, which is precisely the case
+INLA handles awkwardly. Outside that niche the comparison runs the other
+way.
+
+**You need INLA’s breadth of latent structures.** INLA’s
+[`f()`](https://rdrr.io/pkg/INLA/man/f.html) zoo, besag, bym2, rw1, rw2,
+ar1, ar(p), seasonal, Matern SPDE, copies, replicates, and the rest, is
+broad and battle-tested. tulpaObs covers the spatial, temporal, and
+random-effect structures listed in the mapping table, but it does not
+match INLA term for term, and a model that leans on a structure tulpaObs
+does not implement belongs in INLA.
+
+**You depend on INLA’s maturity and ecosystem.** INLA has years of
+published applications, a large user base, `inlabru` for point-process
+and nonlinear-predictor work, and extensive diagnostics. tulpaObs is a
+young package. For production work where a reviewer expects INLA, or
+where you need a feature only the INLA ecosystem provides, the
+established tool wins.
+
+**Your occupancy design has no replication.** This is not an
+INLA-versus-tulpaObs question at all. A single visit per site cannot
+separate occupancy from detection in any engine, and switching packages
+will not rescue an unidentified design. If your data lack repeat visits,
+neither tool fits a real occupancy model, and the honest move is the one
+the occupancy vignette describes: add visits, borrow strength from a
+spatial structure, or report a detection-uncorrected map.
+
+The case for moving to tulpaObs is narrow and specific: you have a
+latent-state observation model with replication, the latent state
+marginalises out, and you want either the exact marginalised likelihood
+INLA cannot write directly or the exact-MCMC check INLA does not
+provide. For everything else, INLA is a fine place to stay.
+
+## References
+
+- `example/MOT_abund_data.Rmd` §“VISIT-LEVEL BERNOULLI MODEL” — Michael
+  Glaser’s binomial workaround, with detectability proxies.
+
+- `example/info.md` — Michael’s note on why a proper single-species
+  occupancy model is hard in INLA (the marginalization problem).
+
+- [`?tobs`](https://gillescolling.com/tulpaObs/reference/tobs.md) and
+  [`?occu`](https://gillescolling.com/tulpaObs/reference/occu.md) — the
+  tulpaObs entry points used here.
+
+- [`?simulate_occu`](https://gillescolling.com/tulpaObs/reference/simulate_occu.md)
+  — the detection-history simulator.

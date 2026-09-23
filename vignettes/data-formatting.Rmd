@@ -420,7 +420,9 @@ whether you go on to a Laplace fit or a full NUTS posterior.
 ## See also
 
 - `?tobs_data`, `?tobs_format`, `?tobs_format_ms` for the constructors.
+
 - The getting-started vignette for the fit, extract, and predict workflow.
+
 - The family vignettes (`vignette("community-models")`,
   `vignette("integrated-occupancy")`, `vignette("dynamic-occupancy")`) for
   the array and list responses fit end to end.

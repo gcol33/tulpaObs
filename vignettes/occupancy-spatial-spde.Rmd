@@ -624,6 +624,7 @@ formula, not in `detection`.
   Penalising model component complexity: a principled, practical approach to
   constructing priors. *Statistical Science*, 32, 1-28.
 * `?tobs` for the unified fitter and the in-formula `spde()` term.
+
 * `vignette("spatial-occupancy", package = "tulpaObs")` for the areal
   ICAR / BYM2 / CAR fields on a neighbour graph.
 * `vignette("occupancy-vs-inla", package = "tulpaObs")` for the

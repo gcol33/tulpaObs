@@ -940,6 +940,7 @@ result through one set of methods.
 - N-mixture abundance, negative binomial, and areal spatial counts:
   `vignette("abundance")`.
 - Many species at once: `vignette("community-models")`.
+
 - Colonisation and extinction across seasons:
   `vignette("dynamic-occupancy")`.
 - Combining detection histories from several sources:
@@ -949,6 +950,7 @@ result through one set of methods.
 - Areal and continuous spatial fields:
   `vignette("spatial-occupancy")` and `vignette("occupancy-spatial-spde")`.
 - Random effects with `lme4` bar syntax: `vignette("random-effects")`.
+
 - Posterior-predictive checks, WAIC, and spatial residual diagnostics:
   `vignette("diagnostics")`.
 ```
