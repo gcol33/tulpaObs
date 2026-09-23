@@ -359,3 +359,21 @@ the default nodes, so the resolution reaches it). A block with no `share()` is p
 `alpha = 0` and has no axis to resolve -- stated nodes win there. NUTS resolves the
 axis to NODES instead (`.tobs_alpha_nodes()`): the sampled alpha's flat prior takes
 the realised node set's span as its support.
+
+## Community recovery tolerance (#153/#155) -- why the naive tolerance is looser than it reads
+
+CLAUDE.md's CI section states the rule (score a multi-seed community recovery
+against `colMeans(bs)` and assert absolutely, not against the nominal constant
+with a relative `tolerance`). Two things make the naive form loose:
+
+- *Estimand = wrong constant.* The community simulator draws per-species coefs
+  around a POPULATION mean -> the seed's realized mean sits `beta_sd/sqrt(S)`
+  off that constant, so scoring vs the constant spends most of the budget on
+  draw noise. Score vs `colMeans(bs)` (seed's own realized mean) -> pure
+  estimator budget. `.jsdmc_sim` returns `beta_real`; most other community
+  simulators still return only the nominal constant (#155).
+- *`tolerance` silently switches scale.* `all.equal.numeric` = relative while
+  target exceeds tolerance, absolute below -> the same nominal `tolerance`
+  means a much wider absolute band on a big coefficient than a small one.
+  Assert absolutely (`expect_lt(abs(est - truth), tol)`) when the budget is
+  meant to be uniform.

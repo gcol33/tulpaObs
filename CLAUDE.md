@@ -230,22 +230,15 @@ DLL.
 **It is an R bug, NOT ours -- do not debug the package for it.** The fault is
 `wcsstr` reading past a non-NUL-terminated `FILE_NAME_INFO.FileName` in R's
 `R_is_redirection_tty()` (`src/main/sysutils.c`); no tulpaObs/tulpa frame is on
-the stack. Its caller asks whether fd 0/1 are msys/cygwin ptys at Windows
-startup, and a testthat worker is `Rterm` with both wired to processx pipes ->
+the stack. A testthat worker is `Rterm` with fd 0/1 wired to processx pipes ->
 workers die at the very START of a file, the file varies, serial never shows it.
-Fixed upstream 2026-08-11 (r-source `a2066dd40`, PR19104); NO released R has it
-(4.6.1 = 2026-06-24, 4.6.0 = 2026-04-24). **Until the next R release: never run
-the parallel tier while anything is BUILDING the package** -- that takes it from
-rare to ~1 run in 5 (4 crashes / 18 build-concurrent rounds vs 0 / 40 without)
--- or run serially. Ruled out by measurement, do not re-chase: the binaries,
-resource exhaustion, out-of-range vector / Eigen indexing (both packages rebuilt
-`-UNDEBUG -D_GLIBCXX_ASSERTIONS`, whole tier, zero assertions), file ordering,
-callr. NOT resource exhaustion (38.6 GB RAM /
-1.36 TB disk free while reproducing) and NOT the binaries (the install preceded
-both original crashes). Mechanism still open; a `-UNDEBUG -D_GLIBCXX_ASSERTIONS`
-build of both packages runs the whole tier with 0 assertions, so it is not an
-out-of-range vector or Eigen index. The SERIAL route (`TESTTHAT_PARALLEL=false`)
-is clean; the `makeCluster` route is neither implicated nor cleared.
+Fixed upstream 2026-08-11 (r-source `a2066dd40`, PR19104); no released R has it
+yet. **Until the next R release: never run the parallel tier while anything is
+BUILDING the package** -- that takes it from rare to common -- or run serially.
+Ruled out by measurement, do not re-chase: binaries, resource exhaustion,
+out-of-range vector/Eigen indexing, file ordering, callr (`NOTES_measurements.md`
+for the numbers). The SERIAL route (`TESTTHAT_PARALLEL=false`) is clean; the
+`makeCluster` route is neither implicated nor cleared.
 
 Slow test -> pair `skip_if_fast()` + `skip_on_cran()` atop any multi-seed fit /
 NUTS block (`tests/testthat/helper-speed.R`). C++ recompiles ccache-backed; only
@@ -299,20 +292,10 @@ first CI run, neither reproduces on Windows. Magnitudes + the #153 case history:
   tolerance hiding it). Test flips -> measure the bias over many seeds BEFORE
   touching the tolerance; widening it deletes the signal.
 
-  Two things make that tolerance looser than it reads; take out BOTH before a
-  community recovery number means anything:
-
-  - *Estimand = wrong constant.* Community simulator draws per-species coefs
-    around a POPULATION mean -> the seed's realized mean sits `beta_sd/sqrt(S)`
-    off that constant, so scoring vs the constant spends most of the budget on
-    draw noise. Score vs `colMeans(bs)` (seed's own realized mean) -> pure
-    estimator budget. `.jsdmc_sim` returns `beta_real`; most other community
-    simulators still return only the nominal constant (#155).
-  - *`tolerance` silently switches scale.* `all.equal.numeric` = relative while
-    target exceeds tolerance, absolute below -> the same nominal `tolerance`
-    means a much wider absolute band on a big coefficient than a small one.
-    Assert absolutely (`expect_lt(abs(est - truth), tol)`) when the budget is
-    meant to be uniform.
+  Two things make that tolerance looser than it reads -- estimand scored
+  against the wrong constant, and `tolerance`'s relative/absolute switch --
+  take out BOTH before a community recovery number means anything; mechanism +
+  the fix for each: `NOTES_families.md`.
 
   One-sided shift = property of the MEAN deviation over seeds, NOT of one fit
   -> assert in a multi-seed loop. Single-seed assertion = gross-regression

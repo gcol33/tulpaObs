@@ -2485,3 +2485,22 @@ block on the same fixture.
 is holding uncommitted. The step-6 block alone is 84 fits: 12 seeds x (1
 full-rank + 3 ranks, each rank paying one warm fit for its orthogonality
 reference and its pin).
+
+## Parallel-tier R bug (#289) -- ruled-out causes and reproduction rate
+
+CLAUDE.md's testing-ladder section states the rule (never run the parallel tier
+while anything is building the package) and the root cause (R's
+`R_is_redirection_tty()` reading past a non-NUL-terminated
+`FILE_NAME_INFO.FileName`, `src/main/sysutils.c`, fixed upstream 2026-08-11,
+r-source `a2066dd40`/PR19104; no released R has the fix -- 4.6.1 = 2026-06-24,
+4.6.0 = 2026-04-24). This entry is the measurement behind "ruled out, do not
+re-chase":
+
+- Reproduction rate: 4 crashes / 18 build-concurrent rounds vs 0 / 40 rounds
+  without a concurrent build.
+- NOT resource exhaustion: 38.6 GB RAM / 1.36 TB disk free while reproducing.
+- NOT the binaries: the install preceded both original crashes.
+- NOT an out-of-range vector or Eigen index: both packages rebuilt
+  `-UNDEBUG -D_GLIBCXX_ASSERTIONS`, whole tier run, zero assertions fired.
+- File ordering and the `callr` layer were also checked and are not
+  implicated.
