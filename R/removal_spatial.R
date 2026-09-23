@@ -346,6 +346,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     r_sd = if (is_nb && is.finite(V[i_logr, i_logr]))
              exp(means[i_logr]) * sqrt(V[i_logr, i_logr]) else NA_real_,
     vcov = V[c(i_lam, i_p), c(i_lam, i_p), drop = FALSE],
+    grid_mixture = res$mixture,
     log_lik = res$log_lik, converged = TRUE, K_max = K_max)
   fit <- build_nmix_fit(raw, model, spatial = spatial)
   # The field loads on the abundance (log lambda) arm by default, or on the

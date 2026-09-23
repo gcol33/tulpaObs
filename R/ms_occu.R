@@ -269,6 +269,7 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
     means = fit$mu, V = fit$Vf, par_names = par_names,
     model = model, process_info = pi_list, N = sum(model$valid),
     log_prob_val = fit$logML, converged = fit$converged, n_iter = fit$n_iter,
+    grid_mixture = fit$grid_mixture,
     extra = list(ms_community = ms_community)
   )
 }

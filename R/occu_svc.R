@@ -458,7 +458,8 @@
   V <- res$vcov; dimnames(V) <- list(nm, nm)
   sds <- sqrt(pmax(diag(V), 0)); names(sds) <- nm
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(n_draws, res$mixture$weights, res$mixture$modes,
+                                    res$mixture$covs)
   colnames(draws) <- nm
 
   # Posterior-mean coefficient surfaces, in `indices` order, plus the per-site

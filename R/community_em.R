@@ -522,17 +522,21 @@
 # are done here so every caller does it once. `extra` carries the
 # family-specific tail (`ms_community`, `ms_dispersion`, `positive`, ...);
 # `spatial`/`method` override the single-species-Laplace defaults.
+# `grid_mixture` (`.tobs_grid_mixture()`) is the outer grid of a grid-integrated
+# fit, which the draws then come from instead of the Gaussian at (means, V).
 .tobs_cem_finalize_fit <- function(means, V, par_names, model, process_info, N,
                                    log_prob_val, converged, n_iter,
                                    spatial = NULL, method = "laplace",
-                                   extra = list()) {
+                                   grid_mixture = NULL, extra = list()) {
   means <- as.numeric(means); names(means) <- par_names
   V <- (V + t(V)) / 2
   dimnames(V) <- list(par_names, par_names)
   sds <- .tobs_sds_from_vcov(V, par_names)
 
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(n_draws, grid_mixture$weights,
+                                    grid_mixture$modes, grid_mixture$covs,
+                                    means, V)
   colnames(draws) <- par_names
 
   structure(c(list(

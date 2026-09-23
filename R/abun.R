@@ -390,7 +390,9 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   fixed_names <- nms
 
   n_pseudo <- 1000L
-  draws <- .rmvn(n_pseudo, means, vcov)
+  draws <- .tobs_grid_mixture_draws(n_pseudo, raw$grid_mixture$weights,
+                                    raw$grid_mixture$modes,
+                                    raw$grid_mixture$covs, means, vcov)
   colnames(draws) <- nms
 
   # Random-effect block: append the variance components (sigma_g_*, cor_g_*_* for

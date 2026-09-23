@@ -436,6 +436,7 @@
     field_var     <- as.numeric(crossprod(w, field_modes^2)) - field_at_cell^2
     field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
     Vj <- NULL
+    beta_covs <- NULL
   } else {
     modes_joint <- modes[, idx_joint, drop = FALSE]
     mbar_joint  <- as.numeric(crossprod(w, modes_joint))
@@ -445,6 +446,9 @@
     diag_Vj    <- diag(Vj)
     sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
     beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
+    beta_covs  <- lapply(blocks[ok_cells], function(C)
+      if (is.null(C)) NULL else as.matrix(C)[seq_len(p_beta), seq_len(p_beta),
+                                             drop = FALSE])
     n_field_cols   <- n_fields * n_cells
     field_at_cell  <- mbar_joint[p_beta + seq_len(n_field_cols)]
     field_var      <- diag_Vj[p_beta + seq_len(n_field_cols)]
@@ -520,7 +524,9 @@
   dimnames(V) <- list(par_names, par_names)
 
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(
+    n_draws, w, modes[, c(bpsi_idx, btheta_idx, bp_idx, bpos_idx), drop = FALSE],
+    beta_covs, means, V)
   colnames(draws) <- par_names
 
   # Split the stacked field summaries into one block of n_cells per coupled

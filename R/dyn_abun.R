@@ -785,7 +785,10 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   sds <- .tobs_sds_from_vcov(vcov, nms)
   n_fixed <- length(nms); fixed_names <- nms
   n_pseudo <- 1000L
-  draws <- .rmvn(n_pseudo, means, vcov); colnames(draws) <- nms
+  draws <- .tobs_grid_mixture_draws(n_pseudo, raw$grid_mixture$weights,
+                                    raw$grid_mixture$modes,
+                                    raw$grid_mixture$covs, means, vcov)
+  colnames(draws) <- nms
   ll <- raw$log_lik %||% NA_real_
 
   # Grouped random effect on the initial-abundance or the detection arm: append

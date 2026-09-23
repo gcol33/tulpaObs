@@ -112,7 +112,8 @@
     hyper        = hyper,
     dispersion   = r_summary,
     boundary_max = max(fit$boundary_max, na.rm = TRUE),
-    mixture      = mixture
+    mixture      = mixture,
+    grid_mixture = .tobs_grid_mixture(w, mu_mat, fit$vcov_mu)
   )
 }
 

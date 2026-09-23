@@ -543,6 +543,7 @@
     b_lambda = blup_lambda, b_p = blup_p,
     spatial_field = z_mean, hyper = hyper, prior_type = spatial$type,
     weights = weights, boundary_max = max(boundary, na.rm = TRUE),
+    grid_mixture = .tobs_grid_mixture(weights, theta_mat, vcov_list, "zero"),
     log_lik = max(log_marg[ok]), converged = TRUE, n_iter = NA_integer_,
     optimizer = "newton", n_quad = n_quad, lkj_eta = lkj_eta,
     spatial_integration = integration_used, spatial_pareto_k = pareto_k)
@@ -622,7 +623,9 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   colnames(coef_p)      <- colnames(blup_p)      <- p_nm
 
   n_pseudo <- 1000L
-  draws <- .rmvn(n_pseudo, means, vcov)
+  draws <- .tobs_grid_mixture_draws(n_pseudo, raw$grid_mixture$weights,
+                                    raw$grid_mixture$modes,
+                                    raw$grid_mixture$covs, means, vcov)
   colnames(draws) <- nms
 
   ms_dispersion <- if (is_nb) {

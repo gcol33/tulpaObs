@@ -94,7 +94,8 @@
     log_r = if (is_nb) means[i_logr] else NA_real_,
     r = if (is_nb) exp(means[i_logr]) else NA_real_,
     mixture = if (is_nb) "negbin" else "poisson",
-    means = means, vcov = V, log_lik = res$log_lik, mean_N1 = NULL,
+    means = means, vcov = V, grid_mixture = res$mixture,
+    log_lik = res$log_lik, mean_N1 = NULL,
     K_max = K, converged = TRUE, n_iter = NA_integer_, coef_names = nm)
   fit <- build_dyn_abun_fit(raw, model)
   # The field loads on the initial-abundance (log lambda_1) arm by default, or on

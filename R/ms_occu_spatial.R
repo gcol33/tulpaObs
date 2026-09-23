@@ -85,7 +85,8 @@
     converged = any(as.logical(fit$converged)),
     n_iter = max(as.integer(fit$n_iter)),
     spatial_field = field_mean, prior_type = prior_type,
-    weights = weights, hyper = hyper)
+    weights = weights, hyper = hyper,
+    grid_mixture = .tobs_grid_mixture(w, mu_mat, fit$vcov_mu))
 }
 
 # Per-species (n_valid, n_det) integer matrices [n_sites x n_species] for the C++
@@ -355,7 +356,7 @@
   fit_em <- list(
     mu = c(fit$mu_psi, fit$mu_p), global = numeric(0), b_list = b_list,
     Sigma = list(psi = fit$Sigma_psi, p = fit$Sigma_p),
-    Vf = fit$vcov, logML = fit$log_lik,
+    Vf = fit$vcov, grid_mixture = fit$grid_mixture, logML = fit$log_lik,
     converged = isTRUE(fit$converged), n_iter = fit$n_iter)
 
   out <- build_ms_occu_fit(model, fit_em, arm_idx)

@@ -55,3 +55,95 @@
   if (symmetrize) V <- (V + t(V)) / 2
   V
 }
+
+
+# The grid as the mixture `.tobs_grid_mixture_draws()` samples, with the same
+# cell handling `.tobs_grid_vcov()` applied to the covariance it reports: under
+# `on_missing = "skip"` a cell with no usable within covariance carries no
+# weight, under "zero" it keeps its weight and is drawn at its mode.
+.tobs_grid_mixture <- function(weights, modes, covs,
+                               on_missing = c("skip", "zero")) {
+  on_missing <- match.arg(on_missing)
+  w <- as.numeric(weights)
+  w[!is.finite(w) | w < 0] <- 0
+  if (identical(on_missing, "skip"))
+    w <- w * !vapply(covs, function(C) is.null(C) || anyNA(C), logical(1))
+  list(weights = w, modes = as.matrix(modes), covs = covs)
+}
+
+
+# Draws from the outer-grid posterior itself: the mixture
+#
+#   x ~ sum_k w_k N(m_k, C_k)
+#
+# over the leading `ncol(modes)` coordinates, a cell picked by its weight and the
+# draw taken from that cell's own inner Gaussian. Its first two moments are the
+# mean and the `.tobs_grid_vcov()` covariance of the same grid, so every summary
+# that read the collapsed Gaussian keeps its mean and SD; what the mixture adds
+# is the shape the weighted cells describe (skew, a long tail along a ridge),
+# which one Gaussian at the grid mean cannot carry into a quantile.
+#
+# `covs = NULL` means the fit kept no per-cell covariance at all (an engine
+# without stored per-cell precisions), and the draw is the Gaussian at `means`
+# with covariance `V`, the only posterior such a fit describes.
+#
+# A grid wider than `means` is cut to its first `length(means)` coordinates: a
+# fit may report a leading run of the coordinates its grid integrated.
+#
+# `covs[[k]]` is cell k's within covariance; a NULL / non-finite entry draws that
+# cell at its mode, the same "zero within term" `.tobs_grid_vcov(on_missing =
+# "zero")` gives it. `V` and `means`, when `V` has more coordinates than
+# `modes`, supply the trailing ones: coordinates the grid carries no inner
+# Gaussian for (the outer hyperparameters, whose reported SD is the engine's
+# per-axis read rather than the grid spread). Those are drawn from their
+# Gaussian conditional under `V` given the leading draw, which reproduces `V`'s
+# trailing block and its cross-covariance with the leading block exactly, since
+# the mixture's own covariance is `V`'s leading block.
+.tobs_grid_mixture_draws <- function(n, weights, modes, covs, means = NULL,
+                                     V = NULL) {
+  if (is.null(covs)) return(.rmvn(n, means, V))
+  modes <- as.matrix(modes)
+  if (!is.null(means) && ncol(modes) > length(means)) {
+    keep  <- seq_along(means)
+    modes <- modes[, keep, drop = FALSE]
+    covs  <- lapply(covs, function(C)
+      if (is.null(C)) NULL else as.matrix(C)[keep, keep, drop = FALSE])
+  }
+  p <- ncol(modes)
+  w <- as.numeric(weights)
+  w[!is.finite(w) | w < 0] <- 0
+  if (!any(w > 0)) stop("grid mixture draw: no cell carries positive weight.",
+                        call. = FALSE)
+  counts <- as.integer(stats::rmultinom(1L, size = n, prob = w / sum(w)))
+  lead <- matrix(0, n, p)
+  pos <- 0L
+  for (k in which(counts > 0L)) {
+    rows <- pos + seq_len(counts[k])
+    Ck <- covs[[k]]
+    lead[rows, ] <- if (is.null(Ck) || !all(is.finite(Ck)))
+                      matrix(modes[k, ], counts[k], p, byrow = TRUE)
+                    else .rmvn(counts[k], modes[k, ], as.matrix(Ck))
+    pos <- pos + counts[k]
+  }
+  lead <- lead[sample.int(n), , drop = FALSE]
+  if (is.null(V) || ncol(V) <= p) return(lead)
+
+  b <- seq_len(p); h <- (p + 1L):ncol(V)
+  mu_b <- as.numeric(means[b]); mu_h <- as.numeric(means[h])
+  if (!all(is.finite(V))) {
+    return(cbind(lead, matrix(mu_h, n, length(h), byrow = TRUE)))
+  }
+  eb <- eigen((V[b, b, drop = FALSE] + t(V[b, b, drop = FALSE])) / 2,
+              symmetric = TRUE)
+  keep <- eb$values > max(eb$values, 0) * 1e-10
+  Vbb_inv <- eb$vectors[, keep, drop = FALSE] %*%
+             (t(eb$vectors[, keep, drop = FALSE]) / eb$values[keep])
+  K  <- V[h, b, drop = FALSE] %*% Vbb_inv
+  Vc <- V[h, h, drop = FALSE] - K %*% V[b, h, drop = FALSE]
+  ec <- eigen((Vc + t(Vc)) / 2, symmetric = TRUE)
+  Lc <- t(ec$vectors %*% diag(sqrt(pmax(ec$values, 0)), nrow = length(h)))
+  dev  <- sweep(lead, 2L, mu_b, "-")
+  tail <- sweep(dev %*% t(K) + matrix(stats::rnorm(n * length(h)), n) %*% Lc,
+                2L, mu_h, "+")
+  cbind(lead, tail)
+}

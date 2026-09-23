@@ -639,6 +639,9 @@ print.nmix_spatial_fit <- function(x, ...) {
     beta_p_mean      = beta_p_mean,
     vcov             = .nmix_grid_vcov(fit$cov_blocks, modes, weights,
                                        p_lam, p_p, c(nm_lam, nm_p)),
+    grid_mixture     = .tobs_grid_mixture(weights,
+                                          modes[, seq_len(p_lam + p_p), drop = FALSE],
+                                          fit$cov_blocks),
     z_mean           = z_mean
   )
 }
@@ -687,6 +690,8 @@ print.nmix_spatial_fit <- function(x, ...) {
     beta_lambda_mean = beta_lambda_mean, beta_p_mean = beta_p_mean,
     vcov = .nmix_grid_vcov(fit$cov_blocks, modes, weights, p_lam, p_p,
                            c(nm_lam, nm_p)),
+    grid_mixture = .tobs_grid_mixture(
+      weights, modes[, seq_len(p_lam + p_p), drop = FALSE], fit$cov_blocks),
     v_mean = v_mean, w_mean = w_mean, phi_mean = phi_mean)
 }
 

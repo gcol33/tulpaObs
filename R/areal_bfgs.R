@@ -591,7 +591,11 @@
                 field_mean = field_means[[1L]], hyper = hyper_means[[1L]],
                 eta_offset = as.numeric(crossprod(wk, offs)),
                 vcov = V, log_lik = sum(wk * logm),
-                integration = method, pareto_k = pareto_k)
+                integration = method, pareto_k = pareto_k,
+                # The grid itself, for draws from the mixture rather than from
+                # the one Gaussian `vcov` collapses it to.
+                mixture = list(weights = wk, modes = modes,
+                               covs = lapply(ik, function(k) res[[k]]$cov)))
     if (n_blk >= 2L) {
       out$temporal_field <- field_means[[2L]]
       out$temporal_hyper <- hyper_means[[2L]]

@@ -185,6 +185,7 @@
     field_var      <- as.numeric(crossprod(w, field_modes^2)) - field_at_cell^2
     field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
     Vj <- NULL  # no joint covariance available
+    beta_covs <- NULL
   } else {
     modes_joint <- modes[, idx_joint, drop = FALSE]
     mbar_joint  <- as.numeric(crossprod(w, modes_joint))
@@ -195,6 +196,9 @@
     diag_Vj    <- diag(Vj)
     sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
     beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
+    beta_covs  <- lapply(blocks[ok_cells], function(C)
+      if (is.null(C)) NULL else as.matrix(C)[seq_len(p_beta), seq_len(p_beta),
+                                             drop = FALSE])
 
     # Field summary uses the full (within + between) variance, demeaned to the
     # sum-to-zero convention the field-block covariance already sits under. One
@@ -206,7 +210,7 @@
   }
 
   list(beta_idx = beta_idx, p_beta = p_beta,
-       sds_beta = sds_beta, beta_block = beta_block,
+       sds_beta = sds_beta, beta_block = beta_block, beta_covs = beta_covs,
        field_demeaned = field_demeaned, field_sd = sqrt(pmax(field_var, 0)),
        Vj = Vj)
 }

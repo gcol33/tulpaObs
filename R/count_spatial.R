@@ -52,7 +52,8 @@
   cov_k <- lapply(hess, function(H) tryCatch(solve(as.matrix(H)),
                                              error = function(e) NULL))
   V <- .tobs_grid_vcov(mode_mat, w, cov_k, center = beta, symmetrize = TRUE)
-  list(beta = beta, vcov = V, weights = w)
+  list(beta = beta, vcov = V, weights = w,
+       grid_mixture = .tobs_grid_mixture(w, mode_mat, cov_k))
 }
 
 
@@ -122,7 +123,8 @@
   sds <- .tobs_sds_from_vcov(V, nms)
 
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(n_draws, fe$grid_mixture$weights,
+                                    fe$grid_mixture$modes, fe$grid_mixture$covs)
   colnames(draws) <- nms
 
   fit <- structure(c(list(
@@ -222,7 +224,8 @@
   sds <- .tobs_sds_from_vcov(V, nms)
 
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(n_draws, fe$grid_mixture$weights,
+                                    fe$grid_mixture$modes, fe$grid_mixture$covs)
   colnames(draws) <- nms
 
   # GP hyperparameter posterior (marginal SD sqrt(sigma2) and the range phi_gp),

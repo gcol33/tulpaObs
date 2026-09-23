@@ -429,7 +429,9 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
 
   n_fixed <- length(nms); fixed_names <- nms
   n_pseudo <- 1000L
-  draws <- .rmvn(n_pseudo, means, vcov)
+  draws <- .tobs_grid_mixture_draws(n_pseudo, raw$grid_mixture$weights,
+                                    raw$grid_mixture$modes,
+                                    raw$grid_mixture$covs, means, vcov)
   colnames(draws) <- nms
 
   # Grouped random effect on the abundance arm: append the variance components

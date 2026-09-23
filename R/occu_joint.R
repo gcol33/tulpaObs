@@ -445,7 +445,8 @@
                               means, sds, par_names, Vj, hyper_sd = hr$sd)
 
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(n_draws, w, modes[, bfv$beta_idx, drop = FALSE],
+                                    bfv$beta_covs, means, V)
   colnames(draws) <- par_names
 
   fs <- .tobs_joint_field_split(field_demeaned, field_sd, n_cells, n_fields,

@@ -153,7 +153,8 @@
     shape = if (hazard) exp(means[i_b]) else NA_real_,
     log_r = if (is_nb) means[i_logr] else NA_real_,
     r = if (is_nb) exp(means[i_logr]) else NA_real_,
-    vcov = res$vcov, log_lik = res$log_lik, converged = TRUE,
+    vcov = res$vcov, grid_mixture = res$mixture,
+    log_lik = res$log_lik, converged = TRUE,
     key = model$key, transect = model$transect, hazard = hazard, K_max = K_max)
   fit <- build_distance_fit(raw, model)
   # The field loads on the abundance (log lambda) arm by default, or on the

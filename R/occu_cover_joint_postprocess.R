@@ -564,8 +564,11 @@
                               hyper_names, hyper_vals, hyper_means,
                               means, sds, par_names, Vj, hyper_sd = hyper_sd)
 
+  # Draws from the outer-grid mixture, so a reported interval carries the shape
+  # the weighted cells describe and not only their first two moments.
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_grid_mixture_draws(n_draws, w, modes[, bfv$beta_idx, drop = FALSE],
+                                    bfv$beta_covs, means, V)
   colnames(draws) <- par_names
 
   # Split the stacked per-field summaries into one block of n_cells per coupled

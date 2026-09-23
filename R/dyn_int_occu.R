@@ -350,7 +350,9 @@
   V <- res$vcov; dimnames(V) <- list(nm, nm)
   sds <- .tobs_sds_from_vcov(V, nm)
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V); colnames(draws) <- nm
+  draws <- .tobs_grid_mixture_draws(n_draws, res$mixture$weights, res$mixture$modes,
+                                    res$mixture$covs)
+  colnames(draws) <- nm
 
   # Intercept field on the legacy scalar slots; any weighted (SVC) blocks become
   # the trend field(s) -- svcTIntPGOcc.
