@@ -60,10 +60,11 @@ test_that("spatial ms_abun S3 surface carries the field", {
 
   expect_no_error(print(fit))
   cf <- coef(fit)
-  expect_true(is.list(cf))
-  expect_setequal(names(cf), c("lambda", "p"))
-  expect_setequal(names(cf$lambda), c("(Intercept)", "abund_cov1"))
-  expect_setequal(names(cf$p), c("(Intercept)", "det_cov1"))
+  expect_false(is.list(cf))
+  expect_setequal(names(cf), c("lambda_(Intercept)", "lambda_abund_cov1",
+                               "p_(Intercept)", "p_det_cov1"))
+  expect_setequal(names(coef(fit, arm = "lambda")), c("(Intercept)", "abund_cov1"))
+  expect_setequal(names(coef(fit, arm = "p")),      c("(Intercept)", "det_cov1"))
   expect_equal(nrow(vcov(fit)), length(fit$means))
   expect_equal(nrow(confint(fit)), length(fit$means))
 
