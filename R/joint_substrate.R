@@ -621,14 +621,13 @@
   g
 }
 
-# A per-draw read of one outer-grid axis column (gcol33/tulpaObs#359): `hyper`
+# A per-draw read of one outer-grid axis column: `hyper`
 # -- `attr(tulpa::tulpa_posterior_draws(jf, ...), "theta")`, i.e.
 # `tulpa::tulpa_hyper_draws()` run in the SAME cells the latent half of the
 # draw came from -- carries the axis CONTINUIZED within its cell, one value
 # per draw. `theta_grid[cells, col]` is the bare grid-node coordinate: on a
 # 3- to 15-node axis every draw takes one of that few values, an atom rather
-# than a marginal, whatever the sample size (the defect gcol33/tulpa#823 fixed
-# engine-side). `hyper` is used whenever it carries the column; the raw grid
+# than a marginal, whatever the sample size. `hyper` is used whenever it carries the column; the raw grid
 # read is kept ONLY as the fallback for a fit where `tulpa_hyper_draws()`
 # declined to continuize that axis (recorded in `theta_declined`) or was not
 # computed at all, so a draw set still resolves rather than erroring.

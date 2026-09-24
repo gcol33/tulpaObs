@@ -504,8 +504,8 @@
                            "var.of.means.min.ess", "diagnose.k", "diagnose.draws",
                            # The engine's two inner-layer debias instruments.
                            # This route is where the inner layer bands
-                           # `unreliable` on a weakly identified psi/p ridge
-                           # (gcol33/tulpa#862), and both were unreachable from
+                           # `unreliable` on a weakly identified psi/p ridge,
+                           # and both were unreachable from
                            # here because this vocabulary did not name them.
                            "subspace.debias", "cila",
                            "k.samples", "k.bootstrap", "k.tail.points", "k.conf.bands",
@@ -519,7 +519,7 @@
                            # "flat" (the axis's own cell measure alone). The
                            # sampler puts a flat prior on its field hypers, so
                            # without this the two routes cannot be compared
-                           # like for like (gcol33/tulpa#862, #865).
+                           # like for like.
                            "hyperprior"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",

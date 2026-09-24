@@ -675,8 +675,7 @@
   # Top-level, not just under `$nuts`: tulpa's `n_divergent()` / `check_model()`
   # read `object$divergent` / `object$accept_prob` at top level (the same
   # fields `.tobs_nuts_field_attach()` sets for the field-NUTS families), else
-  # they fall through to a silent `0` / `NA` regardless of what the sampler did
-  # (gcol33/tulpaObs#343).
+  # they fall through to a silent `0` / `NA` regardless of what the sampler did.
   fit$accept_prob <- rc$accept
   fit$divergent   <- rc$divergent
   fit$nuts <- c(list(

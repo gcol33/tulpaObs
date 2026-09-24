@@ -292,7 +292,7 @@
     # summary()/tidy() should read (means, cov) directly rather than the
     # Monte Carlo mean/SD/quantiles of `draws`, which is a finite unseeded
     # sample FROM that same Gaussian and would otherwise report sampling
-    # noise as the estimate (gcol33/tulpaObs#346).
+    # noise as the estimate.
     cov          = V,
     reported_posterior = "gaussian",
     n_samples    = n_draws,
@@ -928,7 +928,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # `draws` are an unseeded finite sample FROM the fixed (means, V_draw)
   # Gaussian this function already reports, so coef()/confint()/summary()/
   # tidy() should read that Gaussian directly instead of the draws' Monte
-  # Carlo mean/SD/quantiles (gcol33/tulpaObs#346). A simplified-Laplace fit
+  # Carlo mean/SD/quantiles. A simplified-Laplace fit
   # replaced `draws` with a skew-normal marginal (`.sla_replace_draws()`), so
   # it keeps reporting off the draws, where the skew quantiles are the point.
   reported_posterior <- if (identical(sla_status, "simplified_laplace")) NULL

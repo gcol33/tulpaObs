@@ -103,7 +103,7 @@
 # engine has already sampled those coordinates exactly -- its subspace debias
 # returns a corrected `$draws` -- re-drawing them from the per-cell Gaussians
 # throws that sample away and reports the approximation the correction was
-# asked to replace (gcol33/tulpa#862). The conditional hyperparameter tail is
+# asked to replace. The conditional hyperparameter tail is
 # built by the same helper either way.
 .tobs_grid_mixture_draws <- function(n, weights, modes, covs, means = NULL,
                                      V = NULL, lead = NULL) {

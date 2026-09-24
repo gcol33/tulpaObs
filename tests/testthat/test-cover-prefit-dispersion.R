@@ -230,7 +230,7 @@ test_that("a multi-node phi.grid.pos is integrated on the stated nodes", {
   expect_true("phi_pos" %in% names(fixed$means))
   expect_null(fixed$model$cover_pos_disp)
   d <- tulpaObs:::.tobs_joint_draws(fixed, n = 4000L)$disp
-  # gcol33/tulpaObs#359: `d` is the fit's own continuized within-cell marginal
+  # `d` is the fit's own continuized within-cell marginal
   # (`tulpa::tulpa_hyper_draws()`), not the raw grid-node atom, so a draw is
   # no longer restricted to `stated` exactly -- it lands anywhere in the
   # axis's within-cell span, including the outermost cell's extension past

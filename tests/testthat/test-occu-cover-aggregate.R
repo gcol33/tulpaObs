@@ -215,7 +215,7 @@ test_that("WAIC scores aggregated cover at the unit scale, not per visit (#34)",
   # (aggregated, tight) dispersion, so p_waic grew toward the PER-VISIT scale
   # n_sites * J, not the unit scale n_sites.
   #
-  # gcol33/tulpaObs#359 replaced the raw grid-node atom every draw's sigma /
+  # The continuized marginal replaced the raw grid-node atom every draw's sigma /
   # alpha / phi_pos used to take with the fit's own continuized within-cell
   # marginal (`tulpa::tulpa_hyper_draws()`), so p_waic here now also carries
   # genuine hyperparameter uncertainty the atom read used to suppress: this

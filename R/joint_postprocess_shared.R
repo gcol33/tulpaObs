@@ -349,8 +349,7 @@
 # modes and covariances discards that sample and reports the very Gaussian the
 # correction was asked to replace -- measured on an occu_cover fit at J = 3, a
 # 17-minute correction moved the reported `psi` SD from 0.4144 to 0.4028 while
-# the sampler read 1.8028, because nothing downstream ever looked at it
-# (gcol33/tulpa#862).
+# the sampler read 1.8028, because nothing downstream ever looked at it.
 #
 # NULL unless a debias actually completed: a declined record leaves the engine's
 # `$draws` as whatever the plain path produced, which the mixture draw already

@@ -732,8 +732,7 @@ tobs <- function(formula,
   # diagnostic_summary()) read `fit$backend == "hmc"`; every tulpaObs NUTS
   # fitter runs the engine's HMC/NUTS sampler and none of them stamp this
   # themselves, so those gates read "unknown" and refuse even on a fit that
-  # ran the sampler and has real `divergent`/`accept_prob` to show
-  # (gcol33/tulpaObs#343).
+  # ran the sampler and has real `divergent`/`accept_prob` to show.
   if (identical(route$engine, "nuts")) {
     fit$backend <- fit$backend %||% "hmc"
   }

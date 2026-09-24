@@ -11,7 +11,7 @@
 # would have errored had it not been swept.
 #
 # Every computation `R/` needs from the engine now has an exported door
-# (gcol33/tulpa#826-#834), so the audited ceiling this file used to carry is
+# so the audited ceiling this file used to carry is
 # gone and the budget is zero. A reach that reappears is either a door that
 # exists and was not used, or a door that has to be filed in gcol33/tulpa
 # before the call site can land.

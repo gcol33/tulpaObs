@@ -304,8 +304,7 @@
     method       = "nuts",
     # Top-level, not just under `$nuts`: tulpa's `n_divergent()` / `check_model()`
     # read `object$divergent` / `object$accept_prob` at top level, else they
-    # fall through to a silent `0` / `NA` regardless of what the sampler did
-    # (gcol33/tulpaObs#343).
+    # fall through to a silent `0` / `NA` regardless of what the sampler did.
     accept_prob  = accept,
     divergent    = divergent,
     nuts         = nuts,

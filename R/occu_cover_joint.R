@@ -621,7 +621,7 @@
     # axis asks for. Left UNMARKED it bought the same integration by claiming
     # the reader had pinned the axis, and that claim is what the fit then
     # reported back: `outer_grid_recenter_declined == "axis_pinned"` on a fit
-    # whose every axis the reader had defaulted (gcol33/tulpaObs#361).
+    # whose every axis the reader had defaulted.
     #
     # A caller whose pre-fit they expect to be off passes their own span
     # through `phi.grid.pos`, and wrapping it in `auto_grid()` buys the
@@ -762,8 +762,7 @@
     cell_coupling = spec_name,
     # Which density an outer axis carries when the call states none. A formal
     # of the driver, not a control knob. The sampler puts a flat prior on its
-    # field hypers, so the two routes are only comparable when this can be set
-    # (gcol33/tulpa#862, #865).
+    # field hypers, so the two routes are only comparable when this can be set.
     hyperprior    = dots$hyperprior %||% "proper",
     control = c(list(
       max_iter  = as.integer(max.iter),
@@ -857,7 +856,7 @@
       # importance batch).
       # The engine's two inner-layer debias instruments, forwarded because this
       # is the route whose inner layer bands `unreliable` on a weakly
-      # identified psi/p ridge (gcol33/tulpa#862) and the corrections were
+      # identified psi/p ridge, and the corrections were
       # unreachable from here: this control list is a whitelist, so a knob it
       # does not name cannot be requested at all. Both keep the engine's own
       # default of off, so a fit that asks for neither is unchanged.

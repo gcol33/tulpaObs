@@ -1,5 +1,5 @@
 # =============================================================================
-# test-joint-substrate-hyper-draws.R - gcol33/tulpaObs#359.
+# test-joint-substrate-hyper-draws.R
 #
 # `.tobs_joint_field_sd()` / `.tobs_joint_amp()` / `.tobs_joint_phi_at()` used
 # to read a draw's sigma / alpha / phi_pos straight off `theta_grid[cells, ]`
