@@ -48,7 +48,7 @@ Suggests:
     spOccupancy,
     unmarked,
     withr
-Additional_repositories: https://inla.r-inla-download.org/R/stable, https://gcol33.r-universe.dev
+Additional_repositories: https://inla.r-inla-download.org/R/stable
 VignetteBuilder: knitr
 LinkingTo:
     Rcpp,

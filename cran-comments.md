@@ -4,11 +4,16 @@
 
 This is the first CRAN submission of tulpaObs. It fits occupancy, abundance and
 detection models by supplying their observation likelihoods to the 'tulpa'
-engine (on CRAN since 2026-09), which it imports and links against.
+engine (tulpa 0.6.0, on CRAN since 2026-09-24), which it imports and links
+against.
 
 ## R CMD check results
 
-<to fill from the final local and win-builder runs>
+0 errors | 0 warnings | 1 note
+
+* New submission.
+* INLA (Suggests) is not on CRAN; Additional_repositories names its
+  repository, which the check confirms is reachable.
 
 ## Test environments
 
@@ -29,6 +34,9 @@ engine (on CRAN since 2026-09), which it imports and links against.
 
 * Recovery, coverage and sampler tests are skipped on CRAN with
   `skip_on_cran()`; they run in the package's own CI tiers.
+
+* The testthat run under `--as-cran` takes about two minutes and reports no
+  failures; recovery, coverage and sampler tests are skipped on CRAN.
 
 * Thread counts default to at most two under `_R_CHECK_LIMIT_CORES_`.
 
