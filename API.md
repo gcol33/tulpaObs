@@ -444,6 +444,7 @@ directly from seed-offset refits (§5).
 | `loo()`                        | PSIS-LOO; a `loo` object, so `loo::loo_compare()` reads it |
 | `dic()`                        | DIC, effective parameter count `p_D` |
 | `cpo()`                        | Conditional predictive ordinate / LOO log-score (`loo.unit = "obs"`/`"cell"`) |
+| `pointwise_loglik(ndraws)`     | `[draws x observations]` log-likelihood matrix that `waic()` / `loo()` / `cpo()` score |
 | `ppc(fit.stat, n.samples)`     | Posterior predictive check + Bayesian p-value |
 | `pit_residuals(n.samples)`     | PIT residual vector |
 | `test_uniformity(pit)`         | KS test of PIT residuals against uniform |
@@ -520,7 +521,7 @@ a JSDM / community-factor fit (the spatial-factor `ms_occu_cover()` loadings).
 `simulate_occu` `simulate_occu_categorical` `simulate_occu_cover`
 `simulate_occu_multi` `simulate_occu_multiscale_cover` `simulate_occu_ttd`
 `simulate_removal` `simulate_royle_nichols` `simulate_t_occu` ·
-**Diagnostics** `waic` `loo` `cpo` `dic` `ppc` `pit_residuals`
+**Diagnostics** `waic` `loo` `cpo` `dic` `pointwise_loglik` `ppc` `pit_residuals`
 `test_uniformity` `test_dispersion` `test_zero_inflation` `test_outliers`
 `sbc` `check_model` `tobs_check_id` · **Prediction / effects**
 `tobs_predict_spatial` `tobs_marginal_effect` `tobs_richness`
