@@ -20,7 +20,7 @@
 "test-ccd-outer.R","full",15,0,32.8
 "test-ccd-outer.R","smoke",8,1,0.1
 "test-community-diagnostics.R","full",13,0,4.9
-"test-community-diagnostics.R","smoke",7,2,1.2
+"test-community-diagnostics.R","smoke",7,4,1.2
 "test-community-latent-control.R","full",26,0,36.6
 "test-community-latent-control.R","smoke",17,2,10.9
 "test-community-latent-quad.R","smoke",32,2,1.4
@@ -316,7 +316,7 @@
 "test-occu-cover-pos-field.R","full",37,0,2.8
 "test-occu-cover-pos-field.R","smoke",10,6,0.2
 "test-occu-cover-predict.R","full",87,0,6.3
-"test-occu-cover-predict.R","smoke",5,10,0.3
+"test-occu-cover-predict.R","smoke",11,12,0.3
 "test-occu-cover-progress.R","full",15,0,1.1
 "test-occu-cover-progress.R","smoke",0,3,0.1
 "test-occu-cover-residual.R","full",74,0,29

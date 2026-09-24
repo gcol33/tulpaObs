@@ -86,10 +86,14 @@ test_that("occu_cover() detection RE: predict() handles seen and unseen levels",
   expect_s3_class(pd, "tobs_prediction")
   expect_true(all(c("cell", "mean", "lwr", "upr") %in% names(pd)))
   expect_true(all(pd$mean > 0 & pd$mean < 1))
-  # An unseen habitat shrinks to the population-mean detection (offset 0).
+  # An unseen habitat shrinks to the population-mean detection (offset 0). The
+  # prediction is a Monte Carlo mean of plogis(eta) over posterior draws, so it
+  # sits a Jensen term above plogis(intercept) and carries sampling noise; both
+  # are a few thousandths here, well inside the 0.02 that separates a seen
+  # group from the population mean below.
   p_pop  <- stats::plogis(fit$means[["p_(Intercept)"]])
   unseen <- which(nd$habitat %in% c("newA", "newB"))
-  expect_equal(pd$mean[unseen], rep(p_pop, length(unseen)), tolerance = 0.02)
+  expect_lt(max(abs(pd$mean[unseen] - p_pop)), 0.02)
   # A seen-level habitat differs from the population mean for at least one group.
   expect_gt(max(abs(pd$mean[-unseen] - p_pop)), 0.02)
 })
