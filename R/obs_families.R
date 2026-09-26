@@ -199,7 +199,8 @@ jsdm <- function() {
     status         = "working",
     # Shares the ms_count binder and fitter, so latent() factors and a shared
     # field are fit by the same block-coordinate driver.
-    control_groups = c("block_coordinate", "block_coordinate_factor")
+    control_groups = c("block_coordinate", "block_coordinate_factor",
+                       "nuts_grad_threads", "nuts_logr")
   )
 }
 
@@ -880,7 +881,8 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
     params         = list(positive = positive),
     control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load",
                        "n.factors", "n.factors.max", "constrain",
-                       "re.aghq.maxdim")
+                       "re.aghq.maxdim"),
+    control_groups = "nuts_dispersion_re"
   )
 }
 
@@ -1078,7 +1080,8 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) 
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture)
+    params         = list(K_max = K_max, mixture = mixture),
+    control_groups = "nuts_logr"
   )
 }
 
@@ -1396,7 +1399,8 @@ ms_abun <- function(K_max = NULL,
     # latent() factors and the spatial-factor route are fit by the
     # block-coordinate driver. A plain shared field with no factors keeps the
     # dedicated C++ path and reaches no outer loop.
-    control_groups = c("block_coordinate", "block_coordinate_factor")
+    control_groups = c("block_coordinate", "block_coordinate_factor",
+                       "nuts_grad_threads", "nuts_logr")
   )
 }
 
@@ -1515,7 +1519,8 @@ distance <- function(key = c("halfnorm", "hazard"),
     status         = "working",
     params         = list(key = key, transect = transect,
                           cutpoints = cutpoints, K_max = K_max,
-                          mixture = mixture)
+                          mixture = mixture),
+    control_groups = "nuts_logr"
   )
 }
 
@@ -1633,7 +1638,8 @@ removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
     replicates     = "required",
     default_engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture)
+    params         = list(K_max = K_max, mixture = mixture),
+    control_groups = "nuts_logr"
   )
 }
 

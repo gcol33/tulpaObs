@@ -254,16 +254,23 @@ test_that("n.quad names one control across several marginals, each enumerated", 
 test_that("sigma.logr is reachable from control on the sampler routes", {
   # The community-mean ridge on mu_log_r is read from `control` by the
   # negative-binomial NUTS dispatchers, so the allowlist has to admit the name
-  # for those reads to see anything. It is a sampler knob, so the Laplace routes
-  # reject it the way they reject any other sampler control.
-  expect_true("sigma.logr" %in% .tobs_control_groups$nuts)
+  # for those reads to see anything. It is a sampler knob read by some
+  # families only, so it sits in a family-opted group hosted on nuts (#384):
+  # the Laplace routes reject it, and so does a family that does not read it.
+  expect_true("sigma.logr" %in% .tobs_control_groups$nuts_logr)
+  expect_false("sigma.logr" %in% .tobs_control_groups$nuts)
   expect_false("sigma.logr" %in% .tobs_control_groups$laplace_em)
 
   nuts_route <- list(engine = "nuts", correction = "none")
-  expect_silent(.tobs_validate_control(list(sigma.logr = 100), nuts_route))
+  expect_silent(.tobs_validate_control(list(sigma.logr = 100), nuts_route,
+                                       ms_abun()))
+  expect_error(.tobs_validate_control(list(sigma.logr = 100), nuts_route,
+                                      occu()),
+               "not used by occu")
   expect_error(
     .tobs_validate_control(list(sigma.logr = 100),
-                           list(engine = "laplace", correction = "none")),
+                           list(engine = "laplace", correction = "none"),
+                           ms_abun()),
     "sigma.logr")
 
   # And the table stays the single answer for its default: no route may carry

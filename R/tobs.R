@@ -197,6 +197,7 @@
 #'     `ms_abun()`, `ms_dyn_occu()`), whose per-species loop is parallel.
 #'     Default 0 leaves the count to OpenMP. The per-species reduction is
 #'     serial and order-fixed, so the gradient is the same at any count.
+#'     Rejected on the other families.
 #'   * `adapt.delta` -- target acceptance probability (default 0.8 on the
 #'     single-species families, 0.9 on the community samplers).
 #'   * `max.treedepth` -- NUTS maximum tree depth (default 10).
@@ -210,10 +211,12 @@
 #'     `ms_dyn_occu()`, `ms_int_occu()`, `ms_occu_cover()`).
 #'   * `sigma.logr` -- prior SD on the community-mean log-dispersion `mu_log_r`
 #'     (default 1.5), on the negative-binomial samplers that carry one
-#'     (`ms_abun()`, `ms_count()`, `jsdm()`). At the default this is an
+#'     (`ms_abun()`, `ms_count()`, `jsdm()`), and on the log-dispersion and
+#'     grouped random-effect log-SD of the `abun()` / `removal()` /
+#'     `distance()` samplers. At the default this is an
 #'     informative prior on the dispersion scale, so raise it to compare the
-#'     sampler against a maximum-likelihood target. Ignored where the family or
-#'     mixture has no log-dispersion arm.
+#'     sampler against a maximum-likelihood target. Ignored under a Poisson
+#'     mixture; rejected on the other families.
 #'
 #'   Sampler controls (`method = "pg_gibbs"`). A conjugate sweep is far cheaper
 #'   than a NUTS trajectory, so the chain is longer and two chains run by

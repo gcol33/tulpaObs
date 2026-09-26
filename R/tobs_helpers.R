@@ -527,24 +527,24 @@
   # Gibbs alike. `n.seeds` is consumed by tobs() itself (the seed ensemble).
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "seed",
                  "sigma.beta", "n.seeds"),
-  # Knobs only the NUTS fitters read. The pg_gibbs fitters take none of them:
+  # Knobs every NUTS fitter reads. The pg_gibbs fitters take none of them:
   # a conjugate sweep has no step size or tree depth, and its chains run
   # serially.
-  nuts       = c("n.threads",
-                 # OpenMP threads inside ONE gradient evaluation of the
-                 # community NUTS targets, whose per-species loop is
-                 # parallel. Distinct from `n.threads`, which spreads whole
-                 # chains. 0 leaves the count to OpenMP.
-                 "n.threads.grad",
-                 "adapt.delta", "max.treedepth",
-                 # Community-mean prior SD on the log-dispersion mu_log_r, for
-                 # the negative-binomial NUTS paths that carry one
-                 # (ms_abun(), ms_count(), jsdm()). Ignored by a family or
-                 # mixture with no log-dispersion arm.
-                 "sigma.logr",
-                 # ms_occu_cover() NUTS per-species dispersion RE (#115 B7): opt
-                 # into a fourth 1-D community arm on the cover log-dispersion.
-                 "dispersion.re", "sigma.ld.init"),
+  nuts       = c("n.threads", "adapt.delta", "max.treedepth"),
+  # NUTS knobs only some families read, opted into via
+  # `obs_family(control_groups=)` and hosted on the nuts route alone.
+  # OpenMP threads inside ONE gradient evaluation of the community NUTS
+  # targets whose per-species loop is parallel (ms_occu, ms_dyn_occu,
+  # ms_count, jsdm, ms_abun). Distinct from `n.threads`, which spreads whole
+  # chains. 0 leaves the count to OpenMP.
+  nuts_grad_threads = "n.threads.grad",
+  # Prior SD on the log-dispersion (community mean mu_log_r on ms_abun /
+  # ms_count / jsdm; the log-dispersion and grouped-RE log-SD on the abun /
+  # removal / distance count targets).
+  nuts_logr = "sigma.logr",
+  # ms_occu_cover() NUTS per-species dispersion RE (#115 B7): opt into a
+  # fourth 1-D community arm on the cover log-dispersion.
+  nuts_dispersion_re = c("dispersion.re", "sigma.ld.init"),
   universal  = c("verbose",
                  "progress", "progress.every", "progress.throttle",
                  "progress.file")
@@ -567,7 +567,10 @@
 # them, so a Laplace-only group stays rejected under a sampler route.
 .tobs_family_group_hosts <- list(
   block_coordinate        = c("laplace", "nested_laplace"),
-  block_coordinate_factor = c("laplace", "nested_laplace"))
+  block_coordinate_factor = c("laplace", "nested_laplace"),
+  nuts_grad_threads       = "nuts",
+  nuts_logr               = "nuts",
+  nuts_dispersion_re      = "nuts")
 
 .tobs_family_groups <- function(family, engine) {
   groups <- family$control_groups %||% character(0)

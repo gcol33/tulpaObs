@@ -421,6 +421,7 @@ ms_occu <- function() {
     status         = "working",
     # latent() factors and the SVC / shared field routes are fit by the
     # block-coordinate driver
-    control_groups = c("block_coordinate", "block_coordinate_factor")
+    control_groups = c("block_coordinate", "block_coordinate_factor",
+                       "nuts_grad_threads")
   )
 }

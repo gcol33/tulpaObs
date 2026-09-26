@@ -218,6 +218,7 @@ community NUTS target (\code{ms_occu()}, \code{ms_count()} / \code{jsdm()},
 \code{ms_abun()}, \code{ms_dyn_occu()}), whose per-species loop is parallel.
 Default 0 leaves the count to OpenMP. The per-species reduction is
 serial and order-fixed, so the gradient is the same at any count.
+Rejected on the other families.
 \item \code{adapt.delta} -- target acceptance probability (default 0.8 on the
 single-species families, 0.9 on the community samplers).
 \item \code{max.treedepth} -- NUTS maximum tree depth (default 10).
@@ -231,10 +232,12 @@ multiplicative; 5 on the logit-link community samplers \code{ms_occu()},
 \code{ms_dyn_occu()}, \code{ms_int_occu()}, \code{ms_occu_cover()}).
 \item \code{sigma.logr} -- prior SD on the community-mean log-dispersion \code{mu_log_r}
 (default 1.5), on the negative-binomial samplers that carry one
-(\code{ms_abun()}, \code{ms_count()}, \code{jsdm()}). At the default this is an
+(\code{ms_abun()}, \code{ms_count()}, \code{jsdm()}), and on the log-dispersion and
+grouped random-effect log-SD of the \code{abun()} / \code{removal()} /
+\code{distance()} samplers. At the default this is an
 informative prior on the dispersion scale, so raise it to compare the
-sampler against a maximum-likelihood target. Ignored where the family or
-mixture has no log-dispersion arm.
+sampler against a maximum-likelihood target. Ignored under a Poisson
+mixture; rejected on the other families.
 }
 
 Sampler controls (\code{method = "pg_gibbs"}). A conjugate sweep is far cheaper

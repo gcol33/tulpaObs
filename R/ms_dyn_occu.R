@@ -429,6 +429,6 @@ ms_dyn_occu <- function() {
     # The shared psi1 field is fit by the block-coordinate driver, but the call
     # passes `latent = NULL`: a field block and no factors, so no candidate
     # starting directions and no `factor.starts`.
-    control_groups = "block_coordinate"
+    control_groups = c("block_coordinate", "nuts_grad_threads")
   )
 }
