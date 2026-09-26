@@ -41,6 +41,9 @@ test_that("a group that cannot be absorbed falls back to the covariates", {
   # A group of the wrong length is not a group.
   expect_equal(tulpaObs:::.tobs_prefit_resid_var(z, X, group = 1:3), v_x)
   expect_equal(tulpaObs:::.tobs_prefit_resid_var(z, X, group = NULL), v_x)
+  # Every row in one cell: no cell contrast exists, and the fit is the
+  # covariate-only residual rather than a one-level `model.matrix()` error.
+  expect_equal(tulpaObs:::.tobs_prefit_resid_var(z, X, group = rep(7L, n)), v_x)
 })
 
 test_that("a design with nothing left to estimate from declines", {

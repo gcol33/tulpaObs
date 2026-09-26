@@ -475,8 +475,10 @@
   if (!is.null(group)) {
     g <- as.integer(group)
     # A cell factor is only informative where some cell carries more than one
-    # row; saturated, it absorbs the response exactly and leaves nothing.
-    if (any(duplicated(g))) {
+    # row; saturated, it absorbs the response exactly and leaves nothing. Rows
+    # sharing a single cell have no cell contrast, and `model.matrix()` refuses
+    # a one-level factor.
+    if (any(duplicated(g)) && length(unique(g)) > 1L) {
       D <- cbind(X, stats::model.matrix(~ factor(g))[, -1L, drop = FALSE])
       v <- rss(D)
       if (!is.null(v)) return(v)
