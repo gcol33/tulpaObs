@@ -71,37 +71,56 @@
   c(sig, chl, zz)
 }
 
-# Reconstruct the per-group BLUP table from NUTS draws (marginalising over the
-# posterior: b is reconstructed per draw, then summarised). `n_lead` is the
-# number of columns before the RE block. Returns
-# a named list of per-term data.frames with group/level/term/estimate/std.error.
-.tobs_re_nuts_effects <- function(draws, design, n_lead) {
+# Per-draw natural-scale random effects from the sampler's coordinates. For
+# each term: the SDs (n_draws x nc), the correlations of a correlated block
+# (n_draws x nc(nc-1)/2, pairs (ci, cj) with ci < cj, ci-major) read off the
+# correlation Cholesky factor, and the group effects B (n_draws x ng x nc).
+# `n_lead` is the number of columns before the RE block.
+.tobs_re_nuts_blocks <- function(draws, design, n_lead) {
   sz <- .tobs_re_section_sizes(design)
   sig_base  <- n_lead
   chol_base <- n_lead + sum(sz$ncs)
   z_base    <- n_lead + sum(sz$ncs) + sum(sz$nchol)
   sc <- 0L; cc <- 0L; zc <- 0L
-  re_effects <- list()
-  for (t in seq_along(design)) {
-    d <- design[[t]]; nc <- sz$ncs[t]; ng <- sz$ngs[t]; g <- d$group_label
+  nd <- nrow(draws)
+  lapply(seq_along(design), function(t) {
+    nc <- sz$ncs[t]; ng <- sz$ngs[t]
     sig_cols  <- sig_base + sc + seq_len(nc)
     chol_cols <- if (sz$nchol[t] > 0L) chol_base + cc + seq_len(sz$nchol[t]) else integer(0)
     z_cols    <- z_base + zc + seq_len(ng * nc)
+    sc <<- sc + nc; cc <<- cc + sz$nchol[t]; zc <<- zc + ng * nc
 
-    sig_draws  <- exp(draws[, sig_cols, drop = FALSE])      # n_draws x nc
-    z_draws    <- draws[, z_cols, drop = FALSE]             # n_draws x ng*nc
-    chol_draws <- if (length(chol_cols)) draws[, chol_cols, drop = FALSE] else NULL
-    nd <- nrow(draws)
-
+    sig_draws <- exp(draws[, sig_cols, drop = FALSE])
+    z_draws   <- draws[, z_cols, drop = FALSE]
+    pairs <- if (nc > 1L && length(chol_cols))
+      do.call(rbind, lapply(seq_len(nc - 1L), function(ci)
+        cbind(ci, seq(ci + 1L, nc)))) else matrix(integer(0), 0L, 2L)
+    cor_draws <- matrix(NA_real_, nd, nrow(pairs))
     B <- array(0, dim = c(nd, ng, nc))
     for (s in seq_len(nd)) {
-      L <- if (!is.null(chol_draws)) .tobs_re_chol_factor(chol_draws[s, ], nc) else diag(nc)
+      L <- if (length(chol_cols))
+        .tobs_re_chol_factor(draws[s, chol_cols], nc) else diag(nc)
+      if (nrow(pairs)) cor_draws[s, ] <- tcrossprod(L)[pairs]
       sig_s <- sig_draws[s, ]
       for (gi in seq_len(ng)) {
         zg <- z_draws[s, (gi - 1L) * nc + seq_len(nc)]
         B[s, gi, ] <- sig_s * as.numeric(L %*% zg)
       }
     }
+    list(sigma = sig_draws, cor = cor_draws, pairs = pairs, B = B,
+         cols = c(sig_cols, chol_cols, z_cols))
+  })
+}
+
+# Reconstruct the per-group BLUP table from NUTS draws (marginalising over the
+# posterior: b is reconstructed per draw, then summarised). Returns a named
+# list of per-term data.frames with group/level/term/estimate/std.error.
+.tobs_re_nuts_effects <- function(draws, design, n_lead,
+                                  blocks = .tobs_re_nuts_blocks(draws, design, n_lead)) {
+  re_effects <- list()
+  for (t in seq_along(design)) {
+    d <- design[[t]]; B <- blocks[[t]]$B
+    ng <- dim(B)[2L]; nc <- dim(B)[3L]; g <- d$group_label
     est <- apply(B, c(2, 3), mean)            # ng x nc
     se  <- apply(B, c(2, 3), stats::sd)
     re_effects[[g]] <- data.frame(
@@ -111,7 +130,33 @@
       estimate = as.numeric(est),
       std.error = as.numeric(se),
       stringsAsFactors = FALSE)
-    sc <- sc + nc; cc <- cc + sz$nchol[t]; zc <- zc + ng * nc
   }
   re_effects
+}
+
+# The RE block of a NUTS fit on the natural scale, in the layout and names the
+# Laplace path reports (.tobs_re_param_block()): per term `sigma_<g>_<coef>`,
+# `cor_<g>_<ci>_<cj>` on a correlated block, then `re_<g>_<coef>[k]` per
+# coefficient. It has as many columns as the sampler's
+# log_sigma / chol / z block, so it replaces that block in place.
+.tobs_re_nuts_natural <- function(draws, design, n_lead,
+                                  blocks = .tobs_re_nuts_blocks(draws, design, n_lead)) {
+  out <- list(); nms <- character(0)
+  for (t in seq_along(design)) {
+    d <- design[[t]]; bl <- blocks[[t]]; g <- d$group_label; cn <- d$coef_names
+    ng <- dim(bl$B)[2L]; nc <- dim(bl$B)[3L]
+    out <- c(out, list(bl$sigma))
+    nms <- c(nms, sprintf("sigma_%s_%s", g, cn))
+    if (nrow(bl$pairs)) {
+      out <- c(out, list(bl$cor))
+      nms <- c(nms, sprintf("cor_%s_%s_%s", g, cn[bl$pairs[, 1L]], cn[bl$pairs[, 2L]]))
+    }
+    for (c in seq_len(nc)) {
+      out <- c(out, list(matrix(bl$B[, , c], nrow = nrow(draws))))
+      nms <- c(nms, sprintf("re_%s_%s[%d]", g, cn[c], seq_len(ng)))
+    }
+  }
+  M <- do.call(cbind, out)
+  colnames(M) <- nms
+  M
 }

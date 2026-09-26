@@ -822,23 +822,34 @@
   # effects) come last and are named by the engine at their layout position.
   param_names <- unlist(spec$process_names)
 
-  # Name the random-effect block (log_sigma / chol / z, type-blocked per
-  # tulpa's layout) and reconstruct per-group BLUPs into `re_effects` so
-  # summary() / ranef() label them instead of showing param[i]. Counts
-  # and positions are unchanged.
+  # The random-effect block is sampled as log_sigma / chol / z (type-blocked per
+  # tulpa's layout). It is reported on the natural scale under the names the
+  # Laplace path uses -- sigma_<g>_<coef>, cor_<g>_<ci>_<cj>, re_<g>_<coef>[k]
+  # -- reconstructed per draw, so the same formula reads the same parameters on
+  # either engine. Counts and positions are unchanged. The per-group BLUP table
+  # goes to `re_effects` for ranef(). When the block is the tail of the draws,
+  # the fixed effects are the leading columns and `n_fixed` says so, which keeps
+  # the group effects out of summary() / coef() / tidy() as on Laplace.
   if (!is.null(re)) {
     re_design <- .tobs_re_design(re, model)
     n_lead <- length(param_names)
-    re_nms <- .tobs_re_nuts_param_names(re_design)
-    if (n_lead + length(re_nms) <= length(fit$means)) {
-      param_names <- c(param_names, re_nms)
-      names(fit$means)[seq_along(param_names)] <- param_names
-      if (!is.null(fit$draws) && ncol(fit$draws) >= length(param_names)) {
-        colnames(fit$draws)[seq_along(param_names)] <- param_names
+    n_re   <- length(.tobs_re_nuts_param_names(re_design))
+    if (!is.null(fit$draws) && n_lead + n_re <= ncol(fit$draws)) {
+      blocks  <- .tobs_re_nuts_blocks(fit$draws, re_design, n_lead)
+      natural <- .tobs_re_nuts_natural(fit$draws, re_design, n_lead, blocks)
+      span <- n_lead + seq_len(n_re)
+      fit$draws[, span] <- natural
+      colnames(fit$draws)[span] <- colnames(natural)
+      fit$means[span] <- colMeans(natural)
+      names(fit$means)[span] <- colnames(natural)
+      if (length(fit$sds) >= max(span)) {
+        fit$sds[span] <- apply(natural, 2L, stats::sd)
+        names(fit$sds)[span] <- colnames(natural)
       }
-      fit$re_effects <- tryCatch(
-        .tobs_re_nuts_effects(fit$draws, re_design, n_lead),
-        error = function(e) NULL)
+      param_names <- c(param_names, colnames(natural))
+      fit$re_effects <- .tobs_re_nuts_effects(fit$draws, re_design, n_lead,
+                                              blocks)
+      if (ncol(fit$draws) == n_lead + n_re) fit$n_fixed <- n_lead
     }
   }
 

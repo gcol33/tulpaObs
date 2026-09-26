@@ -110,7 +110,7 @@ test_that("deterministic sigma and BLUPs track the NUTS fit on the same data", {
                 control = list(n.iter = 400, n.warmup = 200, seed = 1, verbose = FALSE))
 
   sig_l <- fit_l$means[[grep("^sigma_", names(fit_l$means), value = TRUE)]]
-  sig_n <- exp(fit_n$means[[grep("^log_sigma_", names(fit_n$means), value = TRUE)]])
+  sig_n <- fit_n$means[[grep("^sigma_", names(fit_n$means), value = TRUE)]]
   # Deterministic Laplace sigma is in the NUTS ballpark (the Laplace
   # small-cluster bias is modest at this cluster size; both within ~60%).
   expect_lt(abs(sig_l - sig_n) / sig_n, 0.6)

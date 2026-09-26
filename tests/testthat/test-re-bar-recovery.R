@@ -5,14 +5,16 @@
 # Random slopes are fit by the NUTS engine (the EM-Laplace path does not carry
 # formula random effects; nested-Laplace rejects slopes). The NUTS parameter
 # vector for a single RE term on the occupancy predictor with detection ~ 1 is
-# laid out as
+# sampled as
 #   [psi_(Intercept), p_(Intercept), log_sigma(1..q), chol_raw(1..k(k-1)/2),
 #    z_effects(group-major: g * q + c)]
-# with q = re_n_coefs and the non-centered effects recovered as
-#   b_{g,c} = sigma_c * (L %*% z_g)_c,  L = build_L_from_raw(chol_raw).
-# The tests assert the total parameter count (guards against layout drift, and
-# pins the k(k-1)/2 Cholesky size from populate_helpers.h) and that the
-# reconstructed group effects correlate with the simulated truth.
+# with q = re_n_coefs, and reported on the natural scale in the same number of
+# columns: sigma_g1_<coef> (q), cor_g1_<ci>_<cj> (k(k-1)/2), and the group
+# effects re_g1_<coef>[k], b_{g,c} = sigma_c * (L %*% z_g)_c with
+# L = build_L_from_raw(chol_raw). The tests assert the total parameter count
+# (guards against layout drift, and pins the k(k-1)/2 Cholesky size from
+# populate_helpers.h) and that the group effects correlate with the simulated
+# truth.
 
 # The correlation Cholesky factor the sampler drew, through the engine's
 # partial-correlation map.
@@ -65,15 +67,16 @@ test_that("(1 + x + z | g) recovers a 3x3 correlated RE block", {
   expect_equal(length(fit$means), 2L + 3L + 3L + ng * 3L)
 
   m <- fit$means
-  sig_hat <- exp(m[3:5])
+  cn <- c("(Intercept)", "x", "z")
+  sig_hat <- m[sprintf("sigma_g1_%s", cn)]
   expect_true(all(is.finite(sig_hat)) && all(sig_hat > 0))
   expect_true(all(sig_hat < 2))                  # not blown up
+  cor_hat <- m[grep("^cor_g1_", names(m))]
+  expect_length(cor_hat, 3L)
+  expect_true(all(abs(cor_hat) <= 1))
 
-  L <- re_chol(m[6:8], 3L)
-  zoff <- 8L
-  Bhat <- t(vapply(seq_len(ng), function(gg) {
-    as.numeric(sig_hat * (L %*% m[zoff + (gg - 1L) * 3L + 1:3]))
-  }, numeric(3)))
+  Bhat <- vapply(cn, function(cc) m[sprintf("re_g1_%s[%d]", cc, seq_len(ng))],
+                 numeric(ng))
 
   # The block is genuinely fit: reconstructed group effects track the truth
   # on all three coefficients (probe: 0.86 / 0.70 / 0.80 at N=600/iter=500).
@@ -109,13 +112,12 @@ test_that("(1 + x + z || g) is an uncorrelated multi-slope block (no Cholesky)",
   expect_equal(length(fit$means), 2L + 3L + ng * 3L)
 
   m <- fit$means
-  sig_hat <- exp(m[3:5])
+  cn <- c("(Intercept)", "x", "z")
+  sig_hat <- m[sprintf("sigma_g1_%s", cn)]
   expect_true(all(is.finite(sig_hat)) && all(sig_hat > 0) && all(sig_hat < 2))
-  # Diagonal block: b_{g,c} = sigma_c * z_{g,c}.
-  zoff <- 5L
-  Bhat <- t(vapply(seq_len(ng), function(gg) {
-    sig_hat * m[zoff + (gg - 1L) * 3L + 1:3]
-  }, numeric(3)))
+  expect_false(any(grepl("^cor_", names(m))))
+  Bhat <- vapply(cn, function(cc) m[sprintf("re_g1_%s[%d]", cc, seq_len(ng))],
+                 numeric(ng))
   for (cc in 1:3) expect_gt(cor(Bhat[, cc], B[, cc]), 0.45)
 })
 
@@ -148,10 +150,10 @@ test_that("(0 + x | g) is a slope-only block with no group intercept", {
   expect_equal(length(fit$means), 2L + 1L + ng)
 
   m <- fit$means
-  sig_hat <- exp(m[3])
+  sig_hat <- m[["sigma_g1_x"]]
   expect_true(is.finite(sig_hat) && sig_hat > 0.3 && sig_hat < 1.8)
 
-  # Uncorrelated single slope: b_g = sigma * z_g.
-  bhat <- sig_hat * m[3 + seq_len(ng)]
+  # The reported group slopes track the simulated ones.
+  bhat <- m[sprintf("re_g1_x[%d]", seq_len(ng))]
   expect_gt(cor(bhat, b), 0.45)
 })
