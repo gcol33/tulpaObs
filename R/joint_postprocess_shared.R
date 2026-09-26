@@ -84,6 +84,15 @@
 # and the denominator are read over the cells that were actually solved.
 #
 # `label` names the route in the error / warning text.
+# Grid-weighted posterior mean and variance of latent columns `cols` of the
+# joint modes: `modes` holds the converged cells' rows, `w` their weights. The
+# variance is the between-cell spread of the modes.
+.tobs_joint_latent_moments <- function(modes, w, cols) {
+  u_mod <- modes[, cols, drop = FALSE]
+  u_hat <- as.numeric(crossprod(w, u_mod))
+  list(mean = u_hat, var = as.numeric(crossprod(w, u_mod^2)) - u_hat^2)
+}
+
 .tobs_joint_ok_cells <- function(fit, label) {
   ok_cells <- which(is.finite(fit$log_marginal))
   if (length(ok_cells) == 0L) {

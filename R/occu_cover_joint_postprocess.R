@@ -163,11 +163,7 @@
       lay <- n_fields + d$block_start + seq_len(d$n_blocks) - 1L
       if (is.null(bstart) || length(bstart) < max(lay)) next
       B_mean <- matrix(0, ng, nc); B_sd <- matrix(0, ng, nc); lat <- integer(0)
-      grid_moments <- function(cols) {
-        u_mod <- modes[, cols, drop = FALSE]
-        u_hat <- as.numeric(crossprod(w, u_mod))
-        list(mean = u_hat, var = as.numeric(crossprod(w, u_mod^2)) - u_hat^2)
-      }
+      grid_moments <- function(cols) .tobs_joint_latent_moments(modes, w, cols)
       if (!isTRUE(d$correlated)) {
         for (cc in seq_len(nc)) {
           cols <- bstart[lay[cc]] + seq_len(bsize[lay[cc]])   # length n_groups

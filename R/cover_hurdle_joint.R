@@ -359,6 +359,7 @@
        se_occ = sqrt(pmax(0, var_of_means_occ + mean_of_var_occ)),
        se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)),
        converged = length(ok_cells) == length(fit$log_marginal),
+       ok_cells = ok_cells, w = w,
        fit = fit)
 }
 
@@ -756,6 +757,40 @@
     converged = bm$converged,
     joint = fit
   )
+}
+
+# Per-group random intercepts of a cover() joint fit. Each re() term is one iid
+# prior block, and the blocks trail the field / temporal blocks
+# (`.cover_multi_prior()`), so term k sits at layout position
+# n_blocks - n_re + k and its latent is that block's contiguous run of the joint
+# modes. The BLUP is the grid-weighted posterior mean over the converged cells,
+# centred (the intercept carries the level), with the grid-weighted SD; the
+# term's SD is that block's `sigma` axis averaged under the same weights. The
+# table has the shape `ranef()` stacks from `re_effects`. A lone term is keyed
+# `re` and its SD reported as `sigma_re`; several are numbered.
+.cover_re_effects <- function(fit, bm, re) {
+  if (!length(re)) return(list(effects = NULL, sigma = NULL))
+  lay   <- fit$arm_layout
+  first <- length(lay$block_start) - length(re)
+  modes <- fit$modes[bm$ok_cells, , drop = FALSE]
+  tg    <- fit$theta_grid[bm$ok_cells, , drop = FALSE]
+  keys  <- if (length(re) == 1L) "re" else paste0("re", seq_along(re))
+  effects <- list(); sigma <- numeric(0)
+  for (k in seq_along(re)) {
+    pos  <- first + k
+    cols <- lay$block_start[pos] + seq_len(lay$block_size[pos])
+    mom  <- .tobs_joint_latent_moments(modes, bm$w, cols)
+    lev  <- re[[k]]$levels %||% as.character(seq_along(cols))
+    effects[[keys[k]]] <- data.frame(
+      group = keys[k], level = lev, term = "(Intercept)",
+      estimate  = mom$mean - mean(mom$mean),
+      std.error = sqrt(pmax(mom$var, 0)),
+      stringsAsFactors = FALSE)
+    ax <- sprintf("b%d.sigma", pos)
+    sigma[[paste0("sigma_", keys[k])]] <-
+      if (ax %in% colnames(tg)) sum(bm$w * tg[, ax]) else NA_real_
+  }
+  list(effects = effects, sigma = sigma)
 }
 
 #' Fit cover_hurdle as a joint binomial+(gaussian|beta) model with shared
@@ -1251,6 +1286,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # Trend-field hyperparameter summaries (block 2: sigma_trend, alpha_trend),
   # read off the multi-block (sigma, alpha) axes of the integrated posterior.
   sigma_trend <- if (has_trend) as.numeric(fit$theta_mean[["b2.sigma"]] %||% NA) else NULL
+
+  re_post <- .cover_re_effects(fit, bm, re)
   alpha_trend <- if (has_trend) as.numeric(fit$theta_mean[["b2.alpha"]] %||% NA) else NULL
 
   list(
@@ -1277,6 +1314,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     trend_w_pos   = if (has_trend) trend_spec$w_pos else NULL,
     sigma_trend   = sigma_trend,
     alpha_trend   = alpha_trend,
+    re_effects    = re_post$effects,
+    sigma_re      = re_post$sigma,
     converged    = bm$converged,
     joint        = fit
   )
