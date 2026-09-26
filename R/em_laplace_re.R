@@ -494,6 +494,7 @@
     .tobs_re_occ_fixed_se(X_occ, eta_mode, weights, design_occ, Sigma_occ)
   else .se_from_laplace_fit(occ_fit, p_occ)
   aghq_status <- list(applied = FALSE)
+  re_boundary <- NULL
   # The quadrature factors the marginal into independent per-group integrals.
   # On visit rows the site's occupancy state couples every visit of the site,
   # and a group over visits (or a visit covariate) spans sites, so the integrand
@@ -543,13 +544,15 @@
       aghq_status <- list(applied = TRUE, arm = ref$arm, n_quad = ref$n_quad,
                           lkj_eta = ref$lkj_eta, converged = ref$converged,
                           group_ok = ref$group_ok)
+      re_boundary <- ref$re_boundary
     }
   }
 
   list(
     fits = list(occ = occ_fit, det = det_fit),
     weights = weights,
-    convergence = list(converged = converged, n_iter = it),
+    convergence = list(converged = converged, n_iter = it,
+                       re_boundary = re_boundary),
     correction = "none",
     aghq = aghq_status,
     re_post = list(design = design, b = b, b_var = b_var, Sigma = Sigma_list,

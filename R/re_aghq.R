@@ -219,7 +219,8 @@
     converged    = .tobs_aghq_converged(ref, gstat),
     group_ok     = gstat$group_ok,
     groups_failed = gstat$failed,
-    n_iter       = .tobs_aghq_n_iter(ref)
+    n_iter       = .tobs_aghq_n_iter(ref),
+    re_boundary  = .tobs_re_boundary(ref, design)
   )
 }
 
@@ -295,7 +296,8 @@
        n_iter    = raw$n_iter %||% NA_integer_,
        group_ok  = raw$group_ok,
        groups_failed = failed,
-       groups_failed_names = if (named) as.character(group_names)[failed] else NULL)
+       groups_failed_names = if (named) as.character(group_names)[failed] else NULL,
+       re_boundary = raw$re_boundary)
 }
 
 # =============================================================================
@@ -357,13 +359,108 @@
 
   se_log <- as.numeric(se[[idx]])
   sigma  <- sqrt(pmax(as.numeric(ref$Sigma_list[[block]])[1L], 0))
-  if (!is.finite(se_log) || se_log <= 0 || !is.finite(sigma))
+  w <- .tobs_log_sd_wald(se_log, alpha)
+  if (!w$available || !is.finite(sigma))
     return(unavailable("curvature_unavailable"))
 
-  W <- 1 / se_log
-  list(sigma = sigma, se_log = se_log, statistic = W, critical = crit,
-       alpha = alpha, distinguishable = W >= crit, available = TRUE,
-       reason = NULL)
+  list(sigma = sigma, se_log = se_log, statistic = w$statistic,
+       critical = w$critical, alpha = alpha,
+       distinguishable = w$distinguishable, available = TRUE, reason = NULL)
+}
+
+# The boundary Wald test on one log-scale SD coordinate: W = 1 / SE(log sd)
+# against qnorm(1 - alpha) (derivation above).
+.tobs_log_sd_wald <- function(se_log, alpha = .TOBS_VC_BOUNDARY_ALPHA) {
+  crit <- stats::qnorm(1 - alpha)
+  ok <- length(se_log) == 1L && is.finite(se_log) && se_log > 0
+  W <- if (ok) 1 / se_log else NA_real_
+  list(statistic = W, critical = crit, alpha = alpha,
+       distinguishable = if (ok) W >= crit else NA, available = ok)
+}
+
+# =============================================================================
+# Boundary records for the grouped random effects of a single-species fit.
+# =============================================================================
+# Every covariance block the AGHQ engine optimises carries its SDs on the log
+# scale: a diagonal block as one log-SD per coefficient, a full block as the
+# log-Cholesky diagonal. Each of those coordinates is tested as above.
+#
+# On a full block the i-th Cholesky diagonal is the conditional SD of
+# coefficient i given the ones before it, and the block is singular exactly when
+# one of them is zero. For a 2 x 2 block with coordinates (log L11, L21, log L22)
+#
+#   cor = L21 / sqrt(L21^2 + L22^2),
+#
+# so |cor| -> 1 is L22 -> 0: a correlation at +-1 is the same boundary as a
+# collapsed SD, one coordinate further down the factor, and it takes the same
+# test. The first diagonal is the marginal SD of the first coefficient.
+#
+# `design` is the per-term design the fit was built from, one term per engine
+# block, and supplies the names the fit reports its components under. Returns a
+# named list of records (empty when the engine surfaced no curvature).
+.tobs_re_boundary <- function(ref, design, alpha = .TOBS_VC_BOUNDARY_ALPHA) {
+  lay <- ref$re_par_layout; se <- ref$re_par_se; par <- ref$re_par
+  if (is.null(lay) || is.null(se) || is.null(par) ||
+      length(lay) != length(design)) return(list())
+  out <- list()
+  for (k in seq_along(lay)) {
+    bl <- lay[[k]]; d <- design[[k]]
+    nc <- as.integer(bl$nc)
+    g  <- d$group_label %||% sprintf("g%d", k)
+    cn <- d$coef_names %||% as.character(seq_len(nc))
+    Sk <- as.matrix(ref$Sigma_list[[k]])
+    diag_at <- bl$index[grepl("log_sd_[0-9]+$|log_L([0-9])\\1$", bl$coord)]
+    if (length(diag_at) != nc) next
+    for (i in seq_len(nc)) {
+      w <- .tobs_log_sd_wald(as.numeric(se[[diag_at[i]]]), alpha)
+      rec <- c(list(sd = exp(as.numeric(par[[diag_at[i]]])),
+                    se_log = as.numeric(se[[diag_at[i]]])), w)
+      if (!isTRUE(bl$full) || i == 1L) {
+        nm <- sprintf("sigma_%s_%s", g, cn[i])
+        rec$kind <- "sd"
+        rec$estimate <- sqrt(max(Sk[i, i], 0))
+      } else {
+        prev <- cn[seq_len(i - 1L)]
+        nm <- if (nc == 2L) sprintf("cor_%s_%s_%s", g, cn[1L], cn[2L])
+              else sprintf("sigma_%s_%s|%s", g, cn[i], paste(prev, collapse = ","))
+        rec$kind <- if (nc == 2L) "correlation" else "conditional_sd"
+        den <- sqrt(Sk[1L, 1L] * Sk[i, i])
+        rec$estimate <- if (nc == 2L && den > 0) Sk[1L, 2L] / den else rec$sd
+      }
+      out[[nm]] <- rec
+    }
+  }
+  out
+}
+
+# One warning for every grouped-RE component a fit could not distinguish from
+# its boundary. Raised once, from the fit tail.
+.tobs_warn_re_boundary <- function(records) {
+  hit <- Filter(function(r) isTRUE(r$available) &&
+                  identical(r$distinguishable, FALSE), records)
+  if (!length(hit)) return(invisible(list()))
+  parts <- vapply(names(hit), function(nm) {
+    r <- hit[[nm]]
+    if (identical(r$kind, "sd"))
+      sprintf("%s = %.3g (Wald %.2f)", nm, r$estimate, r$statistic)
+    else
+      sprintf("%s = %.4g, conditional SD %.3g (Wald %.2f)", nm, r$estimate,
+              r$sd, r$statistic)
+  }, character(1L))
+  singular <- any(vapply(hit, function(r) !identical(r$kind, "sd"), logical(1L)))
+  warning("random-effect variance component",
+          if (length(hit) > 1L) "s" else "", " at the boundary: ",
+          paste(parts, collapse = "; "), ", against ",
+          sprintf("%.2f", hit[[1L]]$critical), " at the ",
+          format(hit[[1L]]$alpha), " level. An SD at zero shrinks every BLUP ",
+          "to zero",
+          if (singular) " and a singular covariance puts a correlation at +-1" else "",
+          "; the marginal likelihood peaks there for these data, so the fit ",
+          "converges, but the component's estimate is a bound, not an ",
+          "estimate with an interval.",
+          if (singular) " control$re.lkj above 1 keeps a correlation off +-1." else "",
+          " Records: convergence(fit)$re_boundary.", call. = FALSE)
+  invisible(hit)
 }
 
 # The user-facing half. `records` is a NAMED list of

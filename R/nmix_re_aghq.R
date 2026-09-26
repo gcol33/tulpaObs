@@ -158,6 +158,7 @@
     group_ok      = gstat$group_ok,
     groups_failed = gstat$failed,
     n_iter        = .tobs_aghq_n_iter(ref),
+    re_boundary   = .tobs_re_boundary(ref, design),
     K_max         = K_max
   )
 }
@@ -330,6 +331,7 @@
     converged   = ref$converged,
     group_ok    = ref$group_ok,
     groups_failed = ref$groups_failed,
+    re_boundary = ref$re_boundary,
     n_iter      = ref$n_iter,
     K_max       = ref$K_max %||% K_max)
   re_post <- list(arm = ref$arm, design = design,

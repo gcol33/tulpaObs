@@ -560,7 +560,8 @@
     n_quad = ref$n_quad, lkj_eta = ref$lkj_eta,
     converged = .tobs_aghq_converged(ref, gstat),
     group_ok = gstat$group_ok, groups_failed = gstat$failed,
-    n_iter = .tobs_aghq_n_iter(ref))
+    n_iter = .tobs_aghq_n_iter(ref),
+    re_boundary = .tobs_re_boundary(ref, design))
 }
 
 
@@ -639,6 +640,7 @@
     mean_N1 = ref$mean_N1, K_max = model$K_max,
     converged = ref$converged, n_iter = ref$n_iter %||% NA_integer_,
     group_ok = ref$group_ok, groups_failed = ref$groups_failed,
+    re_boundary = ref$re_boundary,
     coef_names = nms)
   re_post <- list(arm = ref$arm, design = design, Sigma_list = ref$Sigma_list,
                   b = ref$b, b_var = ref$b_var,

@@ -31,7 +31,13 @@ failed and its estimates are \code{NA}), \code{groups_failed} (their indices) an
 species, for the community models). \code{converged} is \code{FALSE} whenever any
 group failed, since the quantities that group contributes to are not
 estimates of anything; filter on these rather than on the text of the
-warning the engine raises. \code{converged()}: a single \code{TRUE} / \code{FALSE}.
+warning the engine raises. A single-species fit whose grouped random
+effects were integrated that way carries \code{re_boundary}: one record per
+random-effect SD (\verb{sigma_<g>_<coef>}) and, on a correlated block, per
+correlation (\verb{cor_<g>_<ci>_<cj>}), with the boundary Wald \code{statistic}, its
+\code{critical} value and \code{distinguishable}; \code{FALSE} means the SD cannot be told
+from zero or the correlation from +-1, and the fit warns once.
+\code{converged()}: a single \code{TRUE} / \code{FALSE}.
 }
 \description{
 The public accessor for whether a fit converged, with one return shape across

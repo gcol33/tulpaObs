@@ -328,7 +328,13 @@ glance.tobs_fit <- function(x, ...) {
 #'   species, for the community models). `converged` is `FALSE` whenever any
 #'   group failed, since the quantities that group contributes to are not
 #'   estimates of anything; filter on these rather than on the text of the
-#'   warning the engine raises. `converged()`: a single `TRUE` / `FALSE`.
+#'   warning the engine raises. A single-species fit whose grouped random
+#'   effects were integrated that way carries `re_boundary`: one record per
+#'   random-effect SD (`sigma_<g>_<coef>`) and, on a correlated block, per
+#'   correlation (`cor_<g>_<ci>_<cj>`), with the boundary Wald `statistic`, its
+#'   `critical` value and `distinguishable`; `FALSE` means the SD cannot be told
+#'   from zero or the correlation from +-1, and the fit warns once.
+#'   `converged()`: a single `TRUE` / `FALSE`.
 #' @examples
 #' \donttest{
 #' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,

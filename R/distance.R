@@ -151,6 +151,7 @@
     converged   = ref$converged,
     group_ok    = ref$group_ok,
     groups_failed = ref$groups_failed,
+    re_boundary = ref$re_boundary,
     n_iter      = ref$n_iter,
     key         = model$key,
     transect    = model$transect,

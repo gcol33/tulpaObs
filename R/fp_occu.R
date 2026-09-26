@@ -422,7 +422,8 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
     n_quad = ref$n_quad, lkj_eta = ref$lkj_eta,
     converged = .tobs_aghq_converged(ref, gstat),
     group_ok = gstat$group_ok, groups_failed = gstat$failed,
-    n_iter = .tobs_aghq_n_iter(ref))
+    n_iter = .tobs_aghq_n_iter(ref),
+    re_boundary = .tobs_re_boundary(ref, design))
 }
 
 
@@ -485,6 +486,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
     log_lik = ref$log_marginal, w1 = ref$w1,
     converged = ref$converged, n_iter = ref$n_iter %||% NA_integer_,
     group_ok = ref$group_ok, groups_failed = ref$groups_failed,
+    re_boundary = ref$re_boundary,
     coef_names = c(paste0("psi_", model$process_info[[1]]$coef_names),
                    paste0("p11_", model$process_info[[2]]$coef_names),
                    paste0("p10_", model$process_info[[3]]$coef_names),

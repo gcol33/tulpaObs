@@ -35,5 +35,8 @@
       "loosen control$tol); convergence(fit) has the record."),
       fam, fit$method, n_it), call. = FALSE)
   }
+  # A grouped-RE component at its boundary is a converged fit whose estimate is
+  # a bound; the AGHQ fitters record the test, and it is raised here once.
+  .tobs_warn_re_boundary(rec$re_boundary %||% list())
   fit
 }
