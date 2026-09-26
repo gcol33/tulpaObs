@@ -76,6 +76,38 @@ test_that("t_occu() gates + S3 surface", {
   }
 })
 
+test_that("t_occu() run length is n.iter / n.warmup / n.thin, pg_gibbs convention", {
+  skip_on_cran()
+  sim <- simulate_t_occu(N = 30, T_seasons = 3, J = 2, seed = 2)
+  fit_ctrl <- function(control) {
+    tobs(~ 1, family = t_occu(), detection = ~ 1, y = sim$y,
+         data = sim$data, method = "pg_gibbs",
+         control = c(control, list(seed = 1L, progress = FALSE)))
+  }
+
+  # n.iter is the TOTAL sweep count and warmup comes out of it: sweeps 21..60
+  # thinned by 2 keep 20 per chain. n.chains = 1 is raised to the two-chain
+  # floor, so the pooled draws hold 40 rows.
+  fit <- fit_ctrl(list(n.iter = 60L, n.warmup = 20L, n.thin = 2L,
+                       n.chains = 1L))
+  per_chain <- length(seq.int(21L, 60L, by = 2L))
+  expect_identical(per_chain, 20L)
+  expect_identical(fit$n_chains, 2L)
+  expect_identical(nrow(fit$draws), 2L * per_chain)
+  expect_identical(fit$n_samples, 2L * per_chain)
+
+  # A NUTS-shaped control (n.iter == n.warmup) leaves nothing to keep, and the
+  # error names the convention.
+  expect_error(fit_ctrl(list(n.iter = 20L, n.warmup = 20L)),
+               "TOTAL sweep count")
+
+  # There is no optimiser loop to cap: max.iter is rejected, and the message
+  # points at the knobs that do set the run length.
+  err <- expect_error(fit_ctrl(list(max.iter = 100L)))
+  expect_match(conditionMessage(err), "not used by t_occu()", fixed = TRUE)
+  expect_match(conditionMessage(err), "n.iter / n.warmup", fixed = TRUE)
+})
+
 test_that("t_occu() fits at the documented default method = 'auto'", {
   skip_on_cran()
   # t_occu() is the one family whose default_engine is "pg_gibbs"; every other
