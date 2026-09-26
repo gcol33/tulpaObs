@@ -1155,9 +1155,16 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   held at its mean rather than grouped over its levels. For a grid over
 #'   more than one covariate, build the design matrix and pass it as `X.0`.
 #' @param n_points Number of prediction points per continuous term.
-#' @param newdata `occu_cover` only: data.frame of prediction units, one row per
-#'   field cell (or carrying a `cell` column mapping rows to field cells).
-#'   Defaults to the training data.
+#' @param newdata data.frame of prediction units. For `occu_cover`: one row per
+#'   field cell (or carrying a `cell` column mapping rows to field cells),
+#'   defaulting to the training data. For the families predicting from a design
+#'   matrix (`occu()`, `dyn_occu()`, `int_occu()`, `abun()`, `removal()`,
+#'   `distance()`, `fp_occu()`, `dyn_abun()`): the covariates of the arm `type`
+#'   selects, expanded through that arm's fitted formula (factor levels and
+#'   transforms as fitted) in place of `X.0` / `X_det.0`; an `int_occu()`
+#'   detection prediction expands it once per source. The prediction is
+#'   population-level: random effects enter at zero. Give `newdata` or
+#'   `X.0` / `X_det.0` / `terms`, not both.
 #' @param times `occu_cover` `type = "change"` only: numeric values of the time
 #'   covariate, at least two. `c(t1, t2)` differences one against the other;
 #'   `c(t1, ..., tK)` returns a trajectory, every step differenced against `t1`.
@@ -1208,11 +1215,18 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                    else "`X.0`"),
            call. = FALSE)
   }
+  # `predict(fit, some_df)` hands the frame over positionally as `X.0`.
+  if (is.null(newdata) && is.data.frame(X.0)) {
+    newdata <- X.0
+    X.0 <- NULL
+  }
   # N-mixture abundance: the response types are "abundance" / "detection", so
   # route before the occupancy-specific match.arg(type) rejects them.
   if (identical(object$model$model_type, "nmix") ||
       identical(object$model$model_type, "removal")) {
     nmix_type <- if (missing(type) || length(type) > 1L) "abundance" else type
+    X.0 <- .tobs_predict_design(object, newdata, X.0, terms,
+                                if (identical(nmix_type, "detection")) 2L else 1L)
     return(.tobs_predict_nmix(object, X.0 = X.0, type = nmix_type,
                               quantiles = quantiles, terms = terms,
                               n_points = n_points))
@@ -1221,6 +1235,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   # "sigma" (detection scale); route before the occupancy match.arg(type).
   if (identical(object$model$model_type, "distance")) {
     dist_type <- if (missing(type) || length(type) > 1L) "lambda" else type
+    X.0 <- .tobs_predict_design(object, newdata, X.0, terms,
+                                if (identical(dist_type, "sigma")) 2L else 1L)
     return(.tobs_predict_distance(object, X.0 = X.0, type = dist_type,
                                   quantiles = quantiles))
   }
@@ -1230,6 +1246,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     fp_type <- if (missing(type) || length(type) > 1L) "psi" else type
     if (identical(fp_type, "occupancy")) fp_type <- "psi"
     if (identical(fp_type, "detection")) fp_type <- "p11"
+    X.0 <- .tobs_predict_design(object, newdata, X.0, terms,
+                                if (identical(fp_type, "p11")) 2L else 1L)
     return(.tobs_predict_fp_occu(object, X.0 = X.0, type = fp_type,
                                  quantiles = quantiles))
   }
@@ -1238,6 +1256,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   if (identical(object$model$model_type, "dyn_abun")) {
     da_type <- if (missing(type) || length(type) > 1L) "lambda" else type
     if (identical(da_type, "abundance")) da_type <- "lambda"
+    X.0 <- .tobs_predict_design(object, newdata, X.0, terms,
+                                if (identical(da_type, "gamma")) 4L else 1L)
     return(.tobs_predict_dyn_abun(object, X.0 = X.0, type = da_type,
                                   quantiles = quantiles))
   }
@@ -1324,6 +1344,12 @@ predict.tobs_fit <- function(object, X.0 = NULL,
 
   # State posterior / NA-response prediction (nested-Laplace only).
   if (type == "state") {
+    if (!is.null(newdata) || !is.null(X.0) || !is.null(terms)) {
+      stop("predict(type = \"state\") returns the in-sample per-site ",
+           "posterior; it takes no `newdata` / `X.0` / `terms`. Use ",
+           "type = \"occupancy\" to predict at new covariate values.",
+           call. = FALSE)
+    }
     sp <- object$state_posterior
     if (!is.null(sp)) return(sp)
     if (identical(object$method, "nested_laplace")) {
@@ -1338,10 +1364,31 @@ predict.tobs_fit <- function(object, X.0 = NULL,
          "posterior the nested path stores).", call. = FALSE)
   }
 
+  model <- object$model
+  if (!is.null(newdata)) {
+    if (type %in% c("occupancy", "both"))
+      X.0 <- .tobs_predict_design(object, newdata, X.0, terms, 1L)
+    if (type %in% c("detection", "both")) {
+      if (!is.null(X_det.0)) {
+        stop("predict(): give one of `newdata` or `X_det.0`, not both.",
+             call. = FALSE)
+      }
+      X_det.0 <- if (identical(model$model_type, "integrated")) {
+        n_src <- model$n_sources %||% (length(model$process_info) - 1L)
+        stats::setNames(
+          lapply(seq_len(n_src), function(s)
+            .tobs_predict_design(object, newdata, NULL, terms, 1L + s)),
+          vapply(seq_len(n_src), function(s) model$process_info[[1L + s]]$name,
+                 character(1)))
+      } else {
+        .tobs_predict_design(object, newdata, NULL, terms, 2L)
+      }
+    }
+  }
+
   # In-sample mode
   if (is.null(X.0) && is.null(X_det.0) && is.null(terms)) return(fitted(object))
 
-  model <- object$model
   draws <- object$draws
   pi_list <- model$process_info
 
@@ -1940,12 +1987,57 @@ tobs_check_id <- function(model, fit = NULL) {
 # / `factor()` re-evaluate on the basis the fit used rather than on whatever the
 # new frame alone implies.
 .tobs_newdata_design <- function(formula, fit_data, newdata) {
-  if (is.null(fit_data)) return(stats::model.matrix(formula, data = newdata))
-  mf <- stats::model.frame(formula, data = fit_data)
+  tt <- stats::delete.response(stats::terms(formula))
+  if (is.null(fit_data)) return(stats::model.matrix(tt, data = newdata))
+  mf <- stats::model.frame(tt, data = fit_data)
   tt <- stats::terms(mf)
   stats::model.matrix(
     tt, stats::model.frame(tt, data = newdata,
                            xlev = stats::.getXlevels(tt, mf)))
+}
+
+# The design a design-matrix predictor reads, from whichever of `newdata` /
+# `X.0` / `terms` the caller gave. `newdata` is expanded through arm
+# `arm_idx`'s own fixed-effect formula (formulas, X_processes and process_info
+# share one index on these families), so factor levels and transforms follow
+# the fit. Random effects are not part of that formula: the prediction is
+# population-level, every group term at zero.
+.tobs_predict_design <- function(object, newdata, X.0, terms, arm_idx) {
+  if (is.null(newdata)) return(X.0)
+  if (!is.null(X.0) || !is.null(terms)) {
+    stop("predict(): give one of `newdata`, `X.0` or `terms`, not several.",
+         call. = FALSE)
+  }
+  model <- object$model
+  fml   <- model$formulas[[arm_idx]]
+  proc  <- model$process_info[[arm_idx]]
+  if (!inherits(fml, "formula") || is.null(proc)) {
+    stop(sprintf(paste0("predict(newdata = ): this fit (model type '%s') ",
+                        "stores no formula for arm %d, so `newdata` cannot be ",
+                        "expanded into its design. Pass the design matrix as ",
+                        "`X.0`."), model$model_type %||% "?", arm_idx),
+         call. = FALSE)
+  }
+  if (!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
+  # A variable the fit read from its data but `newdata` lacks would otherwise
+  # be looked up in the formula's environment, where a same-named object of
+  # the wrong length can stand in for it.
+  vars <- all.vars(stats::delete.response(stats::terms(fml)))
+  miss <- setdiff(intersect(vars, names(model$data) %||% vars), names(newdata))
+  if (length(miss)) {
+    stop(sprintf("predict(newdata = ): `newdata` lacks the %s-arm covariate(s) %s.",
+                 proc$name %||% "state", paste(miss, collapse = ", ")),
+         call. = FALSE)
+  }
+  X <- .tobs_newdata_design(fml, model$data, newdata)
+  if (nrow(X) != nrow(newdata)) {
+    stop(sprintf(paste0("predict(newdata = ): `newdata` has %d rows but only ",
+                        "%d have complete values for the %s-arm covariates."),
+                 nrow(newdata), nrow(X), proc$name %||% "state"),
+         call. = FALSE)
+  }
+  rownames(X) <- NULL
+  .tobs_match_coef_columns(X, proc, "newdata")
 }
 
 # Pair an expanded design with an arm's coefficients BY NAME, so a covariate

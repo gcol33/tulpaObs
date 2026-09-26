@@ -46,9 +46,16 @@ more than one covariate, build the design matrix and pass it as \code{X.0}.}
 
 \item{n_points}{Number of prediction points per continuous term.}
 
-\item{newdata}{\code{occu_cover} only: data.frame of prediction units, one row per
-field cell (or carrying a \code{cell} column mapping rows to field cells).
-Defaults to the training data.}
+\item{newdata}{data.frame of prediction units. For \code{occu_cover}: one row per
+field cell (or carrying a \code{cell} column mapping rows to field cells),
+defaulting to the training data. For the families predicting from a design
+matrix (\code{occu()}, \code{dyn_occu()}, \code{int_occu()}, \code{abun()}, \code{removal()},
+\code{distance()}, \code{fp_occu()}, \code{dyn_abun()}): the covariates of the arm \code{type}
+selects, expanded through that arm's fitted formula (factor levels and
+transforms as fitted) in place of \code{X.0} / \code{X_det.0}; an \code{int_occu()}
+detection prediction expands it once per source. The prediction is
+population-level: random effects enter at zero. Give \code{newdata} or
+\code{X.0} / \code{X_det.0} / \code{terms}, not both.}
 
 \item{times}{\code{occu_cover} \code{type = "change"} only: numeric values of the time
 covariate, at least two. \code{c(t1, t2)} differences one against the other;
