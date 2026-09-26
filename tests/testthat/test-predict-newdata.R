@@ -8,7 +8,7 @@
   expect_equal(unclass(a), unclass(b), ignore_attr = TRUE)
 }
 
-test_that("occu(): newdata predicts per row, population-level with a random effect", {
+test_that("occu(): newdata predicts per row and takes a seen group's effect", {
   set.seed(3); ng <- 12; per <- 30; N <- ng * per; J <- 5
   lab <- sprintf("grp%02d", sample.int(ng)); gi <- rep(seq_len(ng), each = per)
   b <- rnorm(ng); x <- rnorm(N); w <- rnorm(N)
@@ -24,7 +24,13 @@ test_that("occu(): newdata predicts per row, population-level with a random effe
 
   occ <- predict(fit, newdata = nd, type = "occupancy")
   expect_equal(nrow(occ), 2L)
-  .pnd_same(occ, predict(fit, X.0 = cbind(1, nd$x), type = "occupancy"))
+  # Without its grouping column newdata is population-level, as X.0 is; with
+  # it, a seen level takes its group effect and the unseen one stays at the
+  # population mean (#372).
+  pop <- predict(fit, X.0 = cbind(1, nd$x), type = "occupancy")
+  .pnd_same(predict(fit, newdata = nd[c("x", "w")], type = "occupancy"), pop)
+  expect_equal(occ[2L, ], pop[2L, ], ignore_attr = TRUE)
+  expect_false(isTRUE(all.equal(occ[1L, 1L], pop[1L, 1L])))
   # Positional data frame takes the same route.
   .pnd_same(predict(fit, nd), occ)
 

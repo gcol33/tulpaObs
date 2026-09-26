@@ -123,15 +123,27 @@
     ng <- dim(B)[2L]; nc <- dim(B)[3L]; g <- d$group_label
     est <- apply(B, c(2, 3), mean)            # ng x nc
     se  <- apply(B, c(2, 3), stats::sd)
-    re_effects[[g]] <- data.frame(
-      group = g,
-      level = rep(d$levels, times = nc),
-      term  = rep(d$coef_names, each = ng),
-      estimate = as.numeric(est),
-      std.error = as.numeric(se),
-      stringsAsFactors = FALSE)
+    re_effects[[g]] <- .tobs_re_effects_table(d, as.numeric(est),
+                                              as.numeric(se))
   }
   re_effects
+}
+
+# One term's per-group effect table (group / level / term / estimate /
+# std.error; coefficient-major, groups in code order), the shape ranef()
+# stacks. It carries the term's grouping expression and process as attributes,
+# which predict(newdata = ) reads to add a row's group effect.
+.tobs_re_effects_table <- function(d, estimate, std.error) {
+  ng <- d$n_groups; nc <- length(d$coef_names)
+  tab <- data.frame(
+    group = d$group_label,
+    level = rep(d$levels, times = nc),
+    term  = rep(d$coef_names, each = ng),
+    estimate = estimate, std.error = std.error,
+    stringsAsFactors = FALSE)
+  attr(tab, "group_expr") <- d$group_expr
+  attr(tab, "process")    <- d$process
+  tab
 }
 
 # The RE block of a NUTS fit on the natural scale, in the layout and names the

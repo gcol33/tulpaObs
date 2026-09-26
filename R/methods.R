@@ -766,7 +766,15 @@ fitted.tobs_fit <- function(object, ...) {
 # same parameterization.
 .tobs_psi_draws <- function(draws, X.0, p_occ, offset = 0L) {
   beta <- draws[, offset + seq_len(p_occ), drop = FALSE]
-  plogis(beta %*% t(X.0))
+  plogis(.tobs_add_re_offset(beta %*% t(X.0), X.0))
+}
+
+# Add the per-row group effects a `newdata` design carries
+# (`attr(X, "re_offset")`, .tobs_predict_design()) to a [draws x rows] linear
+# predictor. A design without them is returned unchanged.
+.tobs_add_re_offset <- function(eta, X) {
+  off <- attr(X, "re_offset")
+  if (is.null(off)) eta else sweep(eta, 2L, off, "+")
 }
 
 #' Residuals from occupancy model
@@ -1167,8 +1175,12 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `distance()`, `fp_occu()`, `dyn_abun()`): the covariates of the arm `type`
 #'   selects, expanded through that arm's fitted formula (factor levels and
 #'   transforms as fitted) in place of `X.0` / `X_det.0`; an `int_occu()`
-#'   detection prediction expands it once per source. The prediction is
-#'   population-level: random effects enter at zero. Give `newdata` or
+#'   detection prediction expands it once per source. A random-effect term
+#'   on the predicted arm whose grouping variable is a column of `newdata`
+#'   adds each row's fitted group effect (its BLUP / posterior mean, times the
+#'   slope covariate for a random slope); a level the fit did not see adds 0,
+#'   the population mean. Without that column, and always through `X.0` /
+#'   `X_det.0`, the prediction is population-level. Give `newdata` or
 #'   `X.0` / `X_det.0` / `terms`, not both.
 #' @param times `occu_cover` `type = "change"` only: numeric values of the time
 #'   covariate, at least two. `c(t1, t2)` differences one against the other;
@@ -2005,8 +2017,8 @@ tobs_check_id <- function(model, fit = NULL) {
 # `X.0` / `terms` the caller gave. `newdata` is expanded through arm
 # `arm_idx`'s own fixed-effect formula (formulas, X_processes and process_info
 # share one index on these families), so factor levels and transforms follow
-# the fit. Random effects are not part of that formula: the prediction is
-# population-level, every group term at zero.
+# the fit. Random effects are not part of that formula; their contribution
+# rides on the design as `attr(, "re_offset")` (.tobs_predict_re_offset()).
 .tobs_predict_design <- function(object, newdata, X.0, terms, arm_idx) {
   if (is.null(newdata)) return(X.0)
   if (!is.null(X.0) || !is.null(terms)) {
@@ -2042,7 +2054,43 @@ tobs_check_id <- function(model, fit = NULL) {
          call. = FALSE)
   }
   rownames(X) <- NULL
-  .tobs_match_coef_columns(X, proc, "newdata")
+  X <- .tobs_match_coef_columns(X, proc, "newdata")
+  attr(X, "re_offset") <- .tobs_predict_re_offset(object, newdata, arm_idx)
+  X
+}
+
+# The group effects of the rows of `newdata` on arm `arm_idx` (#372). Every
+# random-effect term on that arm whose grouping expression `newdata` can
+# evaluate contributes, per row, the fitted effect of the row's level times the
+# term's design value (1 for the intercept, the slope covariate otherwise); a
+# level the fit did not see contributes 0, the population mean. NULL when no
+# term applies, and the prediction is population-level.
+.tobs_predict_re_offset <- function(object, newdata, arm_idx) {
+  tabs <- Filter(function(t) arm_idx %in% attr(t, "process") &&
+                   !is.null(attr(t, "group_expr")),
+                 object$re_effects %||% list())
+  off <- numeric(nrow(newdata)); used <- FALSE
+  for (tab in tabs) {
+    ex <- attr(tab, "group_expr")
+    if (!all(all.vars(ex) %in% names(newdata))) next
+    lev <- as.character(eval(ex, newdata, baseenv()))
+    for (cn in unique(tab$term)) {
+      rows <- tab$term == cn
+      b <- tab$estimate[rows][match(lev, tab$level[rows])]
+      b[is.na(b)] <- 0
+      z <- if (identical(cn, "(Intercept)")) 1 else {
+        if (is.null(newdata[[cn]])) {
+          stop(sprintf(paste0("predict(newdata = ): `newdata` carries the ",
+                              "grouping of a random slope on `%s` but not `%s`."),
+                       cn, cn), call. = FALSE)
+        }
+        as.numeric(newdata[[cn]])
+      }
+      off <- off + b * z
+    }
+    used <- TRUE
+  }
+  if (used) off else NULL
 }
 
 # Pair an expanded design with an arm's coefficients BY NAME, so a covariate

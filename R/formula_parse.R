@@ -249,7 +249,8 @@
 
 # Evaluate one structured-term call into its `tobs_*` spec, in a `data_env` built
 # by .tobs_term_eval_env(). `label` is the call's source text for error messages
-# and the stored `term_call`; it defaults to the deparsed call.
+# and the stored `term_call`; it defaults to the deparsed call. The call itself
+# is kept as `term_expr`, so an argument can be re-evaluated against new data.
 .tobs_eval_term_spec <- function(call, data_env, label = NULL) {
   if (is.null(label)) label <- paste(deparse(call), collapse = "")
   spec <- tryCatch(
@@ -263,6 +264,7 @@
                  label), call. = FALSE)
   }
   spec$term_call <- label
+  spec$term_expr <- call
   spec
 }
 

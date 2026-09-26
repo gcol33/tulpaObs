@@ -562,10 +562,11 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 
 # Posterior draws of the per-arm linear predictor at a design matrix, returned
 # on the response scale ([n_draws x nrow(X.0)]): exp() for the abundance arm,
-# plogis() for detection.
+# plogis() for detection. A design built from `newdata` carries its rows'
+# group effects as `attr(X.0, "re_offset")` (.tobs_predict_design()).
 .tobs_nmix_response_draws <- function(draws, X.0, beta_offset, p_proc, link) {
   beta <- draws[, beta_offset + seq_len(p_proc), drop = FALSE]
-  eta  <- beta %*% t(X.0)
+  eta  <- .tobs_add_re_offset(beta %*% t(X.0), X.0)
   if (identical(link, "log")) exp(eta) else plogis(eta)
 }
 

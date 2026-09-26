@@ -84,8 +84,21 @@
          n_coefs = ncol(Z), Z = Z, coef_names = coef_names,
          has_intercept = has_int, level = level,
          correlated = isTRUE(re$correlated) && ncol(Z) > 1L,
-         group_label = sprintf("g%d", t))
+         group_label = sprintf("g%d", t),
+         group_expr = .tobs_re_group_expr(re),
+         process = if (identical(level, "visit")) integer(0)
+                   else which(as.logical(re$shared %||% c(TRUE, FALSE))))
   })
+}
+
+# The grouping expression of an re() term (`g`, or `g:h` for a nested level),
+# read off the constructor call the parser kept, so predict() can evaluate it
+# against new data. NULL for a term built outside a formula.
+.tobs_re_group_expr <- function(re) {
+  call <- re$term_expr
+  if (!is.call(call)) return(NULL)
+  mc <- tryCatch(match.call(.tobs_term_re, call), error = function(e) NULL)
+  mc$group
 }
 
 
@@ -611,13 +624,8 @@
       sds   <- c(sds, sqrt(pmax(Vm[, c], 0)))
       nms   <- c(nms, sprintf("re_%s_%s[%d]", g, cn, seq_len(ng)))
     }
-    re_effects[[g]] <- data.frame(
-      group = g,
-      level = rep(d$levels, times = nc),
-      term  = rep(d$coef_names, each = ng),
-      estimate = as.numeric(Bm),
-      std.error = as.numeric(sqrt(pmax(Vm, 0))),
-      stringsAsFactors = FALSE)
+    re_effects[[g]] <- .tobs_re_effects_table(
+      d, estimate = as.numeric(Bm), std.error = as.numeric(sqrt(pmax(Vm, 0))))
     pos <- pos + ng * nc
   }
   list(means = means, sds = sds, names = nms, re_effects = re_effects,

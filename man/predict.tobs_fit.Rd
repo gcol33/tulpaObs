@@ -53,8 +53,12 @@ matrix (\code{occu()}, \code{dyn_occu()}, \code{int_occu()}, \code{abun()}, \cod
 \code{distance()}, \code{fp_occu()}, \code{dyn_abun()}): the covariates of the arm \code{type}
 selects, expanded through that arm's fitted formula (factor levels and
 transforms as fitted) in place of \code{X.0} / \code{X_det.0}; an \code{int_occu()}
-detection prediction expands it once per source. The prediction is
-population-level: random effects enter at zero. Give \code{newdata} or
+detection prediction expands it once per source. A random-effect term
+on the predicted arm whose grouping variable is a column of \code{newdata}
+adds each row's fitted group effect (its BLUP / posterior mean, times the
+slope covariate for a random slope); a level the fit did not see adds 0,
+the population mean. Without that column, and always through \code{X.0} /
+\code{X_det.0}, the prediction is population-level. Give \code{newdata} or
 \code{X.0} / \code{X_det.0} / \code{terms}, not both.}
 
 \item{times}{\code{occu_cover} \code{type = "change"} only: numeric values of the time
