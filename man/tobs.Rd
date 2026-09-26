@@ -258,7 +258,7 @@ those are HMC knobs.
 \item \code{n.seeds} -- number of seed-offset refits to fit and LOO-stack into a
 \code{tobs_stack} ensemble (default 1, a single fit). Member \code{k} uses base
 seed \code{seed + k - 1}. Only meaningful for the stochastic routes
-(\code{"nuts"}, \code{"laplace_gibbs"}, \code{"laplace_mi"}); the deterministic Laplace
+(\code{"nuts"}, \code{"pg_gibbs"}, \code{"laplace_gibbs"}, \code{"laplace_mi"}); the deterministic Laplace
 methods reject it. Seed-variants are statistically identical, so their
 stacking weights come out roughly uniform (this is a Monte-Carlo
 robustness device) -- pass distinct fits to \code{\link[=tobs_stack]{tobs_stack()}} for a genuine

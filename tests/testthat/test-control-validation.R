@@ -61,6 +61,39 @@ test_that("valid controls pass for each engine family", {
   expect_silent(check(list(), "laplace"))
 })
 
+test_that("pg_gibbs admits the chain knobs and rejects the NUTS-only ones", {
+  expect_silent(check(list(n.iter = 3000L, n.warmup = 1500L, n.thin = 2L,
+                           n.chains = 2L, seed = 1L, sigma.beta = 2.5,
+                           n.seeds = 2L, verbose = FALSE), "pg_gibbs"))
+  # Every knob no pg_gibbs fitter reads; each used to pass and be dropped.
+  for (key in c("n.threads", "n.threads.grad", "adapt.delta", "max.treedepth",
+                "sigma.logr", "dispersion.re", "sigma.ld.init")) {
+    err <- expect_error(check(setNames(list(1L), key), "pg_gibbs"))
+    expect_match(conditionMessage(err), key, fixed = TRUE)
+    expect_match(conditionMessage(err), "method = \"nuts\"", fixed = TRUE)
+  }
+})
+
+test_that("the wrong-method hint names only methods the family supports", {
+  # t_occu() fits with pg_gibbs alone, so pointing at the Laplace routes for
+  # max.iter would send the caller to a method the family rejects.
+  msg <- function(control, family) tryCatch(
+    tulpaObs:::.tobs_validate_control(
+      control, tulpaObs:::.tobs_resolve_method("pg_gibbs", family), family),
+    error = function(e) conditionMessage(e))
+  err <- msg(list(max.iter = 100L), t_occu())
+  expect_match(err, "not used by t_occu()", fixed = TRUE)
+  expect_match(err, "method = \"pg_gibbs\"", fixed = TRUE)
+  expect_match(err, "n.iter / n.warmup", fixed = TRUE)
+  expect_false(grepl("laplace", err))
+
+  # A family with a Laplace route still gets the Laplace pointer, narrowed to
+  # the routes it has.
+  err <- msg(list(max.iter = 100L), ms_int_occu())
+  expect_match(err, "method = \"laplace\"", fixed = TRUE)
+  expect_false(grepl("nested_laplace", err))
+})
+
 test_that("unknown control names error with a fuzzy suggestion", {
   err <- expect_error(check(list(niter = 5000L), "nuts"))
   expect_match(conditionMessage(err), "not a known control option")

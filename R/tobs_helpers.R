@@ -523,14 +523,20 @@
                            # like for like.
                            "hyperprior"),
   correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
-  sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "n.threads",
+  # Chain-length and prior knobs read by every sampler, NUTS and Polya-Gamma
+  # Gibbs alike. `n.seeds` is consumed by tobs() itself (the seed ensemble).
+  sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "seed",
+                 "sigma.beta", "n.seeds"),
+  # Knobs only the NUTS fitters read. The pg_gibbs fitters take none of them:
+  # a conjugate sweep has no step size or tree depth, and its chains run
+  # serially.
+  nuts       = c("n.threads",
                  # OpenMP threads inside ONE gradient evaluation of the
                  # community NUTS targets, whose per-species loop is
                  # parallel. Distinct from `n.threads`, which spreads whole
                  # chains. 0 leaves the count to OpenMP.
                  "n.threads.grad",
-                 "adapt.delta", "max.treedepth", "seed", "sigma.beta",
-                 "n.seeds",
+                 "adapt.delta", "max.treedepth",
                  # Community-mean prior SD on the log-dispersion mu_log_r, for
                  # the negative-binomial NUTS paths that carry one
                  # (ms_abun(), ms_count(), jsdm()). Ignored by a family or
@@ -550,7 +556,7 @@
     engine,
     laplace        = c("laplace_em", if (correction != "none") "correction"),
     nested_laplace = c("laplace_em", "nested_laplace_joint"),
-    nuts           = "sampler",
+    nuts           = c("sampler", "nuts"),
     pg_gibbs       = "sampler",
     character(0)
   )
@@ -628,14 +634,27 @@
   fam_only_keys <- unlist(.tobs_control_groups[setdiff(fam_only, family_groups)],
                           use.names = FALSE)
   fam_label <- if (!is.null(family$name)) paste0(family$name, "()") else "this family"
+  fam_methods <- if (!is.null(family$name)) .tobs_family_methods[[family$name]]
+  # Sampler run length is n.iter / n.warmup; say so when an optimiser cap is
+  # passed to a sampler route.
+  run_hint <- if (route$engine %in% c("nuts", "pg_gibbs"))
+    " Run length on this method is set by n.iter / n.warmup." else ""
   msgs <- vapply(bad, function(key) {
+    uses <- if (key %in% vocabulary) .tobs_methods_for_control(key)
+    # Point only at methods this family can actually be fitted with.
+    if (length(uses) && !is.null(fam_methods))
+      uses_fam <- intersect(uses, fam_methods) else uses_fam <- uses
+    extra <- if (key %in% c("max.iter", "tol")) run_hint else ""
     if (key %in% fam_only_keys) {
       sprintf("  - '%s' is not used by %s.", key, fam_label)
+    } else if (key %in% vocabulary && !length(uses_fam)) {
+      sprintf("  - '%s' is not used by %s, which fits with %s.%s",
+              key, fam_label,
+              paste0("method = \"", fam_methods, "\"", collapse = " / "), extra)
     } else if (key %in% vocabulary) {
-      uses <- .tobs_methods_for_control(key)
-      sprintf("  - '%s' is not used by method = \"%s\"; it applies to %s.",
+      sprintf("  - '%s' is not used by method = \"%s\"; it applies to %s.%s",
               key, method,
-              paste0("method = \"", uses, "\"", collapse = " / "))
+              paste0("method = \"", uses_fam, "\"", collapse = " / "), extra)
     } else {
       near <- agrep(key, vocabulary, value = TRUE, max.distance = 0.34)
       hint <- if (length(near))

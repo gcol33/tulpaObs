@@ -256,7 +256,7 @@ test_that("sigma.logr is reachable from control on the sampler routes", {
   # negative-binomial NUTS dispatchers, so the allowlist has to admit the name
   # for those reads to see anything. It is a sampler knob, so the Laplace routes
   # reject it the way they reject any other sampler control.
-  expect_true("sigma.logr" %in% .tobs_control_groups$sampler)
+  expect_true("sigma.logr" %in% .tobs_control_groups$nuts)
   expect_false("sigma.logr" %in% .tobs_control_groups$laplace_em)
 
   nuts_route <- list(engine = "nuts", correction = "none")
@@ -280,6 +280,7 @@ test_that("logr.sigma.prior is a laplace control and defaults to pure ML", {
   # It is a Laplace-path knob: the sampler routes have their own priors and
   # reject it rather than ignoring it.
   expect_false("logr.sigma.prior" %in% .tobs_control_groups$sampler)
+  expect_false("logr.sigma.prior" %in% .tobs_control_groups$nuts)
 
   lap <- list(engine = "laplace", correction = "none")
   expect_silent(.tobs_validate_control(list(logr.sigma.prior = c(1, 0.05)), lap))

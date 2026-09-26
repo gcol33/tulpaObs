@@ -235,7 +235,7 @@
 #'   * `n.seeds` -- number of seed-offset refits to fit and LOO-stack into a
 #'     `tobs_stack` ensemble (default 1, a single fit). Member `k` uses base
 #'     seed `seed + k - 1`. Only meaningful for the stochastic routes
-#'     (`"nuts"`, `"laplace_gibbs"`, `"laplace_mi"`); the deterministic Laplace
+#'     (`"nuts"`, `"pg_gibbs"`, `"laplace_gibbs"`, `"laplace_mi"`); the deterministic Laplace
 #'     methods reject it. Seed-variants are statistically identical, so their
 #'     stacking weights come out roughly uniform (this is a Monte-Carlo
 #'     robustness device) -- pass distinct fits to [tobs_stack()] for a genuine
