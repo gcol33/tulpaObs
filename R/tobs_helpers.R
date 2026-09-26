@@ -500,6 +500,7 @@
                            # post-integration refinement knobs above.
                            "adaptive.grid.cutoff", "adaptive.grid.stride",
                            "adaptive.grid.max.frac", "adaptive.grid.min.cells",
+                           "max.grid.cells",
                            "var.of.means.consistency",
                            "var.of.means.min.ess", "diagnose.k", "diagnose.draws",
                            # The engine's two inner-layer debias instruments.

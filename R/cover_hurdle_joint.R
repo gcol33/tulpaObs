@@ -278,7 +278,7 @@
     list(prune     = control[["prune"]]     %||% FALSE,
          prune_tol = control[["prune.tol"]] %||% 1e-4)
   } else list()
-  tail <- c(.tobs_adaptive_grid_control(control), list(
+  tail <- c(.tobs_outer_grid_control(control), list(
     var_of_means_consistency  = control[["var.of.means.consistency"]]  %||% TRUE,
     var_of_means_min_ess      = control[["var.of.means.min.ess"]],
     progress          = control[["progress"]]     %||% TRUE,

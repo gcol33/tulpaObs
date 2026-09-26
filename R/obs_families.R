@@ -708,6 +708,9 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       # hyperparameter mode at all, and whether that placement is detected on a
       # thinned pilot grid instead of a full extra solve.
       "prune", "prune.tol", "auto.recenter", "recenter.pilot",
+      # Cell-count ceiling on the multi-block outer grid (the engine's
+      # `max_grid_cells`), for a dense tensor the caller means to pay for.
+      "max.grid.cells",
       # Shape of the prior on the cross-arm copy scale: the continuum measure
       # ("exponential" or "flat" in log alpha over the `alpha.grid` span) and
       # the prior probability of the no-coupling point mass at alpha = 0.
@@ -997,6 +1000,7 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
       # the smallest dense tensor worth the machinery at all.
       "adaptive.grid.cutoff", "adaptive.grid.stride",
       "adaptive.grid.max.frac", "adaptive.grid.min.cells",
+      "max.grid.cells",
       "diagnose.k", "diagnose.draws", "k.samples", "k.bootstrap",
       "k.tail.points", "k.conf.bands",
       "checkpoint", "k.threads"
@@ -2205,6 +2209,7 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
       "adaptive.grid.max.frac", "adaptive.grid.min.cells",
       "var.of.means.consistency", "var.of.means.min.ess",
       "prune", "prune.tol", "hessian", "aggregate.occ", "aggregate.pos",
+      "max.grid.cells",
       "progress", "progress.every", "progress.throttle", "progress.file",
       "checkpoint"
     )

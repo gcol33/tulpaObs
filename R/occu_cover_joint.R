@@ -907,7 +907,7 @@
       progress.throttle = dots$progress.throttle,
       progress.file     = dots$progress.file
     ),
-    .tobs_adaptive_grid_control(dots))
+    .tobs_outer_grid_control(dots))
   )
   if (!is.null(copy_arg)) fit_call$copy <- copy_arg
   # Regularizing hyperpriors on the outer grid, forwarded from control to the

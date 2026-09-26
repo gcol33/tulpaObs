@@ -316,7 +316,7 @@
       progress.throttle = dots$progress.throttle,
       progress.file     = dots$progress.file
     ),
-    .tobs_adaptive_grid_control(dots))
+    .tobs_outer_grid_control(dots))
   )
 
   ctx <- list(adj = adj, pi_list = model$process_info, n_cells = n_cells,

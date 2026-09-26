@@ -366,7 +366,7 @@
       k_threads  = dots$k.threads,
       checkpoint = dots$checkpoint
     ),
-    .tobs_adaptive_grid_control(dots))
+    .tobs_outer_grid_control(dots))
   )
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)

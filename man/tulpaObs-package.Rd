@@ -11,6 +11,7 @@ Fits Bayesian models for species observed with imperfect detection: single-seaso
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://gillescolling.com/tulpaObs/}
   \item \url{https://github.com/gcol33/tulpaObs}
   \item Report bugs at \url{https://github.com/gcol33/tulpaObs/issues}
 }

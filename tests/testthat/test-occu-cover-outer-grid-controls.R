@@ -103,6 +103,34 @@ test_that("auto.recenter = FALSE reaches the engine and is recorded", {
 })
 
 
+test_that("max.grid.cells reaches the engine's grid cap on every joint family", {
+  for (fam in list(occu_cover(), occu_multiscale_cover(), cover())) {
+    expect_true("max.grid.cells" %in% fam$control_keys, info = fam$name)
+  }
+  expect_true("max.grid.cells" %in% .tobs_control_groups$nested_laplace_joint)
+  expect_null(.tobs_outer_grid_control(list())$max_grid_cells)
+  expect_identical(.tobs_outer_grid_control(list(max.grid.cells = 2500))$max_grid_cells,
+                   2500)
+
+  # A ceiling below a copied fit's grid is refused by the engine, which is only
+  # possible if the value arrived there. An intercept and a slope field are two
+  # blocks, which puts the fit on the multi-block driver where the cap is
+  # enforced; a single block has no tensor to cap.
+  fx <- oc_grid_fixture()
+  expect_error(suppressWarnings(tobs(
+    formula = ~ occ_cov1 + spatial(~ 1 + occ_cov1 || site_id, graph = fx$adj),
+    data = fx$cell_dat,
+    family = occu_cover("lognormal"),
+    detection = ~ det_cov1,
+    positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1, 1.5))),
+    y = fx$od$y, y_pos = fx$y_pos, visits = fx$od$det.covs,
+    method = "nested_laplace",
+    control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
+                   max.grid.cells = 1))),
+    "hard cap 1")
+})
+
+
 test_that("the joint path refuses a per-axis auto.recenter policy", {
   fx <- oc_grid_fixture()
   expect_error(oc_grid_fit(fx, list(auto.recenter = "rail")),
@@ -179,10 +207,10 @@ test_that("a pruned occu_cover fit does not warn about convergence", {
 # `integration = "grid_adaptive"` evaluates a strict subset of the same tensor
 # lattice. Its four tuning knobs are a DIFFERENT mechanism from the three
 # post-integration refinement knobs that share the `adaptive.grid` prefix, and
-# all seven resolve in one place (`.tobs_adaptive_grid_control()`).
+# all seven resolve in one place (`.tobs_outer_grid_control()`).
 
 test_that("the builder knobs resolve unset so the engine owns their defaults", {
-  r <- .tobs_adaptive_grid_control(list())
+  r <- .tobs_outer_grid_control(list())
   expect_true(r$adaptive_grid)
   expect_equal(r$adaptive_grid_edge_thresh, 0.02)
   expect_equal(r$adaptive_grid_max_passes, 1L)
@@ -202,10 +230,10 @@ test_that("a sub-knob alone does not become the master flag's value", {
               "adaptive.grid.cutoff", "adaptive.grid.stride",
               "adaptive.grid.max.frac", "adaptive.grid.min.cells")) {
     ctl <- stats::setNames(list(0.05), k)
-    expect_identical(.tobs_adaptive_grid_control(ctl)$adaptive_grid, TRUE,
+    expect_identical(.tobs_outer_grid_control(ctl)$adaptive_grid, TRUE,
                      info = k)
   }
-  expect_false(.tobs_adaptive_grid_control(list(adaptive.grid = FALSE))$adaptive_grid)
+  expect_false(.tobs_outer_grid_control(list(adaptive.grid = FALSE))$adaptive_grid)
 })
 
 test_that("every knob passes control validation on the families that host one", {

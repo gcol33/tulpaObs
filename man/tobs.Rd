@@ -371,6 +371,13 @@ two compose and neither implies the other. The saving is largest where a
 fit carries several outer axes -- two spatial arms (a shared field plus an
 arm-specific one) put three on the grid, which \code{integration = "auto"}
 resolves to the dense tensor.
+\item \code{max.grid.cells} -- for the same joint-coupled spatial families, the
+cell-count ceiling on the dense outer tensor (the engine's
+\code{max_grid_cells}, default 2048). A grid past it is refused before any
+inner solve, with the per-block axes that produced the count. Two copied
+field blocks at the default field-SD and copy axes cross to 2500 cells,
+so a fit meaning to integrate that tensor, or to let
+\code{integration = "grid_adaptive"} fall back to it, raises this.
 \item \code{diagnose.k} -- for the joint-coupled spatial families (\code{occu_cover()},
 \code{occu()} spatial, \code{occu_multiscale_cover()}), whether to score the outer
 hyperparameter Gaussian summary with an importance-sampling Pareto-k.
