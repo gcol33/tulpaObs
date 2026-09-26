@@ -45,10 +45,11 @@ test_that("gp() resolves bare coordinate columns from data", {
 
 # --- spatial() umbrella: dispatches to the specific constructors -----------
 
-# Compare two specs on their substantive fields (the recorded call text and
-# label differ between `spatial(..., model = "x")` and `x(...)`).
+# Compare two specs on their substantive fields (the recorded call, as text and
+# as an expression, and the label differ between `spatial(..., model = "x")`
+# and `x(...)`).
 spec_fields <- function(spec) {
-  spec[setdiff(names(spec), c("term_call", "label"))]
+  spec[setdiff(names(spec), c("term_call", "term_expr", "label"))]
 }
 
 test_that("spatial(model = 'bym2') is identical to bym2() (areal)", {
@@ -198,9 +199,9 @@ test_that("share() to a missing id is an error", {
 # --- lme4-style bar syntax: sugar over re() --------------------------------
 
 # Compare two tobs_re specs on their substantive fields (ignore the recorded
-# call text, which differs between `(1|g)` and `re(g)`).
+# call, as text and as an expression, which differs between `(1|g)` and `re(g)`).
 re_fields <- function(spec) {
-  spec[setdiff(names(spec), "term_call")]
+  spec[setdiff(names(spec), c("term_call", "term_expr"))]
 }
 
 test_that("(1 | g) desugars to re(g, type = 'intercept')", {

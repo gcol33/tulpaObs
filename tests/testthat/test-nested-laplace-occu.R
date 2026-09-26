@@ -44,11 +44,14 @@ simulate_panel_occu <- function(n_sites = 20, n_visits = 4, n_times = 5,
 test_that("tobs(engine='nested_laplace') runs with spatial only", {
   d <- simulate_panel_occu()
   adj <- d$adj
-  expect_silent(
+  # max.iter = 5 keeps this tier-1 test fast; a fit stopped at the cap warns
+  # once, naming max.iter, and says nothing else.
+  expect_warning(
     fit <- tobs(~ x + bym2(graph = adj), data = d$data, family = occu(),
                 detection = ~ 1, y = d$y,
                 method = "nested_laplace",
-                control = list(max.iter = 5L, verbose = FALSE, progress = FALSE))
+                control = list(max.iter = 5L, verbose = FALSE, progress = FALSE)),
+    "stopped after 5 iterations without meeting its convergence criterion"
   )
   expect_s3_class(fit, "tobs_fit")
   expect_true(!is.null(fit$nested_laplace$multi_prior))
