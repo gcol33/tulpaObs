@@ -1,5 +1,26 @@
 # tulpaObs NEWS
 
+## 0.3.1
+
+* **A species present in one cell fits (#374).** `occu_cover()` estimates a
+  starting residual variance for the positive arm from a regression on the
+  cells carrying a positive record. With every positive in one cell, the cell
+  factor there had one level and `model.matrix()` stopped with "contrasts can
+  be applied only to factors with 2 or more levels", before any fit. That
+  step now falls back to the covariate-only residual.
+* **`control$max.grid.cells`** sets the engine's cell-count ceiling on the
+  dense outer grid, on `occu_cover()`, `occu_multiscale_cover()`, `cover()`
+  and `occu()` spatial. Two copied field blocks (an intercept and a trend
+  field, each shared onto the positive arm) at the default field-SD and copy
+  axes cross to 50 x 50 = 2500 cells, past the engine's 2048 default, and no
+  route forwarded the engine's knob. With tulpa >= 0.6.1 the refusal names the
+  per-block axes that produced the count.
+* `ranef()` returns the grouping factor's own labels in the `level` column for
+  a formula random effect `(1 | g)`, where it returned an integer index (#370).
+* **Pinned to tulpa (>= 0.6.1)** in both `Imports:` and `LinkingTo:`. That
+  release changes the ABI (45), so a tulpaObs built against 0.6.0 refuses to
+  run against it until rebuilt.
+
 ## 0.3.0
 
 * **Pinned to tulpa (>= 0.6.0)** in both `Imports:` and `LinkingTo:`. The draws

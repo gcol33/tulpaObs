@@ -210,7 +210,7 @@ test_that("refinement leaves the copy axis's upper CI edge at its base geometry"
   # Refinement does NOT move that edge. A slice point re-tiles only the row of
   # the outer grid it was placed in, and every other row keeps its declared
   # 1 -> 1.5 cell, whose mass it still holds over the whole base box (tulpa
-  # 0.5.2, gcol33/tulpa#858). The reported upper edge is therefore the base
+  # >= 0.5.2). The reported upper edge is therefore the base
   # geometry in both arms: measured mean 1.809 against 1.811, the adaptive arm
   # never above the fixed one by more than 0.0016. Asserted as the two edges
   # agreeing and the adaptive one not reaching past the fixed one.

@@ -330,7 +330,7 @@
 # forwarded unset for the same reason. Two copied blocks at the default axes
 # cross to 2500 cells, past the engine's 2048 default, so a fit that means to
 # integrate that tensor (or to let `grid_adaptive` fall back to it) raises the
-# ceiling here (gcol33/tulpa#913).
+# ceiling here.
 .tobs_outer_grid_control <- function(control) {
   list(
     max_grid_cells            = control[["max.grid.cells"]],
