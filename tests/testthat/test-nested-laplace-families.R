@@ -28,10 +28,15 @@ test_that("integrated occupancy fits nested_laplace with a spatial field", {
   })
   names(y) <- c("s1", "s2")
 
-  fit <- tobs(~ elev + bym2(graph = adj), data = data.frame(elev = d),
-              family = int_occu(), detection = ~ 1, y = y,
-              method = "nested_laplace",
-              control = list(max.iter = 6L, verbose = FALSE))
+  # max.iter = 6 keeps this tier-1 test fast; a fit stopped at the cap warns
+  # once, naming max.iter.
+  expect_warning(
+    fit <- tobs(~ elev + bym2(graph = adj), data = data.frame(elev = d),
+                family = int_occu(), detection = ~ 1, y = y,
+                method = "nested_laplace",
+                control = list(max.iter = 6L, verbose = FALSE)),
+    "stopped after 6 iterations without meeting its convergence criterion"
+  )
 
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$method, "nested_laplace")
@@ -59,10 +64,13 @@ test_that("dynamic occupancy fits nested_laplace with a spatial field on psi1", 
   for (i in seq_len(n_sites)) for (t in seq_len(n_seasons))
     y[i, , t] <- if (zmat[i, t]) rbinom(J, 1, 0.4) else 0L
 
-  fit <- tobs(~ elev + icar(graph = adj), data = data.frame(elev = elev),
-              family = dyn_occu(), detection = ~ 1, y = y,
-              colonization = ~ 1, extinction = ~ 1, method = "nested_laplace",
-              control = list(max.iter = 6L, verbose = FALSE))
+  expect_warning(
+    fit <- tobs(~ elev + icar(graph = adj), data = data.frame(elev = elev),
+                family = dyn_occu(), detection = ~ 1, y = y,
+                colonization = ~ 1, extinction = ~ 1, method = "nested_laplace",
+                control = list(max.iter = 6L, verbose = FALSE)),
+    "stopped after 6 iterations without meeting its convergence criterion"
+  )
 
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$nested_laplace$multi_prior[[1]]$type, "icar")

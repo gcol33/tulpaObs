@@ -22,7 +22,7 @@
   fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
               family = ms_distance(cutpoints = .msdi_cut), y = d$y,
               species = d$species, method = "laplace",
-              control = list(max.iter = 3L, progress = FALSE))
+              control = list(progress = FALSE))
   model <- fit$model
   eng   <- tulpaObs:::.tobs_ms_distance_engine(model, K_max = NULL)
   X_lam <- model$X_processes[[1L]]; X_sig <- model$X_processes[[2L]]
@@ -127,10 +127,13 @@ test_that("the hazard key keeps the finite-difference fallback and still fits", 
   # be sandwiched. The fitter passes sp_info = NULL there.
   d <- simulate_ms_distance(n_species = 3, N = 25, cutpoints = .msdi_cut,
                             seed = 4)
-  fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
-              family = ms_distance(cutpoints = .msdi_cut, key = "hazard"),
-              y = d$y, species = d$species, method = "laplace",
-              control = list(max.iter = 3L, progress = FALSE))
+  expect_warning(
+    fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
+                family = ms_distance(cutpoints = .msdi_cut, key = "hazard"),
+                y = d$y, species = d$species, method = "laplace",
+                control = list(max.iter = 3L, progress = FALSE)),
+    "stopped after 3 iterations without meeting its convergence criterion"
+  )
   expect_s3_class(fit, "tobs_fit")
   expect_true(all(is.finite(coef(fit, arm = "lambda"))))
 })

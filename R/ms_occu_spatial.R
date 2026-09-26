@@ -131,7 +131,7 @@
 
 # ICAR
 .ms_occu_community_icar <- function(model, csr, n_spatial, map_site_to_unit,
-                                    tau_grid = NULL, max_iter = 100L,
+                                    tau_grid = NULL, max_iter,
                                     verbose = FALSE) {
   X_psi <- model$X_occ; X_p <- model$X_det
   p_psi <- ncol(X_psi); p_p <- ncol(X_p)
@@ -152,7 +152,7 @@
 # Proper CAR
 .ms_occu_community_car_proper <- function(model, csr, n_spatial, map_site_to_unit,
                                           graph, tau_grid = NULL, rho_grid = NULL,
-                                          max_iter = 100L, verbose = FALSE) {
+                                          max_iter, verbose = FALSE) {
   X_psi <- model$X_occ; X_p <- model$X_det
   p_psi <- ncol(X_psi); p_p <- ncol(X_p)
   if (is.null(tau_grid)) tau_grid <- exp(seq(log(0.3), log(30), length.out = 5L))
@@ -183,7 +183,7 @@
 # BYM2
 .ms_occu_community_bym2 <- function(model, csr, n_spatial, map_site_to_unit,
                                     scale_factor, sigma_grid = NULL,
-                                    rho_grid = NULL, max_iter = 100L,
+                                    rho_grid = NULL, max_iter,
                                     verbose = FALSE) {
   X_psi <- model$X_occ; X_p <- model$X_det
   p_psi <- ncol(X_psi); p_p <- ncol(X_p)
@@ -229,7 +229,7 @@
 # mode-centred integration here (unlike the count family): occupancy's areal
 # fields stay on the fixed tensor grid too, so SPDE matches that convention.
 .ms_occu_community_spde <- function(model, spatial, range_grid = NULL,
-                                    sigma_grid = NULL, max_iter = 100L,
+                                    sigma_grid = NULL, max_iter,
                                     verbose = FALSE) {
   X_psi <- model$X_occ; X_p <- model$X_det
   p_psi <- ncol(X_psi); p_p <- ncol(X_p)
@@ -304,7 +304,7 @@
 # tobs_spatial spec on the occupancy formula (icar / bym2 / car_proper / spde).
 # Returns a `tobs_fit` (via build_ms_occu_fit), with the spatial field +
 # hyperparameters attached.
-.tobs_fit_ms_occu_spatial <- function(model, spatial, max.iter = 100L,
+.tobs_fit_ms_occu_spatial <- function(model, spatial, max.iter,
                                       verbose = FALSE, ...) {
   .tobs_reject_weighted_spatial(spatial, "ms_occu() spatial")
   ptype <- spatial$type %||% "icar"

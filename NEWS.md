@@ -1,5 +1,12 @@
 # tulpaObs NEWS
 
+## 0.4.1
+
+* **`ms_occu()` with an areal or SPDE field defaults to 300 EM iterations**
+  (was 100), the budget the single-season Newton / EM routes took in 0.4.0. At
+  100, 54 of 180 simulated community fits stopped before meeting `tol` and
+  warned; at 300, one does. A fit that converges sooner is unchanged.
+
 ## 0.4.0
 
 * **`predict(newdata = )` uses the new data (#371).** On occu / dyn_occu /

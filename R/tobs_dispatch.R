@@ -286,7 +286,7 @@
     }
     return(.tobs_fit_ms_occu_spatial(
       model, spatial = structs$spatial,
-      max.iter = control[["max.iter"]] %||% 100L,
+      max.iter = control[["max.iter"]] %||% 300L,
       verbose  = isTRUE(control[["verbose"]])))
   }
 

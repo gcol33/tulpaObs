@@ -14,7 +14,7 @@
 # NUTS branches too (for the EM warm start that precedes sampling), and their
 # value genuinely differs by route within one family -- ms_occu_cover() iterates
 # its own EM 30 times at tol 1e-3 but warm-starts its sampler with 200 at 1e-4,
-# and ms_occu()'s plain areal C++ EM uses 100 where its block-coordinate latent
+# and ms_occu()'s plain areal C++ EM uses 300 where its block-coordinate latent
 # fitter uses 200. Those are per-route values, not a profile, so they stay at
 # their call sites where the route that owns them is visible.
 # =============================================================================

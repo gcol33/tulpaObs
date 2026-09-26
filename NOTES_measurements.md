@@ -2528,3 +2528,27 @@ on `tulpa:::.max_rel_change`.
   at 100 therefore left real error on some fits; the warning there is earned.
 - 300 converges every fit in the set under the unchanged rule. Raising the cap
   cannot change a fit that met `tol` sooner (same path, same stop).
+
+## EM iterations to converge: the `ms_occu()` areal `max.iter` default (2026-09-27)
+
+Why the `ms_occu()` plain areal C++ community EM (`.tobs_fit_ms_occu_spatial`,
+icar / car_proper / bym2 / spde) defaults `max.iter` to 300 (was 100). Probe
+`dev_notes/probe_ms_occu_iters.R`: 180 `method = "nested_laplace"` fits of the
+`test-ms-occu-field.R` simulator with an `icar()` field, seeds 1-15 x J in
+2/3/4 x side in 4/6 x S in 3/8, cap lifted to 3000. Every fit converged.
+
+| J | S | median | 90% | max |
+|---|---|---|---|---|
+| 2 | 3 | 83 | 142 | 239 |
+| 3 | 3 | 76 | 134 | 626 |
+| 4 | 3 | 74 | 114 | 236 |
+| 2 | 8 | 94 | 157 | 211 |
+| 3 | 8 | 76 | 125 | 165 |
+| 4 | 8 | 81 | 144 | 191 |
+
+- Fits over the cap: 54 / 180 at 100, 4 at 200, 1 at 300 (side 4, S 3, J 3,
+  seed 6, 626 iterations). Every fit over 200 is on the 4 x 4 grid.
+- That one fit at 300 vs converged: coefficients within 0.025, field within
+  0.002; at 100 the coefficients are within 0.035. It keeps its warning.
+- 300 matches the single-season Newton / EM default in `.tobs_fit_model()`.
+  The largest fit took 6.3 s at the lifted cap.
