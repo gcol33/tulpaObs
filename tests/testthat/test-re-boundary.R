@@ -1,7 +1,7 @@
 # Grouped random-effect components tested against their boundary on the
 # single-species AGHQ fits (#375 SD at zero, #382 correlation at +-1): one
 # record per log-scale SD coordinate on `convergence(fit)$re_boundary`, one
-# warning per fit.
+# message per fit.
 
 # A 2 x 2 full block in tulpa's log-Cholesky packing (log L11, L21, log L22),
 # with the SE of each coordinate supplied.
@@ -35,7 +35,7 @@ test_that("a correlation at +-1 is the conditional SD at zero", {
   cr <- recs[["cor_g1_(Intercept)_w"]]
   expect_gt(abs(cr$estimate), 0.999)
   expect_false(cr$distinguishable)
-  expect_warning(.tobs_warn_re_boundary(recs),
+  expect_message(.tobs_note_re_boundary(recs),
                  "cor_g1_\\(Intercept\\)_w.*re.lkj")
 })
 
@@ -52,17 +52,18 @@ test_that("a diagonal block tests each log-SD", {
   expect_false(recs[[2]]$distinguishable)
 })
 
-test_that("the fit tail warns on a boundary record and not on a clear one", {
+test_that("the fit tail notes a boundary record in a message, not a warning", {
   bad <- .tobs_re_boundary(full_ref(0.8, 0.9, 1e-3, se = c(0.2, 0.3, 25)),
                            slope_design)
   fit <- list(method = "laplace",
               convergence = list(converged = TRUE, n_iter = 5L,
                                  re_boundary = bad))
-  expect_warning(.tobs_finalize_convergence(fit, list(name = "occu")),
-                 "at the boundary")
+  expect_no_warning(
+    expect_message(.tobs_finalize_convergence(fit, list(name = "occu")),
+                   "boundary \\(singular\\) fit"))
   fit$convergence$re_boundary <- .tobs_re_boundary(full_ref(0.8, 0.6, 0.5),
                                                    slope_design)
-  expect_no_warning(.tobs_finalize_convergence(fit, list(name = "occu")))
+  expect_no_message(.tobs_finalize_convergence(fit, list(name = "occu")))
 })
 
 sim_fp_psi_re <- function(n_groups, per_group, J, seed, beta0 = qlogis(0.45),
@@ -80,23 +81,26 @@ sim_fp_psi_re <- function(n_groups, per_group, J, seed, beta0 = qlogis(0.45),
 
 fit_fp_re <- function(seed) {
   s <- sim_fp_psi_re(16L, 10L, 5L, seed)
-  w <- character()
+  w <- m <- character()
   fit <- withCallingHandlers(
     tobs(~ 1 + (1 | g), data = s$data, family = fp_occu(), detection = ~ 1,
          y = s$y, method = "laplace",
          control = list(n.quad = 5L, progress = FALSE, verbose = FALSE)),
     warning = function(x) { w <<- c(w, conditionMessage(x))
-                            invokeRestart("muffleWarning") })
-  list(fit = fit, w = w)
+                            invokeRestart("muffleWarning") },
+    message = function(x) { m <<- c(m, conditionMessage(x))
+                            invokeRestart("muffleMessage") })
+  list(fit = fit, w = w, m = m)
 }
 
-test_that("fp_occu() psi (1|g) collapsing to zero is recorded and warned (#375)", {
+test_that("fp_occu() psi (1|g) collapsing to zero is recorded and noted (#375)", {
   skip_on_cran()
   r <- fit_fp_re(21L)
   rec <- convergence(r$fit)$re_boundary[["sigma_g1_(Intercept)"]]
   expect_lt(rec$estimate, 0.05)
   expect_false(rec$distinguishable)
-  expect_length(grep("at the boundary", r$w), 1L)
+  expect_length(grep("boundary \\(singular\\) fit", r$m), 1L)
+  expect_length(grep("boundary", r$w), 0L)
 })
 
 test_that("fp_occu() psi (1|g) away from zero stays silent", {
@@ -104,5 +108,5 @@ test_that("fp_occu() psi (1|g) away from zero stays silent", {
   r <- fit_fp_re(22L)
   rec <- convergence(r$fit)$re_boundary[["sigma_g1_(Intercept)"]]
   expect_true(rec$distinguishable)
-  expect_length(grep("at the boundary", r$w), 0L)
+  expect_length(grep("boundary", c(r$m, r$w)), 0L)
 })

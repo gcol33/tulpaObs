@@ -36,7 +36,8 @@ effects were integrated that way carries \code{re_boundary}: one record per
 random-effect SD (\verb{sigma_<g>_<coef>}) and, on a correlated block, per
 correlation (\verb{cor_<g>_<ci>_<cj>}), with the boundary Wald \code{statistic}, its
 \code{critical} value and \code{distinguishable}; \code{FALSE} means the SD cannot be told
-from zero or the correlation from +-1, and the fit warns once.
+from zero or the correlation from +-1, and the fit says so in one message
+("boundary (singular) fit").
 \code{converged()}: a single \code{TRUE} / \code{FALSE}.
 }
 \description{

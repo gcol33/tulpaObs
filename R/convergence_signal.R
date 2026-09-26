@@ -37,6 +37,6 @@
   }
   # A grouped-RE component at its boundary is a converged fit whose estimate is
   # a bound; the AGHQ fitters record the test, and it is raised here once.
-  .tobs_warn_re_boundary(rec$re_boundary %||% list())
+  .tobs_note_re_boundary(rec$re_boundary %||% list())
   fit
 }

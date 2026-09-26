@@ -433,9 +433,14 @@
   out
 }
 
-# One warning for every grouped-RE component a fit could not distinguish from
-# its boundary. Raised once, from the fit tail.
-.tobs_warn_re_boundary <- function(records) {
+# One message for every grouped-RE component a fit could not distinguish from
+# its boundary, raised once from the fit tail. A message, not a warning: an SD
+# at zero (or a correlation at +-1) is where the marginal likelihood peaks for
+# these data, a routine outcome when the grouping carries little signal, so it
+# reports a property of the data rather than a failed fit -- the convention
+# lme4 follows with its "boundary (singular) fit" message. The record stays at
+# convergence(fit)$re_boundary for code that needs to branch on it.
+.tobs_note_re_boundary <- function(records) {
   hit <- Filter(function(r) isTRUE(r$available) &&
                   identical(r$distinguishable, FALSE), records)
   if (!length(hit)) return(invisible(list()))
@@ -448,18 +453,14 @@
               r$sd, r$statistic)
   }, character(1L))
   singular <- any(vapply(hit, function(r) !identical(r$kind, "sd"), logical(1L)))
-  warning("random-effect variance component",
-          if (length(hit) > 1L) "s" else "", " at the boundary: ",
-          paste(parts, collapse = "; "), ", against ",
-          sprintf("%.2f", hit[[1L]]$critical), " at the ",
-          format(hit[[1L]]$alpha), " level. An SD at zero shrinks every BLUP ",
-          "to zero",
-          if (singular) " and a singular covariance puts a correlation at +-1" else "",
-          "; the marginal likelihood peaks there for these data, so the fit ",
-          "converges, but the component's estimate is a bound, not an ",
-          "estimate with an interval.",
-          if (singular) " control$re.lkj above 1 keeps a correlation off +-1." else "",
-          " Records: convergence(fit)$re_boundary.", call. = FALSE)
+  message("boundary (singular) fit: ", paste(parts, collapse = "; "),
+          " against ", sprintf("%.2f", hit[[1L]]$critical), " at the ",
+          format(hit[[1L]]$alpha), " level; the data do not separate ",
+          if (singular) "this covariance from a singular one"
+          else "this SD from zero",
+          ". See convergence(fit)$re_boundary.",
+          if (singular) " control$re.lkj above 1 keeps a correlation off +-1."
+          else "")
   invisible(hit)
 }
 
