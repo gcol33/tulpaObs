@@ -1,12 +1,5 @@
 # tulpaObs NEWS
 
-## 0.4.1
-
-* **`ms_occu()` with an areal or SPDE field defaults to 300 EM iterations**
-  (was 100), the budget the single-season Newton / EM routes took in 0.4.0. At
-  100, 54 of 180 simulated community fits stopped before meeting `tol` and
-  warned; at 300, one does. A fit that converges sooner is unchanged.
-
 ## 0.4.0
 
 * **`predict(newdata = )` uses the new data (#371).** On occu / dyn_occu /
@@ -34,8 +27,9 @@
   plain fp_occu() routes.
 * **Newton / EM routes default to 300 iterations**, up from 100. At 100, 16 of
   130 simulated single-season occu() fits (all J = 2) stopped before meeting
-  `tol`; all of them converge by 287 iterations. Fits that converge sooner are
-  unchanged.
+  `tol`; all of them converge by 287 iterations. The `ms_occu()` areal / SPDE
+  community EM takes the same 300: at 100, 54 of 180 simulated fits stopped
+  early, at 300 one does. Fits that converge sooner are unchanged.
 * **Grouped random effects at the boundary are recorded (#375, #382).** An SD
   at zero, or a correlation at +-1 on a correlated block, is tested on the
   single-species AGHQ fits (occu, abun, removal, distance, fp_occu, dyn_abun)
