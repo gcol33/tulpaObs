@@ -2504,3 +2504,27 @@ re-chase":
   `-UNDEBUG -D_GLIBCXX_ASSERTIONS`, whole tier run, zero assertions fired.
 - File ordering and the `callr` layer were also checked and are not
   implicated.
+
+## EM iterations to converge: the single-season `max.iter` default (2026-09-26)
+
+Why `.tobs_fit_model()` defaults `max.iter` to 300 on its Newton / EM routes
+(was 100). Probe `dev_notes/probe_em_iters.R`: 130 single-season `occu()`
+Laplace fits, `simulate_occu(N in 50/100/200/500, J in 2/3/5, seeds 1-10,
+one occ + one det covariate)` plus the test-methods `.fit_simple` fixture at
+10 seeds, cap lifted to 2000, the EM parameter path recorded through a trace
+on `tulpa:::.max_rel_change`.
+
+| stopping rule (tol 1e-4) | median | 90% | 95% | max | fits > 100 |
+|---|---|---|---|---|---|
+| current: max abs(d) / max(abs(prev), 1e-8) | 59.5 | 104 | 137 | 287 | 16 / 130 |
+| mixed: max abs(d) / max(abs(prev), 1) | 39.5 | 81  | 109 | 287 | 8 / 130  |
+
+- The slow fits are J = 2 (plus `.fit_simple`, J = 3, at 101 / 103): EM on the
+  weakly identified psi-p ridge, not the near-zero-coefficient denominator --
+  log iterations correlate 0.16 with log of the smallest abs(parameter), and the
+  mixed rule only halves the count. No tulpa change follows from this.
+- Estimates at iteration 100 vs converged: 1e-5 to 8e-3 on most capped fits,
+  1e-2 to 4e-2 on four, and 11.6 on `N=50 J=2 seed 6` (287 iterations). A cap
+  at 100 therefore left real error on some fits; the warning there is earned.
+- 300 converges every fit in the set under the unchanged rule. Raising the cap
+  cannot change a fit that met `tol` sooner (same path, same stop).

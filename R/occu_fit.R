@@ -79,13 +79,18 @@
   # the formula-RE AGHQ debias.
   if (is.null(n.quad))  n.quad  <- .tobs_n_quad("re_aghq")
   # The iteration budget is per route (engine_defaults.R, scope note): the
-  # Newton / EM routes default to 100 iterations at tol 1e-4, the BFGS routes
-  # over an exact marginal (dyn_abun, fp_occu) to their own. A caller's value
+  # Newton / EM routes default to 300 iterations at tol 1e-4, the BFGS routes
+  # over an exact marginal (dyn_abun, fp_occu) to their own. The EM converges
+  # linearly and slowly on the weakly identified psi-p ridge at J = 2, so the
+  # budget is set from the slowest converging fit, not the typical one
+  # (NOTES_measurements.md, "EM iterations to converge"). A cap only stops fits
+  # that have not met `tol`, so a fit converging earlier is unchanged by it.
+  # A caller's value
   # reaches every route, so the caller's request is kept apart from the
   # Newton default that fills it.
   max_iter_req <- max.iter
   tol_req      <- tol
-  if (is.null(max.iter)) max.iter <- 100L
+  if (is.null(max.iter)) max.iter <- 300L
   if (is.null(tol))      tol      <- 1e-4
 
   # Engine-shaped structure specs derived from the formula's structured terms.
