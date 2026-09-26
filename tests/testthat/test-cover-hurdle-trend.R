@@ -67,7 +67,7 @@ test_that("cover() recovers a trend declared as a weighted areal formula term", 
     method = "nested_laplace", control = trend_control)
 
   expect_s3_class(fit, "cover_fit")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
   expect_identical(fit$n_fields, 2L)
   expect_identical(fit$trend_weight, "time")
 

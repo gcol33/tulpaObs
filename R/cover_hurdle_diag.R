@@ -543,7 +543,7 @@ print.cover_fit <- function(x, ...) {
                 x$n_positive %||% NA_integer_))
   }
   cat(sprintf("  converged    : %s\n",
-              if (isTRUE(x$converged)) "yes" else "no"))
+              if (converged(x)) "yes" else "no"))
   if (!is.null(x$sla_status) && !identical(x$sla_status, "off")) {
     cat(sprintf("  marginals    : %s\n", x$sla_status))
   }

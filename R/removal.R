@@ -273,10 +273,6 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   fit$n_sites <- n_sites
   fit$n_obs <- length(y)
   fit$call <- match.call()
-  if (!fit$converged) {
-    warning(sprintf("removal_laplace did not converge in %d iterations (grad_norm = %.2e).",
-                    max_iter, fit$grad_norm), call. = FALSE)
-  }
   if (nb && isTRUE(fit$dispersion_boundary)) {
     warning(sprintf(paste0("NB dispersion pinned at the boundary (r = r_max = %.3g); the data ",
             "are consistent with Poisson. Consider mixture = \"P\"."), r_max), call. = FALSE)

@@ -308,11 +308,10 @@ glance.tobs_fit <- function(x, ...) {
 #' Convergence record for a fitted model
 #'
 #' The public accessor for whether a fit converged, with one return shape across
-#' every `tobs()` family. Each family stores its optimiser / EM / sampler verdict
-#' under `fit$convergence`, but historically the cover hurdle (`cover()`) put the
-#' flag at `fit$converged` instead, so a consumer that read one location got `NA`
-#' for the other family. These accessors normalise both
-#' layouts: `convergence()` returns the full record (`converged`, `n_iter`,
+#' every `tobs()` family. Every family's optimiser / EM / sampler verdict is
+#' recorded under `fit$convergence`, and a Laplace-family fit that stops
+#' without meeting its criterion warns once, naming `control$max.iter`.
+#' `convergence()` returns the full record (`converged`, `n_iter`,
 #' `sla_status` when the simplified-Laplace marginals were used, and the
 #' per-group AGHQ solve status on the families fitted by that engine), and
 #' `converged()` returns the single logical.

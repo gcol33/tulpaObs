@@ -82,7 +82,7 @@ test_that("cover(): one-sided formula with y= still works (smoke)", {
   dat <- simulate_lhs_cover(N = 200, seed = 9)
   fit <- tobs(~ x, data = dat, family = cover("beta"), y = dat$cover)
   expect_s3_class(fit, "cover_fit")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
 })
 
 

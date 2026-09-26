@@ -59,7 +59,7 @@
 }
 
 .aop_expect_identical_fits <- function(fa, fb, tol = 1e-7) {
-  expect_true(fa$converged && fb$converged)
+  expect_true(converged(fa) && converged(fb))
   expect_equal(fa$beta_occ,     fb$beta_occ,     tolerance = tol)
   expect_equal(fa$beta_pos,     fb$beta_pos,     tolerance = tol)
   expect_equal(fa$se_occ,       fb$se_occ,       tolerance = tol)

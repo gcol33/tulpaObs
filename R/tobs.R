@@ -765,7 +765,7 @@ tobs <- function(formula,
   # without it (R/field_offset.R). A no-op wherever the fitter already did it.
   fit <- .tobs_default_field_eta_offset(fit)
   fit <- .tobs_attach_sampled_loglik(fit)
-  fit
+  .tobs_finalize_convergence(fit, family)
 }
 
 

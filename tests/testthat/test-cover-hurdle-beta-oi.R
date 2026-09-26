@@ -113,7 +113,7 @@ test_that("beta_oi carries through the spatial nested-Laplace path", {
               control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))
   expect_s3_class(fit, "cover_fit")
   expect_identical(fit$positive, "beta_oi")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
   expect_lt(abs(fit$pi_one - 0.25), 0.08)
   expect_lt(abs(fit$phi_pos - 25) / 25, 0.3)
   # Spatial predict projects the one-inflated conditional cover.

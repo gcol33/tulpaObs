@@ -52,7 +52,7 @@ test_that("single fit recovers truth within tolerance and prediction identity ho
     y       = sim$y
   )
   expect_s3_class(fit, "cover_fit")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
 
   expect_lt(abs(fit$beta_occ[1] - sim$truth$beta_occ[1]), 0.4)
   expect_lt(abs(fit$beta_occ[2] - sim$truth$beta_occ[2]), 0.4)

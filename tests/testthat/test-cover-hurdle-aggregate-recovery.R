@@ -106,7 +106,7 @@ test_that("both arms default-ON recover truth (cover beta-trend hurdle/#49)", {
 
   for (i in seq_along(seeds)) {
     f <- .acr_fit(.acr_sim(seeds[i]))   # default control -> both arms aggregated
-    if (!isTRUE(f$converged)) next
+    if (!isTRUE(converged(f))) next
     hp <- f$hyperpar$spatial
     e <- c(`occ_(Intercept)` = f$beta_occ[[1]], occ_x = f$beta_occ[[2]],
            `pos_(Intercept)` = f$beta_pos[[1]], pos_x = f$beta_pos[[2]],
@@ -154,7 +154,7 @@ test_that("both arms default-ON are byte-identical to the full per-plot fit (/#4
     s  <- .acr_sim(seed)
     fd <- .acr_fit(s)              # default control -> both arms aggregated
     ff <- .acr_fit(s, agg = FALSE) # explicit full per-plot occurrence + positive arms
-    expect_true(fd$converged && ff$converged)
+    expect_true(converged(fd) && converged(ff))
     expect_equal(fd$beta_occ,     ff$beta_occ,     tolerance = 1e-8)
     expect_equal(fd$beta_pos,     ff$beta_pos,     tolerance = 1e-8)
     expect_equal(fd$se_occ,       ff$se_occ,       tolerance = 1e-8)

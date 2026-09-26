@@ -35,11 +35,10 @@ warning the engine raises. \code{converged()}: a single \code{TRUE} / \code{FALS
 }
 \description{
 The public accessor for whether a fit converged, with one return shape across
-every \code{tobs()} family. Each family stores its optimiser / EM / sampler verdict
-under \code{fit$convergence}, but historically the cover hurdle (\code{cover()}) put the
-flag at \code{fit$converged} instead, so a consumer that read one location got \code{NA}
-for the other family. These accessors normalise both
-layouts: \code{convergence()} returns the full record (\code{converged}, \code{n_iter},
+every \code{tobs()} family. Every family's optimiser / EM / sampler verdict is
+recorded under \code{fit$convergence}, and a Laplace-family fit that stops
+without meeting its criterion warns once, naming \code{control$max.iter}.
+\code{convergence()} returns the full record (\code{converged}, \code{n_iter},
 \code{sla_status} when the simplified-Laplace marginals were used, and the
 per-group AGHQ solve status on the families fitted by that engine), and
 \code{converged()} returns the single logical.

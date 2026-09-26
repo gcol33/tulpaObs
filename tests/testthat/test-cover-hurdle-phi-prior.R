@@ -55,7 +55,7 @@ test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
     hn  <- fit_one(list("half_normal", 5))
 
     expect_s3_class(def, "cover_fit")
-    expect_true(def$converged && hn$converged)
+    expect_true(converged(def) && converged(hn))
     expect_true(is.finite(def$phi_pos) && is.finite(hn$phi_pos))
     expect_lt(hn$phi_pos, def$phi_pos)
 })

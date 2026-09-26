@@ -57,7 +57,7 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
 
     expect_s3_class(fit, "cover_fit")
     expect_equal(fit$positive, "lognormal")
-    expect_true(fit$converged)
+    expect_true(converged(fit))
     expect_true(all(is.finite(fit$beta_occ)))
     expect_true(all(is.finite(fit$beta_pos)))
     expect_named(fit$hyperpar,
@@ -95,7 +95,7 @@ test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
     )
 
     expect_s3_class(fit, "cover_fit")
-    expect_true(fit$converged)
+    expect_true(converged(fit))
     expect_true(all(is.finite(fit$beta_occ)))
     expect_true(all(is.finite(fit$beta_pos)))
 })
@@ -162,7 +162,7 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
 
     expect_s3_class(fit, "cover_fit")
     expect_equal(fit$positive, "beta")
-    expect_true(fit$converged)
+    expect_true(converged(fit))
     expect_true(all(is.finite(fit$beta_occ)))
     expect_true(all(is.finite(fit$beta_pos)))
     expect_true(is.finite(fit$phi_pos) && fit$phi_pos > 0)
@@ -199,7 +199,7 @@ test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
 
     expect_s3_class(fit, "cover_fit")
     expect_equal(fit$positive, "beta")
-    expect_true(fit$converged)
+    expect_true(converged(fit))
     expect_true(is.finite(fit$phi_pos) && fit$phi_pos > 0)
     expect_true(all(is.finite(fit$beta_pos)))
 })
@@ -228,7 +228,7 @@ test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
     )
 
     expect_s3_class(fit, "cover_fit")
-    expect_true(fit$converged)
+    expect_true(converged(fit))
     expect_true(all(is.finite(fit$beta_occ)))
     expect_true(all(is.finite(fit$beta_pos)))
 })

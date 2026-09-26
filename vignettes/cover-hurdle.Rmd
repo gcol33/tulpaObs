@@ -244,7 +244,7 @@ absorbs whatever residual scale the engine attributes to the data. The
 occurrence arm carries no dispersion parameter at all, being a binomial with the
 trial count fixed at one.
 
-Two arms means two convergence states folded into one flag. `fit$converged` is
+Two arms means two convergence states folded into one flag. `converged(fit)` is
 `TRUE` only when both the binomial and the Gaussian Laplace solves converged, so
 a single number reports the health of the whole hurdle. The per-arm marginal
 likelihoods sit in `fit$log_marginal` under the names `occ` and `pos`, which the

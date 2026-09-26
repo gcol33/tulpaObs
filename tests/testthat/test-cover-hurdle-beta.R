@@ -32,7 +32,7 @@ test_that("cover(response='beta') recovers betas and phi on simulated data", {
   )
   expect_s3_class(fit, "cover_fit")
   expect_equal(fit$positive, "beta")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
 
   expect_lt(abs(fit$beta_occ[1] - sim$truth$beta_occ[1]), 0.3)
   expect_lt(abs(fit$beta_occ[2] - sim$truth$beta_occ[2]), 0.3)

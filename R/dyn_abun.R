@@ -222,7 +222,8 @@
 # grouped RE, and a NUTS path stay Poisson / negbin (rejected upstream in
 # .tobs_fit_model with a pointer); the additive marginal + its gradient are the
 # layer those would share.
-.tobs_fit_dyn_abun_zip <- function(model, max_iter = 300L, verbose = TRUE, ...) {
+.tobs_fit_dyn_abun_zip <- function(model, max_iter = 300L, tol = 1e-8,
+                                   verbose = TRUE, ...) {
   is_nb <- identical(model$mixture, "zinb")
   N <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
   K <- model$K_max
@@ -335,7 +336,7 @@
   opt <- stats::optim(theta0, neg_ll,
                       gr = function(th) { .prog$tick(); neg_grad(th) },
                       method = "BFGS",
-                      control = list(maxit = as.integer(max_iter), reltol = 1e-8))
+                      control = list(maxit = as.integer(max_iter), reltol = tol))
   .prog$finish()
 
   est <- opt$par
@@ -753,10 +754,6 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
           paste0("omega_", colnames(X_omega)), paste0("gamma_", colnames(X_gamma)))
   if (is_nb) nm <- c(nm, "log_r")
   dimnames(vcov) <- list(nm, nm); dimnames(Hobs) <- list(nm, nm)
-  if (!converged) {
-    warning(sprintf("dyn_abun_laplace BFGS did not converge (code %d).", opt$convergence),
-            call. = FALSE)
-  }
 
   log_r <- if (is_nb) as.numeric(theta[ir]) else NA_real_
   structure(list(

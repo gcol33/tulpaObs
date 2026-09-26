@@ -186,10 +186,6 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
   .prog$finish()
   theta <- opt$par
   converged <- opt$convergence == 0L
-  if (!converged && verbose) {
-    warning(sprintf("fp_occu_laplace BFGS did not converge (code %d).", opt$convergence),
-            call. = FALSE)
-  }
 
   out  <- eval_cpp(theta)
   Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th), th), theta)

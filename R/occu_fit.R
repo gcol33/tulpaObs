@@ -20,7 +20,7 @@
                                        "pg_gibbs"),
                             priors = NULL,
                             sigma.beta = NULL,
-                            max.iter = 100L, tol = 1e-4, damping = 0.7,
+                            max.iter = NULL, tol = NULL, damping = 0.7,
                             n.iter = NULL, n.warmup = NULL, n.thin = NULL,
                             n.chains = NULL, n.threads = NULL,
                             sigma.logr = NULL,
@@ -78,6 +78,15 @@
   # `n.quad` names one control across several marginals; this entry's route is
   # the formula-RE AGHQ debias.
   if (is.null(n.quad))  n.quad  <- .tobs_n_quad("re_aghq")
+  # The iteration budget is per route (engine_defaults.R, scope note): the
+  # Newton / EM routes default to 100 iterations at tol 1e-4, the BFGS routes
+  # over an exact marginal (dyn_abun, fp_occu) to their own. A caller's value
+  # reaches every route, so the caller's request is kept apart from the
+  # Newton default that fills it.
+  max_iter_req <- max.iter
+  tol_req      <- tol
+  if (is.null(max.iter)) max.iter <- 100L
+  if (is.null(tol))      tol      <- 1e-4
 
   # Engine-shaped structure specs derived from the formula's structured terms.
   structs  <- .tobs_structures_from_model(model)
@@ -376,7 +385,8 @@
              "use mixture = \"poisson\" / \"negbin\" for those, or drop the term.",
              call. = FALSE)
       }
-      fit <- .tobs_fit_dyn_abun_zip(fit_model, max_iter = 300L, verbose = verbose)
+      fit <- .tobs_fit_dyn_abun_zip(fit_model, max_iter = max_iter_req %||% 300L,
+                                    tol = tol_req %||% 1e-8, verbose = verbose)
       return(.tobs_finalize_family_fit(fit))
     }
     if (!is.null(temporal))
@@ -412,7 +422,8 @@
         fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial, temporal = temporal,
                                           svc = svc,
                                           mixture = model$mixture %||% "poisson",
-                                          K_max = K.max, max_iter = 300L, tol = 1e-8,
+                                          K_max = K.max, max_iter = max_iter_req %||% 300L,
+                                          tol = tol_req %||% 1e-8,
                                           verbose = verbose, integration = integration)
       }
     } else if (identical(method, "nuts")) {
@@ -426,12 +437,14 @@
       # Site-level grouped RE on the initial-abundance (lambda) arm via the
       # exact HMM-forward AGHQ path. n_quad = 1 is the joint Laplace (the
       # small-cluster sigma attenuation regime); n_quad > 1 debiases it.
-      fit <- .tobs_fit_dyn_abun_re(fit_model, re = re, max_iter = 300L,
-                                   tol = 1e-8, verbose = verbose,
+      fit <- .tobs_fit_dyn_abun_re(fit_model, re = re,
+                                   max_iter = max_iter_req %||% 300L,
+                                   tol = tol_req %||% 1e-8, verbose = verbose,
                                    n_quad = n.quad, lkj_eta = re.lkj,
                                    theta_prior_sd = sigma.beta)
     } else {
-      fit <- .tobs_fit_dyn_abun(fit_model, max_iter = 300L, tol = 1e-8,
+      fit <- .tobs_fit_dyn_abun(fit_model, max_iter = max_iter_req %||% 300L,
+                                tol = tol_req %||% 1e-8,
                                 verbose = verbose)
     }
     return(.tobs_finalize_family_fit(fit))
@@ -466,7 +479,7 @@
       } else {
         fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, temporal = temporal,
                                          svc = svc, max_iter = max.iter,
-                                         tol = 1e-8, verbose = verbose,
+                                         tol = tol_req %||% 1e-8, verbose = verbose,
                                          integration = integration)
       }
     } else if (identical(method, "nuts")) {
@@ -484,7 +497,8 @@
                                   tol = tol, n_quad = n.quad, lkj_eta = re.lkj,
                                   sigma.beta = sigma.beta, verbose = verbose)
     } else {
-      fit <- .tobs_fit_fp_occu(fit_model, max_iter = 500L, tol = 1e-8,
+      fit <- .tobs_fit_fp_occu(fit_model, max_iter = max_iter_req %||% 500L,
+                               tol = tol_req %||% 1e-8,
                                sigma.beta = NULL, verbose = verbose)
     }
     return(.tobs_finalize_family_fit(fit))
@@ -507,7 +521,8 @@
     }
     fit <- do.call(.tobs_fit_occu_svc, c(
       list(model = fit_model, svc = svc, priors = priors,
-           max_iter = as.integer(max.iter), tol = 1e-8, verbose = verbose),
+           max_iter = as.integer(max.iter), tol = tol_req %||% 1e-8,
+           verbose = verbose),
       list(...)))
     fit <- .unscale_fit_per_process(fit, scales, process_info)
     fit$model      <- model

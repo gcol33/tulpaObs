@@ -130,7 +130,7 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
 
   expect_s3_class(fit, "cover_fit")
   expect_equal(fit$positive, "beta")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
   expect_true(inherits(fit$joint, "tulpa_nested_laplace_joint_multi"))
 
   # Beta point estimates land on the correct side of zero.
@@ -323,6 +323,6 @@ test_that("cover(): multi-block resolves character group / time columns", {
     )
   ))
   expect_s3_class(fit, "cover_fit")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
   expect_true(inherits(fit$joint, "tulpa_nested_laplace_joint_multi"))
 })

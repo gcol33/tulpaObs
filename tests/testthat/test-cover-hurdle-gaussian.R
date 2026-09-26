@@ -42,7 +42,7 @@ test_that("single fit recovers truth (gaussian arm, identity mean)", {
     y       = sim$y
   )
   expect_s3_class(fit, "cover_fit")
-  expect_true(fit$converged)
+  expect_true(converged(fit))
   expect_equal(fit$positive, "gaussian")
   expect_true(is.na(fit$phi_pos))
   expect_true(is.finite(fit$sigma_pos) && fit$sigma_pos > 0)
@@ -116,7 +116,7 @@ test_that("repeat fits recover truth in aggregate (gaussian, 20 seeds)", {
            family = cover(response = "gaussian"), y = sim$y),
       error = function(e) NULL)
     if (is.null(fit)) next
-    conv[r] <- isTRUE(fit$converged)
+    conv[r] <- isTRUE(converged(fit))
     est_occ[r, ] <- fit$beta_occ; se_occ[r, ] <- fit$se_occ
     est_pos[r, ] <- fit$beta_pos; se_pos[r, ] <- fit$se_pos
     sigma_diffs[r] <- abs(fit$sigma_pos - truth$sigma_pos) / truth$sigma_pos

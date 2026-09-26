@@ -77,19 +77,19 @@ test_that("convergence()/converged() read one record across families", {
   expect_identical(converged(occ), isTRUE(occ$convergence$converged))
 
   # cover(): historically only fit$converged was set, so a consumer reading
-  # fit$convergence$converged got NULL/NA (the bug). It must now carry the same
-  # unified record, and the accessor must agree with the top-level flag.
+  # fit$convergence$converged got NULL/NA (the bug). It carries the unified
+  # record, and the flat slot is gone: one answer per fit.
   sim <- simulate_cover(N = 200, seed = 7)
   cov_fit <- tobs(formula = ~ x, data = sim$data, family = cover("beta"),
                   y = sim$y)
   expect_s3_class(cov_fit, "cover_fit")
   expect_false(is.null(cov_fit$convergence))
   expect_true(is.logical(cov_fit$convergence$converged))
-  expect_identical(cov_fit$convergence$converged, cov_fit$converged)
+  expect_null(cov_fit$converged)
   expect_true("sla_status" %in% names(cov_fit$convergence))
 
   # One accessor, same shape and meaning for both families.
-  expect_identical(converged(cov_fit), isTRUE(cov_fit$converged))
+  expect_identical(converged(cov_fit), isTRUE(cov_fit$convergence$converged))
   expect_named(convergence(cov_fit)[c("converged", "n_iter")],
                c("converged", "n_iter"))
 })

@@ -26,7 +26,7 @@
 
 # Equivalence of every comparable summary between two cover_fit objects.
 .aoc_expect_equal_fits <- function(f1, f0, extra = character(), tol = 1e-8) {
-  expect_true(f0$converged && f1$converged)
+  expect_true(converged(f0) && converged(f1))
   expect_equal(f1$beta_occ, f0$beta_occ, tolerance = tol)
   expect_equal(f1$beta_pos, f0$beta_pos, tolerance = tol)
   expect_equal(f1$se_occ,   f0$se_occ,   tolerance = tol)
