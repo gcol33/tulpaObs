@@ -1,5 +1,56 @@
 # tulpaObs NEWS
 
+## 0.4.0
+
+* **`predict(newdata = )` uses the new data (#371).** On occu / dyn_occu /
+  int_occu, abun / removal, distance, fp_occu and dyn_abun it returned the
+  in-sample fit and ignored the frame. `newdata` is now expanded through the
+  predicted arm's fitted formula (fitted factor levels and transforms,
+  coefficients matched by name). Combining `newdata` with `X.0` / `X_det.0` /
+  `terms`, or asking for `type = "state"` with any of them, is an error, and a
+  formula variable missing from `newdata` is named.
+* **Group-level predictions (#372).** When a random-effect grouping variable
+  is a column of `newdata`, each row gets its fitted group effect (times the
+  slope covariate for a random slope), and 0 for a level the fit did not see.
+  Without the column, and always through `X.0`, the prediction stays
+  population-level.
+* **`cover()` + `(1 | g)` reports its random effect (#373).** `ranef()`
+  returns the group effects under the factor labels, and the SD is reported
+  as `fit$sigma_re`.
+* **One convergence record and one signal per fit (#376-#380, #383).** A
+  Laplace-family fit that stops without meeting its criterion warns once,
+  naming `control$max.iter`, on every family; the per-fitter warnings (which
+  fired on four families, once per species on the community routes, and on
+  fp_occu only under `verbose`) are gone. The top-level `fit$converged` is
+  removed: `convergence()` / `converged()` read `fit$convergence` on every
+  family. `control$max.iter` / `control$tol` now reach the dyn_abun() and
+  plain fp_occu() routes.
+* **Newton / EM routes default to 300 iterations**, up from 100. At 100, 16 of
+  130 simulated single-season occu() fits (all J = 2) stopped before meeting
+  `tol`; all of them converge by 287 iterations. Fits that converge sooner are
+  unchanged.
+* **Grouped random effects at the boundary are recorded (#375, #382).** An SD
+  at zero, or a correlation at +-1 on a correlated block, is tested on the
+  single-species AGHQ fits (occu, abun, removal, distance, fp_occu, dyn_abun)
+  and recorded at `convergence(fit)$re_boundary`. It is reported as one
+  "boundary (singular) fit" message per fit, the way lme4 reports it, since it
+  describes the data rather than a failed fit.
+* **NUTS random effects are reported like the Laplace ones (#381).** The
+  occu NUTS fit reports `sigma_<g>_<coef>`, `cor_<g>_<ci>_<cj>` and
+  `re_<g>_<coef>[k]` on the natural scale, where it listed the sampler's
+  `log_sigma_*` / `chol_*` / `z_*` coordinates in `summary()` / `coef()` /
+  `tidy()`.
+* **Control keys a fitter does not read are refused (#384).** `n.threads.grad`,
+  `sigma.logr`, `dispersion.re` and `sigma.ld.init` are admitted only by the
+  NUTS fitters that read them, and the pg_gibbs route no longer admits the
+  NUTS-only knobs (`adapt.delta`, `max.treedepth`, `n.threads`, ...), which it
+  used to drop. The error for a wrong-method knob names only the methods the
+  family supports.
+* **`control$max.grid.cells` counts the dispersion cells**, following tulpa
+  0.6.2: the count is the number of inner solves, so an active positive-arm
+  dispersion grid multiplies the latent cell count.
+* **Pinned to tulpa (>= 0.6.2)** in both `Imports:` and `LinkingTo:`.
+
 ## 0.3.1
 
 * **A species present in one cell fits (#374).** `occu_cover()` estimates a
