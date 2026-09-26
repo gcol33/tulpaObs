@@ -143,7 +143,7 @@ test_that("refinement densifies a stated copy axis and never extends it", {
   expect_gte(coverage, 0.85)
 })
 
-test_that("refinement halves the copy axis's outer cell, tightening its upper CI edge", {
+test_that("refinement leaves the copy axis's upper CI edge at its base geometry", {
   skip_on_cran()
   skip_if_fast()
   truth_alpha <- 1.5
@@ -198,26 +198,24 @@ test_that("refinement halves the copy axis's outer cell, tightening its upper CI
       truth_alpha <= fit_ad$joint$theta_ci_hi["alpha"]
   }
 
-  # BOTH upper edges are axis geometry, and what separates them is the width of
-  # the outermost cell. A node represents the cell around it, so the reported
-  # support reaches half that cell past the top node: the fixed arm's outer
-  # interval is 1 -> 1.5, giving a half step of 0.25 and an edge just under
-  # 1.75 (measured mean 1.733, SD 0.011). Refinement halves that interval, so
-  # the adaptive arm's half step is 0.125 and its edge just under 1.625
-  # (mean 1.623, SD 0.011). Neither edge follows the data -- the two spreads
-  # are the same to a couple of percent -- so assert the geometry, which is
-  # what is actually on show here.
+  # BOTH upper edges are axis geometry. A node represents the cell around it,
+  # and on the copy axis's log continuum the top node's cell reaches half a log
+  # step past it: the fixed arm's outer interval is 1 -> 1.5, so its support
+  # ends at 1.5 * sqrt(1.5) = 1.837, and the 97.5% quantile lands just inside
+  # (measured mean 1.811, SD 0.026). Neither edge follows the data, so assert
+  # the geometry, which is what is actually on show here.
   expect_lt(sd(hi_fixed), 0.10)
   expect_lt(sd(hi_adapt), 0.10)
 
-  # The adaptive arm's edge sits INSIDE the fixed arm's, on every seed, because
-  # its outer cell is the narrower one. Asserted as the direction plus a floor
-  # on the gap rather than the exact half-step difference, since these are
-  # posterior quantiles and land a little inside the support they are computed
-  # over.
-  expect_lt(mean(hi_adapt), mean(hi_fixed))
-  expect_equal(sum(hi_adapt < hi_fixed), n_seeds)
-  expect_gt(mean(hi_fixed) - mean(hi_adapt), 0.05)
+  # Refinement does NOT move that edge. A slice point re-tiles only the row of
+  # the outer grid it was placed in, and every other row keeps its declared
+  # 1 -> 1.5 cell, whose mass it still holds over the whole base box (tulpa
+  # 0.5.2, gcol33/tulpa#858). The reported upper edge is therefore the base
+  # geometry in both arms: measured mean 1.809 against 1.811, the adaptive arm
+  # never above the fixed one by more than 0.0016. Asserted as the two edges
+  # agreeing and the adaptive one not reaching past the fixed one.
+  expect_lt(abs(mean(hi_fixed) - mean(hi_adapt)), 0.02)
+  expect_true(all(hi_adapt <= hi_fixed + 0.01))
 
   # Coverage does NOT separate the two arms at this placement, and the file no
   # longer claims it does. Both arms cover 20/20 here. With the truth exactly ON
