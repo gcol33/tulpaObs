@@ -14,11 +14,15 @@ against.
 * New submission.
 * INLA (Suggests) is not on CRAN; Additional_repositories names its
   repository, which the check confirms is reachable.
+* The incoming check on win-builder r-devel also lists "MacKenzie", "Royle", "et"
+  and "al" as possibly misspelled: these are the author surnames and the
+  standard abbreviation from the two method references in the Description
+  field, not software names, so they are left unquoted.
 
 ## Test environments
 
 * local: Windows 11, R 4.6.1, `R CMD check --as-cran` including the PDF manual
-* win-builder: R-devel and R-release
+* win-builder: R-devel (Status: 1 NOTE, the one above)
 * GitHub Actions: ubuntu-latest (R-release), windows-latest and macos-latest
   on dispatch
 
