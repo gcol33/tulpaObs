@@ -106,7 +106,7 @@
     se  <- apply(B, c(2, 3), stats::sd)
     re_effects[[g]] <- data.frame(
       group = g,
-      level = rep(seq_len(ng), times = nc),
+      level = rep(d$levels, times = nc),
       term  = rep(d$coef_names, each = ng),
       estimate = as.numeric(est),
       std.error = as.numeric(se),

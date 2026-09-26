@@ -429,7 +429,7 @@ ranef.tobs_fit <- function(object, ...) {
     re <- object$re
     return(data.frame(
       arm   = re$arm,
-      group = seq_along(re$blup),
+      group = re$levels %||% as.character(seq_along(re$blup)),
       blup  = re$blup,
       blup_sd = re$blup_sd,
       stringsAsFactors = FALSE))

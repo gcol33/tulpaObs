@@ -76,10 +76,11 @@
       has_int <- TRUE
     }
     colnames(Z) <- coef_names
-    # Group label for naming sigma / BLUP rows: the term's group is an integer
-    # code (the original factor levels are not retained), so label terms g1,
-    # g2, ... in formula order.
-    list(idx = idx, n_groups = as.integer(re$n_groups %||% max(idx, na.rm = TRUE)),
+    # Terms are labelled g1, g2, ... in formula order for naming sigma / BLUP
+    # rows; `levels` are the grouping factor's own labels, in code order.
+    ng <- as.integer(re$n_groups %||% max(idx, na.rm = TRUE))
+    lev <- re$levels %||% as.character(seq_len(ng))
+    list(idx = idx, n_groups = ng, levels = lev,
          n_coefs = ncol(Z), Z = Z, coef_names = coef_names,
          has_intercept = has_int, level = level,
          correlated = isTRUE(re$correlated) && ncol(Z) > 1L,
@@ -609,7 +610,7 @@
     }
     re_effects[[g]] <- data.frame(
       group = g,
-      level = rep(seq_len(ng), times = nc),
+      level = rep(d$levels, times = nc),
       term  = rep(d$coef_names, each = ng),
       estimate = as.numeric(Bm),
       std.error = as.numeric(sqrt(pmax(Vm, 0))),

@@ -55,13 +55,9 @@
 
 # Resolve a grouping/time vector to 1-based integer codes plus a level count.
 .tobs_index_codes <- function(x, term, arg) {
-  if (is.factor(x) || is.character(x)) {
+  if (is.factor(x) || is.character(x) || is.numeric(x)) {
     f <- as.factor(x)
-    return(list(idx = as.integer(f), n = nlevels(f)))
-  }
-  if (is.numeric(x)) {
-    f <- as.factor(x)
-    return(list(idx = as.integer(f), n = nlevels(f)))
+    return(list(idx = as.integer(f), n = nlevels(f), levels = levels(f)))
   }
   stop(sprintf("%s(): `%s` must be a factor, character, or numeric column.",
                term, arg), call. = FALSE)
@@ -412,7 +408,7 @@
   }
   codes <- .tobs_index_codes(group, "re", "group")
   .tobs_term(list(
-    group_idx = codes$idx, n_groups = codes$n,
+    group_idx = codes$idx, n_groups = codes$n, levels = codes$levels,
     type = type, covariate = covariate, model = model,
     correlated = correlated, intercept = isTRUE(intercept),
     sigma_scale = sigma_scale
