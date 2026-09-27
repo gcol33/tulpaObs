@@ -558,8 +558,8 @@
 #
 # Per-block grids are narrower than `.NL_REGISTRY`'s single-block defaults
 # (which target ~20-25 cells per block). Three-block combinations
-# (e.g. BYM2 + AR1 + IID) at the single-block defaults exceed the
-# multi-block hard cap (2048 cells); the narrower defaults below keep
+# (e.g. BYM2 + AR1 + IID) at the single-block defaults cross to more
+# than 2048 cells, each one inner solve; the narrower defaults below keep
 # typical combos under ~250 cells. Users who need finer integration can
 # pass `*_grid` overrides directly via the tobs_* spec attributes (when
 # present) -- the helper passes them through if set.

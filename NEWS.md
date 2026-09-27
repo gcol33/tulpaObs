@@ -47,10 +47,12 @@
   NUTS-only knobs (`adapt.delta`, `max.treedepth`, `n.threads`, ...), which it
   used to drop. The error for a wrong-method knob names only the methods the
   family supports.
-* **`control$max.grid.cells` counts the dispersion cells**, following tulpa
-  0.6.2: the count is the number of inner solves, so an active positive-arm
-  dispersion grid multiplies the latent cell count.
-* **Pinned to tulpa (>= 0.6.2)** in both `Imports:` and `LinkingTo:`.
+* **A large outer grid warns instead of being refused**, following tulpa
+  0.6.3. A dense outer tensor of more than 2048 inner solves (latent cells
+  times the positive-arm dispersion cells) is announced with a warning naming
+  its axes, then solved. `control$max.grid.cells` is an opt-in ceiling, unset
+  by default.
+* **Pinned to tulpa (>= 0.6.3)** in both `Imports:` and `LinkingTo:`.
 
 ## 0.3.1
 

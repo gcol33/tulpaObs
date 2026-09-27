@@ -201,8 +201,7 @@ test_that("a correlated `|` bar fits an MCAR field", {
   d <- .bar_small_data()
   # Tiny smoke data: the outer CCD over Sigma is weakly identified and declines
   # to the tensor grid, which crosses the 960-row MCAR block with the 7-level
-  # phi axis (6720 cells, past the engine's default cap, so it is declared
-  # through `max.grid.cells`); the assertion is plumbing (structure + summary
+  # phi axis (6720 cells); the assertion is plumbing (structure + summary
   # shape), with parameter recovery in test-cover-spatial-bar-mcar.R.
   fit <- suppressWarnings(tobs(
               formula = ~ time +
@@ -210,7 +209,7 @@ test_that("a correlated `|` bar fits an MCAR field", {
               data = d$df, family = cover(response = "lognormal"), y = d$y,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE, max.iter = 40L,
-                             integration = "grid", max.grid.cells = 6720L)))
+                             integration = "grid")))
   expect_s3_class(fit, "cover_fit")
   expect_true(isTRUE(fit$mcar))
   # The cross-covariance summary carries one SD per field and the cross-corr.

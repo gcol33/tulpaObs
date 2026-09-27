@@ -2,7 +2,7 @@
 # Sigma, in the engine's column-major lower-triangular log-Cholesky coordinates. A
 # p = 2 (intercept + one slope) block -- the common `(1 + x | g)` -- gets a
 # (sigma_0, sigma_1, rho) tensor sized to compose with the shared field + copy
-# amplitude under the engine's outer-grid cap. The grid is a coarsened version of
+# amplitude at a tractable outer-grid size. The grid is a coarsened version of
 # the engine's `.mcar_default_logchol_grid`: SYMMETRIC correlation nodes that
 # include 0 and reach strong +/- (so the marginal correlation is not forced into a
 # lop-sided range), and log-spaced SD nodes spanning small to large. The slope

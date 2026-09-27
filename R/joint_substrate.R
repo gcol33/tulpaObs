@@ -326,12 +326,10 @@
 # exactly one sub-knob is set and the flag itself is not -- a fit passing only
 # `adaptive.grid.edge.thresh = 0.05` would read `adaptive_grid = 0.05`.
 #
-# `max.grid.cells` is the engine's cell-count ceiling on the dense outer tensor,
-# forwarded unset for the same reason. It counts inner solves: two copied
-# blocks at the default axes cross to 2500 latent cells, and an active
-# dispersion grid multiplies that by its node count, past the engine's 2048
-# default either way, so a fit that means to integrate that tensor (or to let
-# `grid_adaptive` fall back to it) raises the ceiling here.
+# `max.grid.cells` is the engine's opt-in cell-count ceiling on the dense outer
+# tensor, forwarded unset for the same reason; unset there is none. It counts
+# inner solves: two copied blocks at the default axes cross to 2500 latent
+# cells, and an active dispersion grid multiplies that by its node count.
 .tobs_outer_grid_control <- function(control) {
   list(
     max_grid_cells            = control[["max.grid.cells"]],

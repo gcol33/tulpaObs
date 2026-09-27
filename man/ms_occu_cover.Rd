@@ -112,7 +112,7 @@ A community model whose per-arm variance components are integrated on an outer
 grid (the engine route of \code{\link[=occu_cover]{occu_cover()}}'s joint-coupled path) is not used: the
 joint nested-Laplace engine integrates every variance component on its outer
 grid, so per-arm community RE variances plus the field hyperparameters exceed
-the engine's grid cap -- the closed-form covariance M-step of the Laplace-EM is
+any tractable grid size -- the closed-form covariance M-step of the Laplace-EM is
 the scaling route for community variance components.
 Structured terms beyond the shared field error from the dispatcher rather than
 being silently dropped.

@@ -45,7 +45,8 @@
 # Routing the community model through tulpa's joint cell-coupling engine instead
 # (per-arm RE blocks integrated on the outer grid) is not viable: the joint engine
 # integrates every variance component on its grid, so per-arm community RE
-# variances plus the field hyperparameters exceed the grid cap -- the closed-form
+# variances plus the field hyperparameters multiply the grid past any tractable
+# size -- the closed-form
 # covariance M-step of the Laplace-EM is the scaling route for community variance
 # components. The non-spatial dispatcher below rejects a residual structured term
 # with a pointer rather than silently dropping it.

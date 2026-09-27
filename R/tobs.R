@@ -349,15 +349,16 @@
 #'     fit carries several outer axes -- two spatial arms (a shared field plus an
 #'     arm-specific one) put three on the grid, which `integration = "auto"`
 #'     resolves to the dense tensor.
-#'   * `max.grid.cells` -- for the same joint-coupled spatial families, the
-#'     cell-count ceiling on the dense outer tensor (the engine's
-#'     `max_grid_cells`, default 2048). A grid past it is refused before any
+#'   * `max.grid.cells` -- for the same joint-coupled spatial families, an
+#'     opt-in ceiling on the dense outer tensor's cell count (the engine's
+#'     `max_grid_cells`, unset by default). A grid past it is refused before any
 #'     inner solve, with the axes that produced the count. The count is the
 #'     number of inner solves: two copied field blocks at the default field-SD
 #'     and copy axes cross to 2500 latent cells, and an active positive-arm
-#'     dispersion grid multiplies that by its node count. A fit meaning to
-#'     integrate that tensor, or to let `integration = "grid_adaptive"` fall
-#'     back to it, raises this.
+#'     dispersion grid multiplies that by its node count. Unset, a tensor of any
+#'     size is solved, including the one a declined `integration =
+#'     "grid_adaptive"` falls back to, and one past 2048 cells is announced with
+#'     a warning first.
 #'   * `diagnose.k` -- for the joint-coupled spatial families (`occu_cover()`,
 #'     `occu()` spatial, `occu_multiscale_cover()`), whether to score the outer
 #'     hyperparameter Gaussian summary with an importance-sampling Pareto-k.

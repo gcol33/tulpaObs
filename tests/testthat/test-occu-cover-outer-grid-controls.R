@@ -103,7 +103,7 @@ test_that("auto.recenter = FALSE reaches the engine and is recorded", {
 })
 
 
-test_that("max.grid.cells reaches the engine's grid cap on every joint family", {
+test_that("max.grid.cells reaches the engine's grid ceiling on every joint family", {
   for (fam in list(occu_cover(), occu_multiscale_cover(), cover())) {
     expect_true("max.grid.cells" %in% fam$control_keys, info = fam$name)
   }
@@ -114,8 +114,8 @@ test_that("max.grid.cells reaches the engine's grid cap on every joint family", 
 
   # A ceiling below a copied fit's grid is refused by the engine, which is only
   # possible if the value arrived there. An intercept and a slope field are two
-  # blocks, which puts the fit on the multi-block driver where the cap is
-  # enforced; a single block has no tensor to cap.
+  # blocks, which puts the fit on the multi-block driver where the ceiling is
+  # read; a single block has no tensor to bound.
   fx <- oc_grid_fixture()
   expect_error(suppressWarnings(tobs(
     formula = ~ occ_cov1 + spatial(~ 1 + occ_cov1 || site_id, graph = fx$adj),
@@ -127,7 +127,7 @@ test_that("max.grid.cells reaches the engine's grid cap on every joint family", 
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
                    max.grid.cells = 1))),
-    "hard cap 1")
+    "past control$max_grid_cells = 1", fixed = TRUE)
 })
 
 

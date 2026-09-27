@@ -392,7 +392,7 @@
                   n_fields = as.integer(n_coefs), obs_idx = obs_idx,
                   field_weight = field_weight)
       # A coarse free-Sigma grid (or the user's) so the block composes with the
-      # shared field + copy under the engine's outer-grid cap.
+      # shared field + copy at a tractable outer-grid size.
       lc <- logchol_grid %||% .occu_cover_miid_logchol_grid(n_coefs)
       if (!is.null(lc)) blk$logchol_grid <- as.matrix(lc)
       re_blocks[[length(re_blocks) + 1L]] <<- blk

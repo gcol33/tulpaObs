@@ -709,8 +709,8 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
       # hyperparameter mode at all, and whether that placement is detected on a
       # thinned pilot grid instead of a full extra solve.
       "prune", "prune.tol", "auto.recenter", "recenter.pilot",
-      # Cell-count ceiling on the multi-block outer grid (the engine's
-      # `max_grid_cells`), for a dense tensor the caller means to pay for.
+      # Opt-in cell-count ceiling on the multi-block outer grid (the engine's
+      # `max_grid_cells`, unset by default).
       "max.grid.cells",
       # Shape of the prior on the cross-arm copy scale: the continuum measure
       # ("exponential" or "flat" in log alpha over the `alpha.grid` span) and
@@ -827,7 +827,7 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
 #' grid (the engine route of [occu_cover()]'s joint-coupled path) is not used: the
 #' joint nested-Laplace engine integrates every variance component on its outer
 #' grid, so per-arm community RE variances plus the field hyperparameters exceed
-#' the engine's grid cap -- the closed-form covariance M-step of the Laplace-EM is
+#' any tractable grid size -- the closed-form covariance M-step of the Laplace-EM is
 #' the scaling route for community variance components.
 #' Structured terms beyond the shared field error from the dispatcher rather than
 #' being silently dropped.
