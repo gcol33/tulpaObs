@@ -15,6 +15,7 @@
   nsim = 1000L,
   draws = TRUE,
   weights = NULL,
+  aggregate = FALSE,
   ...
 )
 }

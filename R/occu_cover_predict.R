@@ -368,22 +368,29 @@
   out
 }
 
-# The prediction frames a change map differences: `newdata` with the time
-# covariate held at each of `times`. Two times give one difference; K times give
-# a trajectory, every step differenced against `times[1]`.
-.tobs_joint_change_frames <- function(object, newdata, times, time_col) {
-  if (is.null(times) || length(times) < 2L) {
+# The prediction frames of a change map or trajectory: `newdata` with the time
+# covariate held at each of `times`. For a change map, two times give one
+# difference and K times a sequence of steps, each differenced against
+# `times[1]`; a trajectory takes one or more times.
+.tobs_joint_change_frames <- function(object, newdata, times, time_col,
+                                      type = "change") {
+  if (identical(type, "trajectory")) {
+    if (is.null(times) || !length(times)) {
+      stop("predict(type = \"trajectory\") needs `times`: the values of the ",
+           "time covariate to predict at.", call. = FALSE)
+    }
+  } else if (is.null(times) || length(times) < 2L) {
     stop("predict(type = \"change\") needs `times = c(t1, t2)` (one change) or ",
          "`times = c(t1, ..., tK)` (a trajectory, each step against t1).",
          call. = FALSE)
   }
   if (!is.numeric(times) || anyNA(times) || !all(is.finite(times))) {
-    stop("predict(type = \"change\"): `times` must be finite numeric values.",
+    stop("predict(type = \"", type, "\"): `times` must be finite numeric values.",
          call. = FALSE)
   }
   if (is.null(time_col)) time_col <- object$trend_weight
   if (is.null(time_col)) {
-    stop("predict(type = \"change\") needs the name of the time covariate. ",
+    stop("predict(type = \"", type, "\") needs the name of the time covariate. ",
          "Pass `time_col = \"<column>\"` (the covariate the `times` are held ",
          "at, whose movement drives the prediction).", call. = FALSE)
   }
@@ -392,6 +399,59 @@
          "`newdata`.", call. = FALSE)
   }
   lapply(times, function(tk) { nd <- newdata; nd[[time_col]] <- tk; nd })
+}
+
+# Long trajectory table over the K prediction frames `nds` (one per time). For
+# every quantity `state_at(nd)` returns -- a named list of [n x nsim] draw
+# matrices -- it reports `<q>_mean`, `<q>_median` and the `level` interval
+# `<q>_lwr` / `<q>_upr` at each time; one row per unit x time, units fastest.
+# Every time is evaluated on the same draw set, so the rows are jointly
+# consistent across units, quantities and times. `aggregate = TRUE` first
+# averages each quantity over the units per draw, giving one row per time. A
+# time's draws are summarised and released before the next is evaluated, so
+# memory stays flat in K unless `draws = TRUE` keeps them.
+.tobs_trajectory_table <- function(state_at, nds, times, cell, level,
+                                   aggregate = FALSE, draws = FALSE) {
+  a <- (1 - level) / 2
+  summ <- function(m, q) {
+    qs <- matrix(apply(m, 1L, stats::quantile, probs = c(0.5, a, 1 - a),
+                       names = FALSE), nrow = 3L)
+    stats::setNames(list(rowMeans(m), qs[1L, ], qs[2L, ], qs[3L, ]),
+                    paste0(q, c("_mean", "_median", "_lwr", "_upr")))
+  }
+  rows <- vector("list", length(nds))
+  dr   <- list()
+  for (k in seq_along(nds)) {
+    st <- state_at(nds[[k]])
+    if (aggregate) st <- lapply(st, function(m) matrix(colMeans(m), nrow = 1L))
+    if (isTRUE(draws))
+      for (q in names(st)) dr[[sprintf("%s_T%d", q, k)]] <- st[[q]]
+    key <- if (aggregate) list(time = times[k])
+           else list(cell = cell, time = rep(times[k], nrow(st[[1L]])))
+    rows[[k]] <- as.data.frame(
+      c(key, do.call(c, lapply(names(st), function(q) summ(st[[q]], q)))),
+      check.names = FALSE)
+  }
+  tbl <- do.call(rbind, rows)
+  rownames(tbl) <- NULL
+  attr(tbl, "quantity")  <- "trajectory"
+  attr(tbl, "times")     <- times
+  attr(tbl, "aggregate") <- aggregate
+  if (isTRUE(draws)) attr(tbl, "draws") <- dr
+  class(tbl) <- c("tobs_prediction", "data.frame")
+  tbl
+}
+
+# `aggregate` is a single TRUE / FALSE and applies to a trajectory only.
+.tobs_check_aggregate <- function(aggregate, type) {
+  if (!is.logical(aggregate) || length(aggregate) != 1L || is.na(aggregate)) {
+    stop("predict(): `aggregate` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (aggregate && !identical(type, "trajectory")) {
+    stop("predict(aggregate = TRUE) applies to type = \"trajectory\" only.",
+         call. = FALSE)
+  }
+  aggregate
 }
 
 # Per-row summaries over a draw matrix: the `level` central-interval endpoints
@@ -417,9 +477,9 @@
 .tobs_predict_occu_cover_coef <- function(object, newdata, type, level, nsim,
                                           weights = NULL) {
   type <- match.arg(type, c("occurrence", "detection", "cover_cond",
-                            "cover_exp", "change"))
-  if (identical(type, "change")) {
-    stop("predict(type = \"change\") needs a joint nested-Laplace fit ",
+                            "cover_exp", "change", "trajectory"))
+  if (type %in% c("change", "trajectory")) {
+    stop("predict(type = \"", type, "\") needs a joint nested-Laplace fit ",
          "(method = \"nested_laplace\"); this fit carries no joint object.",
          call. = FALSE)
   }
@@ -479,9 +539,10 @@
                                 type = "occurrence", times = NULL,
                                 level = 0.95, nsim = 1000L,
                                 draws = TRUE, time_col = NULL,
-                                weights = NULL) {
+                                weights = NULL, aggregate = FALSE) {
   type <- match.arg(type, c("occurrence", "detection", "cover_cond",
-                            "cover_exp", "change"))
+                            "cover_exp", "change", "trajectory"))
+  aggregate <- .tobs_check_aggregate(aggregate, type)
   if (is.null(.tobs_joint_fit(object))) {
     stop("predict() requires a joint nested-Laplace fit (method = ",
          "\"nested_laplace\"); this fit carries no joint object.",
@@ -498,6 +559,15 @@
 
   state <- function(nd)
     .tobs_pool_states(.tobs_joint_arm_states(object, bundle, nd, cell), pool)
+
+  # --- trajectory: every quantity at each of `times` -----------------------
+  if (identical(type, "trajectory")) {
+    nds <- .tobs_joint_change_frames(object, newdata, times, time_col, type)
+    return(.tobs_trajectory_table(function(nd) {
+      s <- state(nd)
+      list(psi = s$p, cover_cond = s$mu, cover_exp = s$E)
+    }, nds, times, out_cell, level, aggregate, draws))
+  }
 
   # --- single-time quantities ---------------------------------------------
   if (type != "change") {
@@ -618,8 +688,10 @@
                                      type = "occupancy", times = NULL,
                                      level = 0.95, nsim = 1000L,
                                      draws = TRUE, time_col = NULL,
-                                     weights = NULL) {
-  type <- match.arg(type, c("occupancy", "detection", "both", "change"))
+                                     weights = NULL, aggregate = FALSE) {
+  type <- match.arg(type, c("occupancy", "detection", "both", "change",
+                            "trajectory"))
+  aggregate <- .tobs_check_aggregate(aggregate, type)
   if (is.null(.tobs_joint_fit(object))) {
     stop("predict() requires a joint nested-Laplace fit; this occu() fit ",
          "carries no joint object.", call. = FALSE)
@@ -659,6 +731,12 @@
       out$detection <- tbl
     }
     return(out)
+  }
+
+  if (identical(type, "trajectory")) {
+    nds <- .tobs_joint_change_frames(object, newdata, times, time_col, type)
+    return(.tobs_trajectory_table(function(nd) list(psi = occ_state(nd)),
+                                  nds, times, cell, level, aggregate, draws))
   }
 
   # type == "change": occupancy at each of `times`, differenced against the first.

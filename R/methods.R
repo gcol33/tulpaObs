@@ -1123,6 +1123,12 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   draw matrices in `attr(, "draws")`; map it yourself, e.g.
 #'   `left_join(cents, pr, by = "cell")` then
 #'   `geom_tile(aes(x, y, fill = delta_psi))` (or `geom_sf()` on polygon cells).
+#'   `type = "trajectory"` with `times = c(t1, ..., tK)` predicts occupancy
+#'   `psi`, conditional cover `cover_cond` and expected cover `cover_exp` at
+#'   each time, for any times the user chooses, as a long table with the
+#'   posterior mean, median and `level` interval of each (one row per cell and
+#'   time); `aggregate = TRUE` averages over the cells per draw and gives the
+#'   overall trajectory, one row per time. All times share one draw set.
 #' - **Community families**: `ms_occu()`, `ms_dyn_occu()`, `ms_int_occu()`,
 #'   `ms_abun()`, `ms_distance()` and `ms_occu_cover()` predict per-species
 #'   matrices `[rows x species]`, in-sample from `fitted()` and at `newdata`
@@ -1148,8 +1154,8 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' @param X.0 Optional design matrix for occupancy prediction.
 #' @param type `"occupancy"` (default), `"detection"`, `"both"`, or `"state"`
 #'   (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
-#'   `occu_cover` fit: `"occurrence"`, `"cover_cond"`, `"cover_exp"`, or
-#'   `"change"`. `"detection"` / `"both"` on a `single`/`int_occu()` fit needs
+#'   `occu_cover` fit: `"occurrence"`, `"cover_cond"`, `"cover_exp"`,
+#'   `"change"` or `"trajectory"`. `"detection"` / `"both"` on a `single`/`int_occu()` fit needs
 #'   `X_det.0`.
 #' @param X_det.0 Optional detection design for out-of-sample `"detection"` /
 #'   `"both"` prediction on a `single`-season or [int_occu()] fit: a plain
@@ -1183,9 +1189,12 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   the population mean. Without that column, and always through `X.0` /
 #'   `X_det.0`, the prediction is population-level. Give `newdata` or
 #'   `X.0` / `X_det.0` / `terms`, not both.
-#' @param times `occu_cover` `type = "change"` only: numeric values of the time
-#'   covariate, at least two. `c(t1, t2)` differences one against the other;
-#'   `c(t1, ..., tK)` returns a trajectory, every step differenced against `t1`.
+#' @param times `occu_cover` `type = "change"` / `"trajectory"`: numeric values
+#'   of the time covariate. For `"change"`, at least two: `c(t1, t2)`
+#'   differences one against the other, `c(t1, ..., tK)` differences every step
+#'   against `t1`. For `"trajectory"`, one or more times to predict at, any
+#'   values of the covariate (between or beyond the fitted times; beyond them the
+#'   prediction follows the fitted time effect).
 #' @param level `occu_cover` only: credible level for the interval columns
 #'   (default 0.95).
 #' @param nsim `occu_cover` only: number of joint posterior draws (default 1000).
@@ -1207,6 +1216,10 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   has one row per cell, in order of first appearance, and a change map's
 #'   occupancy and cover columns share one draw set. `NULL` (default) predicts
 #'   each row on its own.
+#' @param aggregate `type = "trajectory"` only: `FALSE` (default) returns one
+#'   row per prediction unit and time; `TRUE` averages each quantity over the
+#'   units per posterior draw first and returns one row per time (the overall
+#'   trend, with its own interval).
 #' @param ... Ignored.
 #' @return Depends on mode. In-sample: `fitted()` result. `"state"`: a
 #'   data.frame with `row`, `psi` (marginalised posterior mean), `psi_lower` /
@@ -1216,7 +1229,10 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `int_occu()` fit returns a named list of such data.frames (one per
 #'   source), and `type = "both"` returns `list(occupancy = , detection = )`.
 #'   `occu_cover`: a `tobs_prediction` table (one row per cell) with per-unit
-#'   draw matrices in `attr(, "draws")`.
+#'   draw matrices in `attr(, "draws")`; `type = "trajectory"` a long table
+#'   (`cell`, `time`, then `<q>_mean` / `_median` / `_lwr` / `_upr` for `psi`,
+#'   `cover_cond` and `cover_exp`), one row per cell and time, or per time
+#'   with `aggregate = TRUE`.
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
@@ -1226,7 +1242,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  newdata = NULL, times = NULL, level = 0.95,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
                                  X_det.0 = NULL, weights = NULL,
-                                 ...) {
+                                 aggregate = FALSE, ...) {
   if (!is.null(weights) &&
       !identical(object$model$model_type, "occu_cover") &&
       !isTRUE(object$occu_only_joint)) {
@@ -1324,7 +1340,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
       return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
                                  times = times, level = level, nsim = nsim,
                                  draws = draws, time_col = time_col,
-                                 weights = weights))
+                                 weights = weights, aggregate = aggregate))
     }
     # Non-joint occu_cover() fit (laplace / nuts): there is no joint
     # nested-Laplace object for .tobs_predict_joint()'s trend-block bundle to
@@ -1386,7 +1402,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     return(.tobs_predict_occu_joint(object, newdata = nd, type = oc_type,
                                     times = times, level = level, nsim = nsim,
                                     draws = draws, time_col = time_col,
-                                    weights = weights))
+                                    weights = weights, aggregate = aggregate))
   }
   type <- match.arg(type)
 

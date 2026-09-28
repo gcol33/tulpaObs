@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.4.3
+
+* **`predict(type = "trajectory")` predicts occupancy and cover at any times.**
+  On `occu_cover()`, nested-Laplace `cover()` and the joint `occu()` route,
+  `times = c(t1, ..., tK)` gives a long table, one row per unit and time, with
+  the posterior mean, median and `level` interval of occupancy `psi`,
+  conditional cover `cover_cond` and expected cover `cover_exp` (occupancy only
+  on `occu()`). The times are any values of the time covariate, between or
+  beyond the fitted ones, and all of them share one draw set. `aggregate = TRUE`
+  averages over the units per draw first and returns the overall trajectory, one
+  row per time. Each time's draws are summarised before the next is evaluated,
+  so memory does not grow with the number of times.
+
 ## 0.4.2
 
 * **`predict(type = "change")` names occupancy `psi` on every route and gives

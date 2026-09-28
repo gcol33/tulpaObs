@@ -233,6 +233,73 @@ test_that("times = c(t1, ..., tK) widens the change table into a trajectory", {
     }
 })
 
+test_that("type = trajectory returns a long table on one draw set", {
+    skip_on_cran()
+    skip_if_fast()
+    f  <- .ocp_build_fit()
+    tt <- c(0, 0.5, 1)
+    pr <- function(...) predict(f$fit, newdata = f$cell_dat, time_col = "year",
+                                nsim = 300L, ...)
+    set.seed(3); tr <- pr(type = "trajectory", times = tt)
+    qs <- c("psi", "cover_cond", "cover_exp")
+    cols <- as.vector(t(outer(qs, c("_mean", "_median", "_lwr", "_upr"), paste0)))
+    expect_s3_class(tr, "tobs_prediction")
+    expect_identical(names(tr), c("cell", "time", cols))
+    expect_equal(nrow(tr), f$N * 3L)
+    expect_equal(tr$time, rep(tt, each = f$N))
+    expect_equal(attr(tr, "times"), tt)
+
+    # Every summary is the reduction of the draws it carries.
+    dr <- attr(tr, "draws")
+    for (k in 1:3) {
+        rows <- tr$time == tt[k]
+        expect_equal(tr$psi_mean[rows], rowMeans(dr[[sprintf("psi_T%d", k)]]),
+                     ignore_attr = TRUE)
+        expect_equal(tr$cover_exp_upr[rows],
+                     apply(dr[[sprintf("cover_exp_T%d", k)]], 1L, stats::quantile,
+                           probs = 0.975, names = FALSE), ignore_attr = TRUE)
+    }
+    for (q in qs) {
+        expect_true(all(tr[[paste0(q, "_lwr")]] <= tr[[paste0(q, "_median")]] &
+                        tr[[paste0(q, "_median")]] <= tr[[paste0(q, "_upr")]]))
+    }
+    expect_equal(dr$cover_exp_T2, dr$psi_T2 * dr$cover_cond_T2, tolerance = 1e-10)
+
+    # The same seed gives the same draws as a change map over the same times.
+    set.seed(3); ch <- pr(type = "change", times = tt)
+    expect_equal(tr$psi_mean[tr$time == 0], ch$psi_T1)
+    expect_equal(tr$cover_cond_mean[tr$time == 1], ch$cover_cond_T3)
+
+    # aggregate = TRUE averages over the cells per draw: one row per time, and
+    # its mean is the cell average of the per-cell means.
+    set.seed(3); ag <- pr(type = "trajectory", times = tt, aggregate = TRUE)
+    expect_identical(names(ag), c("time", cols))
+    expect_equal(nrow(ag), 3L)
+    expect_equal(ag$psi_mean, as.vector(tapply(tr$psi_mean, tr$time, mean)))
+    expect_equal(ag$cover_exp_mean, as.vector(tapply(tr$cover_exp_mean, tr$time, mean)))
+    expect_true(all(ag$psi_upr > ag$psi_lwr))
+
+    # One time, and a time beyond the fitted range, both predict.
+    one <- pr(type = "trajectory", times = 0.5, draws = FALSE)
+    expect_equal(nrow(one), f$N)
+    expect_null(attr(one, "draws"))
+    far <- pr(type = "trajectory", times = c(-3, 3), draws = FALSE)
+    expect_true(all(is.finite(far$psi_mean) & far$psi_mean > 0 & far$psi_mean < 1))
+})
+
+test_that("type = trajectory arguments are validated", {
+    skip_on_cran()
+    skip_if_fast()
+    f  <- .ocp_build_fit()
+    pr <- function(...) predict(f$fit, newdata = f$cell_dat, time_col = "year",
+                                nsim = 20L, ...)
+    expect_error(pr(type = "trajectory"), "needs `times`")
+    expect_error(pr(type = "change", times = c(0, 1), aggregate = TRUE),
+                 "trajectory\" only")
+    expect_error(pr(type = "trajectory", times = 0, aggregate = "yes"),
+                 "TRUE or FALSE")
+})
+
 test_that("two times keep the unsuffixed change schema", {
     skip_on_cran()
     skip_if_fast()

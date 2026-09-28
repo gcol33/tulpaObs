@@ -464,7 +464,7 @@ predict.cover_fit <- function(object, newdata = NULL,
                                      type = NULL, include_RE = FALSE,
                                      times = NULL, time_col = NULL,
                                      level = 0.95, nsim = 1000L, draws = TRUE,
-                                     weights = NULL, ...) {
+                                     weights = NULL, aggregate = FALSE, ...) {
   # Nested-Laplace shared-field fit: route through the unified joint predict
   # substrate. Map the legacy fixed-effects type names onto the joint vocabulary
   # so old calls keep working.
@@ -478,7 +478,7 @@ predict.cover_fit <- function(object, newdata = NULL,
     return(.tobs_predict_joint(object, newdata = newdata, type = type,
                                times = times, level = level, nsim = nsim,
                                draws = draws, time_col = time_col,
-                               weights = weights))
+                               weights = weights, aggregate = aggregate))
   }
   if (!is.null(weights)) {
     stop("predict(weights = ) needs the nested-Laplace cover() fit ",

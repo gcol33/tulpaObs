@@ -19,6 +19,7 @@
   time_col = NULL,
   X_det.0 = NULL,
   weights = NULL,
+  aggregate = FALSE,
   ...
 )
 }
@@ -29,8 +30,8 @@
 
 \item{type}{\code{"occupancy"} (default), \code{"detection"}, \code{"both"}, or \code{"state"}
 (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
-\code{occu_cover} fit: \code{"occurrence"}, \code{"cover_cond"}, \code{"cover_exp"}, or
-\code{"change"}. \code{"detection"} / \code{"both"} on a \code{single}/\code{int_occu()} fit needs
+\code{occu_cover} fit: \code{"occurrence"}, \code{"cover_cond"}, \code{"cover_exp"},
+\code{"change"} or \code{"trajectory"}. \code{"detection"} / \code{"both"} on a \code{single}/\code{int_occu()} fit needs
 \code{X_det.0}.}
 
 \item{quantiles}{Quantile levels for credible intervals: a strictly
@@ -62,9 +63,12 @@ the population mean. Without that column, and always through \code{X.0} /
 \code{X_det.0}, the prediction is population-level. Give \code{newdata} or
 \code{X.0} / \code{X_det.0} / \code{terms}, not both.}
 
-\item{times}{\code{occu_cover} \code{type = "change"} only: numeric values of the time
-covariate, at least two. \code{c(t1, t2)} differences one against the other;
-\code{c(t1, ..., tK)} returns a trajectory, every step differenced against \code{t1}.}
+\item{times}{\code{occu_cover} \code{type = "change"} / \code{"trajectory"}: numeric values
+of the time covariate. For \code{"change"}, at least two: \code{c(t1, t2)}
+differences one against the other, \code{c(t1, ..., tK)} differences every step
+against \code{t1}. For \code{"trajectory"}, one or more times to predict at, any
+values of the covariate (between or beyond the fitted times; beyond them the
+prediction follows the fitted time effect).}
 
 \item{level}{\code{occu_cover} only: credible level for the interval columns
 (default 0.95).}
@@ -100,6 +104,11 @@ has one row per cell, in order of first appearance, and a change map's
 occupancy and cover columns share one draw set. \code{NULL} (default) predicts
 each row on its own.}
 
+\item{aggregate}{\code{type = "trajectory"} only: \code{FALSE} (default) returns one
+row per prediction unit and time; \code{TRUE} averages each quantity over the
+units per posterior draw first and returns one row per time (the overall
+trend, with its own interval).}
+
 \item{...}{Ignored.}
 }
 \value{
@@ -111,7 +120,10 @@ terms: data.frame with estimate and CIs; \code{type = "detection"} on an
 \code{int_occu()} fit returns a named list of such data.frames (one per
 source), and \code{type = "both"} returns \code{list(occupancy = , detection = )}.
 \code{occu_cover}: a \code{tobs_prediction} table (one row per cell) with per-unit
-draw matrices in \code{attr(, "draws")}.
+draw matrices in \code{attr(, "draws")}; \code{type = "trajectory"} a long table
+(\code{cell}, \code{time}, then \verb{<q>_mean} / \verb{_median} / \verb{_lwr} / \verb{_upr} for \code{psi},
+\code{cover_cond} and \code{cover_exp}), one row per cell and time, or per time
+with \code{aggregate = TRUE}.
 }
 \description{
 Four modes:
@@ -150,6 +162,12 @@ returns the same layout with occupancy only. The result is a
 draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then
 \code{geom_tile(aes(x, y, fill = delta_psi))} (or \code{geom_sf()} on polygon cells).
+\code{type = "trajectory"} with \code{times = c(t1, ..., tK)} predicts occupancy
+\code{psi}, conditional cover \code{cover_cond} and expected cover \code{cover_exp} at
+each time, for any times the user chooses, as a long table with the
+posterior mean, median and \code{level} interval of each (one row per cell and
+time); \code{aggregate = TRUE} averages over the cells per draw and gives the
+overall trajectory, one row per time. All times share one draw set.
 \item \strong{Community families}: \code{ms_occu()}, \code{ms_dyn_occu()}, \code{ms_int_occu()},
 \code{ms_abun()}, \code{ms_distance()} and \code{ms_occu_cover()} predict per-species
 matrices \verb{[rows x species]}, in-sample from \code{fitted()} and at \code{newdata}
