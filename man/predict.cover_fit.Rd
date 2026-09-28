@@ -39,6 +39,10 @@ level, \code{nsim} the draw count, \code{draws} whether to attach the draw matri
 prediction per \code{cell}, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}. A numeric vector (one
 weight per row) or the name of a \code{newdata} column.}
 
+\item{aggregate}{Nested-Laplace fit, \code{type = "trajectory"} only: \code{TRUE}
+averages each quantity over the prediction units per posterior draw and
+returns one row per time, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}.}
+
 \item{...}{Unused.}
 }
 \value{

@@ -456,6 +456,9 @@
 #' @param weights Nested-Laplace fit only: pool several `newdata` rows into one
 #'   prediction per `cell`, as in [predict.tobs_fit()]. A numeric vector (one
 #'   weight per row) or the name of a `newdata` column.
+#' @param aggregate Nested-Laplace fit, `type = "trajectory"` only: `TRUE`
+#'   averages each quantity over the prediction units per posterior draw and
+#'   returns one row per time, as in [predict.tobs_fit()].
 #' @param ... Unused.
 #' @return Separate-Laplace fit: a numeric vector. Nested-Laplace fit: a
 #'   `tobs_prediction`.

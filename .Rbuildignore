@@ -37,3 +37,4 @@
 ^_.*\.(R|log)$
 ^\.Rhistory$
 ^build_site\.R$
+^Rplots\.pdf$

@@ -12,6 +12,10 @@
   averages over the units per draw first and returns the overall trajectory, one
   row per time. Each time's draws are summarised before the next is evaluated,
   so memory does not grow with the number of times.
+* **Pinned to tulpa (>= 0.6.4)** in both `Imports:` and `LinkingTo:`. tulpa
+  0.6.4 moves `TULPA_ABI_VERSION` to 46 (the SMC entry gained the tempered
+  population WBIC reads), so tulpaObs is rebuilt against it; no tulpaObs route
+  calls the SMC or VI entries, and its fits are unchanged.
 
 ## 0.4.2
 
