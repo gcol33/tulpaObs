@@ -18,6 +18,7 @@
   draws = TRUE,
   time_col = NULL,
   X_det.0 = NULL,
+  weights = NULL,
   ...
 )
 }
@@ -84,6 +85,20 @@ a list of one design matrix per source (named by source, or in source
 order) for an \code{int_occu()} fit -- matching \code{fitted()$p}'s per-source
 shape. In-sample locations only: like the state-arm \code{svc()}/\code{spde()}
 surfaces, this does not krige a spatial detection field to unseen points.}
+
+\item{weights}{\code{occu_cover} (and the joint \code{occu()} SVC route) only: pool
+several \code{newdata} rows into one prediction per cell. \code{newdata} then carries
+more than one row per \code{cell} (for example one row per habitat level), and
+\code{weights} gives each row's share of its cell, as a numeric vector with one
+entry per row or the name of a \code{newdata} column. Weights are normalised
+within each cell. Every quantity is pooled per posterior draw before it is
+summarised or differenced: occupancy, detection and expected cover are the
+weighted means of the rows, and conditional cover is the pooled expected
+cover divided by the pooled occupancy (the weighted mean of the rows'
+conditional cover when occupancy does not vary across them). The result
+has one row per cell, in order of first appearance, and a change map's
+occupancy and cover columns share one draw set. \code{NULL} (default) predicts
+each row on its own.}
 
 \item{...}{Ignored.}
 }

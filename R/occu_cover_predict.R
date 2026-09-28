@@ -263,6 +263,72 @@
   list(newdata = newdata, cell = cell)
 }
 
+# Row pooling for predict(weights = ). `newdata` may carry several rows per
+# prediction cell, one per level of a covariate the cell mixes (a habitat
+# composition, a set of plot sizes); `weights` gives each row's share of its cell.
+# Resolves the weights (a numeric vector or the name of a `newdata` column),
+# normalises them within each cell and returns the pooling map: `w` the
+# normalised per-row weight, `g` the row's output-row index, `cell` the output
+# cells in order of first appearance. NULL weights -> NULL (no pooling).
+.tobs_predict_pool <- function(weights, newdata, cell) {
+  if (is.null(weights)) return(NULL)
+  if (is.character(weights)) {
+    if (length(weights) != 1L || !weights %in% names(newdata)) {
+      stop("predict(): `weights = \"", paste(weights, collapse = "\", \""),
+           "\"` must name one column of `newdata`.", call. = FALSE)
+    }
+    weights <- newdata[[weights]]
+  }
+  w <- as.numeric(weights)
+  if (length(w) != nrow(newdata)) {
+    stop("predict(): `weights` has length ", length(w), " but `newdata` has ",
+         nrow(newdata), " rows (one weight per row).", call. = FALSE)
+  }
+  if (anyNA(w) || !all(is.finite(w)) || any(w < 0)) {
+    stop("predict(): `weights` must be finite and non-negative.", call. = FALSE)
+  }
+  key <- unique(cell)
+  g   <- match(cell, key)
+  tot <- as.vector(rowsum(w, g, reorder = FALSE))
+  if (any(tot <= 0)) {
+    stop("predict(): the `weights` of cell(s) ",
+         paste(utils::head(key[tot <= 0], 5L), collapse = ", "),
+         " sum to zero; every cell needs a positive total weight.", call. = FALSE)
+  }
+  list(w = w / tot[g], g = g, cell = key)
+}
+
+# Pool per-draw arm states over each cell's rows (`pool` from
+# .tobs_predict_pool()). Occupancy, detection and expected cover are the
+# weighted means of their rows; conditional cover is the pooled expected cover
+# over the pooled occupancy, i.e. E[cover | present] under the cell's mixture,
+# which reduces to the weighted mean of the rows' conditional cover when
+# occupancy does not vary across them. Pooling happens per draw, before any
+# summary or difference, so the pooled table and its change share one draw set.
+.tobs_pool_states <- function(st, pool) {
+  if (is.null(pool)) return(st)
+  agg <- function(m) {
+    out <- rowsum(pool$w * m, pool$g, reorder = FALSE)
+    dimnames(out) <- NULL
+    out
+  }
+  out <- list()
+  if (!is.null(st$p))     out$p     <- agg(st$p)
+  if (!is.null(st$p_det)) out$p_det <- agg(st$p_det)
+  if (!is.null(st$mu)) {
+    if (!is.null(st$E) && !is.null(out$p)) {
+      out$E  <- agg(st$E)
+      mu_w   <- agg(st$mu)
+      pos    <- out$p > 0
+      out$mu <- mu_w
+      out$mu[pos] <- out$E[pos] / out$p[pos]
+    } else {
+      out$mu <- agg(st$mu)
+    }
+  }
+  out
+}
+
 # Per-draw quantities at `nd` for the arms the fit carries. `bundle$b` is the
 # roster: the occupancy arm ("occ") is always present, the detection arm ("det")
 # on occu() and occu_cover() fits, the cover arm ("pos") on occu_cover() and
@@ -348,7 +414,8 @@
 # `newdata`) is unaffected -- predict.tobs_fit() routes that to fitted()
 # instead of here, which already folds in the field and every random effect
 # (#351).
-.tobs_predict_occu_cover_coef <- function(object, newdata, type, level, nsim) {
+.tobs_predict_occu_cover_coef <- function(object, newdata, type, level, nsim,
+                                          weights = NULL) {
   type <- match.arg(type, c("occurrence", "detection", "cover_cond",
                             "cover_exp", "change"))
   if (identical(type, "change")) {
@@ -375,24 +442,30 @@
   p_occ <- ncol(cmp$b_occ); p_det <- ncol(cmp$b_det); p_pos <- ncol(cmp$b_pos)
   X_occ   <- .tobs_joint_arm_design(object, newdata, "occ", p_occ)
   eta_occ <- tcrossprod(X_occ, cmp$b_occ)
-  p_mat   <- stats::plogis(eta_occ)
+  st <- list(p = stats::plogis(eta_occ))
+  if (identical(type, "detection")) {
+    X_det    <- .tobs_joint_arm_design(object, newdata, "det", p_det)
+    st$p_det <- stats::plogis(tcrossprod(X_det, cmp$b_det))
+  }
+  if (type %in% c("cover_cond", "cover_exp")) {
+    X_pos   <- .tobs_joint_arm_design(object, newdata, "pos", p_pos)
+    eta_pos <- tcrossprod(X_pos, cmp$b_pos)
+    st$mu   <- .occu_cover_mu_from_eta(eta_pos, cmp$disp, object$model$positive)
+    st$E    <- st$p * st$mu
+  }
+  unit <- if (!is.null(newdata$cell)) as.integer(newdata$cell)
+          else seq_len(nrow(newdata))
+  pool <- .tobs_predict_pool(weights, newdata, unit)
+  st   <- .tobs_pool_states(st, pool)
 
-  mat <- switch(
-    type,
-    occurrence = p_mat,
-    detection  = {
-      X_det <- .tobs_joint_arm_design(object, newdata, "det", p_det)
-      stats::plogis(tcrossprod(X_det, cmp$b_det))
-    },
-    cover_cond = ,
-    cover_exp  = {
-      X_pos   <- .tobs_joint_arm_design(object, newdata, "pos", p_pos)
-      eta_pos <- tcrossprod(X_pos, cmp$b_pos)
-      mu      <- .occu_cover_mu_from_eta(eta_pos, cmp$disp, object$model$positive)
-      if (identical(type, "cover_exp")) p_mat * mu else mu
-    })
+  mat <- switch(type,
+                occurrence = st$p,
+                detection  = st$p_det,
+                cover_cond = st$mu,
+                cover_exp  = st$E)
 
-  tbl <- .occu_cover_summ(mat, seq_len(nrow(newdata)), level)
+  tbl <- .occu_cover_summ(mat, if (is.null(pool)) seq_len(nrow(newdata))
+                               else pool$cell, level)
   attr(tbl, "quantity") <- type
   attr(tbl, "draws") <- stats::setNames(list(mat), type)
   class(tbl) <- c("tobs_prediction", "data.frame")
@@ -405,7 +478,8 @@
 .tobs_predict_joint <- function(object, newdata = NULL,
                                 type = "occurrence", times = NULL,
                                 level = 0.95, nsim = 1000L,
-                                draws = TRUE, time_col = NULL) {
+                                draws = TRUE, time_col = NULL,
+                                weights = NULL) {
   type <- match.arg(type, c("occurrence", "detection", "cover_cond",
                             "cover_exp", "change"))
   if (is.null(.tobs_joint_fit(object))) {
@@ -419,8 +493,11 @@
   nc      <- .tobs_joint_predict_cells(object, newdata, bundle$n_cells)
   newdata <- nc$newdata
   cell    <- nc$cell
+  pool    <- .tobs_predict_pool(weights, newdata, cell)
+  out_cell <- if (is.null(pool)) cell else pool$cell
 
-  state <- function(nd) .tobs_joint_arm_states(object, bundle, nd, cell)
+  state <- function(nd)
+    .tobs_pool_states(.tobs_joint_arm_states(object, bundle, nd, cell), pool)
 
   # --- single-time quantities ---------------------------------------------
   if (type != "change") {
@@ -435,7 +512,7 @@
                   detection  = st$p_det,
                   cover_cond = st$mu,
                   cover_exp  = st$E)
-    tbl <- .occu_cover_summ(mat, cell, level)
+    tbl <- .occu_cover_summ(mat, out_cell, level)
     attr(tbl, "quantity") <- type
     if (isTRUE(draws)) attr(tbl, "draws") <- stats::setNames(list(mat), type)
     class(tbl) <- c("tobs_prediction", "data.frame")
@@ -472,7 +549,7 @@
   lvl <- function(nm, k) sprintf("%s_T%d", nm, k)
   dl  <- function(nm, k) paste0(nm, sfx[k])
 
-  tbl <- data.frame(cell = cell)
+  tbl <- data.frame(cell = out_cell)
   add <- function(tbl, nm, v) { tbl[[nm]] <- v; tbl }
 
   # Quantity-major: every step's level, then that quantity's deltas.
@@ -569,7 +646,8 @@
 .tobs_predict_occu_joint <- function(object, newdata = NULL,
                                      type = "occupancy", times = NULL,
                                      level = 0.95, nsim = 1000L,
-                                     draws = TRUE, time_col = NULL) {
+                                     draws = TRUE, time_col = NULL,
+                                     weights = NULL) {
   type <- match.arg(type, c("occupancy", "detection", "both", "change"))
   if (is.null(.tobs_joint_fit(object))) {
     stop("predict() requires a joint nested-Laplace fit; this occu() fit ",
@@ -581,11 +659,13 @@
   nc      <- .tobs_joint_predict_cells(object, newdata, bundle$n_cells)
   newdata <- nc$newdata
   cell    <- nc$cell
+  pool    <- .tobs_predict_pool(weights, newdata, cell)
+  if (!is.null(pool)) cell <- pool$cell
 
-  occ_state <- function(nd)
-    .tobs_joint_arm_states(object, bundle, nd, cell, "occ")$p
-  det_state <- function(nd)
-    .tobs_joint_arm_states(object, bundle, nd, cell, "det")$p_det
+  occ_state <- function(nd) .tobs_pool_states(
+    .tobs_joint_arm_states(object, bundle, nd, nc$cell, "occ"), pool)$p
+  det_state <- function(nd) .tobs_pool_states(
+    .tobs_joint_arm_states(object, bundle, nd, nc$cell, "det"), pool)$p_det
 
   if (type %in% c("occupancy", "detection", "both")) {
     out <- list()

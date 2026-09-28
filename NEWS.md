@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.4.1
+
+* **`predict(weights = )` pools prediction rows per cell.** On `occu_cover()`,
+  nested-Laplace `cover()` and the joint `occu()` SVC route, `newdata` may carry
+  several rows per `cell` (for example one per habitat level) and `weights` (a
+  numeric vector or a `newdata` column name) gives each row's share of its
+  cell. Every quantity is pooled per posterior draw before it is summarised or
+  differenced: occupancy, detection and expected cover as weighted means,
+  conditional cover as pooled expected cover over pooled occupancy. One call
+  therefore returns a habitat-marginal change table whose occupancy and cover
+  columns share one draw set, where averaging cover over a habitat mix
+  previously took a second `predict()` call with its own draws.
+
 ## 0.4.0
 
 * **`predict(newdata = )` uses the new data (#371).** On occu / dyn_occu /

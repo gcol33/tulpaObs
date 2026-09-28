@@ -14,6 +14,7 @@
   level = 0.95,
   nsim = 1000L,
   draws = TRUE,
+  weights = NULL,
   ...
 )
 }
@@ -32,6 +33,10 @@ projection); the nested-Laplace fit always projects the shared field.}
 
 \item{times, time_col, level, nsim, draws}{Nested-Laplace fit only: \code{times = c(t1, t2)} and \code{time_col} drive the \code{"change"} map; \code{level} is the credible
 level, \code{nsim} the draw count, \code{draws} whether to attach the draw matrices.}
+
+\item{weights}{Nested-Laplace fit only: pool several \code{newdata} rows into one
+prediction per \code{cell}, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}. A numeric vector (one
+weight per row) or the name of a \code{newdata} column.}
 
 \item{...}{Unused.}
 }

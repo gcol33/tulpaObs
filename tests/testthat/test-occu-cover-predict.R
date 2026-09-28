@@ -113,6 +113,84 @@ test_that("type = change emits the exact column contract keyed by cell", {
     expect_gt(stats::sd(pr$delta_p), 0)
 })
 
+# Two rows per cell differing only in the cover covariate, weighted w / 1 - w:
+# the setting of a cell whose plots mix two habitats.
+.ocp_mix_frame <- function(f, seed = 5L) {
+    set.seed(seed)
+    a <- f$cell_dat; a$cell <- seq_len(f$N); a$pos_cov1 <- -1
+    b <- a; b$pos_cov1 <- 1
+    w <- stats::runif(f$N, 0.1, 0.9)
+    nd <- rbind(a, b); nd$w <- c(w, 1 - w)
+    list(nd = nd, w = w)
+}
+
+test_that("weights pool rows per draw into one change table per cell", {
+    skip_on_cran()
+    skip_if_fast()
+    f  <- .ocp_build_fit()
+    mx <- .ocp_mix_frame(f)
+    N  <- f$N; w <- mx$w
+    set.seed(11)
+    un <- predict(f$fit, newdata = mx$nd, type = "change",
+                  times = c(0, 1), time_col = "year", nsim = 300L)
+    set.seed(11)
+    po <- predict(f$fit, newdata = mx$nd, type = "change",
+                  times = c(0, 1), time_col = "year", nsim = 300L,
+                  weights = "w")
+    expect_equal(nrow(po), N)
+    expect_equal(po$cell, seq_len(N))
+    du <- attr(un, "draws"); dp <- attr(po, "draws")
+    ia <- seq_len(N); ib <- N + seq_len(N)
+    mix <- function(m)
+        unname(w * m[ia, , drop = FALSE] + (1 - w) * m[ib, , drop = FALSE])
+    for (k in c("p_T1", "p_T2", "cover_exp_T1", "cover_exp_T2")) {
+        expect_equal(dp[[k]], mix(du[[k]]), tolerance = 1e-12, info = k)
+    }
+    # Occupancy carries no cover covariate, so its rows agree and pooling is inert.
+    expect_equal(dp$p_T1, unname(du$p_T1[ia, , drop = FALSE]), tolerance = 1e-12)
+    # Conditional cover under the mixture = pooled E / pooled p.
+    expect_equal(dp$cover_cond_T1, mix(du$cover_exp_T1) / mix(du$p_T1),
+                 tolerance = 1e-12)
+    expect_equal(dp$cover_cond_T1, mix(du$cover_cond_T1), tolerance = 1e-10)
+    # Occupancy and cover columns read one draw set: the table's p_T1 is the
+    # row mean of the same draws its deltas and cover columns come from.
+    expect_equal(po$p_T1, rowMeans(dp$p_T1))
+    expect_equal(po$delta_cover_exp, rowMeans(dp$cover_exp_T2 - dp$cover_exp_T1),
+                 tolerance = 1e-12)
+    expect_equal(po$delta_cover_from_occ + po$delta_cover_from_ab,
+                 po$delta_cover_exp, tolerance = 1e-6)
+
+    # A numeric vector gives the same table as the column name.
+    set.seed(11)
+    pv <- predict(f$fit, newdata = mx$nd, type = "change",
+                  times = c(0, 1), time_col = "year", nsim = 300L,
+                  weights = mx$nd$w)
+    expect_equal(as.data.frame(pv), as.data.frame(po))
+
+    # Single-time quantities pool the same way.
+    set.seed(12)
+    su <- predict(f$fit, newdata = mx$nd, type = "cover_exp", nsim = 200L)
+    set.seed(12)
+    sp <- predict(f$fit, newdata = mx$nd, type = "cover_exp", nsim = 200L,
+                  weights = "w")
+    expect_equal(attr(sp, "draws")$cover_exp,
+                 mix(attr(su, "draws")$cover_exp), tolerance = 1e-12)
+})
+
+test_that("weights are validated", {
+    skip_on_cran()
+    skip_if_fast()
+    f  <- .ocp_build_fit()
+    mx <- .ocp_mix_frame(f)
+    pr <- function(w) predict(f$fit, newdata = mx$nd, type = "occurrence",
+                              nsim = 20L, weights = w)
+    expect_error(pr("nope"), "must name one column")
+    expect_error(pr(1), "one weight per row")
+    expect_error(pr(-mx$nd$w), "non-negative")
+    w0 <- mx$nd$w; w0[c(1L, f$N + 1L)] <- 0
+    expect_error(pr(w0), "sum to zero")
+})
+
 test_that("times = c(t1, ..., tK) widens the change table into a trajectory", {
     skip_on_cran()
     skip_if_fast()
@@ -387,6 +465,24 @@ test_that("predict() at newdata works on a laplace fit and matches in-sample", {
 
     pr_cover <- predict(f$fit, type = "cover_exp", newdata = nd)
     expect_true(all(pr_cover$mean > 0))
+})
+
+test_that("weights pool rows per draw on a laplace fit", {
+    skip_on_cran()
+    f  <- .ocp_build_coef_fit("laplace")
+    a  <- f$sim$data[1:5, , drop = FALSE]; a$cell <- 1:5; a$pos_cov1 <- -1
+    b  <- a; b$pos_cov1 <- 1
+    nd <- rbind(a, b); w <- c(0.2, 0.4, 0.5, 0.7, 0.9)
+    set.seed(3)
+    un <- predict(f$fit, type = "cover_cond", newdata = nd, nsim = 150L)
+    set.seed(3)
+    po <- predict(f$fit, type = "cover_cond", newdata = nd, nsim = 150L,
+                  weights = c(w, 1 - w))
+    expect_equal(po$cell, 1:5)
+    mu <- attr(un, "draws")$cover_cond
+    expect_equal(attr(po, "draws")$cover_cond,
+                 unname(w * mu[1:5, ] + (1 - w) * mu[6:10, ]), tolerance = 1e-12)
+    expect_error(predict(f$fit, weights = 1), "pools `newdata` rows")
 })
 
 test_that("predict() with no newdata reduces to fitted() on a nuts fit", {

@@ -453,6 +453,9 @@
 #' @param times,time_col,level,nsim,draws Nested-Laplace fit only: `times =
 #'   c(t1, t2)` and `time_col` drive the `"change"` map; `level` is the credible
 #'   level, `nsim` the draw count, `draws` whether to attach the draw matrices.
+#' @param weights Nested-Laplace fit only: pool several `newdata` rows into one
+#'   prediction per `cell`, as in [predict.tobs_fit()]. A numeric vector (one
+#'   weight per row) or the name of a `newdata` column.
 #' @param ... Unused.
 #' @return Separate-Laplace fit: a numeric vector. Nested-Laplace fit: a
 #'   `tobs_prediction`.
@@ -461,7 +464,7 @@ predict.cover_fit <- function(object, newdata = NULL,
                                      type = NULL, include_RE = FALSE,
                                      times = NULL, time_col = NULL,
                                      level = 0.95, nsim = 1000L, draws = TRUE,
-                                     ...) {
+                                     weights = NULL, ...) {
   # Nested-Laplace shared-field fit: route through the unified joint predict
   # substrate. Map the legacy fixed-effects type names onto the joint vocabulary
   # so old calls keep working.
@@ -474,7 +477,12 @@ predict.cover_fit <- function(object, newdata = NULL,
                    type)
     return(.tobs_predict_joint(object, newdata = newdata, type = type,
                                times = times, level = level, nsim = nsim,
-                               draws = draws, time_col = time_col))
+                               draws = draws, time_col = time_col,
+                               weights = weights))
+  }
+  if (!is.null(weights)) {
+    stop("predict(weights = ) needs the nested-Laplace cover() fit ",
+         "(method = \"nested_laplace\").", call. = FALSE)
   }
 
   if (is.null(type)) type <- "expected"

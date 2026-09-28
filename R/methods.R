@@ -1194,6 +1194,19 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #' @param time_col `occu_cover` only: name of the time covariate weighting the
 #'   trend field / driving the change map; auto-resolved from the fit's stored
 #'   trend weight when omitted.
+#' @param weights `occu_cover` (and the joint `occu()` SVC route) only: pool
+#'   several `newdata` rows into one prediction per cell. `newdata` then carries
+#'   more than one row per `cell` (for example one row per habitat level), and
+#'   `weights` gives each row's share of its cell, as a numeric vector with one
+#'   entry per row or the name of a `newdata` column. Weights are normalised
+#'   within each cell. Every quantity is pooled per posterior draw before it is
+#'   summarised or differenced: occupancy, detection and expected cover are the
+#'   weighted means of the rows, and conditional cover is the pooled expected
+#'   cover divided by the pooled occupancy (the weighted mean of the rows'
+#'   conditional cover when occupancy does not vary across them). The result
+#'   has one row per cell, in order of first appearance, and a change map's
+#'   occupancy and cover columns share one draw set. `NULL` (default) predicts
+#'   each row on its own.
 #' @param ... Ignored.
 #' @return Depends on mode. In-sample: `fitted()` result. `"state"`: a
 #'   data.frame with `row`, `psi` (marginalised posterior mean), `psi_lower` /
@@ -1212,8 +1225,16 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  terms = NULL, n_points = 50L,
                                  newdata = NULL, times = NULL, level = 0.95,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
-                                 X_det.0 = NULL,
+                                 X_det.0 = NULL, weights = NULL,
                                  ...) {
+  if (!is.null(weights) &&
+      !identical(object$model$model_type, "occu_cover") &&
+      !isTRUE(object$occu_only_joint)) {
+    stop("predict(weights = ) pools newdata rows per cell and is supported for ",
+         "occu_cover() fits and the joint occu() SVC route only; model type '",
+         object$model$model_type %||% "unknown", "' does not take it.",
+         call. = FALSE)
+  }
   # Every family route below reports its interval at these levels, so they are
   # checked once here rather than reaching `quantile()` as an NA.
   quantiles <- .tobs_check_quantiles(quantiles, n = 3L)
@@ -1302,7 +1323,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (!is.null(.tobs_joint_fit(object))) {
       return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
                                  times = times, level = level, nsim = nsim,
-                                 draws = draws, time_col = time_col))
+                                 draws = draws, time_col = time_col,
+                                 weights = weights))
     }
     # Non-joint occu_cover() fit (laplace / nuts): there is no joint
     # nested-Laplace object for .tobs_predict_joint()'s trend-block bundle to
@@ -1310,8 +1332,15 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     # folds in a sampled field or random effect; newdata prediction goes
     # through the coefficient-level draws `.tobs_occu_cover_components()`
     # already assembles for WAIC / fitted() (#351).
-    if (is.null(nd)) return(fitted(object))
-    return(.tobs_predict_occu_cover_coef(object, nd, oc_type, level, nsim))
+    if (is.null(nd)) {
+      if (!is.null(weights)) {
+        stop("predict(weights = ) pools `newdata` rows; pass `newdata` with a ",
+             "`cell` column.", call. = FALSE)
+      }
+      return(fitted(object))
+    }
+    return(.tobs_predict_occu_cover_coef(object, nd, oc_type, level, nsim,
+                                         weights = weights))
   }
   if (identical(object$model$model_type, "occu_multiscale_cover")) {
     if (!is.null(X.0) || !is.null(terms) || !is.null(newdata)) {
@@ -1356,7 +1385,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
     return(.tobs_predict_occu_joint(object, newdata = nd, type = oc_type,
                                     times = times, level = level, nsim = nsim,
-                                    draws = draws, time_col = time_col))
+                                    draws = draws, time_col = time_col,
+                                    weights = weights))
   }
   type <- match.arg(type)
 
