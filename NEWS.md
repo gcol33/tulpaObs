@@ -1,5 +1,19 @@
 # tulpaObs NEWS
 
+## 0.4.2
+
+* **`predict(type = "change")` names occupancy `psi` on every route and gives
+  every level an interval.** The `occu_cover()` / nested-Laplace `cover()`
+  change table named occupancy `p_T<k>` / `delta_p` while the joint `occu()`
+  route named it `psi_T<k>` / `delta_psi`; both now use `psi`. Every level
+  column (`psi_T<k>`, `cover_cond_T<k>`, `cover_exp_T<k>`) now carries `.sd` /
+  `.lwr` / `.upr` (cover levels previously had none), and every delta carries
+  `.lwr` / `.upr` / `.prob_pos`, including the `delta_cover_from_occ` /
+  `delta_cover_from_ab` split. The joint `occu()` route now accepts
+  `times = c(t1, ..., tK)` trajectories as well. Both routes build the table
+  through one helper, so the two layouts cannot drift. Breaking: code reading
+  `p_T1` / `delta_p` must read `psi_T1` / `delta_psi`.
+
 ## 0.4.1
 
 * **`predict(weights = )` pools prediction rows per cell.** On `occu_cover()`,

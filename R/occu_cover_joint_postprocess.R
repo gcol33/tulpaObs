@@ -105,7 +105,7 @@
   # Joint (betas + field) posterior covariance by the law of total covariance
   # over the outer hyperparameter grid, x = (beta_psi, beta_p, beta_pos, field)
   # stacked. Carrying the field block (not just the betas) means downstream
-  # derived quantities (delta_p, delta_cover) can marginalize the joint
+  # derived quantities (delta_psi, delta_cover) can marginalize the joint
   # betas+field posterior instead of a marginal-only diagonal. The arm-count-
   # agnostic computation lives in joint_postprocess_shared.R, shared with the
   # 2-arm `.occu_jc_postprocess()`; only the arm list and the field index differ.
@@ -604,7 +604,7 @@
   pos_field_table <- if (length(pos_field_tables)) pos_field_tables[[1L]] else NULL
 
   # Joint betas+field posterior for downstream derived-quantity prediction
-  # (delta_p / delta_cover marginalized over the full correlated posterior).
+  # (delta_psi / delta_cover marginalized over the full correlated posterior).
   # `joint_means` carries every field in the same demeaned convention as
   # `spatial_field`; `joint_vcov` is the law-of-total-covariance Vj (NULL on
   # the older-tulpa diagonal fallback). Fields are stacked in block order

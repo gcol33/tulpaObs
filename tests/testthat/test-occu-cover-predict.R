@@ -98,19 +98,19 @@ test_that("type = change emits the exact column contract keyed by cell", {
     f <- .ocp_build_fit()
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
                   times = c(0, 1), time_col = "year", nsim = 200L)
-    point_cols <- c("p_T1", "p_T2", "delta_p",
+    point_cols <- c("psi_T1", "psi_T2", "delta_psi",
                     "cover_cond_T1", "cover_cond_T2", "delta_cover_cond",
                     "cover_exp_T1", "cover_exp_T2", "delta_cover_exp",
                     "delta_cover_from_occ", "delta_cover_from_ab")
     delta_ci <- as.vector(outer(
-        c("delta_p", "delta_cover_cond", "delta_cover_exp",
+        c("delta_psi", "delta_cover_cond", "delta_cover_exp",
           "delta_cover_from_occ", "delta_cover_from_ab"),
         c(".lwr", ".upr"), paste0))
     expect_true(all(c("cell", point_cols, delta_ci) %in% names(pr)))
     expect_equal(nrow(pr), f$N)
     expect_s3_class(pr, "tobs_prediction")
-    # year drives occupancy -> delta_p is non-trivial across cells.
-    expect_gt(stats::sd(pr$delta_p), 0)
+    # year drives occupancy -> delta_psi is non-trivial across cells.
+    expect_gt(stats::sd(pr$delta_psi), 0)
 })
 
 # Two rows per cell differing only in the cover covariate, weighted w / 1 - w:
@@ -143,18 +143,18 @@ test_that("weights pool rows per draw into one change table per cell", {
     ia <- seq_len(N); ib <- N + seq_len(N)
     mix <- function(m)
         unname(w * m[ia, , drop = FALSE] + (1 - w) * m[ib, , drop = FALSE])
-    for (k in c("p_T1", "p_T2", "cover_exp_T1", "cover_exp_T2")) {
+    for (k in c("psi_T1", "psi_T2", "cover_exp_T1", "cover_exp_T2")) {
         expect_equal(dp[[k]], mix(du[[k]]), tolerance = 1e-12, info = k)
     }
     # Occupancy carries no cover covariate, so its rows agree and pooling is inert.
-    expect_equal(dp$p_T1, unname(du$p_T1[ia, , drop = FALSE]), tolerance = 1e-12)
+    expect_equal(dp$psi_T1, unname(du$psi_T1[ia, , drop = FALSE]), tolerance = 1e-12)
     # Conditional cover under the mixture = pooled E / pooled p.
-    expect_equal(dp$cover_cond_T1, mix(du$cover_exp_T1) / mix(du$p_T1),
+    expect_equal(dp$cover_cond_T1, mix(du$cover_exp_T1) / mix(du$psi_T1),
                  tolerance = 1e-12)
     expect_equal(dp$cover_cond_T1, mix(du$cover_cond_T1), tolerance = 1e-10)
-    # Occupancy and cover columns read one draw set: the table's p_T1 is the
+    # Occupancy and cover columns read one draw set: the table's psi_T1 is the
     # row mean of the same draws its deltas and cover columns come from.
-    expect_equal(po$p_T1, rowMeans(dp$p_T1))
+    expect_equal(po$psi_T1, rowMeans(dp$psi_T1))
     expect_equal(po$delta_cover_exp, rowMeans(dp$cover_exp_T2 - dp$cover_exp_T1),
                  tolerance = 1e-12)
     expect_equal(po$delta_cover_from_occ + po$delta_cover_from_ab,
@@ -201,10 +201,10 @@ test_that("times = c(t1, ..., tK) widens the change table into a trajectory", {
 
     # A level column per step; a delta per step against the baseline, suffixed
     # by the step it was taken at. The baseline names no delta of its own.
-    expect_true(all(paste0("p_T", 1:5) %in% names(pr)))
+    expect_true(all(paste0("psi_T", 1:5) %in% names(pr)))
     expect_true(all(paste0("cover_cond_T", 1:5) %in% names(pr)))
     expect_true(all(paste0("cover_exp_T", 1:5) %in% names(pr)))
-    for (q in c("delta_p", "delta_cover_cond", "delta_cover_exp",
+    for (q in c("delta_psi", "delta_cover_cond", "delta_cover_exp",
                 "delta_cover_from_occ", "delta_cover_from_ab")) {
         expect_true(all(paste0(q, "_T", 2:5) %in% names(pr)))
         expect_false(paste0(q, "_T1") %in% names(pr))
@@ -225,8 +225,8 @@ test_that("times = c(t1, ..., tK) widens the change table into a trajectory", {
         expect_equal(pr[[paste0("delta_cover_exp", s)]],
                      pr[[paste0("cover_exp_T", k)]] - pr$cover_exp_T1,
                      tolerance = 1e-6)
-        expect_equal(pr[[paste0("delta_p", s)]],
-                     pr[[paste0("p_T", k)]] - pr$p_T1, tolerance = 1e-6)
+        expect_equal(pr[[paste0("delta_psi", s)]],
+                     pr[[paste0("psi_T", k)]] - pr$psi_T1, tolerance = 1e-6)
         expect_equal(dr[[paste0("delta_cover_from_occ", s)]] +
                      dr[[paste0("delta_cover_from_ab", s)]],
                      dr[[paste0("delta_cover_exp", s)]], tolerance = 1e-6)
@@ -242,12 +242,23 @@ test_that("two times keep the unsuffixed change schema", {
     # REGRESSION GUARD for the trajectory generalization: with one step there is
     # nothing to index, so the delta columns a change map has always had must
     # come back unsuffixed and no `_T2` delta may appear beside them.
-    expect_true(all(c("delta_p", "delta_cover_cond", "delta_cover_exp",
+    expect_true(all(c("delta_psi", "delta_cover_cond", "delta_cover_exp",
                       "delta_cover_from_occ", "delta_cover_from_ab") %in%
                     names(pr)))
     expect_false(any(grepl("^delta_.*_T[0-9]+$", names(pr))))
-    expect_true(all(c("delta_p.lwr", "delta_p.upr", "delta_p.prob_pos",
-                      "p_T1.sd", "p_T2.sd") %in% names(pr)))
+    expect_true(all(c("delta_psi.lwr", "delta_psi.upr", "delta_psi.prob_pos",
+                      "psi_T1.sd", "psi_T2.sd") %in% names(pr)))
+    # Every level carries its own interval, cover included, read off the draws.
+    lv <- as.vector(outer(c("psi", "cover_cond", "cover_exp"), 1:2,
+                          function(q, k) sprintf("%s_T%d", q, k)))
+    expect_true(all(as.vector(outer(lv, c(".sd", ".lwr", ".upr"), paste0)) %in%
+                    names(pr)))
+    dr <- attr(pr, "draws")
+    expect_equal(pr$cover_cond_T2.upr,
+                 apply(dr$cover_cond_T2, 1L, stats::quantile, probs = 0.975,
+                       names = FALSE), ignore_attr = TRUE)
+    expect_true(all(pr$cover_exp_T1.lwr <= pr$cover_exp_T1 &
+                    pr$cover_exp_T1 <= pr$cover_exp_T1.upr))
 })
 
 test_that("`times` is validated before any arm is evaluated", {
@@ -356,7 +367,7 @@ test_that("trend fit errors clearly when time_col is unavailable", {
 # Calibration: the per-cell change CI must cover the KNOWN delta in occupancy
 # induced by moving the time covariate from t1 to t2 through the trend field.
 # With the field held at its truth, the true per-cell change is
-#   delta_p[i] = plogis(eta_base[i] + sigma_trend t2 f2[i])
+#   delta_psi[i] = plogis(eta_base[i] + sigma_trend t2 f2[i])
 #              - plogis(eta_base[i] + sigma_trend t1 f2[i]),
 # eta_base[i] = X_occ[i] beta_occ + sigma f[i]. A broken field amplitude
 # (sigma / alpha) factor or a plug-in of posterior means into the nonlinear
@@ -416,12 +427,12 @@ test_that("change CI covers the known per-cell occupancy change", {
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
                   times = c(t1, t2), time_col = "time", nsim = 1500L)
 
-    covered <- pr$delta_p.lwr <= delta_true & delta_true <= pr$delta_p.upr
+    covered <- pr$delta_psi.lwr <= delta_true & delta_true <= pr$delta_psi.upr
     # 95% CIs over the N cells of one realization; conservative floor (observed
     # coverage runs ~0.93-1.0, a broken amplitude factor would crater it).
     expect_gt(mean(covered), 0.8)
     # the point estimate tracks the true change in sign and magnitude.
-    expect_gt(stats::cor(pr$delta_p, delta_true), 0.5)
+    expect_gt(stats::cor(pr$delta_psi, delta_true), 0.5)
 })
 
 # ---------------------------------------------------------------------------

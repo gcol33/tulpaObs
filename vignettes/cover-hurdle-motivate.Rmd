@@ -684,17 +684,17 @@ names(pr_chg)
 ```
 
 The contract is fixed. Three headline deltas come with `.lwr` / `.upr` interval
-columns: `delta_p` (change in occupancy probability), `delta_cover_cond`
+columns: `delta_psi` (change in occupancy probability), `delta_cover_cond`
 (change in conditional cover given presence), and `delta_cover_exp` (change in
 expected cover $\psi\mu$). Two further columns decompose the expected-cover
 change into the part driven by occupancy moving and the part driven by
 conditional cover moving, `delta_cover_from_occ` and `delta_cover_from_ab`, and
 these sum to `delta_cover_exp` exactly, per draw. The states at each time point
-are reported too (`p_T1`, `p_T2`, `cover_exp_T1`, and so on).
+are reported too (`psi_T1`, `psi_T2`, `cover_exp_T1`, and so on).
 
 ```{r oc-change-decomp}
 with(pr_chg, head(data.frame(
-  cell, delta_p,
+  cell, delta_psi,
   delta_cover_exp,
   from_occ = delta_cover_from_occ,
   from_ab  = delta_cover_from_ab,

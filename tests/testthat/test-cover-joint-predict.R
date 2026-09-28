@@ -80,7 +80,7 @@ test_that("cover() joint predict: change decomposition identity holds (#23)", {
                 times = c(-1, 1), time_col = "x", nsim = 500L)
   expect_s3_class(pr, "tobs_prediction")
   expect_equal(nrow(pr), f$n_s)
-  point_cols <- c("p_T1", "p_T2", "delta_p", "cover_cond_T1", "cover_cond_T2",
+  point_cols <- c("psi_T1", "psi_T2", "delta_psi", "cover_cond_T1", "cover_cond_T2",
                   "delta_cover_cond", "cover_exp_T1", "cover_exp_T2",
                   "delta_cover_exp", "delta_cover_from_occ", "delta_cover_from_ab")
   expect_true(all(c("cell", point_cols) %in% names(pr)))
@@ -89,8 +89,8 @@ test_that("cover() joint predict: change decomposition identity holds (#23)", {
                dr$delta_cover_exp, tolerance = 1e-6)
   expect_equal(dr$delta_cover_exp, dr$cover_exp_T2 - dr$cover_exp_T1,
                tolerance = 1e-6)
-  # x drives occupancy -> delta_p varies across cells.
-  expect_gt(stats::sd(pr$delta_p), 0)
+  # x drives occupancy -> delta_psi varies across cells.
+  expect_gt(stats::sd(pr$delta_psi), 0)
 })
 
 test_that("cover() joint predict reconstructs the ICAR field too (#24)", {

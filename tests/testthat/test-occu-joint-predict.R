@@ -221,4 +221,11 @@ test_that("occu() SVC joint fit predicts occupancy, detection and change", {
                               nsim = 200, draws = FALSE))
   expect_true(all(c("psi_T1", "psi_T2", "delta_psi") %in% names(ch)))
   expect_equal(ch$delta_psi, ch$psi_T2 - ch$psi_T1, tolerance = 1e-8)
+
+  tr <- as.data.frame(predict(fit, newdata = nd, type = "change",
+                              times = c(-1, 0, 1), time_col = "x",
+                              nsim = 200, draws = FALSE))
+  expect_true(all(c(paste0("psi_T", 1:3), paste0("psi_T", 1:3, ".lwr"),
+                    paste0("delta_psi_T", 2:3)) %in% names(tr)))
+  expect_equal(tr$delta_psi_T3, tr$psi_T3 - tr$psi_T1, tolerance = 1e-8)
 })

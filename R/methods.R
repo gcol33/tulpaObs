@@ -1106,23 +1106,23 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   "change")` samples the joint latent from the grid-integrated posterior
 #'   (the outer-grid mixture via [tulpa::tulpa_posterior_draws()]) and
 #'   marginalises every derived quantity per draw. `type = "change"` with
-#'   `times = c(t1, t2)` returns a per-cell change table (`delta_p`,
-#'   `delta_cover_cond`, `delta_cover_exp`, the occupancy / abundance
-#'   decomposition, and `.lwr` / `.upr` at `level`), plus the start / end
-#'   occupancy `p_T1` / `p_T2` with their own `.sd` / `.lwr` / `.upr`, and a
-#'   `.prob_pos` column per headline delta giving the directional posterior
-#'   probability `P(delta > 0)` per cell. Passing more than two times,
-#'   `times = c(t1, ..., tK)`, widens the same table into a trajectory: a level
-#'   column per step (`p_T1..p_TK`, `cover_cond_T*`, `cover_exp_T*`) and a
-#'   `_T<k>`-suffixed delta per step, each differenced against `t1` and each
-#'   carrying the same decomposition and interval columns. Every step is
-#'   evaluated on ONE draw set, so the steps share a posterior and their deltas
-#'   are jointly valid; with two times the delta columns keep their unsuffixed
-#'   names, there being only one step to name. The result is a
+#'   `times = c(t1, ..., tK)` (K >= 2) returns a per-cell change table. Each
+#'   quantity -- occupancy `psi`, conditional cover `cover_cond`, expected
+#'   cover `cover_exp` -- has a level column per step (`psi_T1..psi_TK`, ...)
+#'   carrying the posterior mean with `.sd` / `.lwr` / `.upr` at `level`, and a
+#'   delta per step against `t1` (`delta_psi`, `delta_cover_cond`,
+#'   `delta_cover_exp`) with `.lwr` / `.upr` and `.prob_pos`, the posterior
+#'   probability `P(delta > 0)` per cell. The expected-cover change is split
+#'   exactly into its occupancy- and abundance-driven parts
+#'   (`delta_cover_from_occ`, `delta_cover_from_ab`), reported the same way.
+#'   With two times the delta columns are unsuffixed; with K > 2 each carries
+#'   `_T<k>`. Every step is evaluated on ONE draw set, so levels and deltas
+#'   share a posterior and are jointly valid. A standalone `occu()` joint fit
+#'   returns the same layout with occupancy only. The result is a
 #'   `tobs_prediction` table (one row per cell) carrying per-unit `[cell x nsim]`
 #'   draw matrices in `attr(, "draws")`; map it yourself, e.g.
 #'   `left_join(cents, pr, by = "cell")` then
-#'   `geom_tile(aes(x, y, fill = delta_p))` (or `geom_sf()` on polygon cells).
+#'   `geom_tile(aes(x, y, fill = delta_psi))` (or `geom_sf()` on polygon cells).
 #' - **Community families**: `ms_occu()`, `ms_dyn_occu()`, `ms_int_occu()`,
 #'   `ms_abun()`, `ms_distance()` and `ms_occu_cover()` predict per-species
 #'   matrices `[rows x species]`, in-sample from `fitted()` and at `newdata`

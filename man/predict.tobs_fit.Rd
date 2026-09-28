@@ -133,23 +133,23 @@ than informed by detections.
 \code{predict(fit, newdata, type = "occurrence" | "cover_cond" | "cover_exp" | "change")} samples the joint latent from the grid-integrated posterior
 (the outer-grid mixture via \code{\link[tulpa:tulpa_posterior_draws]{tulpa::tulpa_posterior_draws()}}) and
 marginalises every derived quantity per draw. \code{type = "change"} with
-\code{times = c(t1, t2)} returns a per-cell change table (\code{delta_p},
-\code{delta_cover_cond}, \code{delta_cover_exp}, the occupancy / abundance
-decomposition, and \code{.lwr} / \code{.upr} at \code{level}), plus the start / end
-occupancy \code{p_T1} / \code{p_T2} with their own \code{.sd} / \code{.lwr} / \code{.upr}, and a
-\code{.prob_pos} column per headline delta giving the directional posterior
-probability \code{P(delta > 0)} per cell. Passing more than two times,
-\code{times = c(t1, ..., tK)}, widens the same table into a trajectory: a level
-column per step (\code{p_T1..p_TK}, \verb{cover_cond_T*}, \verb{cover_exp_T*}) and a
-\verb{_T<k>}-suffixed delta per step, each differenced against \code{t1} and each
-carrying the same decomposition and interval columns. Every step is
-evaluated on ONE draw set, so the steps share a posterior and their deltas
-are jointly valid; with two times the delta columns keep their unsuffixed
-names, there being only one step to name. The result is a
+\code{times = c(t1, ..., tK)} (K >= 2) returns a per-cell change table. Each
+quantity -- occupancy \code{psi}, conditional cover \code{cover_cond}, expected
+cover \code{cover_exp} -- has a level column per step (\code{psi_T1..psi_TK}, ...)
+carrying the posterior mean with \code{.sd} / \code{.lwr} / \code{.upr} at \code{level}, and a
+delta per step against \code{t1} (\code{delta_psi}, \code{delta_cover_cond},
+\code{delta_cover_exp}) with \code{.lwr} / \code{.upr} and \code{.prob_pos}, the posterior
+probability \code{P(delta > 0)} per cell. The expected-cover change is split
+exactly into its occupancy- and abundance-driven parts
+(\code{delta_cover_from_occ}, \code{delta_cover_from_ab}), reported the same way.
+With two times the delta columns are unsuffixed; with K > 2 each carries
+\verb{_T<k>}. Every step is evaluated on ONE draw set, so levels and deltas
+share a posterior and are jointly valid. A standalone \code{occu()} joint fit
+returns the same layout with occupancy only. The result is a
 \code{tobs_prediction} table (one row per cell) carrying per-unit \verb{[cell x nsim]}
 draw matrices in \code{attr(, "draws")}; map it yourself, e.g.
 \code{left_join(cents, pr, by = "cell")} then
-\code{geom_tile(aes(x, y, fill = delta_p))} (or \code{geom_sf()} on polygon cells).
+\code{geom_tile(aes(x, y, fill = delta_psi))} (or \code{geom_sf()} on polygon cells).
 \item \strong{Community families}: \code{ms_occu()}, \code{ms_dyn_occu()}, \code{ms_int_occu()},
 \code{ms_abun()}, \code{ms_distance()} and \code{ms_occu_cover()} predict per-species
 matrices \verb{[rows x species]}, in-sample from \code{fitted()} and at \code{newdata}

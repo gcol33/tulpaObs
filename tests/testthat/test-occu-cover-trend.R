@@ -327,36 +327,36 @@ test_that("occu_cover change reports start/end CI + directional P(delta>0)", {
   chd <- as.data.frame(ch)
 
   # The new columns exist.
-  expect_true(all(c("p_T1.sd", "p_T1.lwr", "p_T1.upr",
-                    "p_T2.sd", "p_T2.lwr", "p_T2.upr",
-                    "delta_p.prob_pos", "delta_cover_cond.prob_pos",
+  expect_true(all(c("psi_T1.sd", "psi_T1.lwr", "psi_T1.upr",
+                    "psi_T2.sd", "psi_T2.lwr", "psi_T2.upr",
+                    "delta_psi.prob_pos", "delta_cover_cond.prob_pos",
                     "delta_cover_exp.prob_pos") %in% names(chd)))
 
   # Recovery: raising occ_cov1 raises psi in every cell, so the change is positive
   # and its direction is near-certain.
-  expect_true(all(chd$p_T2 > chd$p_T1))
-  expect_gt(mean(chd$delta_p), 0)
-  expect_gt(mean(chd$delta_p.prob_pos), 0.9)
+  expect_true(all(chd$psi_T2 > chd$psi_T1))
+  expect_gt(mean(chd$delta_psi), 0)
+  expect_gt(mean(chd$delta_psi.prob_pos), 0.9)
   expect_gt(mean(chd$delta_cover_exp.prob_pos), 0.9)   # expected cover = psi x cond
 
   # Probabilities are valid; intervals are ordered and bracket the mean.
-  expect_true(all(chd$delta_p.prob_pos >= 0 & chd$delta_p.prob_pos <= 1))
-  expect_true(all(chd$p_T1.lwr <= chd$p_T1 & chd$p_T1 <= chd$p_T1.upr))
-  expect_true(all(chd$p_T2.lwr <= chd$p_T2 & chd$p_T2 <= chd$p_T2.upr))
-  expect_true(all(chd$p_T1.sd > 0))
+  expect_true(all(chd$delta_psi.prob_pos >= 0 & chd$delta_psi.prob_pos <= 1))
+  expect_true(all(chd$psi_T1.lwr <= chd$psi_T1 & chd$psi_T1 <= chd$psi_T1.upr))
+  expect_true(all(chd$psi_T2.lwr <= chd$psi_T2 & chd$psi_T2 <= chd$psi_T2.upr))
+  expect_true(all(chd$psi_T1.sd > 0))
 
   # Self-consistency: every summary column is the exact per-draw reduction of the
   # draw matrices in attr(, "draws") -- the marginalization, not a plug-in.
   dr <- attr(ch, "draws")
-  expect_equal(chd$delta_p.prob_pos, rowMeans(dr$delta_p > 0), ignore_attr = TRUE)
+  expect_equal(chd$delta_psi.prob_pos, rowMeans(dr$delta_psi > 0), ignore_attr = TRUE)
   expect_equal(chd$delta_cover_exp.prob_pos, rowMeans(dr$delta_cover_exp > 0),
                ignore_attr = TRUE)
-  expect_equal(chd$p_T1, rowMeans(dr$p_T1), ignore_attr = TRUE)
-  expect_equal(chd$p_T1.lwr,
-               apply(dr$p_T1, 1L, stats::quantile, probs = 0.025, names = FALSE),
+  expect_equal(chd$psi_T1, rowMeans(dr$psi_T1), ignore_attr = TRUE)
+  expect_equal(chd$psi_T1.lwr,
+               apply(dr$psi_T1, 1L, stats::quantile, probs = 0.025, names = FALSE),
                ignore_attr = TRUE)
-  expect_equal(chd$p_T2.upr,
-               apply(dr$p_T2, 1L, stats::quantile, probs = 0.975, names = FALSE),
+  expect_equal(chd$psi_T2.upr,
+               apply(dr$psi_T2, 1L, stats::quantile, probs = 0.975, names = FALSE),
                ignore_attr = TRUE)
 })
 

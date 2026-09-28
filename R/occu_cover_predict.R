@@ -525,93 +525,64 @@
   # steps share a posterior and their deltas are jointly valid.
   nds <- .tobs_joint_change_frames(object, newdata, times, time_col)
   st  <- lapply(nds, state)
-  K   <- length(st)
   s1  <- st[[1L]]
-
-  # Per-draw deltas against the baseline step + the exact additive decomposition
+  steps <- lapply(st, function(sk)
+    list(psi = sk$p, cover_cond = sk$mu, cover_exp = sk$E))
+  # Exact additive split of the expected-cover change against the first step:
   #   delta_exp = pk muk - p1 mu1 = (pk - p1) mu1 + pk (muk - mu1).
-  d <- lapply(st[-1L], function(sk) list(
-    p    = sk$p  - s1$p,
-    cond = sk$mu - s1$mu,
-    exp  = sk$E  - s1$E,
-    occ  = (sk$p - s1$p) * s1$mu,
-    ab   = sk$p * (sk$mu - s1$mu)))
+  parts <- lapply(st[-1L], function(sk) list(
+    cover_from_occ = (sk$p - s1$p) * s1$mu,
+    cover_from_ab  = sk$p * (sk$mu - s1$mu)))
+  .tobs_change_table(steps, out_cell, times, level, draws, parts)
+}
 
-  qlo <- function(m) .tobs_draw_lwr(m, level)
-  qhi <- function(m) .tobs_draw_upr(m, level)
-  qsd <- .tobs_draw_sd
-
-  # A delta belongs to the step it was taken at, and with two times there is
-  # only one step -- so the delta columns carry a `_T<k>` suffix only when the
-  # table holds a trajectory. Two times therefore keep the column names (and
-  # their order) a change map has always had.
+# Per-cell change table over K time steps, shared by the joint predict handlers.
+# `steps` is a list over the K times, each a named list of [n x nsim] draw
+# matrices carrying the same quantities at every step. Every level `<q>_T<k>`
+# reports its posterior mean with `.sd` / `.lwr` / `.upr`; every delta against
+# the first step `delta_<q>` reports its mean with `.lwr` / `.upr` and the
+# posterior probability `.prob_pos` = P(delta > 0). All summaries are taken over
+# one draw set, so levels and deltas are jointly consistent. `parts` optionally
+# adds further per-step delta draw matrices (a list over steps 2..K). With two
+# times the delta columns carry no step suffix; with K > 2 they carry `_T<k>`.
+.tobs_change_table <- function(steps, cell, times, level, draws, parts = NULL) {
+  K   <- length(steps)
   sfx <- if (K == 2L) rep("", K) else paste0("_T", seq_len(K))
-  lvl <- function(nm, k) sprintf("%s_T%d", nm, k)
-  dl  <- function(nm, k) paste0(nm, sfx[k])
+  summ_level <- function(nm, m) stats::setNames(
+    list(rowMeans(m), .tobs_draw_sd(m), .tobs_draw_lwr(m, level),
+         .tobs_draw_upr(m, level)),
+    paste0(nm, c("", ".sd", ".lwr", ".upr")))
+  summ_delta <- function(nm, m) stats::setNames(
+    list(rowMeans(m), .tobs_draw_lwr(m, level), .tobs_draw_upr(m, level),
+         rowMeans(m > 0)),
+    paste0(nm, c("", ".lwr", ".upr", ".prob_pos")))
 
-  tbl <- data.frame(cell = out_cell)
-  add <- function(tbl, nm, v) { tbl[[nm]] <- v; tbl }
-
-  # Quantity-major: every step's level, then that quantity's deltas.
-  for (k in seq_len(K)) tbl <- add(tbl, lvl("p", k), rowMeans(st[[k]]$p))
-  for (k in 2:K)        tbl <- add(tbl, dl("delta_p", k), rowMeans(d[[k - 1L]]$p))
-  for (k in seq_len(K)) tbl <- add(tbl, lvl("cover_cond", k), rowMeans(st[[k]]$mu))
-  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_cond", k),
-                                   rowMeans(d[[k - 1L]]$cond))
-  for (k in seq_len(K)) tbl <- add(tbl, lvl("cover_exp", k), rowMeans(st[[k]]$E))
-  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_exp", k),
-                                   rowMeans(d[[k - 1L]]$exp))
-  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_from_occ", k),
-                                   rowMeans(d[[k - 1L]]$occ))
-  for (k in 2:K)        tbl <- add(tbl, dl("delta_cover_from_ab", k),
-                                   rowMeans(d[[k - 1L]]$ab))
-
-  # .lwr / .upr for each delta at `level`.
-  for (q in c("p", "cover_cond", "cover_exp", "cover_from_occ", "cover_from_ab")) {
-    slot <- switch(q, p = "p", cover_cond = "cond", cover_exp = "exp",
-                   cover_from_occ = "occ", cover_from_ab = "ab")
-    for (k in 2:K) {
-      nm <- dl(paste0("delta_", q), k)
-      m  <- d[[k - 1L]][[slot]]
-      tbl <- add(tbl, paste0(nm, ".lwr"), qlo(m))
-      tbl <- add(tbl, paste0(nm, ".upr"), qhi(m))
+  cols <- list(cell = cell)
+  dr   <- list()
+  for (q in names(steps[[1L]])) {
+    for (k in seq_len(K)) {
+      nm <- sprintf("%s_T%d", q, k)
+      m  <- steps[[k]][[q]]
+      cols <- c(cols, summ_level(nm, m)); dr[[nm]] <- m
+    }
+    for (k in seq_len(K)[-1L]) {
+      nm <- paste0("delta_", q, sfx[k])
+      m  <- steps[[k]][[q]] - steps[[1L]][[q]]
+      cols <- c(cols, summ_delta(nm, m)); dr[[nm]] <- m
+    }
+  }
+  for (q in names(parts[[1L]])) {
+    for (k in seq_len(K)[-1L]) {
+      nm <- paste0("delta_", q, sfx[k])
+      m  <- parts[[k - 1L]][[q]]
+      cols <- c(cols, summ_delta(nm, m)); dr[[nm]] <- m
     }
   }
 
-  # Per-step occupancy uncertainty (sd + CI at `level`) and the directional
-  # posterior probability P(delta > 0) per cell -- the certainty that the quantity
-  # increased. Both are taken over draws, so they carry the joint posterior rather
-  # than a plug-in of the means (the marginalize-derived-quantities rule). These
-  # are the per-cell change-certainty quantities a spatially-varying-trend
-  # occupancy fit reports; they are pure additions to the table.
-  for (k in seq_len(K)) {
-    nm <- lvl("p", k)
-    tbl <- add(tbl, paste0(nm, ".sd"),  qsd(st[[k]]$p))
-    tbl <- add(tbl, paste0(nm, ".lwr"), qlo(st[[k]]$p))
-    tbl <- add(tbl, paste0(nm, ".upr"), qhi(st[[k]]$p))
-  }
-  for (q in c("p", "cover_cond", "cover_exp")) {
-    slot <- switch(q, p = "p", cover_cond = "cond", cover_exp = "exp")
-    for (k in 2:K) {
-      tbl <- add(tbl, paste0(dl(paste0("delta_", q), k), ".prob_pos"),
-                 rowMeans(d[[k - 1L]][[slot]] > 0))
-    }
-  }
-
+  tbl <- as.data.frame(cols, check.names = FALSE)
   attr(tbl, "quantity") <- "change"
   attr(tbl, "times")    <- times
-  if (isTRUE(draws)) {
-    dr <- list()
-    for (k in seq_len(K)) dr[[lvl("p", k)]] <- st[[k]]$p
-    for (k in 2:K)        dr[[dl("delta_p", k)]] <- d[[k - 1L]]$p
-    for (k in seq_len(K)) dr[[lvl("cover_cond", k)]] <- st[[k]]$mu
-    for (k in 2:K)        dr[[dl("delta_cover_cond", k)]] <- d[[k - 1L]]$cond
-    for (k in seq_len(K)) dr[[lvl("cover_exp", k)]] <- st[[k]]$E
-    for (k in 2:K)        dr[[dl("delta_cover_exp", k)]] <- d[[k - 1L]]$exp
-    for (k in 2:K)        dr[[dl("delta_cover_from_occ", k)]] <- d[[k - 1L]]$occ
-    for (k in 2:K)        dr[[dl("delta_cover_from_ab", k)]] <- d[[k - 1L]]$ab
-    attr(tbl, "draws") <- dr
-  }
+  if (isTRUE(draws)) attr(tbl, "draws") <- dr
   class(tbl) <- c("tobs_prediction", "data.frame")
   tbl
 }
@@ -690,32 +661,8 @@
     return(out)
   }
 
-  # type == "change": occupancy difference between two trend-weight values.
+  # type == "change": occupancy at each of `times`, differenced against the first.
   nds <- .tobs_joint_change_frames(object, newdata, times, time_col)
-  p1  <- occ_state(nds[[1L]])
-  p2  <- occ_state(nds[[2L]])
-  d_p <- p2 - p1
-  qlo <- function(m) .tobs_draw_lwr(m, level)
-  qhi <- function(m) .tobs_draw_upr(m, level)
-  qsd <- .tobs_draw_sd
-  # Start / end occupancy uncertainty and the directional posterior probability
-  # P(delta > 0), both over draws (marginalize-derived-quantities); pure additions
-  # alongside delta_psi.
-  tbl <- data.frame(
-    cell      = cell,
-    psi_T1    = rowMeans(p1),
-    psi_T1.sd = qsd(p1), psi_T1.lwr = qlo(p1), psi_T1.upr = qhi(p1),
-    psi_T2    = rowMeans(p2),
-    psi_T2.sd = qsd(p2), psi_T2.lwr = qlo(p2), psi_T2.upr = qhi(p2),
-    delta_psi = rowMeans(d_p),
-    delta_psi.lwr = qlo(d_p),
-    delta_psi.upr = qhi(d_p),
-    delta_psi.prob_pos = rowMeans(d_p > 0))
-  attr(tbl, "quantity") <- "change"
-  attr(tbl, "times")    <- times
-  if (isTRUE(draws)) {
-    attr(tbl, "draws") <- list(psi_T1 = p1, psi_T2 = p2, delta_psi = d_p)
-  }
-  class(tbl) <- c("tobs_prediction", "data.frame")
-  tbl
+  steps <- lapply(nds, function(nd) list(psi = occ_state(nd)))
+  .tobs_change_table(steps, cell, times, level, draws)
 }
