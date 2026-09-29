@@ -18,6 +18,7 @@
   aggregate = FALSE,
   mc.tol = 0.05,
   nsim.max = 10000L,
+  mc.floor = 0.001,
   ...
 )
 }
@@ -46,8 +47,9 @@ weight per row) or the name of a \code{newdata} column.}
 averages each quantity over the prediction units per posterior draw and
 returns one row per time, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}.}
 
-\item{mc.tol, nsim.max}{Nested-Laplace fit, \code{nsim = "auto"} only: the Monte
-Carlo precision target and the draw cap, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}.}
+\item{mc.tol, nsim.max, mc.floor}{Nested-Laplace fit, trajectory only: the
+Monte Carlo precision target, the draw cap and the SD floor the error is
+measured against, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}.}
 
 \item{...}{Unused.}
 }

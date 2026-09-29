@@ -298,6 +298,10 @@ test_that("type = trajectory returns a long table on one draw set", {
     expect_false(attr(au, "nsim_capped"))
     expect_gt(attr(au, "nsim_used"), 300L)
     expect_identical(names(au), names(tr))
+    bind <- attr(au, "mc_binding")
+    expect_identical(bind$mc_se, attr(au, "mc_se_max"))
+    expect_true(bind$cell %in% f$cell_dat$site_id && bind$time %in% tt)
+    expect_true(bind$quantity %in% qs && bind$bound %in% c("median", "lwr", "upr"))
     expect_error(predict(f$fit, newdata = f$cell_dat, type = "occurrence",
                          nsim = "auto"), "trajectory\" only")
 })

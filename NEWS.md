@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.4.6
+
+* **A trajectory's Monte Carlo check floors the posterior SD and names the
+  bound that sets it** (#386). `predict(type = "trajectory", mc.floor =)`
+  (default 0.001, on the quantity's own scale) measures each bound's Monte
+  Carlo error against `max(SD, mc.floor)`: where occupancy saturates near 0 or
+  1 the posterior SD goes to about 0, and an error relative to it would be
+  unstable. The check still runs on every unit, time and quantity, since the
+  units needing the most draws are the few data-poor ones a subsample would
+  miss. `attr(, "mc_binding")` is a one-row data frame giving the `cell`,
+  `time`, `quantity` and `bound` whose error is `mc_se_max`, so a run that
+  `nsim.max` stopped shows where.
+
 ## 0.4.5
 
 * **`predict(type = "trajectory", nsim = "auto")` chooses the draw count by

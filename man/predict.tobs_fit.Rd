@@ -22,6 +22,7 @@
   aggregate = FALSE,
   mc.tol = 0.05,
   nsim.max = 10000L,
+  mc.floor = 0.001,
   ...
 )
 }
@@ -127,6 +128,13 @@ on each reported median and bound, as a fraction of its posterior SD
 \item{nsim.max}{\code{nsim = "auto"} only: the most draws to take (default
 10000).}
 
+\item{mc.floor}{Trajectory only: the smallest posterior SD a Monte Carlo
+error is measured against, on the quantity's own scale (default 0.001).
+Where occupancy saturates near 0 or 1 its posterior SD goes to about 0,
+and an error relative to it would be unstable; the error is measured
+against \code{max(SD, mc.floor)} instead. \code{psi}, \code{cover_cond} and \code{cover_exp}
+are probabilities or cover fractions, so one floor serves all three.}
+
 \item{...}{Ignored.}
 }
 \value{
@@ -146,6 +154,9 @@ with \code{aggregate = TRUE}. A trajectory states its Monte Carlo precision in
 median or bound, in posterior SDs) and \code{attr(, "nsim_used")}; under
 \code{nsim = "auto"} also \code{attr(, "mc_tol")} and \code{attr(, "nsim_capped")}
 (\code{TRUE} when \code{nsim.max} stopped the draws before \code{mc.tol} was met).
+\code{attr(, "mc_binding")} names the bound that sets \code{mc_se_max}: a one-row
+data frame with its \code{cell} (\code{NA} with \code{aggregate = TRUE}), \code{time},
+\code{quantity}, \code{bound} (\code{"median"}, \code{"lwr"} or \code{"upr"}) and \code{mc_se}.
 }
 \description{
 Four modes:

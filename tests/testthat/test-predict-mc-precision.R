@@ -83,3 +83,46 @@ test_that("nsim, mc.tol and nsim.max are validated", {
     expect_error(chk(10.5, "trajectory", 0.05, 1e4), "whole number")
     expect_error(chk("many", "trajectory", 0.05, 1e4), "whole number")
 })
+
+test_that("the SD floor keeps a saturated row's error finite and small", {
+    set.seed(15)
+    n <- 1000L
+    # A probability pinned near 1: posterior SD ~1e-6.
+    m <- rbind(1 - abs(stats::rnorm(n, sd = 1e-6)), stats::rnorm(n))
+    raw <- tulpaObs:::.tobs_mc_quantile_error(m, c(0.5, 0.975))
+    flo <- tulpaObs:::.tobs_mc_quantile_error(m, c(0.5, 0.975), floor = 0.001)
+    expect_true(all(flo[, 1L] < 0.01))
+    expect_true(all(flo[, 1L] < raw[, 1L]))
+    # A row with real spread is untouched by a floor below its SD.
+    expect_identical(flo[, 2L], raw[, 2L])
+    expect_error(tulpaObs:::.tobs_check_nsim(100, "trajectory", 0.05, 1e4, -1),
+                 "mc.floor")
+})
+
+test_that("mc_binding names the cell, time, quantity and bound that set the stop", {
+    set.seed(16)
+    bundle <- function(n) list(n = n, m = matrix(stats::rnorm(3L * n), 3L, n),
+                               h = exp(stats::rnorm(n, sd = 1.5)))
+    # Cell 12 carries a heavy right tail in quantity `x` at the second time.
+    state <- function(b) function(nd) {
+        x <- b$m
+        if (identical(nd, 2L)) x[2L, ] <- b$h
+        list(y = b$m, x = x)
+    }
+    run <- function(aggregate) tulpaObs:::.tobs_mc_trajectory(
+        state, bundle(250L), bundle, nds = list(1L, 2L), times = c(0, 1),
+        cell = c(11L, 12L, 13L), level = 0.95, aggregate = aggregate,
+        draws = FALSE, nsim = "auto", mc.tol = 0.05, nsim.max = 1000L)
+    tr <- run(FALSE)
+    b  <- attr(tr, "mc_binding")
+    expect_named(b, c("cell", "time", "quantity", "bound", "mc_se"))
+    expect_identical(b$cell, 12L)
+    expect_identical(b$time, 1)
+    expect_identical(b$quantity, "x")
+    expect_identical(b$bound, "upr")
+    expect_identical(b$mc_se, attr(tr, "mc_se_max"))
+    expect_null(attr(tr, ".mc_layout"))
+    ag <- run(TRUE)
+    expect_true(is.na(attr(ag, "mc_binding")$cell))
+    expect_true(attr(ag, "mc_binding")$time %in% c(0, 1))
+})

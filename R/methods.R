@@ -1308,6 +1308,12 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `level = 0.95`).
 #' @param nsim.max `nsim = "auto"` only: the most draws to take (default
 #'   10000).
+#' @param mc.floor Trajectory only: the smallest posterior SD a Monte Carlo
+#'   error is measured against, on the quantity's own scale (default 0.001).
+#'   Where occupancy saturates near 0 or 1 its posterior SD goes to about 0,
+#'   and an error relative to it would be unstable; the error is measured
+#'   against `max(SD, mc.floor)` instead. `psi`, `cover_cond` and `cover_exp`
+#'   are probabilities or cover fractions, so one floor serves all three.
 #' @param draws `occu_cover` only: if `TRUE` (default), carry the per-unit
 #'   `[cell x nsim]` draw matrices in `attr(, "draws")`.
 #' @param time_col `occu_cover` only: name of the time covariate weighting the
@@ -1347,6 +1353,9 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   median or bound, in posterior SDs) and `attr(, "nsim_used")`; under
 #'   `nsim = "auto"` also `attr(, "mc_tol")` and `attr(, "nsim_capped")`
 #'   (`TRUE` when `nsim.max` stopped the draws before `mc.tol` was met).
+#'   `attr(, "mc_binding")` names the bound that sets `mc_se_max`: a one-row
+#'   data frame with its `cell` (`NA` with `aggregate = TRUE`), `time`,
+#'   `quantity`, `bound` (`"median"`, `"lwr"` or `"upr"`) and `mc_se`.
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
@@ -1357,7 +1366,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
                                  X_det.0 = NULL, weights = NULL,
                                  aggregate = FALSE, mc.tol = 0.05,
-                                 nsim.max = 10000L, ...) {
+                                 nsim.max = 10000L, mc.floor = 0.001, ...) {
   if (!is.null(weights) &&
       !identical(object$model$model_type, "occu_cover") &&
       !isTRUE(object$occu_only_joint)) {
@@ -1456,7 +1465,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  times = times, level = level, nsim = nsim,
                                  draws = draws, time_col = time_col,
                                  weights = weights, aggregate = aggregate,
-                                 mc.tol = mc.tol, nsim.max = nsim.max))
+                                 mc.tol = mc.tol, nsim.max = nsim.max,
+                                 mc.floor = mc.floor))
     }
     # Non-joint occu_cover() fit (laplace / nuts): there is no joint
     # nested-Laplace object for .tobs_predict_joint()'s trend-block bundle to
@@ -1519,7 +1529,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                     times = times, level = level, nsim = nsim,
                                     draws = draws, time_col = time_col,
                                     weights = weights, aggregate = aggregate,
-                                    mc.tol = mc.tol, nsim.max = nsim.max))
+                                    mc.tol = mc.tol, nsim.max = nsim.max,
+                                    mc.floor = mc.floor))
   }
   type <- match.arg(type)
 

@@ -316,7 +316,7 @@
 "test-occu-cover-pos-field.R","full",37,0,2.8
 "test-occu-cover-pos-field.R","smoke",10,6,0.2
 "test-occu-cover-predict.R","full",87,0,6.3
-"test-occu-cover-predict.R","smoke",14,16,0.3
+"test-occu-cover-predict.R","smoke",14,16,0.9
 "test-occu-cover-progress.R","full",15,0,1.1
 "test-occu-cover-progress.R","smoke",0,3,0.1
 "test-occu-cover-residual.R","full",74,0,29
@@ -370,7 +370,7 @@
 "test-pit-residuals-single.R","smoke",2,1,0.2
 "test-post-fit-coverage.R","full",7,0,2.3
 "test-post-fit-coverage.R","smoke",5,1,0.4
-"test-predict-mc-precision.R","smoke",29,0,2.1
+"test-predict-mc-precision.R","smoke",42,0,2.1
 "test-predict-spatial.R","smoke",42,2,0.5
 "test-progress-all-variants.R","full",31,0,18.4
 "test-progress-all-variants.R","smoke",0,6,0.2

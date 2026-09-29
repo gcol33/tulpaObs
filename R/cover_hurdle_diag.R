@@ -454,8 +454,9 @@
 #'   c(t1, t2)` and `time_col` drive the `"change"` map; `level` is the credible
 #'   level, `nsim` the draw count (or `"auto"` for a trajectory, as in
 #'   [predict.tobs_fit()]), `draws` whether to attach the draw matrices.
-#' @param mc.tol,nsim.max Nested-Laplace fit, `nsim = "auto"` only: the Monte
-#'   Carlo precision target and the draw cap, as in [predict.tobs_fit()].
+#' @param mc.tol,nsim.max,mc.floor Nested-Laplace fit, trajectory only: the
+#'   Monte Carlo precision target, the draw cap and the SD floor the error is
+#'   measured against, as in [predict.tobs_fit()].
 #' @param weights Nested-Laplace fit only: pool several `newdata` rows into one
 #'   prediction per `cell`, as in [predict.tobs_fit()]. A numeric vector (one
 #'   weight per row) or the name of a `newdata` column.
@@ -471,7 +472,8 @@ predict.cover_fit <- function(object, newdata = NULL,
                                      times = NULL, time_col = NULL,
                                      level = 0.95, nsim = 1000L, draws = TRUE,
                                      weights = NULL, aggregate = FALSE,
-                                     mc.tol = 0.05, nsim.max = 10000L, ...) {
+                                     mc.tol = 0.05, nsim.max = 10000L,
+                                     mc.floor = 0.001, ...) {
   # Nested-Laplace shared-field fit: route through the unified joint predict
   # substrate. Map the legacy fixed-effects type names onto the joint vocabulary
   # so old calls keep working.
@@ -486,7 +488,8 @@ predict.cover_fit <- function(object, newdata = NULL,
                                times = times, level = level, nsim = nsim,
                                draws = draws, time_col = time_col,
                                weights = weights, aggregate = aggregate,
-                               mc.tol = mc.tol, nsim.max = nsim.max))
+                               mc.tol = mc.tol, nsim.max = nsim.max,
+                               mc.floor = mc.floor))
   }
   if (!is.null(weights)) {
     stop("predict(weights = ) needs the nested-Laplace cover() fit ",
