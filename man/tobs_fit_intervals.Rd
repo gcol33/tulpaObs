@@ -29,9 +29,11 @@ parameter, carrying the \code{interval_source}, \code{interval_declined},
 documents.
 }
 \description{
-On a joint nested-Laplace fit whose engine keeps the per-cell pieces of its
-outer grid (for example \code{\link[=occu_cover]{occu_cover()}} with an areal field), the covariance is the grid-marginalized one and the bounds invert the Gaussian
-mixture the grid defines, both read from the engine fit rather than from
-the Monte Carlo draws the fit also carries. Every other fit reads as
+On a nested-Laplace fit that keeps the per-cell pieces of its outer grid
+(for example \code{\link[=occu_cover]{occu_cover()}} or \code{\link[=abun]{abun()}} with an areal field), the
+covariance is the grid-marginalized one and the bounds invert the Gaussian
+mixture the grid defines, rather than being read off the Monte Carlo draws
+the fit also carries; \code{\link[=coef]{coef()}}, \code{\link[=summary]{summary()}} and \code{\link[=tidy]{tidy()}} read the same
+mixture. Every other fit reads as
 \code{\link[tulpa:vcov.tulpa_fit]{tulpa::vcov.tulpa_fit()}} / \code{\link[tulpa:confint.tulpa_fit]{tulpa::confint.tulpa_fit()}} describe.
 }

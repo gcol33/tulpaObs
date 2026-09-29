@@ -401,6 +401,38 @@
   lapply(times, function(tk) { nd <- newdata; nd[[time_col]] <- tk; nd })
 }
 
+# Monte Carlo precision of draw-based quantiles. A sample quantile at
+# probability p from n draws has standard error sqrt(p (1 - p) / n) s(p), with
+# s(p) = dQ/dp the sparsity (inverse density at the quantile). s(p) is the
+# difference quotient of the sample quantiles at p - h and p + h, h the
+# Hall-Sheather (1988) bandwidth, the standard choice for quantile standard
+# errors (quantreg's `hs = TRUE`); a bracket clipped at 0 or 1 divides by the
+# span it kept. Dividing by the row's posterior SD states the error in units of
+# posterior spread, comparable across quantities on different scales. `m` is
+# [rows x draws]; returns the [length(probs) x rows] errors. A row with no
+# spread has no MC error (0).
+.tobs_hall_sheather <- function(n, p, alpha = 0.05) {
+  zp <- stats::qnorm(p)
+  n^(-1 / 3) * stats::qnorm(1 - alpha / 2)^(2 / 3) *
+    (1.5 * stats::dnorm(zp)^2 / (2 * zp^2 + 1))^(1 / 3)
+}
+.tobs_mc_quantile_error <- function(m, probs) {
+  n  <- ncol(m)
+  h  <- .tobs_hall_sheather(n, probs)
+  lo <- pmax(probs - h, 0)
+  hi <- pmin(probs + h, 1)
+  q  <- matrix(apply(m, 1L, stats::quantile, probs = c(lo, hi), names = FALSE),
+               nrow = 2L * length(probs))
+  np <- length(probs)
+  se <- (q[np + seq_len(np), , drop = FALSE] - q[seq_len(np), , drop = FALSE]) *
+    (sqrt(probs * (1 - probs) / n) / (hi - lo))
+  mu <- rowMeans(m)
+  sd <- sqrt(rowSums((m - mu)^2) / (n - 1L))
+  err <- sweep(se, 2L, sd, "/")
+  err[, !(sd > 0)] <- 0
+  err
+}
+
 # Long trajectory table over the K prediction frames `nds` (one per time). For
 # every quantity `state_at(nd)` returns -- a named list of [n x nsim] draw
 # matrices -- it reports `<q>_mean`, `<q>_median` and the `level` interval
@@ -409,20 +441,28 @@
 # consistent across units, quantities and times. `aggregate = TRUE` first
 # averages each quantity over the units per draw, giving one row per time. A
 # time's draws are summarised and released before the next is evaluated, so
-# memory stays flat in K unless `draws = TRUE` keeps them.
+# memory stays flat in K unless `draws = TRUE` keeps them. `attr(, "mc_se_max")`
+# is the largest MC standard error of any reported median or bound, over every
+# row, quantity and time, in units of that row's posterior SD; `attr(, ".mc_se")`
+# carries every one of those errors for .tobs_mc_trajectory() to pool.
 .tobs_trajectory_table <- function(state_at, nds, times, cell, level,
                                    aggregate = FALSE, draws = FALSE) {
   a <- (1 - level) / 2
+  probs <- c(0.5, a, 1 - a)
+  mc_se <- list()
   summ <- function(m, q) {
-    qs <- matrix(apply(m, 1L, stats::quantile, probs = c(0.5, a, 1 - a),
-                       names = FALSE), nrow = 3L)
+    qs <- matrix(apply(m, 1L, stats::quantile, probs = probs, names = FALSE),
+                 nrow = 3L)
+    mc_se[[length(mc_se) + 1L]] <<- as.vector(.tobs_mc_quantile_error(m, probs))
     stats::setNames(list(rowMeans(m), qs[1L, ], qs[2L, ], qs[3L, ]),
                     paste0(q, c("_mean", "_median", "_lwr", "_upr")))
   }
   rows <- vector("list", length(nds))
   dr   <- list()
+  n_draws <- NA_integer_
   for (k in seq_along(nds)) {
     st <- state_at(nds[[k]])
+    n_draws <- ncol(st[[1L]])
     if (aggregate) st <- lapply(st, function(m) matrix(colMeans(m), nrow = 1L))
     if (isTRUE(draws))
       for (q in names(st)) dr[[sprintf("%s_T%d", q, k)]] <- st[[q]]
@@ -437,8 +477,91 @@
   attr(tbl, "quantity")  <- "trajectory"
   attr(tbl, "times")     <- times
   attr(tbl, "aggregate") <- aggregate
+  mc_se <- unlist(mc_se, use.names = FALSE)
+  attr(tbl, "mc_se_max") <- max(mc_se)
+  attr(tbl, ".mc_se")    <- mc_se
+  attr(tbl, "nsim_used") <- n_draws
   if (isTRUE(draws)) attr(tbl, "draws") <- dr
   class(tbl) <- c("tobs_prediction", "data.frame")
+  tbl
+}
+
+# `nsim`: a positive whole number of draws, or "auto" (trajectory only) to draw
+# until every reported quantile meets `mc.tol`. Returns the integer count or
+# "auto".
+.tobs_check_nsim <- function(nsim, type, mc.tol, nsim.max) {
+  if (identical(nsim, "auto")) {
+    if (!identical(type, "trajectory")) {
+      stop("predict(nsim = \"auto\") applies to type = \"trajectory\" only; ",
+           "pass a whole number of draws.", call. = FALSE)
+    }
+    if (!is.numeric(mc.tol) || length(mc.tol) != 1L || !is.finite(mc.tol) ||
+        mc.tol <= 0) {
+      stop("predict(): `mc.tol` must be one positive number (the Monte Carlo ",
+           "error allowed on each reported bound, as a fraction of its ",
+           "posterior SD).", call. = FALSE)
+    }
+    if (!is.numeric(nsim.max) || length(nsim.max) != 1L ||
+        !is.finite(nsim.max) || nsim.max < 2 || nsim.max != round(nsim.max)) {
+      stop("predict(): `nsim.max` must be a whole number of at least 2.",
+           call. = FALSE)
+    }
+    return("auto")
+  }
+  if (!is.numeric(nsim) || length(nsim) != 1L || !is.finite(nsim) ||
+      nsim < 2 || nsim != round(nsim)) {
+    stop("predict(): `nsim` must be a whole number of draws (at least 2) or ",
+         "\"auto\".", call. = FALSE)
+  }
+  as.integer(nsim)
+}
+
+# Draw count of the first "auto" round, the step a round grows by at least, and
+# the factor it grows by at most.
+.TOBS_MC_BATCH  <- 250L
+.TOBS_MC_GROWTH <- 4L
+
+# Trajectory table with the draw count chosen by Monte Carlo precision.
+# `state_of(bundle)` returns the per-frame state function over that draw
+# bundle; `redraw(n)` returns a fresh bundle of `n` joint posterior draws.
+# With an integer `nsim` the table is built once on `bundle`. With "auto", the
+# table is rebuilt on fresh draws until the worst MC error meets `mc.tol`.
+# A quantile's MC error times sqrt(n) is a property of the posterior alone, so
+# every round is an independent estimate of the same per-bound constant c; the
+# rounds' estimates are pooled with inverse-variance weights n^(2/3) (the
+# Hall-Sheather estimate's CV falls as n^(-1/3)). Pooling keeps the noise in
+# one round's largest estimate from setting the draw count. While
+# max(c) / sqrt(n) > mc.tol the next round draws the count that projects to the
+# target, at least one batch more, at most `.TOBS_MC_GROWTH` times the current
+# count (a small round's largest estimate is noisy upward, and projecting from
+# it alone overshoots) and at most `nsim.max`. Every round evaluates
+# one draw set end to end, so peak memory is that of a single run at the final
+# count and all quantities keep sharing one draw set. `mc_se_max` reports the
+# pooled worst error at the final count.
+.tobs_mc_trajectory <- function(state_of, bundle, redraw, nds, times, cell,
+                                level, aggregate, draws, nsim, mc.tol,
+                                nsim.max) {
+  auto <- identical(nsim, "auto")
+  c_sum <- 0
+  w_sum <- 0
+  repeat {
+    tbl <- .tobs_trajectory_table(state_of(bundle), nds, times, cell, level,
+                                  aggregate, draws)
+    n     <- attr(tbl, "nsim_used")
+    w     <- n^(2 / 3)
+    c_sum <- c_sum + w * attr(tbl, ".mc_se") * sqrt(n)
+    w_sum <- w_sum + w
+    c_max <- max(c_sum / w_sum)
+    err   <- c_max / sqrt(n)
+    if (!auto || err <= mc.tol || n >= nsim.max) break
+    proj <- ceiling(1.1 * (c_max / mc.tol)^2 / .TOBS_MC_BATCH) * .TOBS_MC_BATCH
+    bundle <- redraw(as.integer(min(nsim.max, .TOBS_MC_GROWTH * n,
+                                    max(n + .TOBS_MC_BATCH, proj))))
+  }
+  attr(tbl, ".mc_se")      <- NULL
+  attr(tbl, "mc_se_max")   <- err
+  attr(tbl, "mc_tol")      <- if (auto) mc.tol else NA_real_
+  attr(tbl, "nsim_capped") <- auto && err > mc.tol
   tbl
 }
 
@@ -478,6 +601,11 @@
                                           weights = NULL) {
   type <- match.arg(type, c("occurrence", "detection", "cover_cond",
                             "cover_exp", "change", "trajectory"))
+  if (identical(nsim, "auto")) {
+    stop("predict(nsim = \"auto\") applies to type = \"trajectory\" on a joint ",
+         "nested-Laplace fit (method = \"nested_laplace\"); pass a whole ",
+         "number of draws.", call. = FALSE)
+  }
   if (type %in% c("change", "trajectory")) {
     stop("predict(type = \"", type, "\") needs a joint nested-Laplace fit ",
          "(method = \"nested_laplace\"); this fit carries no joint object.",
@@ -539,34 +667,39 @@
                                 type = "occurrence", times = NULL,
                                 level = 0.95, nsim = 1000L,
                                 draws = TRUE, time_col = NULL,
-                                weights = NULL, aggregate = FALSE) {
+                                weights = NULL, aggregate = FALSE,
+                                mc.tol = 0.05, nsim.max = 10000L) {
   type <- match.arg(type, c("occurrence", "detection", "cover_cond",
                             "cover_exp", "change", "trajectory"))
   aggregate <- .tobs_check_aggregate(aggregate, type)
+  nsim <- .tobs_check_nsim(nsim, type, mc.tol, nsim.max)
   if (is.null(.tobs_joint_fit(object))) {
     stop("predict() requires a joint nested-Laplace fit (method = ",
          "\"nested_laplace\"); this fit carries no joint object.",
          call. = FALSE)
   }
 
-  bundle <- .tobs_joint_trend_blocks(
-    object, .tobs_joint_draws(object, n = nsim), time_col)
+  redraw <- function(n) .tobs_joint_trend_blocks(
+    object, .tobs_joint_draws(object, n = n), time_col)
+  bundle <- redraw(if (identical(nsim, "auto"))
+                     min(.TOBS_MC_BATCH, as.integer(nsim.max)) else nsim)
   nc      <- .tobs_joint_predict_cells(object, newdata, bundle$n_cells)
   newdata <- nc$newdata
   cell    <- nc$cell
   pool    <- .tobs_predict_pool(weights, newdata, cell)
   out_cell <- if (is.null(pool)) cell else pool$cell
 
-  state <- function(nd)
-    .tobs_pool_states(.tobs_joint_arm_states(object, bundle, nd, cell), pool)
+  state <- function(nd, b = bundle)
+    .tobs_pool_states(.tobs_joint_arm_states(object, b, nd, cell), pool)
 
   # --- trajectory: every quantity at each of `times` -----------------------
   if (identical(type, "trajectory")) {
     nds <- .tobs_joint_change_frames(object, newdata, times, time_col, type)
-    return(.tobs_trajectory_table(function(nd) {
-      s <- state(nd)
+    return(.tobs_mc_trajectory(function(b) function(nd) {
+      s <- state(nd, b)
       list(psi = s$p, cover_cond = s$mu, cover_exp = s$E)
-    }, nds, times, out_cell, level, aggregate, draws))
+    }, bundle, redraw, nds, times, out_cell, level, aggregate, draws, nsim,
+    mc.tol, nsim.max))
   }
 
   # --- single-time quantities ---------------------------------------------
@@ -688,25 +821,29 @@
                                      type = "occupancy", times = NULL,
                                      level = 0.95, nsim = 1000L,
                                      draws = TRUE, time_col = NULL,
-                                     weights = NULL, aggregate = FALSE) {
+                                     weights = NULL, aggregate = FALSE,
+                                     mc.tol = 0.05, nsim.max = 10000L) {
   type <- match.arg(type, c("occupancy", "detection", "both", "change",
                             "trajectory"))
   aggregate <- .tobs_check_aggregate(aggregate, type)
+  nsim <- .tobs_check_nsim(nsim, type, mc.tol, nsim.max)
   if (is.null(.tobs_joint_fit(object))) {
     stop("predict() requires a joint nested-Laplace fit; this occu() fit ",
          "carries no joint object.", call. = FALSE)
   }
 
-  bundle <- .tobs_joint_trend_blocks(
-    object, .tobs_joint_draws(object, n = nsim), time_col)
+  redraw <- function(n) .tobs_joint_trend_blocks(
+    object, .tobs_joint_draws(object, n = n), time_col)
+  bundle <- redraw(if (identical(nsim, "auto"))
+                     min(.TOBS_MC_BATCH, as.integer(nsim.max)) else nsim)
   nc      <- .tobs_joint_predict_cells(object, newdata, bundle$n_cells)
   newdata <- nc$newdata
   cell    <- nc$cell
   pool    <- .tobs_predict_pool(weights, newdata, cell)
   if (!is.null(pool)) cell <- pool$cell
 
-  occ_state <- function(nd) .tobs_pool_states(
-    .tobs_joint_arm_states(object, bundle, nd, nc$cell, "occ"), pool)$p
+  occ_state <- function(nd, b = bundle) .tobs_pool_states(
+    .tobs_joint_arm_states(object, b, nd, nc$cell, "occ"), pool)$p
   det_state <- function(nd) .tobs_pool_states(
     .tobs_joint_arm_states(object, bundle, nd, nc$cell, "det"), pool)$p_det
 
@@ -735,8 +872,9 @@
 
   if (identical(type, "trajectory")) {
     nds <- .tobs_joint_change_frames(object, newdata, times, time_col, type)
-    return(.tobs_trajectory_table(function(nd) list(psi = occ_state(nd)),
-                                  nds, times, cell, level, aggregate, draws))
+    return(.tobs_mc_trajectory(
+      function(b) function(nd) list(psi = occ_state(nd, b)), bundle, redraw,
+      nds, times, cell, level, aggregate, draws, nsim, mc.tol, nsim.max))
   }
 
   # type == "change": occupancy at each of `times`, differenced against the first.

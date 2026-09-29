@@ -1,5 +1,28 @@
 # tulpaObs NEWS
 
+## 0.4.5
+
+* **`predict(type = "trajectory", nsim = "auto")` chooses the draw count by
+  Monte Carlo precision** (#386). Draws are taken until the Monte Carlo
+  standard error of every reported median and interval bound, over every
+  unit, time and quantity, is at most `mc.tol` (default 0.05) of that
+  quantity's posterior SD, or `nsim.max` (default 10000) draws are reached. A
+  quantile's standard error is read from the draws with the Hall-Sheather
+  sparsity estimate; because that error times sqrt(n) is a property of the
+  posterior, each round's estimate is pooled with the earlier rounds', and a
+  round grows the count at most 4x, so one noisy small round cannot set the
+  draw count. Each round redraws the whole table, so memory is that of one run
+  at the final count and every quantity still shares one draw set. On
+  Gaussian-shaped quantities at `level = 0.95`, where 2,900 draws meet 0.05,
+  the rule stopped at 4,000-5,500 draws for 3 units and about 6,500 for 2,000
+  units: stopping on the worst of many noisy estimates errs toward more draws.
+  Every trajectory, fixed `nsim` included, now reports `attr(, "mc_se_max")`
+  and `attr(, "nsim_used")`; `"auto"` adds `attr(, "mc_tol")` and
+  `attr(, "nsim_capped")` (`TRUE` when `nsim.max` stopped it short of
+  `mc.tol`). An integer `nsim` draws exactly as before. Available on
+  `occu_cover()`, the nested-Laplace `cover()` hurdle and the joint `occu()`
+  SVC route; `nsim = "auto"` on any other type is an error.
+
 ## 0.4.4
 
 * **`confint()`, `coef()`, `vcov()`, `summary()` and `tidy()` read the

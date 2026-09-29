@@ -370,6 +370,7 @@
 "test-pit-residuals-single.R","smoke",2,1,0.2
 "test-post-fit-coverage.R","full",7,0,2.3
 "test-post-fit-coverage.R","smoke",5,1,0.4
+"test-predict-mc-precision.R","smoke",29,0,2.1
 "test-predict-spatial.R","smoke",42,2,0.5
 "test-progress-all-variants.R","full",31,0,18.4
 "test-progress-all-variants.R","smoke",0,6,0.2

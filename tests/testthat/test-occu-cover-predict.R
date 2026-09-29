@@ -285,6 +285,21 @@ test_that("type = trajectory returns a long table on one draw set", {
     expect_null(attr(one, "draws"))
     far <- pr(type = "trajectory", times = c(-3, 3), draws = FALSE)
     expect_true(all(is.finite(far$psi_mean) & far$psi_mean > 0 & far$psi_mean < 1))
+
+    # A fixed nsim states the precision it reached; "auto" draws until every
+    # median and bound over all cells, times and quantities meets mc.tol. The
+    # heavy right tail of conditional cover on some cells sets the draw count.
+    expect_identical(attr(tr, "nsim_used"), 300L)
+    expect_gt(attr(tr, "mc_se_max"), 0)
+    au <- predict(f$fit, newdata = f$cell_dat, time_col = "year",
+                  type = "trajectory", times = tt, nsim = "auto",
+                  mc.tol = 0.2, draws = FALSE)
+    expect_lte(attr(au, "mc_se_max"), 0.2)
+    expect_false(attr(au, "nsim_capped"))
+    expect_gt(attr(au, "nsim_used"), 300L)
+    expect_identical(names(au), names(tr))
+    expect_error(predict(f$fit, newdata = f$cell_dat, type = "occurrence",
+                         nsim = "auto"), "trajectory\" only")
 })
 
 test_that("type = trajectory arguments are validated", {

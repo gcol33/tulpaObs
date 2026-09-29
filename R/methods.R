@@ -1293,7 +1293,21 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   prediction follows the fitted time effect).
 #' @param level `occu_cover` only: credible level for the interval columns
 #'   (default 0.95).
-#' @param nsim `occu_cover` only: number of joint posterior draws (default 1000).
+#' @param nsim `occu_cover` only: number of joint posterior draws (default
+#'   1000), or `"auto"` (`type = "trajectory"` on a joint nested-Laplace fit)
+#'   to choose the count by Monte Carlo precision: draws are taken until the
+#'   Monte Carlo standard error of every reported median and interval bound,
+#'   over every unit, time and quantity, is at most `mc.tol` times that
+#'   quantity's posterior SD, or `nsim.max` draws are reached. Each round
+#'   redraws the whole table at the count the \eqn{1/\sqrt{n}} scaling
+#'   projects, so memory is that of one run at the final count and all
+#'   quantities share one draw set.
+#' @param mc.tol `nsim = "auto"` only: the Monte Carlo standard error allowed
+#'   on each reported median and bound, as a fraction of its posterior SD
+#'   (default 0.05, about 2,900 draws for a Gaussian-shaped quantity at
+#'   `level = 0.95`).
+#' @param nsim.max `nsim = "auto"` only: the most draws to take (default
+#'   10000).
 #' @param draws `occu_cover` only: if `TRUE` (default), carry the per-unit
 #'   `[cell x nsim]` draw matrices in `attr(, "draws")`.
 #' @param time_col `occu_cover` only: name of the time covariate weighting the
@@ -1328,7 +1342,11 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   draw matrices in `attr(, "draws")`; `type = "trajectory"` a long table
 #'   (`cell`, `time`, then `<q>_mean` / `_median` / `_lwr` / `_upr` for `psi`,
 #'   `cover_cond` and `cover_exp`), one row per cell and time, or per time
-#'   with `aggregate = TRUE`.
+#'   with `aggregate = TRUE`. A trajectory states its Monte Carlo precision in
+#'   `attr(, "mc_se_max")` (the largest MC standard error of any reported
+#'   median or bound, in posterior SDs) and `attr(, "nsim_used")`; under
+#'   `nsim = "auto"` also `attr(, "mc_tol")` and `attr(, "nsim_capped")`
+#'   (`TRUE` when `nsim.max` stopped the draws before `mc.tol` was met).
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
@@ -1338,7 +1356,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  newdata = NULL, times = NULL, level = 0.95,
                                  nsim = 1000L, draws = TRUE, time_col = NULL,
                                  X_det.0 = NULL, weights = NULL,
-                                 aggregate = FALSE, ...) {
+                                 aggregate = FALSE, mc.tol = 0.05,
+                                 nsim.max = 10000L, ...) {
   if (!is.null(weights) &&
       !identical(object$model$model_type, "occu_cover") &&
       !isTRUE(object$occu_only_joint)) {
@@ -1436,7 +1455,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
       return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
                                  times = times, level = level, nsim = nsim,
                                  draws = draws, time_col = time_col,
-                                 weights = weights, aggregate = aggregate))
+                                 weights = weights, aggregate = aggregate,
+                                 mc.tol = mc.tol, nsim.max = nsim.max))
     }
     # Non-joint occu_cover() fit (laplace / nuts): there is no joint
     # nested-Laplace object for .tobs_predict_joint()'s trend-block bundle to
@@ -1498,7 +1518,8 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     return(.tobs_predict_occu_joint(object, newdata = nd, type = oc_type,
                                     times = times, level = level, nsim = nsim,
                                     draws = draws, time_col = time_col,
-                                    weights = weights, aggregate = aggregate))
+                                    weights = weights, aggregate = aggregate,
+                                    mc.tol = mc.tol, nsim.max = nsim.max))
   }
   type <- match.arg(type)
 

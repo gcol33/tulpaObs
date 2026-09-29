@@ -16,6 +16,8 @@
   draws = TRUE,
   weights = NULL,
   aggregate = FALSE,
+  mc.tol = 0.05,
+  nsim.max = 10000L,
   ...
 )
 }
@@ -33,7 +35,8 @@ the nested-Laplace fit, one row per spatial unit (or a \code{cell} column).}
 projection); the nested-Laplace fit always projects the shared field.}
 
 \item{times, time_col, level, nsim, draws}{Nested-Laplace fit only: \code{times = c(t1, t2)} and \code{time_col} drive the \code{"change"} map; \code{level} is the credible
-level, \code{nsim} the draw count, \code{draws} whether to attach the draw matrices.}
+level, \code{nsim} the draw count (or \code{"auto"} for a trajectory, as in
+\code{\link[=predict.tobs_fit]{predict.tobs_fit()}}), \code{draws} whether to attach the draw matrices.}
 
 \item{weights}{Nested-Laplace fit only: pool several \code{newdata} rows into one
 prediction per \code{cell}, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}. A numeric vector (one
@@ -42,6 +45,9 @@ weight per row) or the name of a \code{newdata} column.}
 \item{aggregate}{Nested-Laplace fit, \code{type = "trajectory"} only: \code{TRUE}
 averages each quantity over the prediction units per posterior draw and
 returns one row per time, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}.}
+
+\item{mc.tol, nsim.max}{Nested-Laplace fit, \code{nsim = "auto"} only: the Monte
+Carlo precision target and the draw cap, as in \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}.}
 
 \item{...}{Unused.}
 }

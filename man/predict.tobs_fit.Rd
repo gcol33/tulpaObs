@@ -20,6 +20,8 @@
   X_det.0 = NULL,
   weights = NULL,
   aggregate = FALSE,
+  mc.tol = 0.05,
+  nsim.max = 10000L,
   ...
 )
 }
@@ -73,7 +75,15 @@ prediction follows the fitted time effect).}
 \item{level}{\code{occu_cover} only: credible level for the interval columns
 (default 0.95).}
 
-\item{nsim}{\code{occu_cover} only: number of joint posterior draws (default 1000).}
+\item{nsim}{\code{occu_cover} only: number of joint posterior draws (default
+1000), or \code{"auto"} (\code{type = "trajectory"} on a joint nested-Laplace fit)
+to choose the count by Monte Carlo precision: draws are taken until the
+Monte Carlo standard error of every reported median and interval bound,
+over every unit, time and quantity, is at most \code{mc.tol} times that
+quantity's posterior SD, or \code{nsim.max} draws are reached. Each round
+redraws the whole table at the count the \eqn{1/\sqrt{n}} scaling
+projects, so memory is that of one run at the final count and all
+quantities share one draw set.}
 
 \item{draws}{\code{occu_cover} only: if \code{TRUE} (default), carry the per-unit
 \verb{[cell x nsim]} draw matrices in \code{attr(, "draws")}.}
@@ -109,6 +119,14 @@ row per prediction unit and time; \code{TRUE} averages each quantity over the
 units per posterior draw first and returns one row per time (the overall
 trend, with its own interval).}
 
+\item{mc.tol}{\code{nsim = "auto"} only: the Monte Carlo standard error allowed
+on each reported median and bound, as a fraction of its posterior SD
+(default 0.05, about 2,900 draws for a Gaussian-shaped quantity at
+\code{level = 0.95}).}
+
+\item{nsim.max}{\code{nsim = "auto"} only: the most draws to take (default
+10000).}
+
 \item{...}{Ignored.}
 }
 \value{
@@ -123,7 +141,11 @@ source), and \code{type = "both"} returns \code{list(occupancy = , detection = )
 draw matrices in \code{attr(, "draws")}; \code{type = "trajectory"} a long table
 (\code{cell}, \code{time}, then \verb{<q>_mean} / \verb{_median} / \verb{_lwr} / \verb{_upr} for \code{psi},
 \code{cover_cond} and \code{cover_exp}), one row per cell and time, or per time
-with \code{aggregate = TRUE}.
+with \code{aggregate = TRUE}. A trajectory states its Monte Carlo precision in
+\code{attr(, "mc_se_max")} (the largest MC standard error of any reported
+median or bound, in posterior SDs) and \code{attr(, "nsim_used")}; under
+\code{nsim = "auto"} also \code{attr(, "mc_tol")} and \code{attr(, "nsim_capped")}
+(\code{TRUE} when \code{nsim.max} stopped the draws before \code{mc.tol} was met).
 }
 \description{
 Four modes:
