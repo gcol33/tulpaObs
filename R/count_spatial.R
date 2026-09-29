@@ -128,7 +128,7 @@
   colnames(draws) <- nms
 
   fit <- structure(c(list(
-    draws = draws, means = means, sds = sds,
+    draws = draws, means = means, sds = sds, vcov = V,
     skew = NULL, sla_status = "off",
     n_samples = n_draws, n_params = length(means),
     log_prob = rep(NA_real_, n_draws)),
@@ -236,7 +236,7 @@
                    ci_lo = res$theta_ci_lo, ci_hi = res$theta_ci_hi)
 
   fit <- structure(c(list(
-    draws = draws, means = means, sds = sds,
+    draws = draws, means = means, sds = sds, vcov = V,
     skew = NULL, sla_status = "off",
     n_samples = n_draws, n_params = length(means),
     log_prob = rep(NA_real_, n_draws)),

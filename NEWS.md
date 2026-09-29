@@ -1,5 +1,27 @@
 # tulpaObs NEWS
 
+## 0.4.4
+
+* **`confint()`, `coef()`, `vcov()`, `summary()` and `tidy()` read the
+  nested-Laplace grid mixture exactly** (#385). On a fit whose posterior is the
+  Gaussian mixture its outer grid defines (verified on joint `occu_cover()` and
+  the areal `abun()`, `ms_abun()`, `count()`, `distance()` and `fp_occu()`
+  routes), the fixed-effect estimate and SD are the mixture's moments and
+  the bounds invert its CDF, as `confint()` on the engine fit already did.
+  They were read off the 1000 Monte Carlo draws the fit carries, which moved a
+  bound on a weakly identified coefficient by up to a quarter of its SD and the
+  estimate by up to 0.12 on a production fit. `confint()` passes through
+  `interval_source` (`"mixture_cdf"`) and `retained_mass`; a hyperparameter
+  asked for by name is still read off the draws. The mixture is read only when
+  its moments equal the fit's reported `means` / `sds`, so a fit it does not
+  describe keeps the draw read.
+* **Natural-scale coefficient SDs are exact on autoscaled fits.** Mapping a
+  fit's SDs back from the centred and scaled design used a diagonal
+  approximation that ignored the correlation between an intercept and its
+  slopes, so `fit$sds` could disagree with `vcov()` and with the draws. Where
+  the fit carries its covariance the SDs are now the diagonal of the
+  transformed covariance.
+
 ## 0.4.3
 
 * **`predict(type = "trajectory")` predicts occupancy and cover at any times.**

@@ -1,9 +1,101 @@
 # ============================================================================
 # tobs_fit-specific S3 methods.
-# vcov and confint are inherited from tulpa::tulpa_fit via
-# class = c("tobs_fit", "tulpa_fit"). coef, tidy, glance, summary and logLik
-# take the engine's value and put it on the one tobs layout below.
+# coef, vcov, confint, tidy, glance, summary and logLik take the engine's
+# value (tulpa::tulpa_fit, via class = c("tobs_fit", "tulpa_fit")) and put it
+# on the one tobs layout below. The fixed-effect accessors read the engine fit
+# `.tobs_fixed_posterior()` resolves when there is one.
 # ============================================================================
+
+# The engine fit whose fixed-effect posterior this fit reports, relabelled with
+# this fit's coefficient names, or NULL when there is none to read.
+#
+# A nested-Laplace fit's fixed-effect posterior is the Gaussian mixture its
+# outer grid defines, which the engine reads exactly: moments by the law of
+# total variance, bounds by inverting the mixture CDF. A joint fit keeps the
+# per-cell modes, precisions and weights on its engine object (`$joint_fit` /
+# `$joint`); every other grid route keeps them on the draws it sampled from
+# that mixture (`.tobs_grid_mixture_draws()`). The draws are a Monte Carlo
+# sample of it, so a summary read off them restates it with sampling error,
+# which on a weakly identified coefficient moves a bound by a sizeable fraction
+# of its SD. The mixture is read only when it describes the posterior this fit
+# reports: the same number of fixed effects, and moments equal to the reported
+# `means` / `sds`.
+.tobs_fixed_posterior <- function(object) {
+  p <- object$n_fixed %||% ncol(object$draws)
+  if (!is.numeric(p) || length(p) != 1L || is.na(p) || p < 1L ||
+      length(object$means) < p || length(object$sds) < p) return(NULL)
+  idx <- seq_len(p)
+  nm  <- (object$fixed_names %||% object$param_names %||%
+            names(object$means))[idx]
+  if (length(nm) != p || anyNA(nm)) return(NULL)
+  jf <- .tobs_joint_fit(object)
+  if (inherits(jf, "tulpa_fit") && !is.null(jf$grid_hessians) &&
+      !is.null(jf$grid_modes) && !is.null(jf$weights)) {
+    if (!identical(as.integer(jf$n_fixed %||% NA_integer_), as.integer(p)))
+      return(NULL)
+    jf$fixed_names <- nm
+  } else {
+    jf <- .tobs_grid_mixture_fit(object$draws, p, nm)
+    if (is.null(jf)) return(NULL)
+  }
+  est <- tryCatch(stats::coef(jf), error = function(e) NULL)
+  V   <- tryCatch(stats::vcov(jf), error = function(e) NULL)
+  if (length(est) != p || !is.matrix(V) || nrow(V) != p) return(NULL)
+  same <- function(a, b) isTRUE(all.equal(unname(as.numeric(a)),
+                                          unname(as.numeric(b)),
+                                          tolerance = 1e-8))
+  if (!same(est, object$means[idx]) ||
+      !same(sqrt(pmax(diag(V), 0)), object$sds[idx])) return(NULL)
+  jf
+}
+
+#' Fixed-effect covariance and credible intervals for tobs_fit
+#'
+#' On a nested-Laplace fit that keeps the per-cell pieces of its outer grid
+#' (for example [occu_cover()] or [abun()] with an areal field), the
+#' covariance is the grid-marginalized one and the bounds invert the Gaussian
+#' mixture the grid defines, rather than being read off the Monte Carlo draws
+#' the fit also carries; [coef()], [summary()] and [tidy()] read the same
+#' mixture. Every other fit reads as
+#' [tulpa::vcov.tulpa_fit()] / [tulpa::confint.tulpa_fit()] describe.
+#'
+#' @param object A `tobs_fit` object.
+#' @param parm Parameter names or indices (default: all fixed effects).
+#'   Indices address the fixed effects; a name that is not a fixed effect is
+#'   read off the posterior draws when they carry a column of that name.
+#' @param level Interval level (default 0.95).
+#' @param ... Ignored.
+#' @return `vcov()`: the fixed-effect covariance matrix. `confint()`: a
+#'   two-column matrix of lower and upper bounds, one row per requested
+#'   parameter, carrying the `interval_source`, `interval_declined`,
+#'   `retained_mass` and `skew_applied` attributes [tulpa::confint.tulpa_fit()]
+#'   documents.
+#' @name tobs_fit_intervals
+#' @export
+vcov.tobs_fit <- function(object, ...) {
+  fp <- .tobs_fixed_posterior(object)
+  if (is.null(fp)) return(NextMethod())
+  stats::vcov(fp)
+}
+
+#' @rdname tobs_fit_intervals
+#' @export
+confint.tobs_fit <- function(object, parm = NULL, level = 0.95, ...) {
+  fp <- .tobs_fixed_posterior(object)
+  if (is.null(fp)) return(NextMethod())
+  if (!is.character(parm) || all(parm %in% fp$fixed_names)) {
+    return(stats::confint(fp, parm = parm, level = level))
+  }
+  ci <- stats::confint(fp, level = level)
+  ex <- NextMethod(parm = setdiff(parm, fp$fixed_names))
+  out <- rbind(ci, ex[, , drop = FALSE])[parm, , drop = FALSE]
+  sa <- attr(ci, "skew_applied")
+  if (!is.null(sa)) sa <- stats::setNames(sa[parm], parm)
+  attr(out, "skew_applied") <- sa
+  for (a in c("interval_source", "interval_declined", "retained_mass"))
+    attr(out, a) <- attr(ci, a)
+  out
+}
 
 #' Summary for tobs_fit, with skewness column when simplified Laplace is used
 #'
@@ -23,7 +115,8 @@
 #'   every method within a family, returns this layout.
 #' @export
 summary.tobs_fit <- function(object, ...) {
-  s <- NextMethod()
+  fp <- .tobs_fixed_posterior(object)
+  s <- if (is.null(fp)) NextMethod() else summary(fp, ...)
   if (!is.null(object$skew)) {
     sk <- rep(NA_real_, nrow(s))
     nm <- rownames(s)
@@ -220,7 +313,9 @@ tulpa::glance
 #'   `conf.low` and `conf.high`. Every family returns this layout.
 #' @export
 tidy.tobs_fit <- function(x, conf.level = 0.95, ...) {
-  .tobs_tidy_layout(NextMethod(), x)
+  fp <- .tobs_fixed_posterior(x)
+  .tobs_tidy_layout(if (is.null(fp)) NextMethod()
+                    else tidy(fp, conf.level = conf.level), x)
 }
 
 # Replace a flat `term` column by `arm` + `term`, keeping the table's other
@@ -523,7 +618,8 @@ ranef.tobs_fit <- function(object, ...) {
 #' @return A named numeric vector.
 #' @export
 coef.tobs_fit <- function(object, arm = NULL, ...) {
-  flat <- NextMethod()
+  fp <- .tobs_fixed_posterior(object)
+  flat <- if (is.null(fp)) NextMethod() else stats::coef(fp)
   vn <- object$model$det_visit_names
   if (length(vn) && !is.null(object$means)) {
     pv <- object$means[paste0("p_visit_", vn)]

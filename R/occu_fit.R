@@ -1268,19 +1268,7 @@ compute_intercepts <- function(model, means) {
 # blocks are transformed exactly (block-diagonal T preserves them).
 .unscale_vcov <- function(vcov, scales, process_info) {
   if (is.null(vcov) || is.null(scales) || is.null(process_info)) return(vcov)
-  p_tot <- nrow(vcov)
-  Tfull <- diag(p_tot)
-  off <- 0L
-  for (k in seq_along(process_info)) {
-    p_k <- as.integer(process_info[[k]]$p)
-    if (p_k == 0L) next
-    sc <- scales[[k]]
-    if (!is.null(sc) && length(sc$cols) > 0L) {
-      idx <- off + seq_len(p_k)
-      Tfull[idx, idx] <- .scale_transform(sc)
-    }
-    off <- off + p_k
-  }
+  Tfull <- .unscale_transform_full(nrow(vcov), scales, process_info)
   out <- Tfull %*% vcov %*% t(Tfull)
   dimnames(out) <- dimnames(vcov)
   out

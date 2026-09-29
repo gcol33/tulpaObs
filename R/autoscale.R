@@ -214,15 +214,42 @@
   list(model = scaled, scales = scales)
 }
 
+# The per-process scaling as one block-diagonal linear map over the leading
+# `p_tot` coefficients: identity outside the scaled process blocks (and on any
+# tail past them). Natural-scale coefficients are `T %*% beta_scaled`.
+.unscale_transform_full <- function(p_tot, scales, process_info) {
+  Tfull <- diag(p_tot)
+  off <- 0L
+  for (k in seq_along(process_info)) {
+    p_k <- as.integer(process_info[[k]]$p)
+    if (p_k == 0L) next
+    sc <- scales[[k]]
+    if (!is.null(sc) && length(sc$cols) > 0L && off + p_k <= p_tot) {
+      idx <- off + seq_len(p_k)
+      Tfull[idx, idx] <- .scale_transform(sc)
+    }
+    off <- off + p_k
+  }
+  Tfull
+}
+
 # Walk a fit's `means` / `sds` / `draws` and unscale the per-process slices
 # in place. Process layout follows `process_info` (one block per element,
 # `p` columns each). Any tail beyond the process_info coefficients (e.g.
 # `p_visit_*` columns from `X_det_visit`) is left untouched -- those
 # matrices aren't passed through `.autoscale_model_X()` and so are still
 # on natural scale.
+#
+# A block's SDs are the diagonal of `T V T'` when the fit carries its
+# scaled-space covariance `vcov` over that block, so they agree with the
+# covariance and the draws; the diagonal approximation of `.unscale_sds_vec()`
+# is used only where no covariance is available. The grid mixture the draws
+# were sampled from (`.tobs_grid_mixture_draws()`) goes through the same
+# affine map, which carries a Gaussian mixture to a Gaussian mixture exactly.
 .unscale_fit_per_process <- function(fit, scales, process_info) {
   if (is.null(scales) || is.null(process_info)) return(fit)
   if (is.null(fit$means)) return(fit)
+  V_sc <- fit$vcov
   off <- 0L
   for (k in seq_along(process_info)) {
     p_k <- as.integer(process_info[[k]]$p)
@@ -234,7 +261,12 @@
       sd_sc <- if (!is.null(fit$sds)) as.numeric(fit$sds[idx]) else NULL
       fit$means[idx] <- .unscale_beta_vec(mu_sc, sc)
       if (!is.null(sd_sc)) {
-        fit$sds[idx] <- .unscale_sds_vec(sd_sc, sc)
+        V_blk <- if (is.matrix(V_sc) && nrow(V_sc) == ncol(V_sc) &&
+                     nrow(V_sc) >= max(idx))
+                   V_sc[idx, idx, drop = FALSE]
+        fit$sds[idx] <- if (!is.null(V_blk) && all(is.finite(V_blk)))
+          sqrt(pmax(diag(.unscale_vcov_block(V_blk, sc)), 0))
+        else .unscale_sds_vec(sd_sc, sc)
       }
       if (!is.null(fit$draws) && ncol(fit$draws) >= max(idx)) {
         fit$draws[, idx] <- .unscale_draws_mat(
@@ -243,6 +275,14 @@
       }
     }
     off <- off + p_k
+  }
+  gm <- attr(fit$draws, "grid_mixture")
+  if (!is.null(gm)) {
+    Tm <- .unscale_transform_full(ncol(gm$modes), scales, process_info)
+    gm$modes <- gm$modes %*% t(Tm)
+    gm$covs  <- lapply(gm$covs, function(C)
+      if (is.null(C)) NULL else Tm %*% as.matrix(C) %*% t(Tm))
+    attr(fit$draws, "grid_mixture") <- gm
   }
   fit
 }

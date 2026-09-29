@@ -139,7 +139,34 @@
     pos <- pos + counts[k]
   }
   lead <- lead[sample.int(n), , drop = FALSE]
-  .tobs_grid_draw_tail(lead, means, V, p, n)
+  out <- .tobs_grid_draw_tail(lead, means, V, p, n)
+  attr(out, "grid_mixture") <- list(weights = w, modes = modes, covs = covs)
+  out
+}
+
+# The grid mixture a draw matrix was sampled from, as the nested-Laplace fit
+# shape tulpa's fixed-effect accessors read (per-cell modes, precisions and
+# weights), over the leading `p` coordinates and named `nm`. NULL when the
+# draws carry no mixture or `p` exceeds it. A cell whose within covariance is
+# missing or singular carries no precision; the engine then reads the
+# remaining cells, whose moments differ from the reported ones, which is what
+# declines the view in `.tobs_fixed_posterior()`.
+.tobs_grid_mixture_fit <- function(draws, p, nm) {
+  gm <- attr(draws, "grid_mixture")
+  if (is.null(gm) || !is.numeric(p) || length(p) != 1L || p < 1L ||
+      ncol(gm$modes) < p) return(NULL)
+  idx <- seq_len(p)
+  modes <- gm$modes[, idx, drop = FALSE]
+  hess <- lapply(gm$covs, function(C) {
+    if (is.null(C) || !all(is.finite(C))) return(NULL)
+    tryCatch(solve(as.matrix(C)[idx, idx, drop = FALSE]),
+             error = function(e) NULL)
+  })
+  structure(list(modes = modes, weights = gm$weights,
+                 grid_modes = lapply(seq_len(nrow(modes)),
+                                     function(k) modes[k, ]),
+                 grid_hessians = hess, n_fixed = p, fixed_names = nm),
+            class = "tulpa_fit")
 }
 
 # The hyperparameter block, drawn from its Gaussian conditional on the
