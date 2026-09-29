@@ -12,6 +12,12 @@
   miss. `attr(, "mc_binding")` is a one-row data frame giving the `cell`,
   `time`, `quantity` and `bound` whose error is `mc_se_max`, so a run that
   `nsim.max` stopped shows where.
+* **Requires tulpa (>= 0.6.5)**, which resolves Matrix's CHOLMOD stubs on the
+  R main thread at load (#387, gcol33/tulpa#918). On tulpa 0.6.4 the first
+  joint nested-Laplace fit in a session could print a cascade of
+  `Warning: stack imbalance in '.Call', ...`: OpenMP workers in the inner
+  covariance extraction made the first calls into those stubs, and each
+  first call runs `R_GetCCallable()`, which touches the R protect stack.
 
 ## 0.4.5
 
