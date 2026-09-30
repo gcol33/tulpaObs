@@ -337,12 +337,17 @@
   # Blocks are NAMES, not positions: a dropped constant column must not be able
   # to shift which coefficients an arm is assembled from.
   blocks <- list(occ = cn(1L, "psi"), det = cn(2L, "p"), pos = cn(3L, "pos"))
+  # The field scales and the dispersion are ranked on their own continuized
+  # marginal (`$hyper`), not on the node values the bundle scores its latent at.
+  jf <- .tobs_joint_fit(fit)
   if (length(d$blocks)) {
-    b1 <- d$blocks[[1L]]
-    M <- cbind(M, sigma = b1$amp_occ, sigma_pos_field = b1$amp_pos,
-               alpha = ifelse(b1$amp_occ > 0, b1$amp_pos / b1$amp_occ, 0))
+    sigma <- .tobs_joint_field_sd(jf$theta_grid, d$cells, d$hyper, 1L)
+    alpha <- .tobs_joint_amp(jf$theta_grid, d$cells, d$hyper, 1L, "alpha",
+                             default = 0)
+    M <- cbind(M, sigma = sigma, sigma_pos_field = alpha * sigma,
+               alpha = alpha)
   }
-  M <- cbind(M, disp = d$disp)
+  M <- cbind(M, disp = .tobs_joint_disp(jf, d$cells, d$positive, hyper = d$hyper))
   attr(M, "blocks") <- blocks
   M
 }

@@ -10,7 +10,9 @@
 # SAME within-cell construction the fit's own `theta_ci_lo` / `theta_median` /
 # `theta_ci_hi` are read from (`tulpa::tulpa_hyper_draws()`), so a draw's
 # hyperparameter is continuized within its own cell rather than pinned to the
-# cell's coordinate.
+# cell's coordinate. The field amplitude that scales a draw's unit latent and
+# the dispersion the likelihood scores it with are the exception: they read the
+# node that latent was drawn at.
 # =============================================================================
 
 test_that("occu_cover joint draws continuize sigma/alpha/phi_pos, matching theta_ci", {
@@ -72,8 +74,14 @@ test_that("occu_cover joint draws continuize sigma/alpha/phi_pos, matching theta
   }
 
   # `.tobs_joint_draws()` (predict / WAIC / ppc's shared entry point) carries
-  # the same continuized field amplitude and dispersion, not the grid atom.
+  # the continuized axes as `$hyper`, while the amplitude that scales the unit
+  # latent and the dispersion the likelihood scores it with stay at the node
+  # that latent was drawn at.
   bundle <- tulpaObs:::.tobs_joint_draws(fit, n = 5000L)
-  expect_gt(length(unique(bundle$blocks[[1L]]$amp_occ)), n_grid)
-  expect_gt(length(unique(bundle$disp)), n_grid)
+  expect_identical(colnames(bundle$hyper), colnames(jf$theta_grid))
+  expect_gt(length(unique(bundle$hyper[, "sigma"])), n_grid)
+  expect_gt(length(unique(bundle$hyper[, "phi_pos"])), n_grid)
+  expect_equal(bundle$blocks[[1L]]$amp_occ,
+               unname(jf$theta_grid[bundle$cells, "sigma"]))
+  expect_equal(bundle$disp, unname(jf$theta_grid[bundle$cells, "phi_pos"]))
 })

@@ -227,9 +227,17 @@ paired fits, and the occurrence-arm gap does not (control minimum 0.0101). Hence
 the shipped assertion is the cover arm alone at 0.30 se.
 
 Large-N band, `alpha.grid = c(0.5, 1.0, 1.5)`, `adaptive.grid = FALSE`, seeds
-104-108: at N = 1000 max abs skew_occ 0.00002-0.00200, max abs skew_pos
-0.00199-0.01292 (seed 104: 0.00010 / 0.00444). At N = 120: skew_occ
-0.00114-0.00760, skew_pos 0.01756-0.12827 (seed 104: 0.12827).
+104-108, tulpa 0.6.5, measured 2026-10-01 after #390: at N = 1000 max abs
+skew_occ 0.051-0.082, max abs skew_pos 0.0061-0.0125 (seed 104: 0.068 /
+0.0061). At N = 120, seeds 104 / 105: skew_occ 0.097 / 0.227, skew_pos
+0.143 / 0.027.
+
+Every joint-path skewness number recorded before #390 (the band above as first
+measured, and the joint-vs-separate skewness comparisons in this section) is the
+between-cell mixture skew ONLY: the per-cell evaluator read retired
+`sigma_occ` / `sigma_pos` grid columns, errored at every cell, and the combiner
+zeroed the failures. The cover-arm posterior-gap assertion does not read the
+skewness and is unaffected.
 
 ### #197 / #198, on-node vs off-node pinned axes
 

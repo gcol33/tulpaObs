@@ -21,8 +21,9 @@
 # ---------------------------------------------------------------------------
 # Per-unit unit-variance field from the joint mode at grid point k.
 #
-# Under the (sigma_occ, sigma_pos) reparam the stored modes are
-# unit-variance latent z. Each arm scales it by its own `sigma_arm_k`.
+# The stored modes are unit-variance latent z. The occupancy arm scales it by
+# the field SD `sigma_k`, the cover arm by `alpha_k * sigma_k`
+# (`.tobs_joint_copy_amps()`).
 # For BYM2 the z-field is
 #     z[s] = sqrt(rho) * scale_factor * phi[s] + sqrt(1 - rho) * theta[s];
 # for ICAR / CAR_proper it is just `phi[s]`.
@@ -88,8 +89,9 @@
 
   spi_full <- enc$..spi_full
   spi_pos  <- enc$..spi_pos
-  s_occ_k  <- fit$theta_grid[k, "sigma_occ"]
-  s_pos_k  <- fit$theta_grid[k, "sigma_pos"]
+  amp      <- .tobs_joint_copy_amps(fit$theta_grid, k, 1L)
+  s_occ_k  <- amp$occ
+  s_pos_k  <- amp$pos
 
   eta_occ <- as.numeric(enc$occ_data$X %*% beta_occ)
   if (length(field_z) > 0L && length(spi_full) > 0L) {
@@ -347,6 +349,13 @@
     )
     if (length(g_occ) == p_occ) gamma_grid_occ[k, ] <- g_occ
     if (length(g_pos) == p_pos) gamma_grid_pos[k, ] <- g_pos
+  }
+  # The combiner zeroes a cell whose inner skewness failed, which is right for
+  # an odd cell but would report the between-cell mixture skew alone, under a
+  # simplified-Laplace status, when every cell failed.
+  if (!any(is.finite(gamma_grid_occ)) || !any(is.finite(gamma_grid_pos))) {
+    return(list(gamma_occ = NULL, gamma_pos = NULL, valid = FALSE,
+                reason = "inner skewness failed at every grid cell"))
   }
 
   # Posterior-weighted marginal means / variances (var-of-means +

@@ -6,10 +6,10 @@
 # substrate: per-grid weights / modes / sparse precision, an `arm_layout`, a
 # shared latent field, and a working `tulpa::tulpa_posterior_draws()`. They
 # differ only in (a) which slot holds the joint object, (b) the arm roster
-# (occ/pos vs psi/p/pos), and (c) the field-amplitude convention -- cover()'s
-# independent (sigma_occ, sigma_pos) reparam versus occu_cover()'s donor sigma
-# scaled onto the cover arm by the copy coefficient alpha. This file normalizes
-# those three differences ONCE into a family-agnostic draw bundle so predict()
+# (occ/pos vs psi/p/pos), and (c) which blocks a fit carries and on which arms.
+# Both share one field-amplitude convention: the donor sigma, scaled onto the
+# cover arm by the copy coefficient alpha (`.tobs_joint_copy_amps()`). This
+# file normalizes those differences ONCE into a family-agnostic draw bundle so predict()
 # and the pointwise log-likelihood share a single draws -> linear-predictor
 # path.
 # =============================================================================
@@ -639,6 +639,22 @@
 # read is kept ONLY as the fallback for a fit where `tulpa_hyper_draws()`
 # declined to continuize that axis (recorded in `theta_declined`) or was not
 # computed at all, so a draw set still resolves rather than erroring.
+#
+# `hyper = NULL` reads the node on purpose. A draw's latent half comes from its
+# cell's inner Gaussian, which is conditional on that cell's NODE: a field block
+# is stored as a unit latent `z` whose posterior was formed with the node's
+# amplitude, so the data-identified quantity is `amp_node * z`. Rescaling that
+# `z` by a continuized amplitude moves the field on the linear predictor away
+# from what the data fixed (on a cover arm with a small residual SD, by many
+# residual SDs), and every pointwise log-likelihood, prediction and PPC built
+# from it inherits the error. So amplitudes and mixing weights that multiply a
+# latent (sigma, tau, alpha, bym2 rho) read the node, and so does the cover
+# dispersion the likelihood scores that latent with: a within-cell continuized
+# dispersion spans the whole cell on a coarse axis, far wider than the data
+# pin it, and pairing it with a node-conditional latent inflates every
+# pointwise log-likelihood's spread. A draw is then an exact draw of the
+# mixture the engine integrated. Only the hyperparameter's own reported draw
+# (`$hyper` on the bundle, what SBC ranks) is continuized.
 .tobs_hyper_col <- function(hyper, theta_grid, cells, col) {
   if (!is.null(hyper) && col %in% colnames(hyper)) {
     return(as.numeric(hyper[, col]))
@@ -677,11 +693,11 @@
 # whose phi is already an SD (truncated / interval gaussian) or a precision
 # (beta) passes through untouched.
 #
-# `hyper` (default `NULL`) is the continuized per-draw axis matrix from
-# `.tobs_hyper_col()`'s caller -- passed by every posterior-draws consumer in
-# this file. The grid-quadrature callers (`sla_cover_hurdle_joint.R`, which
-# reads a raw outer-grid NODE index `k`, not a draw) never pass it, so they
-# keep the exact node value quadrature requires.
+# `hyper` (default `NULL`, the node) is the continuized per-draw axis matrix,
+# passed only where the dispersion is reported as a hyperparameter draw (SBC).
+# The likelihood consumers and the grid-quadrature callers
+# (`sla_cover_hurdle_joint.R`, which reads a raw outer-grid NODE index `k`)
+# read the node.
 .tobs_joint_disp <- function(jf, cells, positive, hyper = NULL) {
   .cover_phi_to_sd(.tobs_joint_phi_at(jf, cells, hyper = hyper),
                    .cover_pos_engine_family(positive))
@@ -731,6 +747,19 @@
   .cover_phi_to_sd(.tobs_joint_held_phi(jf), .cover_pos_engine_family(positive))
 }
 
+# Per-arm amplitudes of a copied field block at the draw's node: the donor
+# (occupancy) arm scales the unit latent by the block's field SD, the copy
+# (cover) arm by `alpha` times it -- the engine's `eta += field_coef * sigma *
+# z`, with `field_coef = alpha` on the copy arm. No alpha axis means the block
+# is not copied, so the copy arm's amplitude is 0; defaulting to 1 would turn
+# a decoupled fit into a full-amplitude copy. `cells` is a node index vector
+# (one per draw, or a single grid cell).
+.tobs_joint_copy_amps <- function(theta_grid, cells, block) {
+  sigma <- .tobs_joint_field_sd(theta_grid, cells, NULL, block)
+  alpha <- .tobs_joint_amp(theta_grid, cells, NULL, block, "alpha", default = 0)
+  list(occ = sigma, pos = alpha * sigma)
+}
+
 .tobs_joint_amp <- function(theta_grid, cells, hyper, block, name, default = 1) {
   cn <- colnames(theta_grid)
   j  <- match(paste0("b", block, ".", name), cn)
@@ -744,15 +773,19 @@
 #   $n         number of draws
 #   $positive  "lognormal" / "beta"
 #   $cells     length-n outer-grid cell each draw came from
+#   $hyper     [n x n_axes] continuized hyperparameter draws in those cells
+#              (`attr(tulpa_posterior_draws(), "theta")`), the axis's own
+#              marginal; the latent amplitudes below read the node instead
 #   $disp      length-n per-draw positive-arm dispersion (residual SD for
-#              lognormal, precision for beta), read off the `phi_pos` grid axis
+#              lognormal, precision for beta) at the draw's `phi_pos` node
 #   $b         list(occ = [n x p_occ], det = [n x p_det] | NULL,
 #                   pos = [n x p_pos]) of per-arm coefficient draws (in the
 #              fitted, scaled design space)
 #   $blocks    list of shared-field blocks, each:
 #                $z       [n x n_cells] unit-variance field draws
-#                $amp_occ [n] occupancy-arm field amplitude per draw
-#                $amp_pos [n] positive-arm field amplitude per draw
+#                $amp_occ [n] occupancy-arm field amplitude per draw, at
+#                         the draw's grid node (see `.tobs_hyper_col()`)
+#                $amp_pos [n] positive-arm field amplitude per draw, same
 #                $weight  NULL (intercept field) or the per-cell covariate name
 #                         weighting this (trend / SVC) field
 #   $n_cells   spatial-unit count
@@ -814,7 +847,7 @@
     # fit time already excluded it).
     tau_col <- sprintf("b%d.tau", b)
     amp <- if (tau_col %in% cn) {
-      1.0 / sqrt(.tobs_hyper_col(hyper, tg, cells, tau_col))
+      1.0 / sqrt(.tobs_hyper_col(NULL, tg, cells, tau_col))
     } else {
       rep(1.0, length(cells))
     }
@@ -822,7 +855,7 @@
          weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
   })
 
-  list(n = n, positive = NA_character_, cells = cells,
+  list(n = n, positive = NA_character_, cells = cells, hyper = hyper,
        disp = rep(1, length(cells)),
        b = list(occ = b_occ, det = b_det, pos = NULL),
        blocks = blocks, n_cells = n_cells)
@@ -874,14 +907,14 @@
     # Field amplitude on the outer grid: b<b>.sigma (bym2) or 1/sqrt(b<b>.tau)
     # (icar / car_proper), per draw cell. The active arm scales z by this; the
     # inactive arm by 0 (no copy).
-    amp <- .tobs_joint_field_sd(tg, cells, hyper, b)
+    amp <- .tobs_joint_field_sd(tg, cells, NULL, b)
     if (is_bym2[b]) {
       # Reconstruct the rho-mixed unit field from the two sub-blocks, the way
       # the shared-field path does: z = sqrt(rho) * sf * phi + sqrt(1-rho) * theta.
       raw   <- take(2L * nn)
       phi   <- raw[, seq_len(nn), drop = FALSE]
       theta <- raw[, nn + seq_len(nn), drop = FALSE]
-      rho   <- .tobs_hyper_col(hyper, tg, cells, sprintf("b%d.rho", b))
+      rho   <- .tobs_hyper_col(NULL, tg, cells, sprintf("b%d.rho", b))
       sf    <- meta[[b]]$scale_factor %||% 1.0
       z <- sweep(phi, 1L, sqrt(pmax(rho, 0) + 1e-10) * sf, "*") +
            sweep(theta, 1L, sqrt(pmax(1 - rho, 0) + 1e-10), "*")
@@ -901,8 +934,8 @@
     list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = wt)
   })
 
-  list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
+  list(n = n, positive = positive, cells = cells, hyper = hyper,
+       disp = .tobs_joint_disp(jf, cells, positive),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = blocks, n_cells = n_nodes[1L])
 }
@@ -959,18 +992,14 @@
                field_specs[[b]] else NULL
     if (!is.null(spec) && identical(spec$arm, "pos")) {
       # Non-copied ICAR: amplitude is its own SD, from b<k>.sigma or 1/sqrt(b<k>.tau).
-      amp <- .tobs_joint_field_sd(tg, cells, hyper, b)
+      amp <- .tobs_joint_field_sd(tg, cells, NULL, b)
       list(z = z, amp_occ = rep(0, length(cells)), amp_pos = amp,
            weight = spec$weight)
     } else {
-      sigma <- .tobs_joint_field_sd(tg, cells, hyper, b)
-      # No alpha axis = the block is not copied onto the pos arm, so its
-      # amplitude there is 0. Defaulting to 1 would turn a decoupled fit into a
-      # full-amplitude copy in the draws.
-      alpha <- .tobs_joint_amp(tg, cells, hyper, b, "alpha", default = 0)
+      amp <- .tobs_joint_copy_amps(tg, cells, b)
       wt <- if (!is.null(spec)) spec$weight
             else if (b == 1L) NULL else trend_cols[[b - 1L]]
-      list(z = z, amp_occ = sigma, amp_pos = alpha * sigma, weight = wt)
+      list(z = z, amp_occ = amp$occ, amp_pos = amp$pos, weight = wt)
     }
   })
 
@@ -1005,15 +1034,15 @@
   # Pos-arm dispersion: the `phi_pos` axis when it is integrated on the outer
   # grid (control$phi.grid.pos, or the latent path's sigma_u); otherwise the
   # dispersion the arm held.
-  list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
+  list(n = n, positive = positive, cells = cells, hyper = hyper,
+       disp = .tobs_joint_disp(jf, cells, positive),
        b = list(occ = b_occ, det = b_det, pos = b_pos),
        blocks = blocks, n_cells = n_cells, re = re_draws)
 }
 
-# cover (2-arm occ/pos): a single shared field. Under the (sigma_occ, sigma_pos)
-# reparam the occupancy arm scales the unit-variance field z by `sigma_occ`, the
-# positive arm by `sigma_pos`. The field is stored as phi (ICAR / proper CAR) or
+# cover (2-arm occ/pos): a single shared field. The occupancy arm scales the
+# unit-variance field z by the field SD `sigma`, the positive arm by
+# `alpha * sigma` (`.tobs_joint_copy_amps()`). The field is stored as phi (ICAR / proper CAR) or
 # phi + theta (BYM2); for BYM2 the unit-variance z is
 #   z = sqrt(rho) * scale_factor * phi + sqrt(1 - rho) * theta
 # reconstructed per draw from the draw's grid rho.
@@ -1047,16 +1076,12 @@
     trend_cols <- object$trend_weights %||% list(object$trend_weight)
     blocks <- lapply(seq_len(n_field), function(b) {
       z     <- take(n_cells)
-      sigma <- .tobs_joint_field_sd(tg, cells, hyper, b)
-      # No alpha axis = the block is not copied onto the pos arm, so its
-      # amplitude there is 0. Defaulting to 1 would turn a decoupled fit into a
-      # full-amplitude copy in the draws.
-      alpha <- .tobs_joint_amp(tg, cells, hyper, b, "alpha", default = 0)
-      list(z = z, amp_occ = sigma, amp_pos = alpha * sigma,
+      amp   <- .tobs_joint_copy_amps(tg, cells, b)
+      list(z = z, amp_occ = amp$occ, amp_pos = amp$pos,
            weight = if (b == 1L) NULL else trend_cols[[b - 1L]])
     })
-    return(list(n = n, positive = positive, cells = cells,
-                disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
+    return(list(n = n, positive = positive, cells = cells, hyper = hyper,
+                disp = .tobs_joint_disp(jf, cells, positive),
                 b = list(occ = b_occ, det = NULL, pos = b_pos),
                 blocks = blocks, n_cells = n_cells))
   }
@@ -1087,7 +1112,7 @@
   has_rho <- "rho" %in% cn
   if (has_theta && has_rho) {
     theta <- take(length(theta_idx))
-    rho   <- .tobs_hyper_col(hyper, tg, cells, "rho")
+    rho   <- .tobs_hyper_col(NULL, tg, cells, "rho")
     sf    <- as.numeric(attr(jf, "scale_factor") %||% 1.0)
     z <- sweep(phi, 1L, sqrt(pmax(rho, 0) + 1e-10) * sf, "*") +
          sweep(theta, 1L, sqrt(pmax(1 - rho, 0) + 1e-10), "*")
@@ -1095,12 +1120,11 @@
     z <- phi
   }
 
-  amp_occ <- .tobs_joint_amp(tg, cells, hyper, 1L, "sigma_occ")
-  amp_pos <- .tobs_joint_amp(tg, cells, hyper, 1L, "sigma_pos")
-  block <- list(z = z, amp_occ = amp_occ, amp_pos = amp_pos, weight = NULL)
+  amp   <- .tobs_joint_copy_amps(tg, cells, 1L)
+  block <- list(z = z, amp_occ = amp$occ, amp_pos = amp$pos, weight = NULL)
 
-  list(n = n, positive = positive, cells = cells,
-       disp = .tobs_joint_disp(jf, cells, positive, hyper = hyper),
+  list(n = n, positive = positive, cells = cells, hyper = hyper,
+       disp = .tobs_joint_disp(jf, cells, positive),
        b = list(occ = b_occ, det = NULL, pos = b_pos),
        blocks = list(block), n_cells = n_phi)
 }
