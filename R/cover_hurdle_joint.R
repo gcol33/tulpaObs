@@ -308,7 +308,8 @@
 # is poisoned even when the failed cell's weight is exactly zero. Returns the
 # reconciled `fit` (weights fixed up when the engine collapsed them to all-NaN)
 # so the caller stores that copy, not the raw one, and `converged` so the
-# caller can report whether every grid cell survived.
+# caller can report whether every SOLVED grid cell converged (a cell the
+# engine's screen skipped is not a failure).
 .cover_joint_beta_moments <- function(fit, enc) {
   layout <- fit$arm_layout
   p_occ  <- layout$p[1]; p_pos <- layout$p[2]
@@ -358,7 +359,7 @@
        beta_occ = beta_occ, beta_pos = beta_pos,
        se_occ = sqrt(pmax(0, var_of_means_occ + mean_of_var_occ)),
        se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)),
-       converged = length(ok_cells) == length(fit$log_marginal),
+       converged = oc$n_bad == 0L,
        ok_cells = ok_cells, w = w,
        fit = fit)
 }

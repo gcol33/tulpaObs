@@ -300,6 +300,10 @@ test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
   # engine's prune mask: on this fixture 539 of 563 cells are pruned, and
   # reporting them as failures would tell the caller the fit collapsed.
   expect_false(any(grepl("did not converge", warns)))
+  # Nor as a fit that stopped short: `converged` counts failures among the
+  # cells that were solved, and a screened cell was never meant to be.
+  expect_true(isTRUE(converged(f_on)))
+  expect_false(any(grepl("convergence criterion", warns)))
 
   # Pruning is a no-op on the reported posterior: the hyperparameter means and
   # the coefficient estimates match the dense-grid fit.

@@ -83,7 +83,9 @@
 # negligible weight by construction, and is not a fit failure. Both the count
 # and the denominator are read over the cells that were actually solved.
 #
-# `label` names the route in the error / warning text.
+# `label` names the route in the error / warning text. `n_bad` counts the
+# solved cells whose inner Newton failed, so a screened cell never reads as a
+# convergence failure.
 # Grid-weighted posterior mean and variance of latent columns `cols` of the
 # joint modes: `modes` holds the converged cells' rows, `w` their weights. The
 # variance is the between-cell spread of the modes.
@@ -99,15 +101,13 @@
     stop(sprintf("%s: inner Newton failed at every grid cell. ", label),
          "Bump control$max.iter or tighten control$tol.", call. = FALSE)
   }
-  if (length(ok_cells) < length(fit$log_marginal)) {
-    pruned  <- setdiff(.tobs_pruned_cells(fit), ok_cells)
-    n_solved <- length(fit$log_marginal) - length(pruned)
-    n_bad    <- n_solved - length(ok_cells)
-    if (n_bad > 0L) {
+  pruned   <- setdiff(.tobs_pruned_cells(fit), ok_cells)
+  n_solved <- length(fit$log_marginal) - length(pruned)
+  n_bad    <- n_solved - length(ok_cells)
+  if (n_bad > 0L) {
       warning(sprintf("%s: dropping %d / %d outer-grid cell(s) ",
                       label, n_bad, n_solved),
               "whose inner Newton did not converge.", call. = FALSE)
-    }
   }
   # The engine's cell weights carry the outer-grid quadrature: node spacing and
   # the declared hyperparameter prior, not the likelihood alone. Posterior
@@ -133,7 +133,7 @@
     w_full[ok_cells] <- w
     fit$weights <- w_full
   }
-  list(ok_cells = ok_cells, w = w, fit = fit)
+  list(ok_cells = ok_cells, w = w, fit = fit, n_bad = n_bad)
 }
 
 
