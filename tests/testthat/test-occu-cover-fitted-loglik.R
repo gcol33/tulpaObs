@@ -79,7 +79,7 @@ test_that("fitted() carries the spatial field rather than scoring it at 0", {
   expect_gt(length(unique(round(fitted(sp)$cover, 8))), 1L)
 })
 
-test_that("logLik() reports a real df, so AIC and BIC differ", {
+test_that("logLik() reports a real df, and AIC and BIC refuse a non-ML value", {
   skip_if_fast(); skip_on_cran()
   f <- .fl_sim("lognormal", seed = 3L)
   ns <- suppressWarnings(tobs(
@@ -90,7 +90,11 @@ test_that("logLik() reports a real df, so AIC and BIC differ", {
   # psi (2) + p (1) + cover (1) + log dispersion (1).
   expect_equal(ns$n_fixed, 5L)
   expect_equal(attr(stats::logLik(ns), "df"), 5L)
-  expect_false(isTRUE(all.equal(stats::AIC(ns), stats::BIC(ns))))
+  # The default fit carries an N(0, sigma.beta^2) prior on the coefficients,
+  # so its value is a log posterior mode, not a maximised log-likelihood, and
+  # the engine refuses an information criterion built on it.
+  expect_error(stats::AIC(ns), "maximised log-likelihood")
+  expect_error(stats::BIC(ns), "maximised log-likelihood")
 
   sp <- suppressWarnings(tobs(
     occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
@@ -102,5 +106,8 @@ test_that("logLik() reports a real df, so AIC and BIC differ", {
   # penalty: df counts the coefficient block alone, not `length(means)`.
   expect_lt(sp$n_fixed, length(sp$means))
   expect_equal(attr(stats::logLik(sp), "df"), sp$n_fixed)
-  expect_false(isTRUE(all.equal(stats::AIC(sp), stats::BIC(sp))))
+  # A grid-integrated logLik() is a log posterior mean, not a maximised
+  # log-likelihood, so the engine refuses an information criterion built on it.
+  expect_error(stats::AIC(sp), "maximised log-likelihood")
+  expect_error(stats::BIC(sp), "maximised log-likelihood")
 })

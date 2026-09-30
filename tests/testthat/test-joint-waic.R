@@ -36,7 +36,7 @@ test_that("occu_cover() non-spatial: WAIC + pointwise log-lik (#26)", {
   expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["elpd_waic", "Estimate"]))
   expect_gte(w$estimates["p_waic", "Estimate"], 0)
   # lppd is a sane per-observation magnitude for a hurdle (not absurd).
-  expect_lt(abs(w$lppd / N), 5)
+  expect_lt(abs(sum(w$estimates[c("elpd_waic", "p_waic"), "Estimate"]) / N), 5)
 })
 
 test_that("occu_cover() beta arm: pointwise log-lik is finite (#26)", {
@@ -117,7 +117,7 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
   expect_true(all(is.finite(ll)))
   w <- waic(fit)
   expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["elpd_waic", "Estimate"]))
-  expect_lt(abs(w$lppd / N), 5)
+  expect_lt(abs(sum(w$estimates[c("elpd_waic", "p_waic"), "Estimate"]) / N), 5)
 
   # Without the stored spatial-unit index the joint log-lik errors clearly.
   fit2 <- fit; fit2$spi_full <- NULL

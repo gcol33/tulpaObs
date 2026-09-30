@@ -270,8 +270,14 @@ test_that("the criteria score an occupancy-arm random effect", {
   expect_lt(max(abs(as.numeric(grp) - mean(grp) - fit$re$psi$blup)), 0.1)
 
   # The public criteria read the same components, so they score the term rather
-  # than the population-mean model -- and say nothing about dropping it.
-  expect_warning(w <- waic(fit, n.draws = S), NA)
+  # than the population-mean model -- and say nothing about dropping it. loo's
+  # own p_waic diagnostic is the only warning allowed through.
+  msgs <- character(0)
+  w <- withCallingHandlers(waic(fit, n.draws = S), warning = function(cnd) {
+    msgs <<- c(msgs, conditionMessage(cnd))
+    invokeRestart("muffleWarning")
+  })
+  expect_true(all(grepl("p_waic estimates greater than", msgs)))
   expect_lt(abs(w$estimates["elpd_waic", "Estimate"] - on[["elpd"]]),
             abs(w$estimates["elpd_waic", "Estimate"] - off[["elpd"]]))
   cp <- cpo(fit, n.draws = S)
