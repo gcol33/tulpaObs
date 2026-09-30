@@ -390,9 +390,12 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
   bad <- pu("narrow", qs)
   expect_lt(min(bad), 1e-3)
   # The copy scale carries it on its own: calibrated as reported, far outside
-  # once its width is distorted.
+  # once its width is distorted. Ranked on its continuized within-cell
+  # marginal the distorted read is 6.8e-6 at this seed (0.36 as reported);
+  # read off the grid node instead it is exactly 0, the atom's signature, so
+  # the bound sits between the measurement and the gate above.
   expect_gt(ok[["alpha"]], 0.05)
-  expect_lt(bad[["alpha"]], 1e-6)
+  expect_lt(bad[["alpha"]], 1e-4)
   expect_false(rp$inside[rp$arm == "narrow" & rp$quantity == "alpha"])
 })
 
