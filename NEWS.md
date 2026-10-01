@@ -1,5 +1,22 @@
 # tulpaObs NEWS
 
+## 0.4.7
+
+* **Joint draws are scored at the node their latent was drawn at** (#389). Each
+  draw's unit field, bym2 rho, copy amplitudes and cover dispersion now read
+  the cell's node, so a draw is an exact draw of the mixture the engine
+  integrated. `.tobs_joint_copy_amps()` gives every draw branch and the
+  simplified-Laplace evaluator one source for a copied block's per-arm
+  amplitudes. On the ic-fullmodel fixture WAIC reads 798 (p_waic 53) in place
+  of 13000 (p_waic 6123).
+* **Simplified-Laplace skewness on joint cover fits** (#390). The per-cell
+  inner skewness read a retired hyperparameter axis and errored at every cell;
+  it now evaluates, and a pass whose inner skewness fails at every cell reports
+  a Gaussian fallback.
+* **A screened outer-grid cell is not a convergence failure** (#391). A pruned
+  cover joint fit no longer records `converged = FALSE` or warns that it
+  stopped short when only the cheap-pass screen skipped cells.
+
 ## 0.4.6
 
 * **A trajectory's Monte Carlo check floors the posterior SD and names the
