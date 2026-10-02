@@ -9,6 +9,15 @@
   simplified-Laplace evaluator one source for a copied block's per-arm
   amplitudes. On the ic-fullmodel fixture WAIC reads 798 (p_waic 53) in place
   of 13000 (p_waic 6123).
+* **The occupancy state-marginal likelihood fills tulpa's fused slot.** The
+  scaled-Bernoulli `LikelihoodSpec` behind the single-season nested-Laplace
+  state refine now sets `ll_eta_weights_fn` (tulpa ABI 47), so the Laplace
+  loop reads the log-likelihood, score and Fisher weight of a site from one
+  inverse link. Value, score and weight come from one `occ_site_terms()`
+  kernel shared by the split callbacks; `occ_nested_likelihood_eval()` reads
+  the registered callbacks and `test-occ-nested-likelihood-fused.R` holds the
+  fused pass bit-identical to the split pair and its score to finite
+  differences. Fits are unchanged.
 * **Simplified-Laplace skewness on joint cover fits** (#390). The per-cell
   inner skewness read a retired hyperparameter axis and errored at every cell;
   it now evaluates, and a pass whose inner skewness fails at every cell reports

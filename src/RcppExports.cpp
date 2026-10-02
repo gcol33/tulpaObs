@@ -1754,6 +1754,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// occ_nested_likelihood_eval
+Rcpp::NumericMatrix occ_nested_likelihood_eval(Rcpp::NumericVector y, Rcpp::NumericVector det_prob, Rcpp::NumericVector eta);
+RcppExport SEXP _tulpaObs_occ_nested_likelihood_eval(SEXP ySEXP, SEXP det_probSEXP, SEXP etaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type det_prob(det_probSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta(etaSEXP);
+    rcpp_result_gen = Rcpp::wrap(occ_nested_likelihood_eval(y, det_prob, eta));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cpp_occu_cover_cdf_limits
 Rcpp::List cpp_occu_cover_cdf_limits(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det_site, Rcpp::NumericMatrix X_det_visit, Rcpp::IntegerVector site_of_visit, Rcpp::NumericMatrix b_occ, Rcpp::NumericMatrix b_det, Rcpp::NumericMatrix field_occ, Rcpp::NumericMatrix off_det, Rcpp::IntegerVector any_det, double eta_bound, int n_threads);
 RcppExport SEXP _tulpaObs_cpp_occu_cover_cdf_limits(SEXP X_occSEXP, SEXP X_det_siteSEXP, SEXP X_det_visitSEXP, SEXP site_of_visitSEXP, SEXP b_occSEXP, SEXP b_detSEXP, SEXP field_occSEXP, SEXP off_detSEXP, SEXP any_detSEXP, SEXP eta_boundSEXP, SEXP n_threadsSEXP) {
@@ -2589,6 +2602,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nested_laplace_nmix_bym2", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_bym2, 25},
     {"_tulpaObs_cpp_nested_laplace_nmix_spde", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_nmix_spde, 20},
     {"_tulpaObs_occ_make_nested_likelihood", (DL_FUNC) &_tulpaObs_occ_make_nested_likelihood, 2},
+    {"_tulpaObs_occ_nested_likelihood_eval", (DL_FUNC) &_tulpaObs_occ_nested_likelihood_eval, 3},
     {"_tulpaObs_cpp_occu_cover_cdf_limits", (DL_FUNC) &_tulpaObs_cpp_occu_cover_cdf_limits, 11},
     {"_tulpaObs_cpp_occu_cover_ppc", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ppc, 21},
     {"_tulpaObs_cpp_occu_cover_ppc_agg", (DL_FUNC) &_tulpaObs_cpp_occu_cover_ppc_agg, 16},
