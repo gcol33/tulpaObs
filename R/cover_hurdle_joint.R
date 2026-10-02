@@ -230,10 +230,18 @@
 # multi-block routes carry >= 3 latent axes and default to the mode-centred CCD
 # (the dense tensor would blow up; the engine declines back to the tensor grid
 # on a ridge), while the single-block path passes NULL and lets the engine
-# choose. `prune` adds the opt-in cheap-pass screen axes, which only the
-# shared-field path exposes.
+# choose.
 #
 # Notes on the individual entries, which every route inherits:
+#   * prune / prune_tol -- the engine's cheap-pass screen of the outer grid.
+#     Forwarded as the caller set them, NULL when unset, so the engine's own
+#     per-door default decides on every route and no second default lives
+#     here. The screen ranks the cells by a short warm-started inner Newton,
+#     solves the ones whose screened weight clears the tolerance, bounds the
+#     posterior mass the dropped cells may carry by the worst screening error
+#     measured on a kept cell, and solves dropped cells until that bound is
+#     under its gate; a bound the repair cannot bring under the gate falls back
+#     to the full grid.
 #   * hessian -- the beta positive arm's observed mixture Hessian is indefinite
 #     away from the mode, so observed-curvature Newton steps stall and the inner
 #     Newton hits max.iter in every grid cell. Expected/Fisher curvature is PSD
@@ -265,19 +273,16 @@
 #     `control$progress` prefix-matches `progress.file`.
 #   * checkpoint -- grid-cell checkpoint/resume, forwarded verbatim so a
 #     killed run resumes instead of restarting.
-.cover_joint_control <- function(control, positive, integration = NULL,
-                                 prune = FALSE) {
+.cover_joint_control <- function(control, positive, integration = NULL) {
   head <- list(
     max_iter  = control$max.iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
     n_threads = control[["n.threads"]] %||% 1L,
     n_threads_outer = control$n.threads.outer %||% 1L,
     store_Q   = TRUE,
-    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"))
-  screen <- if (prune) {
-    list(prune     = control[["prune"]]     %||% FALSE,
-         prune_tol = control[["prune.tol"]] %||% 1e-4)
-  } else list()
+    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
+    prune     = control[["prune"]],
+    prune_tol = control[["prune.tol"]])
   tail <- c(.tobs_outer_grid_control(control), list(
     var_of_means_consistency  = control[["var.of.means.consistency"]]  %||% TRUE,
     var_of_means_min_ess      = control[["var.of.means.min.ess"]],
@@ -287,7 +292,7 @@
     progress.file     = control$progress.file     %||% "",
     checkpoint        = control$checkpoint,
     integration       = control$integration %||% integration))
-  c(head, screen, tail)
+  c(head, tail)
 }
 
 # Per-arm natural-scale beta posterior moments from a joint fit, by the law of
@@ -1020,22 +1025,16 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   # Outer joint-grid integration controls, shared by the multi-block and
   # single-block dispatch. The dense outer tensor (sigma x [rho] x alpha x
-  # phi_pos) concentrates almost all posterior mass on a handful of cells, but
-  # the inner latent mode moves substantially across the grid, so the
-  # cheap-pass prune is OFF by default: the full-grid solve is the correct
-  # default. The rank-safe speed path is the adaptive grid (`adaptive_grid =
-  # TRUE`): it brackets the mode with FULL inner solves and densifies near it,
-  # so it never approximates the marginal and cannot drop the true mode. The
-  # cheap-pass prune is available opt-in via control$prune = TRUE; it is now
-  # rank-faithful (a neighbour- warm-started lattice sweep) and gated (a
-  # safety check falls back to the full grid if the screen's ranking looks
-  # unreliable), but the correct full grid remains the default. Override via
-  # control$prune / control$prune.tol. This is the only route that exposes the
-  # opt-in cheap-pass screen (`control$prune`), and the only one with no
-  # outer-grid layout default: the coupled-trend multi-block path (>= 3 latent
-  # axes: intercept + trend sigma/alpha) can request "ccd" via
-  # control$integration, and NULL falls through to the engine default.
-  joint_control <- .cover_joint_control(control, positive, prune = TRUE)
+  # phi_pos) concentrates almost all posterior mass on a handful of cells, and
+  # the engine's cheap-pass screen (`control$prune`, at the engine's per-door
+  # default when unset) skips the full inner solve on the rest under a bound on
+  # the mass the skipped cells may carry. The adaptive grid (`adaptive_grid =
+  # TRUE`) brackets the mode with full inner solves and densifies near it.
+  # This is the only route with no outer-grid layout default: the
+  # coupled-trend multi-block path (>= 3 latent axes: intercept + trend
+  # sigma/alpha) can request "ccd" via control$integration, and NULL falls
+  # through to the engine default.
+  joint_control <- .cover_joint_control(control, positive)
 
   # Exact sufficient-statistic reduction of the occurrence (binomial) arm,
   # default ON. The collapse is pointwise exact -- observations sharing the
