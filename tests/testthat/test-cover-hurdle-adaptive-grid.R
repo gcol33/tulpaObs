@@ -292,13 +292,17 @@ test_that("outer-grid pruning keeps the mode and leaves estimates unchanged", {
       invokeRestart("muffleWarning")
     })
 
-  # Most cells pruned; the prune machinery is engaged.
-  expect_true(f_on$joint$prune_n_pruned > 0.5 * f_on$joint$n_grid)
+  # Most declared cells pruned; the prune machinery is engaged. The screen runs
+  # on the declared tensor, and the cells a refinement pass adds are solved.
+  declared <- !nzchar(f_on$joint$refining_axis %||%
+                        rep("", nrow(f_on$joint$theta_grid)))
+  expect_true(f_on$joint$prune_n_pruned > 0.5 * sum(declared))
 
   # A pruned cell is skipped, so it holds the same non-finite log-marginal a
   # failed inner Newton leaves. The postprocess separates the two on the
-  # engine's prune mask: on this fixture 539 of 563 cells are pruned, and
-  # reporting them as failures would tell the caller the fit collapsed.
+  # engine's prune mask: on this fixture 539 of the 560 declared cells are
+  # pruned, and reporting them as failures would tell the caller the fit
+  # collapsed.
   expect_false(any(grepl("did not converge", warns)))
   # Nor as a fit that stopped short: `converged` counts failures among the
   # cells that were solved, and a screened cell was never meant to be.

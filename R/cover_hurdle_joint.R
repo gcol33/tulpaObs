@@ -249,7 +249,7 @@
 #     mode.
 #   * var_of_means_consistency -- the second, independent refinement pass: an
 #     axis whose marginal has collapsed onto too few nodes to carry a spread
-#     gains slice points around its modal cell, so the reported axis SD is a
+#     gains levels at the outer mode, so the reported axis SD is a
 #     spread rather than a floor at zero. It runs whatever `adaptive_grid` is
 #     set to, and on an explicitly declared axis as well, so a fit that must
 #     integrate the nodes it was given and nothing else sets this FALSE.
@@ -1236,8 +1236,8 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # dispersion scalar on the outer joint hyperparameter grid unless a one-node
   # `phi.grid` pins it; `.tobs_joint_phi_moments()` reads the posterior mean and
   # SD from the engine's `theta_mean` / `theta_sd`, or the held value. The
-  # engine computes those under the grid's cell-by-cell measure, refinement
-  # slice cells included, and takes the per-axis SD from
+  # engine computes those under the grid's measure, refinement levels
+  # included, and takes the per-axis SD from
   # `.nl_attach_axis_sd()`, so they do not depend on where the nodes fell.
   # `sum(weights * theta_grid^2) - mean^2` against `theta_grid[, "phi_pos"]`
   # underestimates the SD on a sharply peaked axis, where the weight sits on

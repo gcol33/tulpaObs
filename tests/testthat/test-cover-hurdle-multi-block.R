@@ -152,8 +152,10 @@ test_that("cover(beta) with spatial + temporal + RE fits via multi-block", {
   expect_named(bm[[2L]]$mean, c("tau", "rho"))
   expect_named(bm[[3L]]$mean, "sigma")
 
-  # Every block axis the driver placed is the one asked for, per block.
+  # Every block axis the driver placed is the one asked for, per block: the
+  # declared cells, since the consistency pass may add levels between them.
   tg <- fit$joint$theta_grid
+  tg <- tg[!nzchar(fit$joint$refining_axis %||% rep("", nrow(tg))), , drop = FALSE]
   expect_equal(sort(unique(tg[, "b1.sigma"])), .mb_grid$sigma.grid)
   expect_equal(sort(unique(tg[, "b1.alpha"])), .mb_alpha)
   expect_equal(sort(unique(tg[, "b2.tau"])),   .mb_grid$tau.temporal.grid)

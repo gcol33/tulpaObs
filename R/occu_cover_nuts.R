@@ -1231,8 +1231,8 @@
     # fit object does not carry one.
     r <- sup[[a]]
     if (is.null(r)) {
-      # Specs are read off the base-tensor cells, the node set the axis was
-      # declared on, and the span off the cell measure, refinement slice cells
+      # Specs are read off the declared cells, the node set the axis was
+      # declared on, and the span off the cell measure, refinement levels
       # included.
       refining <- warm$joint_fit$refining_axis
       base <- !nzchar(tulpa::tulpa_hyper_slice_home(refining, nrow(tg)))

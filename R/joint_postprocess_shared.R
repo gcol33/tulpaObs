@@ -27,10 +27,10 @@
 # A driver result that already carries its cell measure (`fit$log_quad`, built by
 # the engine from the axis specs it declared) is weighted by that measure. One
 # without is measured from its grid: `fit$refining_axis` is the per-cell tag a
-# refinement pass leaves (`""` for a base-tensor cell, the axis name for a slice
-# cell), and a grid carrying slice cells is not a tensor product, so its cells
-# are measured one by one from that tag; a grid without the tag (every in-tree
-# fixed-grid driver) is the tensor product it was built as. A `log_marginal`,
+# refinement pass leaves (`""` for a declared cell, the axis name for a cell
+# the pass added). A refined grid is still a tensor, but its declared levels
+# fix the outer cell edges, so the tag goes with it; a grid without the tag
+# (every in-tree fixed-grid driver) is measured as all declared. A `log_marginal`,
 # measure or tag whose length does not match the grid is an error, never an
 # unweighted softmax.
 .tobs_grid_weights <- function(fit, what = "outer grid", log_marginal = NULL) {
@@ -116,7 +116,7 @@
   # posterior against a measure the fit never integrated, so where the engine
   # left no usable weights they are rebuilt from the same measure
   # (`.tobs_grid_weights()`: the stored cell measure, else the grid's own,
-  # slice cells included).
+  # refinement levels included).
   ew <- fit$weights
   ew_ok <- !is.null(ew) && length(ew) == length(fit$log_marginal) &&
            any(is.finite(ew[ok_cells]) & ew[ok_cells] > 0)

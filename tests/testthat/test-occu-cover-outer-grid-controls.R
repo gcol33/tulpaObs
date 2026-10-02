@@ -77,12 +77,18 @@ test_that("prune reaches the engine and does not move the answer", {
 
 test_that("prune.tol alone is not read as prune", {
   # `prune` is a unique prefix of `prune.tol`, so a `$` read of the control
-  # list returns the TOLERANCE on a fit that sets only the tolerance, which
-  # switches screening on where the caller asked only to size it.
-  fx  <- oc_grid_fixture()
-  fit <- oc_grid_fit(fx, list(prune.tol = 1e-3))
-  expect_null(fit$joint_fit$prune_mask)
-  expect_null(fit$joint_fit$prune_fallback_triggered)
+  # list returns the TOLERANCE as `prune` on a fit that sets only the
+  # tolerance. The screen then stays at the engine's default for the joint door
+  # only if the key is read exactly, and an explicit `prune = FALSE` beside a
+  # tolerance keeps it off.
+  fx   <- oc_grid_fixture()
+  base <- oc_grid_fit(fx)
+  fit  <- oc_grid_fit(fx, list(prune.tol = 1e-3))
+  expect_identical(is.null(fit$joint_fit$prune_mask),
+                   is.null(base$joint_fit$prune_mask))
+  off <- oc_grid_fit(fx, list(prune = FALSE, prune.tol = 1e-3))
+  expect_null(off$joint_fit$prune_mask)
+  expect_null(off$joint_fit$prune_fallback_triggered)
 })
 
 
