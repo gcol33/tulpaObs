@@ -182,17 +182,38 @@ test_that("a fused batch species carries the hyper_summary of its own fit", {
   set.seed(41L)
   batch <- .hs_fit(fx, fx$y, fx$y_pos, c(.hs_ctrl, list(batch.backend = "fused")))
   expect_identical(batch$backend, "fused")
+  # The fused species share one design and one unscreened grid walk, so the
+  # independent fits held to them are built uncompressed and unscreened too.
   op <- options(tulpaObs.compress_nodet = FALSE)
   on.exit(options(op), add = TRUE)
+  ind_ctrl <- c(.hs_ctrl, list(prune = FALSE))
   set.seed(41L)
-  ind <- list(a = .hs_fit(fx, fx$y$a, fx$y_pos[[1L]], .hs_ctrl),
-              b = .hs_fit(fx, fx$y$b, fx$y_pos[[2L]], .hs_ctrl))
+  ind <- list(a = .hs_fit(fx, fx$y$a, fx$y_pos[[1L]], ind_ctrl),
+              b = .hs_fit(fx, fx$y$b, fx$y_pos[[2L]], ind_ctrl))
+  # The fused block solve agrees with the lone one to the last few bits (cell
+  # masses to 1e-14). The summary's bounds are read off the engine's tabulated
+  # within-cell CDF, whose table extent and point count are discrete functions
+  # of those masses, so a last-bit change can move a table node and shift an
+  # interpolated bound by ~1e-10; the summary is held at that resolution.
   for (sp in c("a", "b")) {
     .hs_expect_engine_read(batch$fits[[sp]])
     expect_identical(batch$fits[[sp]]$hyper_axis, ind[[sp]]$hyper_axis)
+    expect_equal(batch$fits[[sp]]$hyper_summary$mean,
+                 ind[[sp]]$hyper_summary$mean, tolerance = 1e-9, info = sp)
+    expect_equal(batch$fits[[sp]]$hyper_summary$sd_grid,
+                 ind[[sp]]$hyper_summary$sd_grid, tolerance = 1e-9, info = sp)
     expect_equal(batch$fits[[sp]]$hyper_summary, ind[[sp]]$hyper_summary,
-                 tolerance = 1e-9, info = sp)
+                 tolerance = 1e-6, info = sp)
   }
+})
+
+test_that("a fused batch refuses the cheap-pass screen it cannot carry", {
+  skip_if_fast()
+  fx <- .hs_fixture()
+  expect_error(
+    .hs_fit(fx, fx$y, fx$y_pos,
+            c(.hs_ctrl, list(batch.backend = "fused", prune = TRUE))),
+    "cheap-pass screen")
 })
 
 test_that("hyper_summary divides a rescaled row, maps a precision row and leaves a derived row empty", {

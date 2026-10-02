@@ -105,9 +105,11 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
   # independent fits. The default fit integrates the cover-arm dispersion on an
   # outer axis about each species' own pre-fit, so the two species reach the
   # fused driver with different dispersion nodes over one shared cell layout.
+  # The fused solve walks one unscreened grid for every species, so the fits
+  # held against it run with the cheap-pass screen off as well.
   ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint",
                adaptive.grid = FALSE, var.of.means.consistency = FALSE,
-               diagnose.k = FALSE)
+               diagnose.k = FALSE, prune = FALSE)
   ctrl_fused <- c(ctrl, list(batch.backend = "fused"))
 
   fit_one <- function(yy, ypp) {
@@ -280,7 +282,8 @@ test_that("a fused batch with a one-node phi.grid.pos holds the node for every s
 
   ctrl_at <- function(node) list(
     verbose = FALSE, max.iter = 200L, engine = "joint", adaptive.grid = FALSE,
-    var.of.means.consistency = FALSE, diagnose.k = FALSE, phi.grid.pos = node)
+    var.of.means.consistency = FALSE, diagnose.k = FALSE, prune = FALSE,
+    phi.grid.pos = node)
   fit <- function(yy, ypp, ctrl) suppressWarnings(tobs(
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
@@ -355,6 +358,23 @@ test_that("a fused batch with a one-node phi.grid.pos holds the node for every s
   fit
 }
 
+# The quantities read off the engine's tabulated within-cell CDF (the
+# log-quadratic read): the axis quantiles and the hyperparameter summary built
+# on them, and the draws' copula. The table's extent and point count are
+# discrete functions of the cell masses, so a last-bit change in a mass can move
+# a table node and shift an interpolated bound by ~1e-10; they are held at that
+# resolution, apart from the rest of the fit.
+.batch_tabulated_fields <- c("theta_median", "theta_ci_lo", "theta_ci_hi")
+.batch_tabulated <- function(fit) {
+  list(joint = fit$joint_fit[.batch_tabulated_fields],
+       hyper_summary = fit$hyper_summary)
+}
+.batch_drop_tabulated <- function(fit) {
+  fit$joint_fit[.batch_tabulated_fields] <- NULL
+  fit$hyper_summary <- NULL
+  fit
+}
+
 # The class and field names of `x`, recursively, as one flat record.
 .batch_structure <- function(x, path = "fit") {
   here <- paste(path, paste(class(x), collapse = "/"))
@@ -391,8 +411,10 @@ test_that("a fused species fit is the fit, draws, prediction and summary of its 
 
   # The engine defaults, refinement and placement included: every step of a
   # fused species' fit other than its main grid solve runs as it does alone.
+  # The main grid solve is one unscreened walk shared by the species, so the
+  # independent fits held to them run with the cheap-pass screen off.
   ctrl <- list(verbose = FALSE, max.iter = 200L, engine = "joint",
-               diagnose.k = FALSE, progress = FALSE)
+               diagnose.k = FALSE, progress = FALSE, prune = FALSE)
   fit <- function(yy, ypp, control) suppressWarnings(tobs(
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
@@ -431,13 +453,20 @@ test_that("a fused species fit is the fit, draws, prediction and summary of its 
     # written in, which for the batch is the batch call's.
     k_b <- .batch_inner_k(fb); k_i <- .batch_inner_k(fi)
     expect_equal(k_b, k_i, tolerance = 0.05, info = paste(sp, "inner k-hat"))
-    expect_equal(.batch_drop_timing(.batch_drop_inner_k(fb)),
-                 .batch_drop_timing(.batch_drop_inner_k(fi)),
+    expect_equal(.batch_tabulated(fb), .batch_tabulated(fi), tolerance = 1e-6,
+                 info = paste(sp, "tabulated read"))
+    expect_equal(.batch_drop_timing(.batch_drop_tabulated(.batch_drop_inner_k(fb))),
+                 .batch_drop_timing(.batch_drop_tabulated(.batch_drop_inner_k(fi))),
                  tolerance = 1e-9, ignore_formula_env = TRUE, info = sp)
 
     set.seed(11L); d_b <- tulpaObs:::.tobs_joint_draws(fb, n = 200L)
     set.seed(11L); d_i <- tulpaObs:::.tobs_joint_draws(fi, n = 200L)
     expect_identical(.batch_structure(d_b), .batch_structure(d_i))
+    expect_equal(attr(d_b$hyper, "within_cell_copula"),
+                 attr(d_i$hyper, "within_cell_copula"), tolerance = 1e-6,
+                 info = paste(sp, "draw copula"))
+    attr(d_b$hyper, "within_cell_copula") <- NULL
+    attr(d_i$hyper, "within_cell_copula") <- NULL
     expect_equal(d_b, d_i, tolerance = 1e-8, info = paste(sp, "draws"))
 
     set.seed(12L); p_b <- suppressWarnings(predict(fb))

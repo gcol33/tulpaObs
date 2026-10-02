@@ -165,16 +165,27 @@
 #
 # The species share a design only if their arms are built identically, so the
 # no-detection visit compression (which groups each species' own non-detections)
-# is off inside the batch. Returns a `tobs_batch` (backend = "fused"), or NULL
-# when the configuration cannot share one fused solve -- the caller then falls
-# back to the looped path: a non-spatial or non-joint route, the latent cover RE
-# (whose coupling spec is registered per fit with that species' cover values),
-# or any request tulpa's grid batch declines.
+# is off inside the batch. The engine's cheap-pass screen prunes each species'
+# grid to that species' own kept set, which one fused walk over a shared grid
+# cannot carry, so the screen is off inside the batch as well; a batch that
+# asks for both is refused rather than quietly fitted one species at a time.
+# Returns a `tobs_batch` (backend = "fused"), or NULL when the configuration
+# cannot share one fused solve -- the caller then falls back to the looped
+# path: a non-spatial or non-joint route, the latent cover RE (whose coupling
+# spec is registered per fit with that species' cover values), or any request
+# tulpa's grid batch declines.
 .tobs_fit_occu_cover_batch_fused <- function(tobs_args, y, y_pos, B, labels) {
   if (!identical(tobs_args$method, "nested_laplace")) return(NULL)
   engine_pick <- tobs_args$control[["engine"]] %||% "joint"
   if (!identical(engine_pick, "joint")) return(NULL)
   if (identical(tobs_args$family$params$cover_aggregate, "latent")) return(NULL)
+  if (isTRUE(tobs_args$control[["prune"]])) {
+    stop("Batched occu_cover: `batch.backend = \"fused\"` solves one shared ",
+         "outer grid for every species, and the cheap-pass screen ",
+         "(`control$prune = TRUE`) prunes each species' grid to its own kept ",
+         "set. Drop one of the two.", call. = FALSE)
+  }
+  tobs_args$control[["prune"]] <- FALSE
 
   species_fits <- lapply(seq_len(B), function(s) {
     force(s)

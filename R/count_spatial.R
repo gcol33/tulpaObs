@@ -27,6 +27,11 @@
 # and `res$grid_hessians[[k]]` the per-cell FE precision (the field Schur-folded
 # out); the marginal covariance is the law of total covariance over the outer
 # grid: V = sum_k w_k [C_k + (m_k - beta)(m_k - beta)'], C_k = solve(H_k).
+#
+# Both lists run parallel to the grid's weights. A cell the engine's cheap-pass
+# screen dropped was never solved: its slot is empty and its weight is zero, so
+# it is held as an NA row and carries nothing into the mean, the covariance or
+# the mixture.
 .count_spatial_fe_moments <- function(res, p) {
   w  <- .tobs_grid_weights(res)
   ok <- is.finite(w) & w > 0
@@ -35,7 +40,6 @@
          "Check the adjacency graph / the field hyperparameter grid.",
          call. = FALSE)
   }
-  w[!ok] <- 0; w <- w / sum(w)
 
   modes <- res$grid_modes
   hess  <- res$grid_hessians
@@ -43,14 +47,33 @@
     stop("Areal count: the nested fit did not return grid Hessians. This is a ",
          "tulpaObs bug (keep_grid_hessians was not honoured).", call. = FALSE)
   }
+  if (length(modes) != length(w) || length(hess) != length(w)) {
+    stop(sprintf(paste0(
+      "Areal count: the nested fit carries %d grid weights but %d per-cell ",
+      "modes and %d per-cell Hessians."), length(w), length(modes),
+      length(hess)), call. = FALSE)
+  }
 
-  mode_mat <- do.call(rbind, lapply(modes, as.numeric))
-  beta     <- as.numeric(crossprod(w, mode_mat))
+  solved <- !vapply(modes, is.null, logical(1)) &
+            !vapply(hess, is.null, logical(1))
+  ok <- ok & solved
+  if (!any(ok)) {
+    stop("Areal count: no grid point with positive weight carries a solved ",
+         "fixed-effect block.", call. = FALSE)
+  }
+  w[!ok] <- 0; w <- w / sum(w)
+
+  mode_mat <- matrix(NA_real_, length(w), p)
+  mode_mat[solved, ] <- do.call(rbind, lapply(modes[solved], as.numeric))
+  beta     <- as.numeric(crossprod(w[ok], mode_mat[ok, , drop = FALSE]))
 
   # The kernel returns per-cell FE precisions; the law of total covariance takes
-  # covariances, so invert each cell first (a singular cell drops out).
-  cov_k <- lapply(hess, function(H) tryCatch(solve(as.matrix(H)),
-                                             error = function(e) NULL))
+  # covariances, so invert each cell first (a singular or unsolved cell drops
+  # out).
+  cov_k <- lapply(hess, function(H) {
+    if (is.null(H)) return(NULL)
+    tryCatch(solve(as.matrix(H)), error = function(e) NULL)
+  })
   V <- .tobs_grid_vcov(mode_mat, w, cov_k, center = beta, symmetrize = TRUE)
   list(beta = beta, vcov = V, weights = w,
        grid_mixture = .tobs_grid_mixture(w, mode_mat, cov_k))

@@ -16,6 +16,18 @@
 * **A screened outer-grid cell is not a convergence failure** (#391). A pruned
   cover joint fit no longer records `converged = FALSE` or warns that it
   stopped short when only the cheap-pass screen skipped cells.
+* **One default for the cheap-pass screen** (#392). Every joint route forwards
+  `control$prune` / `control$prune.tol` as set, `NULL` when unset, so the
+  engine's per-door default decides on all of them; the cover hurdle route no
+  longer carries its own `prune = FALSE` beside it.
+* **Two fits on the screened engine default** (#393). An areal `count()`
+  nested-Laplace fit errored with "non-conformable arguments" when the screen
+  dropped a cell: the per-cell fixed-effect modes and Hessians run parallel to
+  the grid weights with an empty slot for a cell never solved, and the mixture
+  read collapsed the slots. A `batch.backend = "fused"` `occu_cover()` batch
+  fell silently to the looped backend, since the fused solve walks one shared
+  grid and cannot screen; the batch now runs its species unscreened, and a
+  batch that asks for both the fused solve and the screen is refused.
 
 ## 0.4.6
 
