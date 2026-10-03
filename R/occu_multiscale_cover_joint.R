@@ -338,7 +338,7 @@
       tol             = as.numeric(tol),
       n_threads       = as.integer(dots$n.threads %||% 1L),
       store_Q         = TRUE,
-      hessian         = dots$hessian %||% (if (is_beta) "fisher" else "lm"),
+      hessian         = dots$hessian,
       inner_refresh   = as.integer(dots$inner.refresh %||% 1L),
       n_threads_outer = as.integer(dots$n.threads.outer %||% 1L),
       force_sparse    = isTRUE(dots$force.sparse),

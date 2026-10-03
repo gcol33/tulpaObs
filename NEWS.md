@@ -2,6 +2,17 @@
 
 ## 0.4.7
 
+* **A beta cover arm's inner Newton takes the engine's observed curvature.**
+  `occu_cover`, the cover hurdle and `occu_multiscale_cover` no longer default
+  `control$hessian` to `"fisher"` for a beta positive arm; an unset one takes
+  the engine's default, the observed Hessian under its LM guard. On the full
+  25 km Calluna `occu_cover` fit (tulpa 0c70abce, 32 threads) the inner
+  iterations per cell went from a median of 48 (p90 121) to 5 (p90 7), and the
+  three cells that stopped at `max.iter` with 1.7% of the posterior mass now
+  converge; the fit took 64.5 against 67.6 min. Hyperparameter summaries
+  agree within 0.3 posterior SD. `control$hessian = "fisher"` restores the
+  expected-information step.
+
 * **Joint draws are scored at the node their latent was drawn at** (#389). Each
   draw's unit field, bym2 rho, copy amplitudes and cover dispersion now read
   the cell's node, so a draw is an exact draw of the mixture the engine

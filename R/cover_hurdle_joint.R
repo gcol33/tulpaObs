@@ -242,13 +242,10 @@
 #     measured on a kept cell, and solves dropped cells until that bound is
 #     under its gate; a bound the repair cannot bring under the gate falls back
 #     to the full grid.
-#   * hessian -- the beta positive arm's observed mixture Hessian is indefinite
-#     away from the mode, so observed-curvature Newton steps stall and the inner
-#     Newton hits max.iter in every grid cell. Expected/Fisher curvature is PSD
-#     by construction and converges in ~12 steps; the final mode-pass always
-#     re-factorizes with the observed Hessian, so the reported SEs, log_det and
-#     grid weights are unchanged. The lognormal arm is exactly quadratic (one
-#     inner step), so observed curvature is already optimal -> "lm".
+#   * hessian -- forwarded as set, so an unset one takes the engine's observed
+#     curvature under its LM guard, which converges quadratically on every
+#     positive arm; the final mode-pass re-factorizes with the observed Hessian
+#     whichever curvature steered the path to the mode.
 #   * n_threads_outer -- outer-grid parallelism, one replicated cell-solve
 #     state per thread. Preferred over inner per-obs threads on many-core
 #     hardware, where the mode-region cells dominate.
@@ -273,14 +270,14 @@
 #     `control$progress` prefix-matches `progress.file`.
 #   * checkpoint -- grid-cell checkpoint/resume, forwarded verbatim so a
 #     killed run resumes instead of restarting.
-.cover_joint_control <- function(control, positive, integration = NULL) {
+.cover_joint_control <- function(control, integration = NULL) {
   head <- list(
     max_iter  = control$max.iter  %||% 50L,
     tol       = control$tol       %||% 1e-6,
     n_threads = control[["n.threads"]] %||% 1L,
     n_threads_outer = control$n.threads.outer %||% 1L,
     store_Q   = TRUE,
-    hessian   = control$hessian   %||% (if (positive == "beta") "fisher" else "lm"),
+    hessian   = control$hessian,
     prune     = control[["prune"]],
     prune_tol = control[["prune.tol"]])
   tail <- c(.tobs_outer_grid_control(control), list(
@@ -532,7 +529,7 @@
   # Each field carries 1 (icar/car) or 2 (bym2/car_proper) latent axes; with the
   # pos-arm phi axis the dense outer tensor grows fast, so the mode-centred CCD
   # is this route's default.
-  joint_control <- .cover_joint_control(control, positive, integration = "ccd")
+  joint_control <- .cover_joint_control(control, integration = "ccd")
 
   fit <- tulpa::tulpa_nested_laplace_joint(
     responses = list(occ = arm_occ, pos = arm_pos),
@@ -669,7 +666,7 @@
   # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky + alpha), so
   # the outer grid uses the mode-centred CCD by default; the dense tensor would
   # blow up.
-  joint_control <- .cover_joint_control(control, positive, integration = "ccd")
+  joint_control <- .cover_joint_control(control, integration = "ccd")
 
   fit <- tulpa::tulpa_nested_laplace_joint(
     responses = list(occ = arm_occ, pos = arm_pos),
@@ -1034,7 +1031,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   # coupled-trend multi-block path (>= 3 latent axes: intercept + trend
   # sigma/alpha) can request "ccd" via control$integration, and NULL falls
   # through to the engine default.
-  joint_control <- .cover_joint_control(control, positive)
+  joint_control <- .cover_joint_control(control)
 
   # Exact sufficient-statistic reduction of the occurrence (binomial) arm,
   # default ON. The collapse is pointwise exact -- observations sharing the

@@ -769,17 +769,13 @@
       tol       = as.numeric(tol),
       n_threads = as.integer(dots$n.threads %||% 1L),
       store_Q   = TRUE,
-      # Inner-Newton curvature. The beta positive arm's observed mixture Hessian
-      # is indefinite away from the mode, so observed- curvature Newton steps
-      # stall and the inner Newton hits max.iter in every grid cell
-      # (non-convergence -- the dominant cost). Expected/Fisher information is
-      # PSD by construction, so the steps are well-conditioned and the inner
-      # Newton converges in ~12 steps instead. The reported SEs, log_det and grid
-      # weights are unchanged: the final mode-pass always re-factorizes with the
-      # observed Hessian; the curvature mode only steers the path to the mode.
-      # The lognormal arm is exactly quadratic (one inner step), so observed
-      # curvature is already optimal -> keep "lm".
-      hessian   = dots$hessian %||% (if (is_beta) "fisher" else "lm"),
+      # Inner-Newton curvature: the engine's default observed Hessian under its
+      # LM guard. On the full 25 km Calluna fit it converges in a median of 5
+      # inner steps (p90 7) with no cell at max.iter, where the expected (Fisher)
+      # step converged linearly, median 48 (p90 121), and left cells at the cap.
+      # The final mode-pass re-factorizes with the observed Hessian either way,
+      # so this steers only the path to the mode.
+      hessian   = dots$hessian,
       # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off for
       # the grid fit. Reuse also makes the off-factor scatter `grad_only` (skipping
       # the beta Hessian fill, the dominant per-iteration cost --

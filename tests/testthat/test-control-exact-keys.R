@@ -11,11 +11,11 @@
 
 test_that("cover() reads n.threads by exact key, not as a prefix of n.threads.outer", {
   f <- tulpaObs:::.cover_joint_control
-  outer_only <- f(list(n.threads.outer = 8L), "beta")
+  outer_only <- f(list(n.threads.outer = 8L))
   expect_identical(outer_only$n_threads, 1L)
   expect_identical(outer_only$n_threads_outer, 8L)
-  expect_identical(f(list(n.threads = 4L), "beta")$n_threads, 4L)
-  expect_identical(f(list(), "beta")$n_threads, 1L)
+  expect_identical(f(list(n.threads = 4L))$n_threads, 4L)
+  expect_identical(f(list())$n_threads, 1L)
 })
 
 # Every `control$key` read (on `control` itself or on `<x>$control`) and every
