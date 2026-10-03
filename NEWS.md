@@ -1,7 +1,8 @@
 # tulpaObs NEWS
 
-## 0.4.7
+## 0.5.0
 
+* Requires tulpa (>= 0.7.0).
 * **A beta cover arm's inner Newton takes the engine's observed curvature.**
   `occu_cover`, the cover hurdle and `occu_multiscale_cover` no longer default
   `control$hessian` to `"fisher"` for a beta positive arm; an unset one takes
@@ -12,14 +13,6 @@
   converge; the fit took 64.5 against 67.6 min. Hyperparameter summaries
   agree within 0.3 posterior SD. `control$hessian = "fisher"` restores the
   expected-information step.
-
-* **Joint draws are scored at the node their latent was drawn at** (#389). Each
-  draw's unit field, bym2 rho, copy amplitudes and cover dispersion now read
-  the cell's node, so a draw is an exact draw of the mixture the engine
-  integrated. `.tobs_joint_copy_amps()` gives every draw branch and the
-  simplified-Laplace evaluator one source for a copied block's per-arm
-  amplitudes. On the ic-fullmodel fixture WAIC reads 798 (p_waic 53) in place
-  of 13000 (p_waic 6123).
 * **The occupancy state-marginal likelihood fills tulpa's fused slot.** The
   scaled-Bernoulli `LikelihoodSpec` behind the single-season nested-Laplace
   state refine now sets `ll_eta_weights_fn` (tulpa ABI 47), so the Laplace
@@ -29,13 +22,6 @@
   the registered callbacks and `test-occ-nested-likelihood-fused.R` holds the
   fused pass bit-identical to the split pair and its score to finite
   differences. Fits are unchanged.
-* **Simplified-Laplace skewness on joint cover fits** (#390). The per-cell
-  inner skewness read a retired hyperparameter axis and errored at every cell;
-  it now evaluates, and a pass whose inner skewness fails at every cell reports
-  a Gaussian fallback.
-* **A screened outer-grid cell is not a convergence failure** (#391). A pruned
-  cover joint fit no longer records `converged = FALSE` or warns that it
-  stopped short when only the cheap-pass screen skipped cells.
 * **One default for the cheap-pass screen** (#392). Every joint route forwards
   `control$prune` / `control$prune.tol` as set, `NULL` when unset, so the
   engine's per-door default decides on all of them; the cover hurdle route no
@@ -48,6 +34,23 @@
   fell silently to the looped backend, since the fused solve walks one shared
   grid and cannot screen; the batch now runs its species unscreened, and a
   batch that asks for both the fused solve and the screen is refused.
+
+## 0.4.7
+
+* **Joint draws are scored at the node their latent was drawn at** (#389). Each
+  draw's unit field, bym2 rho, copy amplitudes and cover dispersion now read
+  the cell's node, so a draw is an exact draw of the mixture the engine
+  integrated. `.tobs_joint_copy_amps()` gives every draw branch and the
+  simplified-Laplace evaluator one source for a copied block's per-arm
+  amplitudes. On the ic-fullmodel fixture WAIC reads 798 (p_waic 53) in place
+  of 13000 (p_waic 6123).
+* **Simplified-Laplace skewness on joint cover fits** (#390). The per-cell
+  inner skewness read a retired hyperparameter axis and errored at every cell;
+  it now evaluates, and a pass whose inner skewness fails at every cell reports
+  a Gaussian fallback.
+* **A screened outer-grid cell is not a convergence failure** (#391). A pruned
+  cover joint fit no longer records `converged = FALSE` or warns that it
+  stopped short when only the cheap-pass screen skipped cells.
 
 ## 0.4.6
 
