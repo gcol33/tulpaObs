@@ -3,16 +3,17 @@
 ## 0.5.0
 
 * Requires tulpa (>= 0.7.0).
-* **A beta cover arm's inner Newton takes the engine's observed curvature.**
+* **A beta cover arm's inner Newton takes the engine's default curvature.**
   `occu_cover`, the cover hurdle and `occu_multiscale_cover` no longer default
   `control$hessian` to `"fisher"` for a beta positive arm; an unset one takes
-  the engine's default, the observed Hessian under its LM guard. On the full
-  25 km Calluna `occu_cover` fit (tulpa 0c70abce, 32 threads) the inner
-  iterations per cell went from a median of 48 (p90 121) to 5 (p90 7), and the
-  three cells that stopped at `max.iter` with 1.7% of the posterior mass now
-  converge; the fit took 64.5 against 67.6 min. Hyperparameter summaries
-  agree within 0.3 posterior SD. `control$hessian = "fisher"` restores the
-  expected-information step.
+  the engine's `"auto"` (tulpa 0.7.0 at 2510f4b4 and later): the observed
+  Hessian where it factors, the expected information where it does not. On
+  the full 25 km Calluna `occu_cover` fit (32 threads) the inner iterations
+  per cell went from a median of 48 to 5, no cell stops at `max.iter` (three
+  did, carrying 1.7% of the posterior mass), and the fit takes 21 against
+  67.6 min at a peak of 18 against 14 GB. Hyperparameter summaries agree with
+  the unscreened dense grid within 0.06 posterior SD.
+  `control$hessian = "fisher"` restores the expected-information step.
 * **The occupancy state-marginal likelihood fills tulpa's fused slot.** The
   scaled-Bernoulli `LikelihoodSpec` behind the single-season nested-Laplace
   state refine now sets `ll_eta_weights_fn` (tulpa ABI 47), so the Laplace
