@@ -112,10 +112,11 @@ test_that("share() in the single shared cover() formula is accepted (#298)", {
                0.5, tolerance = 1e-8)
 
   # A stated grid is integrated rather than pinned: the reported amplitude is
-  # inside the stated nodes.
+  # inside the stated nodes. It is a weighted mean summed in floating point, so
+  # with the mass on the top node it may land an ulp past it.
   a_grid <- alpha_of(fit_at(update(base_f, ~ . + share(spatial(),
                                                        alpha = grid(c(0, 1))))))
-  expect_gte(a_grid, 0); expect_lte(a_grid, 1)
+  expect_gte(a_grid, 0); expect_lte(a_grid, 1 + 8 * .Machine$double.eps)
 })
 
 test_that("shared-formula share() refuses the same conflicts the per-arm one does", {
@@ -307,6 +308,17 @@ test_that("only one per-arm formula errors (need both, or the shared one)", {
   checked
 }
 
+# The levels a fit's joint grid declares on axis `nm`, read off the declared
+# cells: the consistency pass densifies a stated axis inside its span and tags
+# the cells it adds in `refining_axis`. A cover_fit carries the joint object at
+# $joint; theta_grid labels a multi-block axis "b<k>.alpha".
+.cover_declared_axis <- function(f, nm) {
+  j  <- f$joint %||% f$joint_fit
+  tg <- j$theta_grid
+  tg <- tg[!nzchar(j$refining_axis %||% rep("", nrow(tg))), , drop = FALSE]
+  sort(unique(as.numeric(tg[, which(colnames(tg) == nm)])))
+}
+
 test_that("cover() whole-field share(alpha = grid()) compiles onto both blocks", {
   skip_on_cran()
   s <- .cov_trend_sim(); g <- c(0, 0.5, 1)
@@ -323,14 +335,8 @@ test_that("cover() whole-field share(alpha = grid()) compiles onto both blocks",
   # retired (#295), so what is asserted is the half that still means something:
   # the whole-field form reaches BOTH blocks' axes with the nodes it states.
   expect_s3_class(fit_copy, "cover_fit")
-  # A cover_fit carries the joint object at $joint; theta_grid labels a
-  # multi-block axis "b<k>.alpha".
-  ax <- function(f, nm) {
-    tg <- f$joint$theta_grid %||% f$joint_fit$theta_grid
-    sort(unique(as.numeric(tg[, which(colnames(tg) == nm)])))
-  }
-  expect_equal(ax(fit_copy, "b1.alpha"), sort(g))
-  expect_equal(ax(fit_copy, "b2.alpha"), sort(g))
+  expect_equal(.cover_declared_axis(fit_copy, "b1.alpha"), sort(g))
+  expect_equal(.cover_declared_axis(fit_copy, "b2.alpha"), sort(g))
 })
 
 test_that("cover() per-component share(terms=) with equal grids == the whole-field share(alpha=)", {
@@ -373,14 +379,8 @@ test_that("cover() per-component share(terms=) decouples the intercept and trend
   # Per-component grids reach their own block's axis: the intercept takes the
   # stated nodes, the trend is pinned at the single node 0. (This used to assert
   # equality with the control$alpha.grid[.trend] spelling, retired in #295.)
-  # A cover_fit carries the joint object at $joint; theta_grid labels a
-  # multi-block axis "b<k>.alpha".
-  ax <- function(f, nm) {
-    tg <- f$joint$theta_grid %||% f$joint_fit$theta_grid
-    sort(unique(as.numeric(tg[, which(colnames(tg) == nm)])))
-  }
-  expect_equal(ax(fit_dec, "b1.alpha"), sort(g))
-  expect_equal(ax(fit_dec, "b2.alpha"), 0)
+  expect_equal(.cover_declared_axis(fit_dec, "b1.alpha"), sort(g))
+  expect_equal(.cover_declared_axis(fit_dec, "b2.alpha"), 0)
   # Decoupling the trend genuinely changes the fit.
   lm_dec   <- fit_dec$log_marginal   %||% fit_dec$logLik
   lm_whole <- fit_whole$log_marginal %||% fit_whole$logLik
