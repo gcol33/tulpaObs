@@ -174,6 +174,27 @@ test_that("a spatial field placed in the positive formula is an arm-specific fie
   expect_identical(fit_pa$armspec_blocks[[1L]]$arm, "positive")
 })
 
+# Equality across every numeric fit field the two fits share (NA-in-both and
+# timings excluded), as one assertion over the named list of fields, so the
+# assertion count does not depend on which fields a fit carries. Returns the
+# number of fields compared.
+.cover_fit_equal <- function(a, b, tol = 1e-8) {
+  common  <- intersect(names(a), names(b))
+  varying <- grepl("time|elapsed|second|runtime", common, ignore.case = TRUE)
+  av <- list(); bv <- list()
+  for (nm in common[!varying]) {
+    x <- a[[nm]]; y <- b[[nm]]
+    if (is.numeric(x) && is.numeric(y) && length(x) == length(y) && length(x) > 0L) {
+      keep <- !(is.na(x) & is.na(y))
+      if (any(keep)) {
+        av[[nm]] <- unname(x[keep]); bv[[nm]] <- unname(y[keep])
+      }
+    }
+  }
+  expect_equal(av, bv, tolerance = tol)
+  length(av)
+}
+
 test_that("share(spatial()) in the positive formula == the shared-formula field (both arms)", {
   skip_on_cran()
   side <- 6L; nc <- side * side
@@ -210,18 +231,8 @@ test_that("share(spatial()) in the positive formula == the shared-formula field 
     family = cover(response = "beta"), data = dat, y = y,
     method = "nested_laplace", control = ctrl))
 
-  # Byte-identical across every numeric fit field (timings excluded).
-  common <- intersect(names(fit_copy), names(fit_to))
-  varying <- grepl("time|elapsed|second|runtime", common, ignore.case = TRUE)
-  checked <- 0L
-  for (nm in common[!varying]) {
-    a <- fit_copy[[nm]]; b <- fit_to[[nm]]
-    if (is.numeric(a) && is.numeric(b) && length(a) == length(b) && length(a) > 0L) {
-      expect_equal(unname(a), unname(b), tolerance = 1e-8, info = nm)
-      checked <- checked + 1L
-    }
-  }
-  expect_gt(checked, 3L)   # guard: the loop actually compared coefficients + field
+  # guard: the comparison covered coefficients + field
+  expect_gt(.cover_fit_equal(fit_copy, fit_to), 3L)
 })
 
 test_that("share() on the presence formula, or without a presence field, errors", {
@@ -288,24 +299,6 @@ test_that("only one per-arm formula errors (need both, or the shared one)", {
   y <- numeric(N); pos <- pres == 1L
   y[pos] <- stats::rbeta(sum(pos), mu[pos] * 15, (1 - mu[pos]) * 15); y[y >= 1] <- 1 - 1e-6
   list(data = data.frame(x = x, t = tt, cell = cell), y = y, adj = adj)
-}
-
-# Byte-equality across every numeric fit field (NA-in-both and timings excluded).
-.cover_fit_equal <- function(a, b, tol = 1e-8) {
-  common  <- intersect(names(a), names(b))
-  varying <- grepl("time|elapsed|second|runtime", common, ignore.case = TRUE)
-  checked <- 0L
-  for (nm in common[!varying]) {
-    av <- a[[nm]]; bv <- b[[nm]]
-    if (is.numeric(av) && is.numeric(bv) && length(av) == length(bv) && length(av) > 0L) {
-      keep <- !(is.na(av) & is.na(bv))
-      if (any(keep)) {
-        expect_equal(unname(av[keep]), unname(bv[keep]), tolerance = tol, info = nm)
-        checked <- checked + 1L
-      }
-    }
-  }
-  checked
 }
 
 # The levels a fit's joint grid declares on axis `nm`, read off the declared
