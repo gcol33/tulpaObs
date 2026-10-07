@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.5.1
+
+* Requires tulpa (>= 0.7.1).
+* The joint posterior covariance of an `occu_cover` or `occu_multiscale_cover`
+  fit with a field is accumulated in the engine
+  (`tulpa::tulpa_joint_inner_vcov_mixture()`, gcol33/tulpa#947) instead of
+  from one `(betas + field)` square block per outer-grid cell. Those blocks
+  grew with the grid size times the latent dimension squared: a full-data
+  25 km fit (878 solved cells, 4479 latents) needed about 141 GB and died
+  with `std::bad_alloc`. The covariance and the per-cell fixed-effect blocks
+  are the same numbers (relative difference 7e-16 on an ICAR fit), and a cell
+  of zero weight is no longer extracted.
+
 ## 0.5.0
 
 * Requires tulpa (>= 0.7.0).

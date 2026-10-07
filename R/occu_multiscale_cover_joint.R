@@ -404,11 +404,11 @@
   field_idx     <- as.integer(unlist(lapply(field_starts0,
                                             function(s) s + seq_len(n_cells))))
   idx_joint     <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx, field_idx)
-  blocks        <- .joint_inner_vcov_block(
-    fit, idx_joint, n_dense = p_beta,
+  mix           <- .joint_inner_vcov_mixture(
+    fit, idx_joint, n_dense = p_beta, w = w, ok_cells = ok_cells,
     n_threads = as.integer(dots$n.threads.outer %||% 1L))
 
-  if (is.null(blocks)) {
+  if (is.null(mix)) {
     # Older tulpa without stored per-grid Q: marginal-only diagonal fallback.
     beta_idx_all <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx)
     inner_var    <- .joint_inner_var(fit, beta_idx_all)
@@ -438,17 +438,12 @@
     Vj <- NULL
     beta_covs <- NULL
   } else {
-    modes_joint <- modes[, idx_joint, drop = FALSE]
-    mbar_joint  <- as.numeric(crossprod(w, modes_joint))
-    Vj <- .tobs_grid_vcov(modes_joint, w, blocks[ok_cells],
-                          center = mbar_joint, on_missing = "zero",
-                          symmetrize = TRUE)
+    Vj         <- mix$Vj
+    mbar_joint <- mix$mbar
     diag_Vj    <- diag(Vj)
     sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
     beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
-    beta_covs  <- lapply(blocks[ok_cells], function(C)
-      if (is.null(C)) NULL else as.matrix(C)[seq_len(p_beta), seq_len(p_beta),
-                                             drop = FALSE])
+    beta_covs  <- mix$beta_covs
     n_field_cols   <- n_fields * n_cells
     field_at_cell  <- mbar_joint[p_beta + seq_len(n_field_cols)]
     field_var      <- diag_Vj[p_beta + seq_len(n_field_cols)]

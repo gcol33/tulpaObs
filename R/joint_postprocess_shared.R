@@ -161,10 +161,11 @@
   beta_idx  <- as.integer(unlist(lapply(arms, `[[`, "idx")))
   p_beta    <- length(beta_idx)
   idx_joint <- c(beta_idx, field_idx)
-  blocks    <- .joint_inner_vcov_block(fit, idx_joint, n_dense = p_beta,
-                                       n_threads = n_threads)
+  mix       <- .joint_inner_vcov_mixture(fit, idx_joint, n_dense = p_beta,
+                                         w = w, ok_cells = ok_cells,
+                                         n_threads = n_threads)
 
-  if (is.null(blocks)) {
+  if (is.null(mix)) {
     inner_var <- .joint_inner_var(fit, beta_idx)
     total_var <- function(modes_block, mean_vec, iv_block) {
       vom <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
@@ -196,18 +197,12 @@
     Vj <- NULL  # no joint covariance available
     beta_covs <- NULL
   } else {
-    modes_joint <- modes[, idx_joint, drop = FALSE]
-    mbar_joint  <- as.numeric(crossprod(w, modes_joint))
-    # symmetrize off floating-point constraint residuals
-    Vj <- .tobs_grid_vcov(modes_joint, w, blocks[ok_cells],
-                          center = mbar_joint, on_missing = "zero",
-                          symmetrize = TRUE)
+    Vj         <- mix$Vj
+    mbar_joint <- mix$mbar
     diag_Vj    <- diag(Vj)
     sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
     beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
-    beta_covs  <- lapply(blocks[ok_cells], function(C)
-      if (is.null(C)) NULL else as.matrix(C)[seq_len(p_beta), seq_len(p_beta),
-                                             drop = FALSE])
+    beta_covs  <- mix$beta_covs
 
     # Field summary uses the full (within + between) variance, demeaned to the
     # sum-to-zero convention the field-block covariance already sits under. One

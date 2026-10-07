@@ -657,6 +657,9 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 # C++ source `tulpa::tulpa_joint_inner_vcov_blocks`, replacing the former serial
 # R `solve(Qk, E)` over ~`length(beta_idx)` right-hand sides per cell.
 #
+# It holds one block per cell, so it is for a betas-only `beta_idx`; a read that
+# carries the field goes through `.joint_inner_vcov_mixture()`.
+#
 # Returns a list of length n_grid, each element either NULL (when the per-cell
 # sparse Cholesky failed or the cell stored no Q) or a dense `p x p` matrix.
 # Returns NULL when no Q matrices were stored at all.
@@ -681,6 +684,45 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
     field_marginal = field_marginal,
     n_threads    = nthr
   )
+}
+
+# Joint (betas + field) posterior covariance by the law of total covariance over
+# the outer grid, accumulated in the engine (`tulpa_joint_inner_vcov_mixture()`)
+# so no per-cell `length(idx_joint)` square block is ever held: with the field
+# in `idx_joint` that block grows with the latent dimension squared per cell.
+# `w` is the normalized weight over `ok_cells`; the remaining cells carry none
+# and are not extracted. The betas block and the field diagonal of the within
+# term are exact, the field x field off-diagonal of the within term is zero
+# (the cheap selected-inversion recipe), and a cell whose block is missing keeps
+# its weight with a zero within term.
+#
+# Returns NULL when the fit stored no per-cell precision; otherwise
+# list(Vj, mbar, beta_covs) with `beta_covs` one `n_dense` square block per
+# entry of `ok_cells`.
+.joint_inner_vcov_mixture <- function(fit, idx_joint, n_dense, w, ok_cells,
+                                      n_threads = 1L) {
+  Qp <- fit$Q_csc_p_per_grid
+  Qi <- fit$Q_csc_i_per_grid
+  Qx <- fit$Q_csc_x_per_grid
+  n_x <- fit$Q_csc_n
+  if (is.null(Qp) || is.null(Qi) || is.null(Qx) || is.null(n_x)) return(NULL)
+
+  w_full <- numeric(length(Qp))
+  w_full[ok_cells] <- w
+  mix <- tulpa::tulpa_joint_inner_vcov_mixture(
+    Q_p_per_grid = Qp, Q_i_per_grid = Qi, Q_x_per_grid = Qx,
+    n_x          = as.integer(n_x),
+    idx          = as.integer(idx_joint),
+    n_dense      = as.integer(n_dense),
+    A_cols_list  = lapply(.joint_field_constraint_cols(fit$arm_layout),
+                          as.integer),
+    weights      = w_full,
+    modes        = fit$modes[, idx_joint, drop = FALSE],
+    field_marginal = n_dense < length(idx_joint),
+    n_threads    = max(1L, as.integer(n_threads %||% 1L))
+  )
+  list(Vj = mix$vcov, mbar = mix$mean,
+       beta_covs = mix$dense_blocks[ok_cells])
 }
 
 .coef_table <- function(beta, se) {
