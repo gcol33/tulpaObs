@@ -366,6 +366,52 @@
        fit = fit)
 }
 
+# The per-arm summary every joint cover route reports: the grid-weighted beta
+# moments (`.cover_joint_beta_moments()`), the positive-arm dispersion on
+# cover()'s surface, and the head of the fitter's return list that
+# `decode_cover_hurdle_joint()` consumes. Both dispersion regimes integrate the
+# scalar on the outer joint grid unless a one-node `phi.grid` pins it;
+# `.tobs_joint_phi_moments()` reads the posterior mean and SD from the engine's
+# `theta_mean` / `theta_sd` (computed under the grid's measure, refinement
+# levels included), or the held value. The axis carries the engine's phi for
+# the arm's family: it lands in `sigma_pos` for every SD-scale engine family
+# (the lognormal, lognormal_trunc, ordinal and gaussian arms) and in `phi_pos`
+# for the beta precision, the same split the decoder reads it back with.
+# `scale_factor` is the BYM2 field scaling stashed on the joint object so the
+# draw substrate and the SLA reconstruction read the per-grid field amplitude
+# without re-deriving it; a route without one passes 1. Returns the reconciled
+# joint object (weights fixed up by the beta moments), the beta moments
+# (`ok_cells` / `w` / `converged` for the route's own read-outs) and `head`,
+# the leading entries of the return list the route appends its own to.
+.cover_joint_arm_summary <- function(fit, enc, positive, scale_factor = 1.0) {
+  bm  <- .cover_joint_beta_moments(fit, enc)
+  fit <- bm$fit
+  attr(fit, "scale_factor") <- as.numeric(scale_factor)
+
+  phi_m      <- .tobs_joint_phi_moments(fit)
+  pos_family <- .cover_pos_engine_family(positive)
+  if (identical(pos_family, "beta")) {
+    sigma_pos <- NA_real_;   sigma_pos_sd <- NA_real_
+    phi_pos   <- phi_m$mean; phi_pos_sd   <- phi_m$sd
+  } else {
+    pd <- .cover_phi_engine_to_sd(phi_m$mean, phi_m$sd, pos_family)
+    sigma_pos <- pd$est;     sigma_pos_sd <- pd$sd
+    phi_pos   <- NA_real_;   phi_pos_sd   <- NA_real_
+  }
+
+  stub <- function(mode) {
+    list(mode = mode, H_beta = NULL, converged = TRUE, log_marginal = NA_real_)
+  }
+  head <- list(
+    m_occ = stub(bm$beta_occ), m_pos = stub(bm$beta_pos), positive = positive,
+    sigma_pos = sigma_pos, sigma_pos_sd = sigma_pos_sd,
+    phi_pos = phi_pos, phi_pos_sd = phi_pos_sd,
+    pos_fit_n = length(enc$pos_data$y), pos_fit_p = bm$p_pos,
+    beta_occ = bm$beta_occ, beta_pos = bm$beta_pos,
+    se_occ = bm$se_occ, se_pos = bm$se_pos)
+  list(head = head, bm = bm, fit = fit)
+}
+
 # Build one areal latent block restricted to a SINGLE arm with NO cross-arm copy.
 # The block carries the field's own precision axis (tau for icar/car/car_proper,
 # sigma + rho for bym2) integrated on the outer grid; the OTHER arm's per-arm
@@ -541,27 +587,8 @@
     control = joint_control
   )
 
-  # Shared per-arm beta post-processing (identical to the single-field path).
-  bm <- .cover_joint_beta_moments(fit, enc)
-  fit   <- bm$fit
-  p_pos <- bm$p_pos
-  beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
-  se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
-
-  phi_m  <- .tobs_joint_phi_moments(fit)
-  phi_mu <- phi_m$mean
-  phi_sd <- phi_m$sd
-  if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
-    # `phi_pos` is on the engine's scale for this arm's family: the residual
-    # variance for the plain gaussian arm, the SD for the truncated one.
-    pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
-                                  .cover_pos_engine_family(positive))
-    sigma_pos <- pd$est; sigma_pos_sd <- pd$sd
-    phi_pos <- NA_real_; phi_pos_sd <- NA_real_
-  } else {
-    sigma_pos <- NA_real_; sigma_pos_sd <- NA_real_
-    phi_pos <- phi_mu; phi_pos_sd <- phi_sd
-  }
+  s   <- .cover_joint_arm_summary(fit, enc, positive)
+  fit <- s$fit
 
   # Per-field amplitude (sigma) posterior, marginalized over the outer grid. Each
   # block b carries its own axis b<b>.tau (icar/car_proper) or b<b>.sigma (bym2);
@@ -586,25 +613,14 @@
   }
   names(sigma_fields) <- field_names
 
-  m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
-                log_marginal = NA_real_)
-  m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
-                log_marginal = NA_real_)
-  attr(fit, "scale_factor") <- 1.0
-
-  list(
-    m_occ = m_occ, m_pos = m_pos, positive = positive,
-    sigma_pos = sigma_pos, sigma_pos_sd = sigma_pos_sd,
-    phi_pos = phi_pos, phi_pos_sd = phi_pos_sd,
-    pos_fit_n = N_pos, pos_fit_p = p_pos,
-    beta_occ = beta_occ, beta_pos = beta_pos, se_occ = se_occ, se_pos = se_pos,
+  c(s$head, list(
     n_fields = length(blocks),
     armspecific = TRUE,
     armspec_blocks = armspec_meta,
     sigma_armspecific = sigma_fields,
-    converged = bm$converged,
+    converged = s$bm$converged,
     joint = fit
-  )
+  ))
 }
 
 # Fit the cover hurdle with a correlated separable-MCAR coefficient field shared
@@ -679,27 +695,8 @@
     control = joint_control
   )
 
-  # Shared per-arm beta post-processing (identical to the single-field path).
-  bm <- .cover_joint_beta_moments(fit, enc)
-  fit   <- bm$fit
-  p_pos <- bm$p_pos
-  beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
-  se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
-
-  phi_m  <- .tobs_joint_phi_moments(fit)
-  phi_mu <- phi_m$mean
-  phi_sd <- phi_m$sd
-  if (positive %in% c("lognormal", "lognormal_trunc", "gaussian")) {
-    # `phi_pos` is on the engine's scale for this arm's family: the residual
-    # variance for the plain gaussian arm, the SD for the truncated one.
-    pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
-                                  .cover_pos_engine_family(positive))
-    sigma_pos <- pd$est; sigma_pos_sd <- pd$sd
-    phi_pos <- NA_real_; phi_pos_sd <- NA_real_
-  } else {
-    sigma_pos <- NA_real_; sigma_pos_sd <- NA_real_
-    phi_pos <- phi_mu; phi_pos_sd <- phi_sd
-  }
+  s   <- .cover_joint_arm_summary(fit, enc, positive)
+  fit <- s$fit
 
   # Cross-covariance Sigma derived quantities, marginalized over the outer grid
   # (the marginalize-derived-quantities rule): reconstruct Sigma per grid cell
@@ -740,26 +737,15 @@
   alpha_mu <- if (has_alpha) as.numeric(fit$theta_mean[["b1.alpha"]]) else NA_real_
   alpha_sd <- if (has_alpha) as.numeric(fit$theta_sd[["b1.alpha"]])   else NA_real_
 
-  m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
-                log_marginal = NA_real_)
-  m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
-                log_marginal = NA_real_)
-  attr(fit, "scale_factor") <- 1.0
-
-  list(
-    m_occ = m_occ, m_pos = m_pos, positive = positive,
-    sigma_pos = sigma_pos, sigma_pos_sd = sigma_pos_sd,
-    phi_pos = phi_pos, phi_pos_sd = phi_pos_sd,
-    pos_fit_n = N_pos, pos_fit_p = p_pos,
-    beta_occ = beta_occ, beta_pos = beta_pos, se_occ = se_occ, se_pos = se_pos,
+  c(s$head, list(
     spi_full = as.integer(idx_occ), spi_pos = as.integer(idx_pos_cell),
     n_cells = as.integer(mc$n_spatial_units), n_fields = as.integer(p),
     mcar = TRUE, mcar_field_names = mc$field_names,
     sigma_mcar = sigma_mcar, rho_mcar = rho_mcar,
     alpha_mcar = alpha_mu, alpha_mcar_sd = alpha_sd,
-    converged = bm$converged,
+    converged = s$bm$converged,
     joint = fit
-  )
+  ))
 }
 
 # Per-group random intercepts of a cover() joint fit. Each re() term is one iid
@@ -1221,56 +1207,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     fit$log_marginal <- fit$log_marginal - agg_lconst
   }
 
-  # Posterior-weighted mean / SE for the per-arm beta blocks.
-  bm <- .cover_joint_beta_moments(fit, enc)
-  fit   <- bm$fit
-  p_pos <- bm$p_pos
-  beta_occ <- bm$beta_occ; beta_pos <- bm$beta_pos
-  se_occ   <- bm$se_occ;   se_pos   <- bm$se_pos
-
-  # Dispersion summary on the positive arm. Both regimes integrate the
-  # dispersion scalar on the outer joint hyperparameter grid unless a one-node
-  # `phi.grid` pins it; `.tobs_joint_phi_moments()` reads the posterior mean and
-  # SD from the engine's `theta_mean` / `theta_sd`, or the held value. The
-  # engine computes those under the grid's measure, refinement levels
-  # included, and takes the per-axis SD from
-  # `.nl_attach_axis_sd()`, so they do not depend on where the nodes fell.
-  # `sum(weights * theta_grid^2) - mean^2` against `theta_grid[, "phi_pos"]`
-  # underestimates the SD on a sharply peaked axis, where the weight sits on
-  # one node.
-  #
-  # The phi axis carries the gaussian residual SD for lognormal and the
-  # beta precision for beta; surface under the respective slot names.
-  # The phi axis carries the gaussian residual SD (lognormal) or the latent
-  # log-cover SD (ordinal interval-censored Gaussian) -- both surfaced as
-  # sigma_pos -- and the beta precision otherwise (phi_pos).
-  phi_m  <- .tobs_joint_phi_moments(fit)
-  phi_mu <- phi_m$mean
-  phi_sd <- phi_m$sd
-  if (positive %in% c("lognormal", "lognormal_trunc", "ordinal", "gaussian")) {
-    pd <- .cover_phi_engine_to_sd(phi_mu, phi_sd,
-                                  .cover_pos_engine_family(positive))
-    sigma_pos    <- pd$est
-    sigma_pos_sd <- pd$sd
-    phi_pos      <- NA_real_
-    phi_pos_sd   <- NA_real_
-  } else {
-    sigma_pos    <- NA_real_
-    sigma_pos_sd <- NA_real_
-    phi_pos      <- phi_mu
-    phi_pos_sd   <- phi_sd
-  }
-
-  m_occ <- list(mode = beta_occ, H_beta = NULL, converged = TRUE,
-                log_marginal = NA_real_)
-  m_pos <- list(mode = beta_pos, H_beta = NULL, converged = TRUE,
-                log_marginal = NA_real_)
-
-  # Stash the field-decomposition scale_factor (BYM2 Riebler scaling) on the
-  # joint fit so the SLA path can reconstruct per-grid field amplitude
-  # without re-deriving it. The dispersion is read per grid cell through
-  # `.tobs_joint_phi_at()`: the `phi_pos` axis when it is integrated, the held
-  # value when a one-node `phi.grid` pins it.
+  # The field-decomposition scale_factor (BYM2 Riebler scaling) of the block the
+  # SLA path reconstructs the per-grid field amplitude from. The dispersion is
+  # read per grid cell through `.tobs_joint_phi_at()`: the `phi_pos` axis when
+  # it is integrated, the held value when a one-node `phi.grid` pins it.
   if (has_trend) {
     sf_attr <- as.numeric(base_block$scale_factor %||% 1.0)
   } else if (has_multi) {
@@ -1278,7 +1218,10 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   } else {
     sf_attr <- as.numeric(prior_for_joint$scale_factor %||% 1.0)
   }
-  attr(fit, "scale_factor") <- sf_attr
+
+  s   <- .cover_joint_arm_summary(fit, enc, positive, scale_factor = sf_attr)
+  fit <- s$fit
+  bm  <- s$bm
 
   # Trend-field hyperparameter summaries (block 2: sigma_trend, alpha_trend),
   # read off the multi-block (sigma, alpha) axes of the integrated posterior.
@@ -1287,20 +1230,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   re_post <- .cover_re_effects(fit, bm, re)
   alpha_trend <- if (has_trend) as.numeric(fit$theta_mean[["b2.alpha"]] %||% NA) else NULL
 
-  list(
-    m_occ        = m_occ,
-    m_pos        = m_pos,
-    positive     = positive,
-    sigma_pos    = sigma_pos,
-    sigma_pos_sd = sigma_pos_sd,
-    phi_pos      = phi_pos,
-    phi_pos_sd   = phi_pos_sd,
-    pos_fit_n    = N_pos,
-    pos_fit_p    = p_pos,
-    beta_occ     = beta_occ,
-    beta_pos     = beta_pos,
-    se_occ       = se_occ,
-    se_pos       = se_pos,
+  c(s$head, list(
     spi_full     = as.integer(spi_full),
     spi_pos      = as.integer(spi_pos),
     n_cells      = as.integer(prior_for_joint$n_spatial_units %||% NA),
@@ -1315,5 +1245,5 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     sigma_re      = re_post$sigma,
     converged    = bm$converged,
     joint        = fit
-  )
+  ))
 }
