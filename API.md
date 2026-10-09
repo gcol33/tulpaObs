@@ -95,7 +95,7 @@ All families below carry `status = "working"` and are recovery-tested.
 | `distance(key, transect, cutpoints, ...)` | Binned distance sampling | `N x B` bin counts   | laplace |
 | `removal(K_max, mixture)`       | Sequential removal           | `N x K` removal-pass counts | laplace |
 
-`mixture = c("poisson", "negbin")` on the count families; `distance(key = c("halfnorm", "hazard"))`.
+`mixture = c("poisson", "negbin")` on the count families, plus `"zip"` and `"zinb"` on `abun()` and `dyn_abun()`; `distance(key = c("halfnorm", "hazard"))`.
 
 ### Cover
 

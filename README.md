@@ -154,8 +154,8 @@ runs that head-to-head on simulated data with known truth.
 ## Choose the inference route
 
 `method` names one fully specified route. Laplace is fast and the default; the stochastic
-corrections debias it where it is biased; NUTS gives the full posterior and fits every
-structure.
+corrections debias it where it is biased; NUTS gives the full posterior on eighteen of the
+families, the structured terms it samples listed on each family's help page.
 
 ```r
 tobs(..., method = "laplace")         # EM + Laplace, deterministic
@@ -165,8 +165,10 @@ tobs(..., method = "nested_laplace")  # multi-block: areal fields, joint cover h
 tobs(..., method = "nuts")            # HMC, reports split-Rhat and bulk / tail ESS
 ```
 
-Occupancy families also take `method = "pg_gibbs"`, an exact Polya-Gamma Gibbs sampler that
-recovers the community variance components the Laplace EM attenuates. `fit$method` records
+Single-season `occu()`, `t_occu()` and the community families `ms_occu()`, `ms_dyn_occu()`,
+`ms_int_occu()`, `jsdm()` and `ms_count()` also take `method = "pg_gibbs"`, an exact
+Polya-Gamma Gibbs sampler that recovers the community variance components the Laplace EM
+attenuates. `fit$method` records
 the resolved route, and an unsupported combination errors with a pointer to the methods
 that family accepts.
 
@@ -277,8 +279,9 @@ pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
 
 Tagged releases are listed at <https://github.com/gcol33/tulpaObs/releases>.
 
-pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from GitHub (declared in
-`Remotes:`). A C++17 toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from the r-universe
+repository DESCRIPTION declares in `Additional_repositories`, at or above the `Imports`
+floor. A C++17 toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
 `r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their backends on first install.
 
 ## Documentation

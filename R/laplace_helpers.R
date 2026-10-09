@@ -78,9 +78,10 @@
 # Gate the deterministic random-effect path. The variance-component EM in
 # R/em_laplace_re.R fits iid intercept, uncorrelated slopes, and correlated
 # slopes (a full RE covariance) on EITHER the occupancy or the detection
-# predictor of a single-season model (each arm carries its own RE block). Forms
-# it cannot fit -- non-single families, RE + spatial, RE + visit-level
-# detection, a single RE shared across both predictors -- error here with a
+# predictor of a single-season model (each arm carries its own RE block), the
+# detection arm per (site, visit) row when a visit-level covariate or a visit
+# random effect is present. Forms it cannot fit -- non-single families, RE +
+# spatial, a single RE shared across both predictors -- error here with a
 # pointer to `method = "nuts"` (which fits every RE form) rather than being
 # silently dropped. The raw EM variance components (sigma, correlation) carry
 # the Laplace small-cluster bias for binary data (the glmer nAGQ=1 regime, not

@@ -58,8 +58,9 @@ EM, EM/REML cov update `Sigma_k <- mean_g[b_g b_g' + Cov(b_g|y)]`. `Cov(b_g|y)`
 from `tulpa_laplace(return_re_cov=TRUE)$cov_blocks`: occ arm scales by `M`
 (pseudo-binomial inflation), det arm weighted binomial (`M=1`). Corr keeps full
 `Sigma`; uncorr projected to diag each M-step. Gates (error, point to NUTS) via
-`.validate_re_laplace()`: RE across BOTH arms, RE+spatial, RE+visit-level det, RE
-on non-single families.
+`.validate_re_laplace()`: RE across BOTH arms, RE+spatial, RE on non-single
+families. Visit-level det FITS: det arm per (site,visit) row, AGHQ declines, EM
+sigma stands.
 
 Raw EM variance components carry Laplace small-cluster bias for binary; FE SEs do
 not. Default `re.aghq=TRUE` (`control=list(n.quad=)`) debiases via adaptive GH on
@@ -85,8 +86,8 @@ devtools::load_all()                       # iterative dev
 devtools::check(args = "--no-manual")      # full check (skip manual: dev non-ASCII)
 devtools::test()                           # all tests
 devtools::test(filter = "sla-cover-joint") # one file -> test-sla-cover-joint.R
-testthat::test_file("tests/testthat/test-occu.R")
-testthat::test_file("tests/testthat/test-occu.R", desc = "single fit recovers truth")
+testthat::test_file("tests/testthat/test-occu-field-offset-fitted.R")
+testthat::test_file("tests/testthat/test-occu-field-offset-fitted.R", desc = "waic() scores the areal field on an occu() fit")
 ```
 
 Convention: probes/repros/notes in `dev_notes/` (`_` prefix = runner, `probe_*`
@@ -98,7 +99,7 @@ Full suite fits 15-20 models per seed x many seeds + NUTS/spatial recovery -> HO
 Do NOT run on every edit. Ladder:
 
 1. **Iterating** -> only the test file(s) you touched:
-   `testthat::test_file("tests/testthat/test-occu.R")` or
+   `testthat::test_file("tests/testthat/test-occu-field-offset-fitted.R")` or
    `devtools::test(filter = "occu")`. Seconds.
 2. **Whole-suite smoke** (plumbing/dispatch/closed-form, no fits) ->
    `Sys.setenv(TULPAOBS_FAST = "1"); devtools::test()`. `skip_if_fast()` gates
@@ -171,8 +172,8 @@ Do NOT run on every edit. Ladder:
    almost all false. The instrument for that class is RUNNING the block, which
    is why the counts manifest and a finishable tier are the fix and a scanner is
    not.
-3. **Full recovery suite** (all seeds, NUTS, spatial) -> CI cron
-   (`full-recovery.yaml`), or on request. NOT a release gate, NOT pre-commit:
+3. **Full recovery suite** (all seeds, NUTS, spatial) -> `full-recovery.yaml`
+   (dispatch-only, no cron). NOT a release gate, NOT pre-commit:
    ~9h serial, one file never terminates -> local whole-tier run finishes only
    by luck. `Sys.unsetenv("TULPAOBS_FAST")`, then parallel note below --
    `devtools::test()` cannot use `Config/testthat/parallel` here.
@@ -182,9 +183,8 @@ Do NOT run on every edit. Ladder:
 families the diff touches. Calibration evidence (every multi-seed recovery /
 coverage loop) rests on `full-recovery.yaml`'s last green run + the version it
 ran against; a release states which run it inherits. Policy:
-`tests/testthat/helper-speed.R`. As of 2026-07-28 that workflow completed ZERO
-times (one run 2026-07-25, cancelled at 350-min cap) -> calibration evidence
-ABSENT, not stale; any claim resting on it = unverified.
+`tests/testthat/helper-speed.R`. First finished run 2026-09-02 (`failure` =
+failing blocks, no abort).
 
 **`devtools::test()` can NEVER run this suite in parallel (#151, won't-fix
 upstream).** It hardcodes `load_package = "source"` per worker
@@ -252,18 +252,20 @@ killed/partial build needs `pkgbuild::clean_dll()`.
 
 - `R-CMD-check.yaml` -- push/PR + `workflow_dispatch`, NO cron. Checks a **built
   tarball**, not `load_all()`, so a missing NAMESPACE export surfaces (#147
-  shipped `abun()` unexported precisely because `load_all()` resolves internals
-  regardless). `--no-manual` (dev non-ASCII in Rd). ubuntu on push;
+  shipped `abun()` unexported under `load_all()`). `--no-manual`. ubuntu on push;
   ubuntu+windows+macOS on `workflow_dispatch`. `TESTTHAT_PARALLEL` is `false` on
   push/PR so the gate is deterministic and `true` on dispatch, which is the ONLY
   place CI reaches testthat's callr worker pool (#289); `test_check()` hardcodes
   `load_package = "installed"` -> not subject to #151 either way.
-- `smoke.yaml` -- push/PR, tier 2 (`TULPAOBS_FAST=1`) vs INSTALLED package.
-  Catches #148-class breakage the day it lands. `TESTTHAT_PARALLEL: true`
-  (#151, safe here).
-- `full-recovery.yaml` -- weekly cron + dispatch, tier 3, `NOT_CRAN=true` +
-  `TULPAOBS_REQUIRE_SPDE=1`. Hours; carries the calibration evidence.
-  `TESTTHAT_PARALLEL: true` -- the tier #151 was filed to unblock.
+- `smoke.yaml` -- push/PR + dispatch, tier 2 (`TULPAOBS_FAST=1`) vs INSTALLED
+  package. Catches #148-class breakage the day it lands.
+- `full-recovery.yaml` -- `workflow_dispatch` ONLY (no cron), tier 3,
+  `NOT_CRAN=true` + `TULPAOBS_REQUIRE_SPDE=1`. Hours; carries the calibration
+  evidence.
+- `cran-like.yaml` -- push/PR + dispatch; NEITHER `TULPAOBS_FAST` nor `NOT_CRAN`
+  set (#313), x86_64 + aarch64 (#314).
+- `release-gate.yaml` -- `v*` tag push + dispatch; every DESCRIPTION engine floor
+  served (#180).
 
 Both test workflows -> `.github/scripts/run-tests.R` (one runner; logs which
 tier ran -- smoke vs broken-full otherwise report similar counts). Every job
@@ -342,20 +344,15 @@ Computed for single/dynamic/integrated occ + cover hurdle; no-ops to Gaussian
 **Backend coverage enforced centrally**: `.tobs_family_methods` in `R/tobs_helpers.R`
 (NOT `R/tobs.R`, which only calls `.tobs_validate_family_method()`) = single source of
 truth for which `method` each family supports; `tobs()` errors w/ pointer, no silent
-downgrade. READ THAT OBJECT before trusting any support claim here -- roster below
-drifts. `nested_laplace` = occu/int_occu/dyn_occu + cover; `*_sla` on nested = occu +
-cover only; cover hurdle has NO `laplace_gibbs`/`laplace_mi` but DOES have nuts
-(`R/cover_nuts.R`, `src/cover_nuts.cpp`). `abun` = laplace + nuts (non-spatial) +
-nested_laplace (areal). `ms_abun` = laplace + nested_laplace (shared areal field) +
-nuts (non-spatial #14, + shared fixed-hyper proper-CAR field #73).
-`occu_multiscale_cover` = laplace + nested_laplace + nuts (last two non-spatial;
-`R/occu_multiscale_cover_nuts.R`, `src/occu_multiscale_cover_nuts.cpp`).
-`occu_categorical` = laplace ONLY. Community occupancy
-`ms_occu`/`ms_dyn_occu`/`ms_int_occu` = laplace ONLY (shared community Laplace-EM,
-`R/community_em.R`; per-species coef RE, per-arm community covariance).
+downgrade. READ THAT OBJECT before any support claim; no roster here (each entry's
+comment there says what every route carries + gates). Pointers:
+cover nuts `R/cover_nuts.R`/`src/cover_nuts.cpp`;
+`occu_multiscale_cover` laplace + nuts non-spatial (`R/occu_multiscale_cover_nuts.R`,
+`src/occu_multiscale_cover_nuts.cpp`); community occupancy laplace = shared
+community Laplace-EM (`R/community_em.R`; per-species coef RE, per-arm covariance).
 
-Observation families (`removal`/`distance`/`fp_occu`/`dyn_abun`) = laplace + nuts,
-non-spatial Pois/NB. Each: closed-form (or exact HMM-forward, dyn_abun) marginal over
+Observation families (`removal`/`distance`/`fp_occu`/`dyn_abun`), Pois/NB. Each:
+closed-form (or exact HMM-forward, dyn_abun) marginal over
 latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shared
 `src/nuts_engine.h`), draws -> WAIC/LOO. All filed observation-family issues shipped.
 
@@ -416,8 +413,8 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   `.tobs_fit_nmix_spatial()` -> `nmix_laplace_{icar,bym2,car_proper}` (one unit/site).
   Cov grid-integrated (law of total cov): kernels return per-grid `cov_blocks`, wrapper
   `V = sum_k w_k[cov_k + (m_k-mbar)(m_k-mbar)']` (`.nmix_grid_vcov()`). Rank-deficient
-  intrinsic fields use sum-to-zero constraint penalty in `nmix_spatial_beta_cov()`/
-  `nmix_beta_cov_bym2()`.
+  intrinsic fields identified by sum-to-zero centering of the field segment
+  (`nmix_center_field()`, `src/nmix_spatial_assemble.h`; bym2 centres `v` only).
 - **Negbin** (`abun(mixture="negbin")`): kernel P/NB threads both paths. NB adds `r`
   (`Var=lambda+lambda^2/r`). Non-spatial: `log_r` jointly estimated, trailing vcov
   coord (`nmix_dispersion`, delta `r_sd`). Spatial: `r` grid-integrated
@@ -780,7 +777,7 @@ nuts both error w/ pointer); sampled-field (estimated-variance) route =
 nested-Laplace, outer-grid over `(sigma, alpha)`, per-cell occupancy mixture
 closed-form derivs drive inner Newton. Much faster than v3_nested, completes at
 sizes v3_nested does not. Lognormal + beta recovery
-(`test-occu-cover-joint-coupled.R`); status `"working"` (#96). Shared-field occ
+(`test-occu-cover-coupling.R`); status `"working"` (#96). Shared-field occ
 SLOPE Wald CI mildly anti-conservative small-N (NUTS non-spatial calibrated). Outer Pareto-k diagnostic (`control$diagnose.k`) defaults OFF
 (#101): dominates joint-fit wall time (re-solves the inner Laplace on the full
 field vs the grid's node count). tulpa#118 sped it up (Shamanskii reuse via
@@ -833,7 +830,8 @@ p arm excluded via `field_coef=0` (NOT `svc_weight=0`). Resolved by
 `R/occu_cover_nested.R`, lognormal only), `"v2_joint"` (v2 joint Laplace).
 
 **Compact (ragged) input**: `tobs_data(compact=TRUE)` (the DEFAULT under
-`method="nested_laplace"`, `R/tobs.R:433`) returns a `tobs_ragged` carrier -- one row
+`method="nested_laplace"`: `R/tobs.R`, the `control[["compact"]]` default) returns a
+`tobs_ragged` carrier -- one row
 per VALID visit in `order(site, visit)` -- instead of a padded `[n_sites x max_visits]`
 grid -> memory O(observations), NO per-site visit cap. Binder
 `.tobs_build_occu_cover_ragged` (`R/occu_cover.R`) sets `ragged=TRUE` +
@@ -981,7 +979,7 @@ blocked", not "validated". Family NUTS paths (#37/#38/#39/#40/#41/#14/#67) ARE
 recovery-tested. `dyn_occu`/`int_occu` NUTS are recovery + CI-coverage tested
 (#139, `test-family-nuts-coverage.R`; the `cpp_occu_fit` path reports NO
 per-parameter `fit$sds`, so those blocks read the 95% CI off `fit$draws` via
-`.nuts_ci_cover_draws`). **`n.iter` = POST-WARMUP samples kept per chain on ALL
+`.nuts_ci_cover_draws`, helper in that file). **`n.iter` = POST-WARMUP samples kept per chain on ALL
 NUTS paths; the total run per chain is `n.iter + n.warmup`** (every R sampler
 call site passes `n_iter = n.iter + n.warmup` to the engine, which returns
 `n_iter - n_warmup` draws). Under `pg_gibbs` it means the OPPOSITE
@@ -1126,13 +1124,15 @@ prefix-matches `progress.file`.
 Backend -> reporter:
 - outer-grid (nested-Laplace areal, cover/occu_cover/multiscale joint, nmix spatial) ->
   C++ `tulpa_progress::GridProgress` (unit "cells").
-- NUTS, ALL families -> `GridProgress` via active-pointer `g_active_grid_progress`,
-  ticked once/iter under omp critical. Console auto-suppressed in across-chain parallel
-  region (file is channel); byte-exact preserved (tick touches only clock/counter/file,
-  never RNG). `make_nuts_progress` reads option (unit "iter").
+- NUTS, ALL families -> `GridProgress` via active-pointer `g_active_grid_progress`
+  (tulpa), ticked once/iter under omp critical. Console auto-suppressed in
+  across-chain parallel region (file is channel); byte-exact preserved (tick touches
+  only clock/counter/file, never RNG). `make_nuts_progress` (tulpa) reads option
+  (unit "iter").
 - EM-Laplace (occu/dyn/int/jsdm), community EM (ms_occu/ms_dyn/ms_int, ms_occu_cover),
   RE-EM (em_laplace_re.R), fp_occu/dyn_abun optim -> tulpa R loop via
-  `tulpa::tulpa_iter_progress()` (R/progress_iter.R).
+  `tulpa::tulpa_iter_progress()` called directly (areal_bfgs, community_em,
+  dyn_abun, em_laplace_re, fp_occu, occu_multiscale_cover `.R`).
 - count-marginal Laplace (abun/removal/distance) + community N-mixture EM (ms_abun,
   cpp_nmix_community_em) -> C++ `make_grid_progress_from_option` (nmix_progress.h).
 
@@ -1146,7 +1146,7 @@ Most files named inline above; non-obvious ones:
 ```
 R/
   tobs.R / obs_families.R / occu.R   — top-level router+print; family ctors; .tobs_build_model()
-  tobs_dispatch.R           — the per-family `.dispatch_<family>()` bodies (~1370 lines). tobs.R routes HERE; it does not hold the dispatch itself
+  tobs_dispatch.R           — the per-family `.dispatch_<family>()` bodies. tobs.R routes HERE; it does not hold the dispatch itself
   tobs_helpers.R            — `.tobs_family_methods` (the method-support single source of truth) + shared dispatch helpers. NOT tobs.R
   engine_defaults.R         — `.TOBS_ENGINE_DEFAULTS` / `.TOBS_FAMILY_DEFAULTS` (#183): per-engine SAMPLER defaults, ONE table. `.tobs_control_defaults(control, engine, family)` fills every knob left unset (resolve once per dispatcher branch); `.tobs_default(engine, knob, family)` reads one knob inline. Scope = sampler knobs ONLY -- `max.iter`/`tol` are per-ROUTE Laplace-EM values (`ms_occu_cover()` iterates 30 at 1e-3 on its own EM, warm-starts its sampler at 200/1e-4; `ms_occu()` plain areal C++ EM 100, its latent fitter 200) -> stay at their call sites. Log-link families (`ms_count`/`jsdm`/`ms_abun`) `sigma.beta=10` under nuts, logit-link occupancy families 5 (matches C++ model defaults) -> a `.TOBS_FAMILY_DEFAULTS` row, NOT a uniform "community NUTS" value. `test-engine-defaults.R` pins every resolved profile.
     **Every sampler knob is a `NULL` formal filled by `.tobs_fill_sampler(environment(), engine, ...)` as the fitter's first statement (#188)** -- a fitter restating a literal has a DEAD formal wherever a caller forwards explicit values (`.tobs_fit_model()` does), so its own default never runs. `test-engine-defaults.R` asserts structurally that no fitter carries a literal + each calls the filler -> a new sampler family cannot reopen it.
@@ -1219,7 +1219,7 @@ src/
   occu_cover_ragged.h       — `Arms` (#185): the one-row-per-valid-visit predictor view every ragged occu_cover DIAGNOSTIC kernel assembles from (occu_cover_ploglik.cpp, occu_cover_diag.cpp). `make_arms()` = occ + det arms (what the CDF-limits kernel needs), `attach_cover()` adds the pos arm (loglik + PPC). NOT the fit kernels -- those are the cell-coupling specs above
   ms_occu_cover_spatial_nuts.cpp / abun_nuts.cpp / ms_abun_nuts.cpp / occu_cover_nuts.cpp — NUTS (#67/#41/#14; occu_cover non-spatial)
   nuts_engine.h            — shared run_tulpa_nuts driver for the in-tree FullGradFn targets
-  nuts_field_block.h / nuts_field_hyper.h — the two non-centered areal field blocks. `_block` PINS the hypers at a nested-Laplace estimate and marshals one loading (abun/removal/distance/fp_occu/dyn_abun). `_hyper` SAMPLES them (#204, occu_cover): fixed basis `B1` + rho-dependent per-column weights + bounded transforms, so no leapfrog step re-decomposes anything; the pinned case is the same block with every hyper's coordinate absent, byte-identical to `_block`'s loading. A family moving from pinned to sampled swaps the header, not its eval
+  nuts_field_hyper.h / nuts_re_block.h — the two shared non-centered NUTS blocks (count + dyn_abun/distance/fp_occu/occu_cover NUTS). `_field_hyper`: the areal field block, sigma / rho / alpha each sampled or pinned (#204, occu_cover): fixed basis `B1` + rho-dependent per-column weights + bounded transforms, so no leapfrog step re-decomposes anything; all-pinned = the same block's degenerate configuration (the count / observation families' loading, nested-Laplace `tau Q(rho)` in the columns), not a second impl. `_re_block`: single-grouping intercept RE, whitened `z_g` + SAMPLED `log_sigma_re`, one arm, row code 0 = no effect; `re_block_build_list()` = crossed / nested / per-arm blocks
   community_chol.h         — shared log-Cholesky helpers (#14 non-centered, #67 centered) + `CommunityCholPri` / `community_chol_pri_read()` (#181): the log-Cholesky hyperprior scalars + the `pri` list keys, ONE declaration for all seven community NUTS targets. `MsOccuCoverPri` / the spatial-factor `PriScalars` INHERIT it and add their own fields; do not restate the three
   community_grid_pack.h    — `community_pack_grid()` (#181): the per-outer-grid-point pack shared by the community areal drivers (ms_occu_spatial.cpp, nmix_community_spatial.cpp). The state arm is reached by pointer-to-member and named by the caller ("psi" vs "lambda"), and a family with no boundary diagnostic passes a null member pointer. Include AFTER RcppEigen.h
   community_spatial_em.h   — (#239) the Laplace-EM driver + field-structure layer (geometry/offset/log-prior/prior-gradient/sum-to-zero centering, icar/bym2/car_proper/spde) shared by the community areal drivers (nmix_community_spatial.cpp, ms_occu_spatial.cpp), templated on a per-family `SiteBlockFn` (one (species, site) cell -> log-lik/grad/curvature; nmix's reads nmix_kernel.h, occu's reads ms_occu_kernel.h). `run_community_spatial_grid`/`run_community_spatial_grid_spde` are the shared outer-grid drivers (areal vs continuous mesh); `community_pack_grid()` above still does the result packing. Only the per-site marginal cell function stays per-file

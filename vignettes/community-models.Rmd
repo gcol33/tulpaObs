@@ -657,7 +657,11 @@ produced numbers.
 
 ## The community engine
 
-The community families fit under `method = "laplace"`. Each is driven by one
+The community families fit under `method = "laplace"`; every one of them except
+`ms_distance()` also takes `method = "nuts"`, `ms_occu()`, `ms_dyn_occu()`, `jsdm()`,
+`ms_count()`, `ms_abun()` and `ms_distance()` take `method = "nested_laplace"` for a
+shared field, and `ms_occu()`, `ms_dyn_occu()`, `ms_int_occu()`, `jsdm()` and
+`ms_count()` take `method = "pg_gibbs"`. Each Laplace fit is driven by one
 community Laplace-EM: per species the latent state integrates out in closed form,
 the per-species coefficient deviations are integrated by a joint-Newton mode-find
 with the random-effect blocks folded out by a Schur complement, and a closed-form

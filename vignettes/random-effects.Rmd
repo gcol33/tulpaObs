@@ -421,14 +421,16 @@ re_n <- ranef(fit_n)
 cor(re$estimate, re_n$estimate)
 ```
 
-A few random-effect specifications are NUTS-only. The Laplace path errors,
+Two random-effect specifications are NUTS-only. The Laplace path errors,
 with a pointer to NUTS, for: a single random effect shared across both the
-occupancy and detection predictors (`share()` semantics); a random effect
-combined with a spatial field in the same fit; and a random effect
-combined with visit-level detection covariates. In each case the
+occupancy and detection predictors (`share()` semantics), and a random
+effect combined with a spatial field in the same fit. In each case the
 deterministic path would have to fit something it cannot represent
 exactly, so it stops rather than silently fitting a different model. NUTS
-handles all three.
+handles both. A random effect beside visit-level detection covariates, or
+one grouped over visit rows, stays on the Laplace path: the detection arm
+is then fitted per (site, visit) row, and only the AGHQ debias declines,
+so the variance components are the EM values.
 
 The reason for the boundary is in how the Laplace path works. The
 variance-component EM splits the random effects into an occupancy arm and
@@ -438,10 +440,12 @@ effect that has to be the same realization in both predictors breaks that
 split: there is no way to fit it once on the occupancy arm and once on the
 detection arm and call the two the same. Likewise the AGHQ debias works on
 a per-site marginal with the latent occupancy state integrated out in
-closed form; a spatial field or a per-visit detection design changes that
-marginal in a way the closed form does not cover. Rather than approximate
-silently, the validator stops and names NUTS, which samples the joint
-posterior directly and needs none of these closed forms. The cost is
+closed form; a spatial field changes that marginal in a way the closed
+form does not cover, and a per-visit detection design couples every visit
+of a site so the integrand no longer factors by group. The first stops the
+fit; the second only switches the debias off. Rather than approximate
+silently, the validator names NUTS, which samples the joint posterior
+directly and needs none of these closed forms. The cost is
 speed: a NUTS fit takes seconds where Laplace takes a fraction of one, and
 you read convergence from `Rhat` and effective sample size rather than
 trusting a mode.

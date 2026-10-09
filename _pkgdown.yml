@@ -88,6 +88,7 @@ reference:
   - coef.tobs_fit
   - coef.tobs_batch
   - print.tobs_batch
+  - tobs_fit_intervals
   - tidy.tobs_fit
   - glance.tobs_fit
   - fitted.tobs_fit
