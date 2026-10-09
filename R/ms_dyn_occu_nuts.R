@@ -190,7 +190,7 @@
 
 
 # ---------------------------------------------------------------------------
-# Warm-start pieces (mirrors .tobs_fit_ms_dyn_occu + .tobs_ms_occu_nuts_pieces)
+# Warm-start pieces
 # ---------------------------------------------------------------------------
 
 # Build the per-species emission sufficient statistics, the C++-spec (n_valid /
@@ -239,31 +239,14 @@
       as.numeric(crossprod(X_eps,   fb$ext_y - e$eps * fb$ext_n)))
   }
 
-  # ---- warm-start inits (mirror .tobs_fit_ms_dyn_occu) ----
-  clamp01 <- function(q) min(max(q, 1e-3), 1 - 1e-3)
-  occ_props <- numeric(S); det_rates <- numeric(S)
-  for (s in seq_len(S)) {
-    v <- vs_list[[s]]; yy <- ys_list[[s]]
-    site_det1 <- vapply(seq_len(Ns), function(i)
-      any(yy[i, , 1L][v[i, , 1L]] == 1L), logical(1))
-    occ_props[s] <- mean(site_det1)
-    detected <- yy[v]
-    det_rates[s] <- if (length(detected)) mean(detected == 1L) else NA_real_
-  }
-  init_mu <- numeric(P)
-  init_mu[psi1_idx][1L] <- stats::qlogis(clamp01(mean(occ_props)))
-  dr <- mean(det_rates[is.finite(det_rates)]); if (!is.finite(dr)) dr <- 0.3
-  init_mu[p_idx][1L] <- stats::qlogis(clamp01(dr))
-  init_global <- numeric(G)
-  init_global[gam_idx][1L] <- stats::qlogis(0.15)
-  init_global[eps_idx][1L] <- stats::qlogis(0.10)
+  init <- .ms_dyn_occu_warm_init(ys_list, vs_list, Ns, arm_idx, gam_idx, eps_idx)
 
   list(P_psi1 = P_psi1, P_p = P_p, P = P, P_gam = P_gam, P_eps = P_eps, G = G,
        S = S, Ns = Ns, T = T, arm_idx = arm_idx, gam_idx = gam_idx,
        eps_idx = eps_idx, X_psi1 = X_psi1, X_p = X_p, X_gamma = X_gamma,
        X_eps = X_eps, em_stats = em_stats, nv_list = nv_list, nd_list = nd_list,
-       sp_ll = sp_ll, sp_grad = sp_grad, init_mu = init_mu,
-       init_global = init_global)
+       sp_ll = sp_ll, sp_grad = sp_grad, init_mu = init$init_mu,
+       init_global = init$init_global)
 }
 
 # Pack a community Laplace-EM fit into the full NUTS coordinate vector: community

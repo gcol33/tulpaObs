@@ -143,6 +143,45 @@
 
 
 # ---------------------------------------------------------------------------
+# Warm start
+# ---------------------------------------------------------------------------
+
+# Community-mean and transition-global starting values for every ms_dyn_occu
+# fitter (Laplace-EM, the NUTS warm start, the areal block-coordinate path).
+# The first psi1 slot starts at the logit of the naive season-1 occupancy
+# proportion (fraction of sites with any detection in season 1, averaged over
+# species); the first p slot at the logit of the naive detection rate among
+# valid visits (0.3 when no species has a valid visit); the first gamma / eps
+# slots at logit(0.15) / logit(0.10). Every other slot starts at 0.
+# `ys_list` / `vs_list` hold the per-species `[site x visit x season]`
+# detection / validity arrays. Returns `list(init_mu, init_global)`.
+.ms_dyn_occu_warm_init <- function(ys_list, vs_list, n_sites,
+                                   arm_idx, gam_idx, eps_idx) {
+  S <- length(ys_list)
+  clamp01 <- function(q) min(max(q, 1e-3), 1 - 1e-3)
+  occ_props <- numeric(S); det_rates <- numeric(S)
+  for (s in seq_len(S)) {
+    v <- vs_list[[s]]; yy <- ys_list[[s]]
+    site_det1 <- vapply(seq_len(n_sites), function(i)
+      any(yy[i, , 1L][v[i, , 1L]] == 1L), logical(1))
+    occ_props[s] <- mean(site_det1)
+    detected <- yy[v]
+    det_rates[s] <- if (length(detected)) mean(detected == 1L) else NA_real_
+  }
+  init_mu <- numeric(length(arm_idx$psi1) + length(arm_idx$p))
+  init_mu[arm_idx$psi1][1L] <- stats::qlogis(clamp01(mean(occ_props)))
+  dr <- mean(det_rates[is.finite(det_rates)])
+  if (!is.finite(dr)) dr <- 0.3
+  init_mu[arm_idx$p][1L] <- stats::qlogis(clamp01(dr))
+
+  init_global <- numeric(length(gam_idx) + length(eps_idx))
+  init_global[gam_idx][1L] <- stats::qlogis(0.15)
+  init_global[eps_idx][1L] <- stats::qlogis(0.10)
+  list(init_mu = init_mu, init_global = init_global)
+}
+
+
+# ---------------------------------------------------------------------------
 # Laplace-EM fitter (shared community engine)
 # ---------------------------------------------------------------------------
 
@@ -166,7 +205,6 @@
   P_gam  <- pi_list[[3L]]$p
   P_eps  <- pi_list[[4L]]$p
   P      <- P_psi1 + P_p
-  G      <- P_gam + P_eps
   S      <- model$n_species
 
   psi1_idx <- seq_len(P_psi1)
@@ -206,35 +244,12 @@
     .ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em, n_sites, n_seasons)
   }
 
-  # ---- warm start ----
-  clamp01 <- function(q) min(max(q, 1e-3), 1 - 1e-3)
-  # Naive season-1 occupancy proportion: fraction of (species, site) with any
-  # detection in season 1; naive detection rate among detected visits.
-  occ_props <- numeric(S); det_rates <- numeric(S)
-  for (s in seq_len(S)) {
-    v <- vs_list[[s]]; yy <- ys_list[[s]]
-    v1 <- v[, , 1L, drop = FALSE]; y1 <- yy[, , 1L, drop = FALSE]
-    site_det1 <- vapply(seq_len(n_sites), function(i) {
-      any(y1[i, , 1L][v1[i, , 1L]] == 1L)
-    }, logical(1))
-    occ_props[s] <- mean(site_det1)
-    detected <- yy[v]
-    det_rates[s] <- if (length(detected)) mean(detected == 1L) else NA_real_
-  }
-  init_mu <- numeric(P)
-  init_mu[psi1_idx][1L] <- stats::qlogis(clamp01(mean(occ_props)))
-  dr <- mean(det_rates[is.finite(det_rates)])
-  if (!is.finite(dr)) dr <- 0.3
-  init_mu[p_idx][1L] <- stats::qlogis(clamp01(dr))
-
-  init_global <- numeric(G)
-  init_global[gam_idx][1L] <- stats::qlogis(0.15)
-  init_global[eps_idx][1L] <- stats::qlogis(0.10)
+  init <- .ms_dyn_occu_warm_init(ys_list, vs_list, n_sites, arm_idx, gam_idx, eps_idx)
 
   res <- .tobs_community_em(
     S = S, P = P, arm_idx = arm_idx,
     sp_ll = sp_ll, sp_grad = NULL,
-    init_mu = init_mu, init_global = init_global,
+    init_mu = init$init_mu, init_global = init$init_global,
     penalize_global = TRUE, sigma_beta = sigma.beta, priors = priors,
     sigma_init = 0.3, max_iter = as.integer(max.iter), tol = as.numeric(tol),
     newton_max = newton.max, verbose = isTRUE(verbose)

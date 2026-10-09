@@ -227,7 +227,7 @@
   pi_list <- model$process_info
   P_psi1 <- pi_list[[1L]]$p; P_p <- pi_list[[2L]]$p
   P_gam  <- pi_list[[3L]]$p; P_eps <- pi_list[[4L]]$p
-  P <- P_psi1 + P_p; G <- P_gam + P_eps
+  P <- P_psi1 + P_p
   S <- model$n_species; Ns <- model$n_sites; n_seasons <- model$n_seasons
 
   psi1_idx <- seq_len(P_psi1); p_idx <- P_psi1 + seq_len(P_p)
@@ -242,24 +242,7 @@
   em_stats <- lapply(seq_len(S), function(s)
     .ms_dyn_occu_emit_stats(ys_list[[s]], vs_list[[s]], Ns, n_seasons))
 
-  # ---- warm start (mirrors .tobs_fit_ms_dyn_occu) ----
-  clamp01 <- function(q) min(max(q, 1e-3), 1 - 1e-3)
-  occ_props <- numeric(S); det_rates <- numeric(S)
-  for (s in seq_len(S)) {
-    v <- vs_list[[s]]; yy <- ys_list[[s]]
-    site_det1 <- vapply(seq_len(Ns), function(i)
-      any(yy[i, , 1L][v[i, , 1L]] == 1L), logical(1))
-    occ_props[s] <- mean(site_det1)
-    detected <- yy[v]
-    det_rates[s] <- if (length(detected)) mean(detected == 1L) else NA_real_
-  }
-  init_mu <- numeric(P)
-  init_mu[psi1_idx][1L] <- stats::qlogis(clamp01(mean(occ_props)))
-  dr <- mean(det_rates[is.finite(det_rates)]); if (!is.finite(dr)) dr <- 0.3
-  init_mu[p_idx][1L] <- stats::qlogis(clamp01(dr))
-  init_global <- numeric(G)
-  init_global[gam_idx][1L] <- stats::qlogis(0.15)
-  init_global[eps_idx][1L] <- stats::qlogis(0.10)
+  init <- .ms_dyn_occu_warm_init(ys_list, vs_list, Ns, arm_idx, gam_idx, eps_idx)
 
   em_fit <- function(site_off, fac_off, em_prev) {
     # Marginal log-lik and its analytic Fisher-identity gradient share one
@@ -290,9 +273,9 @@
     }
     .tobs_community_em(
       S = S, P = P, arm_idx = arm_idx, sp_ll = sp_ll, sp_grad = sp_grad,
-      init_mu = if (is.null(em_prev)) init_mu else em_prev$mu,
+      init_mu = if (is.null(em_prev)) init$init_mu else em_prev$mu,
       init_b = em_prev$b_list, init_Sigma = em_prev$Sigma,
-      init_global = if (is.null(em_prev)) init_global else em_prev$global,
+      init_global = if (is.null(em_prev)) init$init_global else em_prev$global,
       penalize_global = TRUE, sigma_beta = sigma.beta, priors = priors,
       sigma_init = 0.3, max_iter = min(as.integer(max.iter), 30L),
       tol = as.numeric(tol), newton_max = 20L, verbose = FALSE)
