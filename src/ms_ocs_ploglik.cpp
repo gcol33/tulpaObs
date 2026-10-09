@@ -1,14 +1,14 @@
 // ms_ocs_ploglik.cpp
 // Batched per-(cell, species) pointwise log-likelihood for the spatial-factor
-// community occupancy + cover family (ms_occu_cover_spatial). The former R loop
-// (.tobs_ploglik_ms_occu_cover_spatial) unpacked the NUTS draw (community mean
-// mu, per-species deviation b, shared fields W, occupancy loadings L, optional
-// cover loadings Lpos, log-dispersion), assembled each species' occ / detection
-// / cover predictors -- with the shared-factor offset W L[s,] on psi (and
-// W Lpos[s,] on cover) -- and evaluated the dense occu_cover per-cell marginal
-// (.occu_cover_site_ll). All of that now runs in C++, parallel over draws; the
-// per-cell z-marginal + cover density mirror the dense occu_cover kernel, so the
-// result is byte-close (~1e-13) to the R oracle. Output is [M x (N * S)] with
+// community occupancy + cover family (ms_occu_cover_spatial). Per draw it
+// unpacks the NUTS draw (community mean mu, per-species deviation b, shared
+// fields W, occupancy loadings L, optional cover loadings Lpos,
+// log-dispersion), assembles each species' occ / detection / cover predictors
+// -- with the shared-factor offset W L[s,] on psi (and W Lpos[s,] on cover) --
+// and evaluates the dense occu_cover per-cell marginal (.occu_cover_site_ll),
+// parallel over draws; the per-cell z-marginal + cover density mirror the dense
+// occu_cover kernel, so the result is byte-close (~1e-13) to the R oracle.
+// Output is [M x (N * S)] with
 // species blocks contiguous (column s*N + c), matching as.numeric(LL).
 
 #include <Rcpp.h>

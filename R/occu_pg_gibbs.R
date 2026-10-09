@@ -27,7 +27,7 @@
   .tobs_fill_sampler(environment(), "pg_gibbs", single_species = TRUE)
 
   if (!is.null(model$X_det_visit))
-    stop("occu() method = \"pg_gibbs\" supports site-level detection only in v1 ",
+    stop("occu() method = \"pg_gibbs\" supports site-level detection only ",
          "(visit-level detection covariates are a follow-up).", call. = FALSE)
   rpg <- tulpa::tulpa_rpg
 
@@ -104,8 +104,8 @@
   .tobs_fill_sampler(environment(), "pg_gibbs", single_species = TRUE)
 
   if (!identical(spatial$type, "icar"))
-    stop("occu() method = \"pg_gibbs\" + a spatial field supports icar() only in ",
-         "v1 (bym2 / car_proper are follow-ups).", call. = FALSE)
+    stop("occu() method = \"pg_gibbs\" + a spatial field supports icar() only ",
+         "(bym2 / car_proper are follow-ups).", call. = FALSE)
   if (!is.null(model$X_det_visit))
     stop("occu() pg_gibbs supports site-level detection only.", call. = FALSE)
   rpg <- tulpa::tulpa_rpg

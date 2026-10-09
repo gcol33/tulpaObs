@@ -160,8 +160,7 @@
 # does not capture. Validated against NUTS: every construction tried (modal
 # hyper, grid mixture, mixture of skew-normals) disagreed with the NUTS
 # posterior skewness in sign and/or magnitude, so applying one would be worse
-# than the Gaussian fallback. Retaining Gaussian marginals is by design, not a
-# stub.
+# than the Gaussian fallback. Retaining Gaussian marginals is by design.
 .sla_spatial_reason <- function(family) {
   paste0("Gaussian marginals retained for spatial Sigma by design (", family,
          "): the simplified-Laplace third-cumulant correction is valid for ",

@@ -374,7 +374,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     # tol = 1e-4 on max|dSigma| between EM iters: the M-step Sigma update
     # oscillates with amplitude > 1e-6 on sparse fixtures (few visits / many
     # species) even after the estimate is statistically stable, so the
-    # historical 1e-6 default never fires and the EM grinds through max_iter,
+    # a 1e-6 tolerance never fires and the EM grinds through max_iter,
     # eating ~250s per fit at S=12 / N=60 / J=4 (12-arm covariance updates,
     # Newton inner loop at inner_tol=1e-8). 1e-4 is still ~3 orders of
     # magnitude tighter than any downstream coverage / recovery test gate

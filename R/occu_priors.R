@@ -143,8 +143,8 @@ print.occu_priors <- function(x, ...) {
 #   * a plain list with the same field names -> coerced via occu_priors()
 #
 # Returns NULL to mean "no penalty" only if the user explicitly passes
-# `FALSE` or `"none"` — this is the escape hatch for tests that want
-# the historical unpenalised MAP behavior.
+# `FALSE` or `"none"` — the escape hatch for tests that want an unpenalised
+# MAP fit.
 .resolve_occu_priors <- function(priors) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
     return(NULL)
@@ -348,8 +348,8 @@ print.occu_priors <- function(x, ...) {
 # (beta or lognormal). Unlike occupancy, the two arms are separately identified
 # (presence from 0/>0, positive cover from the positive values), so there is no
 # psi-p-style ridge that demands a default prior. Cover priors are therefore
-# OPT-IN: `tobs(..., family = cover(), priors = NULL)` fits unpenalised (the
-# historical behaviour the recovery tests assume). Passing `cover_priors()`
+# OPT-IN: `tobs(..., family = cover(), priors = NULL)` fits unpenalised (what
+# the recovery tests assume). Passing `cover_priors()`
 # adds the same quadratic `beta_prior` penalty tulpa_laplace() applies on the
 # occupancy path, mainly to tame perfect separation in the occurrence arm at
 # small N. The prior is specified on natural-scale coefficients and applied on

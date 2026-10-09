@@ -3,7 +3,7 @@
 // single-species simulators, these draw from the POSTERIOR-MEAN fitted values
 // (computed in R, deterministic, no draw selection), so there is no sample.int
 // here -- only the RNG data generation, run from R's RNG stream via the R::
-// samplers in the SAME order as the former R loops (byte-identical under a seed).
+// samplers in a fixed order (reproducible under a seed).
 
 #include <Rcpp.h>
 #include <vector>

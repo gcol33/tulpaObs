@@ -309,7 +309,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 
   # Per-species predictors with the shared-factor field offset (W L[s,] on psi,
   # W Lpos[s,] on cover) computed here; the z + detection + cover draws run in
-  # cpp_simulate_ms_occu_cover from R's RNG stream in the former order.
+  # cpp_simulate_ms_occu_cover from R's RNG stream in a fixed order.
   psi <- matrix(0, n_sites, n_species)
   p_mat <- array(0, c(n_sites, max_visits, n_species))
   ep_mat <- array(0, c(n_sites, max_visits, n_species))

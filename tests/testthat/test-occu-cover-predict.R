@@ -5,7 +5,7 @@
 # outer grid. predict() samples the joint latent via tulpa::tulpa_posterior_draws
 # and marginalizes every derived quantity per draw.
 #
-# Fixture mirrors test-occu-cover-joint-coupled.R: occupancy is cell-level
+# Fixture mirrors test-occu-cover-joint.R: occupancy is cell-level
 # (formula on cell_dat), detection + cover are visit-level (od$det.covs).
 
 # Build + fit a spatial occu_cover through the joint engine. A cell-level

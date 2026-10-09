@@ -264,8 +264,8 @@ inline void populate_re(tulpa::ModelData& data, Rcpp::List re_spec) {
     data.total_sigma_params = n_terms;
     data.total_chol_params = 0;
 
-    // Also set legacy single-term fields — compute_param_layout uses these
-    // when n_re_terms <= 1 (falls into legacy path).
+    // Also set the single-term fields: compute_param_layout reads these
+    // when n_re_terms <= 1 (the single-term path).
     if (n_terms == 1) {
         data.re_group.resize(N);
         Rcpp::IntegerVector grp0 = Rcpp::as<Rcpp::IntegerVector>(group_list[0]);

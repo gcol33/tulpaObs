@@ -6,8 +6,8 @@
 //     positive families.
 //   * cpp_cover_ppc -- the posterior predictive check (.tobs_ppc_cover). The
 //     occurrence and cover replicates are drawn from R's RNG stream via the R::
-//     samplers in the SAME order as the former R loop, so under a fixed seed the
-//     discrepancy is byte-identical. Serial (the RNG stream is ordered).
+//     samplers in a fixed order, so under a fixed seed the
+//     discrepancy is reproducible. Serial (the RNG stream is ordered).
 // Family codes: 0 lognormal, 1 lognormal_trunc, 2 ordinal, 3 beta.
 
 #include <Rcpp.h>

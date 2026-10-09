@@ -1,10 +1,10 @@
 // occu_family_ploglik.cpp
 // Parallel pointwise log-likelihood kernels for the draw-matrix occupancy
-// families whose per-observation marginal was a pure-R loop in R/diagnostics.R
-// (single-season replicated, multi-source integrated, multi-season dynamic).
-// Each family's R marginal is the oracle (reproduced in the tests); these ports
-// mirror it and parallelise over the observation index (each column of the
-// [S x N] output is independent, so there are no shared writes). The linear
+// families (single-season replicated, multi-source integrated, multi-season
+// dynamic). Each family's R marginal is the oracle (reproduced in the tests);
+// these kernels mirror it and parallelise over the observation index (each
+// column of the [S x N] output is independent, so there are no shared writes).
+// The linear
 // predictors arrive as [S x N] matrices built by the R caller (BLAS), so the
 // kernel does only the per-observation latent-state marginal.
 

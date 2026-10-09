@@ -253,7 +253,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
 # CPO match the INLA / spOccupancy full-model criteria. The joint engine
 # samples the grid-integrated field jointly with the arm coefficients
 # (.tobs_occu_cover_components -> .tobs_joint_draws), giving the exact integrated
-# field uncertainty. The v3 nested-Laplace path stores no joint object, so it
+# field uncertainty. The `v3_nested` engine path stores no joint object, so it
 # folds the field from the per-cell marginal posterior (field_table z_mean /
 # z_sd, .tobs_occu_cover_v3_field); a single site's pointwise term depends only on
 # its own cell's field, so the per-observation marginal is exact, but the joint
@@ -525,7 +525,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
 
 # Single-season occupancy: per replicate row, marginalized over z. The per-draw
 # linear predictors are built by BLAS here; the per-observation marginal (the
-# former R loop, now the C++ oracle in test-occu-family-ploglik-cpp.R) runs in
+# R oracle in test-occu-family-ploglik-cpp.R) runs in
 # cpp_occu_single_ploglik, parallel over observations.
 .tobs_ploglik_replicated <- function(model, draws, n.threads = 1L) {
   eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_obs]
@@ -648,8 +648,8 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
   K_max <- as.integer(max(model$y_long) + 100L)
-  # Per-draw linear predictors by BLAS; the per-site Royle marginal (the former
-  # R loop, still via compute_nmix_site) is batched over draws in the kernel.
+  # Per-draw linear predictors by BLAS; the per-site Royle marginal
+  # (compute_nmix_site) is batched over draws in the kernel.
   eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
   eta_p      <- draws[, p_lam + seq_len(p_p), drop = FALSE] %*% t(X_p) # [S x n_obs]
   # An areal / temporal / continuous field is part of the arm it loads on, so it
@@ -809,8 +809,8 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
     draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
   }
   # The non-centered reconstruction (b = C z per species) and the per-(species,
-  # site) Royle marginal (still compute_nmix_site) are batched over draws in the
-  # kernel; mirrors the former R loop (via .ms_ocs_b_from_z) exactly.
+  # site) Royle marginal (compute_nmix_site) are batched over draws in the
+  # kernel; the R oracle (via .ms_ocs_b_from_z) is reproduced exactly.
   clogr <- if (is_nb) as.integer(lay$chol_logr[1L]) - 1L else 0L
   cpp_ms_nmix_ploglik_batch(
     as.integer(lf$y), as.integer(lf$species_idx), as.integer(lf$site_idx),
@@ -825,7 +825,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
 # Integrated multi-source: per site, shared psi, detection summed over the
 # sources that observed it (src/integrated_occ_likelihood.h). The per-(site,
 # source) detection counts are draw-invariant, so they are gathered here and the
-# per-site z-marginal (the former R loop, now the C++ oracle in the tests) runs
+# per-site z-marginal (the R oracle in the tests) runs
 # in cpp_occu_integrated_ploglik, parallel over sites.
 .tobs_ploglik_integrated <- function(model, draws, n.threads = 1L) {
   eta_psi <- .tobs_eta_draws(model, draws, 1L)   # [S x n_sites]
@@ -851,7 +851,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
 
 # Dynamic (multi-season HMM): per-site forward recursion in log space,
 # mirroring src/dyn_occ_likelihood.h. Site-level detection only. The recursion
-# (the former R loop, now the C++ oracle in the tests) runs in
+# (the R oracle in the tests) runs in
 # cpp_occu_dynamic_ploglik, parallel over sites.
 .tobs_ploglik_dynamic <- function(model, draws, n.threads = 1L) {
   eta_psi1 <- .tobs_eta_draws(model, draws, 1L)
@@ -920,9 +920,9 @@ ppc.tobs_fit <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
   # Per-site valid mask, visit count, and whether the species was ever detected.
   # The latent z is sampled from its full conditional given the detection history
   # (the spOccupancy ppcOcc construction), then the detection replicate y_rep ~
-  # Bernoulli(z p). The per-draw simulation (the former R loop) runs in
-  # cpp_single_ppc, drawing from R's RNG stream in the same order (the draw
-  # selection sample.int stays in R), so under a fixed seed it is byte-identical.
+  # Bernoulli(z p). The per-draw simulation runs in
+  # cpp_single_ppc, drawing from R's RNG stream in a fixed order (the draw
+  # selection sample.int stays in R), so under a fixed seed it is reproducible.
   valid_mat <- y >= 0
   n_valid   <- rowSums(valid_mat)
   any_det   <- rowSums(y * valid_mat) > 0

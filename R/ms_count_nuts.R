@@ -20,7 +20,6 @@
 
 # Packed layout: mu (P), z species-major (S*P), chol_beta (q_beta),
 #   [chol_logr (1) if negbin], [log_phi (S) if gaussian]. P = p_beta (+1 negbin).
-# `lay$chol` aliases `chol_beta` (the Poisson single-arm cross-check reads it).
 .tobs_ms_count_nuts_layout <- function(p_beta, n_species, family = "poisson") {
   is_nb    <- identical(family, "negbin")
   is_gauss <- identical(family, "gaussian")
@@ -39,7 +38,6 @@
          beta = lay$idx$beta,
          logr = if (is_nb) lay$idx$logr else integer(0),
          chol_beta = lay$chol$beta,
-         chol      = lay$chol$beta,                 # backward-compat alias
          chol_logr = if (is_nb) lay$chol$logr else integer(0),
          logphi    = lay$trailing$logphi))
 }

@@ -5,9 +5,8 @@
 # input handling must not drift between families:
 #
 #   * the policy that the site dimension of `y` matches the rows of the
-#     site-level `data` -- the cross-check that occu / abun / removal / distance
-#     / fp_occu / dyn_abun / the community and cover families each used to
-#     hand-roll with a near-identical stop(); and
+#     site-level `data` -- one cross-check for occu / abun / removal / distance
+#     / fp_occu / dyn_abun / the community and cover families; and
 #   * the canonical (sites x visits, plus sources for the integrated families)
 #     totals tobs() reports under control$verbose and stores on the fit.
 #
@@ -18,7 +17,7 @@
 
 
 # Cross-check the site dimension of `y` against the rows of the site-level
-# `data`. The single home for the check each family binder used to hand-roll.
+# `data`. The single home for the check every family binder runs.
 # `y_unit` keeps the message faithful to the response shape: a 2D response counts
 # "rows", a 3D array / per-source list counts "sites", and the cover hurdle's
 # response vector counts "values".

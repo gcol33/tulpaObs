@@ -540,9 +540,9 @@ extract_beta <- function(sub, p) {
 # observed-information inverse, rescaled so its diagonal matches the reported
 # marginal SEs exactly (`sds`). `prec` is the precision / observed-information
 # matrix the SEs were derived from (cov = solve(prec)); NULL or a non-invertible
-# `prec` yields the diagonal block diag(sds^2), i.e. the previous behaviour. This
-# keeps the marginal SEs byte-identical while restoring the joint correlation the
-# diagonal pseudo-draws used to discard. NA / non-finite SEs map to a
+# `prec` yields the diagonal block diag(sds^2). This keeps the marginal SEs
+# byte-identical while carrying the joint correlation a diagonal pseudo-draw
+# covariance would discard. NA / non-finite SEs map to a
 # zero-variance coordinate (drawn as a point mass downstream).
 .cor_scaled_cov <- function(prec, sds) {
   p <- length(sds)
@@ -560,7 +560,7 @@ extract_beta <- function(sub, p) {
 
 # Assemble a block-diagonal covariance from per-block matrices in append order,
 # flooring zero / NA variances so the matrix is PD and chol-decomposable in
-# .rmvn (mirrors the old `max(sd_j, 1e-4)` point-mass floor for NA-SE columns).
+# .rmvn (a 1e-8 variance floor stands in for a point mass on NA-SE columns).
 .assemble_block_diag <- function(blocks, n_params) {
   V <- matrix(0, n_params, n_params)
   off <- 0L

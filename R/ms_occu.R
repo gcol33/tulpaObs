@@ -230,7 +230,7 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
     # community EM's own Newton solve, conditional on the converged
     # community mean) -- what a per-species-coefficient consumer (SBC's
     # "rank a fixed species set" design, a calibrated per-species CI) needs
-    # beyond the point BLUP; not previously exposed on the fit object. Bf =
+    # beyond the point BLUP. Bf =
     # the mu-b_s cross-Hessian block from the same Newton solve: mu and b_s
     # are NOT independent in the posterior, and Bf is what lets a consumer
     # draw them jointly instead.
@@ -329,7 +329,7 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   n_species <- model$n_species
 
   # Per-species fitted psi / p (community means, deterministic); the z + detection
-  # draws run in cpp_simulate_ms_occu from R's RNG stream in the former order.
+  # draws run in cpp_simulate_ms_occu from R's RNG stream in a fixed order.
   psi <- vapply(seq_len(n_species),
                 function(s) stats::plogis(as.numeric(model$X_occ %*% cm$coef_psi[s, ])),
                 numeric(n_sites))

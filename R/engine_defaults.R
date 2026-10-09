@@ -4,9 +4,8 @@
 # The sampler knobs (chain length, warmup, chain count, thinning, seed, the HMC
 # adaptation knobs, and the coefficient / dispersion prior scales) have defaults
 # that are a property of the FITTING ENGINE rather than of the family being fit,
-# and they used to be written out at every dispatcher branch that reads them --
-# six sites for the Polya-Gamma Gibbs profile alone. Changing one meant editing
-# all six, and missing one produced a family whose chain was shorter than its
+# so they live in one table rather than at every dispatcher branch that reads
+# them: a per-branch literal lets one family's chain run shorter than its
 # siblings with no test failing.
 #
 # Scope. This table covers the SAMPLER knobs only. `max.iter` and `tol` are
@@ -215,10 +214,8 @@
 # The resolved profile for the single-species entry `.tobs_fit_model()`. Its
 # departures belong to the ENTRY, not to the nine families that pass through it,
 # so they are one override applied by engine rather than nine identical family
-# rows. `pg_gibbs` deliberately has none: `occu(method = "pg_gibbs")` used to
-# keep 1000 draws where every `ms_*` sibling kept 1500, which is verbatim the
-# failure this table exists to prevent, and no reason for the shorter chain was
-# ever recorded. It now reads the shared profile.
+# rows. `pg_gibbs` deliberately has none: `occu(method = "pg_gibbs")` reads the
+# shared profile, so it keeps the same 1500 draws as every `ms_*` sibling.
 .tobs_single_species_defaults <- function(engine) {
   base <- .TOBS_ENGINE_DEFAULTS[[engine]] %||% list()
   ov <- switch(engine,
@@ -258,15 +255,14 @@
 
 
 # Fill every knob of the (engine, family) profile the caller did not set. A user
-# value always wins, and an absent or NULL entry counts as unset -- the same
-# rule the `control[["knob"]] %||% default` sites used to apply one at a time.
-# Fill the sampler knobs a fitter was not given from the (engine, family)
-# profile. A fitter declares those knobs as `NULL` formals and calls this as its
+# value always wins, and an absent or NULL entry counts as unset -- the
+# `control[["knob"]] %||% default` rule, applied once for the whole profile.
+# A fitter declares those knobs as `NULL` formals and calls this as its
 # first statement, so the table is the ONLY answer to "what is the default
-# n.iter here" -- a literal formal alongside the table is a second answer, and
-# for the fitters reached through `.tobs_fit_model()` it was an unreachable one
-# (that entry forwards explicit values, so the formal never applied) while for
-# the rest it was the live one and disagreed.
+# n.iter here" -- a literal formal alongside the table is a second answer:
+# for the fitters reached through `.tobs_fit_model()` an unreachable one (that
+# entry forwards explicit values, so the formal never applies) and for the rest
+# a live one that can disagree.
 #
 # Only knobs the fitter actually declares are touched, so one call serves
 # fitters with different knob sets. `single_species = TRUE` selects the

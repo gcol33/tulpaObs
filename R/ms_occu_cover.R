@@ -367,9 +367,7 @@
     th <- split_theta(theta)
     .occu_cover_sp_grad(views[[s]], th$bo, th$bp, th$bpos, global)
   }
-  # No analytic sp_info: leaves the engine's own FD-of-sp_grad path (byte-
-  # identical to this family's former bespoke copy of the same finite
-  # difference).
+  # No analytic sp_info: leaves the engine's own FD-of-sp_grad path.
 
   # ---- warm start ----
   is_beta  <- identical(model$positive, "beta")
@@ -470,8 +468,8 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       # community EM's own Newton solve, conditional on the converged
       # community mean) -- what a per-species-coefficient consumer (SBC's
       # "rank a fixed species set" design, a calibrated per-species CI) needs
-      # beyond the point BLUP; not previously exposed on the fit object.
-      # Covers the full b_s vector across all three arms (occ + p + pos). Bf
+      # beyond the point BLUP. Covers the full b_s vector across all three
+      # arms (occ + p + pos). Bf
       # = the (mu,log_disp)-b_s cross-Hessian block from the same Newton
       # solve: mu/log_disp and b_s are NOT independent in the posterior, and
       # Bf is what lets a consumer draw them jointly instead -- see
@@ -585,8 +583,8 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
   cl <- .tobs_clamp_eta
 
   # Per-species predictors (community means, deterministic); the z + detection +
-  # cover draws run in cpp_simulate_ms_occu_cover from R's RNG stream in the
-  # former order (byte-identical).
+  # cover draws run in cpp_simulate_ms_occu_cover from R's RNG stream in a
+  # fixed order (seed-reproducible).
   psi <- matrix(0, n_sites, n_species)
   p_mat <- array(0, c(n_sites, max_visits, n_species))
   ep_mat <- array(0, c(n_sites, max_visits, n_species))

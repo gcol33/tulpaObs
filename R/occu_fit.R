@@ -47,19 +47,11 @@
   # Sampler knobs come from the one engine table. They arrive as NULL sentinels
   # rather than literal formals because this entry serves several engines and
   # the profile is only known once `method` is: a literal formal here would be a
-  # second answer to "what is the default n.iter", and it was -- the whole
+  # second answer to "what is the default n.iter", and a live one -- the whole
   # family fitter roster below is handed explicit values from this frame, so
-  # their own formals never applied and this was the live answer for every one
-  # of them, at 2000 draws against the table's 1000.
-  #
-  # That 2000 was not a decision. Commit 8975470 fixed `n.iter` from meaning the
-  # TOTAL run to meaning kept post-warmup draws on exactly these paths, and left
-  # the literal alone -- so a default that had always kept 2000 - 1000 = 1000
-  # draws silently began keeping 2000 (that commit's own message records the
-  # behaviour change). Reading the table restores the count these paths were
-  # calibrated at. The knobs that ARE deliberate -- a wider coefficient prior, a
-  # looser adaptation target, a different stream seed -- are on the record as a
-  # family row instead (`.TOBS_SINGLE_SPECIES_NUTS`).
+  # their own formals never apply. The knobs that ARE deliberate -- a wider
+  # coefficient prior, a looser adaptation target, a different stream seed --
+  # are on the record as a family row instead (`.TOBS_SINGLE_SPECIES_NUTS`).
   # The `%||%` tails cover a non-sampling engine (`laplace` / `nested_laplace`
   # carry a ridge and no chain knobs) whose branches never read them anyway.
   prof <- .tobs_single_species_defaults(method)
@@ -379,7 +371,7 @@
   # effects only this round; "laplace" or "nuts".
   if (identical(model$model_type, "dyn_abun")) {
     # Zero-inflated open N-mixture (zip / zinb): a pure-R structural-zero layer
-    # over the Dail-Madsen marginal. v1 is non-spatial laplace with an
+    # over the Dail-Madsen marginal. Scope: non-spatial laplace with an
     # intercept-only structural-zero probability; a field, an RE, or NUTS stay
     # Poisson / negbin.
     if (model$mixture %in% c("zip", "zinb")) {

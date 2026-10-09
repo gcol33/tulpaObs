@@ -27,7 +27,7 @@
 #   .tobs_fit_gdistremoval()     optim over the closed-form marginal
 #   .dispatch_gdistremoval()     tobs() entry (bind + fit + assemble)
 #
-# Scope (v1): half-normal key, line / point transect, Poisson abundance, constant
+# Scope: half-normal key, line / point transect, Poisson abundance, constant
 # per-period removal capture, availability fixed at 1 (a single primary period
 # does not identify phi separately from the detection probabilities). Hazard-rate
 # key, NB / ZIP abundance, and a phi arm over multiple primary periods are

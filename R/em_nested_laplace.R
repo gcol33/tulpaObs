@@ -35,10 +35,8 @@
 #' @keywords internal
 # `grids` carries the caller's outer-grid overrides -- `sigma`, `rho`, `tau`,
 # `range` -- one named list for every block this prior builds. The block
-# builders below used to read those off the term object itself
-# (`spatial$sigma_grid`), and no constructor or binder ever wrote them there, so
-# the whole set of guards was dead and this route had no grid override at all
-# while `cover()` and `occu_cover()` drove the same engine with one. The names
+# builders below read them from here and never off the term object
+# (`spatial$sigma_grid`): no constructor or binder writes a grid there. The names
 # are the `control$sigma.grid` / `rho.grid` / `tau.grid` / `range.grid` the
 # validator already admits on a nested-Laplace route.
 .tobs_to_multi_block_prior <- function(spatial = NULL, temporal = NULL,
@@ -331,7 +329,7 @@
 # carries the calibrated marginal mode, curvature (fitted_eta_var) and grid
 # weights with no M-inflation. Held-out sites have no valid visits -> q_i = 0,
 # so they drop from the likelihood and are interpolated by the field (the INLA
-# NA-response mechanism, now without the n_trials = 0 hack). Detection is plugged
+# NA-response mechanism). Detection is plugged
 # in at its point estimate (the field's dominant uncertainty is the field).
 .tobs_occu_state_marginal_fit <- function(model, em_result, latent_prior,
                                           max_iter = 50L, tol = 1e-6,

@@ -1,12 +1,12 @@
 // dyn_abun_ploglik.cpp
 // Batched pointwise log-likelihood for the open-population N-mixture (dyn_abun)
-// family: the per-draw loop that R (.tobs_ploglik_dyn_abun) ran around the
-// per-site HMM forward marginal now runs in C++, parallel over draws, reusing the
+// family: the per-draw loop around the per-site HMM forward marginal
+// (.tobs_ploglik_dyn_abun), parallel over draws, reusing the
 // SAME per-site kernel compute_dyn_abun_site (dyn_abun_kernel.h) the fit and the
 // single-draw cpp_dyn_abun_total_log_lik use. The four arms (lambda, p, omega,
 // gamma) are site-level [S x n_sites] predictors from BLAS in R; each site's
-// count block is y_flat + i * T * J. eta_logr = 0 mirrors the former R loop
-// (which called eval_beta without the log r argument). Byte-identical to it.
+// count block is y_flat + i * T * J. eta_logr = 0 (eval_beta without the log r
+// argument).
 
 #include <Rcpp.h>
 #include <vector>

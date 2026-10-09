@@ -8,8 +8,8 @@
 //     the posterior-mean predictive CDF plus a uniform jitter.
 // The posterior draw SELECTION (sample.int) stays in R and its indices are
 // passed in; the per-draw RNG (z, y_rep, the PIT jitter) is drawn here from R's
-// stream via the R:: samplers, in the SAME order as the former R loops, so under
-// a fixed seed the results are byte-identical.
+// stream via the R:: samplers, in a fixed order, so under a fixed seed the
+// results are reproducible.
 
 #include <Rcpp.h>
 #include <vector>

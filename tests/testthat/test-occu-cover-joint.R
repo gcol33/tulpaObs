@@ -1,5 +1,5 @@
 # =============================================================================
-# test-occu-cover-joint-coupled.R - end-to-end gates for the joint-coupled
+# test-occu-cover-joint.R - end-to-end gates for the joint-coupled
 # engine wired through the occu_cover_lognormal cell-coupling spec (
 # consumer + R-facing fit wiring).
 #

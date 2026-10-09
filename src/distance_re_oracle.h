@@ -50,7 +50,7 @@ struct DistanceGroupedOracle : CountGroupedOracle {
     DistQuad quad;                              // per-fit detection quadrature
     // Per-site K_hi cap, verified by the R wrapper against the shared K_max
     // ceiling before the AGHQ integration runs; -1 disables it (every group
-    // evaluates at the shared K_max, the historical behaviour).
+    // evaluates at the shared K_max).
     int headroom = -1;
     // Built once in the constructor, read-only thereafter: safe to share
     // read-only across an eval_site() that may be called from a parallel group

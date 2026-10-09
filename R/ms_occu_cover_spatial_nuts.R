@@ -528,9 +528,8 @@
 # reads, so this builder never has to know a family's spelling. The family's
 # returned layout carries `.ms_ocs_layout_base()` -- the fields the shared
 # consumers (`.ms_ocs_b_idx`, `.ms_ocs_b_from_z`, the samplers) read -- plus its
-# own aliases, and NOT the construction slices above: `ms_count` already
-# exposes a field called `chol`, so splicing the whole builder in would give
-# `lay$chol` two meanings.
+# own aliases, and NOT the construction slices above, so a family's flat
+# `chol_<arm>` fields are the only chol spelling its layout exposes.
 .ms_ocs_layout <- function(arms, n_species, trailing = list()) {
   widths <- vapply(arms, function(a) as.integer(a$width), integer(1))
   nms    <- vapply(arms, function(a) a$name, character(1))
@@ -661,7 +660,7 @@
 # count, and the split-Rhat/bulk-ESS tail when >1 chain ran); the only per-family
 # differences are the layout `lay` and any extra scalar hyperparameters (e.g. the
 # NB `sigma_logr`), passed through `...` into the block. Single source for the
-# rc-unpack + fit$nuts glue the families used to re-inline.
+# rc-unpack + fit$nuts glue every family shares.
 #
 # `par_cols` are the sampler coordinates the fit REPORTS, in the order its
 # `fixed_names` list them; every layout puts the community means first as

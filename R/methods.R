@@ -449,9 +449,9 @@ convergence <- function(object, ...) UseMethod("convergence")
 convergence.tobs_fit <- function(object, ...) {
   rec <- object$convergence
   if (is.null(rec) || !is.list(rec)) rec <- list()
-  # Normalise: prefer the unified record, fall back to the legacy top-level
-  # `converged` / `n_iter` so old saved fits and any family still on the flat
-  # layout answer through the same accessor.
+  # Normalise: prefer the unified record, fall back to the flat top-level
+  # `converged` / `n_iter` so a fit stored on the flat layout answers through
+  # the same accessor.
   rec$converged <- rec$converged %||% object$converged %||% NA
   rec$n_iter    <- rec$n_iter    %||% object$n_iter    %||% NA_integer_
   if (is.null(rec$sla_status) && !is.null(object$sla_status)) {

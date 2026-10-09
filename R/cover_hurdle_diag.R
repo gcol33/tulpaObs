@@ -356,8 +356,8 @@
                  stop("cover PIT: unknown positive family '", positive, "'.",
                       call. = FALSE))
   num <- function(x) if (is.null(x)) numeric(0) else as.numeric(x)
-  # The per-observation predictive-CDF limits are deterministic; the former R
-  # loop over occupied plots now runs in cpp_cover_pit_cdf.
+  # The per-observation predictive-CDF limits are deterministic; the loop over
+  # occupied plots runs in cpp_cover_pit_cdf.
   lim <- cpp_cover_pit_cdf(e$eta_occ, e$eta_pos, as.integer(enc$occ_data$y),
                            as.numeric(enc$pos_data$y), as.integer(pos_col),
                            sd_disp, code, num(bounds$lower), num(bounds$upper),
@@ -395,8 +395,7 @@
                  stop("cover PPC: unknown positive family '", positive, "'.",
                       call. = FALSE))
   # The occurrence + cover replicates draw from R's RNG stream in the C++ kernel
-  # in the same order as the former R loop, so under a fixed seed the discrepancy
-  # is byte-identical.
+  # in a fixed order, so under a fixed seed the discrepancy is reproducible.
   r <- cpp_cover_ppc(e$eta_occ, e$eta_pos, as.integer(enc$occ_data$y),
                      as.numeric(y_pos_nat), sd_disp, as.numeric(trunc_u), code,
                      identical(fit.stat, "freeman-tukey"))
@@ -475,8 +474,8 @@ predict.cover_fit <- function(object, newdata = NULL,
                                      mc.tol = 0.05, nsim.max = 10000L,
                                      mc.floor = 0.001, ...) {
   # Nested-Laplace shared-field fit: route through the unified joint predict
-  # substrate. Map the legacy fixed-effects type names onto the joint vocabulary
-  # so old calls keep working.
+  # substrate. Map the fixed-effects type names onto the joint vocabulary, so
+  # both spellings reach the same predictor.
   if (!is.null(.tobs_joint_fit(object))) {
     if (is.null(type)) type <- "occurrence"
     type <- switch(type,

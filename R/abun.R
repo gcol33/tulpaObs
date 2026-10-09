@@ -116,7 +116,7 @@
   method <- match.arg(method)
 
   # Zero-inflated N-mixture (ZIP / ZINB): a structural-zero mixture over the
-  # Royle marginal, fit by a pure-R additive layer. v1 is the non-spatial
+  # Royle marginal, fit by a pure-R additive layer. Scope: the non-spatial
   # laplace path with an intercept-only structural-zero probability; a spatial
   # field / RE / NUTS on the ZI path are follow-ups (error rather than silently
   # dropping the requested structure).
@@ -644,8 +644,8 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
               as.numeric(object$zi_omega) else NA_real_
   # Draw selection (R_unif_index) + latent N (rpois / rnbinom) + (ZI) the
   # structural-zero Bernoulli + per-visit binomial detections run in
-  # cpp_simulate_nmix from R's RNG stream in the same order as the former loop,
-  # so the simulation is byte-identical under a seed (the ZI draw is skipped when
+  # cpp_simulate_nmix from R's RNG stream in a fixed order,
+  # so the simulation is reproducible under a seed (the ZI draw is skipped when
   # zi_omega is NA, leaving the plain stream unchanged).
   ab <- .tobs_sim_arm_block(model, draws, 2L)
   p_lam <- ab$p[1L]; p_p <- ab$p[2L]

@@ -7,10 +7,9 @@
 // truth). The draw selection uses R_unif_index; N is rpois / rnbinom(mu); the
 // bin counts are a multinomial drawn by R's own sequential-binomial algorithm.
 //
-// Because pi now comes from the engine's fixed high-order rule (order 64, the
-// engine default) instead of adaptive QUADPACK, simulate() output is not
-// byte-identical to the former R path; it is the model-consistent pi and the
-// detection functions are smooth, so the rule is effectively exact.
+// pi comes from the engine's fixed high-order rule (order 64, the engine
+// default) rather than adaptive QUADPACK: it is the model-consistent pi, and
+// the detection functions are smooth, so the rule is effectively exact.
 
 #include <Rcpp.h>
 #include <R_ext/Random.h>

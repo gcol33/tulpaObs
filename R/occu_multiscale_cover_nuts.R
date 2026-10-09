@@ -46,8 +46,7 @@
 # joint-logpost cross-check, so the oracle only needs the (penalised) log-density.
 #
 # `sigma.logdisp` keeps log_disp proper, matching the two sibling NUTS targets
-# (occu_cover_nuts.cpp, cover_nuts.cpp), which both sample it under this prior;
-# this target used to leave it flat.
+# (occu_cover_nuts.cpp, cover_nuts.cpp), which both sample it under this prior.
 .tobs_occu_mscale_cover_nuts_logpost <- function(theta, model, idx, sigma.beta = 5,
                                                  sigma.logdisp = 5) {
   ll  <- .occu_mscale_cover_nonspatial_ll(theta, model, idx)

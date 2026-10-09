@@ -986,7 +986,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
   phi_grid_pos <- .arms$phi_grid_pos
 
   # Strip the per-obs spatial_idx (tulpa_nested_laplace_joint takes it per
-  # arm) and the legacy rho_bounds field (joint car_proper uses rho_car_grid).
+  # arm) and the rho_bounds field (joint car_proper uses rho_car_grid).
   # Forward control-grid overrides per backend.
   #
   # The joint engine parameterizes the copy as (sigma, alpha): the donor
@@ -1190,8 +1190,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
     # Adaptive grid forwarding. Defaults match the joint engine's defaults
     # (`adaptive_grid = TRUE`, threshold 0.02, one pass) and triggered the
     # under-coverage fix in INLAabun D3. Pass `control$adaptive.grid
-    # = FALSE` to recover the legacy fixed-grid behaviour for
-    # reproducibility checks.
+    # = FALSE` for a fixed grid, e.g. for reproducibility checks.
     arm_pos$field_coef <- .tobs_alpha_field_coef(alpha_axis)
     fit <- tulpa::tulpa_nested_laplace_joint(
       responses = list(occ = arm_occ, pos = arm_pos),

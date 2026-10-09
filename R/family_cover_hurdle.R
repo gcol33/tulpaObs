@@ -61,10 +61,10 @@
          "in [0, 1]).", call. = FALSE)
   }
   # A spatially varying trend is model structure and so lives in the formula,
-  # as a second weighted areal term. `control$trend` is removed: control
+  # as a second weighted areal term. `control$trend` is rejected: control
   # carries fitting behaviour only. `[[` (exact), never `$`.
   if (!is.null(control[["trend"]])) {
-    stop("control$trend is no longer supported for cover hurdle models.\n",
+    stop("control$trend is not accepted for cover hurdle models.\n",
          "Declare spatially varying trends directly in the formula, e.g.\n\n",
          "  ~ time.sc +\n",
          "    icar(graph = adj, group_var = \"cell_idx\") +\n",
@@ -81,7 +81,7 @@
   # user surface (#295).
   .tobs_check_alpha_control(control, "cover()")
   if (!is.null(control[["sigma.pos.grid"]])) {
-    stop("control$sigma.pos.grid is no longer supported for cover hurdle ",
+    stop("control$sigma.pos.grid is not accepted for cover hurdle ",
          "models.\nThe joint engine integrates the copy coefficient `alpha`, ",
          "with the cover-arm field amplitude `alpha * sigma`; `sigma` is the ",
          "donor axis (control$sigma.grid).\nSet the coupling in the formula ",
@@ -906,7 +906,7 @@ encode_cover_hurdle <- function(formula, data, y,
 # Partition the cover() formula's areal terms into the shared intercept field
 # and the optional spatially-varying trend field. An unweighted areal term is
 # the intercept; a weighted areal term (`icar(..., weight = col)`) is the trend
-# -- the second coupled besag block that `control$trend` used to introduce. Both
+# -- a second coupled besag block. Both
 # spellings of the weighted term -- bare `icar(..., weight = )` and the umbrella
 # `spatial(model = "icar", weight = )` -- resolve to the same `tobs_spatial`
 # term and so to the same trend block.
@@ -1226,7 +1226,7 @@ decode_cover_hurdle <- function(fits, enc, family,
       # Unified convergence record, the same list every other family stores, so
       # a mixed-family QC pass reads one accessor (`convergence(fit)` /
       # `fit$convergence$converged`) across occu / occu_cover / cover. The
-      # top-level `converged` is kept for glance() and back-compat;
+      # top-level `converged` is what glance() reads;
       # `sla_status` carries the simplified-Laplace marginal code.
       convergence  = list(
         converged  = isTRUE(fits$m_occ$converged) && isTRUE(fits$m_pos$converged),

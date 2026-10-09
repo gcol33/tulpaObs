@@ -568,7 +568,7 @@ tobs <- function(formula,
   # `response = "<col>"` (a column name) on an occu_cover() family handed a
   # data-frame `data`; build the paired occurrence / cover arms and the shared
   # site / visit design with the SAME builder the by= loop uses, then fall
-  # through to the normal single-fit dispatch -- so a user no longer hand-rolls
+  # through to the normal single-fit dispatch -- so the caller does not hand-roll
   # tobs_data() twice plus the alignment check. `compact` defaults on for the
   # nested-Laplace route (the joint engine reads the ragged arms with no per-site
   # visit cap) and is overridable via control$compact.

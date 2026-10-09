@@ -314,7 +314,7 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
 
   is_nb <- !is.null(r_size) && is.finite(r_size)
   # Draw selection + latent N + depleting-binomial pass removals run in
-  # cpp_simulate_removal from R's RNG stream in the former order (byte-identical).
+  # cpp_simulate_removal from R's RNG stream in a fixed order (seed-reproducible).
   ab <- .tobs_sim_arm_block(model, draws, 2L)
   p_lam <- ab$p[1L]; p_p <- ab$p[2L]
   res <- cpp_simulate_removal(ab$X[[1L]], ab$X[[2L]], ab$draws,

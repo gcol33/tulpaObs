@@ -981,9 +981,11 @@
   #     covariance M-step). Production path -- profiling shows the FD-gradient
   #     joint optimizer dominates the residual runtime, so EM is the default.
   #   - "joint_fd": the finite-difference joint (theta, Sigma) optimizer. Opt-in
-  #     for correctness / architecture validation, and the only driver that does
-  #     the n.quad > 1 AGHQ variance-component debias. Slower than EM.
-  #   - "joint_grad": reserved analytic-gradient extension; errors for now.
+  #     for correctness / architecture validation; does the n.quad > 1 AGHQ
+  #     variance-component debias. Slower than EM.
+  #   - "joint_grad": the same joint optimizer with the analytic Fisher-identity
+  #     gradient (cpp_aghq_objective_grad); the default for the negbin and
+  #     zero-inflated mixtures, which have no closed-form EM.
   # The AGHQ debias barely moves the community covariances for this family (each
   # species' count marginal is informative, so the per-group Laplace is already
   # accurate), so the EM default loses nothing in practice; n.quad is exposed via

@@ -850,8 +850,9 @@
       subspace_debias = dots[["subspace.debias"]] %||% FALSE,
       cila            = dots[["cila"]] %||% FALSE,
       diagnose_k = dots[["diagnose.k"]] %||% FALSE,
-      # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy
-      # alias). The outer Pareto-k is scored ONCE over this many importance draws.
+      # diagnose.draws is the diagnostic's precision knob (k.samples is an
+      # accepted alias). The outer Pareto-k is scored ONCE over this many
+      # importance draws.
       k_samples = as.integer(dots[["diagnose.draws"]] %||% dots[["k.samples"]] %||% 500L),
       # Bootstrap outer Pareto-k uncertainty. The k-hat's sampling uncertainty is
       # bootstrapped from its raw importance log-ratios (k.bootstrap replicates, NO

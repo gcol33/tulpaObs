@@ -1,11 +1,10 @@
 // ms_nmix_ploglik.cpp
 // Batched pointwise log-likelihood for the community N-mixture (ms_abun) family.
-// The former R loop (.tobs_ploglik_ms_nmix) reconstructed each species' deviation
-// b = C z from the non-centered NUTS draw (log-Cholesky factor C per arm) and
-// called the per-species Royle marginal in R. Both the reconstruction and the
-// per-(species, site) marginal now run in C++, parallel over draws, reusing the
-// SAME per-site kernel compute_nmix_site (nmix_kernel.h). The log-Cholesky unpack
-// mirrors .ms_ocs_chol_unpack; the result is byte-identical to the former loop.
+// Per draw it reconstructs each species' deviation b = C z from the
+// non-centered NUTS draw (log-Cholesky factor C per arm) and evaluates the
+// per-(species, site) Royle marginal, parallel over draws, reusing the SAME
+// per-site kernel compute_nmix_site (nmix_kernel.h). The log-Cholesky unpack
+// mirrors .ms_ocs_chol_unpack; the result is byte-identical to the R oracle.
 // Output is [M x (n_species * n_sites)] with the per-species blocks contiguous.
 
 #include <Rcpp.h>

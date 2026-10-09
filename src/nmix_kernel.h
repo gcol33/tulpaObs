@@ -186,8 +186,8 @@ struct NMixSiteCache {
 
 // Truncation headroom: how many latent-N states above a site's own maximum
 // count the sum is allowed to run for. `headroom < 0` disables the cap and the
-// site truncates at the shared `K_max`, which is the historical behaviour and
-// what an explicitly supplied K_max still means.
+// site truncates at the shared `K_max`, which is what an explicitly supplied
+// K_max means.
 //
 // Why the cap exists. The sum runs over [max(y_i), K_max] -- Binom(y, N, p) is
 // zero below the site's own maximum, so the LOWER end is already per-site. Only

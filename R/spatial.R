@@ -73,9 +73,9 @@ csr_to_adjacency <- function(csr, n) {
 #   10x10            0.644879             0.644879
 #   20x20            0.765026             0.765027
 #
-# -- and NOT the geometric mean of the eigenvalues of Q, which this function
-# used to return (2.646529 / 2.831882 / 2.984944 on the same three graphs) and
-# which no reciprocal or square root of maps onto the reference.
+# -- and NOT the geometric mean of the eigenvalues of Q (2.646529 / 2.831882 /
+# 2.984944 on the same three graphs), which no reciprocal or square root of
+# maps onto the reference.
 #
 # The engine and the R paths spell the loading differently; `.bym2_engine_scale()`
 # below is the boundary between the two conventions.
@@ -86,10 +86,10 @@ csr_to_adjacency <- function(csr, n) {
 # surviving the test carries a real marginal variance. An eigenvalue that
 # survives it and is still negative says the matrix handed in is not an ICAR
 # precision, and it errors here rather than reaching log() and sending NaN on
-# into the BYM2 mixing weight. 1e-10 is the historical floor; the
+# into the BYM2 mixing weight. 1e-10 is an absolute floor; the
 # n * eps * max|lambda| term is the scale the roundoff-zero eigenvalues actually
-# sit at, and overtakes the floor only on graphs far larger than the floor was
-# picked for.
+# sit at, and overtakes the floor only on graphs far larger than the floor
+# covers.
 .bym2_scale <- function(adj) {
   .bym2_scale_from_Q(diag(rowSums(adj)) - adj)
 }

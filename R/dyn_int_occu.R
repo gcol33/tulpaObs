@@ -18,7 +18,7 @@
 # marginal is maximised (optim BFGS) with an observed-information vcov -- pure R,
 # no new C++.
 #
-# v1 scope: every source covers all sites and the same T-season grid; constant
+# Scope: every source covers all sites and the same T-season grid; constant
 # (non-season-varying) colonization / extinction; a shared detection covariate
 # design with per-source coefficients. Partial site / season overlap across
 # sources (the general tIntPGOcc), season-varying transitions (the #124 recipe),
@@ -303,7 +303,7 @@
                                            tol = 1e-8, verbose = TRUE,
                                            integration = "grid") {
   if (!identical(spatial$type, "icar"))
-    stop("dyn_int_occu() + a spatial field supports icar() only in v1 ",
+    stop("dyn_int_occu() + a spatial field supports icar() only ",
          "(bym2 / car_proper are follow-ups).", call. = FALSE)
   S <- model$S; n_sites <- model$n_sites
   X_psi <- model$X_psi; X_gam <- model$X_gam; X_eps <- model$X_eps
@@ -354,7 +354,7 @@
                                     res$mixture$covs)
   colnames(draws) <- nm
 
-  # Intercept field on the legacy scalar slots; any weighted (SVC) blocks become
+  # Intercept field on the scalar slots; any weighted (SVC) blocks become
   # the trend field(s) -- svcTIntPGOcc.
   fmeans <- res$field_means %||% list(res$field_mean)
   trend_labels <- fb$labels[-1L]

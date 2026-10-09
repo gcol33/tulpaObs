@@ -123,7 +123,7 @@ test_that("control$trend errors with a migration pointer", {
          data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace",
          control = list(trend = list(weight = "time"))),
-    "control\\$trend is no longer supported")
+    "control\\$trend is not accepted")
 })
 
 # ---- New parser guards on the weighted areal term ---------------------------

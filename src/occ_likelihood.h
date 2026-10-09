@@ -308,11 +308,10 @@ inline void occ_residual(
 
     // No detection here: the likelihood is the MacKenzie mixture
     // psi * prod(1 - p) + (1 - psi). That object belongs to
-    // occu_coupling_shared.h, which accumulates prod(1 - p) in log space; this
-    // branch used to re-derive it and recover each visit's contribution by
-    // dividing (1 - p_j) back out of the product, hard-zeroing the quotient
-    // below 1e-300. resid_out[1] is the site-level detection score, so the
-    // block's per-visit scores are summed.
+    // occu_coupling_shared.h, which accumulates prod(1 - p) in log space
+    // (re-deriving it here and dividing (1 - p_j) back out of the product would
+    // need a hard zero on the quotient below 1e-300). resid_out[1] is the
+    // site-level detection score, so the block's per-visit scores are summed.
     double  g_psi = 0.0, nh_psi = 0.0;
     double  g_p_stack[64];
     std::vector<double> g_p_heap;

@@ -2,7 +2,7 @@
 # test-occu-cover-spatial.R - method / spatial-term pairing gates for
 # occu_cover(): a spatial term needs method = "nested_laplace", and that
 # method needs a spatial term. Recovery on the spatial path is gated in
-# test-occu-cover-joint-coupled.R and test-occu-cover-coupling.R.
+# test-occu-cover-joint.R and test-occu-cover-coupling.R.
 # =============================================================================
 
 

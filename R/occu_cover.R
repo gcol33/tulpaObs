@@ -20,9 +20,10 @@
 #        + p_ij       * f_pos(y_pos_ij; eta_pos_ij, dispersion) * 1{y_ij = 1}
 #
 # Reduces to occu() when f_pos is degenerate and to the plot-level cover
-# hurdle when J = 1 and p = 1. v1 covers the non-spatial Laplace path; a
+# hurdle when J = 1 and p = 1. This file covers the non-spatial Laplace path; a
 # shared spatial field across the occ and cover arms (the analogue of
-# cover()'s nested-Laplace joint engine) is v2.
+# cover()'s nested-Laplace joint engine) is the joint route in
+# occu_cover_joint.R.
 #
 # Files this touches:
 #   R/obs_families.R    - occu_cover(response = ) constructor
@@ -273,9 +274,10 @@
   }
   if (length(hits) > 0L) {
     stop(sprintf(paste0(
-      "occu_cover() v1 does not support structured terms (%s) on the %s arm. ",
-      "Shared spatial / temporal / RE fields across the three arms is v2; ",
-      "for now use a plain fixed-effects formula on each."),
+      "occu_cover() does not support structured terms (%s) on the %s arm on ",
+      "this path. Shared spatial / temporal / RE fields across the three arms ",
+      "fit on the nested_laplace joint route; here use a plain fixed-effects ",
+      "formula on each."),
       paste(unique(hits), collapse = ", "), arm), call. = FALSE)
   }
   invisible(NULL)

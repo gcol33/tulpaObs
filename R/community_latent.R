@@ -719,11 +719,10 @@
 # closed-form tau M-step. Each field is demeaned: the intrinsic null space is the
 # constant and the fixed effects own the level.
 # One ridge ladder for every singular-Hessian retry in this file: the field
-# Newton, the field covariance and the factor Newton. They used to be written
-# three times with different ridges (relative vs absolute), different tier
-# counts and different failure values, and the relative one reused an unguarded
-# mean diagonal in its last tier -- so a non-finite `d` gave `max(NaN, 1e-6)`
-# = NaN as the ridge, in exactly the near-singular case the retry exists for.
+# Newton, the field covariance and the factor Newton -- one ridge scale, one
+# tier count and one failure value, with the mean diagonal guarded so a
+# non-finite `d` cannot give `max(NaN, 1e-6)` = NaN as the ridge, in exactly
+# the near-singular case the retry exists for.
 #
 # Tiers are relative-then-absolute against the mean diagonal, each guarded.
 # `g` absent solves for the inverse. A solve that fails at every tier returns

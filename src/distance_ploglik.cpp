@@ -1,11 +1,10 @@
 // distance_ploglik.cpp
 // Batched pointwise log-likelihood for the binned distance-sampling family: the
-// per-draw loop that R (.tobs_ploglik_distance) ran around the per-site binned-
-// multinomial-over-N marginal now runs in C++, parallel over draws, reusing the
+// per-draw loop around the per-site binned-multinomial-over-N marginal
+// (.tobs_ploglik_distance), parallel over draws, reusing the
 // SAME per-site kernel compute_distance_site (distance_kernel.h) and the SAME
 // quadrature build dist_build_quad the fit uses. The quad is built once; the
-// linear predictors arrive as [S x n_sites] matrices from BLAS in R. Byte-
-// identical to the former R loop (same kernel + quad).
+// linear predictors arrive as [S x n_sites] matrices from BLAS in R.
 
 #include <Rcpp.h>
 #include <vector>
@@ -70,8 +69,7 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
       for (int s = 0; s < n_sites; ++s) {
         std::size_t off = (std::size_t) s * S + d;
         // Only log_lik is read below, so value_only=true skips the detection-arm
-        // gradient/Fisher block and its five per-bin derivative vectors entirely --
-        // this call previously computed and discarded them.
+        // gradient/Fisher block and its five per-bin derivative vectors entirely.
         double val = tulpaObs::compute_distance_site(
           y_by_site[s].data(), n_bins, pel[off], pes[off], eb, key, quad,
           K_max, r, /*value_only=*/true, &comb_table, &scratch,

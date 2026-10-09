@@ -389,9 +389,8 @@
 
   # Looped backend (default): B independent per-species fits, each routed through
   # the single-species dispatch with the shared cell-level design and visit grid
-  # -- identical to fitting that species alone (the same independence the dense
-  # looped path guaranteed), now without ever materializing the padded grid on
-  # the nested-Laplace route. site / visit / response / det.covs are batch-build
+  # -- identical to fitting that species alone, without materializing the
+  # padded grid on the nested-Laplace route. site / visit / response / det.covs are batch-build
   # keys, not fitter args.
   if (!fused) {
     sp_control <- control
@@ -472,7 +471,7 @@
               sites = sites, visits = visits, compact = compact))
 
   # Cover is meaningful only where occurrence == 1. In the dense grid the unused
-  # / absent cover cells are filled to 0 (matching the historical by= build); in
+  # / absent cover cells are filled to 0 (matching the by= build); in
   # the ragged carrier a floored absence is already NA in `values` and is never
   # read by the joint engine, and the two carriers share order(site, visit) so
   # they pair row-for-row (asserted in test-occu-cover-compact.R) -- so the

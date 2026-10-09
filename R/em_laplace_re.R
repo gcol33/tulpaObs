@@ -390,7 +390,7 @@
   p_det_total <- p_det + p_det_visit
 
   # State. Each arm carries its own latent block b and per-term covariance;
-  # a starting diagonal sigma = 0.5 mirrors the historical single-arm path.
+  # the starting diagonal sigma is 0.5.
   init <- glm_init(X_occ, X_det, any_det, n_det, n_valid, keep, p_occ, p_det)
   beta_occ <- init$occ$beta
   beta_det <- c(init$det$beta, rep(0, p_det_visit))

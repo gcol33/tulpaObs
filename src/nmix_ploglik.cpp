@@ -1,12 +1,11 @@
 // nmix_ploglik.cpp
 // Batched pointwise log-likelihood for the N-mixture family: the per-draw loop
-// that R (.tobs_ploglik_nmix) ran around the per-site Royle marginal now runs in
-// C++, parallel over draws, reusing the SAME per-site kernel compute_nmix_site
+// around the per-site Royle marginal (.tobs_ploglik_nmix), parallel over
+// draws, reusing the SAME per-site kernel compute_nmix_site
 // (nmix_kernel.h) the fit and the single-draw cpp_nmix_total_log_lik use -- one
 // source of truth for the marginal. The linear predictors arrive as [S x n_obs]
 // / [S x n_sites] matrices built by BLAS in R; the kernel gathers each site's
-// visits and evaluates log L_i per draw. Byte-identical to the former R loop
-// (same kernel), just without the S R-level calls.
+// visits and evaluates log L_i per draw.
 
 #include <Rcpp.h>
 #include <vector>

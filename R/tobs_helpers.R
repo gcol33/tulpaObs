@@ -181,8 +181,8 @@
   # (sfJSDM), via block coordinate ascent. laplace: the non-spatial community EM,
   # or latent() factors alone (lfJSDM). nuts: the exact joint community posterior
   # over the Bernoulli response. The single-block correction routes (laplace_sla
-  # / laplace_gibbs / laplace_mi) belonged to the former shared-FE +
-  # scalar-species-intercept model and do not apply to the community EM.
+  # / laplace_gibbs / laplace_mi) correct one Laplace block and do not apply to
+  # the community EM.
   jsdm     = c("laplace", "nuts", "pg_gibbs",
                "nested_laplace"),
   # count: GLMM on the observed count / continuous response directly (no
@@ -267,9 +267,9 @@
   # observed-information vcov. A shared areal icar() field on the first-season
   # occupancy formula fits stIntPGOcc under nested_laplace via the shared
   # areal-BFGS driver (the field gradient is the psi1 score w1 - psi1, #122).
-  # v1 = full site / season overlap, constant transitions, site-level detection
-  # (partial overlap, season-varying rates, bym2 / car_proper, NUTS are
-  # documented follow-ups, #122).
+  # Scope: full site / season overlap, constant transitions, site-level
+  # detection (partial overlap, season-varying rates, bym2 / car_proper, NUTS
+  # are documented follow-ups, #122).
   dyn_int_occu = c("laplace", "nested_laplace"),
   # t_occu: multi-season occupancy with an AR1 year random effect on the state
   # (spOccupancy tPGOcc). NOT colext -- a per-(site, season) Bernoulli GLMM with a
@@ -701,12 +701,12 @@
 # Gate the resolved `method` against whether the formula carries a structured
 # (spatial / temporal) term, for the four observation families whose
 # Laplace and nested-Laplace fitters share one dispatch branch in
-# `.tobs_fit_model()` (abun, removal, distance, fp_occu; #354). Those branches
-# used to pick the engine from `has_field` alone and stamp the REQUESTED
-# `method` on the fit regardless -- `method = "nested_laplace"` on a field-free
-# formula silently ran plain Laplace, and `method = "laplace"` with a field
-# silently ran the areal fit -- exactly the mislabelling
-# `.tobs_family_methods` was meant to make impossible. Mirrors `.dispatch_count`
+# `.tobs_fit_model()` (abun, removal, distance, fp_occu; #354). Picking the
+# engine from `has_field` alone while stamping the REQUESTED `method` on the fit
+# would let `method = "nested_laplace"` on a field-free formula silently run
+# plain Laplace, and `method = "laplace"` with a field silently run the areal
+# fit -- exactly the mislabelling `.tobs_family_methods` exists to make
+# impossible. Mirrors `.dispatch_count`
 # ("a field needs nested_laplace; nested_laplace needs a field"). NUTS is
 # skipped here: each family's own NUTS branch decides which structures it
 # supports (some take a field, some do not), and is not rejected by this gate.

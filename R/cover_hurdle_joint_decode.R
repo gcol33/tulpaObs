@@ -654,8 +654,8 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
 # is left at zero. The cells run concurrently in the engine over `n_threads`.
 # When `beta_idx` is betas-only (`n_dense == length(beta_idx)`, the
 # cover()-only callers) the full block is formed. The whole loop is the single
-# C++ source `tulpa::tulpa_joint_inner_vcov_blocks`, replacing the former serial
-# R `solve(Qk, E)` over ~`length(beta_idx)` right-hand sides per cell.
+# C++ source `tulpa::tulpa_joint_inner_vcov_blocks` (a serial R `solve(Qk, E)`
+# would cost ~`length(beta_idx)` right-hand sides per cell).
 #
 # It holds one block per cell, so it is for a betas-only `beta_idx`; a read that
 # carries the field goes through `.joint_inner_vcov_mixture()`.

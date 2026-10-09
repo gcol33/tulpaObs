@@ -820,7 +820,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   }
   # The community simulator draws from the posterior-MEAN fitted values (no draw
   # selection), so the per-species latent N and detection draws run in
-  # cpp_simulate_ms_nmix from R's RNG stream in the former order (byte-identical).
+  # cpp_simulate_ms_nmix from R's RNG stream in a fixed order (seed-reproducible).
   res <- cpp_simulate_ms_nmix(fit$lambda, fit$p, size_s, as.integer(obs_mask),
                               n_sites, max_visits, n_species, as.integer(nsim))
   res <- lapply(res, function(a) {

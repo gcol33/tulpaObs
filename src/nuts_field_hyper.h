@@ -202,7 +202,7 @@ inline int hyper_field_size(const HyperFieldBlock& fb) {
 
 // Read the block from a NUTS spec. `base` is the first free flat coordinate; the
 // whitened field takes n_raw of them and each sampled hyper one more, in the
-// order (sigma, rho, alpha). A spec carrying only the legacy `field_load` /
+// order (sigma, rho, alpha). A spec carrying only the pinned-form `field_load` /
 // `field_Linv` + `field_alpha` entries marshals as the pinned block -- sigma
 // pinned at 1 with a constant scaling, which reproduces the fixed-hyper loading
 // exactly (that loading already has sigma and rho baked into its columns).
@@ -304,7 +304,7 @@ inline HyperFieldBlock hyper_field_build(const Rcpp::List& spec, int base,
             }
         }
     }
-    // The legacy pinned spec carries the copy amplitude under `field_alpha`.
+    // The pinned spec carries the copy amplitude under `field_alpha`.
     if (!fb.alpha.sampled() && !spec.containsElementNamed("field_alpha_fixed") &&
         spec.containsElementNamed("field_alpha"))
         fb.alpha.fixed = Rcpp::as<double>(spec["field_alpha"]);

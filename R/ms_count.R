@@ -386,7 +386,7 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
     # community EM's own Newton solve, conditional on the converged
     # community mean) -- what a per-species-coefficient consumer (SBC's
     # "rank a fixed species set" design, a calibrated per-species CI) needs
-    # beyond the point BLUP; not previously exposed on the fit object. Bf =
+    # beyond the point BLUP. Bf =
     # the mu-b_s cross-Hessian block from the same Newton solve: mu and b_s
     # are NOT independent in the posterior, and Bf is what lets a consumer
     # draw them jointly instead.

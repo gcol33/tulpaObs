@@ -635,7 +635,7 @@
 # for `cover_fit` (class order cover_fit / tobs_multiarm_fit / tobs_fit), so it
 # never reaches the former and would otherwise glance without the placement.
 # Reads the promoted top-level fields first, falling back to the nested joint
-# object so a fit saved before the promotion still glances. Both columns are
+# object so a fit carrying only the nested record still glances. Both columns are
 # written whenever the record exists, filling the absent one with NA, so a batch
 # summary rbind()ing one row per species gets a rectangular frame instead of
 # losing the column on whichever rows recentered.

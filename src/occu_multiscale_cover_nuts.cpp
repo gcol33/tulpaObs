@@ -308,7 +308,7 @@ inline double mscale_cover_nuts_eval(const MscaleCoverNutsModel& m, const double
     // the non-spatial Laplace path's default) and a broad N(0, sigma_logdisp^2)
     // on log_disp to keep the dispersion proper -- the two sibling NUTS targets
     // (occu_cover_nuts.cpp, cover_nuts.cpp) both sample log_disp under this
-    // prior; this target used to leave it flat.
+    // prior.
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
     const int n_beta = m.o_disp;   // all coords before log_disp
     for (int k = 0; k < n_beta; ++k) {

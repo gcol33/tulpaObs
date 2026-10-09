@@ -400,7 +400,7 @@
 # cover_priors() / list overrides the matching arm(s); the cover arm still gets
 # the cover_priors() default unless a cover_priors object narrows it. Precisions
 # are 1 / sd^2, floored at the engine's own weak default (1e-4) so an Inf-sd
-# bucket reproduces the pre-existing weak ridge rather than dropping the diagonal.
+# bucket reproduces the engine's weak ridge rather than dropping the diagonal.
 .occu_cover_coupled_arm_priors <- function(priors, responses) {
   if (identical(priors, FALSE) || identical(priors, "none")) {
     return(list(psi = NULL, p = NULL, pos = NULL))

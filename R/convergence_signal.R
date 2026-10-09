@@ -7,11 +7,9 @@
 # whichever layout the fitter wrote and the flat slot is removed: a fit carries
 # one answer.
 #
-# The signal is written here for the same reason. A Laplace-family fit that
-# ended without meeting its criterion used to warn on four families, print a
-# line on two and say nothing on the rest; one warning at the fit tail reaches
-# every family once, where a per-fitter warning fired once per species on the
-# community routes that loop a single-species fitter.
+# The signal is written here for the same reason: one warning at the fit tail
+# reaches every family once, where a per-fitter warning fires once per species
+# on the community routes that loop a single-species fitter.
 #
 # Only the optimiser routes are signalled. A sampler's `converged` is an Rhat
 # verdict with its own diagnostics (`check_model()`, `convergence()`), not a

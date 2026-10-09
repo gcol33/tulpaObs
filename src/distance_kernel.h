@@ -120,7 +120,7 @@ struct DistSiteResult {
 // it is already indexed by the offset `k = N - K_lo`, never by K_lo itself
 // (dist_build_comb_table(), #167), so capping here needs only a smaller K_grid,
 // no separate per-site cache. A negative headroom (the default) disables the
-// cap: every site still sums to the shared K_max, the historical behaviour.
+// cap: every site sums to the shared K_max.
 inline DistSiteResult compute_distance_site(
     const int* y_bins, int n_bins,
     double eta_lambda, double eta_sigma, double eta_b,

@@ -30,7 +30,7 @@
 #   .tobs_fit_distsamp_open()     optim over the composed marginal
 #   .dispatch_distsamp_open()     tobs() entry
 #
-# Scope (v1): half-normal key, line / point transect, Poisson initial abundance,
+# Scope: half-normal key, line / point transect, Poisson initial abundance,
 # constant Dail-Madsen dynamics, site-level arms. NB / ZIP initial abundance, other
 # dynamics (autoreg / ricker / gompertz), and season-varying sigma are follow-ups.
 
@@ -466,7 +466,7 @@
 # negbin paths are untouched. omega is an intercept-only structural-zero
 # probability (logit), named `zi_logit` (distinct from `omega`, the survival arm).
 #
-# Scope (v1): non-spatial laplace only, intercept-only zi. The additive marginal
+# Scope: non-spatial laplace only, intercept-only zi. The additive marginal
 # and its per-site gradient are shared verbatim with the .dso_negll / .dso_grad
 # base fitter (weighted by the structural-zero posterior w_i).
 .tobs_fit_distsamp_open_zip <- function(model, verbose = TRUE,
@@ -594,7 +594,7 @@
   mixture  <- family$params$mixture %||% "poisson"
   dynamics <- family$params$dynamics %||% "constant"
   if (!identical(dynamics, "constant") && !identical(mixture, "poisson")) {
-    stop(sprintf(paste0("distsamp_open(dynamics = \"%s\") is Poisson-only for now; ",
+    stop(sprintf(paste0("distsamp_open(dynamics = \"%s\") is Poisson-only; ",
          "the negbin / zero-inflated initial abundance is layered on the constant ",
          "Dail-Madsen marginal. Use dynamics = \"constant\" with mixture = \"%s\", ",
          "or mixture = \"poisson\" with the alternative dynamics."),

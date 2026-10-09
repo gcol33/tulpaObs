@@ -283,7 +283,7 @@
   M
 }
 
-# Per-cell field draws for the v3 nested-Laplace occu_cover spatial path, which
+# Per-cell field draws for the `v3_nested` occu_cover spatial engine, which
 # stores no joint object to sample but DOES carry the per-cell field posterior in
 # `field_table` (z_mean / z_sd) plus the copy coefficient `alpha` (and, for a
 # spatially-varying trend, `trend_field_table` / `alpha_trend` weighted by the
@@ -877,8 +877,8 @@
   # compact fit -- which stores no padded y / valid grid -- reaches the same
   # kernel as a dense one.
   vw    <- .occu_cover_visit_view(model)
-  # The per-draw detection-summary CDF limits are deterministic; the former R
-  # loop now runs in cpp_occu_cover_cdf_limits, parallel over draws.
+  # The per-draw detection-summary CDF limits are deterministic; they run in
+  # cpp_occu_cover_cdf_limits, parallel over draws.
   cpp_occu_cover_cdf_limits(
     X_occ = model$X_occ, X_det_site = model$X_det_site,
     X_det_visit = .occu_cover_visit_design(vw$X_det_visit, vw$V),
@@ -921,7 +921,7 @@
 .tobs_loo_pit_from_limits <- function(ll, Fl, Fu) {
   # Per-observation PSIS leave-one-out weighting of the CDF limits + a uniform
   # jitter, batched in tulpa's cpp_psis_loo_pit (PSIS columns parallel, the runif
-  # in index order), so it is byte-identical to the former per-column R loop.
+  # in index order), so the jitter is reproducible under a seed.
   tulpa::tulpa_pit(cdf = Fu, cdf_lower = Fl, log_lik = ll, n_threads = 1L)
 }
 

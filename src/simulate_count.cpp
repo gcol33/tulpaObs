@@ -2,8 +2,8 @@
 // C++ generators for the count / multistate family simulate() methods (N-mixture,
 // removal, false-positive occupancy). Each selects a posterior draw with
 // R_unif_index (the sample.int primitive) and draws the latent abundance / state
-// and the observations from R's RNG stream via the R:: samplers, in the SAME
-// order as the former R loops, so under a fixed seed each is byte-identical.
+// and the observations from R's RNG stream via the R:: samplers, in a fixed
+// order, so under a fixed seed each is reproducible.
 
 #include <Rcpp.h>
 #include <R_ext/Random.h>

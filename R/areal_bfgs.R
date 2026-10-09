@@ -124,7 +124,7 @@
 # intercept field loads eta += z[map]; a varying-coefficient (SVC) field carries a
 # per-observation `weight` w and loads eta += w * z[map] (the field z is the
 # coefficient surface, reported unweighted via to_phi). `weight = NULL` is the
-# unweighted intercept field and is byte-identical to the historical builder.
+# unweighted intercept field.
 .areal_field_car <- function(adj, kind, map, n_sp, weight = NULL) {
   wtd <- !is.null(weight)
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
@@ -223,7 +223,7 @@
 
 # Areal-BFGS nested-Laplace fit over one OR several latent field blocks (#78).
 #
-# `field` is a single field spec (the historical single-block call) or a LIST of
+# `field` is a single field spec (the single-block call) or a LIST of
 # field specs (e.g. spatial + temporal). Each block owns a contiguous slice of the
 # concatenated field-parameter vector and supplies the same closure interface
 # (offset / scatter / prior_logp / prior_grad / center / constrain / to_phi /
@@ -571,7 +571,7 @@
     logm <- vapply(ik, function(k) res[[k]]$logm, numeric(1))
     # Posterior-mean field + field hyperparameters, per block (tau / rho or sigma
     # / rho), for reporting and for fixing the field precision on the NUTS path.
-    # Block 1 is the spatial field (kept on the legacy scalar slots `field_mean`
+    # Block 1 is the spatial field (reported on the scalar slots `field_mean`
     # / `hyper`); a temporal block 2 is reported under `temporal_field` /
     # `temporal_hyper`.
     n_sp_b <- vapply(blocks, function(b) as.integer(b$n_sp), 0L)
@@ -602,7 +602,7 @@
     }
     # Full per-block posterior-mean fields + hyperparameters, in block order, for
     # a multi-field consumer (an intercept field plus weighted SVC fields, e.g.
-    # svcTIntPGOcc). Block 1 stays the legacy scalar slots.
+    # svcTIntPGOcc). Block 1 also stays on the scalar slots.
     out$field_means <- field_means
     out$hyper_means <- hyper_means
     out
@@ -719,7 +719,7 @@
 # Resolve a LIST of areal-BFGS field blocks from a spatial spec: one block for a
 # plain areal term, or an intercept block plus one weighted (varying-coefficient)
 # block per bar covariate for a `spatial(~ 1 + w || node, graph)` bar
-# (svcTIntPGOcc). The weighted blocks are icar-only in v1. Returns `list(blocks,
+# (svcTIntPGOcc). The weighted blocks are icar-only. Returns `list(blocks,
 # labels)`; `labels` is "intercept" or the covariate name per block, in block order
 # (intercept first). A plain term is byte-identical to the single-block
 # `.tobs_areal_field_spec()` path.
@@ -732,7 +732,7 @@
   }
   if (!identical(spatial$type, "icar"))
     stop(sprintf(paste0("%s() varying-coefficient (SVC) areal field supports icar() ",
-                        "only in v1 (car_proper / bym2 are follow-ups)."),
+                        "only (car_proper / bym2 are follow-ups)."),
                  family), call. = FALSE)
   # A collected multifield wrapping a single bar spec still needs expanding into
   # its intercept + weighted-trend terms; a plain list of areal terms is used as is.

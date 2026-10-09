@@ -25,7 +25,7 @@
 }
 
 # Public hyperparameter name for each RE block, aligned with the descriptor
-# list. A lone term on an arm keeps the legacy bare name (sigma_re /
+# list. A lone term on an arm keeps the bare name (sigma_re /
 # sigma_re_p / sigma_re_pos for psi / detection / positive cover); crossed /
 # nested terms sharing an arm are disambiguated by the grouping var
 # (sigma_re_p_<var>), so every block's variance gets a distinct, stable name.

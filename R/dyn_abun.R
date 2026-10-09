@@ -218,7 +218,7 @@
 # untouched. omega is an intercept-only structural-zero probability (logit). The
 # ZI logit is named `zi_logit` (NOT `omega_*`, which is dyn_abun's SURVIVAL arm).
 #
-# Scope (v1): non-spatial laplace only, intercept-only omega. An areal field, a
+# Scope: non-spatial laplace only, intercept-only omega. An areal field, a
 # grouped RE, and a NUTS path stay Poisson / negbin (rejected upstream in
 # .tobs_fit_model with a pointer); the additive marginal + its gradient are the
 # layer those would share.
@@ -268,7 +268,7 @@
   # Arm gradients: the Dail-Madsen per-site eta gradients scaled by w_i (they
   # enter L only through the L_dm component), summed through the arm designs.
   # omega / gamma per-site gradients are returned as [N] under constant rates
-  # (the season-varying [N x (T-1)] layout is not used on the ZIP v1 path --
+  # (the season-varying [N x (T-1)] layout is not used on the ZIP path --
   # intercept-only rate arms).
   grad_arms <- function(theta, ev, w) {
     g <- numeric(length(theta))
@@ -866,7 +866,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   # simulator reads both exactly as the likelihood does. The draw selection
   # (R_unif_index), latent N (rpois; NB via rpois(rgamma)), and the survival /
   # recruitment / detection draws run in cpp_simulate_dyn_abun from R's RNG
-  # stream in the former site-major order (byte-identical).
+  # stream in site-major order (seed-reproducible).
   ab <- .tobs_sim_arm_block(model, draws, 4L)
   p <- ab$p
   res <- cpp_simulate_dyn_abun(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],

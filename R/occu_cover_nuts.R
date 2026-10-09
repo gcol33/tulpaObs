@@ -115,7 +115,7 @@
 }
 
 # Canonical view of a field description. Accepts the sampled-hyper spec entries
-# the C++ block reads AND the legacy fixed-hyper form (`Linv` / `field_load` +
+# the C++ block reads AND the pinned fixed-hyper form (`Linv` / `field_load` +
 # `alpha`), which resolves to sigma pinned at 1 over a constant scaling -- the
 # fixed loading already carries sigma and rho in its columns, so that
 # configuration reproduces it exactly. `total` is the 1-based index of the

@@ -468,9 +468,9 @@ build_dynamic_callbacks <- function(model, spatial = NULL, latent_prior = NULL) 
                              attr(w, "ext_y_mat"), attr(w, "ext_n_mat"), X_ext)
 
     # Detection: per-(site, season) rows weighted by w[i, t] = P(z_it = 1 | y).
-    # Replaces the legacy hard threshold (w > 0.5) which silently dropped
-    # site-seasons in the boundary regime and double-counted detection evidence for
-    # site-seasons in the high-confidence regime. A constant-detection arm's X_det
+    # A hard threshold (w > 0.5) would drop site-seasons in the boundary regime
+    # and double-count detection evidence for site-seasons in the
+    # high-confidence regime. A constant-detection arm's X_det
     # is site-indexed, so per-season rows read the site's covariates (design_row =
     # i); a season-varying arm's X_det is the long-form [(site x season) x p]
     # design, so the row is the (site, season) index (i - 1) * n_seasons + t.

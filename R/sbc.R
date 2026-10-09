@@ -1483,8 +1483,8 @@
 # dispatches for this model_type, so `draws`/`loglik_many` are also the shared
 # generic ones -- only `spec`/`refit` are custom, to route the family's four
 # arm formulas (`lambda`, `sigma`, `omega`, `gamma`) and rebuild
-# `distsamp_open(cutpoints=, transect=)`. Constant-dynamics, Poisson only for
-# v1 (the alternative dynamics / negbin / zero-inflated layers are follow-ups,
+# `distsamp_open(cutpoints=, transect=)`. Constant-dynamics, Poisson only
+# (the alternative dynamics / negbin / zero-inflated layers are follow-ups,
 # same reasoning as dyn_abun's season-varying-rate exclusion).
 # ---------------------------------------------------------------------------
 
@@ -1598,8 +1598,8 @@
 # already dispatches for this model_type, so `draws`/`loglik_many` are the
 # shared generic ones. The binder itself only accepts full SITE overlap
 # across sources (every source's array shares `n_sites`), so no extra reject
-# is needed there (unlike int_occu()); v1 has no season-varying-rate option
-# to reject either (the family's only mode).
+# is needed there (unlike int_occu()); the family has no season-varying-rate
+# option to reject either (constant rates are its only mode).
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_pool_named_3d <- function(obs, rep) {
@@ -1671,7 +1671,7 @@
 # theta) and no `.tobs_pointwise_loglik` dispatch, so `simulate` is
 # hand-written (drawing a fresh AR1 year-effect sequence at the theta's own
 # (sigma, rho) -- the same generative model `simulate_t_occu()` uses,
-# parameterized by theta instead of drawing its own truth). v1 is also
+# parameterized by theta instead of drawing its own truth). It is also
 # fully-observed only (no NA-visit masking, matching `simulate_t_occu()`'s
 # own output).
 #
@@ -1820,8 +1820,8 @@
 # mu + b_s -- NOT independently, which was #226 (drawing mu and b_s as
 # independent ignores their posterior cross-covariance and biases Var(theta_s)
 # on whichever species trades off most against the community mean). See the
-# registry entry below for the species-count scope this fix needed to actually
-# register cleanly (S=20, not the S=5 fixture the bug was originally found on).
+# registry entry below for the species-count scope at which the joint draw
+# registers cleanly (S=20; an S=5 fixture does not).
 #
 # `simulate()` reuses the family's OWN `.tobs_simulate_ms_occu()` handler
 # (the validated `cpp_simulate_ms_occu` kernel, which already respects the
@@ -1918,8 +1918,8 @@
 # `y`/`y_pos` are both `[site x visit x species]` -- the 3D-season pool
 # generalizes to carry both response arrays, not just one.
 #
-# v1 scope: non-spatial `laplace`, `positive = "lognormal"` only (matches
-# `occu_cover`/`cover`'s own v1 scope -- beta's mu/phi reparameterization is a
+# Scope: non-spatial `laplace`, `positive = "lognormal"` only (matches
+# `occu_cover`/`cover`'s own scope -- beta's mu/phi reparameterization is a
 # separate correctness question, not attempted here).
 # ---------------------------------------------------------------------------
 
@@ -1995,12 +1995,12 @@
 # added (small, independently useful, kept regardless of SBC):
 # `encoding$data`/`encoding$y` (the raw fitting inputs, needed to rebuild a
 # refit call -- occu_categorical needed the identical addition) and
-# `V_occ`/`V_pos` (the full per-arm coefficient covariance, previously only
-# the diagonal `se_occ`/`se_pos` was stored -- needed to draw a JOINT sample
+# `V_occ`/`V_pos` (the full per-arm coefficient covariance beside the diagonal
+# `se_occ`/`se_pos` -- needed to draw a JOINT sample
 # of an arm's coefficients rather than assume independence across them, which
 # the ms_occu near-miss (#226) is a direct warning against).
 #
-# v1 scope: non-spatial `laplace`, `positive = "lognormal"` only
+# Scope: non-spatial `laplace`, `positive = "lognormal"` only
 # (`simulate_cover()`'s own generator only covers lognormal/gaussian, and
 # lognormal's `log(y_pos) ~ N(eta_pos, sigma_pos)` is simpler to get right
 # than beta's mu/phi -> shape1/shape2 reparameterization). `sigma_pos` is
@@ -2024,7 +2024,7 @@
          "(got \"", fit$positive, "\"); the beta/beta_oi/lognormal_trunc/",
          "ordinal/gaussian arms are follow-ups.", call. = FALSE)
   }
-  # v1 scope really is the two-Laplace `.dispatch_cover()` routes (`laplace`
+  # The scope really is the two-Laplace `.dispatch_cover()` routes (`laplace`
   # and `laplace_sla`, both of which call `decode_cover_hurdle()` and so both
   # populate `fit$V_occ`/`V_pos`) -- nothing checked it: a nuts or
   # nested_laplace(_sla) fit fell through to `.tobs_sbc_draws_cover()`, which
@@ -2111,13 +2111,12 @@
 # n_species] arrays sharing the site axis (`.tobs_sbc_pool_named_3d` from
 # dyn_int_occu() reused unchanged), ranking the fixed species set's own
 # realized coefficients via the joint mu/b_s draw
-# `.tobs_sbc_community_b_draws` (#226 part 1). Originally found to share
-# ms_occu's exact failure mode (a direct probe at three seeds found
-# `sp3_p2_(Intercept)` stuck at p_unif ~0.0029-0.0030, reproducible not
-# noise) -- and, like ms_occu, the actual cause turned out to be species
-# count, not a bug: at S=14 (matching this family's own recovery-test
-# fixture) the plain Laplace-EM calibrates cleanly, no debiasing needed (see
-# the registry entry below for the numbers). `simulate()` injects
+# `.tobs_sbc_community_b_draws` (#226 part 1). Like ms_occu, a small fixture
+# fails on species count, not a bug (a three-seed probe at small S pins
+# `sp3_p2_(Intercept)` at p_unif ~0.0029-0.0030, reproducibly): at S=14
+# (matching this family's own recovery-test fixture) the plain Laplace-EM
+# calibrates cleanly, no debiasing needed (see the registry entry below for
+# the numbers). `simulate()` injects
 # `ms_community$coef_psi`/`coef_p<d>` directly rather than the `f$draws`
 # trick since `.tobs_simulate_ms_int_occu()` doesn't consult `object$draws`;
 # `loglik_many` sums each species' own exact two-state marginal via
@@ -2224,10 +2223,10 @@
 # hand-written three-level generator: z_c ~ Bernoulli(psi_c) per cell,
 # a_j | z_{cell(j)} ~ Bernoulli(theta_j) per plot, y_jv | a_j ~
 # Bernoulli(p_j) per visit, cover | y_jv=1 ~ Lognormal(eta_pos_j,
-# sigma_pos). `positive = "lognormal"` only, matching `cover()`'s v1 scope
+# sigma_pos). `positive = "lognormal"` only, matching `cover()`'s scope
 # and reasoning (no beta-arm generator to mirror, and dispersion carries a
 # real SE here so there is no dispersion-fixing complication to work
-# around). No visit-level covariates for v1 (`.tobs_sbc_reject_visit_design`
+# around). No visit-level covariates (`.tobs_sbc_reject_visit_design`
 # rejects them).
 # ---------------------------------------------------------------------------
 
@@ -2342,14 +2341,13 @@
 # mechanism cover()/ms_occu()/ms_int_occu() use for the identical reason).
 # `loglik_many` sums each species' own exact Poisson log-likelihood
 # (`.ms_count_ll_pois`, the same kernel the fitter optimizes) at that
-# species' theta slice. `response = "poisson"` only for v1
+# species' theta slice. `response = "poisson"` only
 # (negbin/gaussian/bernoulli/binomial carry an extra per-species dispersion
 # arm, a follow-up); `jsdm()` is `ms_count(response = "bernoulli")` under
 # the hood and is NOT covered by this registration -- a different response
-# family with its own calibration to check. Originally deferred on a small
-# fixture's failure (matching ms_occu/ms_int_occu); like both of those, the
-# cause was species count, not a bug, and the registry entry below uses a
-# fixture at S=20.
+# family with its own calibration to check. A small fixture fails on species
+# count, not a bug (as for ms_occu/ms_int_occu), so the registry entry below
+# uses a fixture at S=20.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_data_ms_count <- function(fit) {
@@ -2651,7 +2649,7 @@
 # faster engine entirely) does not expose Cinv/Bf at all, so
 # `.tobs_sbc_reject_ms_abun_scope()` requires it explicitly rather than
 # silently falling back to an independent (mu, b_s) draw (#226's exact bug).
-# Poisson only for v1 (negbin/zip/zinb add a further per-species RE arm
+# Poisson only (negbin/zip/zinb add a further per-species RE arm
 # `.tobs_simulate_ms_nmix()` handles but this registration's `theta` layout
 # does not yet carry).
 # ---------------------------------------------------------------------------
@@ -2967,14 +2965,13 @@
     simulate    = .tobs_sbc_sim_occu_mscale_cover,
     refit       = .tobs_sbc_refit_occu_mscale_cover,
     loglik_many = .tobs_sbc_loglik_many_simple),
-  # ms_count() (community group, section 6n): shared ms_occu's exact failure
-  # mode and, like ms_occu/ms_int_occu, the actual cause was species count,
-  # not a bug. Multi-seed (0, 1, 2) posterior SBC on a small fixture
-  # originally found `sp3_mu_(Intercept)` pinned at p_unif ~9.6e-7-9.9e-7
-  # every time (several other coefficients also suspiciously low, e.g.
+  # ms_count() (community group, section 6n): like ms_occu/ms_int_occu, a
+  # small fixture fails on species count, not a bug. Multi-seed (0, 1, 2)
+  # posterior SBC on a small fixture pins `sp3_mu_(Intercept)` at p_unif
+  # ~9.6e-7-9.9e-7 every time (several other coefficients also low, e.g.
   # `sp3_mu_x` ~5e-6) -- worse than ms_occu/ms_int_occu's own small-fixture
   # failures, plausibly because this family has no detection arm to dilute
-  # it. At S=20 (matching ms_occu's own resolved scale), the plain Laplace-EM
+  # it. At S=20 (matching ms_occu's own scale), the plain Laplace-EM
   # calibrates cleanly: 5 seeds, min p_unif range 0.0016-0.086, 0 quantities
   # below 1e-3 out of 41 possible across all 5 runs, no reproducible failing
   # coefficient. No explicit `pool` slot needed -- `y` is a plain 2D `[site x

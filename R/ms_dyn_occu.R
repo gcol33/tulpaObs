@@ -309,7 +309,7 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
     # community EM's own Newton solve, conditional on the converged
     # community mean) -- what a per-species-coefficient consumer (SBC's
     # "rank a fixed species set" design, a calibrated per-species CI) needs
-    # beyond the point BLUP; not previously exposed on the fit object. Bf =
+    # beyond the point BLUP. Bf =
     # the (mu,global)-b_s cross-Hessian block from the same Newton solve:
     # mu/global and b_s are NOT independent in the posterior, and Bf is
     # what lets a consumer draw them jointly instead -- see
@@ -383,7 +383,7 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
 
   # Per-species psi1 / p (community means) + per-site gamma / eps (above); the
   # season-1 state, transitions, and detections run in cpp_simulate_ms_dyn_occu
-  # from R's RNG stream in the former order (byte-identical).
+  # from R's RNG stream in a fixed order (seed-reproducible).
   psi1 <- vapply(seq_len(n_species),
                  function(s) as.numeric(stats::plogis(model$X_psi1 %*% cm$coef_psi1[s, ])),
                  numeric(n_sites))

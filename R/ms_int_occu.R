@@ -190,7 +190,7 @@
   # Resolve each source's site coverage. `site_map` (a list of D integer vectors,
   # one global site index per source row) supports partial / overlapping coverage;
   # omitted, each source must span all n_sites in declaration order (full overlap,
-  # the historical default).
+  # the default).
   if (!is.null(site_map)) {
     if (!is.list(site_map) || length(site_map) != D) {
       stop(sprintf("site_map must be a list of %d integer vectors (one per source).",
@@ -452,7 +452,7 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   # community EM's own Newton solve, conditional on the converged community
   # mean) -- what a per-species-coefficient consumer (SBC's "rank a fixed
   # species set" design, a calibrated per-species CI) needs beyond the point
-  # BLUP; not previously exposed on the fit object. Covers the FULL b_s
+  # BLUP. Covers the FULL b_s
   # vector across every arm (psi + all D detection sources), matching `B <-
   # do.call(rbind, fit$b_list)` above. Bf = the mu-b_s cross-Hessian block
   # from the same Newton solve: mu and b_s are NOT independent in the
@@ -535,7 +535,7 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
 
   # Per-species psi + per-source detection (community means, deterministic); the
   # z + per-source detections run in cpp_simulate_ms_int_occu from R's RNG stream
-  # in the former order (byte-identical).
+  # in a fixed order (seed-reproducible).
   psi <- vapply(seq_len(n_species),
                 function(s) stats::plogis(as.numeric(model$X_psi %*% cm$coef_psi[s, ])),
                 numeric(n_sites))

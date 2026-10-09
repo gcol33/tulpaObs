@@ -103,7 +103,6 @@ test_that("each family exposes the names its own logpost reads", {
   expect_identical(la0$q_logr, 0L)
 
   lg <- .tobs_ms_count_nuts_layout(2L, S, "gaussian")
-  expect_identical(lg$chol, lg$chol_beta)   # the Poisson cross-check reads this
   expect_length(lg$logphi, S)
   expect_identical(lg$total, max(lg$logphi))
   expect_identical(.tobs_ms_count_nuts_layout(2L, S, "poisson")$logphi, integer(0))

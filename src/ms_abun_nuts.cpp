@@ -169,7 +169,7 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
                 d.field_map[i] = u;
             }
             // Accept a general n_field_units x n_raw loading (field_load, #113);
-            // the legacy square inverse Cholesky (field_Linv) is n_raw == NF.
+            // a square inverse Cholesky (field_Linv) is the n_raw == NF case.
             NumericMatrix Li = spec.containsElementNamed("field_load")
                 ? Rcpp::as<NumericMatrix>(spec["field_load"])
                 : Rcpp::as<NumericMatrix>(spec["field_Linv"]);

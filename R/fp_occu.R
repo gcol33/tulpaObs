@@ -582,7 +582,7 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   model <- object$model; draws <- object$draws; n_draws <- nrow(draws)
   n_sites <- model$n_sites; J <- model$max_visits
   # Draw selection + z + per-site multistate detection replicate run in
-  # cpp_simulate_fp_occu from R's RNG stream in the former order (byte-identical).
+  # cpp_simulate_fp_occu from R's RNG stream in a fixed order (seed-reproducible).
   ab <- .tobs_sim_arm_block(model, draws, 4L)
   p <- ab$p
   res <- cpp_simulate_fp_occu(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],

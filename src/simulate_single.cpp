@@ -3,8 +3,8 @@
 // draw is selected with R_unif_index (the exact primitive sample.int(n, 1) uses,
 // exposed by <R_ext/Random.h>), and the latent state z ~ Bernoulli(psi) and
 // detection replicate y ~ Bernoulli(z p) draw from R's RNG stream via R::rbinom,
-// in the SAME order as the former R loop, so under a fixed seed the result is
-// byte-identical. Returns a list of nsim [n_sites x max_visits] integer matrices
+// in a fixed order, so under a fixed seed the result is reproducible. Returns a
+// list of nsim [n_sites x max_visits] integer matrices
 // (< 0 marks the missing visits carried from the observed design).
 
 #include <Rcpp.h>

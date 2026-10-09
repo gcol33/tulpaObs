@@ -299,7 +299,7 @@
       # occupancy field posterior is well-behaved, so the diagnostic is an opt-in,
       # not a default cost. Set control$diagnose.k = TRUE to compute it.
       diagnose_k = dots[["diagnose.k"]] %||% FALSE,
-      # diagnose.draws is the precision knob (k.samples is the legacy alias); the
+      # diagnose.draws is the precision knob (k.samples is an accepted alias); the
       # outer Pareto-k is scored ONCE over this many importance draws.
       k_samples = as.integer(dots[["diagnose.draws"]] %||% dots[["k.samples"]] %||% 500L),
       # Bootstrap outer Pareto-k uncertainty: SE / 95% CI / band_confident from

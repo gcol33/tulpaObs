@@ -571,8 +571,7 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   # stats::integrate path, so the simulator draws from exactly the pi the model
   # was fit against (one source of truth). That rule is
   # (cutpoints, transect, quad_order), so the fit's own `quad_order` is passed
-  # rather than a constant. The former .distance_pi (integrate) path is no
-  # longer used here.
+  # rather than a constant.
   is_nb <- !is.null(r_size) && is.finite(r_size)
   transect_code <- if (identical(model$transect, "point")) 1L else 0L
   ab <- .tobs_sim_arm_block(model, draws, 2L)
