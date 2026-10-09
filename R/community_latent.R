@@ -656,13 +656,13 @@
   gv   <- fields[[1L]]$group_var
   if (!is.null(gv)) {
     if (is.null(model$data) || !gv %in% names(model$data)) {
-      stop(sprintf("spatial group_var '%s' is not a column of the data.", gv),
+      stop(sprintf("spatial group.var '%s' is not a column of the data.", gv),
            call. = FALSE)
     }
     node_of_site <- as.integer(model$data[[gv]])
     if (length(node_of_site) != Ns || anyNA(node_of_site) ||
         min(node_of_site) < 1L || max(node_of_site) > n_nodes) {
-      stop(sprintf(paste0("spatial group_var '%s' must be an integer cell index in ",
+      stop(sprintf(paste0("spatial group.var '%s' must be an integer cell index in ",
                           "1..%d, one per site (%d sites)."), gv, n_nodes, Ns),
            call. = FALSE)
     }
@@ -672,14 +672,14 @@
     }
   } else if (n_nodes != Ns) {
     stop(sprintf(paste0("icar graph has %d nodes but the model has %d sites; add ",
-                        "group_var = \"<cell>\" to map sites to cells, or use one ",
+                        "group.var = \"<cell>\" to map sites to cells, or use one ",
                         "node per site."), n_nodes, Ns), call. = FALSE)
   }
 
   if (identical(ptype, "bym2") &&
       (length(fields) > 1L || !is.null(fields[[1L]]$weight) || !is.null(Mmap))) {
     stop(what, " bym2() field is the single shared intercept field only (no ",
-         "varying-coefficient bar / group_var); use icar()/car_proper() for ",
+         "varying-coefficient bar / group.var); use icar()/car_proper() for ",
          "those.", call. = FALSE)
   }
 
@@ -1001,9 +1001,9 @@
 # loadings at a small constant, which the first Newton pass spreads.
 .tobs_latent_factor_init <- function(latent, Ns, S) {
   Qk <- as.integer(latent$n_factors %||% 1L)
-  if (Qk < 1L) stop("latent(): n_factors must be >= 1.", call. = FALSE)
+  if (Qk < 1L) stop("latent(): n.factors must be >= 1.", call. = FALSE)
   if (Qk > S - 1L) {
-    stop(sprintf("latent(): n_factors (%d) must be < n_species (%d).", Qk, S),
+    stop(sprintf("latent(): n.factors (%d) must be < n_species (%d).", Qk, S),
          call. = FALSE)
   }
   zeta <- matrix(0, Ns, Qk)

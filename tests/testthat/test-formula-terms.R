@@ -36,7 +36,7 @@ test_that("icar() is stripped from fixed effects and yields a spatial spec", {
 test_that("gp() resolves bare coordinate columns from data", {
   dat <- make_dat()
   p <- tulpaObs:::.tobs_parse_formula(
-    ~ gp(lon, lat, prior_range = c(0.1, 0.05)), data = dat)
+    ~ gp(lon, lat, prior.range = c(0.1, 0.05)), data = dat)
   expect_length(p$terms, 1L)
   expect_s3_class(p$terms[[1]], "tobs_spatial")
   expect_identical(p$terms[[1]]$type, "gp")
@@ -69,9 +69,9 @@ test_that("spatial(model = 'bym2') is identical to bym2() (areal)", {
 test_that("spatial(lon, lat, model = 'gp') is identical to gp() (continuous)", {
   dat <- make_dat()
   u <- tulpaObs:::.tobs_parse_formula(
-    ~ spatial(lon, lat, model = "gp", prior_range = c(0.1, 0.05)), data = dat)
+    ~ spatial(lon, lat, model = "gp", prior.range = c(0.1, 0.05)), data = dat)
   r <- tulpaObs:::.tobs_parse_formula(
-    ~ gp(lon, lat, prior_range = c(0.1, 0.05)), data = dat)
+    ~ gp(lon, lat, prior.range = c(0.1, 0.05)), data = dat)
   expect_identical(u$terms[[1]]$type, "gp")
   expect_identical(spec_fields(u$terms[[1]]), spec_fields(r$terms[[1]]))
 })
@@ -80,9 +80,9 @@ test_that("spatial() forwards per-model arguments and id", {
   dat <- make_dat()
   u <- tulpaObs:::.tobs_parse_formula(
     ~ spatial(lon, lat, model = "gp", nn = 5, id = "f",
-              prior_range = c(0.1, 0.05)), data = dat)
+              prior.range = c(0.1, 0.05)), data = dat)
   r <- tulpaObs:::.tobs_parse_formula(
-    ~ gp(lon, lat, nn = 5, id = "f", prior_range = c(0.1, 0.05)), data = dat)
+    ~ gp(lon, lat, nn = 5, id = "f", prior.range = c(0.1, 0.05)), data = dat)
   expect_equal(u$terms[[1]]$nn, 5)
   expect_identical(u$terms[[1]]$id, "f")
   expect_identical(spec_fields(u$terms[[1]]), spec_fields(r$terms[[1]]))
@@ -177,7 +177,7 @@ test_that("term in one process is tagged to that process only", {
 test_that("share() shares one realization across processes", {
   dat <- make_dat()
   parsed <- tulpaObs:::.tobs_parse_processes(
-    list(psi = ~ gp(lon, lat, id = "u", prior_range = c(0.1, 0.05)),
+    list(psi = ~ gp(lon, lat, id = "u", prior.range = c(0.1, 0.05)),
          p = ~ forest + share("u")),
     data = dat, env = environment()
   )

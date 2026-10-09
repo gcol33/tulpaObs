@@ -83,7 +83,7 @@ test_that("abun() spatial gates interpolate the term they rejected", {
 
   a$data$lon <- runif(nrow(a$data)); a$data$lat <- runif(nrow(a$data))
   expect_error(
-    tobs(~ abund_cov1 + gp(lon, lat, prior_range = c(0.3, 0.5)),
+    tobs(~ abund_cov1 + gp(lon, lat, prior.range = c(0.3, 0.5)),
          detection = ~ 1, data = a$data, family = abun(), y = a$y,
          method = "nested_laplace", verbose = FALSE),
     "the dense GP term 'gp' is not wired")

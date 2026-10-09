@@ -42,7 +42,7 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
       seed     = 7000L + r
     )
     fit <- tobs(
-      formula = ~ x + bym2(graph = adj, group_var = "region") +
+      formula = ~ x + bym2(graph = adj, group.var = "region") +
                 share(spatial(), alpha = grid(c(0.25, 0.75, 1.5, 2.5))),
       data    = sim$data,
       family  = cover("beta"),

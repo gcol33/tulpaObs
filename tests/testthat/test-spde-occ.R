@@ -69,9 +69,9 @@ test_that("tobs() + spde() Laplace recovers beta and the field shape", {
   dat <- data.frame(occ_cov = x_cov, det_cov = det_cov,
                     lon = coords[, 1], lat = coords[, 2])
 
-  fit <- tobs(formula = ~ occ_cov + spde(lon, lat, max_edge = c(0.3, 0.6),
-                                         nu = 1, prior_range = c(0.3, 0.5),
-                                         prior_sigma = c(0.7, 0.5)),
+  fit <- tobs(formula = ~ occ_cov + spde(lon, lat, max.edge = c(0.3, 0.6),
+                                         nu = 1, prior.range = c(0.3, 0.5),
+                                         prior.sigma = c(0.7, 0.5)),
               data = dat, family = occu(),
               detection = ~ det_cov, y = y,
               method = "laplace", control = list(verbose = FALSE))
@@ -128,9 +128,9 @@ test_that("tobs() + spde() Laplace recovery tightens at N = 1500", {
     }
     dat <- data.frame(occ_cov = x_cov, det_cov = det_cov,
                       lon = coords[, 1], lat = coords[, 2])
-    fit <- tobs(formula = ~ occ_cov + spde(lon, lat, max_edge = c(0.18, 0.45),
-                                           nu = 1, prior_range = c(0.3, 0.5),
-                                           prior_sigma = c(0.7, 0.5)),
+    fit <- tobs(formula = ~ occ_cov + spde(lon, lat, max.edge = c(0.18, 0.45),
+                                           nu = 1, prior.range = c(0.3, 0.5),
+                                           prior.sigma = c(0.7, 0.5)),
                 data = dat, family = occu(),
                 detection = ~ det_cov, y = y,
                 method = "laplace", control = list(verbose = FALSE))

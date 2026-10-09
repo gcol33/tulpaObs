@@ -82,7 +82,7 @@ test_that("joint SLA path no longer falls back via message", {
     msgs <- character(0)
     fit <- withCallingHandlers(
         tobs(
-            formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
+            formula = ~ x + bym2(graph = sim$adj, group.var = "region"),
             data    = sim$data,
             family  = cover("beta"),
             y       = sim$y,
@@ -117,7 +117,7 @@ test_that("SLA joint fit exposes skew + draws fields", {
     sim <- .make_cover_data(seed = 102, N = 200, n_s = 25)
 
     fit <- suppressMessages(tobs(
-        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
+        formula = ~ x + bym2(graph = sim$adj, group.var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
@@ -171,7 +171,7 @@ test_that("approx='gaussian_laplace' leaves SLA fields off", {
     sim <- .make_cover_data(seed = 103, N = 200, n_s = 25)
 
     fit <- suppressMessages(tobs(
-        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
+        formula = ~ x + bym2(graph = sim$adj, group.var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,
@@ -206,7 +206,7 @@ test_that("SLA gamma near zero at large N", {
                             alpha_true = 1.0)
 
     fit <- suppressMessages(tobs(
-        formula = ~ x + bym2(graph = sim$adj, group_var = "region") +
+        formula = ~ x + bym2(graph = sim$adj, group.var = "region") +
                   share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data    = sim$data,
         family  = cover("beta"),
@@ -261,7 +261,7 @@ test_that("joint SLA matches separate SLA at vanishing sigma", {
                             alpha_true = 0.01, sigma = 0.05)
 
     fit_joint <- suppressMessages(tobs(
-        formula = ~ x + bym2(graph = sim$adj, group_var = "region"),
+        formula = ~ x + bym2(graph = sim$adj, group.var = "region"),
         data    = sim$data,
         family  = cover("beta"),
         y       = sim$y,

@@ -99,7 +99,7 @@ test_that("joint nested_laplace recovers sigma_pos (lognormal) across 10 seeds",
       N = 400, n_s = n_s, sigma_pos_true = truth_sigma, seed = 1000L + r
     )
     fit <- tobs(
-      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+      formula  = ~ x + bym2(graph = adj, group.var = "region") +
         share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
       data     = sim$data,
       family   = cover("lognormal"),
@@ -147,7 +147,7 @@ test_that("joint areal cover hurdle recovers the betas + slope CIs, calibrated (
   for (r in seq_len(n_seeds)) {
     sim <- simulate_joint_lognormal_for_recovery(N = 400, n_s = n_s, seed = 4000L + r)
     fit <- tobs(
-      formula = ~ x + bym2(graph = adj, group_var = "region") +
+      formula = ~ x + bym2(graph = adj, group.var = "region") +
         share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
       data = sim$data, family = cover("lognormal"), y = sim$y,
       method = "nested_laplace",
@@ -253,7 +253,7 @@ test_that("joint nested_laplace recovers beta phi_pos across 10 seeds (#5)", {
       N = 600, n_s = n_s, phi = truth_phi, seed = 2000L + r
     )
     fit <- tobs(
-      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+      formula  = ~ x + bym2(graph = adj, group.var = "region") +
         share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
       data     = sim$data,
       family   = cover("beta"),
@@ -295,7 +295,7 @@ test_that("joint nested_laplace exposes phi_pos_sd on cover(beta) fit", {
     N = 600, n_s = n_s, phi = truth_phi, seed = 3001L
   )
   fit <- tobs(
-    formula  = ~ x + bym2(graph = adj, group_var = "region") +
+    formula  = ~ x + bym2(graph = adj, group.var = "region") +
       share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
     data     = sim$data,
     family   = cover("beta"),

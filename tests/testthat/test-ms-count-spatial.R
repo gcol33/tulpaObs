@@ -137,14 +137,14 @@ test_that("community field recovers under bym2 (scaled structured + iid)", {
   expect_lt(abs(cf_dev[2L]), 0.06)
   # bym2 is the single shared intercept field only: an SVC bar errors
   expect_error(
-    tobs(~ x + bym2(graph = d$graph, weight = x, group_var = "cell"),
+    tobs(~ x + bym2(graph = d$graph, weight = x, group.var = "cell"),
          data = cbind(d$data, cell = seq_len(d$Ns)), family = ms_count(),
          y = d$y, species = colnames(d$y), method = "nested_laplace",
          control = list(progress = FALSE)),
     "single shared intercept|bym2")
 })
 
-test_that("community field recovers under group_var (sites > cells)", {
+test_that("community field recovers under group.var (sites > cells)", {
   skip_on_cran()
   set.seed(8)
   side <- 8L; Acell <- rook_adj(side); Ncell <- nrow(Acell)
@@ -158,7 +158,7 @@ test_that("community field recovers under group_var (sites > cells)", {
   y <- matrix(NA_real_, Ns, S, dimnames = list(NULL, paste0("sp", seq_len(S))))
   for (s in seq_len(S))
     y[, s] <- stats::rpois(Ns, exp(as.numeric(X %*% bs[s, ]) + fcell[cell_of_site]))
-  fit <- tobs(~ x + icar(graph = Acell, group_var = "cell"), data = d,
+  fit <- tobs(~ x + icar(graph = Acell, group.var = "cell"), data = d,
               family = ms_count(), y = y, species = colnames(y),
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))

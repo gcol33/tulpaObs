@@ -134,7 +134,7 @@ test_that("dyn_occu() + a plain areal field still fits (no SVC regression)", {
 
   s <- .svct_simulate(seed = 2L)
   fit <- tobs(
-    ~ x + icar(graph = s$adj, group_var = "cell"),
+    ~ x + icar(graph = s$adj, group.var = "cell"),
     detection = ~ 1, colonization = ~ 1, extinction = ~ 1,
     data = s$data, family = dyn_occu(), y = s$y,
     method = "nested_laplace",

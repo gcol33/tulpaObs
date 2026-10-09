@@ -39,8 +39,8 @@ test_that("ms_occu + spde() recovers community means + a continuous field", {
   }
   species <- paste0("sp", seq_len(n_species))
 
-  fit <- tobs(~ x + spde(lon, lat, max_edge = c(0.3, 0.6), nu = 1,
-                         prior_range = c(0.3, 0.5), prior_sigma = c(0.9, 0.5)),
+  fit <- tobs(~ x + spde(lon, lat, max.edge = c(0.3, 0.6), nu = 1,
+                         prior.range = c(0.3, 0.5), prior.sigma = c(0.9, 0.5)),
               data = dat, family = ms_occu(), detection = ~ 1,
               y = y, species = species, method = "nested_laplace",
               control = list(verbose = FALSE))
@@ -84,8 +84,8 @@ test_that("ms_occu spde() field composes with build_ms_occu_fit S3", {
   }
   species <- paste0("sp", seq_len(n_species))
 
-  fit <- tobs(~ spde(lon, lat, max_edge = c(0.3, 0.6), nu = 1,
-                     prior_range = c(0.3, 0.5), prior_sigma = c(0.7, 0.5)),
+  fit <- tobs(~ spde(lon, lat, max.edge = c(0.3, 0.6), nu = 1,
+                     prior.range = c(0.3, 0.5), prior.sigma = c(0.7, 0.5)),
               data = dat, family = ms_occu(), detection = ~ 1,
               y = y, species = species, method = "nested_laplace",
               control = list(verbose = FALSE))

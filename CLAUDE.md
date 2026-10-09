@@ -776,7 +776,7 @@ column), `fit$trend_field_draws`, per-block suffixed hypers (`sigma_trend`,
 Loading algebra, per-kind bases, validation protocol + grid thinning:
 `NOTES_families.md`. `test-occu-cover-nuts-ic.R` + `test-occu-cover-nuts-svc.R`.
 Correlated `|` (one free-Sigma MCAR block), temporal + RE still gated -> n-L.
-group_var maps sites>cells; predict() needs the joint object (non-spatial laplace AND
+group.var maps sites>cells; predict() needs the joint object (non-spatial laplace AND
 nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `ms_occu_cover()` factor (tulpa#67).
 **Spatial default** (`nested_laplace`,
@@ -861,7 +861,7 @@ the dense grid instead is what made `cpo()`/`ppc()` error on every compact fit w
 missing-at-random); the PPC used to score that NA and returned `fit.y = NA` for every
 draw. Kernel/consumer detail: `NOTES_families.md`.
 
-**`group_var` (sites > cells)**: `group_var="<col>"` on icar/bym2 maps each site ->
+**`group.var` (sites > cells)**: `group.var="<col>"` on icar/bym2 maps each site ->
 field node, so `n_sites` > `n_cells`. Field length `n_cells` while psi/p/cover run over
 `n_sites`; per-arm `spatial_idx` (field node) + `cell_obs_map` (occupancy unit)
 decouple. Layout: site = cell x time-period. R-side only (`.dispatch_occu_cover`,
@@ -943,7 +943,7 @@ Both z (cells) + a (plots) marginalize closed-form (two states each) -> exact jo
 marginal LL, reuses occu_cover nested-Laplace cell-coupling machinery.
 
 **Inputs**: `y`/`y.pos` = `[n_plots x max_visits]`. State `formula` = cell-level psi,
-MUST carry areal field naming per-plot cell col: `icar(graph=adj, group_var="cell")`.
+MUST carry areal field naming per-plot cell col: `icar(graph=adj, group.var="cell")`.
 `availability=~...` = plot-level theta (default `~1`); `detection` = per-visit p;
 `positive=~...` = cover. **Engine** (`nested_laplace` = SPATIAL engine; `laplace` +
 `nuts` also fit, both non-spatial -- see Scope): 4-arm generalization of occu_cover
@@ -1018,7 +1018,7 @@ when the chains are too short for the estimator, never the old Rhat < 1.1 rule.
 **Every `tobs()` fit passes one tail** (`R/tobs.R`, after dispatch):
 `.tobs_default_field_eta_offset()` derives the state-arm field offset from the
 field a fit REPORTS when its fitter recorded none (declines on any existing
-offset slot, no field, or a map it cannot line up, e.g. `group_var`), then
+offset slot, no field, or a map it cannot line up, e.g. `group.var`), then
 `.tobs_attach_sampled_loglik()` fills `log_lik` ONLY where `logLik()` has no
 finite value (gate = `logLik()`, NOT the slot: NUTS reports `mean(log_prob)`
 with `log_lik` NA). `.tobs_eta_draws()` adds the offset itself, so every
@@ -1069,7 +1069,7 @@ different coverage -- do not conflate what they fit, only how they are spelled:
   `fit$svc_field` (n_obs vector / n_obs x n_svc matrix of posterior means, per-draw
   on `attr(., "draws")`), sliced by position from `fit$svc_layout`; block named
   (`svc_w[i,j]`, `log_sigma2_svc[j]`, `log_phi_svc[j]`). NEEDS
-  `prior_range = c(r0, alpha)` (PC prior, `P(range < r0) = alpha`) -- tulpa ships the
+  `prior.range = c(r0, alpha)` (PC prior, `P(range < r0) = alpha`) -- tulpa ships the
   anchors unset and refuses without them; neither package defaults them.
   **RECOVERY-VALIDATED** (#119, tulpa 0.0.82, `test-occu-svc-nngp-recovery.R`):
   divergences fell to 0 every seed and phi recovered onto truth, after two upstream
@@ -1180,7 +1180,7 @@ R/
   ms_count.R                — community count / relative-abundance GLMM (msAbund, #117); .tobs_fit_ms_count over shared community_em.R
   ms_count_nuts.R / src/ms_count_nuts.cpp — community count NUTS (msAbund NUTS, #117); in-tree C++ FullGradFn (reduced ms_abun_nuts: no detection/latent-N), R oracle .tobs_ms_count_nuts_logpost, warm-start from Laplace-EM
   ms_count_spatial.R        — community count + shared areal field (sfMsAbund) + SVC bar (svcMsAbund, #117/#118); block coordinate ascent (community EM offset <-> multi-field Poisson-ICAR), pure R
-  community_latent.R        — SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group_var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter. **The measured evidence behind every number below -- fixtures, seeds, wall times, per-family screens -- is in `NOTES_measurements.md`; the rules here are what it concluded.**
+  community_latent.R        — SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group.var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter. **The measured evidence behind every number below -- fixtures, seeds, wall times, per-family screens -- is in `NOTES_measurements.md`; the rules here are what it concluded.**
 
 **Backtracking + guards.** Factor Newton (`.tobs_latent_factor_update`) backtracks and ridge-bumps singular curvature; non-finite guards are inline, not a named helper, and a non-finite `working()` score/curv `break`s the pass. `.tobs_latent_field_solve` has its OWN local `safe_solve()` (ridge retry for a singular Hessian only, Newton update unconditional) -- do not confuse the two, and there is no `safe_step()` anywhere in the repo. Mechanics: `NOTES_families.md`.
 

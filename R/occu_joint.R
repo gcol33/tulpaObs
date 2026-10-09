@@ -155,14 +155,14 @@
   gv <- fields[[1L]]$group_var
   if (!is.null(gv)) {
     if (is.null(model$data) || !gv %in% names(model$data)) {
-      stop(sprintf(paste0("occu joint: group_var '%s' is not a column of the ",
+      stop(sprintf(paste0("occu joint: group.var '%s' is not a column of the ",
                           "model data."), gv), call. = FALSE)
     }
     site_cell <- as.integer(model$data[[gv]])
     if (length(site_cell) != n_sites || anyNA(site_cell) ||
         min(site_cell) < 1L || max(site_cell) > n_cells) {
       stop(sprintf(paste0(
-        "occu joint: group_var '%s' must be an integer cell index in ",
+        "occu joint: group.var '%s' must be an integer cell index in ",
         "1..%d, one per site (%d sites)."), gv, n_cells, n_sites),
         call. = FALSE)
     }
@@ -170,7 +170,7 @@
     if (n_cells != n_sites) {
       stop(sprintf(paste0(
         "occu joint: the areal field has %d nodes but the model has %d ",
-        "sites; map sites to cells with group_var on the spatial term, or pass ",
+        "sites; map sites to cells with group.var on the spatial term, or pass ",
         "one node per site."), n_cells, n_sites), call. = FALSE)
     }
     site_cell <- seq_len(n_sites)

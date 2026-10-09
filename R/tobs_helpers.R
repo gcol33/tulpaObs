@@ -383,7 +383,7 @@
   # spec); "laplace" / "nuts" are the non-spatial path (iid cells, no field) --
   # the exact three-level marginal optimised directly (Laplace) or sampled
   # (NUTS, the exact coefficient posterior + calibrated WAIC / LOO). Cells are
-  # declared the same way on every path, via icar(group_var = "<cell>") (the
+  # declared the same way on every path, via icar(group.var = "<cell>") (the
   # graph is ignored under "laplace" / "nuts"). Both marginalize z (cells) and
   # a (plots) in closed form.
   occu_multiscale_cover = c("laplace", "nested_laplace", "nuts"),

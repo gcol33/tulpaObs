@@ -111,7 +111,7 @@ simulate_cover_multi_block <- function(N = 400, n_s = 16L, n_years = 6L,
 
 .mb_fit <- function(sim) {
   suppressWarnings(tobs(
-    formula  = ~ x + bym2(graph = sim$adj, group_var = "region") +
+    formula  = ~ x + bym2(graph = sim$adj, group.var = "region") +
                  temporal(year, type = "ar1") + re(obs, type = "iid") +
                  share(spatial(), alpha = grid(.mb_alpha)),
     data     = sim$data,
@@ -224,7 +224,7 @@ test_that("cover(): share(alpha = grid()) places the multi-block copy axis", {
   fit_at <- function(alpha_grid) {
     suppressWarnings(tobs(
       formula  = eval(bquote(
-        ~ x + bym2(graph = adj, group_var = "region") +
+        ~ x + bym2(graph = adj, group.var = "region") +
           temporal(year, type = "ar1") +
           share(spatial(), alpha = grid(.(alpha_grid))))),
       data     = sim$data,
@@ -264,7 +264,7 @@ test_that("cover(): the retired sigma.pos.grid knob is refused, not ignored", {
   sim <- simulate_cover_multi_block(N = 120, seed = 7006)
   expect_error(
     tobs(
-      formula  = ~ x + bym2(graph = sim$adj, group_var = "region") +
+      formula  = ~ x + bym2(graph = sim$adj, group.var = "region") +
                    temporal(year, type = "ar1"),
       data     = sim$data,
       family   = cover("beta"),
@@ -282,7 +282,7 @@ test_that("cover(): multi-block rejects method = 'laplace'", {
   adj <- sim$adj
   expect_error(
     tobs(
-      formula  = ~ x + bym2(graph = adj, group_var = "region") +
+      formula  = ~ x + bym2(graph = adj, group.var = "region") +
                    temporal(year, type = "ar1"),
       data     = sim$data,
       family   = cover("beta"),
@@ -309,7 +309,7 @@ test_that("cover(): multi-block resolves character group / time columns", {
   # cells); grid size is irrelevant to this column-resolution smoke test, so
   # suppress it, as the recovery test above does for the same reason.
   fit <- suppressWarnings(tobs(
-    formula  = ~ x + bym2(graph = adj, group_var = "region") +
+    formula  = ~ x + bym2(graph = adj, group.var = "region") +
                  temporal(year, type = "iid") + re(obs, type = "iid"),
     data     = sim$data,
     family   = cover("beta"),

@@ -178,7 +178,7 @@
 # expand to (`cell`; `g`, `g:h`). A bar's RHS may name several factors (crossed /
 # nested), so each is returned separately. Used by the cover()/occu_cover() guard
 # to flag a bar grouping factor that collides with an areal term's graph-node
-# `group_var`.
+# `group.var`.
 .tobs_collect_bar_groups <- function(formula) {
   out <- character(0)
   walk <- function(e) {
@@ -203,7 +203,7 @@
 # engine's inline-MCAR bar idiom (`tulpa::spatial(graph, ~ 1 + x | cell)`) may
 # carry the `| cell` spelling into a cover formula, where it is legitimately parsed
 # as a random effect, not a spatial field. RE bars are supported and must not be
-# rejected; but when a bar's grouping factor is ALSO the graph-node `group_var` of
+# rejected; but when a bar's grouping factor is ALSO the graph-node `group.var` of
 # an areal term in the same formula (the strong-signal confusion case), emit an
 # informative message() that the bar is being fitted as an IID random effect,
 # pointing to the spatial() bar / two-term form for a spatial field. Suppressible
@@ -228,10 +228,10 @@
     message(sprintf(paste0(
       "cover()/occu_cover(): the bar `| %s` is being fitted as an IID random ",
       "effect, not a spatial field, even though `%s` is also the graph-node ",
-      "group_var of an areal term. For a spatial field on `%s`, use ",
+      "group.var of an areal term. For a spatial field on `%s`, use ",
       "spatial(~ ... || %s, graph = <adj>) or the two-term form ",
-      "%s(graph = <adj>, group_var = \"%s\") + %s(graph = <adj>, weight = ..., ",
-      "group_var = \"%s\"). Suppress with suppressMessages()."),
+      "%s(graph = <adj>, group.var = \"%s\") + %s(graph = <adj>, weight = ..., ",
+      "group.var = \"%s\"). Suppress with suppressMessages()."),
       g, g, g, g, field, g, field, g))
   }
   invisible()

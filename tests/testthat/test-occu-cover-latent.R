@@ -74,7 +74,7 @@
 
 .lat_fit <- function(sim, family, max.iter = 300L) {
   suppressWarnings(tobs(
-    formula = ~ xocc + icar(graph = sim$adj, group_var = "cell_idx"),
+    formula = ~ xocc + icar(graph = sim$adj, group.var = "cell_idx"),
     data = sim$site,
     family = occu_cover(family, cover.aggregate = "latent"),
     detection = ~ det_cov,
@@ -248,7 +248,7 @@ test_that("family carries the latent choice and dispatcher gates it", {
   sim2$vd <- data.frame(det_cov = sim$vd$det_cov,
                         pcov = stats::rnorm(nrow(sim$vd)))
   expect_error(
-    tobs(formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
+    tobs(formula = ~ icar(graph = sim$adj, group.var = "cell_idx"),
          data = sim$site,
          family = occu_cover("lognormal", cover.aggregate = "latent"),
          detection = ~ det_cov, positive = ~ pcov,

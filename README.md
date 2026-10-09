@@ -108,7 +108,7 @@ prior (`P(range < r0) = alpha`):
 
 ```r
 ~ elevation + spatial(lon, lat, model = "svc",
-                      coefficients = "elevation", prior_range = c(50, 0.05))
+                      coefficients = "elevation", prior.range = c(50, 0.05))
 ```
 
 The continuous form fits on single-season `occu()` under `laplace` /
@@ -133,12 +133,12 @@ icar(graph = adj)                     # spatial(graph = adj)
 bym2(graph = adj)                     # spatial(graph = adj, model = "bym2")
 spde(lon, lat)                        # spatial(lon, lat, model = "spde")
 gp(lon, lat, cov = "matern",          # spatial(lon, lat, model = "gp", cov = "matern",
-   prior_range = c(0.1, 0.05))        #         prior_range = c(0.1, 0.05))
+   prior.range = c(0.1, 0.05))        #         prior.range = c(0.1, 0.05))
 ```
 
 Model-specific arguments are checked against the model named in `model =`, so an argument
 that model does not take is an error. `gp()` requires a PC prior on the range:
-`prior_range = c(r0, alpha)` encodes `P(range < r0) = alpha` in the units of the
+`prior.range = c(r0, alpha)` encodes `P(range < r0) = alpha` in the units of the
 coordinates.
 
 ## The latent state integrates out

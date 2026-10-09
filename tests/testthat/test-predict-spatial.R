@@ -354,7 +354,7 @@ test_that("a fit without a spatial component is refused", {
 }
 
 .tps_fit_icar <- function(s) {
-  tobs(~ x + icar(graph = s$adj, group_var = "cell"), detection = ~ 1,
+  tobs(~ x + icar(graph = s$adj, group.var = "cell"), detection = ~ 1,
        data = s$data, family = occu(), y = s$y, method = "nested_laplace",
        control = list(verbose = FALSE, progress = FALSE))
 }

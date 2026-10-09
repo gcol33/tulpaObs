@@ -67,7 +67,7 @@
 }
 
 .iar_fit <- function(s) {
-  tobs(~ x + icar(graph = s$adj, group_var = "cell"),
+  tobs(~ x + icar(graph = s$adj, group.var = "cell"),
        detection = ~ 1, data = s$data, family = int_occu(), y = s$y,
        method = "nested_laplace",
        control = list(verbose = FALSE, progress = FALSE))

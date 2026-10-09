@@ -60,8 +60,8 @@ test_that("cover() recovers a trend declared as a weighted areal formula term", 
   sim <- simulate_cover_trend(seed = 7)
 
   fit <- tobs(
-    formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
-                icar(graph = sim$adj, weight = time, group_var = "cell") +
+    formula = ~ time + icar(graph = sim$adj, group.var = "cell") +
+                icar(graph = sim$adj, weight = time, group.var = "cell") +
                 share(spatial(), alpha = grid(trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
@@ -89,17 +89,17 @@ test_that("spatial(model='icar', weight=) resolves identically to icar(weight=)"
   sim <- simulate_cover_trend(seed = 7)
 
   fit_bare <- tobs(
-    formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
-                icar(graph = sim$adj, weight = time, group_var = "cell") +
+    formula = ~ time + icar(graph = sim$adj, group.var = "cell") +
+                icar(graph = sim$adj, weight = time, group.var = "cell") +
                 share(spatial(), alpha = grid(trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
 
   fit_umb <- tobs(
     formula = ~ time +
-                spatial(graph = sim$adj, model = "icar", group_var = "cell") +
+                spatial(graph = sim$adj, model = "icar", group.var = "cell") +
                 spatial(graph = sim$adj, model = "icar", weight = time,
-                        group_var = "cell") +
+                        group.var = "cell") +
                 share(spatial(), alpha = grid(trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = trend_control)
@@ -119,7 +119,7 @@ test_that("control$trend errors with a migration pointer", {
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
 
   expect_error(
-    tobs(formula = ~ time + icar(graph = adj, group_var = "cell"),
+    tobs(formula = ~ time + icar(graph = adj, group.var = "cell"),
          data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace",
          control = list(trend = list(weight = "time"))),
@@ -135,7 +135,7 @@ test_that("a weighted areal term without an intercept field errors", {
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
 
   expect_error(
-    tobs(formula = ~ time + icar(graph = adj, weight = time, group_var = "cell"),
+    tobs(formula = ~ time + icar(graph = adj, weight = time, group.var = "cell"),
          data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "unweighted intercept field")
@@ -148,8 +148,8 @@ test_that("a weighted trend term requires method = 'nested_laplace'", {
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
 
   expect_error(
-    tobs(formula = ~ time + icar(graph = adj, group_var = "cell") +
-                     icar(graph = adj, weight = time, group_var = "cell"),
+    tobs(formula = ~ time + icar(graph = adj, group.var = "cell") +
+                     icar(graph = adj, weight = time, group.var = "cell"),
          data = df, family = cover(response = "lognormal"), y = y,
          method = "laplace", control = list(verbose = FALSE)),
     "requires method = 'nested_laplace'")
@@ -162,8 +162,8 @@ test_that("two unweighted areal terms error (one intercept field only)", {
   y   <- ifelse(rbinom(64L, 1, 0.5) == 1L, runif(64L, 0.01, 0.9), 0)
 
   expect_error(
-    tobs(formula = ~ time + icar(graph = adj, group_var = "cell") +
-                     bym2(graph = adj, group_var = "cell"),
+    tobs(formula = ~ time + icar(graph = adj, group.var = "cell") +
+                     bym2(graph = adj, group.var = "cell"),
          data = df, family = cover(response = "lognormal"), y = y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "exactly one unweighted intercept field")

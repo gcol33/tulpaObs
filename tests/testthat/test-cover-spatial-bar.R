@@ -79,8 +79,8 @@ test_that("the shared spatial() bar is byte-identical to the two-term form", {
   sim <- .bar_sim_cover_trend(seed = 7)
 
   fit_two <- tobs(
-    formula = ~ time + icar(graph = sim$adj, group_var = "cell") +
-                icar(graph = sim$adj, weight = time, group_var = "cell") +
+    formula = ~ time + icar(graph = sim$adj, group.var = "cell") +
+                icar(graph = sim$adj, weight = time, group.var = "cell") +
                 share(spatial(), alpha = grid(.bar_trend_alpha)),
     data = sim$data, family = cover(response = "lognormal"), y = sim$y,
     method = "nested_laplace", control = .bar_trend_control)
@@ -240,7 +240,7 @@ test_that("a correlated `|` bar cannot co-exist with another areal term", {
   expect_error(
     tobs(formula = ~ time +
                      spatial(~ 1 + time | cell, graph = d$adj) +
-                     icar(graph = d$adj, group_var = "cell"),
+                     icar(graph = d$adj, group.var = "cell"),
          data = d$df, family = cover(response = "lognormal"), y = d$y,
          method = "nested_laplace", control = list(verbose = FALSE)),
     "whole spatial structure|other areal terms")

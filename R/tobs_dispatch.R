@@ -554,7 +554,7 @@
     n_nodes <- vapply(sp_fields, function(f)
       if (is.null(f$graph)) NA_integer_ else nrow(f$graph), integer(1))
     if (any(!is.na(n_nodes) & n_nodes < nrow(data))) {
-      stop("count(): a spatial group_var mapping several sites to one field ",
+      stop("count(): a spatial group.var mapping several sites to one field ",
            "node (sites > cells) is not yet wired for the count family; one ",
            "field node per site is required.",
            call. = FALSE)

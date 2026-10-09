@@ -286,7 +286,7 @@ head(dat_beta, 8)
 ## Fitting the model
 
 The BYM2 plot-level field is written into the formula as a `bym2()` term. The
-graph is over plots, so the term carries `group_var = "plot_id"` to map each
+graph is over plots, so the term carries `group.var = "plot_id"` to map each
 visit row to its plot. The positive family is chosen by `cover("beta")` or
 `cover("lognormal")`, the cover values pass through `y`, and
 `method = "nested_laplace"` selects the joint shared-field engine. Everything
@@ -297,7 +297,7 @@ hyperparameter grid.
 ```{r fit-beta, message = FALSE, warning = FALSE}
 fit_beta <- tobs(
   formula   = ~ year_btw + year_wtn +
-               bym2(graph = sim_beta$adj, group_var = "plot_id"),
+               bym2(graph = sim_beta$adj, group.var = "plot_id"),
   data      = dat_beta,
   family    = cover("beta"),
   y         = sim_beta$y,
@@ -317,7 +317,7 @@ lognormal family fits the second panel:
 ```{r fit-lognormal, message = FALSE, warning = FALSE}
 fit_ln <- tobs(
   formula   = ~ year_btw + year_wtn +
-               bym2(graph = sim_ln$adj, group_var = "plot_id"),
+               bym2(graph = sim_ln$adj, group.var = "plot_id"),
   data      = dat_ln,
   family    = cover("lognormal"),
   y         = sim_ln$y,
@@ -354,7 +354,7 @@ moved:
 ```{r aggregate-equiv}
 fit_full <- tobs(
   formula = ~ year_btw + year_wtn +
-             bym2(graph = sim_beta$adj, group_var = "plot_id"),
+             bym2(graph = sim_beta$adj, group.var = "plot_id"),
   data    = dat_beta, family = cover("beta"), y = sim_beta$y,
   method  = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = FALSE)

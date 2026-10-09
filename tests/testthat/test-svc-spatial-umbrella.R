@@ -18,9 +18,9 @@ pr <- c(0.1, 0.05)
 
 test_that("spatial(model = \"svc\") builds the same term svc() does", {
   co <- cbind(stats::runif(20), stats::runif(20))
-  direct   <- .tobs_term_svc(coords = co, indices = 2L, nn = 5, prior_range = pr)
+  direct   <- .tobs_term_svc(coords = co, indices = 2L, nn = 5, prior.range = pr)
   umbrella <- .tobs_term_spatial(coords = co, model = "svc", indices = 2L,
-                                 nn = 5, prior_range = pr)
+                                 nn = 5, prior.range = pr)
   expect_s3_class(umbrella, "tobs_svc")
   # The umbrella stamps `field_name` (NULL here); everything else is identical.
   umbrella$field_name <- NULL
@@ -31,7 +31,7 @@ test_that("svc is offered by the spatial umbrella and dispatches by name", {
   expect_true("svc" %in% .tobs_spatial_models)
   co <- cbind(stats::runif(12), stats::runif(12))
   tm <- .tobs_term_spatial(coords = co, model = "svc",
-                           coefficients = "elev", prior_range = pr, nn = 4)
+                           coefficients = "elev", prior.range = pr, nn = 4)
   expect_identical(tm$coefficients, "elev")
   expect_identical(tm$n_svc, 1L)
 })
@@ -40,7 +40,7 @@ test_that("spatial(model = \"svc\") rejects an unknown argument", {
   co <- cbind(stats::runif(12), stats::runif(12))
   expect_error(
     .tobs_term_spatial(coords = co, model = "svc", coefficients = "elev",
-                       prior_range = pr, graph = diag(3)),
+                       prior.range = pr, graph = diag(3)),
     "unknown argument")
 })
 
@@ -56,23 +56,23 @@ test_that("a bar with model = \"svc\" points at the continuous form", {
 
 test_that("svc() requires exactly one coefficient selector", {
   co <- cbind(stats::runif(12), stats::runif(12))
-  expect_error(.tobs_term_svc(coords = co, prior_range = pr, nn = 4),
+  expect_error(.tobs_term_svc(coords = co, prior.range = pr, nn = 4),
                "coefficients")
-  expect_error(.tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  expect_error(.tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                               coefficients = "elev", indices = 2L),
                "not both")
 })
 
 test_that("svc() rejects a malformed or duplicated selector", {
   co <- cbind(stats::runif(12), stats::runif(12))
-  expect_error(.tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  expect_error(.tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                               coefficients = c("elev", "elev")),
                "duplicate")
-  expect_error(.tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  expect_error(.tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                               coefficients = 2), "names")
-  expect_error(.tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  expect_error(.tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                               indices = c(1L, 1L)), "duplicate")
-  expect_error(.tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  expect_error(.tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                               indices = 0L), "positive")
 })
 
@@ -80,9 +80,9 @@ test_that("names and positions resolve to the same design columns", {
   co <- cbind(stats::runif(10), stats::runif(10))
   X  <- matrix(0, 10, 3,
                dimnames = list(NULL, c("(Intercept)", "elev", "w")))
-  by_name <- .tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  by_name <- .tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                             coefficients = c("(Intercept)", "w"))
-  by_pos  <- .tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  by_pos  <- .tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                             indices = c(1L, 3L))
   expect_identical(.tobs_svc_columns(by_name, X, "occu"), c(1L, 3L))
   expect_identical(.tobs_svc_columns(by_pos, X, "occu"), c(1L, 3L))
@@ -91,7 +91,7 @@ test_that("names and positions resolve to the same design columns", {
 test_that("an unmatched coefficient name names the available columns", {
   co <- cbind(stats::runif(10), stats::runif(10))
   X  <- matrix(0, 10, 2, dimnames = list(NULL, c("(Intercept)", "elev")))
-  tm <- .tobs_term_svc(coords = co, prior_range = pr, nn = 4,
+  tm <- .tobs_term_svc(coords = co, prior.range = pr, nn = 4,
                        coefficients = "elevation")
   err <- expect_error(.tobs_svc_columns(tm, X, "occu"), "elevation")
   expect_match(conditionMessage(err), "elev")
@@ -101,7 +101,7 @@ test_that("an unmatched coefficient name names the available columns", {
 test_that("an out-of-range position still errors against the design width", {
   co <- cbind(stats::runif(10), stats::runif(10))
   X  <- matrix(0, 10, 2, dimnames = list(NULL, c("(Intercept)", "elev")))
-  tm <- .tobs_term_svc(coords = co, prior_range = pr, nn = 4, indices = 5L)
+  tm <- .tobs_term_svc(coords = co, prior.range = pr, nn = 4, indices = 5L)
   expect_error(.tobs_svc_columns(tm, X, "occu"), "out of range")
 })
 
@@ -121,7 +121,7 @@ test_that("a name-selected continuous SVC fits occu() and reports its column", {
   y   <- matrix(stats::rbinom(n * J, 1, 0.5) * z, n, J)
 
   fit <- tobs(~ w + spatial(lon, lat, model = "svc", coefficients = "w",
-                            nn = 8, prior_range = c(0.2, 0.05)),
+                            nn = 8, prior.range = c(0.2, 0.05)),
               data = df, family = occu(), detection = ~ 1, y = y,
               method = "laplace", verbose = FALSE)
 

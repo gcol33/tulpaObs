@@ -106,7 +106,7 @@ test_that("beta_oi carries through the spatial nested-Laplace path", {
   # cover arm's residual and reads back as over-dispersion: phi comes out near
   # 10 against a truth of 25, the same value a fit with no field at all gives.
   # Truth is one field at unit loading, so the alpha axis straddles 1.
-  fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region") +
+  fit <- tobs(formula = ~ x + bym2(graph = adj, group.var = "region") +
                 share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
               data = dat, family = cover("beta_oi"), y = y,
               method = "nested_laplace",

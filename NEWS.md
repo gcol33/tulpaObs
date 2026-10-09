@@ -37,6 +37,32 @@ the rest of `control`. The old spellings are gone, not aliased (#406).
   `beta_occ` -> `beta.occ`, `n_species` -> `n.species`, `sigma_logr` ->
   `sigma.logr`, `T_seasons` -> `T.seasons`, and so on). The elements of the
   returned list keep their names (`sim$y_pos`, `sim$truth$beta_occ`).
+* **`occu_cover()` scripts must change:** the areal terms take `group.var`
+  (was `group_var`): `icar(graph = adj, group_var = "cell")` is now
+  `icar(graph = adj, group.var = "cell")`. The same applies to `bym2()`,
+  `car()`, `car_proper()` and `spatial(model = ...)` on every family (#407).
+* The other formula-term arguments are dotted too (#407):
+  - `bym2()`: `scale_factor` -> `scale.factor`.
+  - `gp()`: `sigma2_prior_U`, `sigma2_prior_alpha`, `prior_range` ->
+    `sigma2.prior.U`, `sigma2.prior.alpha`, `prior.range`.
+  - `multiscale_gp()`: `nn_local`, `nn_regional` -> `nn.local`,
+    `nn.regional`; `range_local_lower`, `range_local_upper`,
+    `range_regional_lower`, `range_regional_upper` -> `range.local.lower`,
+    `range.local.upper`, `range.regional.lower`, `range.regional.upper`;
+    `sigma2_local_prior_U`, `sigma2_local_prior_alpha`,
+    `sigma2_regional_prior_U`, `sigma2_regional_prior_alpha` ->
+    `sigma2.local.prior.U`, `sigma2.local.prior.alpha`,
+    `sigma2.regional.prior.U`, `sigma2.regional.prior.alpha`.
+  - `spde()`: `max_edge`, `prior_range`, `prior_sigma` -> `max.edge`,
+    `prior.range`, `prior.sigma`.
+  - `svc()`: `sigma2_prior_scale`, `prior_range` -> `sigma2.prior.scale`,
+    `prior.range`.
+  - `re()`: `sigma_scale` -> `sigma.scale`.
+  - `temporal()`: `tau_shape`, `tau_rate` -> `tau.shape`, `tau.rate`.
+  - `latent()`: `n_factors`, `sigma_prior_rate` -> `n.factors`,
+    `sigma.prior.rate`.
+
+  `share()` and `grid()` are unchanged.
 * The abundance vignette's ceiling check now refits with
   `abun(K.max = 200)`; it previously passed the ceiling to `tobs()`, which
   ignored it.

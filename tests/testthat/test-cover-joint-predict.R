@@ -16,8 +16,8 @@
   y <- ifelse(occur == 1L, pmin(exp(rnorm(N, eta_pos, 0.4)), 1 - 1e-6), 0)
   dat <- data.frame(x = x, region = factor(spatial_idx))
 
-  term <- if (prior == "bym2") quote(bym2(graph = adj, group_var = "region"))
-          else quote(icar(graph = adj, group_var = "region"))
+  term <- if (prior == "bym2") quote(bym2(graph = adj, group.var = "region"))
+          else quote(icar(graph = adj, group.var = "region"))
   fm <- stats::reformulate(c("x", deparse(term)))
 
   fit <- tobs(

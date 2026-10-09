@@ -130,7 +130,7 @@ test_that("cover hurdle forwards checkpoint into the joint engine", {
                  adaptive.grid = FALSE)
     if (!is.null(checkpoint)) ctrl$checkpoint <- checkpoint
     suppressWarnings(tobs(
-      formula = ~ x + bym2(graph = adj, group_var = "region"),
+      formula = ~ x + bym2(graph = adj, group.var = "region"),
       data = dat, family = cover("beta"), y = y,
       method = "nested_laplace", control = ctrl
     ))

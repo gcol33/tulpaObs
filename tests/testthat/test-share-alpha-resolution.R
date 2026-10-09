@@ -58,7 +58,7 @@ fit_copy_axis_cover <- function(sim, adj, ctrl = list(), n = NULL) {
                 else bquote(share(spatial(), alpha = grid(n = .(n))))
   suppressWarnings(tobs(
     formula = eval(bquote(
-      ~ x + icar(graph = adj, group_var = "region") + .(share_call))),
+      ~ x + icar(graph = adj, group.var = "region") + .(share_call))),
     data = sim$data, family = cover("beta"), y = sim$y,
     method = "nested_laplace",
     control = c(list(sigma.grid = c(0.3, 0.6), phi.grid = c(12, 40),
@@ -262,7 +262,7 @@ test_that("the resolution is a declared control key on the joint families", {
   }
   sim <- simulate_copy_axis_cover(N = 40L, n_s = 4L)
   expect_error(
-    tobs(formula = ~ x + icar(graph = chain_adj(4L), group_var = "region"),
+    tobs(formula = ~ x + icar(graph = chain_adj(4L), group.var = "region"),
          data = sim$data, family = cover("beta"), y = sim$y,
          method = "nested_laplace",
          control = list(alpha.grid = c(0, 1), alpha.n = 9)),
@@ -309,8 +309,8 @@ test_that("the trend block carries its own resolution", {
   sim$data$time.sc <- as.numeric(scale(seq_len(nrow(sim$data))))
 
   fit <- suppressWarnings(tobs(
-    formula = ~ x + icar(graph = adj, group_var = "region") +
-                icar(graph = adj, weight = time.sc, group_var = "region") +
+    formula = ~ x + icar(graph = adj, group.var = "region") +
+                icar(graph = adj, weight = time.sc, group.var = "region") +
                 share(spatial(),
                       terms = list(intercept = grid(n = 4),
                                    trend     = grid(n = 2))),
@@ -411,7 +411,7 @@ test_that("a bare share() takes the resolution; a share() with nodes refuses it"
 
 .aq_fit <- function(f, positive, ...) {
   suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = f$adj, group.var = "cell"),
     detection = ~ 1, positive = positive,
     family = occu_cover(response = "lognormal"),
     data = f$sim$data, y = f$sim$y, y.pos = f$sim$y_pos,

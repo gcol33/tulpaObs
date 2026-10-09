@@ -31,8 +31,8 @@ simulate_spde_occu <- function(seed, n_sites, J = 8,
 fit_spde_nested <- function(d) {
   tobs(
     formula = ~ occ_cov + spde(lon, lat, cutoff = 0, nu = 1,
-                               prior_range = c(0.3, 0.5),
-                               prior_sigma = c(0.7, 0.5)),
+                               prior.range = c(0.3, 0.5),
+                               prior.sigma = c(0.7, 0.5)),
     data = d$data, family = occu(),
     detection = ~ det_cov, y = d$y,
     method = "nested_laplace", control = list(verbose = FALSE)

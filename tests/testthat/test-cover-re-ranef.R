@@ -31,7 +31,7 @@ test_that("cover() (1|g) exposes labelled BLUPs and a named sigma_re", {
               sigma.grid = c(0.5, 1.0), rho.grid = 0.5,
               sigma.re.grid = c(0.5, 1.0), phi.grid = c(8, 18, 40),
               adaptive.grid = FALSE, max.iter = 300L)
-  fit <- tobs(~ x + bym2(graph = adj, group_var = "region") + (1 | obs),
+  fit <- tobs(~ x + bym2(graph = adj, group.var = "region") + (1 | obs),
               data = fx$d, family = cover("beta"), y = fx$y,
               method = "nested_laplace", control = ctl)
   rf <- ranef(fit)

@@ -103,7 +103,7 @@ test_that(".cover_aggregate_occ collapses exchangeable rows to exact sufficient 
 }
 
 .aoc_fit_single <- function(s, agg) suppressWarnings(tobs(
-  formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+  formula = ~ x + bym2(graph = s$adj, group.var = "region"),
   data = s$data, family = cover("lognormal"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = agg, sigma.grid = c(0.5, 1.0),
                  rho.grid = 0.5, phi.grid = c(0.3, 0.5),
@@ -117,7 +117,7 @@ test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
   # Reduction actually fires: cell-level design collapses occ rows to one
   # Binomial row per cell.
   enc <- tulpaObs:::encode_cover_hurdle(
-    ~ x + bym2(graph = s$adj, group_var = "region"), s$data, s$y, positive = "lognormal")
+    ~ x + bym2(graph = s$adj, group.var = "region"), s$data, s$y, positive = "lognormal")
   spi <- tulpa::prior_from_spec(
     enc$spatial_spec, s$data[enc$obs_keep, , drop = FALSE])$spatial_idx
   og  <- tulpaObs:::.cover_aggregate_occ(enc$occ_data$y, enc$occ_data$X, list(spi = spi))
@@ -150,8 +150,8 @@ test_that("aggregate.occ reduces and preserves the single-block cover() fit", {
 }
 
 .aoc_fit_trend <- function(s, agg) suppressWarnings(tobs(
-  formula = ~ x + bym2(graph = s$adj, group_var = "region") +
-              bym2(graph = s$adj, weight = time, group_var = "region") +
+  formula = ~ x + bym2(graph = s$adj, group.var = "region") +
+              bym2(graph = s$adj, weight = time, group.var = "region") +
               share(spatial(), alpha = grid(c(0, 1.0))),
   data = s$data, family = cover("lognormal"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = agg,
@@ -165,7 +165,7 @@ test_that("aggregate.occ reduces and preserves the coupled-trend cover() fit", {
     s <- .aoc_sim_trend(seed = seed)
     if (seed == 7L) {
       enc <- tulpaObs:::encode_cover_hurdle(
-        ~ x + bym2(graph = s$adj, group_var = "region"), s$data, s$y, positive = "lognormal")
+        ~ x + bym2(graph = s$adj, group.var = "region"), s$data, s$y, positive = "lognormal")
       data_obs <- s$data[enc$obs_keep, , drop = FALSE]
       spi <- tulpa::prior_from_spec(enc$spatial_spec, data_obs)$spatial_idx
       og  <- tulpaObs:::.cover_aggregate_occ(
@@ -207,7 +207,7 @@ test_that("aggregate.occ reduces and preserves the coupled-trend cover() fit", {
 }
 
 .aoc_fit_multi <- function(s, agg) suppressWarnings(tobs(
-  formula = ~ x + bym2(graph = s$adj, group_var = "region") +
+  formula = ~ x + bym2(graph = s$adj, group.var = "region") +
               temporal(year, type = "ar1") + re(obs, type = "iid"),
   data = s$data, family = cover("beta"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = agg, sigma.grid = c(0.4, 0.8),

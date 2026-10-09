@@ -20,7 +20,7 @@
   set.seed(seed)
   co <- cbind(stats::runif(N), stats::runif(N))
   list(co = co, tm = .tobs_term_gp(coords = co, nn = k,
-                                   prior_range = c(0.1, 0.05)))
+                                   prior.range = c(0.1, 0.05)))
 }
 
 .gpp_dense_ref <- function(co, ord, w, sigma2, phi) {
@@ -80,7 +80,7 @@ test_that("multiscale_gp() packs both scales in the kernel's order", {
   set.seed(9)
   N <- 40L; k <- 6L
   co <- cbind(stats::runif(N), stats::runif(N))
-  tm <- .tobs_term_multiscale_gp(coords = co, nn_local = k, nn_regional = k)
+  tm <- .tobs_term_multiscale_gp(coords = co, nn.local = k, nn.regional = k)
   ref <- .tobs_nngp_pair_dist(compute_nngp_neighbors(co, k)$nn_neighbor_dist)
   expect_equal(tm$nn_neighbor_dist_local, ref)
   expect_equal(tm$nn_neighbor_dist_regional, ref)

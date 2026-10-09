@@ -16,7 +16,7 @@ mscopy_control <- function(pos, method = "nested_laplace",
   assign(nm, function(...) { cap$args <- list(...); structure(list(), class = "stub") },
          envir = ns)
   on.exit({ assign(nm, orig, envir = ns); lockBinding(nm, ns) }, add = TRUE)
-  tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+  tobs(formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
        data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
        detection = ~ x_pdet, availability = ~ x_plot, positive = pos,
        y = sim$y, y.pos = sim$y_pos, method = method, control = control)

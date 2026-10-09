@@ -162,7 +162,7 @@ test_that("cover() spatial fit surfaces outer_grid_placement at the top level", 
   }
 
   fit <- tobs(
-    formula = ~ x + icar(graph = adj, group_var = "region"),
+    formula = ~ x + icar(graph = adj, group.var = "region"),
     data    = data.frame(x = x, region = factor(spatial_idx)),
     family  = cover("lognormal"), y = y, method = "nested_laplace",
     control = list(verbose = FALSE)

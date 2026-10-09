@@ -172,5 +172,5 @@ test_that("the term carries s and the engine boundary converts it", {
                getFromNamespace("compute_bym2_scale", "tulpa")(adj),
                tolerance = 1e-10)
   # A user-supplied value is taken as s, unconverted.
-  expect_identical(.tobs_term_bym2(adj, scale_factor = 0.7)$scale_factor, 0.7)
+  expect_identical(.tobs_term_bym2(adj, scale.factor = 0.7)$scale_factor, 0.7)
 })

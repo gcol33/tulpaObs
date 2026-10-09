@@ -43,7 +43,7 @@ test_that("cover() with engine='nested_laplace' returns a cover_fit shape", {
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
     fit <- tobs(
-        formula  = ~ x + bym2(graph = adj, group_var = "region") +
+        formula  = ~ x + bym2(graph = adj, group.var = "region") +
                      share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data     = sim$data,
         family   = cover("lognormal"),
@@ -83,7 +83,7 @@ test_that("cover(engine='nested_laplace') accepts ICAR spatial spec", {
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
     fit <- tobs(
-        formula  = ~ x + car(graph = adj, group_var = "region") +
+        formula  = ~ x + car(graph = adj, group.var = "region") +
                      share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data     = sim$data,
         family   = cover("lognormal"),
@@ -148,7 +148,7 @@ test_that("cover('beta', engine='nested_laplace') BYM2 returns cover_fit", {
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
     fit <- tobs(
-        formula  = ~ x + bym2(graph = adj, group_var = "region") +
+        formula  = ~ x + bym2(graph = adj, group.var = "region") +
                      share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data     = sim$data,
         family   = cover("beta"),
@@ -186,7 +186,7 @@ test_that("cover('beta', engine='nested_laplace') accepts ICAR spatial spec", {
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
     fit <- tobs(
-        formula  = ~ x + car(graph = adj, group_var = "region") +
+        formula  = ~ x + car(graph = adj, group.var = "region") +
                      share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data     = sim$data,
         family   = cover("beta"),
@@ -215,7 +215,7 @@ test_that("cover(engine='nested_laplace') accepts CAR_proper spatial spec", {
     for (s in seq_len(n_s)) for (j in nbr[[s]]) adj[s, j] <- 1L
 
     fit <- tobs(
-        formula  = ~ x + car_proper(graph = adj, group_var = "region") +
+        formula  = ~ x + car_proper(graph = adj, group.var = "region") +
                      share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data     = sim$data,
         family   = cover("lognormal"),

@@ -183,8 +183,8 @@ test_that("occu() SVC joint fit predicts occupancy, detection and change", {
   od <- tobs_data(long, y = "y", site = "site_id", visit = "visit",
                   det.covs = "w")
   fit <- suppressWarnings(tobs(
-    formula = ~ x + icar(graph = adj, group_var = "site_id") +
-                icar(graph = adj, weight = x, group_var = "site_id"),
+    formula = ~ x + icar(graph = adj, group.var = "site_id") +
+                icar(graph = adj, weight = x, group.var = "site_id"),
     data = cell_dat, family = occu(), detection = ~ w,
     y = od$y, visits = od$det.covs,
     method = "nested_laplace", control = list(verbose = FALSE, max.iter = 50L)))

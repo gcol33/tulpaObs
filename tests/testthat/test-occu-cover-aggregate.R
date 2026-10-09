@@ -47,7 +47,7 @@
 
 .agg_fit <- function(sim, cover_aggregate = "mean", max.iter = 300L) {
   suppressWarnings(tobs(
-    formula = ~ xocc + icar(graph = sim$adj, group_var = "cell_idx"),
+    formula = ~ xocc + icar(graph = sim$adj, group.var = "cell_idx"),
     data = sim$site,
     family = occu_cover("beta", cover.aggregate = cover_aggregate),
     detection = ~ det_cov,
@@ -84,7 +84,7 @@ test_that("aggregation resolution, fall-back, and error gates", {
                         pcov = as.vector(t(matrix(rnorm(nrow(sim$site)*6L),
                                                   nrow(sim$site), 6L))))
   fit_fallback <- suppressWarnings(tobs(
-    formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
+    formula = ~ icar(graph = sim$adj, group.var = "cell_idx"),
     data = sim$site, family = occu_cover("beta"),     # default
     detection = ~ det_cov,                            # visit-level pos covariate
     positive = ~ pcov + share(spatial(), alpha = grid(c(0, 1.0))),
@@ -97,7 +97,7 @@ test_that("aggregation resolution, fall-back, and error gates", {
 
   # Explicit aggregation + a visit-level positive covariate -> error.
   expect_error(
-    tobs(formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
+    tobs(formula = ~ icar(graph = sim$adj, group.var = "cell_idx"),
          data = sim$site, family = occu_cover("beta", cover.aggregate = "mean"),
          detection = ~ det_cov, positive = ~ pcov,
          y = sim$Y, y.pos = sim$Ypos, visits = sim2$vd,

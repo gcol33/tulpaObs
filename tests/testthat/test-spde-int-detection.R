@@ -14,8 +14,8 @@
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 .spde_int_det_term <- function() {
-  ~ det_cov + spde(lon, lat, max_edge = c(0.25, 0.5), nu = 1,
-                   prior_range = c(0.3, 0.5), prior_sigma = c(0.8, 0.5))
+  ~ det_cov + spde(lon, lat, max.edge = c(0.25, 0.5), nu = 1,
+                   prior.range = c(0.3, 0.5), prior.sigma = c(0.8, 0.5))
 }
 
 .sim_spde_int_det <- function(seed, n_sites = 600, J1 = 8, J2 = 6,
@@ -247,9 +247,9 @@ test_that("a field on both integrated arms at once errors", {
   g <- .int_gate_data()
   expect_error(
     .int_gate_fit(g, .spde_int_det_term(),
-                  occ = ~ occ_cov + spde(lon, lat, max_edge = c(0.3, 0.6),
-                                         nu = 1, prior_range = c(0.3, 0.5),
-                                         prior_sigma = c(0.8, 0.5))),
+                  occ = ~ occ_cov + spde(lon, lat, max.edge = c(0.3, 0.6),
+                                         nu = 1, prior.range = c(0.3, 0.5),
+                                         prior.sigma = c(0.8, 0.5))),
     "carries one spatial field")
 })
 

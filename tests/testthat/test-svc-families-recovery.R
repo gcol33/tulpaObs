@@ -26,9 +26,9 @@
 
 .svc_fam_formula <- function(covariate = TRUE) {
   if (covariate)
-    ~ 1 + x + svc(lon, lat, indices = 1, nn = 10, prior_range = c(0.3, 0.5))
+    ~ 1 + x + svc(lon, lat, indices = 1, nn = 10, prior.range = c(0.3, 0.5))
   else
-    ~ 1 + svc(lon, lat, indices = 1, nn = 10, prior_range = c(0.3, 0.5))
+    ~ 1 + svc(lon, lat, indices = 1, nn = 10, prior.range = c(0.3, 0.5))
 }
 
 
@@ -81,7 +81,7 @@ test_that("removal() recovers a covariate-weighted svc() surface", {
     remaining <- remaining - y[, k]
   }
   fit <- tobs(~ 1 + x + svc(lon, lat, indices = 2, nn = 10,
-                            prior_range = c(0.3, 0.5)),
+                            prior.range = c(0.3, 0.5)),
               data = tr$df, y = y, family = removal(), detection = ~ 1,
               method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
@@ -196,8 +196,8 @@ test_that("an svc() surface composes with an areal field on the same arm", {
     y[, k] <- stats::rbinom(N, remaining, 0.45)
     remaining <- remaining - y[, k]
   }
-  fit <- tobs(~ 1 + icar(graph = adj, group_var = "cell") +
-                svc(lon, lat, indices = 1, nn = 10, prior_range = c(0.3, 0.5)),
+  fit <- tobs(~ 1 + icar(graph = adj, group.var = "cell") +
+                svc(lon, lat, indices = 1, nn = 10, prior.range = c(0.3, 0.5)),
               data = tr$df, y = y, family = removal(), detection = ~ 1,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
@@ -220,7 +220,7 @@ test_that("svc() on the detection formula errors on the areal-BFGS families", {
   y  <- matrix(stats::rpois(n * 3L, 2), n, 3L)
   expect_error(
     tobs(~ 1, data = df, y = y, family = removal(),
-         detection = ~ svc(lon, lat, indices = 1, prior_range = c(0.3, 0.5)),
+         detection = ~ svc(lon, lat, indices = 1, prior.range = c(0.3, 0.5)),
          method = "laplace"),
     "detection|abundance")
 })
@@ -233,7 +233,7 @@ test_that("svc() under NUTS still errors on the areal-BFGS families", {
   y  <- matrix(stats::rpois(n * 3L, 2), n, 3L)
   # The in-tree NUTS targets carry no NNGP block; the guard fires before any fit.
   expect_error(
-    tobs(~ svc(lon, lat, indices = 1, prior_range = c(0.3, 0.5)), data = df,
+    tobs(~ svc(lon, lat, indices = 1, prior.range = c(0.3, 0.5)), data = df,
          y = y, family = removal(), detection = ~ 1, method = "nuts"),
     "svc|areal|spatially-varying")
 })

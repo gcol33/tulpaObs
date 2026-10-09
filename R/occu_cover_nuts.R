@@ -807,8 +807,8 @@
 # psi formula into the plain areal field spec the NUTS sampler takes, through the
 # SAME expansion the nested-Laplace path uses (.tobs_expand_spatial_bar): one
 # unweighted intercept field plus one weight-scaled field per bar covariate
-# column, each identical to what `icar(graph = adj, group_var = node)` /
-# `icar(graph = adj, weight = col, group_var = node)` builds. A single-column bar
+# column, each identical to what `icar(graph = adj, group.var = node)` /
+# `icar(graph = adj, weight = col, group.var = node)` builds. A single-column bar
 # therefore IS the plain areal term, and routes unchanged.
 #
 # The sampler carries one block PER FIELD -- each with its own loading, site ->
@@ -838,7 +838,7 @@
 # (the full-rank precision the fixed-hyper non-centered field is best conditioned
 # on) and rejects temporal / RE terms with a pointer to the nested-Laplace route.
 # The bar form is desugared first, so `spatial(~ 1 || cell, graph = adj)` and
-# `icar(graph = adj, group_var = "cell")` reach the sampler as one field
+# `icar(graph = adj, group.var = "cell")` reach the sampler as one field
 # description, and `spatial(~ 1 + w || cell, graph = adj)` as the intercept field
 # plus one varying-coefficient field per covariate column. Returns NULL when the
 # psi formula carries no spatial term (the non-spatial NUTS sampler), or list(fe,
@@ -891,7 +891,7 @@
   }
   gvs <- unique(Filter(Negate(is.null), lapply(specs, `[[`, "group_var")))
   if (length(gvs) > 1L)
-    stop("occu_cover() NUTS coupled fields must share a single group_var ",
+    stop("occu_cover() NUTS coupled fields must share a single group.var ",
          "(or none).", call. = FALSE)
   list(fe = bind$fe$psi, spatial = base[[1L]],
        group_var = if (length(gvs) == 1L) gvs[[1L]] else NULL,

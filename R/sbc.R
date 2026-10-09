@@ -2208,7 +2208,7 @@
 # CELLS. Pooling offsets the replicate's cell indices past the observed
 # cell COUNT (`model$n_cells`), not the plot count.
 #
-# `formula` is REQUIRED to carry an `icar(graph =, group_var = "<col>")`
+# `formula` is REQUIRED to carry an `icar(graph =, group.var = "<col>")`
 # term declaring the plot -> cell map, even under the non-spatial engine
 # (the graph itself is ignored there, but the term's presence and its
 # group_var column are not optional syntax). Rather than track and
@@ -2279,7 +2279,7 @@
   fe_labels <- attr(stats::terms(spec$psi), "term.labels")
   icpt <- attr(stats::terms(spec$psi), "intercept")
   rhs <- paste(c(fe_labels,
-                'icar(graph = dummy_graph, group_var = ".sbc_cell")'),
+                'icar(graph = dummy_graph, group.var = ".sbc_cell")'),
               collapse = " + ")
   if (!icpt) rhs <- paste(rhs, "- 1")
   full_formula <- stats::as.formula(paste("~", rhs), env = environment())

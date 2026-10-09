@@ -59,7 +59,7 @@
 #'   perturbation of the posterior than a single row, so the Pareto k values are
 #'   correspondingly higher and are the diagnostic to read before trusting the
 #'   cell-level number. Implemented for `cover()` (the areal field node, when
-#'   sites are grouped via `group_var`) and `occu_cover()` (the `site_cell` map);
+#'   sites are grouped via `group.var`) and `occu_cover()` (the `site_cell` map);
 #'   a non-spatial fit has no cells, so `"cell"` errors there. Equivalent to
 #'   passing `group =` the cell map directly, without hand-building it. `dic()`
 #'   has no cross-validation unit -- it is a plug-in deviance over all

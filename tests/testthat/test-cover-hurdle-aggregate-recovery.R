@@ -76,8 +76,8 @@
   # residual; here that also drags phi onto the floor of its own axis. Each
   # axis straddles the amplitude the simulator used.
   suppressWarnings(tobs(
-    formula = ~ x + bym2(graph = s$adj, group_var = "region") +
-                bym2(graph = s$adj, weight = time, group_var = "region") +
+    formula = ~ x + bym2(graph = s$adj, group.var = "region") +
+                bym2(graph = s$adj, weight = time, group.var = "region") +
                 share(spatial(), terms = list(
                   intercept = grid(c(0.5, 1.0, 1.5)),
                   trend     = grid(c(0.5, 0.9, 1.3)))),

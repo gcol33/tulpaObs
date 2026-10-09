@@ -93,7 +93,7 @@ test_that("NUTS runs with an svc() term attached", {
 
   fit <- tobs(
     ~ occ_cov1 + svc(lon, lat, indices = 1L, nn = 8,
-                     prior_range = c(0.1, 0.05)), data = sim$data,
+                     prior.range = c(0.1, 0.05)), data = sim$data,
     family = occu(), detection = ~ det_cov1, y = sim$y,
     method = "nuts", control = ctl_nuts()
   )

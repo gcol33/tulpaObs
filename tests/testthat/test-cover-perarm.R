@@ -94,7 +94,7 @@ test_that("share() in the single shared cover() formula is accepted (#298)", {
     unname(unlist(h[grep("alpha", names(h))]))[1L]
   }
 
-  base_f <- ~ time + icar(graph = adj, group_var = "cell")
+  base_f <- ~ time + icar(graph = adj, group.var = "cell")
 
   # It fits at all -- this is what used to be `get1index`.
   f_bare <- fit_at(update(base_f, ~ . + share(spatial())))
@@ -132,11 +132,11 @@ test_that("shared-formula share() refuses the same conflicts the per-arm one doe
   # The control spelling is retired (#295): it is refused whether or not a
   # share() is present, and the message names the formula form to use.
   expect_error(
-    fit_at(~ time + icar(graph = adj, group_var = "cell") + share(spatial()),
+    fit_at(~ time + icar(graph = adj, group.var = "cell") + share(spatial()),
            ctrl = c(.cp_shared_ctrl, list(alpha.grid = c(0, 1)))),
     "not user surface")
   expect_error(
-    fit_at(~ time + icar(graph = adj, group_var = "cell"),
+    fit_at(~ time + icar(graph = adj, group.var = "cell"),
            ctrl = c(.cp_shared_ctrl, list(alpha.grid = c(0, 1)))),
     "not user surface")
   # A coupling with no field to couple names the field, not an index error.

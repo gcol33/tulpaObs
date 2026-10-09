@@ -106,7 +106,7 @@ test_that("cover() nested-joint: WAIC + pointwise log-lik (#26)", {
                    1 - 1e-6), 0)
   dat <- data.frame(x = x, region = factor(spatial_idx))
 
-  fit <- tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
+  fit <- tobs(formula = ~ x + bym2(graph = adj, group.var = "region"),
               data = dat, family = cover("lognormal"), y = y,
               method = "nested_laplace",
               control = list(sigma.grid = c(0.4, 0.8), rho.grid = c(0.5, 0.9)))

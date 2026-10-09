@@ -229,7 +229,7 @@ test_that(".tobs_loglik_fold_group leaves an ungrouped matrix untouched", {
               pmin(exp(stats::rnorm(N, 0.4 - 0.5 * x + w_s[cell], 0.4)),
                    1 - 1e-6), 0)
   dat <- data.frame(x = x, region = factor(cell))
-  tobs(formula = ~ x + bym2(graph = adj, group_var = "region"),
+  tobs(formula = ~ x + bym2(graph = adj, group.var = "region"),
        data = dat, family = cover("lognormal"), y = y,
        method = "nested_laplace",
        control = list(verbose = FALSE, sigma.grid = c(0.4, 0.8),

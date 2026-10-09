@@ -203,7 +203,7 @@ test_that("occu_multiscale_cover() scores the cell, not the plot", {
   skip_on_cran()
   sim <- simulate_occu_multiscale_cover(n.cells = 12L, plots.per.cell = 3L,
                                         visits.per.plot = 2L, seed = 1L)
-  fit <- tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+  fit <- tobs(formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
              data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
              detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
              y = sim$y, y.pos = sim$y_pos, method = "laplace", control = ctl_res)

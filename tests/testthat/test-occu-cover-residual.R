@@ -17,7 +17,7 @@
 
 .res_fit <- function(sim, adj, positive, ...) {
   suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
     detection  = ~ 1,
     positive   = positive,
     family     = occu_cover(response = "lognormal"),
@@ -255,7 +255,7 @@ test_that("a deviation composes with a psi RE and with a trend field", {
 
   for (rr in list("\"full\"", "4")) {
     f <- suppressWarnings(tobs(
-      occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell") + re(grp),
+      occurrence = ~ occ_cov1 + icar(graph = adj, group.var = "cell") + re(grp),
       detection  = ~ 1,
       positive   = stats::reformulate(
         c("1", sprintf("share(spatial(), residual = %s)", rr))),

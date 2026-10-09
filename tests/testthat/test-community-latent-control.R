@@ -77,8 +77,8 @@ test_that("max.outer / factor.starts / n.quad reach the latent driver", {
   d <- .clc_count_sim()
 
   # ms_count() + latent() -- lfMsAbund
-  f_count <- tobs(~ x + latent(1), data = d$data, family = ms_count(),
-                  y = d$y_pois, species = colnames(d$y_pois),
+  f_count <- tobs(~ x + latent(n.factors = 1), data = d$data,
+                  family = ms_count(), y = d$y_pois, species = colnames(d$y_pois),
                   method = "laplace", control = ctl)
   expect_identical(f_count$latent_control$max.outer, 1L)
   expect_identical(f_count$latent_control$factor.starts, 3L)
@@ -130,7 +130,7 @@ test_that("the reported settings carry each family's own resolved defaults", {
   for (i in 1:15) { A[i, i + 1L] <- 1L; A[i + 1L, i] <- 1L }
   cell <- rep(seq_len(16L), length.out = nrow(d$data))
   dd <- cbind(d$data, cell = cell)
-  ff <- tobs(~ x + icar(graph = A, group_var = "cell"), data = dd,
+  ff <- tobs(~ x + icar(graph = A, group.var = "cell"), data = dd,
              family = ms_count(), y = d$y_pois, species = colnames(d$y_pois),
              method = "nested_laplace",
              control = list(verbose = FALSE, progress = FALSE))

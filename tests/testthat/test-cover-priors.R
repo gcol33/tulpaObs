@@ -97,12 +97,12 @@ test_that("nested_laplace cover threads fixed-effect priors (#54)", {
 
   ctrl <- list(sigma.grid = c(0.4, 0.8),
                progress = FALSE)
-  f_unpen <- tobs(~ x + icar(graph = adj, group_var = "region"), data = d,
+  f_unpen <- tobs(~ x + icar(graph = adj, group.var = "region"), data = d,
                   family = cover("lognormal"), y = y,
                   method = "nested_laplace", control = ctrl)
   # A tight prior on the positive-arm slope must shrink it toward zero relative
   # to the unpenalised fit -- proof the prior is applied, not dropped.
-  f_pen <- tobs(~ x + icar(graph = adj, group_var = "region"), data = d,
+  f_pen <- tobs(~ x + icar(graph = adj, group.var = "region"), data = d,
                 family = cover("lognormal"), y = y,
                 method = "nested_laplace", control = ctrl,
                 priors = cover_priors(pos.slope = list(mean = 0, sd = 0.02)))

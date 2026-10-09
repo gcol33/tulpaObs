@@ -67,8 +67,8 @@
     stop("control$trend is not accepted for cover hurdle models.\n",
          "Declare spatially varying trends directly in the formula, e.g.\n\n",
          "  ~ time.sc +\n",
-         "    icar(graph = adj, group_var = \"cell_idx\") +\n",
-         "    icar(graph = adj, weight = time.sc, group_var = \"cell_idx\")",
+         "    icar(graph = adj, group.var = \"cell_idx\") +\n",
+         "    icar(graph = adj, weight = time.sc, group.var = \"cell_idx\")",
          call. = FALSE)
   }
   # `control$sigma.pos.grid` named the cover-arm field amplitude when the joint
@@ -646,7 +646,7 @@ encode_cover_hurdle <- function(formula, data, y,
 # The areal terms (icar/bym2/car/car_proper) split by their `weight`:
 #   * an unweighted areal term is the shared intercept field, converted to the
 #     tulpa_spatial spec the engine consumes (`spatial`);
-#   * a weighted areal term (`icar(graph = adj, weight = col, group_var = ...)`)
+#   * a weighted areal term (`icar(graph = adj, weight = col, group.var = ...)`)
 #     is the spatially-varying TREND field -- the formula-DSL spelling of the
 #     coupled second besag block. Its per-observation weight `col` and label
 #     come back in `trend`.
@@ -952,7 +952,7 @@ encode_cover_hurdle <- function(formula, data, y,
            "intercept field (same nodes / adjacency).", call. = FALSE)
     }
     if (!identical(ws$group_var, base_spec$group_var)) {
-      stop("cover() trend field must share the intercept field's group_var ",
+      stop("cover() trend field must share the intercept field's group.var ",
            "(or both name none).", call. = FALSE)
     }
     w_occ <- as.numeric(ws$weight)

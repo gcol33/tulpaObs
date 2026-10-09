@@ -26,7 +26,7 @@
 test_that("a supplied grid is the one the latent block carries", {
   skip_on_cran()
   fx <- .nog_fixture()
-  m <- tobs(~ occ_cov1 + icar(graph = fx$adj, group_var = "cell"),
+  m <- tobs(~ occ_cov1 + icar(graph = fx$adj, group.var = "cell"),
             data = fx$data, family = occu(), detection = ~ 1, y = fx$sim$y,
             method = "nested_laplace",
             control = list(verbose = FALSE, progress = FALSE))
@@ -49,7 +49,7 @@ test_that("control$tau.grid changes the fitted field", {
   skip_on_cran()
   fx <- .nog_fixture()
   f <- function(...) suppressWarnings(tobs(
-    ~ occ_cov1 + icar(graph = fx$adj, group_var = "cell"),
+    ~ occ_cov1 + icar(graph = fx$adj, group.var = "cell"),
     data = fx$data, family = occu(), detection = ~ 1, y = fx$sim$y,
     method = "nested_laplace",
     control = c(list(verbose = FALSE, progress = FALSE), list(...))))

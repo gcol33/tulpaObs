@@ -510,12 +510,12 @@ test_that("occu_cover NUTS samples a single bar-form field (#203)", {
     detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
     y.pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts", control = ctl))
 
-  # A single-column bar desugars to exactly icar(graph, group_var = node), so the
+  # A single-column bar desugars to exactly icar(graph, group.var = node), so the
   # resolved field description is the same object the non-bar spelling builds.
   sp_bar <- tulpaObs:::.occu_cover_nuts_spatial_term(
     ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj), dat)
   sp_plain <- tulpaObs:::.occu_cover_nuts_spatial_term(
-    ~ occ_cov1 + icar(graph = adj, group_var = "cell_idx"), dat)
+    ~ occ_cov1 + icar(graph = adj, group.var = "cell_idx"), dat)
   for (k in c("type", "n_units", "graph", "group_var", "adj_row_ptr",
               "adj_col_idx", "n_neighbors", "weight")) {
     expect_identical(sp_bar$spatial[[k]], sp_plain$spatial[[k]])
@@ -528,7 +528,7 @@ test_that("occu_cover NUTS samples a single bar-form field (#203)", {
   # chain, so the posteriors agree BIT for bit. A tolerance here would only hide
   # the two spellings drifting into different models.
   fit_bar   <- run(~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj))
-  fit_plain <- run(~ occ_cov1 + icar(graph = adj, group_var = "cell_idx"))
+  fit_plain <- run(~ occ_cov1 + icar(graph = adj, group.var = "cell_idx"))
   expect_identical(fit_bar$means, fit_plain$means)
   expect_identical(fit_bar$sds,   fit_plain$sds)
   expect_identical(fit_bar$spatial_field, fit_plain$spatial_field)

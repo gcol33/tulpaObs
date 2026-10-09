@@ -151,7 +151,7 @@ test_that("occu_cover() joint agrees between its reported and per-draw dispersio
                                         visits.per.plot = 2L, phi = truth,
                                         sigma = 0.02, seed = seed)
   suppressWarnings(tobs(
-    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot,
     positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),

@@ -517,20 +517,20 @@
       gv <- nuts_sp$group_var
       if (!is.null(gv)) {
         if (!gv %in% names(data))
-          stop(sprintf("occu_cover() group_var '%s' is not a column of data.",
+          stop(sprintf("occu_cover() group.var '%s' is not a column of data.",
                        gv), call. = FALSE)
         site_cell <- as.integer(data[[gv]])
         if (length(site_cell) != model_sp$n_sites || anyNA(site_cell) ||
             min(site_cell) < 1L || max(site_cell) > n_cells_f)
           stop(sprintf(paste0(
-            "occu_cover() group_var '%s' must be an integer cell index in ",
+            "occu_cover() group.var '%s' must be an integer cell index in ",
             "1..%d, one per site (%d sites)."), gv, n_cells_f, model_sp$n_sites),
             call. = FALSE)
       } else {
         if (model_sp$n_sites != n_cells_f)
           stop(sprintf(paste0(
             "occu_cover() NUTS spatial: %d sites but the graph has %d nodes. ",
-            "Map sites to cells with group_var on the car_proper() term, or ",
+            "Map sites to cells with group.var on the car_proper() term, or ",
             "match the site count to the graph."),
             model_sp$n_sites, n_cells_f), call. = FALSE)
         site_cell <- seq_len(model_sp$n_sites)
@@ -761,14 +761,14 @@
     gv <- spatial_info$group_var
     if (!is.null(gv)) {
       if (!gv %in% names(data)) {
-        stop(sprintf("occu_cover() group_var '%s' is not a column of data.", gv),
+        stop(sprintf("occu_cover() group.var '%s' is not a column of data.", gv),
              call. = FALSE)
       }
       site_cell <- as.integer(data[[gv]])
       if (length(site_cell) != model$n_sites || anyNA(site_cell) ||
           min(site_cell) < 1L || max(site_cell) > n_cells_field) {
         stop(sprintf(paste0(
-          "occu_cover() group_var '%s' must be an integer cell index in 1..%d, ",
+          "occu_cover() group.var '%s' must be an integer cell index in 1..%d, ",
           "one per site (%d sites)."), gv, n_cells_field, model$n_sites),
           call. = FALSE)
       }
@@ -776,7 +776,7 @@
       if (model$n_sites != n_cells_field) {
         stop(sprintf(paste0(
           "occu_cover() spatial: %d sites but the graph has %d nodes. Map sites ",
-          "to cells with group_var = \"<col>\" on the icar()/bym2() term (e.g. ",
+          "to cells with group.var = \"<col>\" on the icar()/bym2() term (e.g. ",
           "site = cell-year), or match the site count to the graph."),
           model$n_sites, n_cells_field), call. = FALSE)
       }

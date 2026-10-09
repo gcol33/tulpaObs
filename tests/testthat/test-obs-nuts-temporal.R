@@ -177,7 +177,7 @@ test_that("NUTS + areal AND temporal simultaneously stays gated (#114)", {
   y <- matrix(rpois(N * 3L, 3), N, 3L)
   expect_error(
     suppressWarnings(tobs(
-      ~ 1 + icar(graph = adj, group_var = "cell") + temporal(period, type = "ar1"),
+      ~ 1 + icar(graph = adj, group.var = "cell") + temporal(period, type = "ar1"),
       data = data.frame(cell = cell, period = period), family = removal(),
       detection = ~ 1, y = y, method = "nuts",
       control = list(verbose = FALSE, progress = FALSE))),

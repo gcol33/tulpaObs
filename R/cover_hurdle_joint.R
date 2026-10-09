@@ -946,7 +946,7 @@ fit_cover_hurdle_joint_nested <- function(enc, data, positive = enc$positive,
 
   # Coupled spatially-varying trend (SVC) field on the cover hurdle. The
   # unweighted areal formula term is the shared intercept field; a SECOND,
-  # weighted areal term (`icar(graph = adj, weight = col, group_var = ...)`)
+  # weighted areal term (`icar(graph = adj, weight = col, group.var = ...)`)
   # adds a shared areal field on the same graph, weighted per observation by
   # `col` and copied onto the positive arm with its own alpha axis. This is
   # the analogue of the INLA joint model's `f(cell.slope, time, model =

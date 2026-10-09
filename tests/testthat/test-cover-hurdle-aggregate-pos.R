@@ -46,11 +46,11 @@
   # The trend is a second weighted areal term in the formula, not a control knob;
   # the unweighted bym2() is the shared intercept field.
   if (trend) {
-    f <- ~ x + bym2(graph = s$adj, group_var = "region") +
-             bym2(graph = s$adj, weight = time, group_var = "region") +
+    f <- ~ x + bym2(graph = s$adj, group.var = "region") +
+             bym2(graph = s$adj, weight = time, group.var = "region") +
              share(spatial(), alpha = grid(c(0, 0.5, 1.0)))
   } else {
-    f <- ~ x + bym2(graph = s$adj, group_var = "region")
+    f <- ~ x + bym2(graph = s$adj, group.var = "region")
   }
   suppressWarnings(tobs(
     formula = f,
@@ -108,7 +108,7 @@ test_that("aggregate.pos reduces and preserves the single-block beta cover() fit
 
   # Reduction fires: the grouped positive arm has strictly fewer rows.
   enc <- tulpaObs:::encode_cover_hurdle(
-    ~ x + bym2(graph = s$adj, group_var = "region"), s$data, s$y, positive = "beta")
+    ~ x + bym2(graph = s$adj, group.var = "region"), s$data, s$y, positive = "beta")
   expect_gt(ff$n_positive, 0L)
 
   .aop_expect_identical_fits(fp, ff)
@@ -129,7 +129,7 @@ test_that("aggregate.pos defaults ON for the beta arm", {
   ctrl <- list(verbose = FALSE, sigma.grid = c(0.5, 0.8, 1.2), rho.grid = 0.5,
                phi.grid = c(8, 18, 40), adaptive.grid = FALSE, max.iter = 300L)
   fd <- suppressWarnings(tobs(
-    formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+    formula = ~ x + bym2(graph = s$adj, group.var = "region"),
     data = s$data, family = cover("beta"), y = s$y,
     method = "nested_laplace", control = ctrl))   # default -> pos arm aggregated
   ff <- .aop_fit(s, trend = FALSE, agg.pos = FALSE)
@@ -176,7 +176,7 @@ test_that("aggregate.pos reduces and preserves the coupled-trend beta cover() fi
 }
 
 .aop_fit_multi <- function(s, agg.pos) suppressWarnings(tobs(
-  formula = ~ x + bym2(graph = s$adj, group_var = "region") +
+  formula = ~ x + bym2(graph = s$adj, group.var = "region") +
               temporal(year, type = "ar1") + re(obs, type = "iid"),
   data = s$data, family = cover("beta"), y = s$y, method = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = agg.pos,
@@ -204,7 +204,7 @@ test_that("aggregate.pos errors for the lognormal positive arm", {
   s <- .aop_sim(101L, trend = FALSE)
   expect_error(
     suppressWarnings(tobs(
-      formula = ~ x + bym2(graph = s$adj, group_var = "region"),
+      formula = ~ x + bym2(graph = s$adj, group.var = "region"),
       data = s$data, family = cover("lognormal"), y = s$y,
       method = "nested_laplace",
       control = list(verbose = FALSE, aggregate.pos = TRUE,
@@ -216,7 +216,7 @@ test_that("aggregate.pos errors for the lognormal positive arm", {
 
 
 # Cell-level (leave-one-group-out) LOO on a cover() fit whose plots are grouped
-# into spatial cells via group_var = "region". The group_var maps the 16 cells'
+# into spatial cells via group.var = "region". The group.var maps the 16 cells'
 # worth of plots onto 16 field nodes, so the per-row spatial index (spi_full)
 # genuinely aggregates many columns into each cell and exercises the real
 # LOGO-CV path, not a degenerate identity map.

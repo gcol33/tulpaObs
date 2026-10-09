@@ -92,7 +92,7 @@ adaptive_axes_of <- function(fit) {
 # format share() compiles into. `alpha` defaults to the pin this file is about.
 fit_d3_like <- function(sim, adj, ctrl, alpha = alpha_pin_for_test) {
   tobs(formula = eval(bquote(
-         ~ x + bym2(graph = adj, group_var = "region") +
+         ~ x + bym2(graph = adj, group.var = "region") +
            share(spatial(), alpha = grid(.(alpha))))),
        data = sim$data, family = cover("beta"), y = sim$y,
        method = "nested_laplace", control = ctrl)

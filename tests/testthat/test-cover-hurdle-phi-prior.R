@@ -36,7 +36,7 @@ test_that("control$prior.phi shrinks the cover-arm precision toward zero", {
     # and can land either way. Coupled, phi_pos recovers to 23.1 and the
     # half-normal moves it to 22.8, which is the effect this block is about.
     fit_one <- function(prior_phi) tobs(
-        formula = ~ x + bym2(graph = adj, group_var = "region") +
+        formula = ~ x + bym2(graph = adj, group.var = "region") +
             share(spatial(), alpha = grid(c(0.5, 1.0, 1.5))),
         data = sim$data, family = cover("beta"), y = sim$y,
         method = "nested_laplace",

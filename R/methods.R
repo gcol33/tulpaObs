@@ -2366,7 +2366,7 @@ tobs_check_id <- function(model, fit = NULL) {
 #' adj <- matrix(0L, 30, 30)
 #' adj[cbind(1:29, 2:30)] <- 1L
 #' adj[cbind(2:30, 1:29)] <- 1L
-#' fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+#' fit <- tobs(~ occ_cov1 + icar(graph = adj, group.var = "cell"),
 #'             data = d, family = occu(), detection = ~ 1, y = sim$y,
 #'             method = "nested_laplace",
 #'             control = list(verbose = FALSE, progress = FALSE))

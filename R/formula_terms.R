@@ -76,9 +76,9 @@
                 error = function(e) stop(sprintf(
                   "%s(): `weight` must be a numeric column.", term),
                   call. = FALSE))
-  # With group_var the weight is per observation (one per site / data row),
+  # With group.var the weight is per observation (one per site / data row),
   # not per graph node; its length is validated downstream against the site
-  # count. Without group_var it is a per-node SVC covariate.
+  # count. Without group.var it is a per-node SVC covariate.
   if (!per_obs && length(w) != n_units) {
     stop(sprintf(
       "%s(): `weight` has length %d but the graph has %d node(s).",
@@ -95,10 +95,10 @@
 # Spatial terms (areal)
 # ---------------------------------------------------------------------------
 
-# Areal terms accept an optional `group_var`: the name of a column that maps
+# Areal terms accept an optional `group.var`: the name of a column that maps
 # each observation to an areal unit (a graph node), for graphs defined over
 # regions rather than over observations directly. When NULL the graph is over
-# the observations 1:1. `group_var` is a deferred column-name string (matching
+# the observations 1:1. `group.var` is a deferred column-name string (matching
 # tulpa's spatial_*() convention) — it is resolved by the engine, not here.
 # Connected components of an adjacency matrix, as a 1-based component label per
 # node. Iterative traversal over an explicit stack, so a long chain carries no
@@ -185,29 +185,29 @@
 .tobs_check_prior_range <- function(prior_range, term) {
   if (is.null(prior_range)) {
     stop(sprintf(paste0(
-      "%s(): `prior_range` is required. Give `c(r0, alpha)`, a PC prior on the\n",
+      "%s(): `prior.range` is required. Give `c(r0, alpha)`, a PC prior on the\n",
       "  spatial range encoding P(range < r0) = alpha. The range is in the units\n",
       "  of the coordinates (the kernel is exp(-d / range)), so pick r0 as a\n",
       "  distance below which you would be surprised to find the field's\n",
-      "  correlation gone -- e.g. prior_range = c(0.1, 0.05) on unit-square\n",
+      "  correlation gone -- e.g. prior.range = c(0.1, 0.05) on unit-square\n",
       "  coordinates reads as \"5%% chance the range is under 0.1\"."), term),
       call. = FALSE)
   }
   pr <- tryCatch(as.numeric(prior_range),
                  error = function(e) stop(sprintf(
-                   "%s(): `prior_range` must be numeric.", term), call. = FALSE),
+                   "%s(): `prior.range` must be numeric.", term), call. = FALSE),
                  warning = function(w) stop(sprintf(
-                   "%s(): `prior_range` must be numeric.", term), call. = FALSE))
+                   "%s(): `prior.range` must be numeric.", term), call. = FALSE))
   if (length(pr) != 2L || anyNA(pr)) {
-    stop(sprintf("%s(): `prior_range` must be a length-2 numeric c(r0, alpha).",
+    stop(sprintf("%s(): `prior.range` must be a length-2 numeric c(r0, alpha).",
                  term), call. = FALSE)
   }
   if (!(pr[1] > 0)) {
-    stop(sprintf("%s(): `prior_range[1]` (r0) must be > 0, not %g.",
+    stop(sprintf("%s(): `prior.range[1]` (r0) must be > 0, not %g.",
                  term, pr[1]), call. = FALSE)
   }
   if (!(pr[2] > 0) || !(pr[2] < 1)) {
-    stop(sprintf("%s(): `prior_range[2]` (alpha) must be in (0, 1), not %g.",
+    stop(sprintf("%s(): `prior.range[2]` (alpha) must be in (0, 1), not %g.",
                  term, pr[2]), call. = FALSE)
   }
   pr
@@ -218,32 +218,32 @@
 # `weight` (optional) is a per-node numeric column that makes this a
 # spatially-varying coefficient (a weighted field, `weight_i * z[node_i]`)
 # instead of a plain intercept field; see .tobs_resolve_field_weight().
-.tobs_term_icar <- function(graph, group_var = NULL, weight = NULL, id = NULL) {
+.tobs_term_icar <- function(graph, group.var = NULL, weight = NULL, id = NULL) {
   .tobs_check_graph(graph, "icar")
   csr <- adjacency_to_csr(graph)
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
   weight <- .tobs_resolve_field_weight(weight, nrow(graph), "icar",
-                                       per_obs = !is.null(group_var))
+                                       per_obs = !is.null(group.var))
   .tobs_term(list(
-    type = "icar", n_units = nrow(graph), graph = graph, group_var = group_var,
+    type = "icar", n_units = nrow(graph), graph = graph, group_var = group.var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
     n_neighbors = csr$n_neighbors, weight = weight, weight_label = wlabel
   ), class = "tobs_spatial", id = id, label = "icar")
 }
 
-# bym2(graph, scale_factor) — BYM2 reparameterization of ICAR + IID
-.tobs_term_bym2 <- function(graph, scale_factor = NULL, group_var = NULL,
+# bym2(graph, scale.factor) — BYM2 reparameterization of ICAR + IID
+.tobs_term_bym2 <- function(graph, scale.factor = NULL, group.var = NULL,
                             weight = NULL, id = NULL) {
   .tobs_check_graph(graph, "bym2")
   csr <- adjacency_to_csr(graph)
-  if (is.null(scale_factor)) scale_factor <- .bym2_scale(graph)
+  if (is.null(scale.factor)) scale.factor <- .bym2_scale(graph)
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
   weight <- .tobs_resolve_field_weight(weight, nrow(graph), "bym2",
-                                       per_obs = !is.null(group_var))
+                                       per_obs = !is.null(group.var))
   .tobs_term(list(
-    type = "bym2", n_units = nrow(graph), graph = graph, group_var = group_var,
+    type = "bym2", n_units = nrow(graph), graph = graph, group_var = group.var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
-    n_neighbors = csr$n_neighbors, scale_factor = scale_factor,
+    n_neighbors = csr$n_neighbors, scale_factor = scale.factor,
     weight = weight, weight_label = wlabel
   ), class = "tobs_spatial", id = id, label = "bym2")
 }
@@ -254,21 +254,21 @@
 # carries the CSR adjacency so it can drive the occupancy / N-mixture
 # multi-block nested-Laplace kernel (cpp_nested_laplace_multi reads the CSR
 # directly when assembling the proper-CAR precision Q = tau (D - rho W)).
-.tobs_term_car <- function(graph, group_var = NULL, id = NULL) {
+.tobs_term_car <- function(graph, group.var = NULL, id = NULL) {
   .tobs_check_graph(graph, "car")
   .tobs_term(list(type = "car", n_units = nrow(graph), graph = graph,
-                  group_var = group_var),
+                  group_var = group.var),
              class = "tobs_spatial", id = id, label = "car")
 }
 
-.tobs_term_car_proper <- function(graph, group_var = NULL, weight = NULL,
+.tobs_term_car_proper <- function(graph, group.var = NULL, weight = NULL,
                                   id = NULL) {
   .tobs_check_graph(graph, "car_proper")
   csr <- adjacency_to_csr(graph)
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
   weight <- .tobs_resolve_field_weight(weight, nrow(graph), "car_proper")
   .tobs_term(list(type = "car_proper", n_units = nrow(graph), graph = graph,
-                  group_var = group_var,
+                  group_var = group.var,
                   adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
                   n_neighbors = csr$n_neighbors,
                   weight = weight, weight_label = wlabel),
@@ -307,11 +307,11 @@
 # gp(lon, lat, ...)        — NNGP-approximated Gaussian process
 .tobs_term_gp <- function(..., coords = NULL, cov = "exponential", nu = 1.5,
                           nn = 15, id = NULL,
-                          sigma2_prior_U = 1.0, sigma2_prior_alpha = 0.01,
-                          prior_range = NULL) {
+                          sigma2.prior.U = 1.0, sigma2.prior.alpha = 0.01,
+                          prior.range = NULL) {
   coords <- .tobs_collect_coords(list(...), coords, "gp")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian", "spherical"))
-  prior_range <- .tobs_check_prior_range(prior_range, "gp")
+  prior_range <- .tobs_check_prior_range(prior.range, "gp")
   nb <- .tobs_build_nngp_block(coords, nn)
   .tobs_term(list(
     type = "gp", n_obs = nb$n_obs, nn = nb$nn,
@@ -321,23 +321,23 @@
     nn_neighbor_dist = nb$nn_neighbor_dist,
     nn_order = nb$nn_order, nn_order_inv = nb$nn_order_inv,
     cov_type = cov, nu = nu,
-    sigma2_prior_U = sigma2_prior_U, sigma2_prior_alpha = sigma2_prior_alpha,
+    sigma2_prior_U = sigma2.prior.U, sigma2_prior_alpha = sigma2.prior.alpha,
     prior_range = prior_range
   ), class = "tobs_spatial", id = id, label = "gp")
 }
 
 # multiscale_gp(lon, lat, ...) — two-scale (local + regional) NNGP
 .tobs_term_multiscale_gp <- function(..., coords = NULL, cov = "exponential",
-                                     nu = 1.5, nn_local = 15, nn_regional = 15,
+                                     nu = 1.5, nn.local = 15, nn.regional = 15,
                                      id = NULL,
-                                     range_local_lower = 0.01, range_local_upper = 10.0,
-                                     range_regional_lower = 0.01, range_regional_upper = 100.0,
-                                     sigma2_local_prior_U = 1.0, sigma2_local_prior_alpha = 0.01,
-                                     sigma2_regional_prior_U = 1.0, sigma2_regional_prior_alpha = 0.01) {
+                                     range.local.lower = 0.01, range.local.upper = 10.0,
+                                     range.regional.lower = 0.01, range.regional.upper = 100.0,
+                                     sigma2.local.prior.U = 1.0, sigma2.local.prior.alpha = 0.01,
+                                     sigma2.regional.prior.U = 1.0, sigma2.regional.prior.alpha = 0.01) {
   coords <- .tobs_collect_coords(list(...), coords, "multiscale_gp")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian", "spherical"))
-  loc <- .tobs_build_nngp_block(coords, nn_local)
-  reg <- .tobs_build_nngp_block(coords, nn_regional)
+  loc <- .tobs_build_nngp_block(coords, nn.local)
+  reg <- .tobs_build_nngp_block(coords, nn.regional)
   .tobs_term(list(
     type = "multiscale_gp", n_obs = loc$n_obs, coords = as.vector(t(coords)),
     nn_local = loc$nn,
@@ -351,28 +351,28 @@
     nn_neighbor_dist_regional = reg$nn_neighbor_dist,
     nn_order_regional = reg$nn_order, nn_order_inv_regional = reg$nn_order_inv,
     cov_type = cov, nu = nu,
-    range_local_lower = range_local_lower, range_local_upper = range_local_upper,
-    range_regional_lower = range_regional_lower, range_regional_upper = range_regional_upper,
-    sigma2_local_prior_U = sigma2_local_prior_U, sigma2_local_prior_alpha = sigma2_local_prior_alpha,
-    sigma2_regional_prior_U = sigma2_regional_prior_U, sigma2_regional_prior_alpha = sigma2_regional_prior_alpha
+    range_local_lower = range.local.lower, range_local_upper = range.local.upper,
+    range_regional_lower = range.regional.lower, range_regional_upper = range.regional.upper,
+    sigma2_local_prior_U = sigma2.local.prior.U, sigma2_local_prior_alpha = sigma2.local.prior.alpha,
+    sigma2_regional_prior_U = sigma2.regional.prior.U, sigma2_regional_prior_alpha = sigma2.regional.prior.alpha
   ), class = "tobs_spatial", id = id, label = "multiscale_gp")
 }
 
 # spde(lon, lat, ...)      — continuous Matern field via triangular mesh
-.tobs_term_spde <- function(..., coords = NULL, mesh = NULL, max_edge = NULL,
+.tobs_term_spde <- function(..., coords = NULL, mesh = NULL, max.edge = NULL,
                             cutoff = 0, nu = 1, id = NULL,
-                            prior_range = c(0.5, 0.5), prior_sigma = c(1, 0.5)) {
+                            prior.range = c(0.5, 0.5), prior.sigma = c(1, 0.5)) {
   if (is.null(coords) && is.null(mesh)) {
     coords <- .tobs_collect_coords(list(...), coords, "spde")
   }
   tulpa_spec <- tulpa::spatial_spde(
     coords = coords, data = NULL, mesh = mesh,
-    max_edge = max_edge, cutoff = cutoff, nu = nu,
-    prior_range = prior_range, prior_sigma = prior_sigma
+    max_edge = max.edge, cutoff = cutoff, nu = nu,
+    prior_range = prior.range, prior_sigma = prior.sigma
   )
   .tobs_term(list(
     type = "spde", tulpa_spec = tulpa_spec, n_units = tulpa_spec$n_mesh,
-    nu = nu, prior_range = prior_range, prior_sigma = prior_sigma
+    nu = nu, prior_range = prior.range, prior_sigma = prior.sigma
   ), class = "tobs_spatial", id = id, label = "spde")
 }
 
@@ -391,7 +391,7 @@
 .tobs_term_re <- function(group, type = c("intercept", "slope", "iid"),
                           covariate = NULL, model = "iid",
                           correlated = TRUE, intercept = TRUE,
-                          sigma_scale = 1, id = NULL) {
+                          sigma.scale = 1, id = NULL) {
   type  <- match.arg(type)
   model <- match.arg(model, c("iid", "ar1", "rw1", "rw2"))
   if (type == "slope" && is.null(covariate)) {
@@ -411,19 +411,19 @@
     group_idx = codes$idx, n_groups = codes$n, levels = codes$levels,
     type = type, covariate = covariate, model = model,
     correlated = correlated, intercept = isTRUE(intercept),
-    sigma_scale = sigma_scale
+    sigma_scale = sigma.scale
   ), class = "tobs_re", id = id, label = "re")
 }
 
 # temporal(time, ...)      — AR1 / RW1 / RW2 / IID temporal field
 .tobs_term_temporal <- function(time, type = c("ar1", "rw1", "rw2", "iid"),
                                 group = NULL, cyclic = FALSE,
-                                tau_shape = 1, tau_rate = 0.01, id = NULL) {
+                                tau.shape = 1, tau.rate = 0.01, id = NULL) {
   type <- match.arg(type)
   tcodes <- .tobs_index_codes(time, "temporal", "time")
   spec <- list(
     type = type, time_idx = tcodes$idx, n_times = tcodes$n,
-    cyclic = cyclic, tau_shape = tau_shape, tau_rate = tau_rate
+    cyclic = cyclic, tau_shape = tau.shape, tau_rate = tau.rate
   )
   if (!is.null(group)) {
     gcodes <- .tobs_index_codes(group, "temporal", "group")
@@ -450,11 +450,11 @@
 # coefficients are.
 .tobs_term_svc <- function(..., coefficients = NULL, indices = NULL,
                            coords = NULL, cov = "exponential",
-                           nn = 15, id = NULL, sigma2_prior_scale = 1,
-                           prior_range = NULL) {
+                           nn = 15, id = NULL, sigma2.prior.scale = 1,
+                           prior.range = NULL) {
   coords <- .tobs_collect_coords(list(...), coords, "svc")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian"))
-  prior_range <- .tobs_check_prior_range(prior_range, "svc")
+  prior_range <- .tobs_check_prior_range(prior.range, "svc")
   sel <- .tobs_svc_check_selector(coefficients, indices)
   nb  <- .tobs_build_nngp_block(coords, nn, pair_dist = FALSE)
   .tobs_term(list(
@@ -462,7 +462,7 @@
     n_obs = nb$n_obs, nn = nb$nn, coords = as.vector(t(coords)),
     nn_idx = nb$nn_idx, nn_dist = nb$nn_dist,
     nn_order = nb$nn_order, nn_order_inv = nb$nn_order_inv,
-    cov_type = cov, sigma2_prior_scale = sigma2_prior_scale,
+    cov_type = cov, sigma2_prior_scale = sigma2.prior.scale,
     prior_range = prior_range
   ), class = "tobs_svc", id = id, label = "svc")
 }
@@ -513,12 +513,12 @@
   list(coefficients = NULL, indices = idx, n_svc = length(idx))
 }
 
-# latent(n_factors, ...)   — latent factors for community models
-.tobs_term_latent <- function(n_factors, constraint = 0,
-                              sigma_prior_rate = 1, id = NULL) {
+# latent(n.factors, ...)   — latent factors for community models
+.tobs_term_latent <- function(n.factors, constraint = 0,
+                              sigma.prior.rate = 1, id = NULL) {
   .tobs_term(list(
-    n_factors = as.integer(n_factors), constraint = as.integer(constraint),
-    sigma_prior_rate = sigma_prior_rate
+    n_factors = as.integer(n.factors), constraint = as.integer(constraint),
+    sigma_prior_rate = sigma.prior.rate
   ), class = "tobs_latent", id = id, label = "latent")
 }
 
@@ -862,7 +862,7 @@
   # Varying-coefficient bar form: the first positional argument is a one-sided
   # coefficient formula carrying a `|` / `||` grouping bar. Capture it together
   # with `graph`, `model`, `to` for later (data-aware) expansion; the bar's node
-  # index is the areal group_var. The first dot is positional when it is unnamed
+  # index is the areal group.var. The first dot is positional when it is unnamed
   # (no names at all, or an empty-string name in slot 1).
   first_unnamed <- length(dots) >= 1L &&
     (is.null(names(dots)) || !nzchar(names(dots)[[1L]]))
@@ -916,7 +916,7 @@
   graph <- rest$graph
   by    <- rest$by
   # Only `graph`, `by`, and (optionally) `model` are accepted on the bar form;
-  # the node index is the bar RHS, weights are the bar LHS, so group_var/weight
+  # the node index is the bar RHS, weights are the bar LHS, so group.var/weight
   # named args would be redundant. Reject anything else with a clear pointer.
   known <- c("graph", "by")
   extra <- setdiff(names(rest)[nzchar(names(rest))], known)
@@ -943,7 +943,7 @@
       "form and needs a graph. Over continuous coordinates, name the varying ",
       "coefficients directly:\n",
       "  spatial(lon, lat, model = \"svc\", coefficients = c(\"(Intercept)\", \"w\"), ",
-      "prior_range = c(r0, alpha))"), call. = FALSE)
+      "prior.range = c(r0, alpha))"), call. = FALSE)
   }
   if (!model %in% c("icar", "bym2", "car", "car_proper")) {
     stop(sprintf(paste0(
@@ -989,12 +989,12 @@
 # pair the existing weighted-areal-term machinery consumes: one unweighted
 # intercept areal field plus, per bar covariate column, a weight-scaled trend
 # areal field, all on the same graph keyed by the bar's node index (the areal
-# group_var). Each is a plain `tobs_spatial` term identical to what `icar(graph,
-# group_var = node)` / `icar(graph, weight = col, group_var = node)` would
+# group.var). Each is a plain `tobs_spatial` term identical to what `icar(graph,
+# group.var = node)` / `icar(graph, weight = col, group.var = node)` would
 # produce, so the bar form desugars to exactly the two-term coupled cover path
 # with no engine change. Returns a list of `tobs_spatial` terms in column order
 # (intercept first). Validate a bar's node-index column against the graph
-# dimension (the bar RHS is the graph node index, the old group_var). Shared by
+# dimension (the bar RHS is the graph node index, the areal group.var). Shared by
 # the independent expansion (.tobs_expand_spatial_bar) and the arm-specific
 # field builder (.tobs_armspecific_bar_fields), so one source of truth for the
 # check.
@@ -1058,17 +1058,17 @@
   ctor  <- .tobs_terms[[spec$type]]
 
   # Validate the node index against the graph dimension (the bar RHS is the
-  # graph node index, the old group_var).
+  # graph node index, the areal group.var).
   .tobs_validate_bar_node(node, spec$graph, data)
 
   out <- vector("list", length(specs))
   for (i in seq_along(specs)) {
     col <- specs[[i]]
     if (isTRUE(col$is_intercept)) {
-      term <- ctor(graph = spec$graph, group_var = node, id = spec$id)
+      term <- ctor(graph = spec$graph, group.var = node, id = spec$id)
       term$component <- "intercept"
     } else {
-      term <- ctor(graph = spec$graph, group_var = node, id = spec$id)
+      term <- ctor(graph = spec$graph, group.var = node, id = spec$id)
       term$weight       <- as.numeric(col$weight)
       term$weight_label <- col$column_name
       # The coefficient (trend) column is addressable as "<field>.<column>" and,

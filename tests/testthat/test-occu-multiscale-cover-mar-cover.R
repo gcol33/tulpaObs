@@ -211,7 +211,7 @@ test_that("multiscale fit with missing cover moves the cover arm alone", {
   y_pos_mar[sample(det, floor(length(det) / 3))] <- NA_real_
 
   fit_one <- function(y_pos) suppressWarnings(tobs(
-    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
     y = sim$y, y.pos = y_pos, method = "laplace",
@@ -265,7 +265,7 @@ test_that("multiscale shared-field fit takes missing cover", {
   y_pos_mar[sample(det, floor(length(det) / 3))] <- NA_real_
 
   fit_one <- function(y_pos) suppressWarnings(tobs(
-    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot,
     positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),

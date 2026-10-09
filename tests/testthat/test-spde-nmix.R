@@ -34,8 +34,8 @@ test_that("abun() + spde() recovers the abundance slope and the mesh field", {
                       lon = coords[, 1], lat = coords[, 2])
     fit <- tobs(
       formula = ~ abun_cov + spde(lon, lat, cutoff = 0, nu = 1,
-                                  prior_range = c(0.3, 0.5),
-                                  prior_sigma = c(0.8, 0.5)),
+                                  prior.range = c(0.3, 0.5),
+                                  prior.sigma = c(0.8, 0.5)),
       data = dat, family = abun(),
       detection = ~ det_cov, y = y,
       method = "nested_laplace", control = list(verbose = FALSE))
@@ -105,8 +105,8 @@ test_that("ms_abun() + spde() recovers the shared mesh field across species", {
 
   fit <- tobs(
     formula = ~ abun_cov + spde(lon, lat, cutoff = 0, nu = 1,
-                                prior_range = c(0.3, 0.5),
-                                prior_sigma = c(0.8, 0.5)),
+                                prior.range = c(0.3, 0.5),
+                                prior.sigma = c(0.8, 0.5)),
     data = dat, family = ms_abun(), species = dimnames(y)[[3]],
     detection = ~ det_cov, y = y,
     method = "nested_laplace", control = list(verbose = FALSE))

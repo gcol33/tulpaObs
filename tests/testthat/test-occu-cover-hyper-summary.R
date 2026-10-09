@@ -137,7 +137,7 @@ test_that("a cover-arm field SD reports the engine read of its precision axis", 
     adj = adj, sigma = 0.5, alpha = 0.0,
     pos.field = TRUE, sigma.pos.int = 0.0, sigma.pos.trend = 0.7, seed = 3L)
   fit <- suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
     detection = ~ 1,
     positive = ~ 1 + spatial(~ 0 + time || cell, graph = adj),
     family = occu_cover(response = "lognormal"),

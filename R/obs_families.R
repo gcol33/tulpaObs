@@ -512,16 +512,16 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' covariate in the cell `data`; this is the equivalent of one weighted formula
 #' term. Specify the trend field one way or the other, not both.
 #'
-#' @section Sites larger than cells (`group_var`):
+#' @section Sites larger than cells (`group.var`):
 #' By default each site (one row of `y` / `data`, one latent occupancy state) is
 #' its own field node, so the graph must have one node per site. Passing
-#' `group_var = "<col>"` to the `icar()` / `bym2()` term maps each site to a
+#' `group.var = "<col>"` to the `icar()` / `bym2()` term maps each site to a
 #' field node named by that integer column, so several sites can share one node.
 #' The field then stays length `n_cells` (the graph) while occupancy, detection,
 #' and cover run over `n_sites`. The motivating layout is a site = cell x
 #' time-period: plots in a cell-period are the detection replicates, occupancy is
 #' per cell-period, and a per-site time weight on a coupled trend field
-#' (`icar(graph, weight = time, group_var = "cell")`) gives a detection-corrected
+#' (`icar(graph, weight = time, group.var = "cell")`) gives a detection-corrected
 #' occupancy trend on a shared cell field.
 #'
 #' @section Per-group random intercept on the shared-field path (`re()` / `(1 | g)`):
@@ -545,10 +545,10 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' `tulpa::spatial(graph, ~ 1 + x | cell)` reads `| cell` as a separable spatial
 #' field, but the same spelling in an `occu_cover()` formula is an IID random
 #' effect on `cell`. For a spatial field on the cells use an areal term --
-#' `icar(graph = adj, group_var = "cell")` (plus
-#' `icar(graph = adj, weight = x, group_var = "cell")` for a spatially-varying
+#' `icar(graph = adj, group.var = "cell")` (plus
+#' `icar(graph = adj, weight = x, group.var = "cell")` for a spatially-varying
 #' trend) -- not a bar. When a formula carries a bar whose grouping factor is also
-#' an areal term's `group_var`, `occu_cover()` emits a one-time message noting the
+#' an areal term's `group.var`, `occu_cover()` emits a one-time message noting the
 #' bar is fitted as a random effect; suppress it with [base::suppressMessages()].
 #'
 #' @section Independent field on the cover arm (placement):
@@ -563,7 +563,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' alone:
 #'
 #' ```r
-#' tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
+#' tobs(occurrence = ~ x + icar(graph = adj, group.var = "cell"),
 #'      detection  = ~ 1,
 #'      positive   = ~ time + spatial(~ 1 + time || cell, graph = adj),
 #'      data = cell_dat, y = y, y.pos = y_pos,
@@ -987,7 +987,7 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' `y` / `y.pos` are `[n_plots x max_visits]` matrices (plots are the rows, the
 #' availability units; visits the columns). The state-process `formula` is the
 #' cell-level occupancy predictor and MUST carry an areal field naming the
-#' per-plot cell column, `icar(graph = adj, group_var = "cell")`. `availability
+#' per-plot cell column, `icar(graph = adj, group.var = "cell")`. `availability
 #' = ~ ...` is the plot-level theta predictor (default `~ 1`); `detection` the
 #' per-visit p predictor; `positive = ~ ...` the cover predictor (default the
 #' detection formula). `y.pos` is read only where `y == 1`.
@@ -1015,11 +1015,11 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' form) optimised directly (`"laplace"`, a Gaussian observed-Fisher posterior)
 #' or sampled (`"nuts"`, the exact coefficient posterior with calibrated
 #' intervals and WAIC / LOO). Cells are declared the same way on every path, via
-#' an `icar(graph = adj, group_var = "<cell>")` term (the graph drives the field
+#' an `icar(graph = adj, group.var = "<cell>")` term (the graph drives the field
 #' under `"nested_laplace"` and supplies only the plot -> cell map under
 #' `"laplace"` / `"nuts"`). On the `"nested_laplace"` path additional weighted
 #' areal terms in the psi formula
-#' (`icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)`) add
+#' (`icar(graph = adj, group.var = "<cell>", weight = <cell covariate>)`) add
 #' spatially-varying-coefficient trend fields, each coupled onto the cover arm
 #' with its own `alpha_trend`; the fitted fields are in `fit$trend_field` /
 #' `fit$trend_fields`. The coupled / trend field is not sampled, so
@@ -2156,8 +2156,8 @@ occu_categorical <- function(classes = NULL) {
 #'
 #' ```r
 #' ~ time.sc +
-#'   icar(graph = adj, group_var = "cell_idx") +
-#'   icar(graph = adj, weight = time.sc, group_var = "cell_idx")
+#'   icar(graph = adj, group.var = "cell_idx") +
+#'   icar(graph = adj, weight = time.sc, group.var = "cell_idx")
 #' ```
 #'
 #' The unweighted term is the shared intercept field; the weighted term
@@ -2208,7 +2208,7 @@ occu_categorical <- function(classes = NULL) {
 #' The bar left-hand side spells the coefficient fields: the intercept column
 #' (`1`) is the unweighted field; each covariate column (`time.sc`) is a
 #' weight-scaled coefficient field (`weight_i * z[cell_i]`). The bar right-hand
-#' side (`cell_idx`) is the graph node index (the areal `group_var`); `||`
+#' side (`cell_idx`) is the graph node index (the areal `group.var`); `||`
 #' requests independent intercept and slope fields, a single `|` makes them
 #' correlated. This desugars to exactly the two-term weighted-areal form above,
 #' so the two spellings give the same fit.
@@ -2306,9 +2306,9 @@ occu_categorical <- function(classes = NULL) {
 #' random effect on `cell`. For a spatial field on the cells write either the
 #' compact `spatial()` bar of the section above,
 #' `spatial(~ 1 + x || cell, graph = adj)`, or the two-term weighted-areal form,
-#' `icar(graph = adj, group_var = "cell") +`
-#' `icar(graph = adj, weight = x, group_var = "cell")`. When a formula carries a
-#' bar whose grouping factor is also an areal term's `group_var`, `cover()` emits
+#' `icar(graph = adj, group.var = "cell") +`
+#' `icar(graph = adj, weight = x, group.var = "cell")`. When a formula carries a
+#' bar whose grouping factor is also an areal term's `group.var`, `cover()` emits
 #' a one-time message noting the bar is fitted as a random effect; suppress it
 #' with [base::suppressMessages()].
 #'

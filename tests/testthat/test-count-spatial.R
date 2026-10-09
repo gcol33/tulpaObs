@@ -55,18 +55,18 @@ test_that("areal count() gates the unsupported forms", {
   # is the identity map when the graph has one node per site, so it fits
   # rather than erroring.
   expect_s3_class(
-    tobs(~ x + icar(graph = d$graph, weight = x, group_var = "cell"),
+    tobs(~ x + icar(graph = d$graph, weight = x, group.var = "cell"),
          data = cbind(d$data, cell = seq_len(d$N)), y = d$y,
          family = count(), method = "nested_laplace",
          control = list(verbose = FALSE, progress = FALSE)),
     "tobs_fit")
 
-  # An AGGREGATING group_var (sites > cells) is not yet reconstructed here.
+  # An AGGREGATING group.var (sites > cells) is not yet reconstructed here.
   expect_error(
-    tobs(~ x + icar(graph = rook_adj(3L), group_var = "cell"),
+    tobs(~ x + icar(graph = rook_adj(3L), group.var = "cell"),
          data = cbind(d$data, cell = rep(seq_len(9L), length.out = d$N)),
          y = d$y, family = count(), method = "nested_laplace"),
-    "group_var|sites > cells|one field node per site")
+    "group\\.var|sites > cells|one field node per site")
 
   # engine mismatch either way
   expect_error(
@@ -287,8 +287,8 @@ test_that("areal count recovers a continuous SPDE field + slope", {
   y  <- rpois(n, exp(0.5 + 0.5 * x + u))
   dat <- data.frame(x = x, lon = coords[, 1], lat = coords[, 2])
 
-  fit <- tobs(~ x + spde(lon, lat, max_edge = c(0.3, 0.6), nu = 1,
-                         prior_range = c(0.3, 0.5), prior_sigma = c(0.7, 0.5)),
+  fit <- tobs(~ x + spde(lon, lat, max.edge = c(0.3, 0.6), nu = 1,
+                         prior.range = c(0.3, 0.5), prior.sigma = c(0.7, 0.5)),
               data = dat, y = y, family = count(), method = "nested_laplace",
               control = list(progress = FALSE, verbose = FALSE))
 
@@ -328,7 +328,7 @@ test_that("areal count recovers a slope under a continuous NNGP gp() field", {
   y <- rpois(n, exp(0.6 + 0.6 * x + u))
   dat <- data.frame(x = x, lon = coords[, 1], lat = coords[, 2])
 
-  fit <- tobs(~ x + gp(lon, lat, prior_range = c(0.1, 0.05)),
+  fit <- tobs(~ x + gp(lon, lat, prior.range = c(0.1, 0.05)),
               data = dat, y = y, family = count("poisson"),
               method = "nested_laplace",
               control = list(progress = FALSE, verbose = FALSE))
@@ -358,7 +358,7 @@ test_that("count() spatial-field gates: multiscale_gp and negbin + gp", {
          control = list(verbose = FALSE)),
     "multiscale_gp")
   expect_error(
-    tobs(~ x + gp(lon, lat, prior_range = c(0.1, 0.05)), data = dat, y = y,
+    tobs(~ x + gp(lon, lat, prior.range = c(0.1, 0.05)), data = dat, y = y,
          family = count("negbin"), method = "nested_laplace",
          control = list(verbose = FALSE)),
     "identifiable|confounded")

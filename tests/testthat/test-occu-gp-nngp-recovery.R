@@ -44,7 +44,7 @@
 
 .gpr_fit <- function(sim, seed, n_iter = 600L, n_warmup = 300L, nn = 10) {
   suppressWarnings(tobs(
-    ~ gp(lon, lat, nn = nn, prior_range = c(0.1, 0.05)),
+    ~ gp(lon, lat, nn = nn, prior.range = c(0.1, 0.05)),
     data = sim$data,
     family = occu(), detection = ~ 1, y = sim$y,
     method = "nuts",

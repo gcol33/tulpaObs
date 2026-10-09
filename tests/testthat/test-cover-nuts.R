@@ -102,7 +102,7 @@ test_that("cover NUTS is gated off the spatial path; family advertises nuts", {
   for (i in seq_len(19)) adj[i, i + 1L] <- adj[i + 1L, i] <- 1L
   expect_error(
     suppressWarnings(tobs(
-      formula = ~ x + icar(graph = adj, group_var = "cell_idx"),
+      formula = ~ x + icar(graph = adj, group.var = "cell_idx"),
       data = sim$data, family = cover("lognormal"), y = sim$y,
       method = "nuts", control = list(verbose = FALSE))),
     "not yet wired|non-spatial sampler")

@@ -7,7 +7,7 @@
                             det = ~ x_pdet, pos = ~ x_cov,
                             y_pos = sim$y_pos) {
   occ_f <- stats::as.formula(
-    paste(deparse(occ), "+ icar(graph = sim$adj, group_var = \"cell\")"))
+    paste(deparse(occ), "+ icar(graph = sim$adj, group.var = \"cell\")"))
   si <- tulpaObs:::.occu_cover_spatial_fields(occ_f, sim$data)
   vd_det <- tulpaObs:::.normalize_visits(NULL, det, nrow(sim$y), ncol(sim$y))
   vd_pos <- tulpaObs:::.normalize_visits(NULL, pos, nrow(sim$y), ncol(sim$y))

@@ -250,7 +250,7 @@ test_that("a one-node phi.grid.pos is the dispersion occu_multiscale_cover holds
                                         visits.per.plot = 2L, phi = 0.4,
                                         sigma = 0.02, seed = 101L)
   fit_at <- function(v) suppressWarnings(tobs(
-    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot,
     positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
@@ -299,7 +299,7 @@ test_that("a one-node phi.grid is the dispersion cover() holds and reports", {
                 pmin(exp(rnorm(N, log(0.2) + 0.3 * x, 0.4)), 1 - 1e-6), 0)
   d   <- data.frame(x = x, region = factor(reg, levels = seq_len(n_s)))
   fit_at <- function(v) suppressWarnings(tobs(
-    formula = ~ x + icar(graph = adj, group_var = "region") +
+    formula = ~ x + icar(graph = adj, group.var = "region") +
       share(spatial(), alpha = grid(c(0.5, 1.0))),
     data = d, family = cover("lognormal"), y = y, method = "nested_laplace",
     control = list(sigma.grid = c(0.25, 0.5, 1.0), phi.grid = v)))

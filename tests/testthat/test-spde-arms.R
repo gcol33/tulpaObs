@@ -22,8 +22,8 @@
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 .spde_field_term <- function() {
-  ~ occ_cov + spde(lon, lat, max_edge = c(0.3, 0.6), nu = 1,
-                   prior_range = c(0.3, 0.5), prior_sigma = c(0.8, 0.5))
+  ~ occ_cov + spde(lon, lat, max.edge = c(0.3, 0.6), nu = 1,
+                   prior.range = c(0.3, 0.5), prior.sigma = c(0.8, 0.5))
 }
 .spde_field_cor <- function(fit, u_true) {
   cor(as.numeric(fit$spatial$tulpa_spec$A %*% fit$spatial_field), u_true)

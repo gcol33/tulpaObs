@@ -59,11 +59,11 @@
 #'
 #'   Structured effects are written as terms inside the formula, the way
 #'   `lme4`, `mgcv`, and `INLA` do: spatial fields `icar(graph = adj)`,
-#'   `bym2(graph = adj)`, `gp(lon, lat, prior_range = c(r0, alpha))`,
+#'   `bym2(graph = adj)`, `gp(lon, lat, prior.range = c(r0, alpha))`,
 #'   `spde(lon, lat)`; random effects `re(group)`; temporal fields
 #'   `temporal(time)`; spatially varying coefficients `spatial(~ 1 + w || cell,
 #'   graph = adj)` over a graph or `spatial(lon, lat, model = "svc",
-#'   coefficients = ..., prior_range = c(r0, alpha))` over coordinates;
+#'   coefficients = ..., prior.range = c(r0, alpha))` over coordinates;
 #'   community latent factors
 #'   `latent(k)`. A term enters whichever linear predictor it is written in
 #'   (occupancy `formula` or `detection`). To share one realization across
@@ -82,12 +82,12 @@
 #'   spatially-varying coefficient -- areal over a graph, continuous over
 #'   coordinates (`model = "svc"`) -- are written through the same verb.
 #'
-#'   The continuous fields (`gp()`, `svc()`, `spde()`) require `prior_range =
+#'   The continuous fields (`gp()`, `svc()`, `spde()`) require `prior.range =
 #'   c(r0, alpha)`, a penalized-complexity prior on the spatial range encoding
 #'   `P(range < r0) = alpha` (Fuglstad et al. 2019). The range is in the units
 #'   of the coordinates -- the kernel is `exp(-d / range)` -- so choose `r0` as
 #'   a distance below which the field's correlation would be surprisingly short:
-#'   on unit-square coordinates `prior_range = c(0.1, 0.05)` reads as "a 5%
+#'   on unit-square coordinates `prior.range = c(0.1, 0.05)` reads as "a 5%
 #'   chance the range is under 0.1". There is no default, deliberately. The
 #'   range is weakly identified by the likelihood alone, so a default would be
 #'   an invented prior doing real work on the posterior rather than a

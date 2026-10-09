@@ -6,7 +6,7 @@
 # error with a pointer to the recovery-tested areal-bar route. These are fast
 # error paths (the guard fires before any fit), so they run in every tier.
 #
-# `prior_range` is supplied even though these calls are expected to fail: without
+# `prior.range` is supplied even though these calls are expected to fail: without
 # it svc() errors in its own constructor, and that message also matches the regex
 # below -- the tests would pass while never reaching the family guard.
 
@@ -15,7 +15,7 @@ test_that("svc() on abun() errors instead of silently dropping", {
   y  <- matrix(stats::rpois(30 * 3, 3), 30, 3)
   df <- data.frame(lon = stats::runif(30), lat = stats::runif(30))
   expect_error(
-    tobs(~ svc(lon, lat, indices = 1, prior_range = c(0.1, 0.05)), data = df,
+    tobs(~ svc(lon, lat, indices = 1, prior.range = c(0.1, 0.05)), data = df,
          family = abun(), detection = ~ 1, y = y),
     "svc|areal|spatially-varying")
 })
@@ -27,7 +27,7 @@ test_that("svc() on a multi-season family still errors", {
   df <- data.frame(lon = stats::runif(n), lat = stats::runif(n))
   # The SVC surfaces are wired on the single-season occupancy marginal only.
   expect_error(
-    tobs(~ svc(lon, lat, indices = 1, prior_range = c(0.1, 0.05)), data = df,
+    tobs(~ svc(lon, lat, indices = 1, prior.range = c(0.1, 0.05)), data = df,
          family = dyn_occu(), detection = ~ 1, y = y,
          colonization = ~ 1, extinction = ~ 1, method = "laplace"),
     "svc|areal|spatially-varying")
@@ -39,7 +39,7 @@ test_that("svc() on a method without an SVC route still errors", {
   df <- data.frame(lon = stats::runif(30), lat = stats::runif(30))
   # Polya-Gamma Gibbs carries no latent-field block for a continuous surface.
   expect_error(
-    tobs(~ svc(lon, lat, indices = 1, prior_range = c(0.1, 0.05)), data = df,
+    tobs(~ svc(lon, lat, indices = 1, prior.range = c(0.1, 0.05)), data = df,
          family = occu(), detection = ~ 1, y = y, method = "pg_gibbs"),
     "svc|areal|spatially-varying")
 })
@@ -58,8 +58,8 @@ test_that("svc() alongside another structured term errors on the Laplace route",
   # The block list carries the NNGP surfaces alone; an areal field alongside
   # them is not wired, so it errors rather than being dropped.
   expect_error(
-    tobs(~ svc(lon, lat, indices = 1, prior_range = c(0.1, 0.05)) +
-           icar(graph = adj, group_var = "cell"),
+    tobs(~ svc(lon, lat, indices = 1, prior.range = c(0.1, 0.05)) +
+           icar(graph = adj, group.var = "cell"),
          data = df, family = occu(), detection = ~ 1, y = y,
          method = "laplace"),
     "svc|spatial|not wired")
@@ -71,7 +71,7 @@ test_that("svc() on single-season occu() FITS under laplace", {
   df <- data.frame(lon = stats::runif(n), lat = stats::runif(n))
   z  <- stats::rbinom(n, 1, 0.5)
   y  <- matrix(stats::rbinom(n * 4, 1, 0.6 * rep(z, 4)), n, 4)
-  fit <- tobs(~ svc(lon, lat, indices = 1, nn = 8, prior_range = c(0.1, 0.05)),
+  fit <- tobs(~ svc(lon, lat, indices = 1, nn = 8, prior.range = c(0.1, 0.05)),
               data = df, family = occu(), detection = ~ 1, y = y,
               method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))

@@ -211,7 +211,7 @@
       beta.psi = c(0.4, 0.6), beta.theta = c(0.2, 0.5),
       beta.p = c(0.0, 0.5), beta.pos = c(log(0.10), -0.4),
       positive = "lognormal", phi = 0.35, seed = 61L)
-    suppressWarnings(tobs(~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    suppressWarnings(tobs(~ x_cell + icar(graph = sim$adj, group.var = "cell"),
                           data = sim$data,
                           family = occu_multiscale_cover(response = "lognormal"),
                           detection = ~ x_pdet, availability = ~ x_plot,

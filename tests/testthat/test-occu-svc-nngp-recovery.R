@@ -23,7 +23,7 @@
 # mean, vs 0.66 before) -- it is bounded by the information in the data, not by
 # sampler health, which is why the calibration test no longer asserts on it.
 #
-# svc() now requires prior_range = c(r0, alpha): tulpa ships the PC range
+# svc() now requires prior.range = c(r0, alpha): tulpa ships the PC range
 # anchors unset and refuses rather than inventing a default.
 #
 # This is the continuous-NNGP flavour, NOT the areal weighted-bar SVC -- that
@@ -57,7 +57,7 @@
 # the scaled-column scale and truth would need rescaling before scoring.
 .svc_fit <- function(sim, seed, n_iter = 600L, n_warmup = 300L) {
   suppressWarnings(tobs(
-    ~ svc(lon, lat, indices = 1L, nn = 12, prior_range = c(0.1, 0.05)),
+    ~ svc(lon, lat, indices = 1L, nn = 12, prior.range = c(0.1, 0.05)),
     data = sim$data,
     family = occu(), detection = ~ 1, y = sim$y,
     method = "nuts",

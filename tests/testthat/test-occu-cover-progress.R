@@ -52,7 +52,7 @@ test_that("cover() hurdle writes its heartbeat file under verbose = FALSE", {
   on.exit(unlink(path), add = TRUE)
 
   fit <- suppressWarnings(tobs(
-    formula = ~ x + bym2(graph = adj, group_var = "region"),
+    formula = ~ x + bym2(graph = adj, group.var = "region"),
     data = dat, family = cover("beta"), y = y,
     method = "nested_laplace",
     control = list(
@@ -131,7 +131,7 @@ test_that("verbose = FALSE without progress.file leaves no heartbeat file", {
   dat <- data.frame(x = x, region = factor(spatial_idx))
 
   fit <- suppressWarnings(tobs(
-    formula = ~ x + bym2(graph = adj, group_var = "region"),
+    formula = ~ x + bym2(graph = adj, group.var = "region"),
     data = dat, family = cover("beta"), y = y,
     method = "nested_laplace",
     control = list(verbose = FALSE, sigma.grid = c(0.4, 0.7),

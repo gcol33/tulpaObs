@@ -167,8 +167,8 @@ test_that("a weighted areal term fits standalone occu() on the nested-Laplace pa
   # standalone occu() nested-Laplace fit: the occupancy-only analogue of the
   # occu_cover() coupled trend, with no cover arm.
   fit <- suppressWarnings(tobs(
-    formula = ~ icar(graph = adj, group_var = "site_id") +
-                icar(graph = adj, weight = x, group_var = "site_id"),
+    formula = ~ icar(graph = adj, group.var = "site_id") +
+                icar(graph = adj, weight = x, group.var = "site_id"),
     data = cell_dat, family = occu(), detection = ~ w,
     y = od$y, visits = od$det.covs,
     method = "nested_laplace", control = list(verbose = FALSE, max.iter = 5L)))
@@ -372,8 +372,8 @@ test_that("standalone occu() change reports psi start/end CI + P(delta>0)", {
                      w = rnorm(3L * N))
   od <- tobs_data(long, y = "y", site = "site_id", visit = "visit", det.covs = "w")
   fit <- suppressWarnings(tobs(
-    formula = ~ x + icar(graph = adj, group_var = "site_id") +
-                icar(graph = adj, weight = x, group_var = "site_id"),
+    formula = ~ x + icar(graph = adj, group.var = "site_id") +
+                icar(graph = adj, weight = x, group.var = "site_id"),
     data = cell_dat, family = occu(), detection = ~ w,
     y = od$y, visits = od$det.covs,
     method = "nested_laplace", control = list(verbose = FALSE, max.iter = 50L)))

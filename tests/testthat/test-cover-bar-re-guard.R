@@ -24,10 +24,10 @@
 
 # ---- 1. same factor as graph node -> message -------------------------------
 
-test_that("a bar sharing the areal group_var emits the guidance message", {
+test_that("a bar sharing the areal group.var emits the guidance message", {
   adj <- .guard_chain_adj(16L)
   dat <- .guard_data()
-  f <- ~ time + (1 + time | cell) + icar(graph = adj, group_var = "cell")
+  f <- ~ time + (1 + time | cell) + icar(graph = adj, group.var = "cell")
 
   expect_message(
     tulpaObs:::.encode_cover_terms(f, dat),
@@ -38,7 +38,7 @@ test_that("a bar sharing the areal group_var emits the guidance message", {
 test_that("the same-factor message also fires through occu_cover's parser", {
   adj <- .guard_chain_adj(16L)
   dat <- .guard_data()
-  f <- ~ time + (1 | cell) + icar(graph = adj, group_var = "cell")
+  f <- ~ time + (1 | cell) + icar(graph = adj, group.var = "cell")
 
   expect_message(
     tulpaObs:::.occu_cover_spatial_fields(f, dat),
@@ -52,7 +52,7 @@ test_that("a bar on an unrelated factor does not message", {
   adj <- .guard_chain_adj(16L)
   dat <- .guard_data()
   # bar groups by `site`; the field's graph-node group_var is `cell`.
-  f <- ~ time + (1 + time | site) + icar(graph = adj, group_var = "cell")
+  f <- ~ time + (1 + time | site) + icar(graph = adj, group.var = "cell")
 
   expect_no_message(tulpaObs:::.encode_cover_terms(f, dat))
 })
@@ -69,7 +69,7 @@ test_that("a bar with no spatial term in the formula does not message", {
 test_that("the same-factor bar still fits as a random effect (re populated)", {
   adj <- .guard_chain_adj(16L)
   dat <- .guard_data()
-  f <- ~ time + (1 + time | cell) + icar(graph = adj, group_var = "cell")
+  f <- ~ time + (1 + time | cell) + icar(graph = adj, group.var = "cell")
 
   enc <- suppressMessages(tulpaObs:::.encode_cover_terms(f, dat))
   expect_false(is.null(enc$re))

@@ -47,7 +47,7 @@
 
 .svcl_fit <- function(sim, method = "laplace", nn = 10) {
   suppressWarnings(tobs(
-    ~ svc(lon, lat, indices = 1L, nn = nn, prior_range = c(0.1, 0.05)),
+    ~ svc(lon, lat, indices = 1L, nn = nn, prior.range = c(0.1, 0.05)),
     data = sim$data, family = occu(), detection = ~ 1, y = sim$y,
     method = method,
     control = list(verbose = FALSE, progress = FALSE)))
@@ -62,7 +62,7 @@ test_that("the R NNGP precision reproduces tulpa's compiled SVC kernel", {
   N <- 40L
   co <- cbind(stats::runif(N), stats::runif(N))
   tm <- .tobs_term_svc(coords = co, indices = 1L, nn = 8,
-                       prior_range = c(0.1, 0.05))
+                       prior.range = c(0.1, 0.05))
   co_m    <- matrix(as.numeric(tm$coords),   ncol = 2L,  byrow = TRUE)
   nn_idx  <- matrix(as.integer(tm$nn_idx),   nrow = N,   byrow = TRUE)
   nn_dist <- matrix(as.numeric(tm$nn_dist),  nrow = N,   byrow = TRUE)
@@ -210,7 +210,7 @@ test_that("occu() + svc() recovers a COVARIATE-weighted coefficient surface", {
   dat <- cbind(sim$data, w = w)
 
   fit <- suppressWarnings(tobs(
-    ~ w + svc(lon, lat, indices = 2L, nn = 10, prior_range = c(0.1, 0.05)),
+    ~ w + svc(lon, lat, indices = 2L, nn = 10, prior.range = c(0.1, 0.05)),
     data = dat, family = occu(), detection = ~ 1, y = y, method = "laplace",
     control = list(verbose = FALSE, progress = FALSE)))
 

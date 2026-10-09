@@ -23,7 +23,7 @@ test_that("GP spatial occupancy runs", {
   y <- matrix(0L, n_sites, 3)
   for (i in seq_len(n_sites)) if (z[i] == 1) y[i, ] <- rbinom(3, 1, 0.5)
 
-  fit <- tobs(~ gp(lon, lat, nn = 5, prior_range = c(0.1, 0.05)),
+  fit <- tobs(~ gp(lon, lat, nn = 5, prior.range = c(0.1, 0.05)),
               dat, family = occu(),
               detection = ~ 1, y = y,
               method = "nuts",

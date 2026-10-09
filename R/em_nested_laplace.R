@@ -498,7 +498,7 @@
 # unweighted intercept field first, then any varying-coefficient (weighted)
 # fields. Three shapes flow in:
 #   * a plain areal term -- icar()/bym2()/car_proper() -- one field, unweighted.
-#   * a weighted areal term -- icar(graph, weight = col, group_var = node) -- a
+#   * a weighted areal term -- icar(graph, weight = col, group.var = node) -- a
 #     single varying-coefficient field (the SVC slope on `col`); valid here on
 #     its own, but typically paired with an intercept term.
 #   * an independent varying-coefficient bar -- spatial(~ 1 + x || node,
@@ -528,7 +528,7 @@
     weighted <- vapply(fields, function(f) !is.null(f$weight), logical(1))
     if (!any(!weighted)) {
       stop("occu(): a varying-coefficient spatial field needs an unweighted ",
-           "intercept field (e.g. icar(graph = adj, group_var = \"cell\")) ",
+           "intercept field (e.g. icar(graph = adj, group.var = \"cell\")) ",
            "alongside the weighted term(s).", call. = FALSE)
     }
     fields <- c(fields[!weighted], fields[weighted])
@@ -578,7 +578,7 @@
     sp <- spatial$tulpa_spec
     if (as.integer(sp$n_mesh) <= 0L) {
       stop("SPDE mesh has 0 nodes; rebuild the mesh (see the tulpaMesh ",
-           "zero-triangle note: use cutoff = 0 with the default max_edge).",
+           "zero-triangle note: use cutoff = 0 with the default max.edge).",
            call. = FALSE)
     }
     A_b   <- sp$A[site_of_row, , drop = FALSE]
@@ -627,14 +627,14 @@
   gv      <- spatial$group_var
   if (!is.null(gv)) {
     if (is.null(model) || is.null(model$data) || !gv %in% names(model$data)) {
-      stop(sprintf("spatial group_var '%s' is not a column of the model data.",
+      stop(sprintf("spatial group.var '%s' is not a column of the model data.",
                    gv), call. = FALSE)
     }
     site_node <- as.integer(model$data[[gv]])
     if (length(site_node) != n_sites || anyNA(site_node) ||
         min(site_node) < 1L || max(site_node) > n_nodes) {
       stop(sprintf(paste0(
-        "spatial group_var '%s' must be an integer cell index in 1..%d, one ",
+        "spatial group.var '%s' must be an integer cell index in 1..%d, one ",
         "per site (%d sites)."), gv, n_nodes, n_sites), call. = FALSE)
     }
     spatial_idx <- site_node[site_of_row]
@@ -643,7 +643,7 @@
       stop(sprintf(paste0(
         "spatial has %d units but the model has %d sites; one spatial unit per ",
         "site is required for the nested-Laplace latent field, or map sites to ",
-        "cells with group_var = \"<col>\" on the areal term."),
+        "cells with group.var = \"<col>\" on the areal term."),
         n_nodes, n_sites), call. = FALSE)
     }
     spatial_idx <- site_of_row

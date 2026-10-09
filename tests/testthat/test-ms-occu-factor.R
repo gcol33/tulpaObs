@@ -61,11 +61,11 @@ test_that("ms_occu() + latent() gates unsupported combinations", {
     tobs(~ x + latent(2), data = d$data, family = ms_occu(), detection = ~ 1,
          y = d$y, species = sp, method = "nuts"),
     "block-coordinate|laplace")
-  # n_factors must be < n_species
+  # n.factors must be < n_species
   expect_error(
     tobs(~ x + latent(8), data = d$data, family = ms_occu(), detection = ~ 1,
          y = d$y, species = sp, method = "laplace"),
-    "n_factors")
+    "n\\.factors")
 })
 
 # Smoke coverage of the lfMsPGOcc path: dispatch, the factor block and the S3

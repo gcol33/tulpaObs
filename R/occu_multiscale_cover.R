@@ -566,7 +566,7 @@
 
 # ---------------------------------------------------------------------------
 # Dispatcher (wired into tobs.R's switch). Cells are declared via an
-# icar()/bym2() term's group_var; method = "nested_laplace" fits the shared
+# icar()/bym2() term's group.var; method = "nested_laplace" fits the shared
 # areal field, method = "laplace" the non-spatial (iid-cell) marginal.
 # ---------------------------------------------------------------------------
 .dispatch_occu_multiscale_cover <- function(formula, data, family, detection,
@@ -617,7 +617,7 @@
   spatial_info <- .occu_cover_spatial_fields(formula, data)
   if (is.null(spatial_info)) {
     stop("occu_multiscale_cover() declares cells via an areal term: the state ",
-         "formula must carry icar(graph = adj, group_var = \"<cell>\") naming ",
+         "formula must carry icar(graph = adj, group.var = \"<cell>\") naming ",
          "the per-plot cell column (the graph is used for the field under ",
          "method = \"nested_laplace\" and ignored under method = \"laplace\").",
          call. = FALSE)
@@ -631,12 +631,12 @@
   }
   gv <- spatial_info$group_var
   if (is.null(gv)) {
-    stop("occu_multiscale_cover() requires group_var on the icar()/bym2() ",
+    stop("occu_multiscale_cover() requires group.var on the icar()/bym2() ",
          "term naming the integer cell column (plot -> cell), e.g. ",
-         "icar(graph = adj, group_var = \"cell\").", call. = FALSE)
+         "icar(graph = adj, group.var = \"cell\").", call. = FALSE)
   }
   if (!gv %in% names(data)) {
-    stop(sprintf("occu_multiscale_cover() group_var '%s' is not a column of data.",
+    stop(sprintf("occu_multiscale_cover() group.var '%s' is not a column of data.",
                  gv), call. = FALSE)
   }
 

@@ -33,9 +33,9 @@
   tobs(
     formula = ~ occ_cov,
     data = sim$data, family = occu(),
-    detection = ~ det_cov + spde(lon, lat, max_edge = c(0.25, 0.5),
-                                 nu = 1, prior_range = c(0.3, 0.5),
-                                 prior_sigma = c(0.8, 0.5)),
+    detection = ~ det_cov + spde(lon, lat, max.edge = c(0.25, 0.5),
+                                 nu = 1, prior.range = c(0.3, 0.5),
+                                 prior.sigma = c(0.8, 0.5)),
     y = sim$y, method = "laplace", control = list(verbose = FALSE)
   )
 }

@@ -55,7 +55,7 @@ test_that("fitted() works on occu_cover, both engines and both cover families", 
     .fl_check_shape(ns, f, paste(resp, "laplace"))
 
     sp <- suppressWarnings(tobs(
-      occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
+      occurrence = ~ occ_cov1 + icar(graph = f$adj, group.var = "cell"),
       detection = ~ 1, positive = ~ 1 + share(spatial()),
       family = occu_cover(response = resp),
       data = f$sim$data, y = f$sim$y, y.pos = f$sim$y_pos,
@@ -71,7 +71,7 @@ test_that("fitted() carries the spatial field rather than scoring it at 0", {
   # return one distinct cover value.
   f <- .fl_sim("lognormal", seed = 4L)
   sp <- suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = f$adj, group.var = "cell"),
     detection = ~ 1, positive = ~ 1 + share(spatial()),
     family = occu_cover(response = "lognormal"),
     data = f$sim$data, y = f$sim$y, y.pos = f$sim$y_pos,
@@ -97,7 +97,7 @@ test_that("logLik() reports a real df, and AIC and BIC refuse a non-ML value", {
   expect_error(stats::BIC(ns), "maximised log-likelihood")
 
   sp <- suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = f$adj, group.var = "cell"),
     detection = ~ 1, positive = ~ 1 + share(spatial()),
     family = occu_cover(response = "lognormal"),
     data = f$sim$data, y = f$sim$y, y.pos = f$sim$y_pos,

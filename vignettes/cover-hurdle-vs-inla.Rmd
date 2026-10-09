@@ -60,7 +60,7 @@ their tulpaObs counterparts. The left block is the independent-arm path
 | `inla(log_cover ~ x, family = "gaussian", data = subset(occur == 1))` | the positive arm of the same `cover()` fit | tulpaObs subsets to `y > 0` internally inside `encode_cover_hurdle()`. |
 | `family = "gaussian"` precision hyperparameter | `fit$sigma_pos` (residual SD, `1 / sqrt(precision)`) | tulpaObs reports the SD directly; INLA reports a precision posterior. |
 | `family = c("binomial", "beta")` for cover in $(0, 1)$ | `cover("beta")` | Logit-link beta with precision `phi`; see `fit$phi_pos`. |
-| `f(site, model = "bym2", graph = adj)` | `bym2(graph = adj, group_var = "site")` in the formula | Areal field on the latent-presence linear predictor. |
+| `f(site, model = "bym2", graph = adj)` | `bym2(graph = adj, group.var = "site")` in the formula | Areal field on the latent-presence linear predictor. |
 | `f(site, model = "iid")`, `"besag"`, `"besagproper2"` | `icar(graph = adj)`, `car(graph = adj)`, `car_proper(graph = adj)` | One areal term per latent-presence formula. |
 | `copy = "site", fixed = FALSE` (shared field, fitted scale) | the joint `cover()` path: `method = "nested_laplace"` with a `bym2()` term, copy coefficient `alpha` | `alpha` is integrated on the outer grid, surfaced as `fit$joint$theta_mean["alpha"]`. |
 | `inla.stack()` for the joint design | not needed | tulpaObs builds the two-arm design from one formula and one `y`. |
@@ -260,7 +260,7 @@ behaviour is identical across both implementations.
 
 ```{r joint-fit-tulpa, message = FALSE, warning = FALSE}
 fit_joint <- tobs(
-  formula = ~ x + bym2(graph = adj, group_var = "region") +
+  formula = ~ x + bym2(graph = adj, group.var = "region") +
               share(spatial(), alpha = grid(c(0.25, 0.75, 1.5, 2.5))),
   data    = sim_joint$data,
   family  = cover("lognormal"),

@@ -237,7 +237,7 @@
   # field). All coupled fields must name the same group_var (or none).
   gvs <- unique(Filter(Negate(is.null), lapply(specs, function(s) s$group_var)))
   if (length(gvs) > 1L) {
-    stop("occu_cover() coupled fields must share a single group_var (or none).",
+    stop("occu_cover() coupled fields must share a single group.var (or none).",
          call. = FALSE)
   }
   group_var <- if (length(gvs) == 1L) gvs[[1L]] else NULL

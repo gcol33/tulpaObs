@@ -52,7 +52,7 @@ test_that("a spatial single-season fit draws the arms as correlated", {
   z <- stats::rbinom(n_sites, 1L, plogis(0.3 + 0.5 * x + f0[cell]))
   y <- matrix(stats::rbinom(n_sites * J, 1L, rep(z * plogis(-0.3), J)),
               n_sites, J)
-  fit <- tobs(~ x + icar(graph = adj, group_var = "cell"),
+  fit <- tobs(~ x + icar(graph = adj, group.var = "cell"),
               detection = ~ 1, data = data.frame(x = x, cell = cell),
               family = occu(), y = y, method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))

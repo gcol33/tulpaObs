@@ -34,7 +34,7 @@ test_that("a positive-arm placed bar resolves to an arm-specific cover field", {
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n),
                      time = as.numeric(scale(rnorm(n))))
-  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
+  f <- psi ~ occ_cov1 + icar(graph = adj, group.var = "cell")
   si <- .occu_cover_spatial_fields(f, data, .pf_arm(
     quote(spatial(~ 1 + time || cell, graph = adj)), "positive"))
 
@@ -52,7 +52,7 @@ test_that("a single-arm \"presence\" placement is rejected", {
   adj  <- rook_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
-  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
+  f <- psi ~ occ_cov1 + icar(graph = adj, group.var = "cell")
   expect_error(
     .occu_cover_spatial_fields(f, data,
       .pf_arm(quote(spatial(~ 1 || cell, graph = adj)), "presence")),
@@ -63,7 +63,7 @@ test_that("a detection-arm spatial bar resolves onto the detection (p) arm", {
   adj  <- rook_adj(4L)
   n    <- nrow(adj)
   data <- data.frame(cell = seq_len(n), occ_cov1 = rnorm(n))
-  f <- psi ~ occ_cov1 + icar(graph = adj, group_var = "cell")
+  f <- psi ~ occ_cov1 + icar(graph = adj, group.var = "cell")
   si <- .occu_cover_spatial_fields(f, data,
     .pf_arm(quote(spatial(~ 1 || cell, graph = adj)), "detection"))
   expect_false(is.null(si$armspec[["p"]]))
@@ -86,7 +86,7 @@ test_that("detection-arm field recovers once the substrate scatters onto p", {
       alpha = 0.0, det.field = TRUE, sigma.p.int = 0.0, sigma.p.trend = truth,
       seed = s)
     fit <- suppressWarnings(tobs(
-      occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+      occurrence = ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
       detection  = ~ 1 + spatial(~ 0 + time || cell, graph = adj),
       positive   = ~ 1, family = occu_cover(response = "lognormal"),
       data = sim$data, y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
@@ -125,7 +125,7 @@ test_that("occu_cover cover-arm field fits and yields a non-constant delta_cover
     adj = adj, sigma = 0.5, alpha = 0.0,
     pos.field = TRUE, sigma.pos.int = 0.0, sigma.pos.trend = 0.7, seed = 42L)
 
-  fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+  fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
                  positive = ~ 1 + spatial(~ 0 + time || cell, graph = adj))
 
   expect_s3_class(fit, "tobs_fit")
@@ -177,7 +177,7 @@ test_that("occu_cover cover-arm trend field SD recovers across seeds", {
       beta.pos = c(log(0.25), 0.0), sigma.pos = 0.3,
       adj = adj, sigma = 0.5, alpha = 0.0,
       pos.field = TRUE, sigma.pos.int = 0.0, sigma.pos.trend = truth, seed = s)
-    fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
                    positive = ~ 1 + spatial(~ 0 + time || cell, graph = adj))
     nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)[1L]
     # The MARGINAL companion, not `means[[nm]]`. `sigma_*_field` is the raw
@@ -222,7 +222,7 @@ test_that("occu_cover cover-arm intercept field SD recovers across seeds", {
       beta.pos = c(log(0.25), 0.0), sigma.pos = 0.3,
       adj = adj, sigma = 0.5, alpha = 0.0,
       pos.field = TRUE, sigma.pos.int = truth, sigma.pos.trend = 0.0, seed = s)
-    fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    fit <- .pf_fit(sim, ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
                    positive = ~ 1 + spatial(~ 1 || cell, graph = adj))
     nm <- grep("^sigma_pos_field", names(fit$means), value = TRUE)[1L]
     # The MARGINAL companion, not `means[[nm]]`. `sigma_*_field` is the raw
@@ -273,7 +273,7 @@ test_that("a spatial field in the positive formula is the arm-specific cover fie
   ctrl <- list(progress = FALSE, integration = "ccd")
 
   fit_place <- suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
     detection = ~ 1, positive = ~ time + spatial(~ 0 + time || cell, graph = adj),
     family = occu_cover(response = "lognormal"),
     data = sim$data, y = sim$y, y.pos = sim$y_pos,
@@ -308,7 +308,7 @@ test_that("control$sigma.grid.pos.field is accepted and sets the cover-field gri
   # the weighted mean over a single grid node). Reaching the fit at all confirms
   # the control passes validation; the exact value confirms the grid was applied.
   fit <- suppressWarnings(tobs(
-    occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+    occurrence = ~ occ_cov1 + icar(graph = adj, group.var = "cell"),
     detection  = ~ 1,
     positive   = ~ time + spatial(~ 0 + time || cell, graph = adj),
     family     = occu_cover(response = "lognormal"),

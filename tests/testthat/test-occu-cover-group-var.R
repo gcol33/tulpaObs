@@ -1,9 +1,9 @@
 # =============================================================================
-# test-occu-cover-group-var.R - occu_cover() with group_var: occupancy units
+# test-occu-cover-group-var.R - occu_cover() with group.var: occupancy units
 # (sites) decoupled from field nodes (cells). Many sites share one cell field
 # node (site = cell x period), so a per-site trend weight gives an occupancy
 # time trend on a shared areal field. The icar()/bym2() term carries
-# group_var = "<col>" mapping each site row to a field node.
+# group.var = "<col>" mapping each site row to a field node.
 #
 # Covers: the fit runs with n_sites > n_cells, the fields stay length n_cells
 # (not n_sites), both coupled fields are exposed, and (recovery) the per-cell
@@ -60,8 +60,8 @@
 
 .gv_fit <- function(sim, adj, max.iter = 300L) {
   suppressWarnings(tobs(
-    formula = ~ time.sc + icar(graph = adj, group_var = "cell_idx") +
-                icar(graph = adj, weight = time.sc, group_var = "cell_idx"),
+    formula = ~ time.sc + icar(graph = adj, group.var = "cell_idx") +
+                icar(graph = adj, weight = time.sc, group.var = "cell_idx"),
     data = sim$site, family = occu_cover("beta"),
     detection = ~ det_cov,
     positive = ~ pos_cov + share(spatial(), alpha = grid(c(0, 0.6, 1.5))),
@@ -74,7 +74,7 @@
 }
 
 
-test_that("occu_cover group_var runs with more sites than field nodes", {
+test_that("occu_cover group.var runs with more sites than field nodes", {
   skip_on_cran()
   skip_if_fast()
   n_cells <- 16L; n_per <- 4L; J <- 12L
@@ -161,7 +161,7 @@ test_that("occu_cover group_var runs with more sites than field nodes", {
        n_sites = n_sites, n_cells = n_cells)
 }
 
-test_that("occu_cover group_var: unequal design keeps the psi intercept anchored", {
+test_that("occu_cover group.var: unequal design keeps the psi intercept anchored", {
   skip_on_cran()
   skip_if_fast()
   n_cells <- 16L
@@ -171,7 +171,7 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
   expect_gt(length(unique(table(sim$site$cell_idx))), 1L)   # genuinely unequal
 
   fit <- suppressWarnings(tobs(
-    formula = ~ icar(graph = adj, group_var = "cell_idx"),
+    formula = ~ icar(graph = adj, group.var = "cell_idx"),
     data = sim$site, family = occu_cover("beta"),
     detection = ~ det_cov,
     positive = ~ pos_cov + share(spatial(), alpha = grid(c(0, 0.6, 1.5))),
@@ -197,7 +197,7 @@ test_that("occu_cover group_var: unequal design keeps the psi intercept anchored
   expect_gt(stats::sd(fit$spatial_field), 0.05)
 })
 
-test_that("occu_cover group_var recovers fields and slopes (multi-seed)", {
+test_that("occu_cover group.var recovers fields and slopes (multi-seed)", {
   skip_on_cran()
   skip_if_fast()
   n_cells <- 20L; n_per <- 6L; J <- 15L

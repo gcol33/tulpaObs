@@ -32,9 +32,9 @@
 }
 
 .det_block_spde <- function(coords, arm = c(FALSE, TRUE)) {
-  sp <- tulpaObs:::.tobs_term_spde(coords = coords, max_edge = c(0.4, 0.8),
-                                   nu = 1, prior_range = c(0.3, 0.5),
-                                   prior_sigma = c(0.8, 0.5))
+  sp <- tulpaObs:::.tobs_term_spde(coords = coords, max.edge = c(0.4, 0.8),
+                                   nu = 1, prior.range = c(0.3, 0.5),
+                                   prior.sigma = c(0.8, 0.5))
   sp$shared <- arm
   sp
 }

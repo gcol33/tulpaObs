@@ -73,8 +73,8 @@ test_that("occu_multiscale_cover NUTS rejects a coupled trend field", {
     n.cells = 20L, plots.per.cell = 3L, visits.per.plot = 2L,
     trend = TRUE, positive = "lognormal", seed = 5L)
   expect_error(
-    tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell") +
-                     icar(graph = sim$adj, group_var = "cell", weight = tcov),
+    tobs(formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell") +
+                     icar(graph = sim$adj, group.var = "cell", weight = tcov),
          data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
          detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
          y = sim$y, y.pos = sim$y_pos, method = "nuts"),
@@ -111,7 +111,7 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
       positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 600L + s)
 
     fit <- tryCatch(suppressWarnings(tobs(
-      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+      formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y.pos = sim$y_pos, method = "nuts",
@@ -124,7 +124,7 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
     div[s]   <- sum(fit$divergent, na.rm = TRUE)
 
     fl <- suppressWarnings(tobs(
-      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+      formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y.pos = sim$y_pos, method = "laplace",
@@ -182,7 +182,7 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
     n.cells = 50L, plots.per.cell = 4L, visits.per.plot = 4L,
     positive = "lognormal", phi = 0.35, sigma = 0, alpha = 0, seed = 909L)
   fit <- suppressWarnings(tobs(
-    formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+    formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
     y = sim$y, y.pos = sim$y_pos, method = "nuts",

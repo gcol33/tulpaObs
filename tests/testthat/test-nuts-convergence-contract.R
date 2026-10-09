@@ -175,7 +175,7 @@
       n.cells = 30L, plots.per.cell = 3L, visits.per.plot = 3L,
       positive = "lognormal", phi = 0.35, sigma = 0, alpha = 0, seed = 909L)
     suppressWarnings(tobs(
-      formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
+      formula = ~ x_cell + icar(graph = sim$adj, group.var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
       y = sim$y, y.pos = sim$y_pos, method = "nuts", control = .nconv_ctl()))
