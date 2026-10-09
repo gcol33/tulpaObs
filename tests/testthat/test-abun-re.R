@@ -307,3 +307,41 @@ test_that("abun() NUTS rejects random slopes / both-arm RE (Laplace-only)", {
          control = list(n.iter = 20L, n.warmup = 10L)),
     "ONE arm|laplace")
 })
+
+test_that(".tobs_count_nuts_warm_init keeps the Laplace metric under an RE tail", {
+  V <- diag(c(0.04, 0.09, 1e-9))
+  init <- tulpaObs:::.tobs_count_nuts_warm_init(c(1, 2, 3), V, list(n_groups = 4L))
+  expect_identical(init$theta0, c(1, 2, 3, 0, 0, 0, 0, log(0.5)))
+  expect_identical(init$inv_metric, c(0.04, 0.09, 1e-6, 1, 1, 1, 1, 0.25))
+  expect_identical(init$n_base, 3L)
+  # A warm covariance that is not square on the coefficient block, or that
+  # carries a non-finite variance, falls back to a unit metric on the block.
+  expect_identical(tulpaObs:::.tobs_count_nuts_warm_init(c(1, 2), V, NULL)$inv_metric,
+                   c(1, 1))
+  V[2, 2] <- NA_real_
+  expect_identical(tulpaObs:::.tobs_count_nuts_warm_init(c(1, 2, 3), V, NULL)$inv_metric,
+                   c(1, 1, 1))
+})
+
+test_that("abun() NUTS + (1|g) warm-starts the coefficient block on the Laplace metric", {
+  skip_on_cran()
+  # Two 20-iteration chains on 40 sites: a plumbing check, kept in the smoke tier.
+  s <- sim_abun_lambda_re(N = 40, J = 3, ngrp = 5, beta_lambda = c(0.5, 0.2),
+                          beta_p = 0, sigma_b = 0.5, seed = 2)
+  ctl <- list(n.iter = 20L, n.warmup = 20L, seed = 1L)
+  re <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
+             family = abun(), method = "nuts", verbose = FALSE, control = ctl)
+  fe <- tobs(formula = ~ x1, detection = ~ 1, data = s$data, y = s$y,
+             family = abun(), method = "nuts", verbose = FALSE, control = ctl)
+  n_base <- length(fe$nuts$inv_metric)
+  expect_identical(n_base, 3L)
+  # The coefficient-only fit's metric is the floored Laplace variance, not the
+  # unit fallback.
+  expect_false(all(fe$nuts$inv_metric == 1))
+  # With the RE the coefficient block keeps that same Laplace warm start; only
+  # the z / log_sigma tail is appended (unit metric for z, 0.25 for the log-SD).
+  expect_identical(re$nuts$inv_metric[seq_len(n_base)], fe$nuts$inv_metric)
+  expect_identical(re$nuts$theta0[seq_len(n_base)], fe$nuts$theta0)
+  expect_identical(re$nuts$inv_metric[-seq_len(n_base)], c(rep(1, 5), 0.25))
+  expect_identical(length(re$nuts$theta0), ncol(re$draws))
+})

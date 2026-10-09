@@ -1,9 +1,10 @@
 # removal_nuts.R - NUTS target density for the removal-sampling family (removal()).
 #
 # Same flat coefficient block as the N-mixture NUTS path (abun_nuts.R) -- there
-# is no latent field, random effect, or community covariance, only
-# theta = (beta_lambda, beta_p[, log_r]) -- so the layout / warm-start helpers
-# (.tobs_abun_nuts_layout / .tobs_abun_nuts_pack_init) are reused. The only
+# is no latent field or community covariance, only
+# theta = (beta_lambda, beta_p[, log_r]) plus the optional single-intercept RE
+# tail -- so the layout (.tobs_abun_nuts_layout) and the shared sampler front
+# door (.tobs_count_nuts_front_door, R/nuts_chains.R) are reused. The only
 # difference is the per-site marginal: the removal depleting-binomial product
 # (cpp_removal_total_log_lik) instead of the N-mixture product. The C++ FullGradFn
 # (src/removal_nuts.cpp) mirrors this R target and is cross-checked against it.
@@ -112,31 +113,19 @@
   warm <- removal_laplace(y = y_long, site_idx = site_idx, X_lambda = X_lambda,
                           X_p = X_p, mixture = mix_code, K_max = K_max,
                           max_iter = 100L, verbose = FALSE)
-  init <- .tobs_count_nuts_re_init(.tobs_abun_nuts_pack_init(warm, lay), lay, re_info)
-
-  spec <- .tobs_count_nuts_re_spec(
-    list(y = as.integer(y_long), site_idx = as.integer(site_idx),
-         X_lambda = X_lambda, X_p = X_p,
-         n_sites = n_sites, K_max = K_max, is_nb = is_nb),
-    re_info, sigma.logr)
-
-  run_chain <- function(ch) {
-    cpp_removal_nuts(spec, theta0 = init$theta0,
-                     sigma_beta = sigma.beta, sigma_logr = sigma.logr,
-                     inv_metric = init$inv_metric,
-                     n_iter = as.integer(n.iter + n.warmup),
-                     n_warmup = as.integer(n.warmup),
-                     max_treedepth = as.integer(max.treedepth),
-                     adapt_delta = adapt.delta,
-                     seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
-  }
-  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
-           paste0("p_",      model$process_info[[2]]$coef_names),
-           if (is_nb) "log_r",
-           .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
-                              n.thin = n.thin,
-                              n.threads = n.threads)
+  run <- .tobs_count_nuts_front_door(
+    cpp_removal_nuts,
+    spec = list(y = as.integer(y_long), site_idx = as.integer(site_idx),
+                X_lambda = X_lambda, X_p = X_p,
+                n_sites = n_sites, K_max = K_max, is_nb = is_nb),
+    priors = list(sigma_beta = sigma.beta, sigma_logr = sigma.logr),
+    theta0 = c(warm$beta_lambda, warm$beta_p, if (is_nb) warm$log_r),
+    V = warm$vcov,
+    nms = c(paste0("lambda_", model$process_info[[1]]$coef_names),
+            paste0("p_",      model$process_info[[2]]$coef_names),
+            if (is_nb) "log_r"),
+    re_info = re_info, sigma.logr = sigma.logr,
+    sampler = .tobs_sampler_control_snapshot(environment()), verbose = verbose)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_removal_nuts_marginal(model, mixture = mix_code, K_max = K_max)
@@ -155,9 +144,8 @@
   fit <- build_nmix_fit(raw, model, spatial = NULL)
 
   .tobs_count_nuts_attach(
-    fit, run, ll_mean, n.chains, re_info,
+    fit, run, ll_mean,
     extra = list(is_nb = is_nb, K_max = K_max,
                  re_arm = if (!is.null(re_info)) re_info$arm else -1L,
-                 sigma_beta = sigma.beta, sigma_logr = sigma.logr),
-    sampler_control = .tobs_sampler_control_snapshot(environment()))
+                 sigma_beta = sigma.beta, sigma_logr = sigma.logr))
 }

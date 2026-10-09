@@ -126,7 +126,7 @@
 "test-dyn_abun.R","smoke",21,14,1.3
 "test-em-det-block-weights.R","full",34,0,0.3
 "test-em-det-block-weights.R","smoke",34,0,0.3
-"test-engine-defaults.R","smoke",128,0,1
+"test-engine-defaults.R","smoke",127,0,0.6
 "test-exports.R","smoke",61,0,0.3
 "test-family-marg-ploglik-cpp.R","full",12,0,0.5
 "test-family-marg-ploglik-cpp.R","smoke",12,0,0.6

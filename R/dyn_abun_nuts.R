@@ -73,7 +73,11 @@
 # Front-door NUTS fitter for the open N-mixture family
 # ---------------------------------------------------------------------------
 
-.tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = NULL, re = NULL,
+# `sigma.logr` is the prior SD on the RE log-SD (the shared count-NUTS RE
+# block); the NB log r coordinate rides the coefficient prior `sigma.beta`
+# (cpp_dyn_abun_nuts takes no separate log-r scale).
+.tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = NULL, sigma.logr = NULL,
+                                    re = NULL,
                                     n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
                                     n.threads = NULL,
                                     max.treedepth = NULL, adapt.delta = NULL,
@@ -100,40 +104,22 @@
     J = model$max_visits, K_max = model$K_max,
     X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
     mixture = model$mixture %||% "poisson", verbose = FALSE)
-  V <- as.matrix(warm$vcov)
-  n_base <- length(warm$means)
-  base_metric <- if (!is.null(V) && nrow(V) == n_base && all(is.finite(diag(V))))
-                   pmax(diag(V), 1e-6) else rep(1, n_base)
-  init <- .tobs_count_nuts_re_init(
-    list(theta0 = as.numeric(warm$means), inv_metric = base_metric), lay, re_info)
-  theta0 <- init$theta0; inv_metric <- init$inv_metric
-
-  spec <- .tobs_count_nuts_re_spec(
-    list(y = as.integer(model$y_flat), n_sites = model$n_sites,
-         T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
-         X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
-         use_nb = use_nb),
-    re_info, 1.5)
-
-  run_chain <- function(ch) {
-    cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
-                      inv_metric = inv_metric,
-                      n_iter = as.integer(n.iter + n.warmup),
-                      n_warmup = as.integer(n.warmup),
-                      max_treedepth = as.integer(max.treedepth),
-                      adapt_delta = adapt.delta,
-                      seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
-  }
-  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
-           paste0("p_",      model$process_info[[2]]$coef_names),
-           paste0("omega_",  model$process_info[[3]]$coef_names),
-           paste0("gamma_",  model$process_info[[4]]$coef_names))
-  if (use_nb) nms <- c(nms, "log_r")
-  nms <- c(nms, .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
-                              n.thin = n.thin,
-                              n.threads = n.threads)
-  par <- run$par; cov <- run$cov
+  run <- .tobs_count_nuts_front_door(
+    cpp_dyn_abun_nuts,
+    spec = list(y = as.integer(model$y_flat), n_sites = model$n_sites,
+                T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+                X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
+                use_nb = use_nb),
+    priors = list(sigma_beta = sigma.beta),
+    theta0 = warm$means, V = warm$vcov,
+    nms = c(paste0("lambda_", model$process_info[[1]]$coef_names),
+            paste0("p_",      model$process_info[[2]]$coef_names),
+            paste0("omega_",  model$process_info[[3]]$coef_names),
+            paste0("gamma_",  model$process_info[[4]]$coef_names),
+            if (use_nb) "log_r"),
+    re_info = re_info, sigma.logr = sigma.logr,
+    sampler = .tobs_sampler_control_snapshot(environment()), verbose = verbose)
+  par <- run$par; cov <- run$cov; nms <- run$nms
 
   marg <- .tobs_dyn_abun_nuts_marginal(model)
   log_r <- if (use_nb) as.numeric(par[lay$logr]) else NA_real_
@@ -148,7 +134,7 @@
   fit <- build_dyn_abun_fit(raw, model)
 
   .tobs_count_nuts_attach(
-    fit, run, ev_mean$log_lik, n.chains, re_info,
-    extra = list(sigma_beta = sigma.beta, K_max = model$K_max),
-    sampler_control = .tobs_sampler_control_snapshot(environment()))
+    fit, run, ev_mean$log_lik,
+    extra = list(sigma_beta = sigma.beta, sigma_logr = sigma.logr,
+                 K_max = model$K_max))
 }

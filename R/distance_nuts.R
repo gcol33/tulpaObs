@@ -149,43 +149,26 @@
   # per chain. A single post-hoc check at the posterior mean, after sampling,
   # is the guard for the region NUTS actually explored.
   headroom <- warm$headroom %||% headroom
-  theta0 <- c(as.numeric(warm$beta_lambda), as.numeric(warm$beta_sigma))
-  if (hazard) theta0 <- c(theta0, as.numeric(warm$eta_b))
-  if (is_nb)  theta0 <- c(theta0, as.numeric(warm$log_r))
-  V <- as.matrix(warm$vcov)
-  base_metric <- if (!is.null(V) && nrow(V) == length(theta0)) pmax(diag(V), 1e-6)
-                 else rep(1, length(theta0))
-  init <- .tobs_count_nuts_re_init(list(theta0 = theta0, inv_metric = base_metric),
-                                   lay, re_info)
-  theta0 <- init$theta0; inv_metric <- init$inv_metric
 
   quad_xptr <- cpp_distance_build_quad(as.numeric(model$cutpoints),
                                        .dist_transect_code(model$transect),
                                        as.integer(model$quad_order))
-  spec <- .tobs_count_nuts_re_spec(
-    list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
-         quad_xptr = quad_xptr,
-         key = .dist_key_code(model$key), K_max = K_max,
-         is_nb = is_nb, headroom = as.integer(headroom)),
-    re_info, sigma.logr)
-
-  run_chain <- function(ch) {
-    cpp_distance_nuts(spec, theta0 = theta0,
-                      sigma_beta = sigma.beta, sigma_shape = sigma.shape,
-                      sigma_logr = sigma.logr, inv_metric = inv_metric,
-                      n_iter = as.integer(n.iter + n.warmup),
-                      n_warmup = as.integer(n.warmup),
-                      max_treedepth = as.integer(max.treedepth),
-                      adapt_delta = adapt.delta,
-                      seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
-  }
-  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
-           paste0("sigma_",  model$process_info[[2]]$coef_names),
-           if (hazard) "log_shape", if (is_nb) "log_r",
-           .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
-                              n.thin = n.thin,
-                              n.threads = n.threads)
+  run <- .tobs_count_nuts_front_door(
+    cpp_distance_nuts,
+    spec = list(y = y, X_lambda = X_lambda, X_sigma = X_sigma,
+                quad_xptr = quad_xptr,
+                key = .dist_key_code(model$key), K_max = K_max,
+                is_nb = is_nb, headroom = as.integer(headroom)),
+    priors = list(sigma_beta = sigma.beta, sigma_shape = sigma.shape,
+                  sigma_logr = sigma.logr),
+    theta0 = c(warm$beta_lambda, warm$beta_sigma,
+               if (hazard) warm$eta_b, if (is_nb) warm$log_r),
+    V = warm$vcov,
+    nms = c(paste0("lambda_", model$process_info[[1]]$coef_names),
+            paste0("sigma_",  model$process_info[[2]]$coef_names),
+            if (hazard) "log_shape", if (is_nb) "log_r"),
+    re_info = re_info, sigma.logr = sigma.logr,
+    sampler = .tobs_sampler_control_snapshot(environment()), verbose = verbose)
   par <- run$par; cov <- run$cov
 
   marg <- .tobs_distance_nuts_marginal(model, mixture = mix_code, K_max = K_max,
@@ -236,10 +219,9 @@
   fit$headroom <- headroom
 
   .tobs_count_nuts_attach(
-    fit, run, ll_mean, n.chains, re_info,
+    fit, run, ll_mean,
     extra = list(is_nb = is_nb, hazard = hazard, K_max = K_max,
                  headroom = headroom,
                  sigma_beta = sigma.beta, sigma_shape = sigma.shape,
-                 sigma_logr = sigma.logr),
-    sampler_control = .tobs_sampler_control_snapshot(environment()))
+                 sigma_logr = sigma.logr))
 }

@@ -53,6 +53,13 @@ R side:
 - `.tobs_nuts_attach_convergence()` `R/nuts_chains.R:389` -- the single writer of
   the Rhat / ESS record `summary()` and `print()` read. A NUTS path that skips it
   reports no convergence at all.
+- `.tobs_count_nuts_front_door()` `R/nuts_chains.R` -- the one sampler front
+  door for the marginal count-family NUTS targets (abun, removal, distance,
+  fp_occu, dyn_abun): Laplace warm start + diagonal Laplace metric, the
+  single-intercept RE tail, chain runs and pooling. A family hands it the warm
+  mode / covariance, its C++ target with that target's prior scales, the data
+  spec and the coefficient names, and reads the pooled run back through
+  `.tobs_count_nuts_attach()`.
 - `compute_bym2_scale()` `R/spatial.R:62` -- the Riebler scale factor.
 - `.tobs_svc_columns()` `R/occu_svc.R:46` -- resolves `svc()` columns for BOTH
   backends, so Laplace and NUTS cannot disagree on which coefficients vary.

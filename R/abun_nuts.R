@@ -93,23 +93,10 @@
     K_max    = K_max)
 }
 
-# Warm-start the sampler at the Laplace mode and a diagonal inverse-metric from
-# the Laplace curvature (the #67 recipe: init = mode, inv_metric = 1 / diag of
-# the observed-information Hessian, floored). `raw` is a nmix_laplace() fit.
-.tobs_abun_nuts_pack_init <- function(raw, lay) {
-  theta0 <- c(as.numeric(raw$beta_lambda), as.numeric(raw$beta_p))
-  if (lay$is_nb) theta0 <- c(theta0, as.numeric(raw$log_r))
-  V <- as.matrix(raw$vcov)
-  inv_metric <- if (!is.null(V) && all(dim(V) == lay$total)) {
-    pmax(diag(V), 1e-6)              # metric = posterior-scale (Laplace vcov)
-  } else rep(1, lay$total)
-  list(theta0 = theta0, inv_metric = inv_metric)
-}
-
-
-# The shared single-intercept RE wiring these families use
-# (.tobs_count_nuts_re_info / _spec / _init / _names / _finish) lives with the
-# rest of the shared NUTS orchestration in R/nuts_chains.R.
+# The shared sampler front door (.tobs_count_nuts_front_door: Laplace warm
+# start + diagonal Laplace metric, single-intercept RE threading, chain runs)
+# and the RE wiring (.tobs_count_nuts_re_info / _spec / _names / _finish) live
+# with the rest of the shared NUTS orchestration in R/nuts_chains.R.
 
 
 # ---------------------------------------------------------------------------
@@ -155,31 +142,19 @@
   warm <- nmix_laplace(y = y_long, site_idx = site_idx, X_lambda = X_lambda,
                        X_p = X_p, mixture = mix_code, K_max = K_max,
                        max_iter = 100L, verbose = FALSE)
-  init <- .tobs_count_nuts_re_init(.tobs_abun_nuts_pack_init(warm, lay), lay, re_info)
-
-  spec <- .tobs_count_nuts_re_spec(
-    list(y = as.integer(y_long), site_idx = as.integer(site_idx),
-         X_lambda = X_lambda, X_p = X_p,
-         n_sites = model$n_sites, K_max = K_max, is_nb = is_nb),
-    re_info, sigma.logr)
-
-  run_chain <- function(ch) {
-    cpp_abun_nuts(spec, theta0 = init$theta0,
-                  sigma_beta = sigma.beta, sigma_logr = sigma.logr,
-                  inv_metric = init$inv_metric,
-                  n_iter = as.integer(n.iter + n.warmup),
-                  n_warmup = as.integer(n.warmup),
-                  max_treedepth = as.integer(max.treedepth),
-                  adapt_delta = adapt.delta,
-                  seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
-  }
-  nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
-           paste0("p_",      model$process_info[[2]]$coef_names),
-           if (is_nb) "log_r",
-           .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
-                              n.thin = n.thin,
-                              n.threads = n.threads)
+  run <- .tobs_count_nuts_front_door(
+    cpp_abun_nuts,
+    spec = list(y = as.integer(y_long), site_idx = as.integer(site_idx),
+                X_lambda = X_lambda, X_p = X_p,
+                n_sites = model$n_sites, K_max = K_max, is_nb = is_nb),
+    priors = list(sigma_beta = sigma.beta, sigma_logr = sigma.logr),
+    theta0 = c(warm$beta_lambda, warm$beta_p, if (is_nb) warm$log_r),
+    V = warm$vcov,
+    nms = c(paste0("lambda_", model$process_info[[1]]$coef_names),
+            paste0("p_",      model$process_info[[2]]$coef_names),
+            if (is_nb) "log_r"),
+    re_info = re_info, sigma.logr = sigma.logr,
+    sampler = .tobs_sampler_control_snapshot(environment()), verbose = verbose)
   par <- run$par; cov <- run$cov
 
   # Data log-likelihood at the posterior mean (scale-invariant), so logLik() on
@@ -209,11 +184,10 @@
   # order [lambda, p, (log_r), z_1..z_G, log_sigma_re] matches the draws, so the
   # per-process unscaler leaves the RE tail untouched, like log_r).
   .tobs_count_nuts_attach(
-    fit, run, ll_mean, n.chains, re_info,
+    fit, run, ll_mean,
     extra = list(is_nb = is_nb, K_max = K_max,
                  re_arm = if (has_re) re_info$arm else -1L,
-                 sigma_beta = sigma.beta, sigma_logr = sigma.logr),
-    sampler_control = .tobs_sampler_control_snapshot(environment()))
+                 sigma_beta = sigma.beta, sigma_logr = sigma.logr))
 }
 
 

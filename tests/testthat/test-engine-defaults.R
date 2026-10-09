@@ -120,7 +120,6 @@ test_that("an engine with no profile leaves control untouched", {
   ".tobs_fit_abun_nuts", ".tobs_fit_abun_nuts_spatial",
   ".tobs_fit_distance_nuts", ".tobs_fit_distance_nuts_spatial",
   ".tobs_fit_dyn_abun_nuts", ".tobs_fit_dyn_abun_nuts_spatial",
-  ".tobs_fit_dyn_abun_nuts_temporal",
   ".tobs_fit_fp_occu_nuts", ".tobs_fit_fp_occu_nuts_spatial",
   ".tobs_fit_removal_nuts", ".tobs_fit_removal_nuts_spatial",
   ".tobs_fit_occu_pg_gibbs", ".tobs_fit_occu_pg_gibbs_spatial",

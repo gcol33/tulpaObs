@@ -99,16 +99,78 @@
 
 
 # ---------------------------------------------------------------------------
-# Non-spatial marginal NUTS: shared chain-run and fit-assembly tail
+# Non-spatial marginal NUTS: shared front door and fit-assembly tail
 #
 # The same five families (abun, removal, distance, fp_occu, dyn_abun) run an
-# identically shaped sampler when there is no field: a flat coefficient vector,
-# one C++ FullGradFn entry point, and a `run_chain(ch)` closure. Everything
-# after that closure -- pooling the chains, naming the draw columns, the
-# posterior moments, the RE tail, and the `fit$nuts` diagnostics block -- is the
-# same for all of them. The two helpers below carry it, so a change to the
-# reported diagnostics is made once.
+# identically shaped sampler when there is no field: a flat coefficient vector
+# warm-started at the family's Laplace mode, one C++ FullGradFn entry point,
+# and an optional single-intercept RE tail. What differs per family is the
+# warm fitter, the C++ target and its prior-scale arguments, the data spec and
+# the coefficient names; `.tobs_count_nuts_front_door()` takes exactly those
+# and carries everything else -- the warm init, the RE threading, the chain
+# runs, the pooling -- so a change to any of it is made once.
+# `.tobs_count_nuts_attach()` then turns the pooled run into the `fit$nuts`
+# diagnostics block.
 # ---------------------------------------------------------------------------
+
+# Warm start for a count-family target: `theta0` is the Laplace mode over the
+# base coefficient block and `inv_metric` that block's Laplace marginal
+# variances (floored at 1e-6) whenever `V` is square on the block with a finite
+# diagonal, else a unit metric. With a single-intercept RE the whitened group
+# offsets z_1..z_G start at 0 on a unit metric and log_sigma_re at log(0.5) on a
+# 0.25 metric. The metric rule is sized by the BASE block, so the RE tail does
+# not cost the coefficients their Laplace scale.
+.tobs_count_nuts_warm_init <- function(theta0, V, re_info = NULL) {
+  theta0 <- as.numeric(theta0)
+  n_base <- length(theta0)
+  V <- if (is.null(V)) NULL else as.matrix(V)
+  inv_metric <- if (!is.null(V) && nrow(V) == n_base && ncol(V) == n_base &&
+                    all(is.finite(diag(V)))) {
+    pmax(diag(V), 1e-6)
+  } else rep(1, n_base)
+  if (!is.null(re_info)) {
+    G <- re_info$n_groups
+    theta0     <- c(theta0, rep(0, G), log(0.5))
+    inv_metric <- c(inv_metric, rep(1, G), 0.25)
+  }
+  list(theta0 = theta0, inv_metric = unname(inv_metric), n_base = n_base)
+}
+
+# The one sampler front door for the marginal count-family NUTS targets.
+# `target` is the family's C++ sampler entry (`cpp_<family>_nuts`), `spec` its
+# data list, `priors` the named prior-scale arguments that entry takes between
+# `theta0` and `inv_metric` (`sigma_beta`, and `sigma_shape` / `sigma_logr`
+# where the target has them), `theta0` / `V` the warm Laplace mode and
+# covariance over the base coefficient block, `nms` the base coefficient names,
+# `re_info` the resolved single-intercept RE (NULL for none), `sigma.logr` the
+# prior SD on the RE log-SD, and `sampler` the resolved sampler knobs
+# (`.tobs_sampler_control_snapshot()`). Runs `n.chains` chains with offset
+# seeds and pools them; the warm init, the RE record and the sampler knobs ride
+# on the result for `.tobs_count_nuts_attach()`.
+.tobs_count_nuts_front_door <- function(target, spec, priors, theta0, V, nms,
+                                        re_info, sigma.logr, sampler,
+                                        verbose = FALSE) {
+  init <- .tobs_count_nuts_warm_init(theta0, V, re_info)
+  spec <- .tobs_count_nuts_re_spec(spec, re_info, sigma.logr)
+  nms  <- c(nms, .tobs_count_nuts_re_names(re_info))
+  seed0 <- sampler[["seed"]]
+  args <- c(list(spec, theta0 = init$theta0), priors,
+            list(inv_metric    = init$inv_metric,
+                 n_iter        = as.integer(sampler[["n.iter"]] + sampler[["n.warmup"]]),
+                 n_warmup      = as.integer(sampler[["n.warmup"]]),
+                 max_treedepth = as.integer(sampler[["max.treedepth"]]),
+                 adapt_delta   = sampler[["adapt.delta"]],
+                 verbose       = isTRUE(verbose)))
+  run_chain <- function(ch)
+    do.call(target, c(args, list(seed = as.integer(seed0 + ch - 1L))))
+  run <- .tobs_count_nuts_run(run_chain, sampler[["n.chains"]], nms,
+                              n.thin = sampler[["n.thin"]],
+                              n.threads = sampler[["n.threads"]])
+  run$init    <- init
+  run$re_info <- re_info
+  run$sampler <- sampler
+  run
+}
 
 # Run `n_chains` chains of a prepared sampler closure, in parallel when asked,
 # and thin every per-iteration series the fit reports by the same stride.
@@ -159,17 +221,17 @@
 }
 
 # Replace the family builder's moment-matched draws and NA diagnostics with the
-# actual NUTS posterior. `log_lik` is the data log-likelihood at the posterior
-# mean (the laplace-path `logLik()` convention); `re_info` attaches the RE tail
-# when the fit carries one; `extra` is the family's own `fit$nuts` entries
+# actual NUTS posterior. `run` is a `.tobs_count_nuts_front_door()` result;
+# `log_lik` is the data log-likelihood at the posterior mean (the laplace-path
+# `logLik()` convention); `extra` is the family's own `fit$nuts` entries
 # (`is_nb`, `K_max`, `re_arm`, the prior scales, ...), appended after the common
-# sampler diagnostics.
-.tobs_count_nuts_attach <- function(fit, run, log_lik, n_chains, re_info = NULL,
-                                    extra = list(), sampler_control = NULL) {
+# sampler diagnostics. The warm start the chains ran from (`theta0`,
+# `inv_metric`) is recorded alongside them.
+.tobs_count_nuts_attach <- function(fit, run, log_lik, extra = list()) {
   n_draws <- nrow(run$draws)
   fit$draws <- run$draws
   fit <- .tobs_count_nuts_re_finish(fit, run$draws, run$par, run$cov, run$nms,
-                                    re_info)
+                                    run$re_info)
   fit$n_samples   <- n_draws
   fit$log_prob    <- rep(log_lik, n_draws)
   fit$accept_prob <- run$accept
@@ -179,13 +241,15 @@
   fit$method      <- "nuts"
   fit$nuts <- c(list(accept_prob = run$accept, divergent = run$divergent,
                      treedepth = run$treedepth, epsilon = run$epsilon,
-                     n_chains = as.integer(n_chains),
-                     divergent_total = sum(run$divergent)),
+                     n_chains = as.integer(run$sampler[["n.chains"]]),
+                     divergent_total = sum(run$divergent),
+                     theta0 = run$init$theta0,
+                     inv_metric = run$init$inv_metric),
                 extra)
   # Every sampled coordinate here is a reported model parameter (the coefficients
   # plus the trailing log_r / RE block), so the record covers all of them.
   .tobs_nuts_attach_convergence(fit, run$chains, par_names = run$nms,
-                                sampler_control = sampler_control)
+                                sampler_control = run$sampler)
 }
 
 
@@ -194,8 +258,9 @@
 # (abun, removal, distance, fp_occu, dyn_abun): one grouping factor, intercept
 # only, on the state OR detection arm. The C++ side (marginal_count_nuts.h)
 # carries the non-centered per-site offset; these helpers resolve the RE term,
-# thread it into the spec / warm-start / draw names, and surface fit$re. Slopes
-# / correlated / multi-term / both-arm RE stay on the AGHQ Laplace path.
+# thread it into the spec / draw names (the warm start is
+# `.tobs_count_nuts_warm_init()`), and surface fit$re. Slopes / correlated /
+# multi-term / both-arm RE stay on the AGHQ Laplace path.
 # ---------------------------------------------------------------------------
 
 # Resolve a single intercept RE from the formula `re` terms. NULL = no RE.
@@ -242,17 +307,6 @@
   spec$n_re_groups  <- re_info$n_groups
   spec$sigma_re_lsd <- sigma.logr
   spec
-}
-
-# Append z (warm-started at 0, unit metric) + log_sigma_re (log(0.5), 0.25
-# metric) to the warm-start init.
-.tobs_count_nuts_re_init <- function(init, lay, re_info) {
-  if (is.null(re_info)) return(init)
-  G <- re_info$n_groups
-  init$theta0     <- c(init$theta0, rep(0, G), log(0.5))
-  init$inv_metric <- c(init$inv_metric[seq_len(lay$total - G - 1L)],
-                       rep(1, G), 0.25)
-  init
 }
 
 # Draw-column names for the RE block (z_1..z_G + log_sigma_<arm>_<label>).

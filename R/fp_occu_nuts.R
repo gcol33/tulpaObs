@@ -52,7 +52,10 @@
 # Front-door NUTS fitter for the false-positive occupancy family
 # ---------------------------------------------------------------------------
 
-.tobs_fit_fp_occu_nuts <- function(model, sigma.beta = NULL, re = NULL,
+# `sigma.logr` is the prior SD on the RE log-SD (the shared count-NUTS RE
+# block).
+.tobs_fit_fp_occu_nuts <- function(model, sigma.beta = NULL, sigma.logr = NULL,
+                                   re = NULL,
                                    n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
                                    n.threads = NULL,
                                    max.treedepth = NULL, adapt.delta = NULL,
@@ -77,38 +80,20 @@
   warm <- fp_occu_laplace(y = model$y_long, site_idx = model$site_idx,
                           X_psi = X_psi, X_p11 = X_p11, X_p10 = X_p10, X_b = X_b,
                           verbose = FALSE)
-  n_base <- length(warm$means)
-  V <- as.matrix(warm$vcov)
-  base_metric <- if (!is.null(V) && nrow(V) == n_base && all(is.finite(diag(V))))
-                   pmax(diag(V), 1e-6) else rep(1, n_base)
-  init <- .tobs_count_nuts_re_init(
-    list(theta0 = as.numeric(warm$means), inv_metric = base_metric), lay, re_info)
-  theta0 <- init$theta0; inv_metric <- init$inv_metric
-
-  spec <- .tobs_count_nuts_re_spec(
-    list(y = as.integer(model$y_long), site_idx = as.integer(model$site_idx),
-         X_psi = X_psi, X_p11 = X_p11, X_p10 = X_p10, X_b = X_b,
-         n_sites = model$n_sites),
-    re_info, 1.5)
-
-  run_chain <- function(ch) {
-    cpp_fp_occu_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
-                     inv_metric = inv_metric,
-                     n_iter = as.integer(n.iter + n.warmup),
-                     n_warmup = as.integer(n.warmup),
-                     max_treedepth = as.integer(max.treedepth),
-                     adapt_delta = adapt.delta,
-                     seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
-  }
-  nms <- c(paste0("psi_", model$process_info[[1]]$coef_names),
-           paste0("p11_", model$process_info[[2]]$coef_names),
-           paste0("p10_", model$process_info[[3]]$coef_names),
-           paste0("b_",   model$process_info[[4]]$coef_names),
-           .tobs_count_nuts_re_names(re_info))
-  run <- .tobs_count_nuts_run(run_chain, n.chains, nms,
-                              n.thin = n.thin,
-                              n.threads = n.threads)
-  par <- run$par; cov <- run$cov
+  run <- .tobs_count_nuts_front_door(
+    cpp_fp_occu_nuts,
+    spec = list(y = as.integer(model$y_long), site_idx = as.integer(model$site_idx),
+                X_psi = X_psi, X_p11 = X_p11, X_p10 = X_p10, X_b = X_b,
+                n_sites = model$n_sites),
+    priors = list(sigma_beta = sigma.beta),
+    theta0 = warm$means, V = warm$vcov,
+    nms = c(paste0("psi_", model$process_info[[1]]$coef_names),
+            paste0("p11_", model$process_info[[2]]$coef_names),
+            paste0("p10_", model$process_info[[3]]$coef_names),
+            paste0("b_",   model$process_info[[4]]$coef_names)),
+    re_info = re_info, sigma.logr = sigma.logr,
+    sampler = .tobs_sampler_control_snapshot(environment()), verbose = verbose)
+  par <- run$par; cov <- run$cov; nms <- run$nms
 
   marg <- .tobs_fp_occu_nuts_marginal(model)
   ev_mean <- marg$eval_beta(par[lay$psi], par[lay$p11], par[lay$p10], par[lay$b])
@@ -119,8 +104,7 @@
   fit <- build_fp_occu_fit(raw, model)
 
   .tobs_count_nuts_attach(
-    fit, run, ev_mean$log_lik, n.chains, re_info,
-    extra = list(sigma_beta = sigma.beta,
-                 re_arm = if (!is.null(re_info)) re_info$arm else -1L),
-    sampler_control = .tobs_sampler_control_snapshot(environment()))
+    fit, run, ev_mean$log_lik,
+    extra = list(sigma_beta = sigma.beta, sigma_logr = sigma.logr,
+                 re_arm = if (!is.null(re_info)) re_info$arm else -1L))
 }

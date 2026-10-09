@@ -105,16 +105,20 @@
                              X_svc = X_lam, family = "dyn_abun")
 }
 
-# Areal-spatial Dail-Madsen open N-mixture via NUTS: a FIXED- HYPER non-centered
-# PROPER-CAR field on the initial-abundance (log lambda_1) arm of the forward-HMM
-# marginal. The field precision (tau, rho) is fixed at the nested- Laplace areal
-# posterior mean (fit$spatial_hyper) and the whitened raw ~ N(0, I) (z = Linv %*%
-# raw) is sampled jointly with the four arms' coefficients via the dyn_abun NUTS
-# field block (cpp_dyn_abun_nuts over nuts_field_block.h). The areal Laplace fit
-# supplies warm coefficients + the field hyper. icar / car_proper / bym2 -- the
-# intrinsic icar / bym2 fields sample via the #71 sum-to-zero reparameterisation
-# (#113); Poisson or NB initial abundance.
-.tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial, mixture = "poisson",
+# Field Dail-Madsen open N-mixture via NUTS: a FIXED-HYPER non-centered field
+# on the initial-abundance (log lambda_1) arm of the forward-HMM marginal, from
+# EITHER an areal term (icar / car_proper / bym2; the intrinsic icar / bym2
+# fields sample via the #71 sum-to-zero reparameterisation, #113) OR a
+# temporal() term (ar1 / rw1 / rw2 / iid, #114). Both reduce to a whitened
+# raw ~ N(0, I) sampled jointly with the four arms' coefficients through the
+# dyn_abun NUTS field block (cpp_dyn_abun_nuts over nuts_field_block.h): the
+# field precision is fixed at the nested-Laplace posterior mean
+# (fit$spatial_hyper / fit$temporal_hyper), which also supplies the warm
+# coefficients. Only the loading L, the per-site field map and the warm-start
+# source differ, so the sampling tail is one body. Poisson or NB initial
+# abundance; temporal-only (no simultaneous areal field on this path).
+.tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
+                                            mixture = "poisson",
                                             K_max = NULL, sigma.beta = NULL,
                                             n.iter = NULL, n.warmup = NULL,
                                             n.chains = NULL, n.thin = NULL,
@@ -124,54 +128,82 @@
   # Sampler defaults come from the one engine table.
   .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
 
-  .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
-  .tobs_reject_det_arm_spatial(spatial, "dyn_abun() NUTS", "initial-abundance",
-                               "a spatially-varying detection logit",
-                               "is wired under method = \"nested_laplace\".")
-  if (!spatial$type %in% c("icar", "car_proper", "bym2"))
-    stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports icar() / ",
-                        "car_proper() / bym2() on the initial-abundance arm; got ",
-                        "'%s'."), spatial$type), call. = FALSE)
+  temporal_only <- is.null(spatial) && !is.null(temporal)
   n_sites <- model$n_sites
-  if (spatial$n_units != n_sites)
-    stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
-                        "spatial unit per site is required for dyn_abun NUTS."),
-                 spatial$n_units, n_sites), call. = FALSE)
+  if (!temporal_only) {
+    .tobs_reject_weighted_spatial(spatial, "dyn_abun NUTS abundance spatial")
+    .tobs_reject_det_arm_spatial(spatial, "dyn_abun() NUTS", "initial-abundance",
+                                 "a spatially-varying detection logit",
+                                 "is wired under method = \"nested_laplace\".")
+    if (!spatial$type %in% c("icar", "car_proper", "bym2"))
+      stop(sprintf(paste0("dyn_abun() NUTS + areal spatial supports icar() / ",
+                          "car_proper() / bym2() on the initial-abundance arm; got ",
+                          "'%s'."), spatial$type), call. = FALSE)
+    if (spatial$n_units != n_sites)
+      stop(sprintf(paste0("spatial term has %d units but the model has %d sites; one ",
+                          "spatial unit per site is required for dyn_abun NUTS."),
+                   spatial$n_units, n_sites), call. = FALSE)
+  }
   use_nb <- identical(model$mixture %||% mixture, "negbin") ||
             mixture %in% c("negbin", "NB")
   X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
-  adj <- as.matrix(spatial$graph)
 
-  # Warm coefficients + fixed field hyper (tau, rho) from the nested-Laplace fit.
-  nl <- .tobs_fit_dyn_abun_spatial(model, spatial,
-                                   mixture = if (use_nb) "negbin" else "poisson",
-                                   K_max = K_max, max_iter = 300L, tol = 1e-8,
-                                   verbose = FALSE, integration = "grid")
-  hyper <- nl$spatial_hyper
-  hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
-  fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
-                                 tau = hv("tau"), rho = hv("rho"),
-                                 sigma = hv("sigma"),
-                                 scale_factor = spatial$scale_factor)
+  if (temporal_only) {
+    ti <- as.integer(temporal$time_idx)
+    if (length(ti) != n_sites)
+      stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
+                          "sites; one time index per site is required for dyn_abun ",
+                          "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
+    n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+           else max(ti, na.rm = TRUE)
+    # Warm coefficients + fixed temporal field hyper (tau[, rho]) from the
+    # nested-Laplace temporal-only fit (spatial = NULL).
+    nl <- .tobs_fit_dyn_abun_spatial(model, spatial = NULL, temporal = temporal,
+                                     mixture = if (use_nb) "negbin" else "poisson",
+                                     K_max = K_max, max_iter = 300L, tol = 1e-8,
+                                     verbose = FALSE, integration = "grid")
+    hyper <- nl$temporal_hyper
+    hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
+    fl <- .tobs_nuts_temporal_loading(temporal$type, n_t,
+                                      tau = hv("tau"), rho = hv("rho"))
+    field_map <- ti
+    n_field_units <- n_t
+    raw0 <- numeric(fl$n_raw)                     # raw starts flat (sum-to-zero safe)
+  } else {
+    adj <- as.matrix(spatial$graph)
+    # Warm coefficients + fixed field hyper (tau, rho) from the nested-Laplace fit.
+    nl <- .tobs_fit_dyn_abun_spatial(model, spatial,
+                                     mixture = if (use_nb) "negbin" else "poisson",
+                                     K_max = K_max, max_iter = 300L, tol = 1e-8,
+                                     verbose = FALSE, integration = "grid")
+    hyper <- nl$spatial_hyper
+    hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
+    fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
+                                   tau = hv("tau"), rho = hv("rho"),
+                                   sigma = hv("sigma"),
+                                   scale_factor = spatial$scale_factor)
+    field_map <- seq_len(n_sites)
+    n_field_units <- n_sites
+    # car_proper warm-starts raw near the integrated field; icar / bym2
+    # (non-square sum-to-zero loadings) start raw at 0 (#71/#113).
+    raw0 <- if (identical(spatial$type, "car_proper")) {
+      L <- chol(.areal_Q(adj, fl$rho) * fl$tau + diag(1e-4 * fl$tau, n_sites))
+      as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
+    } else numeric(fl$n_raw)
+  }
   field_load <- fl$field_load; n_raw <- fl$n_raw
 
   cm <- as.numeric(nl$means)
   n_base <- length(cm)
-  # car_proper warm-starts raw near the integrated field; icar / bym2 (non-square
-  # sum-to-zero loadings) start raw at 0 (#71/#113).
-  raw0 <- if (identical(spatial$type, "car_proper")) {
-    L <- chol(.areal_Q(adj, fl$rho) * fl$tau + diag(1e-4 * fl$tau, n_sites))
-    as.numeric(L %*% (nl$spatial_field %||% numeric(n_sites)))
-  } else numeric(n_raw)
   theta0 <- c(cm, raw0)
   inv_metric <- c(rep(0.2, n_base), rep(1, n_raw))
 
   spec <- list(y = as.integer(model$y_flat), n_sites = n_sites,
                T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                X_lambda = X_lam, X_p = X_p, X_omega = X_om, X_gamma = X_gm,
-               use_nb = use_nb, n_field_units = n_sites,
-               field_map = seq_len(n_sites), field_load = field_load)
+               use_nb = use_nb, n_field_units = n_field_units,
+               field_map = field_map, field_load = field_load)
 
   run_chain <- function(ch)
     cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
@@ -188,10 +220,12 @@
   ev  <- .tobs_dyn_abun_nuts_eval(model, run$par, X_lam, X_p, X_om, X_gm, use_nb)
   fit <- build_dyn_abun_fit(
     .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
-  .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
-                          prior_type = spatial$type, fl = fl,
-                          field_map = seq_len(n_sites),
-                          sampler_control = .tobs_sampler_control_snapshot(environment()))
+  .tobs_nuts_field_attach(
+    fit, run, ev$log_lik, n.chains,
+    prior_type = if (temporal_only) temporal$type else spatial$type, fl = fl,
+    field_map = field_map,
+    temporal = if (temporal_only) temporal else NULL,
+    sampler_control = .tobs_sampler_control_snapshot(environment()))
 }
 
 # Coefficient + whitened-field column names for a field dyn_abun NUTS run.
@@ -225,77 +259,3 @@
        log_r = ev$log_r, r = if (use_nb) exp(ev$log_r) else NA_real_)
 }
 
-# Temporal-field Dail-Madsen open N-mixture via NUTS: a FIXED-HYPER non-centered
-# ar1 / rw1 / rw2 / iid field on the initial-abundance (log lambda_1) arm of the
-# forward-HMM marginal. Structurally identical to the areal NUTS path -- the
-# temporal field is a GMRF whose whitened loading is fixed at the nested-Laplace
-# temporal-only posterior mean and whose per-site field_map is the period index
-# (many sites share a period), so it rides the SAME dyn_abun NUTS field block
-# (cpp_dyn_abun_nuts over nuts_field_block.h) with no engine change. Poisson or
-# NB initial abundance; temporal-only (no simultaneous areal field on this path).
-.tobs_fit_dyn_abun_nuts_temporal <- function(model, temporal, mixture = "poisson",
-                                             K_max = NULL, sigma.beta = NULL,
-                                             n.iter = NULL, n.warmup = NULL,
-                                             n.chains = NULL, n.thin = NULL,
-                                             n.threads = NULL, max.treedepth = NULL,
-                                             adapt.delta = NULL, seed = NULL,
-                                             verbose = FALSE) {
-  # Sampler defaults come from the one engine table.
-  .tobs_fill_sampler(environment(), "nuts", single_species = TRUE)
-
-  n_sites <- model$n_sites
-  ti <- as.integer(temporal$time_idx)
-  if (length(ti) != n_sites)
-    stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
-                        "sites; one time index per site is required for dyn_abun ",
-                        "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
-  n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
-         else max(ti, na.rm = TRUE)
-  use_nb <- identical(model$mixture %||% mixture, "negbin") ||
-            mixture %in% c("negbin", "NB")
-  X_lam <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
-  X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
-
-  # Warm coefficients + fixed temporal field hyper (tau[, rho]) from the
-  # nested-Laplace temporal-only fit (spatial = NULL).
-  nl <- .tobs_fit_dyn_abun_spatial(model, spatial = NULL, temporal = temporal,
-                                   mixture = if (use_nb) "negbin" else "poisson",
-                                   K_max = K_max, max_iter = 300L, tol = 1e-8,
-                                   verbose = FALSE, integration = "grid")
-  hyper <- nl$temporal_hyper
-  hv <- function(k) suppressWarnings(as.numeric(hyper[k]))
-  fl <- .tobs_nuts_temporal_loading(temporal$type, n_t,
-                                    tau = hv("tau"), rho = hv("rho"))
-  field_load <- fl$field_load; n_raw <- fl$n_raw
-
-  cm <- as.numeric(nl$means)
-  n_base <- length(cm)
-  theta0 <- c(cm, numeric(n_raw))                 # raw starts flat (sum-to-zero safe)
-  inv_metric <- c(rep(0.2, n_base), rep(1, n_raw))
-
-  spec <- list(y = as.integer(model$y_flat), n_sites = n_sites,
-               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
-               X_lambda = X_lam, X_p = X_p, X_omega = X_om, X_gamma = X_gm,
-               use_nb = use_nb, n_field_units = n_t,
-               field_map = ti, field_load = field_load)
-
-  run_chain <- function(ch)
-    cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
-                      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
-                      n_warmup = as.integer(n.warmup),
-                      max_treedepth = as.integer(max.treedepth),
-                      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
-                      verbose = isTRUE(verbose))
-  nms <- .tobs_dyn_abun_nuts_names(model, use_nb, n_raw)
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
-                                field_load, n.thin = n.thin,
-                                n.threads = n.threads)
-
-  ev  <- .tobs_dyn_abun_nuts_eval(model, run$par, X_lam, X_p, X_om, X_gm, use_nb)
-  fit <- build_dyn_abun_fit(
-    .tobs_dyn_abun_nuts_raw(run, nms, ev, model, use_nb), model)
-  .tobs_nuts_field_attach(fit, run, ev$log_lik, n.chains,
-                          prior_type = temporal$type, fl = fl,
-                          field_map = ti, temporal = temporal,
-                          sampler_control = .tobs_sampler_control_snapshot(environment()))
-}
