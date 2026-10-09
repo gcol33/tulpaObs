@@ -41,7 +41,7 @@ test_that("occu laplace (EM) writes a heartbeat under verbose = FALSE", {
 test_that("ms_occu (community EM) writes a heartbeat under verbose = FALSE", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu(N = 90, J = 3, n_species = 8, seed = 2)
+  sim <- simulate_ms_occu(N = 90, J = 3, n.species = 8, seed = 2)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
   tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1, y = sim$y,
        species = paste0("sp", seq_len(8)), method = "laplace",
@@ -53,7 +53,7 @@ test_that("abun NUTS writes a heartbeat under verbose = FALSE", {
   skip_on_cran()
   skip_if_fast()
   set.seed(3)
-  sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 3)
+  sim <- simulate_abun(N = 60, J = 4, n.abund.covs = 1, n.det.covs = 1, seed = 3)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
   tobs(~ abund_cov1, data = sim$data, y = sim$y, family = abun(),
        detection = ~ det_cov1, method = "nuts",
@@ -66,7 +66,7 @@ test_that("abun laplace (count-marginal Newton) writes a heartbeat", {
   skip_on_cran()
   skip_if_fast()
   set.seed(4)
-  sim <- simulate_abun(N = 200, J = 4, n_abund_covs = 2, n_det_covs = 1, seed = 4)
+  sim <- simulate_abun(N = 200, J = 4, n.abund.covs = 2, n.det.covs = 1, seed = 4)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
   tobs(~ abund_cov1 + abund_cov2, data = sim$data, y = sim$y, family = abun(),
        detection = ~ det_cov1, method = "laplace",
@@ -77,8 +77,8 @@ test_that("abun laplace (count-marginal Newton) writes a heartbeat", {
 test_that("ms_abun (community N-mixture EM) writes a heartbeat", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 10, N = 70, J = 4,
-                          n_abund_covs = 1, n_det_covs = 1, seed = 5)
+  sim <- simulate_ms_abun(n.species = 10, N = 70, J = 4,
+                          n.abund.covs = 1, n.det.covs = 1, seed = 5)
   path <- tempfile(fileext = ".eta"); on.exit(unlink(path), add = TRUE)
   tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
        detection = ~ det_cov1, species = sim$species, method = "laplace",
@@ -90,7 +90,7 @@ test_that("NUTS progress does not perturb the sampler (byte-exact draws)", {
   skip_on_cran()
   skip_if_fast()
   set.seed(6)
-  sim <- simulate_abun(N = 50, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 6)
+  sim <- simulate_abun(N = 50, J = 4, n.abund.covs = 1, n.det.covs = 1, seed = 6)
   ctl <- list(n.iter = 300L, n.warmup = 200L, n.chains = 1L, seed = 9L,
               verbose = FALSE)
   off <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = abun(),

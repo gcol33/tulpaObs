@@ -525,7 +525,7 @@ fit_oc <- suppressWarnings(tobs(
   detection = ~ det_cov1,
   positive  = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1.0))),
   y         = od$y,
-  y_pos     = y_pos,
+  y.pos     = y_pos,
   visits    = od$det.covs,
   method    = "nested_laplace",
   control   = list(verbose = FALSE, max.iter = 300L,
@@ -679,7 +679,7 @@ change quantity carries a credible interval.
 
 ```{r oc-change}
 pr_chg <- predict(fit_oc, newdata = cell_dat, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 1000L)
+                  times = c(0, 1), time.col = "year", nsim = 1000L)
 names(pr_chg)
 ```
 

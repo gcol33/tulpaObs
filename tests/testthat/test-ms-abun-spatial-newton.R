@@ -12,7 +12,7 @@ test_that("inner.solver = \"newton\" is a recognized control with regime guards"
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(3L)
-  sim <- simulate_ms_abun(n_species = 4, J = 2, graph = adj,
+  sim <- simulate_ms_abun(n.species = 4, J = 2, graph = adj,
                           sigma.field = 0.3, seed = 5)
   # The control key is admitted (not an "unknown control option"); an unknown
   # VALUE hits match.arg -- both fire before any heavy fitting.
@@ -34,9 +34,9 @@ test_that("the Newton solver agrees with EM on the shared-field community fit", 
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(4L)                       # 16 sites
-  sim <- simulate_ms_abun(n_species = 8, J = 4, n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 8, J = 4, n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
                           graph = adj, sigma.field = 0.6, seed = 7)
   truth <- c(sim$truth$mu_lambda, sim$truth$mu_p)
 

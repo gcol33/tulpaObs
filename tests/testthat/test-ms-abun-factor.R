@@ -43,16 +43,16 @@
 }
 
 
-test_that("abun() / ms_abun() reject a non-numeric K_max", {
+test_that("abun() / ms_abun() reject a non-numeric K.max", {
   # `K_max` is the first formal, so abun("negbin") -- reaching for the mixing
   # distribution -- binds the string to K_max. Unchecked it coerces to NA and
   # resurfaces as an unrelated comparison error deep inside a kernel.
-  expect_error(ms_abun("negbin"), "K_max.*mixture|mixture = ")
-  expect_error(abun("negbin"),    "K_max.*mixture|mixture = ")
-  expect_error(abun(K_max = -5),  "K_max")
+  expect_error(ms_abun("negbin"), "K.max.*mixture|mixture = ")
+  expect_error(abun("negbin"),    "K.max.*mixture|mixture = ")
+  expect_error(abun(K.max = -5),  "K.max")
   # the honest spellings still work
   expect_s3_class(ms_abun(mixture = "negbin"), "tobs_family")
-  expect_s3_class(abun(K_max = 50), "tobs_family")
+  expect_s3_class(abun(K.max = 50), "tobs_family")
 })
 
 test_that("ms_abun() + latent() gates unsupported combinations", {

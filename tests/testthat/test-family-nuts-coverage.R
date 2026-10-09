@@ -41,8 +41,8 @@ test_that("distance NUTS coefficient 95% CIs cover at the nominal rate", {
   covered <- logical(0)
   for (s in seq_len(20L)) {
     sim <- simulate_distance(N = 120, cutpoints = cuts5, key = "halfnorm",
-                             transect = "line", n_abund_covs = 1, n_sigma_covs = 1,
-                             beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                             transect = "line", n.abund.covs = 1, n.sigma.covs = 1,
+                             beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                              seed = 600 + s)
     fit <- tryCatch(tobs(~ abund_cov1, data = sim$data,
                     family = distance(key = "halfnorm", transect = "line",
@@ -67,8 +67,8 @@ test_that("removal NUTS coefficient 95% CIs cover at the nominal rate", {
   truth <- c(beta_lambda, beta_p)
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_removal(N = 80, K = 5, n_abund_covs = 1, n_det_covs = 1,
-                            beta_lambda = beta_lambda, beta_p = beta_p, seed = 600 + s)
+    sim <- simulate_removal(N = 80, K = 5, n.abund.covs = 1, n.det.covs = 1,
+                            beta.lambda = beta_lambda, beta.p = beta_p, seed = 600 + s)
     fit <- tryCatch(tobs(~ abund_cov1, data = sim$data, family = removal(),
                     detection = ~ det_cov1, y = sim$y, method = "nuts",
                     control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
@@ -90,7 +90,7 @@ test_that("fp_occu NUTS coefficient 95% CIs cover at the nominal rate", {
   truth <- c(beta_psi, qlogis(0.6), qlogis(0.05), qlogis(0.5))
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_fp_occu(N = 300, J = 6, n_occ_covs = 1, beta_psi = beta_psi,
+    sim <- simulate_fp_occu(N = 300, J = 6, n.occ.covs = 1, beta.psi = beta_psi,
                             p11 = 0.6, p10 = 0.05, b = 0.5, seed = 600 + s)
     fit <- tryCatch(tobs(~ occ_cov1, data = sim$data, family = fp_occu(),
                     detection = ~ 1, y = sim$y, method = "nuts",
@@ -113,10 +113,10 @@ test_that("dyn_abun NUTS coefficient 95% CIs cover at the nominal rate", {
   truth <- c(beta_lambda, qlogis(0.5), qlogis(0.6), log(1.2))
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_dyn_abun(N = 70, T = 3, J = 3, n_abund_covs = 1,
-                             beta_lambda = beta_lambda, p = 0.5, omega = 0.6,
+    sim <- simulate_dyn_abun(N = 70, T = 3, J = 3, n.abund.covs = 1,
+                             beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 600 + s)
-    fit <- tryCatch(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 26),
+    fit <- tryCatch(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 26),
                     detection = ~ 1, y = sim$y, method = "nuts",
                     control = list(n.iter = 250L, n.warmup = 250L, seed = 1L,
                                    adapt.delta = 0.9, verbose = FALSE)),
@@ -137,8 +137,8 @@ test_that("abun NUTS coefficient 95% CIs cover at the nominal rate", {
   truth <- c(beta_lambda, beta_p)
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 2, n_det_covs = 1,
-                         beta_lambda = beta_lambda, beta_p = beta_p,
+    sim <- simulate_abun(N = 60, J = 4, n.abund.covs = 2, n.det.covs = 1,
+                         beta.lambda = beta_lambda, beta.p = beta_p,
                          mixture = "poisson", seed = 600 + s)
     fit <- tryCatch(tobs(~ abund_cov1 + abund_cov2, data = sim$data, y = sim$y,
                     family = abun(), detection = ~ det_cov1, method = "nuts",
@@ -195,8 +195,8 @@ test_that("int_occu NUTS occupancy 95% CIs cover at the nominal rate", {
   truth <- c(0, 0.4)                      # psi_(Intercept), psi_x
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_int_occu(N_total = 300, n_data = 1L, J = 5L,
-                             beta_occ = c(0, 0.4), beta_det = list(c(0, -0.3)),
+    sim <- simulate_int_occu(N.total = 300, n.data = 1L, J = 5L,
+                             beta.occ = c(0, 0.4), beta.det = list(c(0, -0.3)),
                              seed = 30L + s)
     fit <- tryCatch(tobs(~ x, data = sim$data, family = int_occu(), detection = ~ 1,
                     y = sim$y, method = "nuts",

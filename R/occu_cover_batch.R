@@ -87,7 +87,7 @@
   sp_control[["batch.backend"]] <- NULL
   sp_dots <- tobs_args$dots
   sp_dots[["species"]] <- NULL
-  sp_dots[["y_pos"]] <- .tobs_response_slice(y_pos, s)
+  sp_dots[["y.pos"]] <- .tobs_response_slice(y_pos, s)
   c(list(
       formula   = tobs_args$formula,
       data      = tobs_args$data,
@@ -103,18 +103,18 @@
 
 .tobs_fit_occu_cover_batch <- function(tobs_args, y, B) {
   dots     <- tobs_args$dots
-  y_pos    <- dots[["y_pos"]]
+  y_pos    <- dots[["y.pos"]]
   species  <- dots[["species"]]
 
   B_pos <- .tobs_multiresponse_n(y_pos)
   if (is.null(B_pos)) {
     stop(paste0("Batched occu_cover: `y` is multi-response (", B,
-                " species) so `y_pos` must be a matching list/3D array of the ",
+                " species) so `y.pos` must be a matching list/3D array of the ",
                 "same length."), call. = FALSE)
   }
   if (B_pos != B) {
     stop(sprintf(paste0("Batched occu_cover: `y` carries %d responses but ",
-                        "`y_pos` carries %d."), B, B_pos), call. = FALSE)
+                        "`y.pos` carries %d."), B, B_pos), call. = FALSE)
   }
 
   labels <- .tobs_batch_species_labels(species, y, B)
@@ -298,10 +298,10 @@
   # occu_cover: a site x visit response. Detection arm = `response` (0/1), cover
   # arm = `y_pos` (continuous), both pivoted onto the shared grid. Visit-level
   # covariates flow to `visits` as the det.covs matrices tobs_data() returns.
-  y_pos <- dots[["y_pos"]]
+  y_pos <- dots[["y.pos"]]
   if (is.null(visit) || is.null(y_pos)) {
     stop("tobs(by = ) for occu_cover(): supply `visit = ` (the long-format ",
-         "visit/replicate column) and `y_pos = ` (the cover column).",
+         "visit/replicate column) and `y.pos = ` (the cover column).",
          call. = FALSE)
   }
   for (col in c(visit, y_pos)) {
@@ -397,14 +397,14 @@
     sp_control[["batch.backend"]] <- NULL
     sp_control[["compact"]]       <- NULL
     fwd <- dots[setdiff(names(dots),
-                        c("species", "site", "response", "y_pos", "det.covs"))]
+                        c("species", "site", "response", "y.pos", "det.covs"))]
     fits <- vector("list", B)
     for (b in seq_len(B)) {
       fits[[b]] <- do.call(tobs, c(
         list(formula = formula, data = cell_data, family = family,
              detection = detection, y = arms[[b]]$y, visits = visits_sp,
              method = method, priors = priors, control = sp_control,
-             y_pos = arms[[b]]$y_pos),
+             y.pos = arms[[b]]$y_pos),
         fwd))
     }
     names(fits) <- labels
@@ -424,7 +424,7 @@
   fit_dots <- dots
   fit_dots[["site"]] <- NULL; fit_dots[["visit"]] <- NULL
   fit_dots[["response"]] <- NULL; fit_dots[["det.covs"]] <- NULL
-  fit_dots[["y_pos"]] <- ypos_list
+  fit_dots[["y.pos"]] <- ypos_list
 
   .tobs_fit_occu_cover_batch(
     tobs_args = list(formula = formula, data = cell_data, family = family,
@@ -560,14 +560,14 @@
     }
   }
   if (is.null(dots[["site"]]) || is.null(visit) || is.null(dots[["response"]]) ||
-      is.null(dots[["y_pos"]])) {
+      is.null(dots[["y.pos"]])) {
     stop("occu_cover() from a long frame needs `site = `, `visit = `, ",
-         "`response = ` (the 0/1 detection column) and `y_pos = ` (the cover ",
+         "`response = ` (the 0/1 detection column) and `y.pos = ` (the cover ",
          "column).", call. = FALSE)
   }
   .occu_cover_arms_from_long(
     data, site = dots[["site"]], visit = visit, response = dots[["response"]],
-    y_pos = dots[["y_pos"]], occ.covs = dots[["occ.covs"]], det.covs = dots[["det.covs"]],
+    y_pos = dots[["y.pos"]], occ.covs = dots[["occ.covs"]], det.covs = dots[["det.covs"]],
     coords = dots[["coords"]], compact = compact, pos_type = pos_type)
 }
 
@@ -580,7 +580,7 @@
 #' consumes, from one long (one row per site-visit / plot) data frame. This is
 #' the same construction [tobs()] runs internally when a single `occu_cover()`
 #' fit is handed a long frame; call it directly when you want to inspect the
-#' arms before fitting, or pass them on as `y = `, `y_pos = `, `visits = `,
+#' arms before fitting, or pass them on as `y = `, `y.pos = `, `visits = `,
 #' `data = ` to [tobs()].
 #'
 #' The occurrence and cover arms are pivoted onto one shared `(sites, visits)`
@@ -591,9 +591,9 @@
 #' read by the joint engine.
 #'
 #' @param data A long / plot-level data frame: one row per site-visit.
-#' @param site,visit,response,y_pos Column names: the site identifier, the
+#' @param site,visit,response,y.pos Column names: the site identifier, the
 #'   visit / replicate, the 0/1 detection response, and the continuous cover
-#'   response (used only where `response == 1`). The accepted range of `y_pos`
+#'   response (used only where `response == 1`). The accepted range of `y.pos`
 #'   follows `positive`.
 #' @param occ.covs Optional character vector of site-level covariate columns.
 #'   The default (`NULL`) keeps the full first-row-per-site frame and lets the
@@ -604,7 +604,7 @@
 #'   joint nested-Laplace `occu_cover()` engine consumes (no per-site visit
 #'   cap), or the dense `[n_sites x max_visits]` grid.
 #' @param positive The cover-arm distribution, matching [occu_cover()]: `"beta"`
-#'   (default) stores `y_pos` as a proportion in `[0, 1]` (`tobs_data()` type
+#'   (default) stores `y.pos` as a proportion in `[0, 1]` (`tobs_data()` type
 #'   `"cover"`); `"lognormal"` / `"gamma"` store it as a positive real `(0, Inf)`
 #'   (type `"positive"`, validated non-negative with no upper bound). Pick the
 #'   value you pass to `occu_cover(response = )`.
@@ -622,17 +622,17 @@
 #'                    det_cov1 = sim$visit_data$det_cov1,
 #'                    occ_cov1 = rep(sim$data$occ_cov1, each = 3))
 #' inp <- occu_cover_inputs(long, site = "site", visit = "visit",
-#'                          response = "occur", y_pos = "cover",
+#'                          response = "occur", y.pos = "cover",
 #'                          det.covs = "det_cov1", compact = FALSE,
 #'                          positive = "lognormal")
 #' dim(inp$y)
 #' @export
-occu_cover_inputs <- function(data, site, visit, response, y_pos,
+occu_cover_inputs <- function(data, site, visit, response, y.pos,
                               occ.covs = NULL, det.covs = NULL,
                               coords = NULL, compact = TRUE,
                               positive = "beta") {
   .occu_cover_arms_from_long(
-    data, site = site, visit = visit, response = response, y_pos = y_pos,
+    data, site = site, visit = visit, response = response, y_pos = y.pos,
     occ.covs = occ.covs, det.covs = det.covs, coords = coords,
     compact = compact, pos_type = .occu_cover_pos_type(positive))
 }
@@ -654,7 +654,7 @@ occu_cover_inputs <- function(data, site, visit, response, y_pos,
   # (dropped from both arms by the cover encoder, i.e. not observed there).
   fit_dots <- dots
   fit_dots[["site"]] <- NULL; fit_dots[["response"]] <- NULL
-  fit_dots[["visit"]] <- NULL; fit_dots[["det.covs"]] <- NULL; fit_dots[["y_pos"]] <- NULL
+  fit_dots[["visit"]] <- NULL; fit_dots[["det.covs"]] <- NULL; fit_dots[["y.pos"]] <- NULL
 
   fits <- vector("list", B)
   for (b in seq_len(B)) {
@@ -728,7 +728,7 @@ coef.tobs_batch <- function(object, ...) {
 #' fit <- tobs(~ occ_cov1, data = long, family = occu_cover("lognormal"),
 #'             detection = ~ det_cov1, positive = ~ 1, method = "laplace",
 #'             by = "sp", site = "site", visit = "visit", response = "occur",
-#'             y_pos = "cover", det.covs = "det_cov1",
+#'             y.pos = "cover", det.covs = "det_cov1",
 #'             control = list(verbose = FALSE))
 #' fit_a <- tobs_get(fit, "a")
 #' coef(fit_a)

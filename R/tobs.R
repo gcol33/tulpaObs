@@ -294,7 +294,7 @@
 #'     Community joint occupancy-cover (`ms_occu_cover()`): 5. Tensor AGHQ over
 #'     the joint per-species RE vector, so the node count is raised to a power
 #'     of the RE dimension and stays small.
-#'     Latent cover-per-unit (`cover_aggregate = "latent"`): 15 for a beta cover
+#'     Latent cover-per-unit (`cover.aggregate = "latent"`): 15 for a beta cover
 #'     arm, 1 for lognormal, whose per-unit marginal is closed form and needs no
 #'     quadrature at all.
 #'     Community `latent()` factors: 5, the Gauss-Hermite nodes the joint site
@@ -421,14 +421,14 @@
 #'   [ms_occu_cover()]. The long -> response pivot needs the column names: pass
 #'   `site = ` and `response = ` (the detection 0/1 column for `occu_cover()`,
 #'   the cover column for `cover()`), plus, for `occu_cover()`, `visit = ` (the
-#'   replicate column) and `y_pos = ` (the cover column) and any visit-level
+#'   replicate column) and `y.pos = ` (the cover column) and any visit-level
 #'   `det.covs = `. Site-level covariates (those the `formula` / `detection`
 #'   reference at the cell level) are read as the first row per site, the way
 #'   [tobs_data()]`(occ.covs = )` does.
 #'
 #'   The same long-frame contract drives a SINGLE `occu_cover()` fit when `by`
 #'   is omitted: pass `site = `, `visit = `, `response = ` (the 0/1 detection
-#'   column) and `y_pos = ` (the cover column), plus any visit-level
+#'   column) and `y.pos = ` (the cover column), plus any visit-level
 #'   `det.covs = `, with a long, plot-level `data`, and `tobs()` builds the
 #'   paired occurrence / cover arms and the site-level design for you -- the
 #'   by= batch reduced to one species, so you no longer hand-build the two
@@ -455,7 +455,7 @@
 #' @examples
 #' \donttest{
 #' # Single-season occupancy
-#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
 #'                      seed = 1)
 #' fit <- tobs(
 #'   formula   = ~ occ_cov1,
@@ -587,7 +587,7 @@ tobs <- function(formula,
     data   <- arms$site_data
     y      <- arms$y
     visits <- arms$visits
-    fwd_dots[["y_pos"]]    <- arms$y_pos
+    fwd_dots[["y.pos"]]    <- arms$y_pos
     fwd_dots[["response"]] <- NULL
     fwd_dots[["site"]]     <- NULL
     fwd_dots[["det.covs"]] <- NULL

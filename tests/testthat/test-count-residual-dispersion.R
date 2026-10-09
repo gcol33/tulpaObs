@@ -67,8 +67,8 @@ test_that("the Dail-Madsen marginal variance recursion matches Monte Carlo", {
 
 test_that("abun() residuals: Poisson unchanged, negbin at its own variance", {
   skip_on_cran()
-  args <- list(N = 90, J = 4, n_abund_covs = 1, n_det_covs = 1,
-               beta_lambda = c(log(6), 0.4), beta_p = c(0.3, -0.2), seed = 3)
+  args <- list(N = 90, J = 4, n.abund.covs = 1, n.det.covs = 1,
+               beta.lambda = c(log(6), 0.4), beta.p = c(0.3, -0.2), seed = 3)
   cell_mu <- function(fit) {
     fv <- .tobs_fitted_nmix(fit)
     pmax(fv$lambda[fit$model$site_idx] * fv$p, 1e-10)
@@ -108,8 +108,8 @@ test_that("removal() residuals: Poisson unchanged, negbin at its own variance", 
   flat <- function(fit, ty) residuals(fit, type = ty)$det[
     cbind(fit$model$site_idx, fit$model$visit_idx)]
 
-  sim <- simulate_removal(N = 90, K = 3, n_abund_covs = 1, n_det_covs = 1,
-                          beta_lambda = c(log(7), 0.3), beta_p = c(0.4, -0.2),
+  sim <- simulate_removal(N = 90, K = 3, n.abund.covs = 1, n.det.covs = 1,
+                          beta.lambda = c(log(7), 0.3), beta.p = c(0.4, -0.2),
                           seed = 4)
   fp <- tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
              family = removal(), method = "laplace", control = ctl)
@@ -117,8 +117,8 @@ test_that("removal() residuals: Poisson unchanged, negbin at its own variance", 
   for (ty in c("response", "pearson", "deviance"))
     expect_identical(flat(fp, ty), old_pois(y, mu, ty))
 
-  simn <- simulate_removal(N = 90, K = 3, n_abund_covs = 1, n_det_covs = 1,
-                           beta_lambda = c(log(7), 0.3), beta_p = c(0.4, -0.2),
+  simn <- simulate_removal(N = 90, K = 3, n.abund.covs = 1, n.det.covs = 1,
+                           beta.lambda = c(log(7), 0.3), beta.p = c(0.4, -0.2),
                            mixture = "negbin", size = 3, seed = 4)
   fn <- tobs(~ abund_cov1, data = simn$data, detection = ~ det_cov1, y = simn$y,
              family = removal(mixture = "negbin"), method = "laplace",
@@ -131,8 +131,8 @@ test_that("removal() residuals: Poisson unchanged, negbin at its own variance", 
 
 test_that("dyn_abun() residuals: Poisson unchanged, negbin at the recursion", {
   skip_on_cran()
-  args <- list(N = 50, T = 3, J = 3, n_abund_covs = 1,
-               beta_lambda = c(log(8), 0), p = 0.6, omega = 0.7, gamma = 1.2,
+  args <- list(N = 50, T = 3, J = 3, n.abund.covs = 1,
+               beta.lambda = c(log(8), 0), p = 0.6, omega = 0.7, gamma = 1.2,
                seed = 4)
   exact_var <- function(fit) {
     fv <- fit$model; f <- .tobs_fitted_dyn_abun(fit)

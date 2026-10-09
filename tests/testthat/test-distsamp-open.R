@@ -23,8 +23,8 @@ test_that("distsamp_open() reports laplace as its backend", {
 
 test_that("the distsamp_open analytic gradient matches finite differences", {
   skip_on_cran()
-  sim <- simulate_distsamp_open(N = 120, cutpoints = cutp, n_seasons = 3L,
-           beta_lambda = c(log(10), 0.3), beta_sigma = c(log(18), 0.1),
+  sim <- simulate_distsamp_open(N = 120, cutpoints = cutp, n.seasons = 3L,
+           beta.lambda = c(log(10), 0.3), beta.sigma = c(log(18), 0.1),
            omega = 0.6, gamma = 2, seed = 4)
   m <- tulpaObs:::.tobs_build_distsamp_open(~ abund_cov1, ~ det_cov1, ~ 1, ~ 1,
          sim$data, sim$y, cutp, "line")
@@ -43,7 +43,7 @@ test_that("the distsamp_open analytic gradient matches finite differences", {
 # --- (3) dispatch + input gates --------------------------------------------
 
 test_that("distsamp_open() gates its required inputs", {
-  sim <- simulate_distsamp_open(N = 30, cutpoints = cutp, n_seasons = 3L, seed = 1)
+  sim <- simulate_distsamp_open(N = 30, cutpoints = cutp, n.seasons = 3L, seed = 1)
   fam <- distsamp_open(cutpoints = cutp)
 
   expect_error(tobs(~ 1, data = sim$data, y = sim$y, family = fam),
@@ -66,8 +66,8 @@ test_that("distsamp_open() gates its required inputs", {
 test_that("a distsamp_open fit recovers a single data set and wires S3", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n_seasons = 4L,
-           beta_lambda = c(log(8), 0.3), beta_sigma = c(log(18), 0.1),
+  sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n.seasons = 4L,
+           beta.lambda = c(log(8), 0.3), beta.sigma = c(log(18), 0.1),
            omega = 0.6, gamma = 1.8, seed = 301)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = distsamp_open(cutpoints = cutp), detection = ~ det_cov1,
@@ -107,8 +107,8 @@ test_that("distsamp_open recovers lambda / sigma / omega / gamma with ~95% cover
   est <- matrix(NA_real_, n_seed, np); cov <- matrix(FALSE, n_seed, np)
   conv <- logical(n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n_seasons = 4L,
-             beta_lambda = tt[1:2], beta_sigma = tt[3:4],
+    sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n.seasons = 4L,
+             beta.lambda = tt[1:2], beta.sigma = tt[3:4],
              omega = stats::plogis(tt[5]), gamma = exp(tt[6]), seed = 300 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, y = sim$y,
@@ -133,8 +133,8 @@ test_that("distsamp_open recovers lambda / sigma / omega / gamma with ~95% cover
 
 test_that("the distsamp_open NB analytic gradient (incl. log_r) matches FD", {
   skip_on_cran()
-  sim <- simulate_distsamp_open(N = 80, cutpoints = cutp, n_seasons = 3L,
-           beta_lambda = c(log(6), 0.3), beta_sigma = c(log(18), 0.1),
+  sim <- simulate_distsamp_open(N = 80, cutpoints = cutp, n.seasons = 3L,
+           beta.lambda = c(log(6), 0.3), beta.sigma = c(log(18), 0.1),
            omega = 0.6, gamma = 1.2, mixture = "negbin", size = 5, seed = 4)
   m <- tulpaObs:::.tobs_build_distsamp_open(~ abund_cov1, ~ det_cov1, ~ 1, ~ 1,
          sim$data, sim$y, cutp, "line", mixture = "negbin")
@@ -156,8 +156,8 @@ test_that("a distsamp_open(negbin) fit recovers abundance / scale and surfaces r
   # Modest lambda keeps the cubic-in-K forward tractable; NB size / omega / gamma
   # sit on a weakly identified ridge at short series, so the recovery targets are
   # the well-identified abundance + distance-scale arms (and a finite r / log_r).
-  sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n_seasons = 4L,
-           beta_lambda = c(log(8), 0.3), beta_sigma = c(log(18), 0.1),
+  sim <- simulate_distsamp_open(N = 100, cutpoints = cutp, n.seasons = 4L,
+           beta.lambda = c(log(8), 0.3), beta.sigma = c(log(18), 0.1),
            omega = 0.6, gamma = 1.5, mixture = "negbin", size = 6, seed = 401)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = distsamp_open(cutpoints = cutp, mixture = "negbin"),
@@ -182,8 +182,8 @@ test_that("a distsamp_open(negbin) fit recovers abundance / scale and surfaces r
 test_that("a distsamp_open(zip) fit recovers abundance / scale and the ZI share", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_distsamp_open(N = 120, cutpoints = cutp, n_seasons = 4L,
-           beta_lambda = c(log(8), 0.3), beta_sigma = c(log(18), 0.1),
+  sim <- simulate_distsamp_open(N = 120, cutpoints = cutp, n.seasons = 4L,
+           beta.lambda = c(log(8), 0.3), beta.sigma = c(log(18), 0.1),
            omega = 0.55, gamma = 1.2, mixture = "zip", zi = 0.35, seed = 411)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = distsamp_open(cutpoints = cutp, mixture = "zip"),
@@ -212,8 +212,8 @@ test_that("distsamp_open(zinb) recovers the structural-zero share across seeds (
   # 0.12 of truth). lambda / sigma / r sit on the usual ridge and are checked loosely.
   zi <- numeric(0)
   for (s in seq_len(3L)) {
-    sim <- simulate_distsamp_open(N = 110, cutpoints = cutp, n_seasons = 4L,
-             beta_lambda = c(log(9), 0.3), beta_sigma = c(log(16), 0.1),
+    sim <- simulate_distsamp_open(N = 110, cutpoints = cutp, n.seasons = 4L,
+             beta.lambda = c(log(9), 0.3), beta.sigma = c(log(16), 0.1),
              omega = 0.6, gamma = 1.2, mixture = "zinb", size = 8, zi = 0.3,
              seed = 80L + s)
     fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
@@ -258,12 +258,12 @@ test_that("distsamp_open fits every alternative dynamics and recovers lambda/sig
                     sim = list(r = 0.3, K = 8)))
 
   for (d in names(spec)) {
-    args <- c(list(N = 40, cutpoints = cp3, n_seasons = 3L,
-                   beta_lambda = bl, beta_sigma = bs, dynamics = d, seed = 51),
+    args <- c(list(N = 40, cutpoints = cp3, n.seasons = 3L,
+                   beta.lambda = bl, beta.sigma = bs, dynamics = d, seed = 51),
               spec[[d]]$sim)
     sim <- do.call(simulate_distsamp_open, args)
     fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
-                family = distsamp_open(cutpoints = cp3, dynamics = d, K_max = 22L),
+                family = distsamp_open(cutpoints = cp3, dynamics = d, K.max = 22L),
                 detection = ~ det_cov1, method = "laplace",
                 control = list(verbose = FALSE))
     info <- paste0("dynamics = ", d)
@@ -319,12 +319,12 @@ test_that("distsamp_open density-dependent dynamics params have nominal CI cover
     sp <- spec[[d]]; info <- paste0("dynamics = ", d)
     lam_ok <- sig_ok <- logical(0)
     for (seed in seq_len(5L)) {
-      args <- c(list(N = 40L, cutpoints = cp3, n_seasons = sp$ns,
-                     beta_lambda = bl, beta_sigma = bs, dynamics = d, seed = 50L + seed),
+      args <- c(list(N = 40L, cutpoints = cp3, n.seasons = sp$ns,
+                     beta.lambda = bl, beta.sigma = bs, dynamics = d, seed = 50L + seed),
                 sp$sim)
       sim <- do.call(simulate_distsamp_open, args)
       fit <- tryCatch(tobs(~ abund_cov1, data = sim$data, y = sim$y,
-                       family = distsamp_open(cutpoints = cp3, dynamics = d, K_max = sp$K),
+                       family = distsamp_open(cutpoints = cp3, dynamics = d, K.max = sp$K),
                        detection = ~ det_cov1, method = "laplace",
                        control = list(verbose = FALSE)), error = function(e) NULL)
       if (is.null(fit) || !isTRUE(fit$convergence$converged)) next

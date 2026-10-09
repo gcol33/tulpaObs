@@ -406,7 +406,7 @@
   if (is.null(ref) || !isTRUE(ref$ok)) {
     stop(sprintf(paste0("%s AGHQ random-effect refinement did not produce a ",
                         "usable fit (singular marginal Hessian or non-finite ",
-                        "optimum). Try a different K_max or simplify the RE ",
+                        "optimum). Try a different K.max or simplify the RE ",
                         "structure."), family_label), call. = FALSE)
   }
 

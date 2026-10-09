@@ -56,9 +56,9 @@
   adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
-    beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5),
-    beta_pos = c(log(0.25), 0.3),
-    sigma = sigma, alpha = alpha, sigma_pos = 0.4, seed = seed)
+    beta.occ = c(0.2, 0.6), beta.p = c(0.4, -0.5),
+    beta.pos = c(log(0.25), 0.3),
+    sigma = sigma, alpha = alpha, sigma.pos = 0.4, seed = seed)
   long <- data.frame(site_id = rep(seq_len(N), each = J),
                      visit = rep(seq_len(J), times = N),
                      y = as.vector(t(sim$y)),
@@ -86,7 +86,7 @@
     data = cbind(data.frame(site_id = seq_len(N)), sim$data),
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = pos_f,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace", control = ctl))
   list(fit = fit, sim = sim, adj = adj, phi.grid = phi.grid)
 }
@@ -410,7 +410,7 @@ test_that("occu_cover scores the same quantities on the sampled and grid routes"
   adj <- chain_adj(N)
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "beta", adj = adj,
-    beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5), beta_pos = c(-1.0, 0.3),
+    beta.occ = c(0.2, 0.6), beta.p = c(0.4, -0.5), beta.pos = c(-1.0, 0.3),
     sigma = 0.8, alpha = 1.0, phi = 30, seed = 707L)
   long <- data.frame(site_id = rep(seq_len(N), each = J),
                      visit = rep(seq_len(J), times = N),
@@ -425,7 +425,7 @@ test_that("occu_cover scores the same quantities on the sampled and grid routes"
                family = occu_cover("beta"),
                detection = ~ det_cov1,
                positive = ~ pos_cov1 + share(spatial()),
-               y = od$y, y_pos = y_pos, visits = od$det.covs)
+               y = od$y, y.pos = y_pos, visits = od$det.covs)
 
   f_nuts <- suppressWarnings(do.call(tobs, c(args, list(
     method = "nuts",
@@ -469,13 +469,13 @@ test_that("occu_cover scores the same quantities on the sampled and grid routes"
 test_that("sbc() runs end to end on a non-joint (field-free) laplace fit", {
   skip_on_cran()
   sim <- simulate_occu_cover(
-    N = 60L, J = 4L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-    beta_occ = c(0.3, 0.8), beta_p = c(0.2, -0.5), beta_pos = c(-1, 0.4),
-    positive = "lognormal", sigma_pos = 0.4, seed = 21L)
+    N = 60L, J = 4L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+    beta.occ = c(0.3, 0.8), beta.p = c(0.2, -0.5), beta.pos = c(-1, 0.4),
+    positive = "lognormal", sigma.pos = 0.4, seed = 21L)
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
   f <- tobs(~ occ_cov1, data = sim$data, family = occu_cover("lognormal"),
            detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-           y_pos = y_pos, visits = sim$visit_data, method = "laplace",
+           y.pos = y_pos, visits = sim$visit_data, method = "laplace",
            control = list(verbose = FALSE))
   expect_null(tulpaObs:::.tobs_joint_fit(f))
 

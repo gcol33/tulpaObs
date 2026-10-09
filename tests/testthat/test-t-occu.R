@@ -16,7 +16,7 @@
 
 test_that("t_occu() gates + S3 surface", {
   skip_on_cran()
-  sim <- simulate_t_occu(N = 80, T_seasons = 6, J = 3, beta_occ = c(0.2),
+  sim <- simulate_t_occu(N = 80, T.seasons = 6, J = 3, beta.occ = c(0.2),
                          p = 0.4, rho = 0.6, sigma = 0.7, seed = 1)
 
   # Requires a detection formula and y.
@@ -31,7 +31,7 @@ test_that("t_occu() gates + S3 surface", {
                     data = sim$data, method = "laplace"),
                "pg_gibbs")
   # >= 2 seasons.
-  sim1 <- simulate_t_occu(N = 40, T_seasons = 2, J = 3, seed = 1)
+  sim1 <- simulate_t_occu(N = 40, T.seasons = 2, J = 3, seed = 1)
   y1 <- sim1$y[, 1L, , drop = FALSE]
   expect_error(.tobs_build_t_occu(~ 1, ~ 1, sim1$data,
                                   array(y1, dim = c(40L, 1L, 3L))),
@@ -78,7 +78,7 @@ test_that("t_occu() gates + S3 surface", {
 
 test_that("t_occu() run length is n.iter / n.warmup / n.thin, pg_gibbs convention", {
   skip_on_cran()
-  sim <- simulate_t_occu(N = 30, T_seasons = 3, J = 2, seed = 2)
+  sim <- simulate_t_occu(N = 30, T.seasons = 3, J = 2, seed = 2)
   fit_ctrl <- function(control) {
     tobs(~ 1, family = t_occu(), detection = ~ 1, y = sim$y,
          data = sim$data, method = "pg_gibbs",
@@ -113,7 +113,7 @@ test_that("t_occu() fits at the documented default method = 'auto'", {
   # t_occu() is the one family whose default_engine is "pg_gibbs"; every other
   # block here passes `method` explicitly, so the default route needs its own
   # assertion.
-  sim <- simulate_t_occu(N = 60, T_seasons = 5, J = 3, seed = 1)
+  sim <- simulate_t_occu(N = 60, T.seasons = 5, J = 3, seed = 1)
   expect_equal(t_occu()$default_engine, "pg_gibbs")
   expect_equal(.tobs_resolve_method("auto", t_occu())$engine, "pg_gibbs")
   fit <- tobs(~ 1, family = t_occu(), detection = ~ 1, y = sim$y,
@@ -126,7 +126,7 @@ test_that("t_occu() fits at the documented default method = 'auto'", {
 
 test_that("t_occu() accepts a list of per-season matrices", {
   skip_on_cran()
-  sim <- simulate_t_occu(N = 50, T_seasons = 5, J = 3, seed = 2)
+  sim <- simulate_t_occu(N = 50, T.seasons = 5, J = 3, seed = 2)
   ylist <- lapply(seq_len(5L), function(t) sim$y[, t, ])
   fit <- tobs(~ 1, family = t_occu(), detection = ~ 1, y = ylist,
               data = sim$data, method = "pg_gibbs",
@@ -149,7 +149,7 @@ test_that("t_occu() recovers the year-effect surface, coefficients + sigma", {
   b0 <- 0.2
 
   for (s in seq_len(n_seed)) {
-    sim <- simulate_t_occu(N = 220, T_seasons = 12, J = 4, beta_occ = c(b0),
+    sim <- simulate_t_occu(N = 220, T.seasons = 12, J = 4, beta.occ = c(b0),
                            p = 0.4, rho = 0.6, sigma = 0.7, seed = 100 + s)
     fit <- tobs(~ 1, family = t_occu(), detection = ~ 1, y = sim$y,
                 data = sim$data, method = "pg_gibbs",

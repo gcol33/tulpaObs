@@ -193,7 +193,7 @@
   # the default).
   if (!is.null(site_map)) {
     if (!is.list(site_map) || length(site_map) != D) {
-      stop(sprintf("site_map must be a list of %d integer vectors (one per source).",
+      stop(sprintf("site.map must be a list of %d integer vectors (one per source).",
                    D), call. = FALSE)
     }
   }
@@ -208,22 +208,22 @@
       if (n_d != n_sites) {
         stop(sprintf("source %d has %d sites but data has %d rows. Supply ",
                      d, n_d, n_sites),
-             "`site_map` (one global site index per source row) for partial / ",
+             "`site.map` (one global site index per source row) for partial / ",
              "overlapping coverage.", call. = FALSE)
       }
       maps[[d]] <- seq_len(n_sites)
     } else {
       m <- as.integer(site_map[[d]])
       if (length(m) != n_d) {
-        stop(sprintf("site_map[[%d]] has %d entries but source %d has %d rows.",
+        stop(sprintf("site.map[[%d]] has %d entries but source %d has %d rows.",
                      d, length(m), d, n_d), call. = FALSE)
       }
       if (anyNA(m) || any(m < 1L) || any(m > n_sites)) {
-        stop(sprintf("site_map[[%d]] must index sites in 1..%d.", d, n_sites),
+        stop(sprintf("site.map[[%d]] must index sites in 1..%d.", d, n_sites),
              call. = FALSE)
       }
       if (anyDuplicated(m)) {
-        stop(sprintf("site_map[[%d]] has duplicate site indices (a source maps ",
+        stop(sprintf("site.map[[%d]] has duplicate site indices (a source maps ",
                      d), "each of its rows to a distinct site).", call. = FALSE)
       }
       maps[[d]] <- m
@@ -596,11 +596,11 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
 ms_int_occu <- function() {
   obs_family(
     name           = "ms_int_occu",
-    class_long     = "community integrated occupancy",
+    class.long     = "community integrated occupancy",
     latent         = "bernoulli",
     observation    = "multisource_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working"
   )
 }

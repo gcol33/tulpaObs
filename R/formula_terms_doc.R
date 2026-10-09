@@ -264,7 +264,7 @@
 #' fit$spatial_field[1:5]
 #'
 #' # Detection random effect by observer, who changes between visits
-#' obs <- simulate_occu(N = 60, J = 3, n_visit_groups = 4, seed = 1)
+#' obs <- simulate_occu(N = 60, J = 3, n.visit.groups = 4, seed = 1)
 #' fit_re <- tobs(~ occ_cov1, data = obs$data, family = occu(),
 #'                detection = ~ (1 | visit_group), y = obs$y,
 #'                visits = obs$visits, method = "laplace", control = ctrl)

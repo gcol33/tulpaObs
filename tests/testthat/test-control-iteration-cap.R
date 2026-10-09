@@ -4,7 +4,7 @@
 
 cap_fit_dyn_abun <- function(ctrl) {
   sim <- simulate_dyn_abun(N = 80L, T = 4L, J = 3L,
-                           beta_lambda = c(log(5), 0.3), p = 0.5,
+                           beta.lambda = c(log(5), 0.3), p = 0.5,
                            omega = 0.6, gamma = 1, seed = 23L)
   suppressWarnings(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(),
                         detection = ~ 1, omega = ~ 1, gamma = ~ 1, y = sim$y,

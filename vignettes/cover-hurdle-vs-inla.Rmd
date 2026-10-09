@@ -76,9 +76,9 @@ library(tulpaObs)
 
 sim <- simulate_cover(
   N         = 400,
-  beta_occ  = c(-0.4, 0.8),
-  beta_pos  = c(-1.0, 0.3),
-  sigma_pos = 0.4,
+  beta.occ  = c(-0.4, 0.8),
+  beta.pos  = c(-1.0, 0.3),
+  sigma.pos = 0.4,
   seed      = 11
 )
 
@@ -234,8 +234,8 @@ for (s in seq_len(n_s)) {
 sim_joint <- simulate_cover_joint(
   N        = 300L,
   adj      = adj,
-  beta_occ = c(-0.3, 0.7),
-  beta_pos = c(-1.5, -0.5),
+  beta.occ = c(-0.3, 0.7),
+  beta.pos = c(-1.5, -0.5),
   sigma    = 0.6,
   rho      = 0.7,
   alpha    = 1.0,

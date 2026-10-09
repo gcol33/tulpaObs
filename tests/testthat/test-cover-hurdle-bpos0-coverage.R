@@ -38,7 +38,7 @@ test_that("joint nested_laplace beta_pos_0 covers nominally at alpha=1 (BYM2)", 
       adj      = adj,
       alpha    = alpha_true,
       positive = "beta",
-      beta_pos = c(beta_pos_0_truth, -0.5),
+      beta.pos = c(beta_pos_0_truth, -0.5),
       seed     = 7000L + r
     )
     fit <- tobs(

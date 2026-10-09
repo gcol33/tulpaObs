@@ -26,9 +26,9 @@ test_that("double_observer() constructor + gates", {
 })
 
 test_that("double_observer() fits + full S3 surface", {
-  sim <- simulate_double_observer(N = 200, beta_lambda = c(log(8), 0.4),
-                                  beta_p1 = c(stats::qlogis(0.5), 0.2),
-                                  beta_p2 = c(stats::qlogis(0.45), -0.1),
+  sim <- simulate_double_observer(N = 200, beta.lambda = c(log(8), 0.4),
+                                  beta.p1 = c(stats::qlogis(0.5), 0.2),
+                                  beta.p2 = c(stats::qlogis(0.45), -0.1),
                                   seed = 3)
   fit <- tobs(~ abund_cov1, data = sim$data, family = double_observer(),
               detection = ~ det_cov1, y = sim$y,
@@ -63,8 +63,8 @@ test_that("double_observer() recovers lambda + per-observer detection (multi-see
   hit <- tot <- 0L
   for (s in seq_len(n_seed)) {
     sim <- simulate_double_observer(
-      N = 250, n_abund_covs = 1, n_det_covs = 1,
-      beta_lambda = c(bl0, bl1), beta_p1 = c(bp1, 0), beta_p2 = c(bp2, 0),
+      N = 250, n.abund.covs = 1, n.det.covs = 1,
+      beta.lambda = c(bl0, bl1), beta.p1 = c(bp1, 0), beta.p2 = c(bp2, 0),
       seed = 900 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, family = double_observer(),
@@ -130,8 +130,8 @@ test_that("double_observer('dependent') recovers lambda + both detections", {
   li <- q1 <- q2 <- rep(NA_real_, n_seed); hit <- tot <- 0L
   for (s in seq_len(n_seed)) {
     sim <- simulate_double_observer(
-      N = 400, type = "dependent", beta_lambda = c(bl0, bl1),
-      beta_p1 = c(bp1, 0), beta_p2 = c(bp2, 0), seed = 700 + s)
+      N = 400, type = "dependent", beta.lambda = c(bl0, bl1),
+      beta.p1 = c(bp1, 0), beta.p2 = c(bp2, 0), seed = 700 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, family = double_observer("dependent"),
            detection = ~ det_cov1, y = sim$y, primary = sim$primary,

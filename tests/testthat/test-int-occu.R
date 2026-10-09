@@ -6,8 +6,8 @@
 # source to the wrong latent states, silently.
 
 test_that("each source joins to the sites it names (#241)", {
-  sim <- simulate_int_occu(N_total = 40, n_data = 2, J = c(3, 2),
-                           n_shared = 20, seed = 1)
+  sim <- simulate_int_occu(N.total = 40, n.data = 2, J = c(3, 2),
+                           n.shared = 20, seed = 1)
 
   # The layout the join has to survive: source 2 covers the shared block and
   # then skips a run of sites, so its rows are not the leading 1..n_rows.
@@ -91,8 +91,8 @@ test_that("a multi-source fit carries the simulator's site maps (#241)", {
   skip_on_cran()
   skip_if_fast()
 
-  sim <- simulate_int_occu(N_total = 120, n_data = 2, J = c(4, 3),
-                           n_shared = 40, seed = 7)
+  sim <- simulate_int_occu(N.total = 120, n.data = 2, J = c(4, 3),
+                           n.shared = 40, seed = 7)
   fit <- tobs(~ x, data = sim$data, family = int_occu(), detection = ~ 1,
               y = sim$y, method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
@@ -109,8 +109,8 @@ test_that("a keyed compact source fits the NA-padded full source (#241)", {
   # by name, and each source as a full n_sites grid with NA at the sites it did
   # not survey. Both name the same site for every observation, so the fits
   # agree; under a positional read the compact form is a different model.
-  sim <- simulate_int_occu(N_total = 120, n_data = 2, J = c(4, 3),
-                           n_shared = 40, seed = 3)
+  sim <- simulate_int_occu(N.total = 120, n.data = 2, J = c(4, 3),
+                           n.shared = 40, seed = 3)
   padded <- lapply(seq_along(sim$y), function(s) {
     full <- matrix(NA_integer_, nrow(sim$data), ncol(sim$y[[s]]))
     full[sim$site_maps[[s]], ] <- sim$y[[s]]

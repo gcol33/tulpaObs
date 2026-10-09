@@ -127,7 +127,7 @@ test_that("Cross-check against unmarked::pcount", {
   expect_lt(abs(fit$beta_p[2]      - um_coef["p(wind)"]),   5e-3)
 })
 
-test_that("K_max sanity: low K_max triggers boundary warning", {
+test_that("K.max sanity: low K.max triggers boundary warning", {
   skip_if_fast()
   dat <- simulate_nmix(seed = 42)
   # Force K_max close to mean(N) so a heavy posterior tail at K_max is likely
@@ -137,12 +137,12 @@ test_that("K_max sanity: low K_max triggers boundary warning", {
       X_lambda = dat$X_lambda, X_p = dat$X_p,
       K_max = max(dat$y) + 1L, max_iter = 50L
     ),
-    "posterior weight on N = K_max"
+    "posterior weight on N = K.max"
   )
   expect_true(any(fit$boundary_weight > 1e-4))
 })
 
-test_that("K_max < max(y) errors clearly", {
+test_that("K.max < max(y) errors clearly", {
   skip_if_fast()
   dat <- simulate_nmix(seed = 42)
   expect_error(
@@ -151,7 +151,7 @@ test_that("K_max < max(y) errors clearly", {
       X_lambda = dat$X_lambda, X_p = dat$X_p,
       K_max = max(dat$y) - 1L
     ),
-    "K_max"
+    "K.max"
   )
 })
 

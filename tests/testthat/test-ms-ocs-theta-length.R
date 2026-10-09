@@ -24,7 +24,7 @@
 .ocs_len_fixture <- function(K = 1L, constrain = FALSE, seed = 321L) {
   adj <- .ocs_len_grid_adj(4L, 4L)              # N = 16 cells
   S <- 4L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
                                         seed = seed)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,

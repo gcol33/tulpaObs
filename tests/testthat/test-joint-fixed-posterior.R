@@ -32,7 +32,7 @@ test_that("joint occu_cover accessors read the engine's mixture posterior", {
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE)
   ))

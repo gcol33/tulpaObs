@@ -63,8 +63,8 @@ test_that("a reused quad_xptr matches a freshly-rebuilt one, total log-lik + gra
 
 test_that("distance_laplace()'s internal quad build matches an externally-supplied one", {
   sim <- simulate_distance(N = 60, key = "halfnorm", transect = "line",
-                           beta_lambda = c(log(30), 0.3),
-                           beta_sigma  = c(log(0.45), 0.2), seed = 9)
+                           beta.lambda = c(log(30), 0.3),
+                           beta.sigma  = c(log(0.45), 0.2), seed = 9)
   Xl <- model.matrix(~ abund_cov1, sim$data)
   Xs <- model.matrix(~ sigma_cov1, sim$data)
 
@@ -84,8 +84,8 @@ test_that("distance_laplace()'s internal quad build matches an externally-suppli
 
 test_that("ms_distance()'s shared per-species engine quad matches a standalone build", {
   set.seed(203)
-  sim <- simulate_ms_distance(n_species = 3, N = 30, key = "halfnorm",
-                              n_abund_covs = 1, seed = 203)
+  sim <- simulate_ms_distance(n.species = 3, N = 30, key = "halfnorm",
+                              n.abund.covs = 1, seed = 203)
   model <- tulpaObs:::.tobs_build_ms_distance(
     ~ abund_cov1, ~ 1, sim$data, sim$y, sim$species, sim$cutpoints,
     key = "halfnorm", transect = "line")

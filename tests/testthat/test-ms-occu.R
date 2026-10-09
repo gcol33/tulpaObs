@@ -23,9 +23,9 @@ test_that("ms_occu() constructor returns a tobs_family", {
 test_that("ms_occu() recovers community means + per-species coefs", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu(N = 130, J = 4, n_species = 16,
-                          beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                          alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+  sim <- simulate_ms_occu(N = 130, J = 4, n.species = 16,
+                          beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                          alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                           seed = 41)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(),
               detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(16)),
@@ -55,9 +55,9 @@ test_that("ms_occu() community-mean 95% CIs cover near the nominal rate", {
   covered <- logical(0)
   truth <- c("psi_(Intercept)" = 0, "psi_x" = 0.6, "p_(Intercept)" = 0.2)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_occu(N = 120, J = 4, n_species = 14,
-                            beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                            alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+    sim <- simulate_ms_occu(N = 120, J = 4, n.species = 14,
+                            beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                            alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                             seed = 700 + s)
     fit <- tryCatch(
       tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
@@ -75,8 +75,8 @@ test_that("ms_occu() community-mean 95% CIs cover near the nominal rate", {
 test_that("ms_occu() S3 methods work, incl. richness", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu(N = 60, J = 3, n_species = 8,
-                          beta_comm_mean = c(0, 0.5), alpha_comm_mean = c(0.2),
+  sim <- simulate_ms_occu(N = 60, J = 3, n.species = 8,
+                          beta.comm.mean = c(0, 0.5), alpha.comm.mean = c(0.2),
                           seed = 5)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", seq_len(8)),
@@ -117,7 +117,7 @@ test_that("ms_occu() S3 methods work, incl. richness", {
 
 
 test_that("ms_occu() capability gates: laplace + nuts + nested_laplace", {
-  sim <- simulate_ms_occu(N = 30, J = 3, n_species = 4, seed = 1)
+  sim <- simulate_ms_occu(N = 30, J = 3, n.species = 4, seed = 1)
   # nuts is offered (independent per-arm community RE blocks in the sampler);
   # nested_laplace is offered, but only with a shared areal field on the
   # occupancy formula -- it errors with a pointer when requested without a

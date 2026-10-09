@@ -264,7 +264,7 @@ test_that("arm-specific predict() projects each per-arm field (not flat)", {
   expect_gt(cor(log(cond), z_pos - mean(z_pos)), 0.7)
 })
 
-test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
+test_that("intercept-only arm-specific predict() needs no time.col (#95)", {
   skip_if_fast()
   skip_on_cran()
   set.seed(11)
@@ -278,7 +278,7 @@ test_that("intercept-only arm-specific predict() needs no time_col (#95)", {
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "grid")))
   nd <- data.frame(cell = seq_len(16L), x = 0)
-  # No trend field is present, so predict must not demand a `time_col`.
+  # No trend field is present, so predict must not demand a `time.col`.
   expect_no_error(
     occ <- as.data.frame(predict(fit, newdata = nd, type = "occurrence",
                                  nsim = 100L, draws = FALSE))$mean)

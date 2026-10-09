@@ -11,22 +11,22 @@ test_that("cover_priors() constructs and validates", {
   expect_output(print(cp), "cover_priors (opt-in, for cover() Laplace fits):",
                 fixed = TRUE)
 
-  expect_error(cover_priors(occ_slope = list(mean = 0, sd = -1)), "positive")
-  expect_error(cover_priors(pos_intercept = list(mean = 0)), "mean")
+  expect_error(cover_priors(occ.slope = list(mean = 0, sd = -1)), "positive")
+  expect_error(cover_priors(pos.intercept = list(mean = 0)), "mean")
   # Inf sd is allowed (= no penalty on that component)
-  expect_silent(cover_priors(pos_slope = list(mean = 0, sd = Inf)))
+  expect_silent(cover_priors(pos.slope = list(mean = 0, sd = Inf)))
 })
 
 test_that("a tight occurrence-slope prior shrinks the occ slope (lognormal)", {
-  sim <- simulate_cover(N = 150L, beta_occ = c(0, 1.4), beta_pos = c(-1, 0.3),
-                        sigma_pos = 0.4, seed = 11)
+  sim <- simulate_cover(N = 150L, beta.occ = c(0, 1.4), beta.pos = c(-1, 0.3),
+                        sigma.pos = 0.4, seed = 11)
   d <- sim$data
 
   f_unpen <- tobs(~ x, data = d, family = cover(response = "lognormal"),
                   y = sim$y, method = "laplace")
   f_pen   <- tobs(~ x, data = d, family = cover(response = "lognormal"),
                   y = sim$y, method = "laplace",
-                  priors = cover_priors(occ_slope = list(mean = 0, sd = 0.05)))
+                  priors = cover_priors(occ.slope = list(mean = 0, sd = 0.05)))
 
   b_unpen <- unname(f_unpen$beta_occ["x"])
   b_pen   <- unname(f_pen$beta_occ["x"])
@@ -37,8 +37,8 @@ test_that("a tight occurrence-slope prior shrinks the occ slope (lognormal)", {
 })
 
 test_that("priors = NULL fits unpenalised (cover priors are opt-in)", {
-  sim <- simulate_cover(N = 120L, beta_occ = c(0, 1.0), beta_pos = c(-1, 0.3),
-                        sigma_pos = 0.4, seed = 7)
+  sim <- simulate_cover(N = 120L, beta.occ = c(0, 1.0), beta.pos = c(-1, 0.3),
+                        sigma.pos = 0.4, seed = 7)
   a <- tobs(~ x, data = sim$data, family = cover(response = "lognormal"),
             y = sim$y, method = "laplace")
   b <- tobs(~ x, data = sim$data, family = cover(response = "lognormal"),
@@ -56,8 +56,8 @@ test_that("occu_priors() is rejected for cover() with a pointer to cover_priors(
 })
 
 test_that("beta arm: a tight positive-slope prior shrinks the pos slope", {
-  sim <- simulate_cover(N = 160L, beta_occ = c(0.5, 0.5), beta_pos = c(-1, 0.6),
-                        sigma_pos = 0.4, seed = 5)
+  sim <- simulate_cover(N = 160L, beta.occ = c(0.5, 0.5), beta.pos = c(-1, 0.6),
+                        sigma.pos = 0.4, seed = 5)
   d <- sim$data
 
   f_unpen <- tobs(~ x, data = d, family = cover(response = "beta"),
@@ -65,7 +65,7 @@ test_that("beta arm: a tight positive-slope prior shrinks the pos slope", {
   # beta-arm prior now threads through tulpa_laplace_beta(beta_prior=)
   f_pen   <- tobs(~ x, data = d, family = cover(response = "beta"),
                   y = sim$y, method = "laplace",
-                  priors = cover_priors(pos_slope = list(mean = 0, sd = 0.02)))
+                  priors = cover_priors(pos.slope = list(mean = 0, sd = 0.02)))
   expect_s3_class(f_pen, "tobs_fit")
 
   b_unpen <- unname(f_unpen$beta_pos["x"])
@@ -105,7 +105,7 @@ test_that("nested_laplace cover threads fixed-effect priors (#54)", {
   f_pen <- tobs(~ x + icar(graph = adj, group_var = "region"), data = d,
                 family = cover("lognormal"), y = y,
                 method = "nested_laplace", control = ctrl,
-                priors = cover_priors(pos_slope = list(mean = 0, sd = 0.02)))
+                priors = cover_priors(pos.slope = list(mean = 0, sd = 0.02)))
 
   expect_s3_class(f_pen, "cover_fit")
   b_unpen <- unname(f_unpen$beta_pos["x"])

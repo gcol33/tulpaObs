@@ -89,11 +89,11 @@ All families below carry `status = "working"` and are recovery-tested.
 
 | Constructor                     | Model                        | Response `y`                | Default engine |
 |---------------------------------|------------------------------|-----------------------------|----------------|
-| `abun(K_max, mixture)`          | N-mixture (Royle 2004)       | `N x J` counts              | laplace |
-| `ms_abun(K_max, mixture)`       | Community N-mixture (`msNMix`) | `S x N x J` counts        | laplace |
-| `dyn_abun(K_max, mixture)`      | Open N-mixture (Dail-Madsen) | `N x J x T` counts          | laplace |
+| `abun(K.max, mixture)`          | N-mixture (Royle 2004)       | `N x J` counts              | laplace |
+| `ms_abun(K.max, mixture)`       | Community N-mixture (`msNMix`) | `S x N x J` counts        | laplace |
+| `dyn_abun(K.max, mixture)`      | Open N-mixture (Dail-Madsen) | `N x J x T` counts          | laplace |
 | `distance(key, transect, cutpoints, ...)` | Binned distance sampling | `N x B` bin counts   | laplace |
-| `removal(K_max, mixture)`       | Sequential removal           | `N x K` removal-pass counts | laplace |
+| `removal(K.max, mixture)`       | Sequential removal           | `N x K` removal-pass counts | laplace |
 
 `mixture = c("poisson", "negbin")` on the count families, plus `"zip"` and `"zinb"` on `abun()` and `dyn_abun()`; `distance(key = c("halfnorm", "hazard"))`.
 
@@ -287,10 +287,10 @@ genuine model average.
 occupancy Laplace path (breaks the psi-p identifiability ridge at small `J`):
 
 ```r
-occu_priors(p_intercept        = list(mean = 0, sd = 1.5),
-            p_slope            = list(mean = 0, sd = 2.5),
-            beta_occ_intercept = list(mean = 0, sd = 2),
-            beta_occ_slope     = list(mean = 0, sd = 5))
+occu_priors(p.intercept        = list(mean = 0, sd = 1.5),
+            p.slope            = list(mean = 0, sd = 2.5),
+            beta.occ.intercept = list(mean = 0, sd = 2),
+            beta.occ.slope     = list(mean = 0, sd = 5))
 ```
 
 Set any `sd = Inf` to disable that component. Pass `priors = FALSE` to `tobs()`
@@ -303,10 +303,10 @@ warning rather than being silently ignored.
 intercept/slope bucket per arm:
 
 ```r
-cover_priors(occ_intercept = list(mean = 0, sd = 2),
-             occ_slope     = list(mean = 0, sd = 2.5),
-             pos_intercept = list(mean = 0, sd = 3),
-             pos_slope     = list(mean = 0, sd = 2.5))
+cover_priors(occ.intercept = list(mean = 0, sd = 2),
+             occ.slope     = list(mean = 0, sd = 2.5),
+             pos.intercept = list(mean = 0, sd = 3),
+             pos.slope     = list(mean = 0, sd = 2.5))
 ```
 
 Cover has no psi-p-style ridge, so priors are off by default (a cover fit with
@@ -331,7 +331,7 @@ its family group — there is no generic prior object.
 |---------------------------------------------------|---------|
 | `tobs_format(y, occ.covs, det.covs, coords, species)` | Build a `tobs_data` object from matrices/lists |
 | `tobs_data(df, y, site, visit, occ.covs, det.covs, coords)` | Convert long format (one row per site-visit) |
-| `tobs_format_ms(y, occ.covs, det.covs, coords, species_names)` | Multi-species (3D array or list of matrices) |
+| `tobs_format_ms(y, occ.covs, det.covs, coords, species.names)` | Multi-species (3D array or list of matrices) |
 
 `summary()` / `plot()` / `print()` methods on `tobs_data` report naive
 occupancy/detection, per-visit rates, completeness, and (with coordinates) a
@@ -422,7 +422,7 @@ prefer `waic()` / `loo()` / `dic()` / `cpo()`. tulpaObs overrides or adds:
 | `converged()` / `convergence()` | Convergence flag / full convergence diagnostics (split-Rhat, ESS under NUTS) |
 | `$`                             | spOccupancy-compatible accessors: `beta.samples`, `alpha.samples`, `psi.samples`, `p.samples`, `z.samples`, `run.time` |
 
-`tobs_marginal_effect(object, covariate, process, n_points)` and
+`tobs_marginal_effect(object, covariate, process, n.points)` and
 `tobs_richness(object)` (community models) are standalone exported helpers;
 `predict(..., terms=)` returns a `tobs_prediction` with a `plot()` method.
 
@@ -490,7 +490,7 @@ to a separate single-response call.
 
 | Function / method       | Purpose |
 |-------------------------|---------|
-| `occu_cover_inputs(data, site, visit, response, y_pos, ...)` | Build the ragged / dense occupancy + cover arms from a long (one row per site-visit) plot-level data frame, ready to hand to `tobs(family = occu_cover())`. |
+| `occu_cover_inputs(data, site, visit, response, y.pos, ...)` | Build the ragged / dense occupancy + cover arms from a long (one row per site-visit) plot-level data frame, ready to hand to `tobs(family = occu_cover())`. |
 | `tobs_get(x, species)`  | Extract one response's `tobs_fit` from a `tobs_batch` (by label or index). |
 | `coef(<tobs_batch>)`    | Named list of per-response coefficient vectors. |
 | `print(<tobs_batch>)`   | Species count, family, and where the per-response fits live (`$fits`). |

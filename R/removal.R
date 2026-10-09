@@ -240,7 +240,7 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
     K_max <- as.integer(R_max + 100L)
   } else {
     K_max <- as.integer(K_max)
-    if (K_max < R_max) stop("`K_max` must be >= the largest per-site removal total.", call. = FALSE)
+    if (K_max < R_max) stop("`K.max` must be >= the largest per-site removal total.", call. = FALSE)
   }
   if (!is.numeric(r_max) || length(r_max) != 1L || r_max <= 0) {
     stop("`r_max` must be a positive scalar.", call. = FALSE)
@@ -279,7 +279,7 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   }
   max_bw <- max(fit$boundary_weight, na.rm = TRUE)
   if (is.finite(max_bw) && max_bw > 1e-4) {
-    warning(sprintf("Max posterior weight on N = K_max is %.2e at %d sites; raise K_max.",
+    warning(sprintf("Max posterior weight on N = K.max is %.2e at %d sites; raise K.max.",
                     max_bw, sum(fit$boundary_weight > 1e-4)), call. = FALSE)
   }
   class(fit) <- c("nmix_fit", "list")
@@ -372,12 +372,12 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
 #'
 #' @param N Number of sites (default 100).
 #' @param K Number of removal passes (default 4).
-#' @param n_abund_covs Number of abundance covariates (default 2).
-#' @param n_det_covs Number of detection covariates (default 1).
-#' @param beta_lambda Abundance coefficients on the log scale. Default
-#'   `c(log(6), runif(n_abund_covs, -0.5, 0.5))`.
-#' @param beta_p Detection coefficients on the logit scale. Default
-#'   `c(0.4, runif(n_det_covs, -0.5, 0.5))`.
+#' @param n.abund.covs Number of abundance covariates (default 2).
+#' @param n.det.covs Number of detection covariates (default 1).
+#' @param beta.lambda Abundance coefficients on the log scale. Default
+#'   `c(log(6), runif(n.abund.covs, -0.5, 0.5))`.
+#' @param beta.p Detection coefficients on the logit scale. Default
+#'   `c(0.4, runif(n.det.covs, -0.5, 0.5))`.
 #' @param mixture `"poisson"` (default) or `"negbin"`.
 #' @param size Negative-binomial size `r` (`mixture = "negbin"` only, default 3).
 #' @param seed Optional random seed.
@@ -388,25 +388,25 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
 #' dim(sim$y)
 #' @export
 simulate_removal <- function(N = 100, K = 4,
-                             n_abund_covs = 2, n_det_covs = 1,
-                             beta_lambda = NULL, beta_p = NULL,
+                             n.abund.covs = 2, n.det.covs = 1,
+                             beta.lambda = NULL, beta.p = NULL,
                              mixture = c("poisson", "negbin"), size = 3,
                              seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda)) beta_lambda <- c(log(6), stats::runif(n_abund_covs, -0.5, 0.5))
-  if (is.null(beta_p))      beta_p      <- c(0.4, stats::runif(n_det_covs, -0.5, 0.5))
+  if (is.null(beta.lambda)) beta.lambda <- c(log(6), stats::runif(n.abund.covs, -0.5, 0.5))
+  if (is.null(beta.p))      beta.p      <- c(0.4, stats::runif(n.det.covs, -0.5, 0.5))
 
-  abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
-  names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
-  det_covs <- data.frame(matrix(stats::rnorm(N * n_det_covs), N, n_det_covs))
-  names(det_covs) <- paste0("det_cov", seq_len(n_det_covs))
+  abund_covs <- data.frame(matrix(stats::rnorm(N * n.abund.covs), N, n.abund.covs))
+  names(abund_covs) <- paste0("abund_cov", seq_len(n.abund.covs))
+  det_covs <- data.frame(matrix(stats::rnorm(N * n.det.covs), N, n.det.covs))
+  names(det_covs) <- paste0("det_cov", seq_len(n.det.covs))
   data <- cbind(abund_covs, det_covs)
 
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   X_det    <- stats::model.matrix(~ ., det_covs)
-  lambda <- exp(as.vector(X_lambda %*% beta_lambda))
-  p      <- plogis(as.vector(X_det %*% beta_p))
+  lambda <- exp(as.vector(X_lambda %*% beta.lambda))
+  p      <- plogis(as.vector(X_det %*% beta.p))
   Nlat   <- if (identical(mixture, "negbin")) {
     stats::rnbinom(N, size = size, mu = lambda)
   } else stats::rpois(N, lambda)
@@ -423,7 +423,7 @@ simulate_removal <- function(N = 100, K = 4,
 
   list(
     y = y, data = data,
-    truth = list(beta_lambda = beta_lambda, beta_p = beta_p,
+    truth = list(beta_lambda = beta.lambda, beta_p = beta.p,
                  lambda = lambda, p = p, N = Nlat, mixture = mixture,
                  size = if (identical(mixture, "negbin")) size else NA_real_)
   )

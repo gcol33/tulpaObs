@@ -22,11 +22,11 @@ test_that("ms_abun(negbin) floors the log_r block at the converged AGHQ order", 
   # get two. Asserted on the per-block grid the fit reports rather than on an SE,
   # because the collapse is data-dependent: it needs a fixture whose realised
   # dispersion spread is wide, and only some seeds are.
-  sim <- simulate_ms_abun(n_species = 3, N = 12, J = 2,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(3), 0.2), mu_p = c(0.5, -0.2),
-                          sd_lambda = 0.3, sd_p = 0.3,
-                          mixture = "negbin", size = 5, sigma_logr = 0.4,
+  sim <- simulate_ms_abun(n.species = 3, N = 12, J = 2,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(3), 0.2), mu.p = c(0.5, -0.2),
+                          sd.lambda = 0.3, sd.p = 0.3,
+                          mixture = "negbin", size = 5, sigma.logr = 0.4,
                           seed = 1)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = ms_abun(mixture = "negbin"),

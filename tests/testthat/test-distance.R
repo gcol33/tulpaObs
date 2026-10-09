@@ -56,8 +56,8 @@ test_that("analytic gradient matches finite differences (halfnorm, hazard, NB)",
   for (cs in cases) {
     is_nb <- identical(cs$mix, "NB"); hazard <- identical(cs$key, "hazard")
     sim <- simulate_distance(N = 80, key = cs$key, transect = "line",
-                             beta_lambda = c(log(30), 0.3),
-                             beta_sigma  = c(log(0.45), 0.2), shape = 3,
+                             beta.lambda = c(log(30), 0.3),
+                             beta.sigma  = c(log(0.45), 0.2), shape = 3,
                              mixture = if (is_nb) "negbin" else "poisson",
                              size = 5, seed = 7)
     model <- tulpaObs:::.tobs_build_distance(~ abund_cov1, ~ sigma_cov1, sim$data,
@@ -86,8 +86,8 @@ test_that("analytic observed information matches the FD Hessian (Louis curvature
   for (key in c("halfnorm", "hazard")) {
     hazard <- identical(key, "hazard")
     sim <- simulate_distance(N = 120, key = key, transect = "line",
-                             beta_lambda = c(log(35), 0.3),
-                             beta_sigma  = c(log(0.45), 0.2), shape = 3, seed = 5)
+                             beta.lambda = c(log(35), 0.3),
+                             beta.sigma  = c(log(0.45), 0.2), shape = 3, seed = 5)
     Xl <- model.matrix(~ abund_cov1, sim$data)
     Xs <- model.matrix(~ sigma_cov1, sim$data)
     raw <- tulpaObs:::distance_laplace(sim$y, Xl, Xs, sim$cutpoints, key = key,
@@ -152,8 +152,8 @@ test_that("half-normal distance fit recovers truth", {
   beta_lambda <- c(log(50), 0.5, -0.3)
   beta_sigma  <- c(log(0.45), 0.25)
   sim <- simulate_distance(N = 400, cutpoints = cuts5, key = "halfnorm",
-                           transect = "line", n_abund_covs = 2, n_sigma_covs = 1,
-                           beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                           transect = "line", n.abund.covs = 2, n.sigma.covs = 1,
+                           beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                            seed = 11)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = distance(key = "halfnorm", transect = "line",
@@ -183,8 +183,8 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
   covered <- matrix(NA, n_seed, length(truth))
   for (s in seq_len(n_seed)) {
     sim <- simulate_distance(N = 250, cutpoints = cuts5, key = "halfnorm",
-                             transect = "line", n_abund_covs = 2, n_sigma_covs = 1,
-                             beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                             transect = "line", n.abund.covs = 2, n.sigma.covs = 1,
+                             beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                              seed = 300 + s)
     fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
                 family = distance(key = "halfnorm", transect = "line",
@@ -207,8 +207,8 @@ test_that("hazard-rate distance recovers truth and the shape", {
   beta_sigma  <- c(log(0.5), 0.2)
   shape_true  <- 3
   sim <- simulate_distance(N = 400, cutpoints = cuts5, key = "hazard",
-                           transect = "line", n_abund_covs = 1, n_sigma_covs = 1,
-                           beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                           transect = "line", n.abund.covs = 1, n.sigma.covs = 1,
+                           beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                            shape = shape_true, seed = 17)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
               family = distance(key = "hazard", transect = "line",
@@ -231,8 +231,8 @@ test_that("negbin distance recovers truth and surfaces dispersion", {
   beta_sigma  <- c(log(0.45), 0.2)
   size_true   <- 6
   sim <- simulate_distance(N = 400, cutpoints = cuts5, key = "halfnorm",
-                           transect = "line", n_abund_covs = 1, n_sigma_covs = 1,
-                           beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                           transect = "line", n.abund.covs = 1, n.sigma.covs = 1,
+                           beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                            mixture = "negbin", size = size_true, seed = 21)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
               family = distance(key = "halfnorm", transect = "line",
@@ -256,8 +256,8 @@ test_that("point-transect distance recovers truth", {
   beta_lambda <- c(log(60), 0.4)
   beta_sigma  <- c(log(0.5), 0.2)
   sim <- simulate_distance(N = 400, cutpoints = cuts5, key = "halfnorm",
-                           transect = "point", n_abund_covs = 1, n_sigma_covs = 1,
-                           beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                           transect = "point", n.abund.covs = 1, n.sigma.covs = 1,
+                           beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                            seed = 23)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
               family = distance(key = "halfnorm", transect = "point",
@@ -273,9 +273,9 @@ test_that("point-transect distance recovers truth", {
 test_that("S3 surface works for distance fits", {
   skip_if_fast()
   sim <- simulate_distance(N = 200, cutpoints = cuts5, key = "halfnorm",
-                           transect = "line", n_abund_covs = 2, n_sigma_covs = 1,
-                           beta_lambda = c(log(45), 0.5, -0.3),
-                           beta_sigma = c(log(0.45), 0.2), seed = 3)
+                           transect = "line", n.abund.covs = 2, n.sigma.covs = 1,
+                           beta.lambda = c(log(45), 0.5, -0.3),
+                           beta.sigma = c(log(0.45), 0.2), seed = 3)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = distance(key = "halfnorm", transect = "line",
                                 cutpoints = sim$cutpoints),
@@ -332,8 +332,8 @@ test_that("distance NUTS recovers truth and scores WAIC", {
   beta_lambda <- c(log(45), 0.4)
   beta_sigma  <- c(log(0.45), 0.2)
   sim <- simulate_distance(N = 120, cutpoints = cuts5, key = "halfnorm",
-                           transect = "line", n_abund_covs = 1, n_sigma_covs = 1,
-                           beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+                           transect = "line", n.abund.covs = 1, n.sigma.covs = 1,
+                           beta.lambda = beta_lambda, beta.sigma = beta_sigma,
                            seed = 31)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
               family = distance(key = "halfnorm", transect = "line",
@@ -395,7 +395,7 @@ test_that("distance() NUTS samples a single abundance RE and recovers sigma + be
                               sigma_b = 0.5, seed = 9)
   fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
               family = distance(cutpoints = cuts, key = "halfnorm",
-                                transect = "line", K_max = 120L),
+                                transect = "line", K.max = 120L),
               method = "nuts", verbose = FALSE,
               control = list(n.iter = 400L, n.warmup = 300L, seed = 1L))
   expect_identical(fit$method, "nuts")
@@ -417,7 +417,7 @@ test_that("distance() Laplace AGHQ recovers a site-grouped abundance RE", {
                               sigma_b = 0.6, seed = 3)
   fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data, y = s$y,
               family = distance(cutpoints = cuts, key = "halfnorm",
-                                transect = "line", K_max = 250L),
+                                transect = "line", K.max = 250L),
               method = "laplace", verbose = FALSE,
               control = list(n.quad = 5L))
   expect_identical(fit$method, "laplace")

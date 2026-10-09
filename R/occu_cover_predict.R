@@ -234,7 +234,7 @@
   if (is.null(time_col)) time_col <- object$trend_weight
   if (is.null(time_col)) {
     stop("predict(): this fit has ", sum(shared_trend),
-         " shared time-varying (trend) field(s); pass `time_col = ",
+         " shared time-varying (trend) field(s); pass `time.col = ",
          "\"<column>\"`, the per-cell covariate that weights the trend ",
          "field(s) (the same column used at fit time).", call. = FALSE)
   }
@@ -391,11 +391,11 @@
   if (is.null(time_col)) time_col <- object$trend_weight
   if (is.null(time_col)) {
     stop("predict(type = \"", type, "\") needs the name of the time covariate. ",
-         "Pass `time_col = \"<column>\"` (the covariate the `times` are held ",
+         "Pass `time.col = \"<column>\"` (the covariate the `times` are held ",
          "at, whose movement drives the prediction).", call. = FALSE)
   }
   if (!time_col %in% names(newdata)) {
-    stop("predict(): `time_col = \"", time_col, "\"` is not a column of ",
+    stop("predict(): `time.col = \"", time_col, "\"` is not a column of ",
          "`newdata`.", call. = FALSE)
   }
   lapply(times, function(tk) { nd <- newdata; nd[[time_col]] <- tk; nd })

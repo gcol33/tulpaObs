@@ -308,16 +308,16 @@ tobs_data <- function(df, y, site, visit,
 #' @param occ.covs Data.frame of site-level covariates.
 #' @param det.covs Named list of detection covariates.
 #' @param coords Optional n_sites x 2 coordinate matrix.
-#' @param species_names Optional character vector of species names.
+#' @param species.names Optional character vector of species names.
 #' @return An `tobs_data` object with multi-species structure.
 #' @examples
-#' sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+#' sim <- simulate_ms_occu(N = 40, J = 3, n.species = 4, seed = 1)
 #' dat <- tobs_format_ms(sim$y, occ.covs = sim$data,
-#'                       species_names = paste0("sp", 1:4))
+#'                       species.names = paste0("sp", 1:4))
 #' dat$n_species
 #' @export
 tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
-                           coords = NULL, species_names = NULL) {
+                           coords = NULL, species.names = NULL) {
   if (is.list(y) && !is.array(y)) {
     n_species <- length(y)
     if (n_species == 0L)
@@ -328,7 +328,7 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
            "sites x visits detection matrix.", call. = FALSE)
     n_sites <- nrow(y[[1]])
     max_visits <- ncol(y[[1]])
-    if (is.null(species_names)) species_names <- names(y)
+    if (is.null(species.names)) species.names <- names(y)
     y_array <- array(NA_integer_, dim = c(n_sites, max_visits, n_species))
     for (s in seq_len(n_species)) {
       ys <- y[[s]]
@@ -340,8 +340,8 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
         stop(sprintf(paste0("tobs_format_ms(): species %s is %s, but species 1 ",
                             "is %d x %d. Every species must share one ",
                             "sites x visits grid; pad short surveys with NA."),
-                     if (!is.null(species_names[s]) && nzchar(species_names[s]))
-                       sQuote(species_names[s]) else as.character(s),
+                     if (!is.null(species.names[s]) && nzchar(species.names[s]))
+                       sQuote(species.names[s]) else as.character(s),
                      if (is.matrix(ys))
                        sprintf("%d x %d", nrow(ys), ncol(ys))
                      else sprintf("not a matrix (length %d)", length(ys)),
@@ -355,15 +355,15 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
         stop(sprintf(paste0("tobs_format_ms(): species %s holds non-integer ",
                             "values; `y` is a detection / count response and ",
                             "is stored as integer."),
-                     if (!is.null(species_names[s]) && nzchar(species_names[s]))
-                       sQuote(species_names[s]) else as.character(s)),
+                     if (!is.null(species.names[s]) && nzchar(species.names[s]))
+                       sQuote(species.names[s]) else as.character(s)),
              call. = FALSE)
       y_array[, , s] <- as.integer(ys)
     }
     y <- y_array
   }
-  if (is.null(species_names)) {
-    species_names <- paste0("sp", seq_len(dim(y)[3]))
+  if (is.null(species.names)) {
+    species.names <- paste0("sp", seq_len(dim(y)[3]))
   }
   if (is.list(occ.covs) && !is.data.frame(occ.covs)) {
     occ.covs <- as.data.frame(occ.covs)
@@ -374,7 +374,7 @@ tobs_format_ms <- function(y, occ.covs = NULL, det.covs = NULL,
     occ.covs = occ.covs,
     det.covs = det.covs,
     coords = coords,
-    species_names = species_names,
+    species_names = species.names,
     n_species = dim(y)[3]
   ), class = "tobs_data")
 }
@@ -560,16 +560,16 @@ plot.tobs_data <- function(x, ...) {
 #'
 #' @param N Number of sites (default 100).
 #' @param J Number of visits (default 4).
-#' @param n_occ_covs Number of occupancy covariates (default 2).
-#' @param n_det_covs Number of detection covariates (default 1).
-#' @param beta_occ Occupancy coefficients (auto-generated if NULL).
-#' @param beta_det Detection coefficients (auto-generated if NULL).
-#' @param n_visit_groups Number of groups a visit can belong to (an observer,
+#' @param n.occ.covs Number of occupancy covariates (default 2).
+#' @param n.det.covs Number of detection covariates (default 1).
+#' @param beta.occ Occupancy coefficients (auto-generated if NULL).
+#' @param beta.det Detection coefficients (auto-generated if NULL).
+#' @param n.visit.groups Number of groups a visit can belong to (an observer,
 #'   say), each adding an effect to the detection logit of the visits it made.
 #'   Visits are assigned to groups uniformly at random. `0` (default) simulates
 #'   no such effect.
-#' @param sigma_visit Standard deviation of the per-group detection effects,
-#'   drawn from `N(0, sigma_visit^2)`.
+#' @param sigma.visit Standard deviation of the per-group detection effects,
+#'   drawn from `N(0, sigma.visit^2)`.
 #' @param seed Random seed.
 #' @return A list with `y`, `data`, and `truth`. With `n_visit_groups > 0` it
 #'   also carries `visits`, a data frame with one row per site-visit in
@@ -579,49 +579,49 @@ plot.tobs_data <- function(x, ...) {
 #' sim <- simulate_occu(N = 50, J = 3, seed = 1)
 #' dim(sim$y)
 #'
-#' obs <- simulate_occu(N = 50, J = 3, n_visit_groups = 5, seed = 1)
+#' obs <- simulate_occu(N = 50, J = 3, n.visit.groups = 5, seed = 1)
 #' table(obs$visits$visit_group)
 #' @export
 simulate_occu <- function(N = 100, J = 4,
-                          n_occ_covs = 2, n_det_covs = 1,
-                          beta_occ = NULL, beta_det = NULL,
-                          n_visit_groups = 0L, sigma_visit = 1,
+                          n.occ.covs = 2, n.det.covs = 1,
+                          beta.occ = NULL, beta.det = NULL,
+                          n.visit.groups = 0L, sigma.visit = 1,
                           seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
-  if (is.null(beta_occ)) beta_occ <- c(0, runif(n_occ_covs, -1, 1))
-  if (is.null(beta_det)) beta_det <- c(0, runif(n_det_covs, -1, 1))
+  if (is.null(beta.occ)) beta.occ <- c(0, runif(n.occ.covs, -1, 1))
+  if (is.null(beta.det)) beta.det <- c(0, runif(n.det.covs, -1, 1))
 
   # Covariates
-  occ_covs <- .sim_normal_covs(N, n_occ_covs, "occ_cov")
-  det_covs <- .sim_normal_covs(N, n_det_covs, "det_cov")
+  occ_covs <- .sim_normal_covs(N, n.occ.covs, "occ_cov")
+  det_covs <- .sim_normal_covs(N, n.det.covs, "det_cov")
   data <- cbind(occ_covs, det_covs)
 
   X_occ <- cbind(1, as.matrix(occ_covs))
   X_det <- cbind(1, as.matrix(det_covs))
 
-  psi <- plogis(as.vector(X_occ %*% beta_occ))
-  eta_det <- as.vector(X_det %*% beta_det)
+  psi <- plogis(as.vector(X_occ %*% beta.occ))
+  eta_det <- as.vector(X_det %*% beta.det)
   p <- plogis(eta_det)
   z <- rbinom(N, 1, psi)
 
-  truth <- list(beta_occ = beta_occ, beta_det = beta_det, psi = psi, p = p, z = z)
+  truth <- list(beta_occ = beta.occ, beta_det = beta.det, psi = psi, p = p, z = z)
   y <- matrix(NA_integer_, N, J)
-  if (n_visit_groups > 0L) {
-    group <- sample.int(n_visit_groups, N * J, replace = TRUE)
-    b_visit <- rnorm(n_visit_groups, 0, sigma_visit)
+  if (n.visit.groups > 0L) {
+    group <- sample.int(n.visit.groups, N * J, replace = TRUE)
+    b_visit <- rnorm(n.visit.groups, 0, sigma.visit)
     p_ij <- matrix(plogis(rep(eta_det, each = J) + b_visit[group]),
                    N, J, byrow = TRUE)
     for (i in seq_len(N)) {
       y[i, ] <- rbinom(J, 1, z[i] * p_ij[i, ])
     }
     truth$b_visit <- b_visit
-    truth$sigma_visit <- sigma_visit
+    truth$sigma_visit <- sigma.visit
     return(list(
       y = y,
       data = data,
       visits = data.frame(visit_group = factor(group,
-                                               levels = seq_len(n_visit_groups))),
+                                               levels = seq_len(n.visit.groups))),
       truth = truth
     ))
   }
@@ -636,27 +636,27 @@ simulate_occu <- function(N = 100, J = 4,
 #'
 #' @param N Number of sites (default 100).
 #' @param J Number of visits (default 4).
-#' @param n_species Number of species (default 10).
-#' @param beta_comm_mean Community mean for occupancy (default c(0, 0.5)).
-#' @param beta_comm_sd Community SD for occupancy (default c(0.5, 0.3)).
-#' @param alpha_comm_mean Community mean for detection (default c(0)).
-#' @param alpha_comm_sd Community SD for detection (default c(0.5)).
+#' @param n.species Number of species (default 10).
+#' @param beta.comm.mean Community mean for occupancy (default c(0, 0.5)).
+#' @param beta.comm.sd Community SD for occupancy (default c(0.5, 0.3)).
+#' @param alpha.comm.mean Community mean for detection (default c(0)).
+#' @param alpha.comm.sd Community SD for detection (default c(0.5)).
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
 #' @examples
-#' sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+#' sim <- simulate_ms_occu(N = 40, J = 3, n.species = 4, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
-                     beta_comm_mean = c(0, 0.5),
-                     beta_comm_sd = c(0.5, 0.3),
-                     alpha_comm_mean = c(0),
-                     alpha_comm_sd = c(0.5),
+simulate_ms_occu <- function(N = 100, J = 4, n.species = 10,
+                     beta.comm.mean = c(0, 0.5),
+                     beta.comm.sd = c(0.5, 0.3),
+                     alpha.comm.mean = c(0),
+                     alpha.comm.sd = c(0.5),
                      seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
-  n_occ_covs <- length(beta_comm_mean) - 1
-  n_det_covs <- length(alpha_comm_mean) - 1
+  n_occ_covs <- length(beta.comm.mean) - 1
+  n_det_covs <- length(alpha.comm.mean) - 1
 
   data <- data.frame(x = rnorm(N))
   if (n_occ_covs > 1) {
@@ -666,18 +666,18 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
   X_occ <- model.matrix(~ ., data[, seq_len(n_occ_covs + (n_occ_covs == 0)), drop = FALSE])
 
   # Species-specific coefficients
-  beta_species <- matrix(NA_real_, n_species, length(beta_comm_mean))
-  alpha_species <- matrix(NA_real_, n_species, length(alpha_comm_mean))
-  for (j in seq_along(beta_comm_mean)) {
-    beta_species[, j] <- rnorm(n_species, beta_comm_mean[j], beta_comm_sd[j])
+  beta_species <- matrix(NA_real_, n.species, length(beta.comm.mean))
+  alpha_species <- matrix(NA_real_, n.species, length(alpha.comm.mean))
+  for (j in seq_along(beta.comm.mean)) {
+    beta_species[, j] <- rnorm(n.species, beta.comm.mean[j], beta.comm.sd[j])
   }
-  for (j in seq_along(alpha_comm_mean)) {
-    alpha_species[, j] <- rnorm(n_species, alpha_comm_mean[j], alpha_comm_sd[j])
+  for (j in seq_along(alpha.comm.mean)) {
+    alpha_species[, j] <- rnorm(n.species, alpha.comm.mean[j], alpha.comm.sd[j])
   }
 
-  y <- array(NA_integer_, dim = c(N, J, n_species))
-  z <- matrix(NA_integer_, N, n_species)
-  for (s in seq_len(n_species)) {
+  y <- array(NA_integer_, dim = c(N, J, n.species))
+  z <- matrix(NA_integer_, N, n.species)
+  for (s in seq_len(n.species)) {
     psi_s <- plogis(as.vector(X_occ %*% beta_species[s, ]))
     p_s <- plogis(alpha_species[s, 1])
     z[, s] <- rbinom(N, 1, psi_s)
@@ -692,8 +692,8 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
     truth = list(
       beta_species = beta_species,
       alpha_species = alpha_species,
-      beta_comm_mean = beta_comm_mean,
-      beta_comm_sd = beta_comm_sd,
+      beta_comm_mean = beta.comm.mean,
+      beta_comm_sd = beta.comm.sd,
       z = z
     )
   )
@@ -707,8 +707,8 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
 #' negative-binomial (log link) or Gaussian (identity). No detection.
 #'
 #' @param N Number of sites.
-#' @param n_species Number of species.
-#' @param beta_comm_mean,beta_comm_sd Community mean and SD of the per-species
+#' @param n.species Number of species.
+#' @param beta.comm.mean,beta.comm.sd Community mean and SD of the per-species
 #'   coefficients (intercept first). Length sets the number of covariates.
 #' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`, `"binomial"`.
 #' @param size Negative-binomial community size (mean of the per-species
@@ -721,31 +721,31 @@ simulate_ms_occu <- function(N = 100, J = 4, n_species = 10,
 #' @param seed Optional RNG seed.
 #' @return A list with `y` (an `N x n_species` matrix), `data`, and `truth`.
 #' @examples
-#' sim <- simulate_ms_count(N = 50, n_species = 4, seed = 1)
+#' sim <- simulate_ms_count(N = 50, n.species = 4, seed = 1)
 #' head(sim$y)
 #' @export
-simulate_ms_count <- function(N = 120, n_species = 10,
-                              beta_comm_mean = c(1, 0.5),
-                              beta_comm_sd = c(0.4, 0.3),
+simulate_ms_count <- function(N = 120, n.species = 10,
+                              beta.comm.mean = c(1, 0.5),
+                              beta.comm.sd = c(0.4, 0.3),
                               response = c("poisson", "negbin", "gaussian",
                                            "binomial"),
                               size = 2, size.log.sd = 0.3, sd = 1,
                               trials = 10, seed = NULL) {
   response <- match.arg(response)
   if (!is.null(seed)) set.seed(seed)
-  n_cov <- length(beta_comm_mean) - 1L
+  n_cov <- length(beta.comm.mean) - 1L
 
   data <- data.frame(x = stats::rnorm(N))
   if (n_cov > 1L) for (k in 2:n_cov) data[[paste0("cov", k)]] <- stats::rnorm(N)
   X <- stats::model.matrix(~ ., data[, seq_len(max(n_cov, 1L)), drop = FALSE])
 
-  beta_species <- matrix(NA_real_, n_species, length(beta_comm_mean))
-  for (j in seq_along(beta_comm_mean)) {
-    beta_species[, j] <- stats::rnorm(n_species, beta_comm_mean[j],
-                                      beta_comm_sd[j])
+  beta_species <- matrix(NA_real_, n.species, length(beta.comm.mean))
+  for (j in seq_along(beta.comm.mean)) {
+    beta_species[, j] <- stats::rnorm(n.species, beta.comm.mean[j],
+                                      beta.comm.sd[j])
   }
   r_s <- if (identical(response, "negbin"))
-    exp(stats::rnorm(n_species, log(size), size.log.sd)) else rep(NA_real_, n_species)
+    exp(stats::rnorm(n.species, log(size), size.log.sd)) else rep(NA_real_, n.species)
 
   is_binom <- identical(response, "binomial")
   n_trials <- NULL
@@ -754,13 +754,13 @@ simulate_ms_count <- function(N = 120, n_species = 10,
           else as.integer(trials)
     if (length(nt) != N) stop("simulate_ms_count(): `trials` must be a scalar ",
                               "or length N.", call. = FALSE)
-    n_trials <- matrix(nt, N, n_species)
+    n_trials <- matrix(nt, N, n.species)
   }
 
   is_gauss <- identical(response, "gaussian")
-  y <- matrix(NA_real_, N, n_species,
-              dimnames = list(NULL, paste0("sp", seq_len(n_species))))
-  for (s in seq_len(n_species)) {
+  y <- matrix(NA_real_, N, n.species,
+              dimnames = list(NULL, paste0("sp", seq_len(n.species))))
+  for (s in seq_len(n.species)) {
     eta <- as.numeric(X %*% beta_species[s, ])
     mu  <- switch(response, gaussian = eta, binomial = stats::plogis(eta),
                   exp(eta))
@@ -773,8 +773,8 @@ simulate_ms_count <- function(N = 120, n_species = 10,
 
   list(y = y, data = data,
        truth = list(beta_species = beta_species,
-                    beta_comm_mean = beta_comm_mean,
-                    beta_comm_sd = beta_comm_sd,
+                    beta_comm_mean = beta.comm.mean,
+                    beta_comm_sd = beta.comm.sd,
                     response = response, r_s = r_s, sd = sd,
                     trials = n_trials))
 }
@@ -787,24 +787,24 @@ simulate_ms_count <- function(N = 120, n_species = 10,
 #' process), so the response is an `N x n_species` presence matrix.
 #'
 #' @param N Number of sites (default 100).
-#' @param n_species Number of species (default 10).
-#' @param beta_comm_mean Community-mean occupancy coefficients, length
+#' @param n.species Number of species (default 10).
+#' @param beta.comm.mean Community-mean occupancy coefficients, length
 #'   `1 + n_occ_covs` (intercept first).
-#' @param beta_comm_sd Between-species SD of each occupancy coefficient (same
-#'   length as `beta_comm_mean`).
+#' @param beta.comm.sd Between-species SD of each occupancy coefficient (same
+#'   length as `beta.comm.mean`).
 #' @param seed Random seed.
 #' @return A list with `y` (an `N x n_species` 0/1 presence matrix), `data`, and
 #'   `truth` (per-species coefficients and the community hyperparameters).
 #' @examples
-#' sim <- simulate_jsdm(N = 60, n_species = 5, seed = 1)
+#' sim <- simulate_jsdm(N = 60, n.species = 5, seed = 1)
 #' dim(sim$y)   # 60 sites x 5 species presence matrix
 #' @export
-simulate_jsdm <- function(N = 100, n_species = 10,
-                          beta_comm_mean = c(0, 0.5),
-                          beta_comm_sd = c(0.5, 0.3),
+simulate_jsdm <- function(N = 100, n.species = 10,
+                          beta.comm.mean = c(0, 0.5),
+                          beta.comm.sd = c(0.5, 0.3),
                           seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  n_occ_covs <- length(beta_comm_mean) - 1
+  n_occ_covs <- length(beta.comm.mean) - 1
 
   data <- data.frame(x = rnorm(N))
   if (n_occ_covs > 1) {
@@ -813,21 +813,21 @@ simulate_jsdm <- function(N = 100, n_species = 10,
   X_occ <- model.matrix(~ .,
     data[, seq_len(n_occ_covs + (n_occ_covs == 0)), drop = FALSE])
 
-  beta_species <- matrix(NA_real_, n_species, length(beta_comm_mean))
-  for (j in seq_along(beta_comm_mean)) {
-    beta_species[, j] <- rnorm(n_species, beta_comm_mean[j], beta_comm_sd[j])
+  beta_species <- matrix(NA_real_, n.species, length(beta.comm.mean))
+  for (j in seq_along(beta.comm.mean)) {
+    beta_species[, j] <- rnorm(n.species, beta.comm.mean[j], beta.comm.sd[j])
   }
 
-  y <- matrix(NA_integer_, N, n_species)
-  for (s in seq_len(n_species)) {
+  y <- matrix(NA_integer_, N, n.species)
+  for (s in seq_len(n.species)) {
     y[, s] <- rbinom(N, 1, plogis(as.vector(X_occ %*% beta_species[s, ])))
   }
-  colnames(y) <- paste0("sp", seq_len(n_species))
+  colnames(y) <- paste0("sp", seq_len(n.species))
 
   list(y = y, data = data,
        truth = list(beta_species   = beta_species,
-                    beta_comm_mean = beta_comm_mean,
-                    beta_comm_sd   = beta_comm_sd))
+                    beta_comm_mean = beta.comm.mean,
+                    beta_comm_sd   = beta.comm.sd))
 }
 
 #' Simulate count / relative-abundance GLMM data
@@ -903,15 +903,15 @@ simulate_count <- function(N = 200, beta = c(1, 0.5),
 #' Latent abundance `N_i ~ Poisson(lambda_i)`, `log lambda = X beta_lambda`, and
 #' per-visit detection `y_ij ~ Bernoulli(1 - (1 - r_ij)^{N_i})` with per-individual
 #' detection `logit r_ij = beta_r`. Detection is site-level by default; supplying
-#' `beta_r_visit` draws a per-visit covariate `w` and makes `logit r_ij =
+#' `beta.r.visit` draws a per-visit covariate `w` and makes `logit r_ij =
 #' beta_r + beta_r_visit * w_ij` visit-varying. Matches the [royle_nichols()]
 #' family; the response is an `N x J` 0/1 detection-history matrix.
 #'
 #' @param N Number of sites (default 200).
 #' @param J Number of visits per site (default 5).
-#' @param beta_lambda Log-abundance coefficients `c(intercept, slope_on_x)`.
-#' @param beta_r Per-individual detection logit (a scalar intercept).
-#' @param beta_r_visit Optional scalar slope on a drawn per-visit detection
+#' @param beta.lambda Log-abundance coefficients `c(intercept, slope_on_x)`.
+#' @param beta.r Per-individual detection logit (a scalar intercept).
+#' @param beta.r.visit Optional scalar slope on a drawn per-visit detection
 #'   covariate `w`. When supplied, detection varies by visit and the returned list
 #'   carries `visits = list(w = )` (an `N x J` matrix) for `tobs(..., visits =)`.
 #' @param seed Random seed.
@@ -922,49 +922,49 @@ simulate_count <- function(N = 200, beta = c(1, 0.5),
 #' sim <- simulate_royle_nichols(N = 100, J = 4, seed = 1)
 #' dim(sim$y)
 #' # Visit-varying detection:
-#' sv <- simulate_royle_nichols(N = 100, J = 4, beta_r_visit = 0.8, seed = 1)
+#' sv <- simulate_royle_nichols(N = 100, J = 4, beta.r.visit = 0.8, seed = 1)
 #' names(sv$visits)
 #' @export
 simulate_royle_nichols <- function(N = 200, J = 5,
-                                   beta_lambda = c(0.3, 0.5),
-                                   beta_r = -0.8,
-                                   beta_r_visit = NULL,
+                                   beta.lambda = c(0.3, 0.5),
+                                   beta.r = -0.8,
+                                   beta.r.visit = NULL,
                                    seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   data   <- data.frame(x = rnorm(N))
   X_l    <- model.matrix(~ x, data)
-  lambda <- exp(as.vector(X_l %*% beta_lambda))
+  lambda <- exp(as.vector(X_l %*% beta.lambda))
   Ni     <- rpois(N, lambda)
 
-  if (is.null(beta_r_visit)) {
-    r <- plogis(rep(beta_r[1], N))
+  if (is.null(beta.r.visit)) {
+    r <- plogis(rep(beta.r[1], N))
     y <- matrix(0L, N, J)
     for (i in seq_len(N)) {
       p_i <- 1 - (1 - r[i])^Ni[i]
       y[i, ] <- rbinom(J, 1, p_i)
     }
     return(list(y = y, data = data,
-                truth = list(beta_lambda = beta_lambda, beta_r = beta_r,
+                truth = list(beta_lambda = beta.lambda, beta_r = beta.r,
                              beta_r_visit = NULL, N = Ni, lambda = lambda, r = r)))
   }
 
   w     <- matrix(rnorm(N * J), N, J)
-  r_mat <- plogis(beta_r[1] + beta_r_visit[1] * w)
+  r_mat <- plogis(beta.r[1] + beta.r.visit[1] * w)
   y     <- matrix(0L, N, J)
   for (i in seq_len(N)) {
     p_ij   <- 1 - (1 - r_mat[i, ])^Ni[i]
     y[i, ] <- rbinom(J, 1, p_ij)
   }
   list(y = y, data = data, visits = list(w = w),
-       truth = list(beta_lambda = beta_lambda, beta_r = beta_r,
-                    beta_r_visit = beta_r_visit, N = Ni, lambda = lambda,
+       truth = list(beta_lambda = beta.lambda, beta_r = beta.r,
+                    beta_r_visit = beta.r.visit, N = Ni, lambda = lambda,
                     r = r_mat, w = w))
 }
 
 #' Simulate temporal (multi-season) occupancy data
 #'
 #' Colonization and extinction are constant across the `n_seasons - 1` transition
-#' intervals by default. Supplying `beta_gamma` and/or `beta_epsilon` makes the
+#' intervals by default. Supplying `beta.gamma` and/or `beta.epsilon` makes the
 #' corresponding rate SEASON-VARYING: a per-`(site, interval)` covariate is drawn
 #' into an `[N x (n_seasons - 1)]` matrix column (`gamma_cov` / `eps_cov`) of the
 #' returned `data`, and the rate is `plogis(beta[1] + beta[2] * cov)`. Fit these
@@ -973,45 +973,45 @@ simulate_royle_nichols <- function(N = 200, J = 5,
 #'
 #' @param N Number of sites (default 100).
 #' @param J Number of visits per season (default 4).
-#' @param n_seasons Number of seasons (default 5).
-#' @param beta_occ Initial occupancy coefficients.
-#' @param beta_det Detection coefficients.
+#' @param n.seasons Number of seasons (default 5).
+#' @param beta.occ Initial occupancy coefficients.
+#' @param beta.det Detection coefficients.
 #' @param gamma Colonization probability (default 0.2); ignored when
-#'   `beta_gamma` is given.
+#'   `beta.gamma` is given.
 #' @param epsilon Extinction probability (default 0.1); ignored when
-#'   `beta_epsilon` is given.
-#' @param beta_gamma Optional `c(intercept, slope)` for a season-varying
+#'   `beta.epsilon` is given.
+#' @param beta.gamma Optional `c(intercept, slope)` for a season-varying
 #'   colonization logit driven by a drawn per-`(site, interval)` covariate.
-#' @param beta_epsilon Optional `c(intercept, slope)` for a season-varying
+#' @param beta.epsilon Optional `c(intercept, slope)` for a season-varying
 #'   extinction logit driven by a drawn per-`(site, interval)` covariate.
-#' @param beta_det_season Optional `c(intercept, slope)` for a season-varying
+#' @param beta.det.season Optional `c(intercept, slope)` for a season-varying
 #'   detection logit driven by a drawn per-`(site, season)` covariate `det_cov`
 #'   (a `[N x T]` matrix column of `data`); fit with `detection = ~ det_cov`.
 #' @param seed Random seed.
 #' @return A list with `y` (3D array), `data`, and `truth`.
 #' @examples
-#' sim <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 4, seed = 1)
+#' sim <- simulate_dyn_occu(N = 40, J = 3, n.seasons = 4, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
-                    beta_occ = c(0.5), beta_det = c(0),
+simulate_dyn_occu <- function(N = 100, J = 4, n.seasons = 5,
+                    beta.occ = c(0.5), beta.det = c(0),
                     gamma = 0.2, epsilon = 0.1,
-                    beta_gamma = NULL, beta_epsilon = NULL,
-                    beta_det_season = NULL, seed = NULL) {
+                    beta.gamma = NULL, beta.epsilon = NULL,
+                    beta.det.season = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   data <- data.frame(x = rnorm(N))
-  psi1 <- plogis(beta_occ[1])
-  p <- plogis(beta_det[1])
-  n_int <- n_seasons - 1L
+  psi1 <- plogis(beta.occ[1])
+  p <- plogis(beta.det[1])
+  n_int <- n.seasons - 1L
 
   # Season-varying detection [N x T] when a covariate coefficient is given: p
   # varies by primary season off a [N x T] covariate `det_cov`. Constant detection
   # keeps the scalar p (the RNG stream is unchanged in that branch).
-  p_mat <- matrix(p, N, n_seasons)
-  if (!is.null(beta_det_season)) {
-    det_cov <- matrix(rnorm(N * n_seasons), N, n_seasons)
-    p_mat <- plogis(beta_det_season[1] + beta_det_season[2] * det_cov)
+  p_mat <- matrix(p, N, n.seasons)
+  if (!is.null(beta.det.season)) {
+    det_cov <- matrix(rnorm(N * n.seasons), N, n.seasons)
+    p_mat <- plogis(beta.det.season[1] + beta.det.season[2] * det_cov)
     data$det_cov <- det_cov
   }
 
@@ -1022,28 +1022,28 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
   gamma_cov <- eps_cov <- NULL
   gam_it <- matrix(gamma,   N, n_int)
   eps_it <- matrix(epsilon, N, n_int)
-  if (!is.null(beta_gamma)) {
+  if (!is.null(beta.gamma)) {
     gamma_cov <- matrix(rnorm(N * n_int), N, n_int)
-    gam_it <- plogis(beta_gamma[1] + beta_gamma[2] * gamma_cov)
+    gam_it <- plogis(beta.gamma[1] + beta.gamma[2] * gamma_cov)
     data$gamma_cov <- gamma_cov
   }
-  if (!is.null(beta_epsilon)) {
+  if (!is.null(beta.epsilon)) {
     eps_cov <- matrix(rnorm(N * n_int), N, n_int)
-    eps_it <- plogis(beta_epsilon[1] + beta_epsilon[2] * eps_cov)
+    eps_it <- plogis(beta.epsilon[1] + beta.epsilon[2] * eps_cov)
     data$eps_cov <- eps_cov
   }
 
-  z <- matrix(NA_integer_, N, n_seasons)
+  z <- matrix(NA_integer_, N, n.seasons)
   z[, 1] <- rbinom(N, 1, psi1)
-  for (t in 2:n_seasons) {
+  for (t in 2:n.seasons) {
     iv <- t - 1L
     z[, t] <- z[, t-1] * (1 - rbinom(N, 1, eps_it[, iv])) +
               (1 - z[, t-1]) * rbinom(N, 1, gam_it[, iv])
   }
 
-  y <- array(NA_integer_, dim = c(N, J, n_seasons))
+  y <- array(NA_integer_, dim = c(N, J, n.seasons))
   for (i in seq_len(N)) {
-    for (t in seq_len(n_seasons)) {
+    for (t in seq_len(n.seasons)) {
       y[i, , t] <- rbinom(J, 1, z[i, t] * p_mat[i, t])
     }
   }
@@ -1053,59 +1053,59 @@ simulate_dyn_occu <- function(N = 100, J = 4, n_seasons = 5,
     data = data,
     truth = list(
       psi1 = psi1, p = p, gamma = gamma, epsilon = epsilon,
-      beta_gamma = beta_gamma, beta_epsilon = beta_epsilon,
-      beta_det_season = beta_det_season,
-      z = z, beta_occ = beta_occ, beta_det = beta_det
+      beta_gamma = beta.gamma, beta_epsilon = beta.epsilon,
+      beta_det_season = beta.det.season,
+      z = z, beta_occ = beta.occ, beta_det = beta.det
     )
   )
 }
 
 #' Simulate integrated (multi-source) occupancy data
 #'
-#' @param N_total Total number of unique sites (default 150).
-#' @param n_data Number of data sources (default 2).
+#' @param N.total Total number of unique sites (default 150).
+#' @param n.data Number of data sources (default 2).
 #' @param J Vector of visits per source (default c(4, 3)).
-#' @param n_shared Number of sites shared across sources (default 20).
-#' @param beta_occ Occupancy coefficients (default c(0.5, 0.3)).
-#' @param beta_det List of detection coefficient vectors per source.
+#' @param n.shared Number of sites shared across sources (default 20).
+#' @param beta.occ Occupancy coefficients (default c(0.5, 0.3)).
+#' @param beta.det List of detection coefficient vectors per source.
 #' @param seed Random seed.
 #' @return A list with `y` (list of matrices, each row named by the site of
 #'   `data` it measures), `data`, `site_maps`, and `truth`.
 #' @examples
-#' sim <- simulate_int_occu(N_total = 60, n_shared = 10, seed = 1)
+#' sim <- simulate_int_occu(N.total = 60, n.shared = 10, seed = 1)
 #' lapply(sim$y, dim)
 #' @export
-simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
-                      n_shared = 20,
-                      beta_occ = c(0.5, 0.3),
-                      beta_det = list(c(0.2, -0.4), c(-0.1, 0.3)),
+simulate_int_occu <- function(N.total = 150, n.data = 2, J = c(4, 3),
+                      n.shared = 20,
+                      beta.occ = c(0.5, 0.3),
+                      beta.det = list(c(0.2, -0.4), c(-0.1, 0.3)),
                       seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  if (length(J) != n_data) J <- rep(J[1], n_data)
-  if (length(beta_det) != n_data) {
+  if (length(J) != n.data) J <- rep(J[1], n.data)
+  if (length(beta.det) != n.data) {
     stop("beta_det must be a list of length n_data")
   }
 
-  data <- data.frame(x = rnorm(N_total))
+  data <- data.frame(x = rnorm(N.total))
   X_occ <- model.matrix(~ x, data)
-  psi <- plogis(as.vector(X_occ %*% beta_occ))
-  z <- rbinom(N_total, 1, psi)
+  psi <- plogis(as.vector(X_occ %*% beta.occ))
+  z <- rbinom(N.total, 1, psi)
 
   # Assign sites to sources
-  shared <- seq_len(n_shared)
-  remaining <- setdiff(seq_len(N_total), shared)
-  n_per_source <- (N_total - n_shared) %/% n_data
-  site_maps <- vector("list", n_data)
-  y_list <- vector("list", n_data)
+  shared <- seq_len(n.shared)
+  remaining <- setdiff(seq_len(N.total), shared)
+  n_per_source <- (N.total - n.shared) %/% n.data
+  site_maps <- vector("list", n.data)
+  y_list <- vector("list", n.data)
 
-  for (s in seq_len(n_data)) {
+  for (s in seq_len(n.data)) {
     start <- (s - 1) * n_per_source + 1
     end <- min(s * n_per_source, length(remaining))
     source_sites <- sort(c(shared, remaining[start:end]))
     site_maps[[s]] <- source_sites
 
     ns <- length(source_sites)
-    p_s <- plogis(beta_det[[s]][1])
+    p_s <- plogis(beta.det[[s]][1])
     y_s <- matrix(NA_integer_, ns, J[s])
     for (i in seq_len(ns)) {
       y_s[i, ] <- rbinom(J[s], 1, z[source_sites[i]] * p_s)
@@ -1121,7 +1121,7 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
     y = y_list,
     data = data,
     site_maps = site_maps,
-    truth = list(beta_occ = beta_occ, beta_det = beta_det, psi = psi, z = z)
+    truth = list(beta_occ = beta.occ, beta_det = beta.det, psi = psi, z = z)
   )
 }
 
@@ -1129,10 +1129,10 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #'
 #' @param N Number of sites (default 50).
 #' @param J Visits per season (default 3).
-#' @param n_species Number of species (default 5).
-#' @param n_seasons Number of seasons (default 4).
-#' @param beta_comm_mean Community mean for occupancy (default c(0)).
-#' @param beta_comm_sd Community SD for occupancy (default c(0.5)).
+#' @param n.species Number of species (default 5).
+#' @param n.seasons Number of seasons (default 4).
+#' @param beta.comm.mean Community mean for occupancy (default c(0)).
+#' @param beta.comm.sd Community SD for occupancy (default c(0.5)).
 #' @param gamma Colonization probability (default 0.15).
 #' @param epsilon Extinction probability (default 0.1).
 #' @param field Optional per-site shared areal field (length `N`) added to the
@@ -1146,12 +1146,12 @@ simulate_int_occu <- function(N_total = 150, n_data = 2, J = c(4, 3),
 #' @return A list with `y` (4D array), `data`, and `truth`.
 #' @seealso [ms_dyn_occu()], the family this simulates for.
 #' @examples
-#' sim <- simulate_ms_dyn_occu(N = 30, J = 2, n_species = 3, n_seasons = 3,
+#' sim <- simulate_ms_dyn_occu(N = 30, J = 2, n.species = 3, n.seasons = 3,
 #'                             seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
-                      beta_comm_mean = c(0), beta_comm_sd = c(0.5),
+simulate_ms_dyn_occu <- function(N = 50, J = 3, n.species = 5, n.seasons = 4,
+                      beta.comm.mean = c(0), beta.comm.sd = c(0.5),
                       gamma = 0.15, epsilon = 0.1,
                       field = NULL, trend = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
@@ -1159,9 +1159,9 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
   data <- data.frame(x = rnorm(N))
   # Draw the per-species first-season occupancy logits (same RNG draw as before;
   # plogis of an rnorm), then apply the optional shared field on the logit scale.
-  logit_psi1_species <- rnorm(n_species, beta_comm_mean[1], beta_comm_sd[1])
+  logit_psi1_species <- rnorm(n.species, beta.comm.mean[1], beta.comm.sd[1])
   psi1_species <- plogis(logit_psi1_species)
-  p_species <- plogis(rnorm(n_species, 0, 0.5))
+  p_species <- plogis(rnorm(n.species, 0, 0.5))
   if (!is.null(field) && length(field) != N) {
     stop("simulate_ms_dyn_occu(): `field` must have length N.", call. = FALSE)
   }
@@ -1173,20 +1173,20 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
   }
   trend_off <- if (is.null(trend)) rep(0, N) else trend * data$x
 
-  z <- array(NA_integer_, dim = c(N, n_seasons, n_species))
-  y <- array(NA_integer_, dim = c(N, J, n_seasons, n_species))
+  z <- array(NA_integer_, dim = c(N, n.seasons, n.species))
+  y <- array(NA_integer_, dim = c(N, J, n.seasons, n.species))
 
-  for (sp in seq_len(n_species)) {
+  for (sp in seq_len(n.species)) {
     psi1_i <- if (is.null(field) && is.null(trend)) rep(psi1_species[sp], N)
               else plogis(logit_psi1_species[sp] +
                           (if (is.null(field)) 0 else field) + trend_off)
     z[, 1, sp] <- rbinom(N, 1, psi1_i)
-    for (t in 2:n_seasons) {
+    for (t in 2:n.seasons) {
       z[, t, sp] <- z[, t-1, sp] * (1 - rbinom(N, 1, epsilon)) +
                     (1 - z[, t-1, sp]) * rbinom(N, 1, gamma)
     }
     for (i in seq_len(N)) {
-      for (t in seq_len(n_seasons)) {
+      for (t in seq_len(n.seasons)) {
         y[i, , t, sp] <- rbinom(J, 1, z[i, t, sp] * p_species[sp])
       }
     }
@@ -1206,32 +1206,32 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n_species = 5, n_seasons = 4,
 #'
 #' @param N Number of sites (default 100).
 #' @param J Vector of visits per source (default c(3, 4)).
-#' @param n_species Number of species (default 5).
-#' @param n_data Number of data sources (default 2).
+#' @param n.species Number of species (default 5).
+#' @param n.data Number of data sources (default 2).
 #' @param seed Random seed.
 #' @return A list with `y` (list of 3D arrays), `data`, and `truth`.
 #' @seealso [ms_int_occu()], the family this simulates for.
 #' @examples
-#' sim <- simulate_ms_int_occu(N = 40, n_species = 3, seed = 1)
+#' sim <- simulate_ms_int_occu(N = 40, n.species = 3, seed = 1)
 #' lapply(sim$y, dim)
 #' @export
-simulate_ms_int_occu <- function(N = 100, J = c(3, 4), n_species = 5,
-                        n_data = 2, seed = NULL) {
+simulate_ms_int_occu <- function(N = 100, J = c(3, 4), n.species = 5,
+                        n.data = 2, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  if (length(J) != n_data) J <- rep(J[1], n_data)
+  if (length(J) != n.data) J <- rep(J[1], n.data)
 
   data <- data.frame(x = rnorm(N))
-  psi_species <- plogis(rnorm(n_species, 0, 0.5))
-  z <- matrix(NA_integer_, N, n_species)
-  for (sp in seq_len(n_species)) z[, sp] <- rbinom(N, 1, psi_species[sp])
+  psi_species <- plogis(rnorm(n.species, 0, 0.5))
+  z <- matrix(NA_integer_, N, n.species)
+  for (sp in seq_len(n.species)) z[, sp] <- rbinom(N, 1, psi_species[sp])
 
-  y_list <- vector("list", n_data)
-  p_det <- vector("list", n_data)
-  for (s in seq_len(n_data)) {
-    p_s <- plogis(rnorm(n_species, 0, 0.3))
+  y_list <- vector("list", n.data)
+  p_det <- vector("list", n.data)
+  for (s in seq_len(n.data)) {
+    p_s <- plogis(rnorm(n.species, 0, 0.3))
     p_det[[s]] <- p_s
-    y_s <- array(NA_integer_, dim = c(N, J[s], n_species))
-    for (sp in seq_len(n_species)) {
+    y_s <- array(NA_integer_, dim = c(N, J[s], n.species))
+    for (sp in seq_len(n.species)) {
       for (i in seq_len(N)) {
         y_s[i, , sp] <- rbinom(J[s], 1, z[i, sp] * p_s[sp])
       }

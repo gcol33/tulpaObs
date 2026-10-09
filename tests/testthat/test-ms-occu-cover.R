@@ -49,7 +49,7 @@ test_that("ms_occu_cover() constructor returns a tobs_family", {
 
 
 test_that("ms_occu_cover() enforces its capability gates", {
-  sim <- simulate_ms_occu_cover(n_species = 4, N = 30, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 4, N = 30, J = 3,
                                 positive = "lognormal", seed = 1)
   vis <- .msoc_visits(30, 3, sim$visit_data)
 
@@ -57,7 +57,7 @@ test_that("ms_occu_cover() enforces its capability gates", {
   expect_error(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1,
-         y = sim$y, y_pos = sim$y_pos, visits = vis, method = "laplace"),
+         y = sim$y, y.pos = sim$y_pos, visits = vis, method = "laplace"),
     "species"
   )
   # Missing y_pos.
@@ -65,14 +65,14 @@ test_that("ms_occu_cover() enforces its capability gates", {
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1,
          y = sim$y, visits = vis, species = sim$species, method = "laplace"),
-    "y_pos"
+    "y.pos"
   )
   # nested_laplace is not offered (community coupled-field engine is upstream-
   # pending).
   expect_error(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1,
-         y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+         y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
          method = "nested_laplace"),
     "not available"
   )
@@ -84,7 +84,7 @@ test_that("ms_occu_cover() enforces its capability gates", {
     tobs(~ occ_cov1, data = sim$data,
          family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1 + icar(graph = adj),
-         positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos, visits = vis,
+         positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos, visits = vis,
          species = sim$species, method = "laplace"),
     "detection arm must use a plain formula"
   )
@@ -96,15 +96,15 @@ test_that("ms_occu_cover() recovers community means + per-species coefs (lognorm
   skip_if_fast()
   set.seed(21)
   sim <- simulate_ms_occu_cover(
-    n_species = 14, N = 90, J = 4,
-    mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
-    mu_pos = c(log(0.12), 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-    positive = "lognormal", sigma_pos = 0.4, seed = 21)
+    n.species = 14, N = 90, J = 4,
+    mu.occ = c(stats::qlogis(0.45), 0.7), mu.p = c(0.2, -0.4),
+    mu.pos = c(log(0.12), 0.5), sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
+    positive = "lognormal", sigma.pos = 0.4, seed = 21)
   vis <- .msoc_visits(90, 4, sim$visit_data)
 
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
 
   expect_true(isTRUE(fit$convergence$converged))
@@ -145,15 +145,15 @@ test_that("ms_occu_cover() community-mean 95% CIs cover near the nominal rate", 
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
     sim <- simulate_ms_occu_cover(
-      n_species = 12, N = 70, J = 4,
-      mu_occ = c(stats::qlogis(0.45), 0.6), mu_p = c(0.2, -0.4),
-      mu_pos = c(log(0.12), 0.4), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-      positive = "lognormal", sigma_pos = 0.4, seed = 300 + s)
+      n.species = 12, N = 70, J = 4,
+      mu.occ = c(stats::qlogis(0.45), 0.6), mu.p = c(0.2, -0.4),
+      mu.pos = c(log(0.12), 0.4), sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
+      positive = "lognormal", sigma.pos = 0.4, seed = 300 + s)
     vis <- .msoc_visits(70, 4, sim$visit_data)
     fit <- tryCatch(
       tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
            detection = ~ det_cov1, positive = ~ pos_cov1,
-           y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+           y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
            method = "laplace", control = list(verbose = FALSE)),
       error = function(e) NULL)
     if (is.null(fit)) next
@@ -172,12 +172,12 @@ test_that("ms_occu_cover() S3 methods work", {
   skip_on_cran()
   skip_if_fast()
   set.seed(5)
-  sim <- simulate_ms_occu_cover(n_species = 8, N = 45, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 8, N = 45, J = 3,
                                 positive = "lognormal", seed = 5)
   vis <- .msoc_visits(45, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
 
   expect_s3_class(fit, "tobs_fit")
@@ -222,12 +222,12 @@ test_that("ms_occu_cover() flags community-variance Laplace attenuation", {
   skip_on_cran()
   skip_if_fast()
   set.seed(5)
-  sim <- simulate_ms_occu_cover(n_species = 8, N = 45, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 8, N = 45, J = 3,
                                 positive = "lognormal", seed = 5)
   vis <- .msoc_visits(45, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
 
   # Machine-readable marker on the community block: variance attenuated, means not.
@@ -254,15 +254,15 @@ test_that("ms_occu_cover() recovers community means (beta arm, smoke)", {
   occ_dev <- p_dev <- pos_dev <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {
     sim <- simulate_ms_occu_cover(
-      n_species = 12, N = 70, J = 4,
-      mu_occ = c(stats::qlogis(0.5), 0.6), mu_p = c(0.2, -0.4),
-      mu_pos = c(stats::qlogis(0.3), 0.3), sd_occ = 0.5, sd_p = 0.4,
-      sd_pos = 0.3, positive = "beta", phi = 25, seed = 500 + s)
+      n.species = 12, N = 70, J = 4,
+      mu.occ = c(stats::qlogis(0.5), 0.6), mu.p = c(0.2, -0.4),
+      mu.pos = c(stats::qlogis(0.3), 0.3), sd.occ = 0.5, sd.p = 0.4,
+      sd.pos = 0.3, positive = "beta", phi = 25, seed = 500 + s)
     vis <- .msoc_visits(70, 4, sim$visit_data)
     fit <- tryCatch(
       tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("beta"),
            detection = ~ det_cov1, positive = ~ pos_cov1,
-           y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+           y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
            method = "laplace", control = list(verbose = FALSE)),
       error = function(e) NULL)
     if (is.null(fit)) next
@@ -306,14 +306,14 @@ test_that("ms_occu_cover() recovers community means + sigma_pos (gaussian, #127)
   # this cover design, exactly as it would on the log scale.
   set.seed(31)
   sim <- simulate_ms_occu_cover(
-    n_species = 14, N = 90, J = 4,
-    mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
-    mu_pos = c(2.0, 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-    positive = "gaussian", sigma_pos = 0.4, seed = 31)
+    n.species = 14, N = 90, J = 4,
+    mu.occ = c(stats::qlogis(0.45), 0.7), mu.p = c(0.2, -0.4),
+    mu.pos = c(2.0, 0.5), sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
+    positive = "gaussian", sigma.pos = 0.4, seed = 31)
   vis <- .msoc_visits(90, 4, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("gaussian"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
   expect_true(isTRUE(fit$convergence$converged))
 
@@ -336,13 +336,13 @@ test_that("ms_occu_cover() recovers community means + sigma_pos (gaussian, #127)
 
 test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116)", {
   skip_on_cran()
-  sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
-                                mu_pos = c(log(0.12), 0.4), positive = "lognormal",
-                                sigma_pos = 0.4, seed = 7)
+  sim <- simulate_ms_occu_cover(n.species = 5, N = 40, J = 3,
+                                mu.pos = c(log(0.12), 0.4), positive = "lognormal",
+                                sigma.pos = 0.4, seed = 7)
   vis <- .msoc_visits(40, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
   # Pointwise ll is per-(species, cell): [n_draws x (n_species * n_sites)].
   ll <- .tobs_pointwise_loglik(fit, n.draws = 100L)
@@ -360,22 +360,22 @@ test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116
 
 test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127)", {
   skip_on_cran()
-  sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
-                                mu_pos = c(2.0, 0.4), positive = "gaussian",
-                                sigma_pos = 0.4, seed = 9)
+  sim <- simulate_ms_occu_cover(n.species = 5, N = 40, J = 3,
+                                mu.pos = c(2.0, 0.4), positive = "gaussian",
+                                sigma.pos = 0.4, seed = 9)
   vis <- .msoc_visits(40, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("gaussian"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit, n.draws = 100L)
   expect_true(is.finite(w$estimates["waic", "Estimate"]))
 })
 
 test_that("ms_occu_cover(\"gaussian\") simulate() round-trips (#127)", {
-  sim <- simulate_ms_occu_cover(n_species = 5, N = 40, J = 3,
-                                mu_pos = c(2.0, 0.4), positive = "gaussian",
-                                sigma_pos = 0.4, seed = 11)
+  sim <- simulate_ms_occu_cover(n.species = 5, N = 40, J = 3,
+                                mu.pos = c(2.0, 0.4), positive = "gaussian",
+                                sigma.pos = 0.4, seed = 11)
   expect_true(any(sim$y_pos[!is.na(sim$y_pos)] < 0) ||
               min(sim$y_pos, na.rm = TRUE) < 1)   # gaussian admits low / negative
   expect_true(all(is.na(sim$y_pos[!is.na(sim$y) & sim$y == 0L])))
@@ -393,13 +393,13 @@ test_that("ms_occu_cover() AGHQ debias reduces variance-component attenuation (#
   em <- aghq <- matrix(NA_real_, n_seeds, 2L)   # cols: sd_occ, sd_p
   for (s in seq_len(n_seeds)) {
     sim <- simulate_ms_occu_cover(
-      n_species = 16, N = 40, J = 3, n_occ_covs = 0, n_det_covs = 0,
-      n_pos_covs = 0, sd_occ = sd_occ_t, sd_p = sd_p_t, sd_pos = 0.4,
-      positive = "lognormal", sigma_pos = 0.4, seed = 700 + s)
+      n.species = 16, N = 40, J = 3, n.occ.covs = 0, n.det.covs = 0,
+      n.pos.covs = 0, sd.occ = sd_occ_t, sd.p = sd_p_t, sd.pos = 0.4,
+      positive = "lognormal", sigma.pos = 0.4, seed = 700 + s)
     # Intercept-only arms carry no per-visit covariates, so no `visits` design.
     common <- list(formula = ~ 1, data = sim$data,
                    family = ms_occu_cover("lognormal"),
-                   detection = ~ 1, positive = ~ 1, y = sim$y, y_pos = sim$y_pos,
+                   detection = ~ 1, positive = ~ 1, y = sim$y, y.pos = sim$y_pos,
                    species = sim$species, method = "laplace")
     fit_em <- tryCatch(do.call(tobs, c(common, list(
       control = list(verbose = FALSE, re.aghq = FALSE)))), error = function(e) NULL)
@@ -443,14 +443,14 @@ test_that("ms_occu_cover() variance debias is a hard cap; EM is a tested lower b
   sd_default <- sd_noaghq <- matrix(NA_real_, n_seeds, 2L)   # cols: sd_occ, sd_p
   for (s in seq_len(n_seeds)) {
     sim <- simulate_ms_occu_cover(
-      n_species = 16, N = 60, J = 4,
-      mu_occ = c(stats::qlogis(0.45), 0.5), mu_p = c(0.2, -0.4),
-      mu_pos = c(log(0.12), 0.3), sd_occ = sd_occ_t, sd_p = sd_p_t, sd_pos = 0.4,
-      positive = "lognormal", sigma_pos = 0.4, seed = 720 + s)
+      n.species = 16, N = 60, J = 4,
+      mu.occ = c(stats::qlogis(0.45), 0.5), mu.p = c(0.2, -0.4),
+      mu.pos = c(log(0.12), 0.3), sd.occ = sd_occ_t, sd.p = sd_p_t, sd.pos = 0.4,
+      positive = "lognormal", sigma.pos = 0.4, seed = 720 + s)
     vis <- .msoc_visits(60, 4, sim$visit_data)
     common <- list(formula = ~ occ_cov1, data = sim$data,
                    family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-                   positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+                   positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
                    visits = vis, species = sim$species, method = "laplace")
     fd <- tryCatch(do.call(tobs, c(common, list(
       control = list(verbose = FALSE)))), error = function(e) NULL)

@@ -22,7 +22,7 @@ test_that("ms_count() family is wired and reports its supported methods", {
 })
 
 test_that("ms_count() dispatch guards reject unsupported inputs", {
-  sim <- simulate_ms_count(N = 40, n_species = 5, seed = 1)
+  sim <- simulate_ms_count(N = 40, n.species = 5, seed = 1)
 
   # a detection formula is meaningless (no detection process)
   expect_error(
@@ -52,7 +52,7 @@ test_that("ms_count() dispatch guards reject unsupported inputs", {
 
 test_that("ms_count() S3 surface works (coef / ranef / fitted / simulate / WAIC)", {
   skip_on_cran()
-  sim <- simulate_ms_count(N = 120, n_species = 8, response = "poisson", seed = 2)
+  sim <- simulate_ms_count(N = 120, n.species = 8, response = "poisson", seed = 2)
   fit <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
               species = colnames(sim$y), method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
@@ -74,7 +74,7 @@ test_that("ms_count() S3 surface works (coef / ranef / fitted / simulate / WAIC)
 
 test_that("ms_count() Laplace fit accepts missing (NA) site x species entries", {
   skip_on_cran()
-  sim <- simulate_ms_count(N = 120, n_species = 8, response = "poisson", seed = 3)
+  sim <- simulate_ms_count(N = 120, n.species = 8, response = "poisson", seed = 3)
   y <- sim$y
   set.seed(3)
   y[sample(length(y), floor(0.15 * length(y)))] <- NA   # ~15% missing at random
@@ -97,8 +97,8 @@ test_that("Poisson community count recovers community means with ~95% coverage",
   cover <- matrix(FALSE, n_seed, length(beta))
   est   <- matrix(NA_real_, n_seed, length(beta))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_count(N = 150, n_species = 20, beta_comm_mean = beta,
-                             beta_comm_sd = c(0.4, 0.3), response = "poisson",
+    sim <- simulate_ms_count(N = 150, n.species = 20, beta.comm.mean = beta,
+                             beta.comm.sd = c(0.4, 0.3), response = "poisson",
                              seed = s)
     fit <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
                 species = colnames(sim$y), method = "laplace",
@@ -129,8 +129,8 @@ test_that("binomial community count recovers means with ~95% coverage (#125)", {
   cover <- matrix(FALSE, n_seed, length(beta))
   est   <- matrix(NA_real_, n_seed, length(beta))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_count(N = 150, n_species = 30, beta_comm_mean = beta,
-                             beta_comm_sd = c(0.4, 0.3), response = "binomial",
+    sim <- simulate_ms_count(N = 150, n.species = 30, beta.comm.mean = beta,
+                             beta.comm.sd = c(0.4, 0.3), response = "binomial",
                              trials = 10, seed = 800 + s)
     fit <- tobs(~ x, data = sim$data, family = ms_count("binomial"), y = sim$y,
                 species = colnames(sim$y), trials = 10, method = "laplace",
@@ -157,8 +157,8 @@ test_that("Gaussian + negbin community count recover means + dispersion", {
   est_g <- matrix(NA_real_, n_seed, length(beta)); vr <- numeric(n_seed)
   cov_g <- matrix(FALSE, n_seed, length(beta))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_count(N = 150, n_species = 20, beta_comm_mean = beta,
-                             beta_comm_sd = c(0.4, 0.3), response = "gaussian",
+    sim <- simulate_ms_count(N = 150, n.species = 20, beta.comm.mean = beta,
+                             beta.comm.sd = c(0.4, 0.3), response = "gaussian",
                              sd = 0.8, seed = s)
     fit <- tobs(~ x, data = sim$data, family = ms_count("gaussian"), y = sim$y,
                 species = colnames(sim$y), method = "laplace",
@@ -178,8 +178,8 @@ test_that("Gaussian + negbin community count recover means + dispersion", {
   est_n <- matrix(NA_real_, n_seed, length(beta)); mlr <- numeric(n_seed)
   cov_n <- matrix(FALSE, n_seed, length(beta))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_count(N = 150, n_species = 20, beta_comm_mean = beta,
-                             beta_comm_sd = c(0.4, 0.3), response = "negbin",
+    sim <- simulate_ms_count(N = 150, n.species = 20, beta.comm.mean = beta,
+                             beta.comm.sd = c(0.4, 0.3), response = "negbin",
                              size = 3, size.log.sd = 0.3, seed = s)
     fit <- tobs(~ x, data = sim$data, family = ms_count("negbin"), y = sim$y,
                 species = colnames(sim$y), method = "laplace",

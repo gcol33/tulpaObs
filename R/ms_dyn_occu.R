@@ -446,15 +446,15 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
 ms_dyn_occu <- function() {
   obs_family(
     name           = "ms_dyn_occu",
-    class_long     = "community dynamic occupancy",
+    class.long     = "community dynamic occupancy",
     latent         = "bernoulli_hmm",
     observation    = "binomial_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     # The shared psi1 field is fit by the block-coordinate driver, but the call
     # passes `latent = NULL`: a field block and no factors, so no candidate
     # starting directions and no `factor.starts`.
-    control_groups = c("block_coordinate", "nuts_grad_threads")
+    control.groups = c("block_coordinate", "nuts_grad_threads")
   )
 }

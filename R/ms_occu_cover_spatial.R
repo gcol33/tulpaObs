@@ -40,33 +40,33 @@
 
 #' Simulate a reduced-rank spatial-factor community occu_cover data set (K = 1)
 #'
-#' Generates occupancy / detection / cover data for `n_species` species sharing
+#' Generates occupancy / detection / cover data for `n.species` species sharing
 #' one latent ICAR spatial factor `w` on the cell graph, with per-species
 #' loadings `L_s` on the occupancy state predictor and Gaussian community priors
 #' on the per-species arm coefficients. This is the ground-truth generator for
 #' the Stage-1 reduced-rank spatial JSDM.
 #'
 #' @param adj N x N 0/1 adjacency matrix of the cell graph (required); `N` cells.
-#' @param n_species Number of species.
+#' @param n.species Number of species.
 #' @param J Number of detection visits per cell.
-#' @param K Number of shared latent spatial factors (`1 <= K <= n_species`).
+#' @param K Number of shared latent spatial factors (`1 <= K <= n.species`).
 #'   `K = 1` is the Stage-1 single-field case (loading vector, field vector);
 #'   `K > 1` draws `K` ICAR fields with lower-triangular, positive-diagonal
 #'   loadings and returns the `S x K` loading matrix / `N x K` field matrix.
-#' @param n_occ_covs,n_det_covs,n_pos_covs Number of (Gaussian) covariates on the
+#' @param n.occ.covs,n.det.covs,n.pos.covs Number of (Gaussian) covariates on the
 #'   occupancy, detection, and cover arms; each arm also has an intercept.
-#' @param mu_occ,mu_p,mu_pos Community mean coefficient vectors (intercept first).
+#' @param mu.occ,mu.p,mu.pos Community mean coefficient vectors (intercept first).
 #'   `NULL` picks sensible defaults of the right length.
-#' @param sd_occ,sd_p,sd_pos Community RE SDs (diagonal `Sigma_.`); scalar
+#' @param sd.occ,sd.p,sd.pos Community RE SDs (diagonal `Sigma_.`); scalar
 #'   (recycled) or per-coefficient.
-#' @param mean_load,sd_load Mean and SD of the per-species loadings `L_s`.
-#' @param cover_factor Logical; when `TRUE` the same shared fields `W` also load
+#' @param mean.load,sd.load Mean and SD of the per-species loadings `L_s`.
+#' @param cover.factor Logical; when `TRUE` the same shared fields `W` also load
 #'   on the cover (positive) predictor through a free `S x K` loading matrix
 #'   `L_pos` (the cover-arm factor). The cover-factor
 #'   draws are gated, so `FALSE` (the default) reproduces the no-factor RNG stream
 #'   exactly. `truth$L_pos` carries the generating cover loadings.
-#' @param mean_load_pos,sd_load_pos Mean and SD of the cover-arm loadings `L_pos`
-#'   (used only when `cover_factor = TRUE`).
+#' @param mean.load.pos,sd.load.pos Mean and SD of the cover-arm loadings `L_pos`
+#'   (used only when `cover.factor = TRUE`).
 #' @param field Areal structure of the shared latent factors: `"icar"` (improper
 #'   intrinsic CAR, the default), `"car_proper"` (proper CAR with a correlation
 #'   `rho`, field precision `tau (D - rho A)`), or `"bym2"` (the Riebler 2016
@@ -77,7 +77,7 @@
 #'   `field = "car_proper"` (the `rho -> 1` limit is the ICAR field).
 #' @param phi BYM2 spatial-variance fraction in `[0, 1]`, used only when
 #'   `field = "bym2"` (`phi = 1` is the pure ICAR field, `phi = 0` pure iid).
-#' @param sigma_pos Lognormal cover residual SD (on the log scale).
+#' @param sigma.pos Lognormal cover residual SD (on the log scale).
 #' @param positive Cover family; only `"lognormal"` in Stage 1.
 #' @param seed Optional RNG seed.
 #'
@@ -90,32 +90,32 @@
 #' adj <- matrix(0, 10, 10)
 #' adj[cbind(1:9, 2:10)] <- 1
 #' adj <- adj + t(adj)
-#' sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4, J = 3, seed = 1)
+#' sim <- simulate_ms_occu_cover_spatial(adj, n.species = 4, J = 3, seed = 1)
 #' dim(sim$y)
 #' @export
 simulate_ms_occu_cover_spatial <- function(adj,
-                                           n_species  = 8L,
+                                           n.species  = 8L,
                                            J          = 4L,
                                            K          = 1L,
-                                           n_occ_covs = 1L,
-                                           n_det_covs = 1L,
-                                           n_pos_covs = 1L,
-                                           mu_occ     = NULL,
-                                           mu_p       = NULL,
-                                           mu_pos     = NULL,
-                                           sd_occ     = 0.4,
-                                           sd_p       = 0.4,
-                                           sd_pos     = 0.3,
-                                           mean_load  = 0,
-                                           sd_load    = 1.0,
-                                           cover_factor  = FALSE,
-                                           mean_load_pos = 0,
-                                           sd_load_pos   = 1.0,
+                                           n.occ.covs = 1L,
+                                           n.det.covs = 1L,
+                                           n.pos.covs = 1L,
+                                           mu.occ     = NULL,
+                                           mu.p       = NULL,
+                                           mu.pos     = NULL,
+                                           sd.occ     = 0.4,
+                                           sd.p       = 0.4,
+                                           sd.pos     = 0.3,
+                                           mean.load  = 0,
+                                           sd.load    = 1.0,
+                                           cover.factor  = FALSE,
+                                           mean.load.pos = 0,
+                                           sd.load.pos   = 1.0,
                                            field      = c("icar", "car_proper",
                                                           "bym2"),
                                            rho        = 0.9,
                                            phi        = 0.7,
-                                           sigma_pos  = 0.4,
+                                           sigma.pos  = 0.4,
                                            positive   = c("lognormal", "beta"),
                                            seed       = NULL) {
   positive <- match.arg(positive)
@@ -129,40 +129,40 @@ simulate_ms_occu_cover_spatial <- function(adj,
     stop("adj must be a square N x N adjacency matrix.", call. = FALSE)
   }
   K <- as.integer(K)
-  if (K < 1L || K > n_species) {
+  if (K < 1L || K > n.species) {
     stop("K must satisfy 1 <= K <= n_species.", call. = FALSE)
   }
   if (!is.null(seed)) set.seed(seed)
   N <- nrow(adj)
 
-  p_occ <- n_occ_covs + 1L
-  p_p   <- n_det_covs + 1L
-  p_pos <- n_pos_covs + 1L
-  if (is.null(mu_occ)) mu_occ <- c(0.0, rep(0.6, n_occ_covs))
-  if (is.null(mu_p))   mu_p   <- c(0.2, rep(-0.4, n_det_covs))
-  if (is.null(mu_pos)) mu_pos <- c(log(5), rep(0.3, n_pos_covs))
-  stopifnot(length(mu_occ) == p_occ, length(mu_p) == p_p,
-            length(mu_pos) == p_pos)
+  p_occ <- n.occ.covs + 1L
+  p_p   <- n.det.covs + 1L
+  p_pos <- n.pos.covs + 1L
+  if (is.null(mu.occ)) mu.occ <- c(0.0, rep(0.6, n.occ.covs))
+  if (is.null(mu.p))   mu.p   <- c(0.2, rep(-0.4, n.det.covs))
+  if (is.null(mu.pos)) mu.pos <- c(log(5), rep(0.3, n.pos.covs))
+  stopifnot(length(mu.occ) == p_occ, length(mu.p) == p_p,
+            length(mu.pos) == p_pos)
   rec <- function(sd, p) if (length(sd) == 1L) rep(sd, p) else sd
-  sd_occ <- rec(sd_occ, p_occ); sd_p <- rec(sd_p, p_p); sd_pos <- rec(sd_pos, p_pos)
+  sd.occ <- rec(sd.occ, p_occ); sd.p <- rec(sd.p, p_p); sd.pos <- rec(sd.pos, p_pos)
 
   # Cell-level (occupancy) covariate frame.
-  occ_covs <- if (n_occ_covs > 0L) {
-    m <- matrix(stats::rnorm(N * n_occ_covs), N, n_occ_covs)
-    df <- as.data.frame(m); names(df) <- paste0("occ_cov", seq_len(n_occ_covs)); df
+  occ_covs <- if (n.occ.covs > 0L) {
+    m <- matrix(stats::rnorm(N * n.occ.covs), N, n.occ.covs)
+    df <- as.data.frame(m); names(df) <- paste0("occ_cov", seq_len(n.occ.covs)); df
   } else data.frame(row.names = seq_len(N))
   X_occ <- if (ncol(occ_covs)) stats::model.matrix(~ ., occ_covs)
            else stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
 
   # Cell-level detection / cover designs (community covariates, shared across
   # species and visits in Stage 1).
-  det_covs <- if (n_det_covs > 0L) {
-    m <- matrix(stats::rnorm(N * n_det_covs), N, n_det_covs)
-    df <- as.data.frame(m); names(df) <- paste0("det_cov", seq_len(n_det_covs)); df
+  det_covs <- if (n.det.covs > 0L) {
+    m <- matrix(stats::rnorm(N * n.det.covs), N, n.det.covs)
+    df <- as.data.frame(m); names(df) <- paste0("det_cov", seq_len(n.det.covs)); df
   } else data.frame(row.names = seq_len(N))
-  pos_covs <- if (n_pos_covs > 0L) {
-    m <- matrix(stats::rnorm(N * n_pos_covs), N, n_pos_covs)
-    df <- as.data.frame(m); names(df) <- paste0("pos_cov", seq_len(n_pos_covs)); df
+  pos_covs <- if (n.pos.covs > 0L) {
+    m <- matrix(stats::rnorm(N * n.pos.covs), N, n.pos.covs)
+    df <- as.data.frame(m); names(df) <- paste0("pos_cov", seq_len(n.pos.covs)); df
   } else data.frame(row.names = seq_len(N))
   X_p   <- if (ncol(det_covs)) stats::model.matrix(~ ., det_covs)
            else stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
@@ -205,24 +205,24 @@ simulate_ms_occu_cover_spatial <- function(adj,
   # the rotation/sign/ordering-identified canonical form (gllvm/HMSC): factor k
   # loads on species k..S only, and L[k, k] > 0. K = 1 is the length-S loading
   # vector with the reference-species (sp1) sign anchor.
-  L <- matrix(0, n_species, K)
+  L <- matrix(0, n.species, K)
   for (k in seq_len(K)) {
-    rows <- k:n_species
-    L[rows, k] <- stats::rnorm(length(rows), mean_load, sd_load)
+    rows <- k:n.species
+    L[rows, k] <- stats::rnorm(length(rows), mean.load, sd.load)
   }
-  b_occ <- matrix(stats::rnorm(n_species * p_occ, 0, rep(sd_occ, each = n_species)),
-                  n_species, p_occ)
-  b_p   <- matrix(stats::rnorm(n_species * p_p, 0, rep(sd_p, each = n_species)),
-                  n_species, p_p)
-  b_pos <- matrix(stats::rnorm(n_species * p_pos, 0, rep(sd_pos, each = n_species)),
-                  n_species, p_pos)
+  b_occ <- matrix(stats::rnorm(n.species * p_occ, 0, rep(sd.occ, each = n.species)),
+                  n.species, p_occ)
+  b_p   <- matrix(stats::rnorm(n.species * p_p, 0, rep(sd.p, each = n.species)),
+                  n.species, p_p)
+  b_pos <- matrix(stats::rnorm(n.species * p_pos, 0, rep(sd.pos, each = n.species)),
+                  n.species, p_pos)
 
   # Cover-arm shared-factor loadings (Stage 3): the SAME fields W also load on the
   # cover predictor through a free S x K loading matrix L_pos. Drawn only when
   # requested, after every Stage 1-2 draw, so the no-cover-factor RNG stream (and
   # every existing fixture) stays byte-identical.
-  Lpos <- if (isTRUE(cover_factor)) {
-    matrix(stats::rnorm(n_species * K, mean_load_pos, sd_load_pos), n_species, K)
+  Lpos <- if (isTRUE(cover.factor)) {
+    matrix(stats::rnorm(n.species * K, mean.load.pos, sd.load.pos), n.species, K)
   } else NULL
 
   # Canonical sign anchor: make each factor's diagonal loading positive, flipping
@@ -235,28 +235,28 @@ simulate_ms_occu_cover_spatial <- function(adj,
     }
   }
 
-  species_names <- paste0("sp", seq_len(n_species))
-  y     <- array(NA_integer_, dim = c(N, J, n_species),
+  species_names <- paste0("sp", seq_len(n.species))
+  y     <- array(NA_integer_, dim = c(N, J, n.species),
                  dimnames = list(NULL, NULL, species_names))
-  y_pos <- array(NA_real_,    dim = c(N, J, n_species),
+  y_pos <- array(NA_real_,    dim = c(N, J, n.species),
                  dimnames = list(NULL, NULL, species_names))
-  psi   <- matrix(NA_real_, N, n_species, dimnames = list(NULL, species_names))
-  zmat  <- matrix(NA_integer_, N, n_species, dimnames = list(NULL, species_names))
+  psi   <- matrix(NA_real_, N, n.species, dimnames = list(NULL, species_names))
+  zmat  <- matrix(NA_integer_, N, n.species, dimnames = list(NULL, species_names))
 
-  for (s in seq_len(n_species)) {
-    eta_psi <- as.vector(X_occ %*% (mu_occ + b_occ[s, ])) +
+  for (s in seq_len(n.species)) {
+    eta_psi <- as.vector(X_occ %*% (mu.occ + b_occ[s, ])) +
                as.numeric(W %*% L[s, ])
     ps      <- stats::plogis(eta_psi)
     z       <- stats::rbinom(N, 1L, ps)
-    pp      <- stats::plogis(as.vector(X_p %*% (mu_p + b_p[s, ])))
-    eta_pos <- as.vector(X_pos %*% (mu_pos + b_pos[s, ]))
+    pp      <- stats::plogis(as.vector(X_p %*% (mu.p + b_p[s, ])))
+    eta_pos <- as.vector(X_pos %*% (mu.pos + b_pos[s, ]))
     if (!is.null(Lpos)) eta_pos <- eta_pos + as.numeric(W %*% Lpos[s, ])
     for (i in seq_len(N)) {
       det_ij <- stats::rbinom(J, 1L, z[i] * pp[i])
       y[i, , s] <- det_ij
       hit <- det_ij == 1L
       if (any(hit)) {
-        y_pos[i, hit, s] <- exp(eta_pos[i] + stats::rnorm(sum(hit), 0, sigma_pos))
+        y_pos[i, hit, s] <- exp(eta_pos[i] + stats::rnorm(sum(hit), 0, sigma.pos))
       }
     }
     psi[, s] <- ps; zmat[, s] <- z
@@ -272,15 +272,15 @@ simulate_ms_occu_cover_spatial <- function(adj,
       field = field,
       rho = if (identical(field, "car_proper")) rho else NULL,
       phi = if (identical(field, "bym2")) phi else NULL,
-      mu_occ = mu_occ, mu_p = mu_p, mu_pos = mu_pos,
-      sd_occ = sd_occ, sd_p = sd_p, sd_pos = sd_pos,
-      sigma_pos = sigma_pos,
+      mu_occ = mu.occ, mu_p = mu.p, mu_pos = mu.pos,
+      sd_occ = sd.occ, sd_p = sd.p, sd_pos = sd.pos,
+      sigma_pos = sigma.pos,
       b_occ = b_occ, b_p = b_p, b_pos = b_pos,
       # K = 1 keeps the Stage-1 shapes (loading vector, field vector); K > 1
       # returns the S x K loading matrix and the N x K field matrix.
       L = if (K == 1L) L[, 1L] else L,
       w = if (K == 1L) W[, 1L] else W,
-      cover_factor = isTRUE(cover_factor),
+      cover_factor = isTRUE(cover.factor),
       L_pos = if (is.null(Lpos)) NULL else if (K == 1L) Lpos[, 1L] else Lpos,
       psi = psi, z = zmat
     )

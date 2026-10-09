@@ -556,7 +556,7 @@
 #' detection sources with per-source detection probability.
 #'
 #' @param N Number of sites (default 200).
-#' @param T_seasons Number of seasons (default 4).
+#' @param T.seasons Number of seasons (default 4).
 #' @param S Number of detection sources (default 2).
 #' @param J Visits per source (scalar or length-`S`; default 3).
 #' @param psi1,gamma,eps Season-1 occupancy, colonization, extinction (defaults
@@ -570,7 +570,7 @@
 #'   gains `w * trend` on top of `field` -- the svcTIntPGOcc surface. Default
 #'   `NULL`. When set, `data` carries a `cell` node index (`1..N`) and the
 #'   covariate `w` for the bar `spatial(~ 1 + w || cell, graph)`.
-#' @param source_seasons Optional length-`S` list; `source_seasons[[s]]` is the
+#' @param source.seasons Optional length-`S` list; `source.seasons[[s]]` is the
 #'   integer vector of seasons source `s` observes (partial season overlap). The
 #'   seasons a source does not cover are set to `NA` in its array -- the staggered
 #'   survey where sources rarely share the full season grid. Default `NULL` (every
@@ -579,13 +579,13 @@
 #' @return A list with `y` (a length-`S` list of `[N x J x T]` arrays), `data`,
 #'   `sources`, and `truth`.
 #' @examples
-#' sim <- simulate_dyn_int_occu(N = 40, T_seasons = 3, seed = 1)
+#' sim <- simulate_dyn_int_occu(N = 40, T.seasons = 3, seed = 1)
 #' lapply(sim$y, dim)
 #' @export
-simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
+simulate_dyn_int_occu <- function(N = 200, T.seasons = 4, S = 2, J = 3,
                                   psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                   p = c(0.4, 0.6), field = NULL, trend = NULL,
-                                  source_seasons = NULL, seed = NULL) {
+                                  source.seasons = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   if (length(J) != S) J <- rep(J[1L], S)
   if (length(p) != S) p <- rep(p[1L], S)
@@ -593,16 +593,16 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
     stop("simulate_dyn_int_occu(): `field` must have length N.", call. = FALSE)
   if (!is.null(trend) && length(trend) != N)
     stop("simulate_dyn_int_occu(): `trend` must have length N.", call. = FALSE)
-  if (!is.null(source_seasons)) {
-    if (!is.list(source_seasons) || length(source_seasons) != S)
+  if (!is.null(source.seasons)) {
+    if (!is.list(source.seasons) || length(source.seasons) != S)
       stop("simulate_dyn_int_occu(): `source_seasons` must be a length-S list.",
            call. = FALSE)
-    if (any(unlist(source_seasons) < 1L | unlist(source_seasons) > T_seasons))
+    if (any(unlist(source.seasons) < 1L | unlist(source.seasons) > T.seasons))
       stop("simulate_dyn_int_occu(): `source_seasons` indices must be in 1..T.",
            call. = FALSE)
   }
   data <- data.frame(row.names = seq_len(N))
-  z <- matrix(0L, N, T_seasons)
+  z <- matrix(0L, N, T.seasons)
   # Season-1 occupancy carries the optional shared field + a varying-coefficient
   # field (weighted by a covariate w) on the logit scale. No field and no trend
   # keeps the exact constant-psi1 path (byte-identical to the pre-SVC simulator).
@@ -620,19 +620,19 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
     psi1_i <- stats::plogis(eta1)
   }
   z[, 1L] <- stats::rbinom(N, 1L, psi1_i)
-  for (t in 2:T_seasons) {
+  for (t in 2:T.seasons) {
     surv <- stats::rbinom(N, 1L, 1 - eps); col <- stats::rbinom(N, 1L, gamma)
     z[, t] <- ifelse(z[, t - 1L] == 1L, surv, col)
   }
   y <- lapply(seq_len(S), function(s) {
-    arr <- array(0L, c(N, J[s], T_seasons))
-    for (t in seq_len(T_seasons)) for (j in seq_len(J[s]))
+    arr <- array(0L, c(N, J[s], T.seasons))
+    for (t in seq_len(T.seasons)) for (j in seq_len(J[s]))
       arr[, j, t] <- ifelse(z[, t] == 1L, stats::rbinom(N, 1L, p[s]), 0L)
     # Partial season overlap: source s observes only source_seasons[[s]]; the
     # seasons it does not cover are NA (absent), the per-source-season-map form
     # of a staggered survey where sources rarely share the full season grid.
-    if (!is.null(source_seasons)) {
-      miss <- setdiff(seq_len(T_seasons), source_seasons[[s]])
+    if (!is.null(source.seasons)) {
+      miss <- setdiff(seq_len(T.seasons), source.seasons[[s]])
       if (length(miss)) arr[, , miss] <- NA_integer_
     }
     arr
@@ -641,5 +641,5 @@ simulate_dyn_int_occu <- function(N = 200, T_seasons = 4, S = 2, J = 3,
   list(y = y, data = data, sources = names(y),
        truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p, z = z,
                     field = field, trend = trend, w = w,
-                    source_seasons = source_seasons))
+                    source_seasons = source.seasons))
 }

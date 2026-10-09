@@ -21,7 +21,7 @@
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     sigma = 0.8, alpha = 1.0,
-    trend = trend, sigma_trend = 0.7, alpha_trend = 0.9, seed = seed)
+    trend = trend, sigma.trend = 0.7, alpha.trend = 0.9, seed = seed)
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
     y = as.vector(t(sim$y)),
@@ -235,7 +235,7 @@ test_that("the compiled axis is the axis the fit integrates", {
     occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
     positive   = ~ pos_cov1 + share(spatial(), alpha = grid(g)),
     data = d$cell_dat, family = occu_cover("lognormal"),
-    detection = ~ det_cov1, y = d$od$y, y_pos = d$y_pos,
+    detection = ~ det_cov1, y = d$od$y, y.pos = d$y_pos,
     visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
                    adaptive.grid = FALSE,
@@ -266,7 +266,7 @@ test_that("control$alpha.grid is refused: it is not user surface (#295)", {
       occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
       positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0.5, 1))),
-      y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+      y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint", alpha.grid = c(0.5, 1))))),
     "not user surface")
@@ -280,7 +280,7 @@ test_that("share(spatial(grp)) on a mismatched grouping variable errors", {
       occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
       positive = ~ pos_cov1 + share(spatial(region_idx), alpha = grid(c(0.5, 1))),
-      y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+      y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "grouped on")
@@ -294,7 +294,7 @@ test_that("share(spatial(), terms =) must address every field block", {
       occurrence = ~ occ_cov1 + spatial(~ 1 + time || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
       positive = ~ pos_cov1 + share(spatial(), terms = list(intercept = grid(c(0.5, 1)))),
-      y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+      y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "every field block")
@@ -308,7 +308,7 @@ test_that("share(string) on the positive arm errors (selector required)", {
       occurrence = ~ occ_cov1 + spatial(~ 1 || cell_idx, graph = adj),
       data = d$cell_dat, family = occu_cover("lognormal"), detection = ~ det_cov1,
       positive = ~ pos_cov1 + share("occ_space", alpha = grid(c(0.5, 1))),
-      y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+      y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "not a string")
@@ -353,7 +353,7 @@ test_that("a structured term on the positive arm reaches the arm rejector (#296)
       occurrence = ~ occ_cov1 + icar(graph = d$adj), data = d$cell_dat,
       family = occu_cover("lognormal"), detection = ~ det_cov1,
       positive = ~ pos_cov1 + temporal(visit),
-      y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+      y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, engine = "joint")))),
     "not supported on the positive cover arm")
@@ -369,7 +369,7 @@ test_that("a stated alpha grid states NODES, and the span reaches past them (#30
     detection = ~ det_cov1,
     positive = eval(bquote(
       ~ pos_cov1 + share(spatial(), alpha = grid(.(nodes))))),
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = c(list(verbose = FALSE, engine = "joint",
                      sigma.grid = c(0.5, 1)), list(...)))))

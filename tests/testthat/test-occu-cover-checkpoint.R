@@ -39,7 +39,7 @@
     formula = ~ occ_cov1 + bym2(graph = d$adj), data = d$cell_dat,
     family = occu_cover(d$positive),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace", control = ctrl
   ))
 }

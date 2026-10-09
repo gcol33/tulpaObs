@@ -16,7 +16,7 @@ test_that("ms_count() reports nuts for every response family", {
 test_that("community count NUTS log-posterior + gradient match the R oracle", {
   skip_on_cran()
   check_family <- function(response, seed) {
-    sim <- simulate_ms_count(N = 60, n_species = 6, beta_comm_mean = c(1, 0.5),
+    sim <- simulate_ms_count(N = 60, n.species = 6, beta.comm.mean = c(1, 0.5),
                              response = response, seed = seed)
     model <- tulpaObs:::.tobs_build_ms_count(
       formula = ~ x, data = sim$data, y = sim$y, species = colnames(sim$y),
@@ -49,8 +49,8 @@ test_that("community count NUTS log-posterior + gradient match the R oracle", {
 test_that("community count Poisson NUTS recovers community means + agrees with Laplace", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_ms_count(N = 150, n_species = 12, beta_comm_mean = c(1, 0.5),
-                           beta_comm_sd = c(0.4, 0.3), response = "poisson",
+  sim <- simulate_ms_count(N = 150, n.species = 12, beta.comm.mean = c(1, 0.5),
+                           beta.comm.sd = c(0.4, 0.3), response = "poisson",
                            seed = 5)
   lap <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
               species = colnames(sim$y), method = "laplace",
@@ -89,8 +89,8 @@ test_that("ms_count NUTS community-mean 95% CIs cover at the nominal rate", {
   truth <- c(1, 0.5)
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_ms_count(N = 150, n_species = 12, beta_comm_mean = truth,
-                             beta_comm_sd = c(0.4, 0.3), response = "poisson",
+    sim <- simulate_ms_count(N = 150, n.species = 12, beta.comm.mean = truth,
+                             beta.comm.sd = c(0.4, 0.3), response = "poisson",
                              seed = 300 + s)
     fit <- tryCatch(tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
                     species = colnames(sim$y), method = "nuts",
@@ -107,8 +107,8 @@ test_that("ms_count NUTS community-mean 95% CIs cover at the nominal rate", {
 test_that("community count negbin NUTS recovers community means + dispersion", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_ms_count(N = 150, n_species = 12, beta_comm_mean = c(1, 0.5),
-                           beta_comm_sd = c(0.4, 0.3), response = "negbin",
+  sim <- simulate_ms_count(N = 150, n.species = 12, beta.comm.mean = c(1, 0.5),
+                           beta.comm.sd = c(0.4, 0.3), response = "negbin",
                            size = 3, seed = 6)
   lap <- tobs(~ x, data = sim$data, family = ms_count("negbin"), y = sim$y,
               species = colnames(sim$y), method = "laplace",
@@ -142,7 +142,7 @@ test_that("community count negbin NUTS recovers community means + dispersion", {
 test_that("community count NUTS log-posterior + gradient handle missing (NA) entries", {
   skip_on_cran()
   check_family_na <- function(response, seed) {
-    sim <- simulate_ms_count(N = 60, n_species = 6, beta_comm_mean = c(1, 0.5),
+    sim <- simulate_ms_count(N = 60, n.species = 6, beta.comm.mean = c(1, 0.5),
                              response = response, seed = seed)
     y <- sim$y
     # Knock out a scattered set of site x species entries, plus nearly a whole
@@ -185,8 +185,8 @@ test_that("community count NUTS log-posterior + gradient handle missing (NA) ent
 test_that("community count NUTS accepts missing (NA) entries and matches Laplace", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_ms_count(N = 150, n_species = 12, beta_comm_mean = c(1, 0.5),
-                           beta_comm_sd = c(0.4, 0.3), response = "poisson",
+  sim <- simulate_ms_count(N = 150, n.species = 12, beta.comm.mean = c(1, 0.5),
+                           beta.comm.sd = c(0.4, 0.3), response = "poisson",
                            seed = 21)
   y <- sim$y
   set.seed(21)
@@ -216,8 +216,8 @@ test_that("community count NUTS accepts missing (NA) entries and matches Laplace
 test_that("community count gaussian NUTS recovers community means + residual variance", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_ms_count(N = 150, n_species = 12, beta_comm_mean = c(1, 0.5),
-                           beta_comm_sd = c(0.4, 0.3), response = "gaussian",
+  sim <- simulate_ms_count(N = 150, n.species = 12, beta.comm.mean = c(1, 0.5),
+                           beta.comm.sd = c(0.4, 0.3), response = "gaussian",
                            sd = 1, seed = 7)
   nut <- tobs(~ x, data = sim$data, family = ms_count("gaussian"), y = sim$y,
               species = colnames(sim$y), method = "nuts",

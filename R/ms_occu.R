@@ -422,7 +422,7 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 #' @seealso [occu()], [ms_dyn_occu()], [ms_int_occu()]
 #' @examples
 #' \donttest{
-#' sim <- simulate_ms_occu(N = 80, J = 4, n_species = 8, seed = 1)
+#' sim <- simulate_ms_occu(N = 80, J = 4, n.species = 8, seed = 1)
 #' fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
 #'             y = sim$y, species = paste0("sp", seq_len(8)), method = "laplace")
 #' summary(fit)
@@ -431,15 +431,15 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 ms_occu <- function() {
   obs_family(
     name           = "ms_occu",
-    class_long     = "multispecies occupancy",
+    class.long     = "multispecies occupancy",
     latent         = "bernoulli",
     observation    = "binomial_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     # latent() factors and the SVC / shared field routes are fit by the
     # block-coordinate driver
-    control_groups = c("block_coordinate", "block_coordinate_factor",
+    control.groups = c("block_coordinate", "block_coordinate_factor",
                        "nuts_grad_threads")
   )
 }

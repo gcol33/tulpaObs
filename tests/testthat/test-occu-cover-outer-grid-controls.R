@@ -41,7 +41,7 @@ oc_grid_fit <- function(fx, ctrl = list()) {
     formula = ~ occ_cov1 + bym2(graph = fx$adj), data = fx$cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = fx$od$y, y_pos = fx$y_pos, visits = fx$od$det.covs,
+    y = fx$od$y, y.pos = fx$y_pos, visits = fx$od$det.covs,
     method = "nested_laplace",
     control = c(list(verbose = FALSE, max.iter = 500L, engine = "joint"), ctrl)
   ))
@@ -129,7 +129,7 @@ test_that("max.grid.cells reaches the engine's grid ceiling on every joint famil
     family = occu_cover("lognormal"),
     detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1, 1.5))),
-    y = fx$od$y, y_pos = fx$y_pos, visits = fx$od$det.covs,
+    y = fx$od$y, y.pos = fx$y_pos, visits = fx$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
                    max.grid.cells = 1))),
@@ -192,7 +192,7 @@ test_that("a pruned occu_cover fit does not warn about convergence", {
          family = occu_cover("lognormal"),
          detection = ~ det_cov1,
          positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1, 1.5))),
-         y = fx$od$y, y_pos = fx$y_pos, visits = fx$od$det.covs,
+         y = fx$od$y, y.pos = fx$y_pos, visits = fx$od$det.covs,
          method = "nested_laplace",
          control = list(verbose = FALSE, max.iter = 500L, engine = "joint",
                         prune = TRUE, prune.tol = 1e-3,

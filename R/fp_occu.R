@@ -639,9 +639,9 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
 #'
 #' @param N Number of sites (default 300).
 #' @param J Number of visits (default 5).
-#' @param n_occ_covs Number of occupancy covariates (default 1).
-#' @param beta_psi Occupancy coefficients (logit). Default
-#'   `c(qlogis(0.5), runif(n_occ_covs, -0.6, 0.6))`.
+#' @param n.occ.covs Number of occupancy covariates (default 1).
+#' @param beta.psi Occupancy coefficients (logit). Default
+#'   `c(qlogis(0.5), runif(n.occ.covs, -0.6, 0.6))`.
 #' @param p11,p10,b True detection, false-positive, and certain-classification
 #'   probabilities (scalars; defaults 0.6, 0.05, 0.5).
 #' @param seed Optional random seed.
@@ -651,14 +651,14 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
 #' sim <- simulate_fp_occu(N = 50, J = 4, seed = 1)
 #' table(sim$y)
 #' @export
-simulate_fp_occu <- function(N = 300, J = 5, n_occ_covs = 1, beta_psi = NULL,
+simulate_fp_occu <- function(N = 300, J = 5, n.occ.covs = 1, beta.psi = NULL,
                              p11 = 0.6, p10 = 0.05, b = 0.5, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_psi)) beta_psi <- c(stats::qlogis(0.5), stats::runif(n_occ_covs, -0.6, 0.6))
-  occ_covs <- data.frame(matrix(stats::rnorm(N * n_occ_covs), N, n_occ_covs))
-  names(occ_covs) <- paste0("occ_cov", seq_len(n_occ_covs))
+  if (is.null(beta.psi)) beta.psi <- c(stats::qlogis(0.5), stats::runif(n.occ.covs, -0.6, 0.6))
+  occ_covs <- data.frame(matrix(stats::rnorm(N * n.occ.covs), N, n.occ.covs))
+  names(occ_covs) <- paste0("occ_cov", seq_len(n.occ.covs))
   X_psi <- stats::model.matrix(~ ., occ_covs)
-  psi <- stats::plogis(as.vector(X_psi %*% beta_psi))
+  psi <- stats::plogis(as.vector(X_psi %*% beta.psi))
   z <- stats::rbinom(N, 1L, psi)
   y <- matrix(0L, N, J)
   for (i in seq_len(N)) {
@@ -670,6 +670,6 @@ simulate_fp_occu <- function(N = 300, J = 5, n_occ_covs = 1, beta_psi = NULL,
     }
   }
   list(y = y, data = occ_covs,
-       truth = list(beta_psi = beta_psi, psi = psi, p11 = p11, p10 = p10,
+       truth = list(beta_psi = beta.psi, psi = psi, p11 = p11, p10 = p10,
                     b = b, z = z))
 }

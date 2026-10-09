@@ -119,7 +119,7 @@ test_that("int_occu() residuals read the multi-source detection, not NA", {
 
 test_that("the community count families score their own marginal", {
   skip_on_cran()
-  sim <- simulate_ms_abun(n_species = 3, N = 40, J = 3, seed = 1)
+  sim <- simulate_ms_abun(n.species = 3, N = 40, J = 3, seed = 1)
   fit <- suppressWarnings(
     tobs(~ abund_cov1, data = sim$data, family = ms_abun(mixture = "poisson"),
          detection = ~ 1, y = sim$y, species = paste0("sp", 1:3),
@@ -137,7 +137,7 @@ test_that("the community count families score their own marginal", {
   }
 
   cutp <- c(0, 25, 50, 75, 100)
-  sd2 <- simulate_ms_distance(n_species = 3, N = 40, cutpoints = cutp,
+  sd2 <- simulate_ms_distance(n.species = 3, N = 40, cutpoints = cutp,
                               transect = "line", key = "halfnorm", seed = 0L)
   fd <- suppressWarnings(
     tobs(~ abund_cov1, data = sd2$data,
@@ -164,12 +164,12 @@ test_that("the community count families score their own marginal", {
 test_that("ms_occu_cover scores its state arm like its community siblings", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu_cover(n_species = 3, N = 30, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 3, N = 30, J = 3,
                                 positive = "lognormal", seed = 1)
   fit <- suppressWarnings(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1,
-         y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+         y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
          species = sim$species, method = "laplace", control = ctl_res))
   expect_residual_contract(fit)
   r <- residuals(fit, type = "response")
@@ -181,11 +181,11 @@ test_that("ms_occu_cover scores its state arm like its community siblings", {
 
 test_that("occu_cover() scores its state arm like its community sibling", {
   skip_on_cran()
-  sim <- simulate_occu_cover(N = 30, J = 3, n_occ_covs = 1L, n_det_covs = 1L,
-                             n_pos_covs = 1L, positive = "lognormal", seed = 1)
+  sim <- simulate_occu_cover(N = 30, J = 3, n.occ.covs = 1L, n.det.covs = 1L,
+                             n.pos.covs = 1L, positive = "lognormal", seed = 1)
   fit <- tobs(occurrence = ~ occ_cov1, data = sim$data,
              family = occu_cover("lognormal"), detection = ~ det_cov1,
-             positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+             positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
              visits = sim$visit_data, method = "laplace", control = ctl_res)
   expect_residual_contract(fit)
   r <- residuals(fit, type = "response")
@@ -201,12 +201,12 @@ test_that("occu_cover() scores its state arm like its community sibling", {
 
 test_that("occu_multiscale_cover() scores the cell, not the plot", {
   skip_on_cran()
-  sim <- simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
-                                        visits_per_plot = 2L, seed = 1L)
+  sim <- simulate_occu_multiscale_cover(n.cells = 12L, plots.per.cell = 3L,
+                                        visits.per.plot = 2L, seed = 1L)
   fit <- tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
              data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
              detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-             y = sim$y, y_pos = sim$y_pos, method = "laplace", control = ctl_res)
+             y = sim$y, y.pos = sim$y_pos, method = "laplace", control = ctl_res)
   expect_residual_contract(fit)
   r <- residuals(fit, type = "response")
   expect_null(r$det)

@@ -32,7 +32,7 @@ test_that("occu_cover() joint path exposes field_sd, not just the raw amplitude 
     formula = ~ occ_cov1 + icar(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint")
   ))
@@ -81,7 +81,7 @@ test_that("joint and NUTS occu_cover() backends report field_sd in the same conv
     formula = ~ occ_cov1 + icar(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs
+    y = od$y, y.pos = y_pos, visits = od$det.covs
   )
   fit_joint <- suppressWarnings(do.call(tobs, c(common, list(
     method = "nested_laplace",

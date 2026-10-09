@@ -16,10 +16,10 @@ test_that("spatial ms_abun (ICAR) recovers community means and the shared field"
   # enough groups to be identified -- the non-spatial recovery fixture uses 14,
   # and at fewer the Laplace-EM attenuates / collapses the weakest coordinate
   # (the detection intercept here), as for any small-group variance-component fit.
-  sim <- simulate_ms_abun(n_species = 20, J = 5,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 20, J = 5,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
                           graph = adj, sigma.field = 0.6, seed = 7)
   fit <- tobs(~ abund_cov1 + icar(graph = adj),
               detection = ~ det_cov1, family = ms_abun(),
@@ -51,7 +51,7 @@ test_that("spatial ms_abun S3 surface carries the field", {
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(5L)
-  sim <- simulate_ms_abun(n_species = 6, J = 4, graph = adj,
+  sim <- simulate_ms_abun(n.species = 6, J = 4, graph = adj,
                           sigma.field = 0.5, seed = 3)
   fit <- tobs(~ abund_cov1 + icar(graph = adj),
               detection = ~ det_cov1, family = ms_abun(),
@@ -89,7 +89,7 @@ test_that("spatial ms_abun (BYM2) fits and recovers the field shape", {
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(6L)
-  sim <- simulate_ms_abun(n_species = 8, J = 5, graph = adj,
+  sim <- simulate_ms_abun(n.species = 8, J = 5, graph = adj,
                           sigma.field = 0.6, seed = 21)
   fit <- tobs(~ abund_cov1 + bym2(graph = adj),
               detection = ~ det_cov1, family = ms_abun(),
@@ -106,7 +106,7 @@ test_that("spatial ms_abun (proper CAR) fits and recovers the field shape", {
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(6L)
-  sim <- simulate_ms_abun(n_species = 8, J = 5, graph = adj,
+  sim <- simulate_ms_abun(n.species = 8, J = 5, graph = adj,
                           sigma.field = 0.6, seed = 22)
   fit <- tobs(~ abund_cov1 + car_proper(graph = adj),
               detection = ~ det_cov1, family = ms_abun(),
@@ -123,8 +123,8 @@ test_that("spatial ms_abun (negbin) integrates the size r over the grid", {
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(6L)
-  sim <- simulate_ms_abun(n_species = 8, J = 5, graph = adj, sigma.field = 0.5,
-                          mu_lambda = c(log(4), 0.4), mu_p = c(0.3, -0.3),
+  sim <- simulate_ms_abun(n.species = 8, J = 5, graph = adj, sigma.field = 0.5,
+                          mu.lambda = c(log(4), 0.4), mu.p = c(0.3, -0.3),
                           mixture = "negbin", size = 4, seed = 41)
   fit <- tobs(~ abund_cov1 + icar(graph = adj),
               detection = ~ det_cov1, family = ms_abun(mixture = "negbin"),
@@ -149,10 +149,10 @@ test_that("spatial ms_abun community-mean 95% CIs cover near the nominal rate", 
   n_seed <- 12L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_abun(n_species = 8, J = 5,
-                            n_abund_covs = 1, n_det_covs = 1,
-                            mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                            sd_lambda = 0.5, sd_p = 0.4,
+    sim <- simulate_ms_abun(n.species = 8, J = 5,
+                            n.abund.covs = 1, n.det.covs = 1,
+                            mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                            sd.lambda = 0.5, sd.p = 0.4,
                             graph = adj, sigma.field = 0.5, seed = 200 + s)
     fit <- tobs(~ abund_cov1 + icar(graph = adj),
                 detection = ~ det_cov1, family = ms_abun(),
@@ -177,8 +177,8 @@ test_that("spatial ms_abun interops with spAbundance::sfMsNMix (smoke)", {
   # assert numerical agreement -- that needs the long offline benchmark in
   # dev_notes/probe_ms_abun_spatial_vs_spabundance.R.
   adj <- rook_adj(5L); N <- nrow(adj)
-  sim <- simulate_ms_abun(n_species = 6, J = 4, graph = adj, sigma.field = 0.4,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3), seed = 9)
+  sim <- simulate_ms_abun(n.species = 6, J = 4, graph = adj, sigma.field = 0.4,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3), seed = 9)
   J <- dim(sim$y)[2]
 
   fit <- tobs(~ abund_cov1 + icar(graph = adj), detection = ~ det_cov1,

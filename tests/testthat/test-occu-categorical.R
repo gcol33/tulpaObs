@@ -76,7 +76,7 @@ test_that("occu_categorical() recovers presence + class truth (multi-seed) and C
   bo1 <- bo2 <- bc <- rep(NA_real_, n_seed)
   hit_o <- hit_c <- tot <- 0L
   for (s in seq_len(n_seed)) {
-    sim <- simulate_occu_categorical(N = 1500L, beta_occ = beta_occ_truth,
+    sim <- simulate_occu_categorical(N = 1500L, beta.occ = beta_occ_truth,
                                      seed = 900L + s)
     dat <- cbind(sim$data, y = sim$y)
     fit <- tryCatch(

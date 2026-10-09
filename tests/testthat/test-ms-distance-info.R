@@ -17,7 +17,7 @@
 # designs, and the gradient the finite difference is taken of. Single source for
 # every block below.
 .msdi_setup <- function(n_species = 3L, N = 25L, seed = 11L) {
-  d <- simulate_ms_distance(n_species = n_species, N = N,
+  d <- simulate_ms_distance(n.species = n_species, N = N,
                             cutpoints = .msdi_cut, seed = seed)
   fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
               family = ms_distance(cutpoints = .msdi_cut), y = d$y,
@@ -125,7 +125,7 @@ test_that("the hazard key keeps the finite-difference fallback and still fits", 
   # grad_b / info_b come back already summed over sites and the per-site
   # detection cross terms are not exported, so the shared log-shape global cannot
   # be sandwiched. The fitter passes sp_info = NULL there.
-  d <- simulate_ms_distance(n_species = 3, N = 25, cutpoints = .msdi_cut,
+  d <- simulate_ms_distance(n.species = 3, N = 25, cutpoints = .msdi_cut,
                             seed = 4)
   expect_warning(
     fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,

@@ -22,8 +22,8 @@ ctl <- list(verbose = FALSE, progress = FALSE)
 
 test_that("abun(mixture = 'zip') scores the structural-zero mixture", {
   skip_on_cran()
-  sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1,
-                       beta_lambda = c(log(6), 0.5), beta_p = c(0.3, -0.3),
+  sim <- simulate_abun(N = 120, J = 4, n.abund.covs = 1, n.det.covs = 1,
+                       beta.lambda = c(log(6), 0.5), beta.p = c(0.3, -0.3),
                        mixture = "zip", omega = 0.35, seed = 2)
   fit <- tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
               family = abun(mixture = "zip"), method = "laplace", control = ctl)
@@ -99,8 +99,8 @@ test_that("an areal negbin abun() is scored as negbin, not Poisson", {
 
 test_that("dyn_abun(mixture = 'negbin') is scored at the estimated log_r", {
   skip_on_cran()
-  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(8), 0), p = 0.6, omega = 0.7,
+  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(8), 0), p = 0.6, omega = 0.7,
                            gamma = 1.2, mixture = "negbin", r = 3, seed = 4)
   fit <- tobs(~ 1, data = sim$data, detection = ~ 1, y = sim$y,
               family = dyn_abun(mixture = "negbin"), method = "laplace",
@@ -118,8 +118,8 @@ test_that("dyn_abun(mixture = 'zinb') scores both the size and the ZI layer", {
   skip_on_cran()
   skip_if_fast()   # 68 s: the ZINB open-population forward is the file's one
                    # block too slow for the smoke tier (measured 2026-08-22).
-  sim <- simulate_dyn_abun(N = 60, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(8), 0), p = 0.6, omega = 0.7,
+  sim <- simulate_dyn_abun(N = 60, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(8), 0), p = 0.6, omega = 0.7,
                            gamma = 1.2, mixture = "negbin", r = 4, zi = 0.3,
                            seed = 5)
   fit <- tobs(~ 1, data = sim$data, detection = ~ 1, y = sim$y,
@@ -144,8 +144,8 @@ test_that("the posterior-mean row carries the draw names the kernels read", {
   skip_on_cran()
   # .tobs_loglik_at_mean() feeds DIC; an unnamed mean row would score the plain
   # Poisson marginal for a negbin fit.
-  sim <- simulate_abun(N = 100, J = 4, n_abund_covs = 1, n_det_covs = 1,
-                       beta_lambda = c(log(6), 0.4), beta_p = c(0.3, -0.2),
+  sim <- simulate_abun(N = 100, J = 4, n.abund.covs = 1, n.det.covs = 1,
+                       beta.lambda = c(log(6), 0.4), beta.p = c(0.3, -0.2),
                        mixture = "negbin", size = 3, seed = 9)
   fit <- tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
               family = abun(mixture = "negbin"), method = "laplace",

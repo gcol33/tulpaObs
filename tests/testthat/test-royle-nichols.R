@@ -18,8 +18,8 @@ test_that("royle_nichols() recovers the generative truth", {
   est <- matrix(NA_real_, S, 3)
   cov95 <- matrix(NA, S, 3)
   for (s in seq_len(S)) {
-    sim <- simulate_royle_nichols(N = 300, J = 6, beta_lambda = c(0.3, 0.5),
-                                  beta_r = -0.8, seed = 200 + s)
+    sim <- simulate_royle_nichols(N = 300, J = 6, beta.lambda = c(0.3, 0.5),
+                                  beta.r = -0.8, seed = 200 + s)
     fit <- tobs(~ x, data = sim$data, family = royle_nichols(),
                 detection = ~ 1, y = sim$y, control = list(verbose = FALSE))
     expect_true(isTRUE(fit$convergence$converged))
@@ -102,8 +102,8 @@ test_that("royle_nichols() recovers visit-varying detection", {
   est <- matrix(NA_real_, S, 4)
   cov95 <- matrix(NA, S, 4)
   for (s in seq_len(S)) {
-    sim <- simulate_royle_nichols(N = 300, J = 6, beta_lambda = c(0.3, 0.5),
-                                  beta_r = -0.8, beta_r_visit = 0.8,
+    sim <- simulate_royle_nichols(N = 300, J = 6, beta.lambda = c(0.3, 0.5),
+                                  beta.r = -0.8, beta.r.visit = 0.8,
                                   seed = 400 + s)
     fit <- tobs(~ x, data = sim$data, family = royle_nichols(),
                 detection = ~ w, y = sim$y, visits = sim$visits,
@@ -123,7 +123,7 @@ test_that("royle_nichols() recovers visit-varying detection", {
 
 test_that("royle_nichols() visit-varying S3 surface works", {
   skip_on_cran()
-  sim <- simulate_royle_nichols(N = 150, J = 5, beta_r_visit = 0.8, seed = 7)
+  sim <- simulate_royle_nichols(N = 150, J = 5, beta.r.visit = 0.8, seed = 7)
   fit <- tobs(~ x, data = sim$data, family = royle_nichols(), detection = ~ w,
               y = sim$y, visits = sim$visits, control = list(verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")

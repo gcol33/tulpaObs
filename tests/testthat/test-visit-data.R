@@ -240,7 +240,7 @@ test_that("factor det.cov fits categorically on both occu_cover arms (beta)", {
     family    = occu_cover("beta"),
     detection = ~ habitat,
     positive  = ~ habitat,
-    y         = od$y, y_pos = y_pos, visits = od$det.covs,
+    y         = od$y, y.pos = y_pos, visits = od$det.covs,
     method    = "laplace", control = list(verbose = FALSE)
   )
   expect_s3_class(fit, "tobs_fit")

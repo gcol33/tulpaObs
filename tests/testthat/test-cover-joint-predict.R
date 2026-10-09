@@ -77,7 +77,7 @@ test_that("cover() joint predict: change decomposition identity holds (#23)", {
   f <- .cjp_build_fit()
   nd <- data.frame(x = 0, cell = seq_len(f$n_s))
   pr <- predict(f$fit, newdata = nd, type = "change",
-                times = c(-1, 1), time_col = "x", nsim = 500L)
+                times = c(-1, 1), time.col = "x", nsim = 500L)
   expect_s3_class(pr, "tobs_prediction")
   expect_equal(nrow(pr), f$n_s)
   point_cols <- c("psi_T1", "psi_T2", "delta_psi", "cover_cond_T1", "cover_cond_T2",

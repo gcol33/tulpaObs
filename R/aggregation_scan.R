@@ -292,10 +292,10 @@
 #' @param year Name of the integer year column.
 #' @param plot Optional name of the plot-id column; enables the within-cell
 #'   homogeneity proxy.
-#' @param cell_sizes Numeric vector of candidate cell edge lengths. `NULL`
+#' @param cell.sizes Numeric vector of candidate cell edge lengths. `NULL`
 #'   auto-proposes a geometric ladder from the nearest-neighbour spacing to half
 #'   the extent.
-#' @param block_lengths Integer vector of candidate contiguous block lengths (in
+#' @param block.lengths Integer vector of candidate contiguous block lengths (in
 #'   years). `NULL` runs mean-shift changepoint segmentation of the per-year
 #'   naive occupancy series and uses the resulting blocks as the single temporal
 #'   candidate.
@@ -317,12 +317,12 @@
 #'                 detected = rbinom(200, 1, 0.3))
 #' scan <- occu_aggregation_scan(d, response = "detected",
 #'                               coords = c("east", "north"), year = "year",
-#'                               cell_sizes = c(0.2, 0.4),
-#'                               block_lengths = c(2, 3))
+#'                               cell.sizes = c(0.2, 0.4),
+#'                               block.lengths = c(2, 3))
 #' scan
 #' @export
 occu_aggregation_scan <- function(data, response, coords, year, plot = NULL,
-                                  cell_sizes = NULL, block_lengths = NULL,
+                                  cell.sizes = NULL, block.lengths = NULL,
                                   score = c("info", "count"),
                                   family = c("occupancy"),
                                   control = list()) {
@@ -356,17 +356,17 @@ occu_aggregation_scan <- function(data, response, coords, year, plot = NULL,
   origin <- c(min(x), min(y))
   origin_year <- min(yr)
 
-  if (is.null(cell_sizes)) {
-    cell_sizes <- .scan_auto_cell_sizes(x, y, ctrl$n_cell_sizes, ctrl$nn_sample)
-    if (length(cell_sizes) == 0L)
-      stop("could not auto-propose cell sizes; supply cell_sizes")
+  if (is.null(cell.sizes)) {
+    cell.sizes <- .scan_auto_cell_sizes(x, y, ctrl$n_cell_sizes, ctrl$nn_sample)
+    if (length(cell.sizes) == 0L)
+      stop("could not auto-propose cell sizes; supply cell.sizes")
   }
 
   # Temporal candidates: a named list of per-record block-id vectors plus a
   # human-readable definition string.
   blocks <- list()
   segmentation <- NULL
-  if (is.null(block_lengths)) {
+  if (is.null(block.lengths)) {
     yrs <- sort(unique(yr))
     rate <- as.numeric(tapply(resp, factor(yr, levels = yrs),
                               function(v) mean(v > 0L)))
@@ -378,14 +378,14 @@ occu_aggregation_scan <- function(data, response, coords, year, plot = NULL,
     segmentation <- data.frame(year = yrs, segment = seg, naive_psi = rate)
     blocks[["changepoint"]] <- list(id = blk, def = "changepoint")
   } else {
-    for (L in block_lengths) {
+    for (L in block.lengths) {
       blk <- .scan_fixed_blocks(yr, as.integer(L), origin_year)
       blocks[[paste0("L", L)]] <- list(id = blk, def = paste0(L, "yr"))
     }
   }
 
   rows <- list()
-  for (s in cell_sizes) {
+  for (s in cell.sizes) {
     cell <- .scan_cell_assign(x, y, s, origin)
     for (bn in names(blocks)) {
       blk <- blocks[[bn]]
@@ -419,7 +419,7 @@ occu_aggregation_scan <- function(data, response, coords, year, plot = NULL,
     n_years = length(unique(yr)),
     year_range = range(yr),
     coord_extent = c(diff(range(x)), diff(range(y))),
-    cell_sizes = cell_sizes
+    cell_sizes = cell.sizes
   ), class = "tobs_aggregation_scan")
 }
 

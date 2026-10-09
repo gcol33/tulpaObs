@@ -44,9 +44,9 @@
                progress = FALSE)
   tobs(occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
        data = od$occ.covs,
-       family = occu_cover(response = "beta", cover_aggregate = "none"),
+       family = occu_cover(response = "beta", cover.aggregate = "none"),
        detection = ~ x1 + hab, positive = ~ hab,
-       y = od$y, y_pos = ocv$y, visits = od$det.covs,
+       y = od$y, y.pos = ocv$y, visits = od$det.covs,
        method = "nested_laplace", control = ctrl)
 }
 
@@ -149,9 +149,9 @@ test_that("compact == dense with an observation-arm random effect (reHab)", {
     # the fixed habitat term.
     tobs(occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
          data = od$occ.covs,
-         family = occu_cover(response = "beta", cover_aggregate = "none"),
+         family = occu_cover(response = "beta", cover.aggregate = "none"),
          detection = ~ x1 + (1 | hab), positive = ~ hab,
-         y = od$y, y_pos = ocv$y, visits = od$det.covs,
+         y = od$y, y.pos = ocv$y, visits = od$det.covs,
          method = "nested_laplace", control = ctrl)
   }
 
@@ -281,9 +281,9 @@ test_that("compact == dense for the per-visit RE offsets (#211)", {
                  adaptive.grid = FALSE, verbose = FALSE, progress = FALSE)
     tobs(occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
          data = od$occ.covs,
-         family = occu_cover(response = "beta", cover_aggregate = "none"),
+         family = occu_cover(response = "beta", cover.aggregate = "none"),
          detection = ~ x1 + (1 | hab), positive = ~ hab,
-         y = od$y, y_pos = ocv$y, visits = od$det.covs,
+         y = od$y, y.pos = ocv$y, visits = od$det.covs,
          method = "nested_laplace", control = ctrl)
   }
   vd <- tulpaObs:::.occu_cover_visit_view(fit_re(FALSE)$model)
@@ -363,10 +363,10 @@ test_that("a compact `by =` batch scores cpo() / ppc() per species (#185)", {
                  compact = compact)
     suppressMessages(suppressWarnings(tobs(
       occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
-      data = d2, family = occu_cover(response = "beta", cover_aggregate = "none"),
+      data = d2, family = occu_cover(response = "beta", cover.aggregate = "none"),
       detection = ~ x1 + hab, positive = ~ hab,
       site = "site_key", visit = "visit", response = "occur",
-      y_pos = "cover.flat", occ.covs = c("cell_idx", "time.sc"),
+      y.pos = "cover.flat", occ.covs = c("cell_idx", "time.sc"),
       det.covs = c("x1", "hab"), by = "sp",
       method = "nested_laplace", control = ctrl)))
   }
@@ -405,9 +405,9 @@ test_that("compact input is gated to the joint nested-Laplace path", {
   # which reads the dense grid. Compact must error clearly, not silently rebuild.
   expect_error(
     tobs(occurrence = ~ time.sc, data = od$occ.covs,
-         family = occu_cover(response = "beta", cover_aggregate = "none"),
+         family = occu_cover(response = "beta", cover.aggregate = "none"),
          detection = ~ x1 + hab, positive = ~ hab,
-         y = od$y, y_pos = ocv$y, visits = od$det.covs,
+         y = od$y, y.pos = ocv$y, visits = od$det.covs,
          method = "laplace", control = list(verbose = FALSE)),
     "compact")
 })

@@ -65,28 +65,28 @@ test_that("fitted() z posterior matches a hand-rolled multi-source Bayes update"
 })
 
 test_that("predict() detection design mode works for single-season occu()", {
-  sim <- simulate_occu(N = 100, J = 5, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.3, 1.0), beta_det = c(0.7, 0.6), seed = 1)
+  sim <- simulate_occu(N = 100, J = 5, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.3, 1.0), beta.det = c(0.7, 0.6), seed = 1)
   fit <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
               y = sim$y, method = "laplace", control = list(verbose = FALSE))
 
   X_det <- fit$model$X_processes[[2L]]
   X_occ <- fit$model$X_processes[[1L]]
 
-  pr <- predict(fit, type = "detection", X_det.0 = X_det[1:5, , drop = FALSE])
+  pr <- predict(fit, type = "detection", X.det.0 = X_det[1:5, , drop = FALSE])
   expect_s3_class(pr, "data.frame")
   expect_identical(nrow(pr), 5L)
   expect_true(all(pr$mean >= 0 & pr$mean <= 1))
 
   both <- predict(fit, X.0 = X_occ[1:5, , drop = FALSE], type = "both",
-                  X_det.0 = X_det[1:5, , drop = FALSE])
+                  X.det.0 = X_det[1:5, , drop = FALSE])
   expect_identical(names(both), c("occupancy", "detection"))
   expect_equal(both$detection, pr)
 
   # A design matrix for the type NOT requested is not required.
   expect_error(predict(fit, X.0 = X_occ[1:5, , drop = FALSE], type = "both"),
-              "X_det.0")
-  expect_error(predict(fit, X_det.0 = X_det[1:5, , drop = FALSE], type = "both"),
+              "X.det.0")
+  expect_error(predict(fit, X.det.0 = X_det[1:5, , drop = FALSE], type = "both"),
               "X.0")
 
   # No design matrix at all is still the in-sample fallback (matches
@@ -102,7 +102,7 @@ test_that("predict() detection design mode is per-source for int_occu()", {
   Xd1 <- fit$model$X_processes[[2L]][1:5, , drop = FALSE]
   Xd2 <- fit$model$X_processes[[3L]][1:5, , drop = FALSE]
 
-  pr <- predict(fit, type = "detection", X_det.0 = list(src1 = Xd1, src2 = Xd2))
+  pr <- predict(fit, type = "detection", X.det.0 = list(src1 = Xd1, src2 = Xd2))
   expect_identical(names(pr), c("src1", "src2"))
   expect_identical(nrow(pr$src1), 5L)
   # Matches the in-sample posterior-mean predictor closely (draw-averaged vs
@@ -111,15 +111,15 @@ test_that("predict() detection design mode is per-source for int_occu()", {
   expect_lt(max(abs(pr$src2$mean - f$p$src2[1:5])), 0.02)
 
   # Unnamed list in source order works too.
-  pr2 <- predict(fit, type = "detection", X_det.0 = list(Xd1, Xd2))
+  pr2 <- predict(fit, type = "detection", X.det.0 = list(Xd1, Xd2))
   expect_equal(pr2, pr)
 
   expect_error(
-    predict(fit, type = "detection", X_det.0 = Xd1),
+    predict(fit, type = "detection", X.det.0 = Xd1),
     "list"
   )
   expect_error(
-    predict(fit, type = "detection", X_det.0 = list(src1 = Xd1)),
+    predict(fit, type = "detection", X.det.0 = list(src1 = Xd1)),
     "name every source|unnamed entries"
   )
 })

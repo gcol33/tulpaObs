@@ -71,11 +71,11 @@ test_that("the convergence record carries the status through to the fit", {
 test_that("a community N-mixture fit records the per-species solve status", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 3, N = 12, J = 2,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(3), 0.2), mu_p = c(0.5, -0.2),
-                          sd_lambda = 0.3, sd_p = 0.3,
-                          mixture = "negbin", size = 5, sigma_logr = 0.4,
+  sim <- simulate_ms_abun(n.species = 3, N = 12, J = 2,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(3), 0.2), mu.p = c(0.5, -0.2),
+                          sd.lambda = 0.3, sd.p = 0.3,
+                          mixture = "negbin", size = 5, sigma.logr = 0.4,
                           seed = 1)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = ms_abun(mixture = "negbin"),
@@ -117,11 +117,11 @@ test_that("a failed species is on the fit, not only in a warning", {
   }
   testthat::local_mocked_bindings(cpp_aghq_blups = fail_one, .package = "tulpa")
 
-  sim <- simulate_ms_abun(n_species = 3, N = 12, J = 2,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(3), 0.2), mu_p = c(0.5, -0.2),
-                          sd_lambda = 0.3, sd_p = 0.3,
-                          mixture = "negbin", size = 5, sigma_logr = 0.4,
+  sim <- simulate_ms_abun(n.species = 3, N = 12, J = 2,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(3), 0.2), mu.p = c(0.5, -0.2),
+                          sd.lambda = 0.3, sd.p = 0.3,
+                          mixture = "negbin", size = 5, sigma.logr = 0.4,
                           seed = 1)
   fit <- suppressWarnings(
     tobs(~ abund_cov1, data = sim$data, y = sim$y,

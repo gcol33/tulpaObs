@@ -57,7 +57,7 @@
     formula = ~ spatial(~ 1 + x | site_id, graph = d$adj),
     data = d$cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(max.iter = max.iter, progress = FALSE, verbose = FALSE)))
 }
@@ -167,7 +167,7 @@ test_that("independent `||` occupancy bar carries no cross-correlation", {
     formula = ~ spatial(~ 1 + x || site_id, graph = d$adj),
     data = d$cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(max.iter = 80L, progress = FALSE, verbose = FALSE)))
 

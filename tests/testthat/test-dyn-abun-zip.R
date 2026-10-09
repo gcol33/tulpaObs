@@ -11,11 +11,11 @@
 
 test_that("dyn_abun(mixture='zip') gates + S3 surface", {
   skip_on_cran()
-  sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(6), 0.3), p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(6), 0.3), p = 0.5, omega = 0.6,
                            gamma = 1.0, zi = 0.3, seed = 1)
   fit <- tobs(~ abund_cov1, data = sim$data,
-              family = dyn_abun(mixture = "zip", K_max = 30),
+              family = dyn_abun(mixture = "zip", K.max = 30),
               detection = ~ 1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
@@ -26,7 +26,7 @@ test_that("dyn_abun(mixture='zip') gates + S3 surface", {
   adj <- diag(0, 120)
   expect_error(
     tobs(~ icar(graph = adj), data = sim$data,
-         family = dyn_abun(mixture = "zip", K_max = 30),
+         family = dyn_abun(mixture = "zip", K.max = 30),
          detection = ~ 1, y = sim$y, method = "nested_laplace"),
     "zip|zinb|does not yet compose")
 })
@@ -39,13 +39,13 @@ test_that("dyn_abun(mixture='zip') recovers the structural-zero share", {
   zi_hat <- lam0_hat <- rep(NA_real_, n_seed)
   cov_hit <- 0L; cov_tot <- 0L
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_abun(N = 200, T = 3, J = 3, n_abund_covs = 1,
-                             beta_lambda = c(log(6), bo1), p = 0.5,
+    sim <- simulate_dyn_abun(N = 200, T = 3, J = 3, n.abund.covs = 1,
+                             beta.lambda = c(log(6), bo1), p = 0.5,
                              omega = 0.6, gamma = 1.0, zi = zi_tru,
                              seed = 300 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data,
-           family = dyn_abun(mixture = "zip", K_max = 30),
+           family = dyn_abun(mixture = "zip", K.max = 30),
            detection = ~ 1, y = sim$y, method = "laplace",
            control = list(verbose = FALSE, progress = FALSE)),
       error = function(e) NULL)
@@ -72,13 +72,13 @@ test_that("dyn_abun(mixture='zinb') recovers zero-inflation + dispersion", {
   zi_tru <- 0.25; r_tru <- 3
   zi_hat <- r_hat <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_abun(N = 220, T = 3, J = 3, n_abund_covs = 1,
-                             beta_lambda = c(log(7), 0.2), p = 0.55, omega = 0.6,
+    sim <- simulate_dyn_abun(N = 220, T = 3, J = 3, n.abund.covs = 1,
+                             beta.lambda = c(log(7), 0.2), p = 0.55, omega = 0.6,
                              gamma = 1.2, mixture = "negbin", r = r_tru,
                              zi = zi_tru, seed = 500 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data,
-           family = dyn_abun(mixture = "zinb", K_max = 32),
+           family = dyn_abun(mixture = "zinb", K.max = 32),
            detection = ~ 1, y = sim$y, method = "laplace",
            control = list(verbose = FALSE, progress = FALSE)),
       error = function(e) NULL)

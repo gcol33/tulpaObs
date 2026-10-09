@@ -178,10 +178,10 @@ test_that("simulation functions work", {
   expect_equal(dim(sim$y), c(20, 3))
   expect_equal(nrow(sim$data), 20)
 
-  sim_ms <- simulate_ms_occu(N = 10, J = 3, n_species = 3, seed = 42)
+  sim_ms <- simulate_ms_occu(N = 10, J = 3, n.species = 3, seed = 42)
   expect_equal(dim(sim_ms$y), c(10, 3, 3))
 
-  sim_t <- simulate_dyn_occu(N = 10, J = 3, n_seasons = 4, seed = 42)
+  sim_t <- simulate_dyn_occu(N = 10, J = 3, n.seasons = 4, seed = 42)
   expect_equal(dim(sim_t$y), c(10, 3, 4))
 })
 
@@ -197,7 +197,7 @@ test_that("predict(terms=) varies one term and rejects a longer vector", {
 
   # The documented mode: a grid over `elev`, every other design column at its
   # mean, on the occupancy probability scale.
-  pr <- predict(fit, terms = "elev", n_points = 12L)
+  pr <- predict(fit, terms = "elev", n.points = 12L)
   expect_s3_class(pr, "tobs_prediction")
   expect_equal(nrow(pr), 12L)
   expect_identical(attr(pr, "term"), "elev")
@@ -220,7 +220,7 @@ test_that("predict(terms=) varies one term and rejects a longer vector", {
                        type = "detection"), "one term")
 
   # tobs_marginal_effect() calls the same fitter, so it inherits the contract.
-  me <- tobs_marginal_effect(fit, "elev", n_points = 8L)
+  me <- tobs_marginal_effect(fit, "elev", n.points = 8L)
   expect_equal(nrow(me), 8L)
   expect_error(tobs_marginal_effect(fit, c("elev", "slope")), "one term")
 
@@ -248,7 +248,7 @@ test_that("predict(terms=)/tobs_marginal_effect() refuse by name on families wit
   expect_no_match(conditionMessage(err), "finite number")
 
   # ms_occu() (community): same X_processes gap.
-  smo <- simulate_ms_occu(N = 40, J = 3, n_species = 5, seed = 1)
+  smo <- simulate_ms_occu(N = 40, J = 3, n.species = 5, seed = 1)
   fo <- tobs(~ x, data = smo$data, family = ms_occu(), detection = ~ 1,
              y = smo$y, species = paste0("sp", 1:5),
              control = list(verbose = FALSE))
@@ -303,13 +303,13 @@ test_that("predict(quantiles=) drives the levels AND the column names", {
 
   # The terms route reports the same levels: lower / upper at the requested
   # ends, and the middle level as its own named column rather than dropped.
-  tm <- predict(fit, terms = "elev", n_points = 8L,
+  tm <- predict(fit, terms = "elev", n.points = 8L,
                 quantiles = c(0.1, 0.5, 0.9))
   expect_named(as.data.frame(tm),
                c("x", "estimate", "lower", "upper", "q50"))
   expect_equal(attr(tm, "quantiles"), c(0.1, 0.5, 0.9))
   expect_true(all(tm$lower <= tm$q50 & tm$q50 <= tm$upper))
-  wide <- predict(fit, terms = "elev", n_points = 8L)
+  wide <- predict(fit, terms = "elev", n.points = 8L)
   expect_true(all(tm$lower > wide$lower))
   expect_true(all(tm$upper < wide$upper))
   expect_error(predict(fit, terms = "elev", quantiles = c(0.1, 0.9)),
@@ -468,12 +468,12 @@ test_that("nobs() resolves a per-family handler and refuses an unknown type", {
 
 
 test_that("predict(terms=) on the N-mixture route holds the same contract", {
-  sim <- simulate_abun(N = 40, J = 3, n_abund_covs = 2, n_det_covs = 1,
+  sim <- simulate_abun(N = 40, J = 3, n.abund.covs = 2, n.det.covs = 1,
                        seed = 3)
   fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, family = abun(),
               detection = ~ 1, y = sim$y, control = list(verbose = FALSE))
 
-  pr <- predict(fit, terms = "abund_cov1", n_points = 10L)
+  pr <- predict(fit, terms = "abund_cov1", n.points = 10L)
   expect_s3_class(pr, "tobs_prediction")
   expect_equal(nrow(pr), 10L)
   expect_identical(attr(pr, "term"), "abund_cov1")
@@ -488,14 +488,14 @@ test_that("families whose predictor has no terms= argument say so", {
   # supplied `terms` used to come back as an in-sample fitted() vector that had
   # quietly ignored it -- the same half-answer as reading terms[1] of a vector.
   # Each is told which argument its own predictor varies covariates through.
-  sim_rn <- simulate_royle_nichols(N = 60L, J = 4L, beta_lambda = c(0.3, 0.4),
-                                   beta_r = -0.8, seed = 11L)
+  sim_rn <- simulate_royle_nichols(N = 60L, J = 4L, beta.lambda = c(0.3, 0.4),
+                                   beta.r = -0.8, seed = 11L)
   fit_rn <- tobs(~ x, detection = ~ 1, data = sim_rn$data, y = sim_rn$y,
                  family = royle_nichols(),
                  control = list(verbose = FALSE, progress = FALSE))
   expect_error(predict(fit_rn, terms = "x"), "newdata")
 
-  sim_fp <- simulate_fp_occu(N = 80L, J = 5L, beta_psi = c(0.2, 0.5),
+  sim_fp <- simulate_fp_occu(N = 80L, J = 5L, beta.psi = c(0.2, 0.5),
                              p11 = 0.6, p10 = 0.05, b = 0.5, seed = 12L)
   fit_fp <- tobs(~ occ_cov1, detection = ~ 1, data = sim_fp$data, y = sim_fp$y,
                  family = fp_occu(),

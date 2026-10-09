@@ -305,7 +305,7 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
     headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
   } else {
     K_max <- as.integer(K_max)
-    if (K_max < R_max) stop("`K_max` must be >= the largest per-site total.", call. = FALSE)
+    if (K_max < R_max) stop("`K.max` must be >= the largest per-site total.", call. = FALSE)
     headroom <- if (is.null(headroom)) -1L else as.integer(headroom)
   }
   # A negative-binomial abundance has a heavier tail than the per-site window is
@@ -388,7 +388,7 @@ distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
   }
   max_bw <- max(fit$boundary_weight, na.rm = TRUE)
   if (is.finite(max_bw) && max_bw > 1e-4) {
-    warning(sprintf("Max posterior weight on N = K_max is %.2e at %d sites; raise K_max.",
+    warning(sprintf("Max posterior weight on N = K.max is %.2e at %d sites; raise K.max.",
                     max_bw, sum(fit$boundary_weight > 1e-4)), call. = FALSE)
   }
   class(fit) <- c("distance_fit", "list")
@@ -639,11 +639,11 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
 #'   `seq(0, 1, length.out = 6)` (five bins out to 1).
 #' @param key `"halfnorm"` (default) or `"hazard"`.
 #' @param transect `"line"` (default) or `"point"`.
-#' @param n_abund_covs,n_sigma_covs Number of abundance / detection covariates.
-#' @param beta_lambda Abundance coefficients (log scale). Default
-#'   `c(log(40), runif(n_abund_covs, -0.4, 0.4))`.
-#' @param beta_sigma Detection-scale coefficients (log scale). Default
-#'   `c(log(0.4), runif(n_sigma_covs, -0.3, 0.3))`.
+#' @param n.abund.covs,n.sigma.covs Number of abundance / detection covariates.
+#' @param beta.lambda Abundance coefficients (log scale). Default
+#'   `c(log(40), runif(n.abund.covs, -0.4, 0.4))`.
+#' @param beta.sigma Detection-scale coefficients (log scale). Default
+#'   `c(log(0.4), runif(n.sigma.covs, -0.3, 0.3))`.
 #' @param shape Hazard-rate shape `b` (`key = "hazard"` only, default 3).
 #' @param mixture `"poisson"` (default) or `"negbin"`.
 #' @param size Negative-binomial size `r` (`mixture = "negbin"` only, default 5).
@@ -658,29 +658,29 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
 simulate_distance <- function(N = 200, cutpoints = seq(0, 1, length.out = 6),
                               key = c("halfnorm", "hazard"),
                               transect = c("line", "point"),
-                              n_abund_covs = 1, n_sigma_covs = 1,
-                              beta_lambda = NULL, beta_sigma = NULL,
+                              n.abund.covs = 1, n.sigma.covs = 1,
+                              beta.lambda = NULL, beta.sigma = NULL,
                               shape = 3, mixture = c("poisson", "negbin"),
                               size = 5, seed = NULL) {
   key      <- match.arg(key)
   transect <- match.arg(transect)
   mixture  <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda)) beta_lambda <- c(log(40), stats::runif(n_abund_covs, -0.4, 0.4))
-  if (is.null(beta_sigma))  beta_sigma  <- c(log(0.4), stats::runif(n_sigma_covs, -0.3, 0.3))
+  if (is.null(beta.lambda)) beta.lambda <- c(log(40), stats::runif(n.abund.covs, -0.4, 0.4))
+  if (is.null(beta.sigma))  beta.sigma  <- c(log(0.4), stats::runif(n.sigma.covs, -0.3, 0.3))
   cutpoints <- as.numeric(cutpoints)
   n_bins <- length(cutpoints) - 1L
 
-  abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
-  names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
-  sigma_covs <- data.frame(matrix(stats::rnorm(N * n_sigma_covs), N, n_sigma_covs))
-  names(sigma_covs) <- paste0("sigma_cov", seq_len(n_sigma_covs))
+  abund_covs <- data.frame(matrix(stats::rnorm(N * n.abund.covs), N, n.abund.covs))
+  names(abund_covs) <- paste0("abund_cov", seq_len(n.abund.covs))
+  sigma_covs <- data.frame(matrix(stats::rnorm(N * n.sigma.covs), N, n.sigma.covs))
+  names(sigma_covs) <- paste0("sigma_cov", seq_len(n.sigma.covs))
   data <- cbind(abund_covs, sigma_covs)
 
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   X_sigma  <- stats::model.matrix(~ ., sigma_covs)
-  lambda <- exp(as.vector(X_lambda %*% beta_lambda))
-  sigma  <- exp(as.vector(X_sigma  %*% beta_sigma))
+  lambda <- exp(as.vector(X_lambda %*% beta.lambda))
+  sigma  <- exp(as.vector(X_sigma  %*% beta.sigma))
   Nlat <- if (identical(mixture, "negbin"))
     stats::rnbinom(N, size = size, mu = lambda) else stats::rpois(N, lambda)
 
@@ -697,7 +697,7 @@ simulate_distance <- function(N = 200, cutpoints = seq(0, 1, length.out = 6),
 
   list(
     y = y, data = data, cutpoints = cutpoints,
-    truth = list(beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+    truth = list(beta_lambda = beta.lambda, beta_sigma = beta.sigma,
                  lambda = lambda, sigma = sigma, N = Nlat,
                  key = key, transect = transect, mixture = mixture,
                  shape = if (identical(key, "hazard")) shape else NA_real_,

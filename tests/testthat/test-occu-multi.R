@@ -64,10 +64,10 @@ test_that("occu_multi() recovers the interaction sign + marginal occupancy", {
   for (s in seq_len(n_seed)) {
     # Positive interaction (co-occurrence).
     simp <- simulate_occu_multi(
-      S = 2, N = 350, J = 5, n_state_covs = 0,
-      beta_first = list(c(stats::qlogis(0.45)), c(stats::qlogis(0.5))),
-      beta_second = list(c(1.2)),
-      beta_p = list(c(stats::qlogis(0.55)), c(stats::qlogis(0.55))),
+      S = 2, N = 350, J = 5, n.state.covs = 0,
+      beta.first = list(c(stats::qlogis(0.45)), c(stats::qlogis(0.5))),
+      beta.second = list(c(1.2)),
+      beta.p = list(c(stats::qlogis(0.55)), c(stats::qlogis(0.55))),
       seed = 800 + s)
     fp <- tryCatch(tobs(~ 1, data = simp$data, family = occu_multi(),
                         detection = ~ 1, y = simp$y, species = simp$species,
@@ -81,10 +81,10 @@ test_that("occu_multi() recovers the interaction sign + marginal occupancy", {
     }
     # Negative interaction (avoidance).
     simn <- simulate_occu_multi(
-      S = 2, N = 350, J = 5, n_state_covs = 0,
-      beta_first = list(c(stats::qlogis(0.5)), c(stats::qlogis(0.5))),
-      beta_second = list(c(-1.2)),
-      beta_p = list(c(stats::qlogis(0.55)), c(stats::qlogis(0.55))),
+      S = 2, N = 350, J = 5, n.state.covs = 0,
+      beta.first = list(c(stats::qlogis(0.5)), c(stats::qlogis(0.5))),
+      beta.second = list(c(-1.2)),
+      beta.p = list(c(stats::qlogis(0.55)), c(stats::qlogis(0.55))),
       seed = 8000 + s)
     fn <- tryCatch(tobs(~ 1, data = simn$data, family = occu_multi(),
                         detection = ~ 1, y = simn$y, species = simn$species,

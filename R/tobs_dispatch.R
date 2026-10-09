@@ -692,7 +692,7 @@
     det_visit_formula  = vd$det_visit_formula,
     det_visit_data     = vd$visits
   )
-  # K_max and the abundance mixture travel with the family object (abun(K_max =,
+  # K_max and the abundance mixture travel with the family object (abun(K.max =,
   # mixture =)); thread them into the fitter alongside the engine controls.
   do.call(.tobs_fit_model, c(
     list(model = model,
@@ -834,8 +834,8 @@
   model <- .tobs_build_ms_abun(
     abund_formula = formula, det_formula = detection,
     data = data, y = y, species = dots[["species"]],
-    det_visit_formula = dots[["det_visit_formula"]],
-    det_visit_data    = dots[["det_visit_data"]])
+    det_visit_formula = dots[["det.visit.formula"]],
+    det_visit_data    = dots[["det.visit.data"]])
 
   # NUTS (method = "nuts"): sample the exact joint posterior of the non-spatial
   # community N-mixture (community means, per-species deviations, and community
@@ -1098,8 +1098,8 @@
          "n_species] or a named list of detection-history matrices).",
          call. = FALSE)
   }
-  if (is.null(dots[["y_pos"]])) {
-    stop("ms_occu_cover() requires `y_pos` (a 3D array / list matching `y`; ",
+  if (is.null(dots[["y.pos"]])) {
+    stop("ms_occu_cover() requires `y.pos` (a 3D array / list matching `y`; ",
          "values used only where y == 1).", call. = FALSE)
   }
   if (is.null(dots[["species"]])) {
@@ -1145,7 +1145,7 @@
       pos_formula      = vd_pos$det_formula,
       data             = data,
       y                = y,
-      y_pos            = dots[["y_pos"]],
+      y_pos            = dots[["y.pos"]],
       positive         = family$params$positive,
       species          = dots[["species"]],
       adj              = sp$graph,
@@ -1227,7 +1227,7 @@
     pos_formula      = vd_pos$det_formula,
     data             = data,
     y                = y,
-    y_pos            = dots[["y_pos"]],
+    y_pos            = dots[["y.pos"]],
     positive         = family$params$positive,
     species          = dots[["species"]],
     det_visit_formula = vd_det$det_visit_formula,
@@ -1390,7 +1390,7 @@
   }
   model <- .tobs_build_ms_int_occu(
     occ_formula = formula, det_formula = detection,
-    data = data, y = y, species = dots[["species"]], site_map = dots[["site_map"]])
+    data = data, y = y, species = dots[["species"]], site_map = dots[["site.map"]])
 
   # The community integrated family consumes no structured term on either
   # engine: the shared community Laplace-EM and the PG-Gibbs sampler both fit

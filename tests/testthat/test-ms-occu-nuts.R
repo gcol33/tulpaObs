@@ -21,9 +21,9 @@
 
 .msocc_pieces <- function(n_species = 6, N = 60, J = 4, seed = 7,
                           det_cov = FALSE) {
-  sim <- simulate_ms_occu(N = N, J = J, n_species = n_species,
-                          beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                          alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+  sim <- simulate_ms_occu(N = N, J = J, n.species = n_species,
+                          beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                          alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                           seed = seed)
   det_form <- ~ 1
   if (det_cov) { sim$data$dcov <- stats::rnorm(N); det_form <- ~ dcov }
@@ -103,9 +103,9 @@ test_that("ms_occu NUTS C++ FullGradFn matches the R oracle", {
 test_that("ms_occu NUTS recovers community means", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu(N = 130, J = 4, n_species = 16,
-                          beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                          alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+  sim <- simulate_ms_occu(N = 130, J = 4, n.species = 16,
+                          beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                          alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                           seed = 41)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", seq_len(16)), method = "nuts",
@@ -137,9 +137,9 @@ test_that("ms_occu NUTS community-mean 95% CIs cover at the nominal rate", {
   covered <- logical(0)
   truth <- c("psi_(Intercept)" = 0, "psi_x" = 0.6, "p_(Intercept)" = 0.2)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_occu(N = 120, J = 4, n_species = 14,
-                            beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                            alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+    sim <- simulate_ms_occu(N = 120, J = 4, n.species = 14,
+                            beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                            alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                             seed = 700 + s)
     fit <- tryCatch(
       tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
@@ -171,9 +171,9 @@ test_that("ms_occu NUTS community-covariance 95% CIs cover at the nominal rate",
   sd_psi_true <- c(0.5, 0.3); sd_p_true <- 0.4
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_occu(N = 120, J = 4, n_species = 14,
-                            beta_comm_mean = c(0, 0.5), beta_comm_sd = sd_psi_true,
-                            alpha_comm_mean = c(0.2), alpha_comm_sd = sd_p_true,
+    sim <- simulate_ms_occu(N = 120, J = 4, n.species = 14,
+                            beta.comm.mean = c(0, 0.5), beta.comm.sd = sd_psi_true,
+                            alpha.comm.mean = c(0.2), alpha.comm.sd = sd_p_true,
                             seed = 700 + s)
     fit <- tryCatch(
       tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
@@ -214,8 +214,8 @@ test_that("ms_occu NUTS community-covariance 95% CIs cover at the nominal rate",
 test_that("ms_occu NUTS S3 methods work, incl. richness", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu(N = 60, J = 3, n_species = 8,
-                          beta_comm_mean = c(0, 0.5), alpha_comm_mean = c(0.2),
+  sim <- simulate_ms_occu(N = 60, J = 3, n.species = 8,
+                          beta.comm.mean = c(0, 0.5), alpha.comm.mean = c(0.2),
                           seed = 5)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", seq_len(8)), method = "nuts",
@@ -257,9 +257,9 @@ test_that("ms_occu NUTS de-attenuates the community variance vs EM", {
   # The raw Laplace-EM community SDs carry the documented small-cluster
   # attenuation for binary detection; the sampler integrates the full joint, so
   # its per-arm community SDs sit above the EM SDs (closer to the truth).
-  sim <- simulate_ms_occu(N = 130, J = 4, n_species = 16,
-                          beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                          alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+  sim <- simulate_ms_occu(N = 130, J = 4, n.species = 16,
+                          beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                          alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                           seed = 41)
   args <- list(formula = ~ x, data = sim$data, family = ms_occu(),
                detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(16)))
@@ -282,7 +282,7 @@ test_that("ms_occu NUTS rejects a spatial term with a pointer", {
   N <- 16L
   adj <- matrix(0L, N, N)
   for (i in seq_len(N - 1L)) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
-  sim <- simulate_ms_occu(N = N, J = 3, n_species = 4, seed = 5)
+  sim <- simulate_ms_occu(N = N, J = 3, n.species = 4, seed = 5)
   expect_error(
     tobs(~ x + icar(graph = adj), data = sim$data, family = ms_occu(),
          detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(4)),

@@ -593,9 +593,9 @@
 .occu_cover_reject_offsets <- function(off_det, off_pos, mode) {
   if (is.null(off_det) && is.null(off_pos)) return(invisible(NULL))
   stop("occu_cover diagnostics: an observation-arm random effect is scored per ",
-       "visit, which cover_aggregate = \"", mode, "\" does not carry (its cover ",
+       "visit, which cover.aggregate = \"", mode, "\" does not carry (its cover ",
        "arm holds one row per detected unit). Refit with ",
-       "cover_aggregate = \"none\".", call. = FALSE)
+       "cover.aggregate = \"none\".", call. = FALSE)
 }
 
 # Flatten a dense (padded [n_sites x max_visits]) no-aggregation occu_cover model

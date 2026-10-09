@@ -40,9 +40,9 @@ test_that("simulator round-trips a coefficient prior", {
 test_that("single fit recovers truth within tolerance and prediction identity holds", {
   sim <- simulate_cover(
     N         = 800,
-    beta_occ  = c(-0.5, 0.8),
-    beta_pos  = c(-1.0, 0.3),
-    sigma_pos = 0.4,
+    beta.occ  = c(-0.5, 0.8),
+    beta.pos  = c(-1.0, 0.3),
+    sigma.pos = 0.4,
     seed      = 2026
   )
   fit <- tobs(
@@ -96,9 +96,9 @@ test_that("repeat fits recover truth in aggregate (light sanity, 10 reps)", {
   for (r in seq_len(10)) {
     sim <- simulate_cover(
       N         = 600,
-      beta_occ  = truth$beta_occ,
-      beta_pos  = truth$beta_pos,
-      sigma_pos = truth$sigma_pos,
+      beta.occ  = truth$beta_occ,
+      beta.pos  = truth$beta_pos,
+      sigma.pos = truth$sigma_pos,
       seed      = 100 + r
     )
     fit <- tobs(

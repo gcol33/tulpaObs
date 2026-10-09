@@ -48,7 +48,7 @@
 #'
 #' @examples
 #' \donttest{
-#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 2, n_det_covs = 1,
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 2, n.det.covs = 1,
 #'                      seed = 1)
 #' ctrl <- list(verbose = FALSE, progress = FALSE)
 #' f1 <- tobs(~ occ_cov1, data = sim$data, family = occu(),

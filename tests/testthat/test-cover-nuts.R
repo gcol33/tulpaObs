@@ -39,8 +39,8 @@
 .cn_sim_lognormal <- function(N = 500L, beta_occ = c(-0.4, 0.8),
                               beta_pos = c(-1.0, 0.3), sigma_pos = 0.4,
                               seed = 1L) {
-  simulate_cover(N = N, beta_occ = beta_occ, beta_pos = beta_pos,
-                 sigma_pos = sigma_pos, seed = seed)
+  simulate_cover(N = N, beta.occ = beta_occ, beta.pos = beta_pos,
+                 sigma.pos = sigma_pos, seed = seed)
 }
 
 # Identity-Gaussian (delta-normal) cover: the exported simulator draws the raw
@@ -48,8 +48,8 @@
 .cn_sim_gaussian <- function(N = 500L, beta_occ = c(-0.4, 0.8),
                              beta_pos = c(2.0, 0.4), sigma_pos = 0.5,
                              seed = 1L) {
-  simulate_cover(N = N, beta_occ = beta_occ, beta_pos = beta_pos,
-                 sigma_pos = sigma_pos, response = "gaussian", seed = seed)
+  simulate_cover(N = N, beta.occ = beta_occ, beta.pos = beta_pos,
+                 sigma.pos = sigma_pos, response = "gaussian", seed = seed)
 }
 
 .cn_fit <- function(sim, positive, method = "laplace", control = list()) {

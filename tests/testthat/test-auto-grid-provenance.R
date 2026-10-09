@@ -326,7 +326,7 @@ test_that("occu_cover() declines to recenter a PINNED axis but not a defaulted o
   run <- function(ctrl) suppressWarnings(tobs(
     occurrence = ~ occ_cov1 + icar(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,
-    positive = ~ pos_cov1, y = od$y, y_pos = y_pos, visits = od$det.covs,
+    positive = ~ pos_cov1, y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace", control = c(list(verbose = FALSE), ctrl)))
 
   # A grid the user named is a pin: the engine says so and leaves it alone.

@@ -154,7 +154,7 @@ test_that("a family that does not consume a structured term rejects it", {
   expect_error(
     tobs(~ abund_cov1 + icar(graph = chain(nrow(gd$data))), detection = ~ 1,
          removal = ~ 1, data = gd$data, family = gdistremoval(cutpoints = cp),
-         y = gd$y, y_rem = gd$y_rem, method = "laplace", verbose = FALSE),
+         y = gd$y, y.rem = gd$y_rem, method = "laplace", verbose = FALSE),
     "gdistremoval[(][)]: the spatial field icar[(][)] is not wired")
 
   ds <- simulate_distsamp_open(N = 20, seed = 1)

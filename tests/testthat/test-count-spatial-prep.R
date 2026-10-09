@@ -190,16 +190,16 @@ test_that("a latent warm start is checked against the length its door names", {
                         n_latent = c(n_spatial = 6L)))
 })
 
-test_that("the K_max boundary warning is one wording at every door", {
+test_that("the K.max boundary warning is one wording at every door", {
   src <- function(f) paste(deparse(body(f)), collapse = " ")
   fitters <- list(nmix_laplace_icar, nmix_laplace_car_proper, nmix_laplace_bym2,
                   nmix_laplace_spde, removal_laplace_icar,
                   removal_laplace_car_proper, removal_laplace_bym2)
   for (f in fitters) {
     expect_true(grepl(".count_spatial_warn_boundary", src(f), fixed = TRUE))
-    expect_false(grepl("Max posterior weight on N = K_max", src(f), fixed = TRUE))
+    expect_false(grepl("Max posterior weight on N = K.max", src(f), fixed = TRUE))
   }
   expect_warning(.count_spatial_warn_boundary(list(boundary_max = c(1e-3, 0))),
-                 "raise K_max")
+                 "raise K.max")
   expect_silent(.count_spatial_warn_boundary(list(boundary_max = c(1e-9, NA))))
 })

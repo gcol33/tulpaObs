@@ -10,8 +10,8 @@ expect_gof <- function(r) {
 
 test_that("count GOF tests run on abun and recover ~1 dispersion when well-fit", {
   skip_on_cran()
-  sim <- simulate_abun(N = 200, J = 4, n_abund_covs = 2, n_det_covs = 1, seed = 7)
-  fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, family = abun(K_max = 60),
+  sim <- simulate_abun(N = 200, J = 4, n.abund.covs = 2, n.det.covs = 1, seed = 7)
+  fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, family = abun(K.max = 60),
               detection = ~ det_cov1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE))
   d <- test_dispersion(fit, n.samples = 100)
@@ -26,8 +26,8 @@ test_that("count GOF tests run on abun and recover ~1 dispersion when well-fit",
 test_that("count GOF tests run on removal / distance / dyn_abun", {
   skip_on_cran()
   skip_if_fast()
-  simr <- simulate_removal(N = 150, K = 5, n_abund_covs = 2, n_det_covs = 1, seed = 8)
-  fitr <- tobs(~ abund_cov1 + abund_cov2, data = simr$data, family = removal(K_max = 60),
+  simr <- simulate_removal(N = 150, K = 5, n.abund.covs = 2, n.det.covs = 1, seed = 8)
+  fitr <- tobs(~ abund_cov1 + abund_cov2, data = simr$data, family = removal(K.max = 60),
                detection = ~ det_cov1, y = simr$y, method = "laplace",
                control = list(verbose = FALSE))
   expect_gof(test_dispersion(fitr, n.samples = 80))
@@ -35,7 +35,7 @@ test_that("count GOF tests run on removal / distance / dyn_abun", {
 
   cuts5 <- c(0, 10, 20, 30, 40, 50)
   simd <- simulate_distance(N = 200, cutpoints = cuts5, key = "halfnorm",
-                            transect = "line", n_abund_covs = 2, n_sigma_covs = 1,
+                            transect = "line", n.abund.covs = 2, n.sigma.covs = 1,
                             seed = 11)
   fitd <- tobs(~ abund_cov1 + abund_cov2, data = simd$data,
                family = distance(key = "halfnorm", transect = "line",
@@ -45,8 +45,8 @@ test_that("count GOF tests run on removal / distance / dyn_abun", {
   expect_gof(test_dispersion(fitd, n.samples = 80))
   expect_gof(test_outliers(fitd, n.samples = 80))
 
-  simda <- simulate_dyn_abun(N = 100, T = 4, J = 3, n_abund_covs = 1, seed = 9)
-  fitda <- tobs(~ abund_cov1, data = simda$data, family = dyn_abun(K_max = 35),
+  simda <- simulate_dyn_abun(N = 100, T = 4, J = 3, n.abund.covs = 1, seed = 9)
+  fitda <- tobs(~ abund_cov1, data = simda$data, family = dyn_abun(K.max = 35),
                 detection = ~ 1, y = simda$y, method = "laplace",
                 control = list(verbose = FALSE))
   expect_gof(test_dispersion(fitda, n.samples = 50))

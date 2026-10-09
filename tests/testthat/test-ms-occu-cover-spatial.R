@@ -19,7 +19,7 @@
 test_that("simulate_ms_occu_cover_spatial returns well-formed K=1 community data", {
   adj <- .mscs_grid_adj(6L, 6L)        # N = 36 cells
   N <- nrow(adj); J <- 4L; S <- 8L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = J, seed = 11L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = J, seed = 11L)
 
   expect_identical(dim(sim$y),     c(N, J, S))
   expect_identical(dim(sim$y_pos), c(N, J, S))
@@ -41,7 +41,7 @@ test_that("simulate_ms_occu_cover_spatial returns well-formed K=1 community data
 test_that("K > 1 draws lower-triangular loadings and K unit-scale fields", {
   adj <- .mscs_grid_adj(7L, 7L)
   N <- nrow(adj); S <- 10L; K <- 3L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, sd_load = 1.0,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, sd.load = 1.0,
                                         seed = 42L)
   expect_identical(sim$truth$K, K)
   expect_identical(dim(sim$truth$L), c(S, K))   # S x K loading matrix
@@ -70,8 +70,8 @@ test_that("K > 1 draws lower-triangular loadings and K unit-scale fields", {
 
 test_that("K = 1 simulator output is unchanged (Stage-1 shapes preserved)", {
   adj <- .mscs_grid_adj(6L, 6L)
-  a <- simulate_ms_occu_cover_spatial(adj, n_species = 8L, J = 4L, seed = 11L)
-  b <- simulate_ms_occu_cover_spatial(adj, n_species = 8L, J = 4L, K = 1L,
+  a <- simulate_ms_occu_cover_spatial(adj, n.species = 8L, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n.species = 8L, J = 4L, K = 1L,
                                       seed = 11L)
   expect_null(dim(a$truth$L))                   # vector, not matrix
   expect_null(dim(a$truth$w))
@@ -82,7 +82,7 @@ test_that("K = 1 simulator output is unchanged (Stage-1 shapes preserved)", {
 
 test_that("the shared factor is unit-scaled and sign-anchored", {
   adj <- .mscs_grid_adj(7L, 7L)
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 6L, seed = 7L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = 6L, seed = 7L)
   w <- sim$truth$w
 
   expect_length(w, nrow(adj))
@@ -96,7 +96,7 @@ test_that("the shared factor is unit-scaled and sign-anchored", {
 
 test_that("loadings give per-species range heterogeneity (not the naive shared map)", {
   adj <- .mscs_grid_adj(8L, 8L)
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 12L, sd_load = 1.2,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = 12L, sd.load = 1.2,
                                         seed = 99L)
   w <- sim$truth$w; L <- sim$truth$L
 
@@ -117,9 +117,9 @@ test_that("loadings give per-species range heterogeneity (not the naive shared m
 test_that("penalised joint gradient matches finite differences", {
   adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells (small for FD)
   S <- 3L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 3L,
-                                        n_occ_covs = 1L, n_det_covs = 1L,
-                                        n_pos_covs = 1L, seed = 321L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 3L,
+                                        n.occ.covs = 1L, n.det.covs = 1L,
+                                        n.pos.covs = 1L, seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -160,9 +160,9 @@ test_that("penalised joint gradient matches finite differences", {
 test_that("penalised joint gradient matches finite differences at K = 2", {
   adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells
   S <- 4L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
-                                        n_occ_covs = 1L, n_det_covs = 1L,
-                                        n_pos_covs = 1L, seed = 321L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
+                                        n.occ.covs = 1L, n.det.covs = 1L,
+                                        n.pos.covs = 1L, seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -202,7 +202,7 @@ test_that("penalised joint gradient matches finite differences at K = 2", {
 test_that("constrained (triangular) penalised gradient matches FD at K = 2", {
   adj <- .mscs_grid_adj(4L, 4L)
   S <- 4L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
                                         seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
@@ -246,7 +246,7 @@ test_that("constrained (triangular) penalised gradient matches FD at K = 2", {
 test_that("joint NUTS log-posterior gradient matches FD (K = 1 unconstrained)", {
   adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells (small for FD)
   S <- 3L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 3L, seed = 321L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 3L, seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -287,8 +287,8 @@ test_that("joint NUTS log-posterior gradient matches FD (K = 1 unconstrained)", 
 test_that("joint NUTS log-posterior gradient matches FD (K = 2 constrained + cover factor)", {
   adj <- .mscs_grid_adj(4L, 4L)
   S <- 4L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
-                                        cover_factor = TRUE, seed = 321L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
+                                        cover.factor = TRUE, seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -331,7 +331,7 @@ test_that("joint NUTS log-posterior gradient matches FD on the field-hyper axis 
     adj <- .mscs_grid_adj(4L, 4L)
     S <- 3L
     sim <- simulate_ms_occu_cover_spatial(
-      adj, n_species = S, J = 3L, field = cfg$field,
+      adj, n.species = S, J = 3L, field = cfg$field,
       rho = cfg$h, phi = cfg$h, seed = 321L)
     model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
       occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
@@ -375,7 +375,7 @@ test_that("C++ joint log-posterior + gradient matches the R target", {
   for (cfg in list(list(K = 1L, constrain = FALSE),
                    list(K = 2L, constrain = TRUE))) {
     adj <- .mscs_grid_adj(4L, 4L); S <- 4L; K <- cfg$K
-    sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+    sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
                                           seed = 321L)
     model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
       occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
@@ -411,8 +411,8 @@ test_that("NUTS samples the spatial-factor community target and recovers the mea
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(5L, 5L); S <- 5L; K <- 1L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = K,
-          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = K,
+          sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4, seed = 3L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -451,11 +451,11 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(5L, 5L); S <- 5L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
-          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = 1L,
+          sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4, seed = 3L)
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 1L, sd.load = 1.1, n.iter = 400L,
                              n.warmup = 200L, adapt.delta = 0.95, seed = 42L))
@@ -474,7 +474,7 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
   expect_error(
     tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-         positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+         positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
          species = sim$species, method = "nuts",
          control = list(n.factors = "auto")),
     "explicit n.factors")
@@ -482,7 +482,7 @@ test_that("tobs(method = 'nuts') fits the spatial-factor community occu_cover", 
   # formula with method = "nuts" fits rather than erroring.
   fit_ns <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
                  detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-                 y_pos = sim$y_pos, species = sim$species, method = "nuts",
+                 y.pos = sim$y_pos, species = sim$species, method = "nuts",
                  control = list(n.iter = 150L, n.warmup = 150L, seed = 1L,
                                 verbose = FALSE))
   expect_identical(fit_ns$method, "nuts")
@@ -493,11 +493,11 @@ test_that("multi-chain NUTS reports split-R-hat / ESS and converges on the means
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(5L, 5L); S <- 5L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
-          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = 1L,
+          sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4, seed = 3L)
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 1L, sd.load = 1.1, n.chains = 4L,
                              n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
@@ -521,8 +521,8 @@ test_that("NUTS recovers the community means under the constrained K = 2 path", 
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(6L, 6L); S <- 8L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = K,
-          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 4L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = K,
+          sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4, seed = 4L)
   # n.factors = 2 auto-selects the identified (triangular) parameterisation, so
   # this exercises the constrained C++ adapter end to end under sampling.
   # adapt.delta is 0.99 here, not the 0.95 its neighbours use: the divergence
@@ -534,7 +534,7 @@ test_that("NUTS recovers the community means under the constrained K = 2 path", 
   # merely counting against it. See NOTES_measurements.md.
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 2L, sd.load = 1.1, n.chains = 2L,
                              n.iter = 500L, n.warmup = 300L, adapt.delta = 0.99,
@@ -551,13 +551,13 @@ test_that("NUTS recovers means + the field correlation under a proper-CAR field"
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(6L, 6L); S <- 6L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
-          field = "car_proper", rho = 0.85, sd_occ = 0.5, sd_load = 1.1,
-          sigma_pos = 0.4, seed = 4L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = 1L,
+          field = "car_proper", rho = 0.85, sd.occ = 0.5, sd.load = 1.1,
+          sigma.pos = 0.4, seed = 4L)
   # car_proper exercises the logit_h field-hyper block under sampling.
   fit <- tobs(~ occ_cov1 + car_proper(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 1L, sd.load = 1.1, n.chains = 2L,
                              n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
@@ -579,13 +579,13 @@ test_that("NUTS recovers means + the variance fraction under a BYM2 field", {
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(6L, 6L); S <- 6L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
-          field = "bym2", phi = 0.7, sd_occ = 0.5, sd_load = 1.1,
-          sigma_pos = 0.4, seed = 4L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = 1L,
+          field = "bym2", phi = 0.7, sd.occ = 0.5, sd.load = 1.1,
+          sigma.pos = 0.4, seed = 4L)
   # bym2 exercises the logit_h block with the eigen-form R(h) under sampling.
   fit <- tobs(~ occ_cov1 + bym2(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 1L, sd.load = 1.1, n.chains = 2L,
                              n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
@@ -604,15 +604,15 @@ test_that("NUTS recovers the community means with a cover-arm shared factor", {
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(6L, 6L); S <- 6L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
-          cover_factor = TRUE, sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = 1L,
+          cover.factor = TRUE, sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4,
           seed = 4L)
   # icar() on BOTH the occupancy and cover formulas wires the shared field onto
   # the cover predictor (free Lpos), exercising the cover-field gradient under NUTS.
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
               positive = ~ pos_cov1 + icar(graph = adj), y = sim$y,
-              y_pos = sim$y_pos, species = sim$species, method = "nuts",
+              y.pos = sim$y_pos, species = sim$species, method = "nuts",
               control = list(n.factors = 1L, sd.load = 1.1, n.chains = 2L,
                              n.iter = 500L, n.warmup = 300L, adapt.delta = 0.95,
                              seed = 7L))
@@ -629,11 +629,11 @@ test_that("tobs_waic / tobs_cpo deliver calibrated WAIC / LOO from the NUTS draw
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(6L, 6L); S <- 8L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, K = 1L,
-          sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 4L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, K = 1L,
+          sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4, seed = 4L)
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "nuts",
               control = list(n.factors = 1L, n.iter = 600L, n.warmup = 300L,
                              n.chains = 2L, adapt.delta = 0.95, seed = 7L))
@@ -651,7 +651,7 @@ test_that("tobs_waic / tobs_cpo deliver calibrated WAIC / LOO from the NUTS draw
   # A Laplace fit (community-mean draws omit the field) errors with a pointer.
   fitL <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
                family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-               positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+               positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
                species = sim$species, method = "laplace",
                control = list(n.factors = 1L))
   expect_error(waic(fitL), "NUTS")
@@ -661,8 +661,8 @@ test_that("inner mode-find recovers the latent field + loadings at the true hype
   skip_on_cran()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
   S <- 16L                                 # more species -> sharper shared factor
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
-                                        sd_load = 1.2, sigma_pos = 0.4,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 6L,
+                                        sd.load = 1.2, sigma.pos = 0.4,
                                         seed = 2024L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
@@ -702,9 +702,9 @@ test_that("Laplace-EM recovers the factor, loadings and community scales", {
   # recovers the shared factor, the loadings, the community means, and the
   # community covariance scales from data alone.
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 16L, J = 6L,
-                                        sd_occ = 0.5, sd_load = 1.2,
-                                        sigma_pos = 0.4, seed = 4040L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = 16L, J = 6L,
+                                        sd.occ = 0.5, sd.load = 1.2,
+                                        sigma.pos = 0.4, seed = 4040L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -749,9 +749,9 @@ test_that("Laplace-EM recovers the rank-2 spatial structure (K = 2)", {
   fcor <- numeric(length(seeds))
   sdL2 <- numeric(length(seeds))
   for (i in seq_along(seeds)) {
-    sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-                                          sd_occ = 0.5, sd_load = 1.2,
-                                          sigma_pos = 0.4, seed = seeds[i])
+    sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+                                          sd.occ = 0.5, sd.load = 1.2,
+                                          sigma.pos = 0.4, seed = seeds[i])
     model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
       occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
       data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -785,14 +785,14 @@ test_that("tobs() front door routes icar() on the occupancy arm to the spatial f
   skip_if_fast()
   adj <- .mscs_grid_adj(8L, 8L)            # N = 64 cells
   S <- 16L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
-                                        sd_occ = 0.5, sd_load = 1.2,
-                                        sigma_pos = 0.4, seed = 5151L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 6L,
+                                        sd.occ = 0.5, sd.load = 1.2,
+                                        sigma.pos = 0.4, seed = 5151L)
   fit <- tobs(
     ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(sd.load = 1.2, max.iter = 25L, tol = 1e-3))
   tr <- sim$truth
@@ -827,9 +827,9 @@ test_that("constrained (triangular) Laplace-EM recovers the rank-2 structure", {
   # loading matrix (the proper-posterior parameterisation for per-factor
   # uncertainty / model comparison).
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-                                        sd_occ = 0.5, sd_load = 1.2,
-                                        sigma_pos = 0.4, seed = 2024L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+                                        sd.occ = 0.5, sd.load = 1.2,
+                                        sigma.pos = 0.4, seed = 2024L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
     data = sim$data, y = sim$y, y_pos = sim$y_pos,
@@ -853,14 +853,14 @@ test_that("tobs() front door fits K > 1 via control$n.factors", {
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-                                        sd_occ = 0.5, sd_load = 1.2,
-                                        sigma_pos = 0.4, seed = 77L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+                                        sd.occ = 0.5, sd.load = 1.2,
+                                        sigma.pos = 0.4, seed = 77L)
   fit <- tobs(
     ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(n.factors = K, sd.load = 1.2, max.iter = 30L, tol = 1e-3))
 
@@ -900,9 +900,9 @@ test_that("Laplace marginal likelihood recovers the true number of factors K", {
 
   # (a) K = 1 truth -> selected K = 1 (no spurious factor).
   adj1 <- .mscs_grid_adj(8L, 8L)
-  sim1 <- simulate_ms_occu_cover_spatial(adj1, n_species = 16L, K = 1L, J = 6L,
-                                         sd_occ = 0.5, sd_load = 1.2,
-                                         sigma_pos = 0.4, seed = 11L)
+  sim1 <- simulate_ms_occu_cover_spatial(adj1, n.species = 16L, K = 1L, J = 6L,
+                                         sd.occ = 0.5, sd.load = 1.2,
+                                         sigma.pos = 0.4, seed = 11L)
   sel1 <- tulpaObs:::.ms_ocs_select_K(build(sim1, adj1), K.max = 3L, sd_L = 1.2,
                                       max.em = 30L, tol = 1e-4)
   expect_identical(sel1$K, 1L)
@@ -910,9 +910,9 @@ test_that("Laplace marginal likelihood recovers the true number of factors K", {
 
   # (b) K = 2 truth -> selected K = 2 (the second factor clears the Occam budget).
   adj2 <- .mscs_grid_adj(9L, 9L)
-  sim2 <- simulate_ms_occu_cover_spatial(adj2, n_species = 20L, K = 2L, J = 6L,
-                                         sd_occ = 0.5, sd_load = 1.2,
-                                         sigma_pos = 0.4, seed = 2024L)
+  sim2 <- simulate_ms_occu_cover_spatial(adj2, n.species = 20L, K = 2L, J = 6L,
+                                         sd.occ = 0.5, sd.load = 1.2,
+                                         sigma.pos = 0.4, seed = 2024L)
   sel2 <- tulpaObs:::.ms_ocs_select_K(build(sim2, adj2), K.max = 3L, sd_L = 1.2,
                                       max.em = 40L, tol = 1e-4)
   expect_identical(sel2$K, 2L)
@@ -924,14 +924,14 @@ test_that("tobs() front door selects K via control$n.factors = 'auto'", {
   skip_on_cran()
   skip_if_fast()
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-                                        sd_occ = 0.5, sd_load = 1.2,
-                                        sigma_pos = 0.4, seed = 77L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+                                        sd.occ = 0.5, sd.load = 1.2,
+                                        sigma.pos = 0.4, seed = 77L)
   fit <- tobs(
     ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(n.factors = "auto", n.factors.max = 3L, sd.load = 1.2,
                    max.iter = 40L, tol = 1e-4))
@@ -954,18 +954,18 @@ test_that("tobs() front door selects K via control$n.factors = 'auto'", {
 
 test_that("a structured term on the detection arm, or an unsupported field, is rejected", {
   adj <- .mscs_grid_adj(5L, 5L)
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = 4L, J = 3L, seed = 3L)
   expect_error(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1 + icar(graph = adj), positive = ~ pos_cov1,
-         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+         y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace"),
     "detection arm")
   # car() (improper CAR) is not a supported field for this family (icar /
   # car_proper / bym2 are); it errors from the dispatcher.
   expect_error(
     tobs(~ occ_cov1 + car(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-         positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+         positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
          species = sim$species, method = "laplace"),
     "icar")
 })
@@ -973,35 +973,35 @@ test_that("a structured term on the detection arm, or an unsupported field, is r
 test_that("a cover-arm factor requires a matching shared field on the occupancy arm", {
   adj  <- .mscs_grid_adj(5L, 5L)
   adj2 <- .mscs_grid_adj(25L, 1L)        # same N, different graph
-  sim  <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
+  sim  <- simulate_ms_occu_cover_spatial(adj, n.species = 4L, J = 3L, seed = 3L)
   # Cover icar() with a plain occupancy arm: the field is shared, so this errors.
   expect_error(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1 + icar(graph = adj),
-         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+         y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace"),
     "occupancy arm")
   # icar() on both arms but naming different graphs: the field must be one graph.
   expect_error(
     tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
          positive = ~ pos_cov1 + icar(graph = adj2),
-         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+         y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace"),
     "same graph")
 })
 
 test_that("simulate_ms_occu_cover_spatial cover factor is well-formed and RNG-gated", {
   adj <- .mscs_grid_adj(6L, 6L); S <- 8L; K <- 2L
-  cf <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 4L,
-                                       cover_factor = TRUE, seed = 11L)
+  cf <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 4L,
+                                       cover.factor = TRUE, seed = 11L)
   expect_true(isTRUE(cf$truth$cover_factor))
   expect_identical(dim(cf$truth$L_pos), c(S, K))
 
   # The cover-factor draws are gated: with cover_factor = FALSE (the default) the
   # detection / cover data is byte-identical to a call that never requests one, so
   # every Stage 1-2 fixture is unchanged.
-  a <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, seed = 11L)
-  b <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
-                                      cover_factor = FALSE, seed = 11L)
+  a <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L,
+                                      cover.factor = FALSE, seed = 11L)
   expect_identical(a$y, b$y)
   expect_identical(a$y_pos, b$y_pos)
   expect_null(a$truth$L_pos)
@@ -1017,14 +1017,14 @@ test_that("tobs() front door recovers a shared factor on the cover arm", {
   # as the field (so Fpos has the right sign).
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 14L
   sim <- simulate_ms_occu_cover_spatial(
-    adj, n_species = S, J = 6L, cover_factor = TRUE,
-    mu_occ = c(0.3, 0.6), mu_pos = c(log(5), 0.3),
-    sd_load = 1.0, sd_load_pos = 0.9, sigma_pos = 0.4, seed = 2024L)
+    adj, n.species = S, J = 6L, cover.factor = TRUE,
+    mu.occ = c(0.3, 0.6), mu.pos = c(log(5), 0.3),
+    sd.load = 1.0, sd.load.pos = 0.9, sigma.pos = 0.4, seed = 2024L)
 
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
               positive = ~ pos_cov1 + icar(graph = adj),
-              y = sim$y, y_pos = sim$y_pos, species = sim$species,
+              y = sim$y, y.pos = sim$y_pos, species = sim$species,
               method = "laplace", control = list(max.iter = 25L, tol = 1e-3))
 
   expect_identical(fit$spatial$type, "icar+cover")
@@ -1055,7 +1055,7 @@ test_that("penalised gradient matches FD on the proper-CAR field path", {
   # must still match finite differences (the field enters only the W-block prior).
   adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells
   S <- 4L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
                                         field = "car_proper", rho = 0.85,
                                         seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
@@ -1107,7 +1107,7 @@ test_that("penalised gradient matches FD on the proper-CAR field path", {
 
 test_that("simulate_ms_occu_cover_spatial proper-CAR field is well-formed and RNG-gated", {
   adj <- .mscs_grid_adj(7L, 7L); N <- nrow(adj); S <- 8L
-  cr <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+  cr <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L,
                                        field = "car_proper", rho = 0.9, seed = 11L)
   expect_identical(cr$truth$field, "car_proper")
   expect_identical(cr$truth$rho, 0.9)
@@ -1118,8 +1118,8 @@ test_that("simulate_ms_occu_cover_spatial proper-CAR field is well-formed and RN
 
   # The car branch is gated: field = "icar" (the default) reproduces the Stage 1-2
   # RNG stream byte for byte, so every existing fixture is unchanged.
-  a <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, seed = 11L)
-  b <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+  a <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L,
                                       field = "icar", seed = 11L)
   expect_identical(a$y, b$y)
   expect_identical(a$y_pos, b$y_pos)
@@ -1129,14 +1129,14 @@ test_that("simulate_ms_occu_cover_spatial proper-CAR field is well-formed and RN
 
 test_that("a car_proper field must be the same term on both spatial arms", {
   adj <- .mscs_grid_adj(5L, 5L)
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4L, J = 3L, seed = 3L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = 4L, J = 3L, seed = 3L)
   # Mixed field types across the shared arms: the field is one GMRF, so its type
   # cannot differ between occupancy and cover.
   expect_error(
     tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
          family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
          positive = ~ pos_cov1 + car_proper(graph = adj),
-         y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace"),
+         y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace"),
     "same term")
 })
 
@@ -1148,14 +1148,14 @@ test_that("tobs() front door recovers a proper-CAR field and its correlation", {
   # the field shape + spatial contribution F = W L' are recovered (richer fields).
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 14L
   rho_true <- 0.9
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 6L,
-                                        sd_load = 1.2, field = "car_proper",
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 6L,
+                                        sd.load = 1.2, field = "car_proper",
                                         rho = rho_true, seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + car_proper(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(n.factors = 1L, sd.load = 1.2, max.iter = 25L, tol = 1e-3))
 
@@ -1183,15 +1183,15 @@ test_that("auto-K rank selection composes with a proper-CAR field", {
   # normaliser (|R(rho)| at rank N, not the rank-(N-1) ICAR pseudo-determinant);
   # auto-K must run that path end to end and return a fit at the selected rank.
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-                                        sd_occ = 0.5, sd_load = 1.2,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+                                        sd.occ = 0.5, sd.load = 1.2,
                                         field = "car_proper", rho = 0.9,
                                         seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + car_proper(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(n.factors = "auto", n.factors.max = 3L, sd.load = 1.2,
                    max.iter = 40L, tol = 1e-4))
@@ -1216,7 +1216,7 @@ test_that("penalised gradient matches FD on the BYM2 field path", {
   # finite differences (the field enters only the W-block prior).
   adj <- .mscs_grid_adj(4L, 4L)            # N = 16 cells
   S <- 4L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 3L,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 3L,
                                         field = "bym2", phi = 0.7, seed = 321L)
   model <- tulpaObs:::.tobs_build_ms_occu_cover_spatial(
     occ_formula = ~ occ_cov1, det_formula = ~ det_cov1, pos_formula = ~ pos_cov1,
@@ -1264,7 +1264,7 @@ test_that("penalised gradient matches FD on the BYM2 field path", {
 
 test_that("simulate_ms_occu_cover_spatial BYM2 field is well-formed and RNG-gated", {
   adj <- .mscs_grid_adj(7L, 7L); N <- nrow(adj); S <- 8L
-  by <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+  by <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L,
                                        field = "bym2", phi = 0.7, seed = 11L)
   expect_identical(by$truth$field, "bym2")
   expect_identical(by$truth$phi, 0.7)
@@ -1275,8 +1275,8 @@ test_that("simulate_ms_occu_cover_spatial BYM2 field is well-formed and RNG-gate
 
   # The bym2 branch is gated: field = "icar" (default) reproduces the Stage 1-2
   # RNG stream byte for byte.
-  a <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L, seed = 11L)
-  b <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 4L,
+  a <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L, seed = 11L)
+  b <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 4L,
                                       field = "icar", seed = 11L)
   expect_identical(a$y, b$y)
   expect_identical(a$truth$w, b$truth$w)
@@ -1296,15 +1296,15 @@ test_that("tobs() front door recovers a BYM2 field and its variance fraction", {
   # single-realisation variance component, so the band around truth is wide.
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L
   phi_true <- 0.7
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, J = 8L,
-                                        sd_occ = 0.5, sd_load = 1.2,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, J = 8L,
+                                        sd.occ = 0.5, sd.load = 1.2,
                                         field = "bym2", phi = phi_true,
                                         seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + bym2(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(n.factors = 1L, sd.load = 1.2, max.iter = 25L, tol = 1e-5))
 
@@ -1338,14 +1338,14 @@ test_that("auto-K rank selection composes with a BYM2 field", {
   # The Laplace evidence integrates the field out with the BYM2 full-rank
   # normaliser (|R(phi)| at rank N); auto-K must run that path end to end.
   adj <- .mscs_grid_adj(9L, 9L); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 8L,
-                                        sd_occ = 0.5, sd_load = 1.2,
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 8L,
+                                        sd.occ = 0.5, sd.load = 1.2,
                                         field = "bym2", phi = 0.7, seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + bym2(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species,
+    y = sim$y, y.pos = sim$y_pos, species = sim$species,
     method = "laplace",
     control = list(n.factors = "auto", n.factors.max = 3L, sd.load = 1.2,
                    max.iter = 40L, tol = 1e-4))
@@ -1374,14 +1374,14 @@ test_that("tobs_associations() recovers the residual species associations", {
     so <- sqrt(rowSums(Lo^2)); sp <- sqrt(rowSums(Lp^2)); (Lo %*% t(Lp)) / outer(so, sp)
   }
   adj <- .mscs_grid_adj(9L, 9L); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-           sd_occ = 0.5, sd_load = 1.3, sigma_pos = 0.4, cover_factor = TRUE,
-           mean_load_pos = 0, sd_load_pos = 1.2, seed = 2024L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+           sd.occ = 0.5, sd.load = 1.3, sigma.pos = 0.4, cover.factor = TRUE,
+           mean.load.pos = 0, sd.load.pos = 1.2, seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1 + icar(graph = adj),
-    y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace",
+    y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace",
     control = list(n.factors = K, sd.load = 1.3, max.iter = 30L, tol = 1e-3))
 
   occ <- tobs_associations(fit, "occupancy")
@@ -1428,13 +1428,13 @@ test_that("predict() returns calibrated per-species occupancy maps", {
   # field posterior. The maps recover the true psi surface and the interval is
   # calibrated -- a rare species borrows strength across the shared factors.
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-           sd_occ = 0.6, sd_load = 1.2, sigma_pos = 0.4, seed = 2024L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+           sd.occ = 0.6, sd.load = 1.2, sigma.pos = 0.4, seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace",
+    y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace",
     control = list(n.factors = K, sd.load = 1.2, max.iter = 30L, tol = 1e-3))
 
   pr <- predict(fit)
@@ -1466,14 +1466,14 @@ test_that("predict() returns calibrated per-species cover maps", {
   # lognormal mean, the psi product), marginalised per draw. Truth is
   # reconstructed from the fit's own cover design so it matches exactly.
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = K, J = 6L,
-           sd_occ = 0.6, sd_load = 1.2, sigma_pos = 0.4, cover_factor = TRUE,
-           mean_load_pos = 0, sd_load_pos = 1.2, seed = 2024L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = K, J = 6L,
+           sd.occ = 0.6, sd.load = 1.2, sigma.pos = 0.4, cover.factor = TRUE,
+           mean.load.pos = 0, sd.load.pos = 1.2, seed = 2024L)
   fit <- tobs(
     ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family    = ms_occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1 + icar(graph = adj),
-    y = sim$y, y_pos = sim$y_pos, species = sim$species, method = "laplace",
+    y = sim$y, y.pos = sim$y_pos, species = sim$species, method = "laplace",
     control = list(n.factors = K, sd.load = 1.2, max.iter = 30L, tol = 1e-3))
 
   pc <- predict(fit, type = "cover_cond")
@@ -1510,11 +1510,11 @@ test_that("fitted() returns per-species occupancy / detection / cover surfaces",
   # detection probability p (no field on detection). Same shape as the
   # non-spatial community fitted(); the occupancy surface matches predict().
   adj <- .mscs_grid_adj(7L, 7L); N <- nrow(adj); S <- 12L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = 2L, J = 5L,
-           sd_occ = 0.5, sd_load = 1.1, sigma_pos = 0.4, seed = 3L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = 2L, J = 5L,
+           sd.occ = 0.5, sd.load = 1.1, sigma.pos = 0.4, seed = 3L)
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "laplace",
               control = list(n.factors = 2L, sd.load = 1.1, max.iter = 25L))
 
@@ -1538,11 +1538,11 @@ test_that("simulate() reproduces the per-species data structure", {
   # model reproduces the data's per-species detection prevalence and cover
   # magnitude (the basis for posterior-predictive checks).
   adj <- .mscs_grid_adj(8L, 8L); N <- nrow(adj); S <- 14L
-  sim <- simulate_ms_occu_cover_spatial(adj, n_species = S, K = 2L, J = 5L,
-           sd_occ = 0.5, sd_load = 1.2, sigma_pos = 0.4, seed = 5L)
+  sim <- simulate_ms_occu_cover_spatial(adj, n.species = S, K = 2L, J = 5L,
+           sd.occ = 0.5, sd.load = 1.2, sigma.pos = 0.4, seed = 5L)
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+              positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
               species = sim$species, method = "laplace",
               control = list(n.factors = 2L, sd.load = 1.2, max.iter = 30L))
 

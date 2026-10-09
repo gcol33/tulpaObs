@@ -43,9 +43,9 @@
                progress = FALSE)
   tobs(occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
        data = od$occ.covs,
-       family = occu_cover(response = "beta", cover_aggregate = "none"),
+       family = occu_cover(response = "beta", cover.aggregate = "none"),
        detection = ~ x1 + hab, positive = ~ hab,
-       y = od$y, y_pos = ocv$y, visits = od$det.covs,
+       y = od$y, y.pos = ocv$y, visits = od$det.covs,
        method = "nested_laplace", control = ctrl)
 }
 

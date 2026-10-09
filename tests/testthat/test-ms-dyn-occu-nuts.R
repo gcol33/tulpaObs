@@ -20,9 +20,9 @@
 # --- shared fixtures / helpers ---------------------------------------------
 
 .msdyn_pieces <- function(n_species = 6, N = 60, J = 3, n_seasons = 4, seed = 7) {
-  sim <- simulate_ms_dyn_occu(N = N, J = J, n_species = n_species,
-                              n_seasons = n_seasons,
-                              beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+  sim <- simulate_ms_dyn_occu(N = N, J = J, n.species = n_species,
+                              n.seasons = n_seasons,
+                              beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = seed)
   bind  <- tulpaObs:::.tobs_bind_formulas(list(psi1 = ~ 1, p = ~ 1), sim$data)
   model <- tulpaObs:::.tobs_build_ms_dyn_occu(
@@ -101,8 +101,8 @@ test_that("ms_dyn_occu NUTS C++ FullGradFn matches the R oracle", {
 test_that("ms_dyn_occu NUTS recovers community means", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
-                              beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n.species = 14, n.seasons = 4,
+                              beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = 31)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", seq_len(14)), method = "nuts",
@@ -137,8 +137,8 @@ test_that("ms_dyn_occu NUTS community-mean 95% CIs cover at the nominal rate", {
              "eps_(Intercept)"   = stats::qlogis(0.1))
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_ms_dyn_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
-                                beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+    sim <- simulate_ms_dyn_occu(N = 90, J = 3, n.species = 14, n.seasons = 4,
+                                beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                                 gamma = 0.2, epsilon = 0.1, seed = 300 + s)
     fit <- tryCatch(tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
                     y = sim$y, species = paste0("sp", seq_len(14)), method = "nuts",
@@ -158,8 +158,8 @@ test_that("ms_dyn_occu NUTS community-mean 95% CIs cover at the nominal rate", {
 test_that("ms_dyn_occu NUTS S3 methods work", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_dyn_occu(N = 55, J = 3, n_species = 8, n_seasons = 3,
-                              beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+  sim <- simulate_ms_dyn_occu(N = 55, J = 3, n.species = 8, n.seasons = 3,
+                              beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = 12)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", seq_len(8)), method = "nuts",
@@ -189,8 +189,8 @@ test_that("ms_dyn_occu NUTS de-attenuates the community variance vs EM", {
   # The raw Laplace-EM community SDs carry the documented small-cluster
   # attenuation for the binary arms; the sampler integrates the full joint, so
   # its per-arm community SDs sit at or above the EM SDs (closer to the truth).
-  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
-                              beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n.species = 14, n.seasons = 4,
+                              beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = 31)
   args <- list(formula = ~ 1, data = sim$data, family = ms_dyn_occu(),
                detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(14)))
@@ -211,7 +211,7 @@ test_that("ms_dyn_occu NUTS rejects a spatial term with a pointer", {
   N <- 16L
   adj <- matrix(0L, N, N)
   for (i in seq_len(N - 1L)) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
-  sim <- simulate_ms_dyn_occu(N = N, J = 3, n_species = 4, n_seasons = 3, seed = 5)
+  sim <- simulate_ms_dyn_occu(N = N, J = 3, n.species = 4, n.seasons = 3, seed = 5)
   expect_error(
     tobs(~ 1 + icar(graph = adj), data = sim$data, family = ms_dyn_occu(),
          detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(4)),

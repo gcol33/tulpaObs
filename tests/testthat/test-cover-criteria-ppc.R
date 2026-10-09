@@ -102,7 +102,7 @@ test_that("occu_cover(): DIC/CPO + PIT + PPC", {
   fit <- tobs(formula = ~ occ_cov1, data = cell_dat,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = od$y, y_pos = y_pos, visits = od$det.covs,
+              y = od$y, y.pos = y_pos, visits = od$det.covs,
               method = "laplace", control = list(verbose = FALSE))
 
   d <- dic(fit, n.draws = 300L)

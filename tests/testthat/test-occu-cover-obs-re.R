@@ -10,9 +10,9 @@
 .ocor_sim <- function(seed, side = 7L, J = 6L, n_g = 6L, sigma_re_p = 0.8) {
   adj <- rook_adj(side)
   simulate_occu_cover(
-    N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det_groups = n_g, sigma_re_p = sigma_re_p, seed = seed)
+    re.det.groups = n_g, sigma.re.p = sigma_re_p, seed = seed)
 }
 
 # Cover-arm RE sibling: the per-visit `habitat` grouping carries a random
@@ -21,9 +21,9 @@
 .ocor_sim_pos <- function(seed, side = 8L, J = 8L, n_g = 6L, sigma_re_pos = 0.8) {
   adj <- rook_adj(side)
   simulate_occu_cover(
-    N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_pos_groups = n_g, sigma_re_pos = sigma_re_pos, seed = seed)
+    re.pos.groups = n_g, sigma.re.pos = sigma_re_pos, seed = seed)
 }
 
 test_that("occu_cover() detection RE: fit runs and reports the RE on the p arm", {
@@ -33,7 +33,7 @@ test_that("occu_cover() detection RE: fit runs and reports the RE on the p arm",
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (1 | habitat), positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
@@ -65,7 +65,7 @@ test_that("occu_cover() detection RE: a no-RE fit is unchanged (no fit$re)", {
   fit0 <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
                family = occu_cover("lognormal"),
                detection = ~ det_cov1, positive = ~ pos_cov1,
-               y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+               y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
                method = "nested_laplace",
                control = list(verbose = FALSE, progress = FALSE))
   expect_null(fit0$re)
@@ -80,7 +80,7 @@ test_that("occu_cover() detection RE: predict() handles seen and unseen levels",
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (1 | habitat), positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
   nd <- data.frame(occ_cov1 = sim$data$occ_cov1)
@@ -107,9 +107,9 @@ test_that("occu_cover() positive-cover RE: fit runs and reports the RE on the po
   sim <- .ocor_sim(4L, side = 6L, n_g = 6L)
   adj <- rook_adj(6L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
-              family = occu_cover("lognormal", cover_aggregate = "none"),
+              family = occu_cover("lognormal", cover.aggregate = "none"),
               detection = ~ det_cov1, positive = ~ pos_cov1 + (1 | habitat),
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_false(is.null(fit$re$pos))
@@ -128,7 +128,7 @@ test_that("occu_cover() detection RE recovers BLUPs and detects the variance", {
                 family = occu_cover("lognormal"),
                 detection = ~ det_cov1 + (1 | habitat),
                 positive  = ~ pos_cov1 + share(spatial()),
-                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+                y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
                 method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE,
                                integration = "ccd"))
@@ -154,9 +154,9 @@ test_that("occu_cover() cover RE recovers BLUPs and the variance", {
                          sigma_re_pos = sigma_re_pos)
     adj <- rook_adj(8L)
     fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
-                family = occu_cover("lognormal", cover_aggregate = "none"),
+                family = occu_cover("lognormal", cover.aggregate = "none"),
                 detection = ~ det_cov1, positive = ~ pos_cov1 + (1 | habitat),
-                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+                y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
                 method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     bl <- fit$re$pos$blup; names(bl) <- fit$re$pos$levels
@@ -177,7 +177,7 @@ test_that("occu_cover() observation RE gates the unsupported configurations", {
   sim <- .ocor_sim(5L, side = 5L, n_g = 5L)
   adj <- rook_adj(5L)
   base <- list(data = sim$data, family = occu_cover("lognormal"),
-               y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+               y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
                control = list(progress = FALSE))
   # An observation-arm RE needs the joint nested-Laplace engine.
   expect_error(
@@ -191,8 +191,8 @@ test_that("occu_cover() observation RE gates the unsupported configurations", {
     tobs(occurrence = ~ occ_cov1 + icar(graph = adj),
          detection = ~ det_cov1, positive = ~ occ_cov1 + (1 | habitat),
          data = sim$data,
-         family = occu_cover("lognormal", cover_aggregate = "mean"),
-         y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+         family = occu_cover("lognormal", cover.aggregate = "mean"),
+         y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
          method = "nested_laplace", control = list(progress = FALSE)),
     "per-visit cover")
 })
@@ -203,16 +203,16 @@ test_that("occu_cover() crossed detection RE: two groupings fit and report", {
   skip_on_cran()
   adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
-    N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = 6L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det_groups = 6L, sigma_re_p = 0.8,
-    re_det = list(observer = list(K = 4L, sigma = 0.6, prefix = "obs")),
+    re.det.groups = 6L, sigma.re.p = 0.8,
+    re.det = list(observer = list(K = 4L, sigma = 0.6, prefix = "obs")),
     seed = 11L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (1 | habitat) + (1 | observer),
               positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE,
                              integration = "ccd",
@@ -240,16 +240,16 @@ test_that("occu_cover() nested detection RE: (1 | region/site) fits two terms", 
   skip_on_cran()
   adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
-    N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = 6L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det = list(region = list(K = 3L, sigma = 0.7, prefix = "region"),
+    re.det = list(region = list(K = 3L, sigma = 0.7, prefix = "region"),
                   site   = list(K = 2L, sigma = 0.5, prefix = "s",
                                 nested_in = "region")),
     seed = 12L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (1 | region/site), positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE,
                              integration = "ccd",
@@ -267,16 +267,16 @@ test_that("occu_cover() crossed RE: predict sums both groupings, unseen shrinks"
   adj <- rook_adj(6L)
   N   <- nrow(adj)
   sim <- simulate_occu_cover(
-    N = N, J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = N, J = 6L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det_groups = 6L, sigma_re_p = 0.8,
-    re_det = list(observer = list(K = 4L, sigma = 0.6, prefix = "obs")),
+    re.det.groups = 6L, sigma.re.p = 0.8,
+    re.det = list(observer = list(K = 4L, sigma = 0.6, prefix = "obs")),
     seed = 13L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (1 | habitat) + (1 | observer),
               positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE,
                              integration = "ccd",
@@ -324,16 +324,16 @@ test_that("occu_cover() crossed detection RE recovers both variances + BLUPs", {
   res <- t(vapply(seeds, function(s) {
     adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
-      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      N = nrow(adj), J = 8L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-      re_det_groups = 6L, sigma_re_p = 0.8,
-      re_det = list(observer = list(K = 5L, sigma = 0.6, prefix = "obs")),
+      re.det.groups = 6L, sigma.re.p = 0.8,
+      re.det = list(observer = list(K = 5L, sigma = 0.6, prefix = "obs")),
       seed = s)
     fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
                 family = occu_cover("lognormal"),
                 detection = ~ det_cov1 + (1 | habitat) + (1 | observer),
                 positive  = ~ pos_cov1 + share(spatial()),
-                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+                y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
                 method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE,
                                integration = "ccd"))
@@ -362,9 +362,9 @@ test_that("occu_cover() nested detection RE recovers both levels' BLUPs", {
   res <- t(vapply(seeds, function(s) {
     adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
-      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      N = nrow(adj), J = 8L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-      re_det = list(region = list(K = 6L, sigma = 0.7, prefix = "region"),
+      re.det = list(region = list(K = 6L, sigma = 0.7, prefix = "region"),
                     site   = list(K = 3L, sigma = 0.5, prefix = "s",
                                   nested_in = "region")),
       seed = s)
@@ -372,7 +372,7 @@ test_that("occu_cover() nested detection RE recovers both levels' BLUPs", {
                 family = occu_cover("lognormal"),
                 detection = ~ det_cov1 + (1 | region/site),
                 positive  = ~ pos_cov1 + share(spatial()),
-                y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+                y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
                 method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE,
                                integration = "ccd"))
@@ -407,15 +407,15 @@ test_that("occu_cover() uncorrelated random slope: weighted iid block fits + rep
   skip_on_cran()
   adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
-    N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = 6L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det = list(habitat = list(K = 6L, sigma = 0.7, prefix = "hab",
+    re.det = list(habitat = list(K = 6L, sigma = 0.7, prefix = "hab",
                                  slope_cov = "area")),
     seed = 21L)
   fit <- tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1 + (0 + area | habitat), positive = ~ pos_cov1,
-              y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+              y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
               method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE,
                              integration = "ccd"))
@@ -432,9 +432,9 @@ test_that("occu_cover() correlated random slope: miid block fits + reports Sigma
   skip_on_cran()
   adj <- rook_adj(6L)
   sim <- simulate_occu_cover(
-    N = nrow(adj), J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = 6L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det = list(habitat = list(K = 6L, sigma = 0.8, sigma_slope = 0.6,
+    re.det = list(habitat = list(K = 6L, sigma = 0.8, sigma_slope = 0.6,
                                  rho = 0.5, prefix = "hab", slope_cov = "area")),
     seed = 22L)
   # A correlated slope's miid block adds p(p+1)/2 log-Cholesky axes, so the outer
@@ -443,7 +443,7 @@ test_that("occu_cover() correlated random slope: miid block fits + reports Sigma
     occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+    y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
   re <- fit$re[["p"]]
@@ -463,16 +463,16 @@ test_that("occu_cover() random slope: predict weights the slope covariate", {
   skip_on_cran()
   adj <- rook_adj(6L); N <- nrow(adj)
   sim <- simulate_occu_cover(
-    N = N, J = 6L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = N, J = 6L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det = list(habitat = list(K = 6L, sigma = 0.8, sigma_slope = 0.6,
+    re.det = list(habitat = list(K = 6L, sigma = 0.8, sigma_slope = 0.6,
                                  rho = 0.4, prefix = "hab", slope_cov = "area")),
     seed = 23L)
   fit <- suppressWarnings(tobs(
     occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
-    y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+    y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
     method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
   nd <- data.frame(occ_cov1 = sim$data$occ_cov1,
@@ -496,16 +496,16 @@ test_that("occu_cover() correlated random slope recovers Sigma + BLUPs", {
   res <- t(vapply(seeds, function(s) {
     adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
-      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      N = nrow(adj), J = 8L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-      re_det = list(habitat = list(K = 8L, sigma = 0.8, sigma_slope = 0.6,
+      re.det = list(habitat = list(K = 8L, sigma = 0.8, sigma_slope = 0.6,
                                    rho = 0.5, prefix = "hab", slope_cov = "area")),
       seed = s)
     fit <- suppressWarnings(tobs(
       occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
-      y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+      y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
       method = "nested_laplace",
       control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
     re <- fit$re[["p"]]
@@ -535,16 +535,16 @@ test_that("occu_cover() uncorrelated random slope recovers slope SD + BLUPs", {
   res <- t(vapply(seeds, function(s) {
     adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
-      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      N = nrow(adj), J = 8L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-      re_det = list(habitat = list(K = 8L, sigma = sigma_slope, prefix = "hab",
+      re.det = list(habitat = list(K = 8L, sigma = sigma_slope, prefix = "hab",
                                    slope_cov = "area")),
       seed = s)
     fit <- suppressWarnings(tobs(
       occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1 + (0 + area | habitat), positive = ~ pos_cov1,
-      y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+      y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
       method = "nested_laplace",
       control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
     re <- fit$re[["p"]]
@@ -573,9 +573,9 @@ test_that("occu_cover() random slope recovers on a NON-unit covariate scale", {
   res <- t(vapply(seeds, function(s) {
     adj <- rook_adj(9L)
     sim <- simulate_occu_cover(
-      N = nrow(adj), J = 8L, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+      N = nrow(adj), J = 8L, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
       positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-      re_det = list(habitat = list(K = 8L, sigma = 0.7, sigma_slope = 0.08,
+      re.det = list(habitat = list(K = 8L, sigma = 0.7, sigma_slope = 0.08,
                                    rho = 0.4, prefix = "hab",
                                    slope_cov = "area", slope_sd = 8)),
       seed = s)
@@ -583,7 +583,7 @@ test_that("occu_cover() random slope recovers on a NON-unit covariate scale", {
       occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1 + (1 + area | habitat), positive = ~ pos_cov1,
-      y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+      y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
       method = "nested_laplace",
       control = list(verbose = FALSE, progress = FALSE, integration = "ccd")))
     re <- fit$re[["p"]]

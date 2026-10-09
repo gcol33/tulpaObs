@@ -44,11 +44,11 @@
 t_occu <- function() {
   obs_family(
     name           = "t_occu",
-    class_long     = "multi-season occupancy (AR1 year effect)",
+    class.long     = "multi-season occupancy (AR1 year effect)",
     latent         = "bernoulli_panel",
     observation    = "binomial_detection",
     replicates     = "required",
-    default_engine = "pg_gibbs",
+    default.engine = "pg_gibbs",
     status         = "working"
   )
 }
@@ -377,9 +377,9 @@ t_occu <- function() {
 #' Simulate multi-season occupancy with an AR1 year effect (tPGOcc)
 #'
 #' @param N Number of sites (default 150).
-#' @param T_seasons Number of seasons / years (default 8).
+#' @param T.seasons Number of seasons / years (default 8).
 #' @param J Visits per season (default 3).
-#' @param beta_occ Occupancy coefficients (intercept first; default `c(0.2)`).
+#' @param beta.occ Occupancy coefficients (intercept first; default `c(0.2)`).
 #' @param p Detection probability (default 0.4).
 #' @param rho AR1 correlation of the year effect (default 0.6).
 #' @param sigma AR1 innovation SD of the year effect (default 0.7).
@@ -387,28 +387,28 @@ t_occu <- function() {
 #' @return A list with `y` (3D array `[N x T x J]`), `data`, and `truth`.
 #' @seealso [t_occu()], the family this simulates for.
 #' @examples
-#' sim <- simulate_t_occu(N = 30, T_seasons = 4, J = 2, seed = 1)
+#' sim <- simulate_t_occu(N = 30, T.seasons = 4, J = 2, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_t_occu <- function(N = 150, T_seasons = 8, J = 3, beta_occ = c(0.2),
+simulate_t_occu <- function(N = 150, T.seasons = 8, J = 3, beta.occ = c(0.2),
                             p = 0.4, rho = 0.6, sigma = 0.7, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   data <- data.frame(x = stats::rnorm(N))
-  X_occ <- if (length(beta_occ) > 1L) stats::model.matrix(~ x, data)
+  X_occ <- if (length(beta.occ) > 1L) stats::model.matrix(~ x, data)
            else stats::model.matrix(~ 1, data)
   # AR1 year effect (stationary start).
-  eta <- numeric(T_seasons)
+  eta <- numeric(T.seasons)
   eta[1L] <- stats::rnorm(1, 0, sigma / sqrt(1 - rho^2))
-  for (t in 2:T_seasons) eta[t] <- rho * eta[t - 1L] + stats::rnorm(1, 0, sigma)
+  for (t in 2:T.seasons) eta[t] <- rho * eta[t - 1L] + stats::rnorm(1, 0, sigma)
   eta <- eta - mean(eta)
-  lin <- as.vector(X_occ %*% beta_occ)
-  z <- matrix(0L, N, T_seasons)
-  for (t in seq_len(T_seasons))
+  lin <- as.vector(X_occ %*% beta.occ)
+  z <- matrix(0L, N, T.seasons)
+  for (t in seq_len(T.seasons))
     z[, t] <- stats::rbinom(N, 1L, stats::plogis(lin + eta[t]))
-  y <- array(0L, dim = c(N, T_seasons, J))
-  for (t in seq_len(T_seasons)) for (j in seq_len(J))
+  y <- array(0L, dim = c(N, T.seasons, J))
+  for (t in seq_len(T.seasons)) for (j in seq_len(J))
     y[, t, j] <- ifelse(z[, t] == 1L, stats::rbinom(N, 1L, p), 0L)
   list(y = y, data = data,
-       truth = list(beta_occ = beta_occ, p = p, rho = rho, sigma = sigma,
+       truth = list(beta_occ = beta.occ, p = p, rho = rho, sigma = sigma,
                     eta = eta, z = z))
 }

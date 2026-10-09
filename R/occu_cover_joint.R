@@ -41,7 +41,7 @@
   is_latent  <- identical(cover_aggregate, "latent")
   if (is_latent && is_gauss) {
     stop("occu_cover(response = \"gaussian\") has no latent cover-aggregate ",
-         "variant; use cover_aggregate = \"none\" / \"mean\" / \"median\".",
+         "variant; use cover.aggregate = \"none\" / \"mean\" / \"median\".",
          call. = FALSE)
   }
   aggregated <- !identical(cover_aggregate, "none") && !is_latent
@@ -88,13 +88,13 @@
   has_det_armspec <- !is.null(det_armspec)
   has_armspec     <- has_pos_armspec || has_det_armspec
   if (has_any_re && is_latent) {
-    stop("occu_cover(): a per-group RE and cover_aggregate = \"latent\" cannot ",
+    stop("occu_cover(): a per-group RE and cover.aggregate = \"latent\" cannot ",
          "be combined (the latent path carries its own per-unit cover RE).",
          call. = FALSE)
   }
   if (has_armspec && is_latent) {
     stop("occu_cover(): an arm-specific field (to = \"positive\" / \"detection\") ",
-         "does not compose with cover_aggregate = \"latent\".", call. = FALSE)
+         "does not compose with cover.aggregate = \"latent\".", call. = FALSE)
   }
 
   # Correlated (`|`) free-Sigma MCAR field: one coupled block over the bar's
@@ -104,7 +104,7 @@
   if (correlated) {
     if (is_latent) {
       stop("occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) does ",
-           "not compose with cover_aggregate = \"latent\".", call. = FALSE)
+           "not compose with cover.aggregate = \"latent\".", call. = FALSE)
     }
     if (has_any_re) {
       stop("occu_cover(): a per-group RE does not compose with a correlated ",

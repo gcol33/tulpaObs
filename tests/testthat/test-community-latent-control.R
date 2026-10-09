@@ -160,8 +160,8 @@ test_that("the latent-state families thread the same controls", {
   expect_identical(f_abun$latent_control$n.quad, 7L)
 
   cut <- c(0, 25, 50, 75, 100)
-  dd <- simulate_ms_distance(n_species = 5, N = 50, cutpoints = cut,
-                             n_factors = 1, load_sd = 0.5, seed = 11)
+  dd <- simulate_ms_distance(n.species = 5, N = 50, cutpoints = cut,
+                             n.factors = 1, load.sd = 0.5, seed = 11)
   f_dist <- tobs(~ abund_cov1 + latent(1), detection = ~ 1, data = dd$data,
                  family = ms_distance(cutpoints = cut), y = dd$y,
                  species = dd$species, method = "laplace", control = ctl)

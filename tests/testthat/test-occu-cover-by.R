@@ -93,7 +93,7 @@ test_that("by = (occu_cover) equals the multi-response list batch and independen
     formula = ~ occ_cov1, data = long, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ 1, method = "laplace",
     control = ctrl, by = "sp",
-    site = "site", visit = "visit", response = "occur", y_pos = "cover",
+    site = "site", visit = "visit", response = "occur", y.pos = "cover",
     det.covs = "det_cov1")
   # The by = path builds visits internally; it must not also be handed `visits`.
 
@@ -115,7 +115,7 @@ test_that("by = (occu_cover) equals the multi-response list batch and independen
   fit_list <- tobs(
     formula = ~ occ_cov1, data = cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ 1, method = "laplace", control = ctrl,
-    y = list(a = y1, b = y2), y_pos = list(yp1, yp2), visits = od1$det.covs)
+    y = list(a = y1, b = y2), y.pos = list(yp1, yp2), visits = od1$det.covs)
 
   expect_s3_class(fit_list, "tobs_batch")
 
@@ -123,7 +123,7 @@ test_that("by = (occu_cover) equals the multi-response list batch and independen
   fit_one <- function(yy, ypp) tobs(
     formula = ~ occ_cov1, data = cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ 1, method = "laplace", control = ctrl,
-    y = yy, y_pos = ypp, visits = od1$det.covs)
+    y = yy, y.pos = ypp, visits = od1$det.covs)
   ind_a <- fit_one(y1, yp1)
   ind_b <- fit_one(y2, yp2)
 
@@ -242,10 +242,10 @@ test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fi
 
   fit_by <- suppressWarnings(suppressMessages(tobs(
     occurrence = ~ occ_cov1 + spatial(~ 1 || site_id, graph = adj), data = long,
-    family = occu_cover(response = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover.aggregate = "none"),
     detection = ~ det_cov1, positive = ~ 1,
     method = "nested_laplace", control = ctrl, by = "sp",
-    site = "site_id", visit = "visit", response = "occur", y_pos = "cover",
+    site = "site_id", visit = "visit", response = "occur", y.pos = "cover",
     det.covs = "det_cov1")))
 
   expect_s3_class(fit_by, "tobs_batch")
@@ -262,9 +262,9 @@ test_that("by = (occu_cover, nested_laplace) is compact + equals dense single fi
   yp2 <- ifelse(is.na(sim2$y_pos), 0, sim2$y_pos)
   fit_one <- function(yy, ypp) suppressWarnings(suppressMessages(tobs(
     occurrence = ~ occ_cov1 + spatial(~ 1 || site_id, graph = adj), data = cell_dat,
-    family = occu_cover(response = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover.aggregate = "none"),
     detection = ~ det_cov1, positive = ~ 1,
-    y = yy, y_pos = ypp, visits = od1$det.covs,
+    y = yy, y.pos = ypp, visits = od1$det.covs,
     method = "nested_laplace", control = ctrl)))
   ind_a <- fit_one(sim1$y, yp1)
   ind_b <- fit_one(sim2$y, yp2)
@@ -308,7 +308,7 @@ test_that("by = (occu_cover, lognormal) accepts cover > 1 via the positive type"
     formula = ~ occ_cov1, data = long, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ 1, method = "laplace",
     control = list(verbose = FALSE, max.iter = 200L), by = "sp",
-    site = "site", visit = "visit", response = "occur", y_pos = "cover",
+    site = "site", visit = "visit", response = "occur", y.pos = "cover",
     det.covs = "det_cov1")
 
   expect_s3_class(fit_by, "tobs_batch")

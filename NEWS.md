@@ -1,5 +1,46 @@
 # tulpaObs NEWS
 
+## 0.6.0
+
+Every argument a user types is now dotted, matching `n.iter`, `max.iter` and
+the rest of `control`. The old spellings are gone, not aliased (#406).
+
+* **`occu_cover()` scripts must change:** `occu_cover(cover_aggregate = )` is
+  now `occu_cover(cover.aggregate = )`.
+* **`occu_cover()` scripts must change:** the cover response passed to
+  `tobs()` is now `y.pos =` (was `y_pos =`). The same key applies to
+  `occu_multiscale_cover()`, `ms_occu_cover()`, `tobs(by = )` batches and
+  `occu_cover_inputs(y.pos = )`.
+* Other `tobs()` extras: `y_rem` -> `y.rem` (`gdistremoval()`), `site_map` ->
+  `site.map` (`ms_int_occu()`), `det_visit_formula` / `det_visit_data` ->
+  `det.visit.formula` / `det.visit.data` (`ms_abun()`).
+* Latent-count ceiling: `K_max` -> `K.max` on `abun()`, `ms_abun()`,
+  `dyn_abun()`, `distance()`, `ms_distance()`, `removal()`,
+  `royle_nichols()` and `distsamp_open()`.
+* `occu_ttd(surveyLength = )` -> `occu_ttd(survey.length = )`.
+* `predict()`: `n_points`, `time_col`, `X_det.0` -> `n.points`, `time.col`,
+  `X.det.0` on a `tobs_fit`; `include_RE`, `time_col` -> `include.RE`,
+  `time.col` on a `cover_fit`. `tobs_marginal_effect(n_points = )` ->
+  `n.points`.
+* Priors: `occu_priors()` takes `p.intercept`, `p.slope`,
+  `beta.occ.intercept`, `beta.occ.slope`; `cover_priors()` takes
+  `occ.intercept`, `occ.slope`, `pos.intercept`, `pos.slope`. A named list
+  passed as `priors =` uses the same keys. The returned prior objects keep
+  their element names.
+* Data helpers: `occu_aggregation_scan(cell_sizes, block_lengths)` ->
+  `cell.sizes`, `block.lengths`; `tobs_format_ms(species_names = )` ->
+  `species.names`.
+* `obs_family()`: `class_long`, `default_engine`, `control_keys`,
+  `control_groups` -> `class.long`, `default.engine`, `control.keys`,
+  `control.groups`.
+* Every `simulate_*()` argument is dotted (`n_occ_covs` -> `n.occ.covs`,
+  `beta_occ` -> `beta.occ`, `n_species` -> `n.species`, `sigma_logr` ->
+  `sigma.logr`, `T_seasons` -> `T.seasons`, and so on). The elements of the
+  returned list keep their names (`sim$y_pos`, `sim$truth$beta_occ`).
+* The abundance vignette's ceiling check now refits with
+  `abun(K.max = 200)`; it previously passed the ceiling to `tobs()`, which
+  ignored it.
+
 ## 0.5.1
 
 * Requires tulpa (>= 0.7.1).

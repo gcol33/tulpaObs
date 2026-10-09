@@ -74,7 +74,7 @@ test_that("a family with no roster entry is a no-op for the validator", {
   # `obs_family()`. The validator passes it through; tobs() rejects it at
   # dispatch.
   fam <- obs_family(name        = "not_a_family",
-                    class_long  = "hand-built family object",
+                    class.long  = "hand-built family object",
                     latent      = "bernoulli",
                     observation = "binomial_detection")
   expect_null(.tobs_family_methods[[fam$name]])

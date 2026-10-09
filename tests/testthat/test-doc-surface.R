@@ -16,8 +16,8 @@ test_that("test_outliers() returns the same field names on every family", {
   so <- simulate_occu(N = 50, J = 3, seed = 11)
   fo <- tobs(~ occ_cov1, data = so$data, family = occu(), detection = ~ 1,
              y = so$y, method = "laplace", control = ctl)
-  sa <- simulate_abun(N = 50, J = 3, n_abund_covs = 1, n_det_covs = 1,
-                      beta_lambda = c(log(5), 0.3), beta_p = c(0.4, -0.2),
+  sa <- simulate_abun(N = 50, J = 3, n.abund.covs = 1, n.det.covs = 1,
+                      beta.lambda = c(log(5), 0.3), beta.p = c(0.4, -0.2),
                       seed = 11)
   fa <- tobs(~ abund_cov1, data = sa$data, family = abun(),
              detection = ~ det_cov1, y = sa$y, method = "laplace",
@@ -67,8 +67,8 @@ test_that("tobs_check_id() says when its pre-fit checks did not run", {
              y = so$y, method = "laplace", control = ctl)
   expect_true(suppressMessages(tobs_check_id(fo$model))$prefit_checked)
 
-  sa <- simulate_abun(N = 50, J = 3, n_abund_covs = 1, n_det_covs = 1,
-                      beta_lambda = c(log(5), 0.3), beta_p = c(0.4, -0.2),
+  sa <- simulate_abun(N = 50, J = 3, n.abund.covs = 1, n.det.covs = 1,
+                      beta.lambda = c(log(5), 0.3), beta.p = c(0.4, -0.2),
                       seed = 13)
   fa <- tobs(~ abund_cov1, data = sa$data, family = abun(),
              detection = ~ det_cov1, y = sa$y, method = "laplace",

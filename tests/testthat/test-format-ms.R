@@ -30,7 +30,7 @@ test_that("an array and a named list of matrices give the same object", {
   f <- .fms_fixture()
   nms <- names(f$lst)
 
-  from_array <- tobs_format_ms(f$arr, species_names = nms)
+  from_array <- tobs_format_ms(f$arr, species.names = nms)
   from_list  <- tobs_format_ms(f$lst)
 
   expect_identical(from_list, from_array)
@@ -53,7 +53,7 @@ test_that("species labels come from the list names, the argument, or a default",
 
   # An explicit argument wins over the list names.
   expect_identical(
-    tobs_format_ms(f$lst, species_names = c("A", "B", "C"))$species_names,
+    tobs_format_ms(f$lst, species.names = c("A", "B", "C"))$species_names,
     c("A", "B", "C"))
 
   # No names anywhere: positional defaults, in order.
@@ -98,7 +98,7 @@ test_that("missing visits survive both entry points as NA", {
   lst <- stats::setNames(lapply(seq_len(3), function(s) arr[, , s]),
                          names(f$lst))
 
-  for (d in list(tobs_format_ms(arr, species_names = names(f$lst)),
+  for (d in list(tobs_format_ms(arr, species.names = names(f$lst)),
                  tobs_format_ms(lst))) {
     expect_true(is.na(d$y[1, 2, 1]))
     expect_true(is.na(d$y[4, 3, 3]))

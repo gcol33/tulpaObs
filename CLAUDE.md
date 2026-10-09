@@ -375,9 +375,9 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   the lower end is always the site's own maximum, only the ceiling is shared -> a
   shared ceiling makes every site pay for the largest count ANYWHERE in the data, and
   cost is linear in the state count, so one heavy-tailed species-site drags every
-  other site's evaluation up by that ratio. `K_max = NULL` (default) caps each site at
+  other site's evaluation up by that ratio. `K.max = NULL` (default) caps each site at
   `max(y_i) + 100` (`.nmix_truncation`, `R/nmix_site_marginal.R`) = the SAME headroom
-  the site holding the global maximum already had; an explicit `K_max` keeps its
+  the site holding the global maximum already had; an explicit `K.max` keeps its
   documented meaning (hard global truncation) and is NEVER capped, since a caller
   raising it is compensating for the one regime headroom cannot see. Threaded as a
   `headroom` argument (`< 0` = no cap) through `nmix_precompute_site` -- the single
@@ -801,9 +801,9 @@ the pos arm a `cover_priors()` weakly-informative intercept prior **by default**
 the engine flat ridge); else the cover intercept floats to huge SD and `predict()`
 conditional cover blows up via Jensen. `priors = FALSE`/`"none"` disables all three arms.
 
-**Cell-aggregated cover (`cover_aggregate`, #33)**: per-visit cover gives the cover arm
+**Cell-aggregated cover (`cover.aggregate`, #33)**: per-visit cover gives the cover arm
 one row/visit -> a cell w/ many detected plots drives the field more than its single
-occupancy obs. `cover_aggregate = "mean"` (default spatial) / `"median"` collapses the
+occupancy obs. `cover.aggregate = "mean"` (default spatial) / `"median"` collapses the
 cover arm to ONE row/occupancy unit; `"none"` keeps per-visit. ONLY on spatial `joint`.
 Needs cell-level positive design (from `data`); visit-level `positive` keeps per-visit.
 C++ compile-time `Aggregated` flag on `OccuCoverCoupling`
@@ -811,7 +811,7 @@ C++ compile-time `Aggregated` flag on `OccuCoverCoupling`
 `.occu_cover_build_joint_arms(cover_aggregate=)`. `test-occu-cover-coupling.R`,
 `test-occu-cover-aggregate.R`.
 
-**Latent cover-per-unit (`cover_aggregate = "latent"`)**: principled mean/median
+**Latent cover-per-unit (`cover.aggregate = "latent"`)**: principled mean/median
 alternative — cover arm carries a per-unit cover RE `u_i ~ N(0, sigma_u^2)` shared across
 the unit's detected visits, integrated out per unit (keeps EVERY visit). Unit-level
 predictor -> per-unit marginal `log M_i` SCALAR in one eta, reuses the one-row-per-unit
@@ -845,7 +845,7 @@ grid -> memory O(observations), NO per-site visit cap. Binder
 `.tobs_build_occu_cover_ragged` (`R/occu_cover.R`) sets `ragged=TRUE` +
 `site_of_visit`/`y_det_visit`/`y_pos_visit`/V-row visit designs; a compact model carries
 **NO `model$y` / `model$y_pos` / `model$valid`** (all NULL). Gated to the joint
-nested-Laplace path + `cover_aggregate="none"`. `test-occu-cover-compact.R`.
+nested-Laplace path + `cover.aggregate="none"`. `test-occu-cover-compact.R`.
 
 **A per-visit diagnostic reads `.occu_cover_visit_view()`, NEVER `model$y`/`$valid`**
 (#185). ONE length-V view for BOTH layouts: a compact fit's stored visit rows, or a
@@ -896,7 +896,7 @@ present so the iid block scatters; the shared field stays off detection by its
 `cor_re_*_<ci>_<cj>`) + BLUPs; `fit$re` = flat list keyed by arm (lone term) or
 `"<arm>:<var>"` (crossed). predict SUMS a term's offsets on its arm, slope coef
 weighted by `newdata[[coef_name]]` (intercept=1), unseen level -> 0 = pop mean. Gates:
-obs RE needs `nested_laplace`; pos RE needs `cover_aggregate="none"`; not composed w/
+obs RE needs `nested_laplace`; pos RE needs `cover.aggregate="none"`; not composed w/
 correlated MCAR / latent cover / batch. Corr slope / crossed grow the grid ->
 `control$integration="ccd"`. sigma carries binary small-cluster attenuation (lower
 bound); BLUPs recover (cor>0.5). Knobs `re.sigma.grid.p`/`.pos`,
@@ -942,7 +942,7 @@ cover|y=1  ~ f_pos(eta_pos, disp)    # hurdle (beta/lognormal/gaussian)
 Both z (cells) + a (plots) marginalize closed-form (two states each) -> exact joint
 marginal LL, reuses occu_cover nested-Laplace cell-coupling machinery.
 
-**Inputs**: `y`/`y_pos` = `[n_plots x max_visits]`. State `formula` = cell-level psi,
+**Inputs**: `y`/`y.pos` = `[n_plots x max_visits]`. State `formula` = cell-level psi,
 MUST carry areal field naming per-plot cell col: `icar(graph=adj, group_var="cell")`.
 `availability=~...` = plot-level theta (default `~1`); `detection` = per-visit p;
 `positive=~...` = cover. **Engine** (`nested_laplace` = SPATIAL engine; `laplace` +

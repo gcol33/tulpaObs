@@ -187,7 +187,8 @@
 #'   When both this and `omega_sigma_prior` are set they must be equal: the engine
 #'   applies one Penalized-Complexity prior across every block it regularizes.
 #'   Ignored for Poisson / ZIP.
-#' @param verbose Unused (kept for backward compatibility); the engine is silent.
+#' @param verbose Print the per-iteration community-covariance change of the
+#'   `optimizer = "em"` solver; the joint AGHQ optimizers are silent.
 #'
 #' @return A list of class `nmix_re_fit`: `mu_lambda`, `mu_p` (community
 #'   means), `vcov` (their joint covariance from the AGHQ marginal Hessian,
@@ -288,9 +289,9 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # (max(y) + 100) never trips this.
   y_max <- max(y)
   if (K_max < y_max) {
-    stop(sprintf(paste0("K_max (%d) is below the largest observed count (%d). ",
-                        "The N-mixture marginal sums the latent N only to K_max, ",
-                        "so a count above K_max has zero probability. Raise K_max ",
+    stop(sprintf(paste0("K.max (%d) is below the largest observed count (%d). ",
+                        "The N-mixture marginal sums the latent N only to K.max, ",
+                        "so a count above K.max has zero probability. Raise K.max ",
                         "above max(y)."), K_max, y_max), call. = FALSE)
   }
 
@@ -534,7 +535,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     stop("Community N-mixture optimization failed: the AGHQ engine returned no ",
          "fit (a singular or non-finite optimum, or a per-species posterior ",
          "solve that failed -- the engine's warning names which species). Try a ",
-         "different warm start, K_max, or n_quad.", call. = FALSE)
+         "different warm start, K.max, or n.quad.", call. = FALSE)
   }
 
   # Per-species solve status. A species the engine could not solve has NA BLUPs,

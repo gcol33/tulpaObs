@@ -119,10 +119,10 @@ library(tulpaObs)
 sim <- simulate_occu(
   N          = 600,
   J          = 6,
-  n_occ_covs = 1,
-  n_det_covs = 1,
-  beta_occ   = c(0.5, 1.2),    # intercept + slope on occ_cov1
-  beta_det   = c(0.0, 0.8),    # intercept + slope on det_cov1
+  n.occ.covs = 1,
+  n.det.covs = 1,
+  beta.occ   = c(0.5, 1.2),    # intercept + slope on occ_cov1
+  beta.det   = c(0.0, 0.8),    # intercept + slope on det_cov1
   seed       = 42
 )
 
@@ -339,10 +339,10 @@ detection process keeps a covariate so there are two arms to separate.
 sim2 <- simulate_occu(
   N          = 400,
   J          = 5,
-  n_occ_covs = 1,
-  n_det_covs = 1,
-  beta_occ   = c(0.2, 0.9),
-  beta_det   = c(0.4, 0.5),
+  n.occ.covs = 1,
+  n.det.covs = 1,
+  beta.occ   = c(0.2, 0.9),
+  beta.det   = c(0.4, 0.5),
   seed       = 7
 )
 

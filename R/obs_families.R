@@ -18,13 +18,13 @@
 #' this directly.
 #'
 #' @param name short slug, e.g. `"occu"`.
-#' @param class_long human-readable name, e.g. `"single-season occupancy"`.
+#' @param class.long human-readable name, e.g. `"single-season occupancy"`.
 #' @param latent latent-state distribution, e.g. `"bernoulli"`, `"poisson"`,
 #'   `"lognormal"`, `"hurdle"`.
 #' @param observation observation likelihood, e.g. `"binomial_detection"`,
 #'   `"binomial_N"`, `"beta"`, `"distance_binned"`.
 #' @param replicates one of `"required"`, `"optional"`, `"single"`.
-#' @param default_engine `"laplace"`, `"nested_laplace"`, `"nuts"`, or
+#' @param default.engine `"laplace"`, `"nested_laplace"`, `"nuts"`, or
 #'   `"pg_gibbs"`. This is the route `method = "auto"` resolves to.
 #' @param status `"working"`, `"planned"`, or `"experimental"`.
 #' @param response shape of the family's response: `"vector"` for a plain
@@ -36,14 +36,14 @@
 #'   not sit on a formula LHS). Consulted by [tobs()].
 #' @param params named list of family-specific parameters carried with the
 #'   object (K_max, positive-part link, etc.).
-#' @param control_keys character vector of extra `control` names this family's
+#' @param control.keys character vector of extra `control` names this family's
 #'   dispatcher accepts beyond the engine/route controls. These are added to
 #'   the allowlist `tobs()` validates `control` against, so a family with a
 #'   bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.
 #'   Admitted on every route the family supports.
-#' @param control_groups character vector of capability groups (names of
+#' @param control.groups character vector of capability groups (names of
 #'   `.tobs_control_groups`) this family participates in beyond the ones its
-#'   route admits unconditionally. Unlike `control_keys` these stay route-gated,
+#'   route admits unconditionally. Unlike `control.keys` these stay route-gated,
 #'   so a group tied to the Laplace engines is still rejected under `"nuts"`.
 #'   `"block_coordinate"` is the case this exists for: `max.outer` /
 #'   `factor.starts` mean something only to a family whose latent structure is fit
@@ -57,34 +57,34 @@
 #' f
 #' @export
 obs_family <- function(name,
-                       class_long,
+                       class.long,
                        latent,
                        observation,
                        replicates    = c("required", "optional", "single"),
-                       default_engine = c("laplace", "nested_laplace", "nuts",
+                       default.engine = c("laplace", "nested_laplace", "nuts",
                                           "pg_gibbs"),
                        status         = c("working", "planned", "experimental"),
                        params         = list(),
-                       control_keys   = character(0),
-                       control_groups = character(0),
+                       control.keys   = character(0),
+                       control.groups = character(0),
                        response       = c("matrix", "vector")) {
   replicates     <- match.arg(replicates)
-  default_engine <- match.arg(default_engine)
+  default.engine <- match.arg(default.engine)
   status         <- match.arg(status)
   response       <- match.arg(response)
 
   structure(
     list(
       name           = name,
-      class_long     = class_long,
+      class_long     = class.long,
       latent         = latent,
       observation    = observation,
       replicates     = replicates,
-      default_engine = default_engine,
+      default_engine = default.engine,
       status         = status,
       params         = params,
-      control_keys   = control_keys,
-      control_groups = control_groups,
+      control_keys   = control.keys,
+      control_groups = control.groups,
       response       = response
     ),
     class = "tobs_family"
@@ -130,11 +130,11 @@ obs_family <- function(name,
 occu <- function() {
   obs_family(
     name           = "occu",
-    class_long     = "single-season occupancy",
+    class.long     = "single-season occupancy",
     latent         = "bernoulli",
     observation    = "binomial_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working"
   )
 }
@@ -172,11 +172,11 @@ occu <- function() {
 dyn_occu <- function() {
   obs_family(
     name           = "dyn_occu",
-    class_long     = "dynamic occupancy (HMM)",
+    class.long     = "dynamic occupancy (HMM)",
     latent         = "bernoulli_hmm",
     observation    = "binomial_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working"
   )
 }
@@ -212,11 +212,11 @@ dyn_occu <- function() {
 int_occu <- function() {
   obs_family(
     name           = "int_occu",
-    class_long     = "integrated occupancy",
+    class.long     = "integrated occupancy",
     latent         = "bernoulli",
     observation    = "multisource_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working"
   )
 }
@@ -250,15 +250,15 @@ int_occu <- function() {
 jsdm <- function() {
   obs_family(
     name           = "jsdm",
-    class_long     = "joint species distribution",
+    class.long     = "joint species distribution",
     latent         = "latent_factor",
     observation    = "probit",
     replicates     = "single",
-    default_engine = "nuts",
+    default.engine = "nuts",
     status         = "working",
     # Shares the ms_count binder and fitter, so latent() factors and a shared
     # field are fit by the same block-coordinate driver.
-    control_groups = c("block_coordinate", "block_coordinate_factor",
+    control.groups = c("block_coordinate", "block_coordinate_factor",
                        "nuts_grad_threads", "nuts_logr")
   )
 }
@@ -306,11 +306,11 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
   response <- match.arg(response)
   obs_family(
     name           = "count",
-    class_long     = "count / relative-abundance GLMM",
+    class.long     = "count / relative-abundance GLMM",
     latent         = "none",
     observation    = response,
     replicates     = "single",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(response = response),
     response       = "vector"
@@ -566,7 +566,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
 #'      detection  = ~ 1,
 #'      positive   = ~ time + spatial(~ 1 + time || cell, graph = adj),
-#'      data = cell_dat, y = y, y_pos = y_pos,
+#'      data = cell_dat, y = y, y.pos = y_pos,
 #'      family = occu_cover("lognormal"), method = "nested_laplace")
 #' ```
 #'
@@ -580,7 +580,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' grid, which keeps the added axis from multiplying the outer-grid cost.
 #' The per-cell field posterior is in `fit$pos_field` / `fit$pos_field_table`
 #' (and `fit$pos_field_tables` per column). Scope: it composes with the shared
-#' occupancy field but uses per-visit cover (`cover_aggregate = "none"`) and does
+#' occupancy field but uses per-visit cover (`cover.aggregate = "none"`) and does
 #' not combine with the correlated `|` MCAR field, the latent cover RE, or the
 #' batched fused path; like the shared field it is fitted as ICAR (bym2/car read as
 #' ICAR). A static intercept cover field is only weakly identified against the
@@ -605,12 +605,12 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' re-solved, and a checkpoint written for different data or settings is rejected
 #' rather than resumed onto. Forwarded to [tulpa::tulpa_nested_laplace_joint()].
 #'
-#' @section Cell-aggregated cover (`cover_aggregate`):
+#' @section Cell-aggregated cover (`cover.aggregate`):
 #' On the shared-field spatial path the cover arm has one observation per
 #' detected visit, so a cell with many detected plots informs the shared field
 #' far more than the single occupancy observation for that cell; the field is
 #' then driven almost entirely by the cover arm and the detection-corrected
-#' occupancy surface flattens. `cover_aggregate` collapses the cover arm to a
+#' occupancy surface flattens. `cover.aggregate` collapses the cover arm to a
 #' single response per occupancy unit (cell-period) so the two arms inform the
 #' field with comparable weight:
 #' \itemize{
@@ -675,7 +675,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' (symmetric correlation nodes including 0); widen it with
 #' `control$re.logchol.grid.p` / `re.logchol.grid.pos`.
 #'
-#' The positive-cover RE needs per-visit cover (`cover_aggregate = "none"`). As
+#' The positive-cover RE needs per-visit cover (`cover.aggregate = "none"`). As
 #' with the occupancy-arm RE, each grid-integrated variance carries the binary /
 #' small-cluster inner-Laplace attenuation and is a lower bound on the truth; the
 #' BLUPs recover the per-group structure.
@@ -701,7 +701,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #'   in (0, 1)), `"lognormal"` (log-cover Gaussian), or `"gaussian"` (an
 #'   identity-Gaussian magnitude on a real, unbounded scale -- the delta-normal
 #'   hurdle; not for cover fractions, which stay on `"beta"`/`"lognormal"`).
-#' @param cover_aggregate how the cover arm collapses per occupancy unit on the
+#' @param cover.aggregate how the cover arm collapses per occupancy unit on the
 #'   shared-field spatial path: `"mean"`, `"median"`, `"latent"` (a per-unit
 #'   cover random effect integrated out), or `"none"` (per-visit). `NULL`
 #'   (default) is `"mean"` on the spatial path and `"none"` on the non-spatial
@@ -712,8 +712,8 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' @examples
 #' \donttest{
 #' N <- 120; J <- 4
-#' sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-#'                            n_pos_covs = 1, positive = "beta", seed = 1)
+#' sim <- simulate_occu_cover(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+#'                            n.pos.covs = 1, positive = "beta", seed = 1)
 #' long <- data.frame(site_id = rep(seq_len(N), each = J),
 #'                    visit    = rep(seq_len(J), times = N),
 #'                    y        = as.vector(t(sim$y)),
@@ -725,31 +725,31 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
 #' fit <- tobs(~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
 #'             detection = ~ det_cov1, positive = ~ pos_cov1,
-#'             y = od$y, y_pos = y_pos, visits = od$det.covs, method = "laplace")
+#'             y = od$y, y.pos = y_pos, visits = od$det.covs, method = "laplace")
 #' summary(fit)
 #' }
 #' @export
 occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
-                       cover_aggregate = NULL) {
+                       cover.aggregate = NULL) {
   positive <- match.arg(response)
-  if (!is.null(cover_aggregate)) {
-    cover_aggregate <- match.arg(cover_aggregate,
+  if (!is.null(cover.aggregate)) {
+    cover.aggregate <- match.arg(cover.aggregate,
                                  c("mean", "median", "latent", "none"))
   }
   obs_family(
     name           = "occu_cover",
-    class_long     = "joint occupancy-detection + cover hurdle",
+    class.long     = "joint occupancy-detection + cover hurdle",
     latent         = "bernoulli",
     observation    = switch(positive,
                             beta      = "detection_plus_beta",
                             gaussian  = "detection_plus_gaussian",
                             "detection_plus_lognormal"),
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(positive = positive,
-                          cover_aggregate = cover_aggregate),
-    control_keys   = c(
+                          cover_aggregate = cover.aggregate),
+    control.keys   = c(
       "max.iter", "tol", "sigma.beta", "engine",
       "sigma.grid", "alpha.grid", "alpha.grid.trend", "trend",
       # Resolution of the copy coefficient's own outer axis: the engine re-reads
@@ -828,7 +828,7 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
 #' positive-arm dispersion is a shared community parameter.
 #'
 #' @section Inputs:
-#' `y` and `y_pos` are 3D arrays `[n_sites x max_visits x n_species]` (or named
+#' `y` and `y.pos` are 3D arrays `[n_sites x max_visits x n_species]` (or named
 #' lists of `n_sites x max_visits` matrices, one per species); `species =` is
 #' required. The occupancy `formula`, the `detection` formula, and the cover
 #' `positive` formula carry community covariates shared across species. `coef()`
@@ -945,20 +945,20 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
   positive <- match.arg(response)
   obs_family(
     name           = "ms_occu_cover",
-    class_long     = "community joint occupancy-detection + cover hurdle",
+    class.long     = "community joint occupancy-detection + cover hurdle",
     latent         = "bernoulli",
     observation    = switch(positive,
                             beta      = "detection_plus_beta",
                             gaussian  = "detection_plus_gaussian",
                             "detection_plus_lognormal"),
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(positive = positive),
-    control_keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load",
+    control.keys   = c("max.iter", "tol", "sigma.beta", "newton.max", "sd.load",
                        "n.factors", "n.factors.max", "constrain",
                        "re.aghq.maxdim"),
-    control_groups = "nuts_dispersion_re"
+    control.groups = "nuts_dispersion_re"
   )
 }
 
@@ -984,13 +984,13 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' same nested-Laplace cell-coupling machinery as [occu_cover()].
 #'
 #' @section Inputs:
-#' `y` / `y_pos` are `[n_plots x max_visits]` matrices (plots are the rows, the
+#' `y` / `y.pos` are `[n_plots x max_visits]` matrices (plots are the rows, the
 #' availability units; visits the columns). The state-process `formula` is the
 #' cell-level occupancy predictor and MUST carry an areal field naming the
 #' per-plot cell column, `icar(graph = adj, group_var = "cell")`. `availability
 #' = ~ ...` is the plot-level theta predictor (default `~ 1`); `detection` the
 #' per-visit p predictor; `positive = ~ ...` the cover predictor (default the
-#' detection formula). `y_pos` is read only where `y == 1`.
+#' detection formula). `y.pos` is read only where `y == 1`.
 #'
 #' A detected visit (`y_cjv = 1`) with a missing cover (`y_pos_cjv = NA`) keeps
 #' its detection term but drops the `f_pos` factor: cover is taken
@@ -1055,17 +1055,17 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
   positive <- match.arg(response)
   obs_family(
     name           = "occu_multiscale_cover",
-    class_long     = "three-level occupancy + cover hurdle",
+    class.long     = "three-level occupancy + cover hurdle",
     latent         = "bernoulli",
     observation    = switch(positive,
                             beta      = "availability_detection_plus_beta",
                             gaussian  = "availability_detection_plus_gaussian",
                             "availability_detection_plus_lognormal"),
     replicates     = "required",
-    default_engine = "nested_laplace",
+    default.engine = "nested_laplace",
     status         = "working",
     params         = list(positive = positive),
-    control_keys   = c(
+    control.keys   = c(
       "max.iter", "tol", "sigma.beta",
       "sigma.grid", "alpha.grid", "alpha.grid.trend",
       "alpha.n", "alpha.n.trend", "phi.grid.pos", "n.threads",
@@ -1100,8 +1100,8 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
   if (is.null(K_max)) return(invisible(NULL))
   if (!is.numeric(K_max) || length(K_max) != 1L || !is.finite(K_max) ||
       K_max < 1) {
-    stop(sprintf(paste0("%s(): `K_max` must be a single positive number (the ",
-                        "latent-count truncation), got %s. `K_max` is the first ",
+    stop(sprintf(paste0("%s(): `K.max` must be a single positive number (the ",
+                        "latent-count truncation), got %s. `K.max` is the first ",
                         "argument -- to set the mixing distribution write ",
                         "%s(mixture = \"negbin\")."),
                  family_name, deparse(K_max)[1L], family_name), call. = FALSE)
@@ -1114,8 +1114,8 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
 #' Latent Poisson (or NB) abundance with binomial detection per visit
 #' (Royle 2004).
 #'
-#' @param K_max upper bound for the latent-abundance marginal sum (the exact
-#'   integration over `N` is truncated at `K_max`). `NULL` (default) lets the
+#' @param K.max upper bound for the latent-abundance marginal sum (the exact
+#'   integration over `N` is truncated at `K.max`). `NULL` (default) lets the
 #'   engine pick `max(y) + 100` (matching `unmarked::pcount()`); raise it if a
 #'   fit warns that the posterior over `N` puts mass on the boundary.
 #' @param mixture latent-abundance distribution, both fitted via tulpa's
@@ -1149,25 +1149,25 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
 #'   `"laplace"`-only, and a field does not combine with a random effect here.
 #' @examples
 #' \donttest{
-#' sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
+#' sim <- simulate_abun(N = 120, J = 4, n.abund.covs = 1, n.det.covs = 1, seed = 1)
 #' fit <- tobs(~ abund_cov1, data = sim$data, family = abun(),
 #'             detection = ~ det_cov1, y = sim$y, method = "laplace")
 #' summary(fit)
 #' }
 #' @export
-abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
+abun <- function(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
-  .tobs_check_K_max(K_max, "abun")
+  .tobs_check_K_max(K.max, "abun")
   obs_family(
     name           = "abun",
-    class_long     = "N-mixture abundance",
+    class.long     = "N-mixture abundance",
     latent         = mixture,
     observation    = "binomial_N",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture),
-    control_groups = "nuts_logr"
+    params         = list(K_max = K.max, mixture = mixture),
+    control.groups = "nuts_logr"
   )
 }
 
@@ -1181,14 +1181,14 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) 
 #' `log lambda` (abundance); `detection` models `logit r`. Detection is site-level
 #' by default; passing `visits` makes it visit-varying (`logit r_ij` gains the
 #' visit-level covariates), exactly as for the occupancy / N-mixture front doors.
-#' The latent `N` marginalises in closed form (a Poisson sum to `K_max`), so the
+#' The latent `N` marginalises in closed form (a Poisson sum to `K.max`), so the
 #' fit maximises the exact marginal with an observed-information vcov.
 #'
 #' @section Engines:
 #' * `method = "laplace"` -- the exact marginal maximised (BFGS) with an
 #'   observed-information covariance; the only route (no field, no sampler).
 #'
-#' @param K_max Upper summation bound for the latent abundance (default: a
+#' @param K.max Upper summation bound for the latent abundance (default: a
 #'   data-driven Poisson-tail guess).
 #' @return A `tobs_family` object for [tobs()].
 #' @examples
@@ -1199,23 +1199,23 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) 
 #' coef(fit)
 #'
 #' # Visit-varying detection via `visits`:
-#' sv <- simulate_royle_nichols(N = 150, J = 5, beta_r_visit = 0.8, seed = 1)
+#' sv <- simulate_royle_nichols(N = 150, J = 5, beta.r.visit = 0.8, seed = 1)
 #' fv <- tobs(~ x, data = sv$data, family = royle_nichols(),
 #'            detection = ~ w, y = sv$y, visits = sv$visits,
 #'            control = list(verbose = FALSE))
 #' coef(fv)
 #' }
 #' @export
-royle_nichols <- function(K_max = NULL) {
+royle_nichols <- function(K.max = NULL) {
   obs_family(
     name           = "royle_nichols",
-    class_long     = "Royle-Nichols occupancy",
+    class.long     = "Royle-Nichols occupancy",
     latent         = "poisson",
     observation    = "bernoulli_N",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max)
+    params         = list(K_max = K.max)
   )
 }
 
@@ -1225,42 +1225,42 @@ royle_nichols <- function(K_max = NULL) {
 #' Occupancy where a survey records the TIME to first detection rather than a
 #' 0/1 outcome (Garrard et al. 2008; \pkg{unmarked} `occuTTD`). At an occupied
 #' site the time-to-detection is exponential with rate `lambda` (constant
-#' hazard); a survey of length `surveyLength` that reaches its end without a
+#' hazard); a survey of length `survey.length` that reaches its end without a
 #' detection is censored. An unoccupied site never detects. The state `formula`
 #' models `logit psi` (occupancy); `detection` models `log lambda` (the
 #' site-level detection rate). The latent occupancy state integrates out in
 #' closed form (two states), so the fit maximises the exact marginal with an
 #' observed-information vcov.
 #'
-#' `y` is an `N x J` matrix of detection times: a value in `(0, surveyLength)`
-#' is a detection; a value `>= surveyLength` is a non-detection (censored);
+#' `y` is an `N x J` matrix of detection times: a value in `(0, survey.length)`
+#' is a detection; a value `>= survey.length` is a non-detection (censored);
 #' `NA` is a survey not conducted.
 #'
 #' @section Engines:
 #' * `method = "laplace"` -- the exact marginal maximised (BFGS) with an
 #'   observed-information covariance; the only route (no field, no sampler).
 #'
-#' @param surveyLength Survey length `Tmax` (the censoring time): a scalar, a
+#' @param survey.length Survey length `Tmax` (the censoring time): a scalar, a
 #'   length-`N` vector, or an `N x J` matrix. Default 1.
 #' @return A `tobs_family` object for [tobs()].
 #' @examples
 #' \donttest{
 #' sim <- simulate_occu_ttd(N = 200, J = 4, Tmax = 3, seed = 1)
-#' fit <- tobs(~ psi_cov1, data = sim$data, family = occu_ttd(surveyLength = 3),
+#' fit <- tobs(~ psi_cov1, data = sim$data, family = occu_ttd(survey.length = 3),
 #'             detection = ~ rate_cov1, y = sim$y, control = list(verbose = FALSE))
 #' coef(fit)
 #' }
 #' @export
-occu_ttd <- function(surveyLength = 1) {
+occu_ttd <- function(survey.length = 1) {
   obs_family(
     name           = "occu_ttd",
-    class_long     = "time-to-detection occupancy",
+    class.long     = "time-to-detection occupancy",
     latent         = "bernoulli",
     observation    = "exponential_ttd",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
-    params         = list(surveyLength = surveyLength)
+    params         = list(surveyLength = survey.length)
   )
 }
 
@@ -1298,11 +1298,11 @@ occu_ttd <- function(surveyLength = 1) {
 occu_multi <- function() {
   obs_family(
     name           = "occu_multi",
-    class_long     = "multi-species co-occurrence occupancy",
+    class.long     = "multi-species co-occurrence occupancy",
     latent         = "bernoulli",
     observation    = "multi_state",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list()
   )
@@ -1365,11 +1365,11 @@ double_observer <- function(type = c("independent", "dependent")) {
   type <- match.arg(type)
   obs_family(
     name           = "double_observer",
-    class_long     = "double-observer abundance",
+    class.long     = "double-observer abundance",
     latent         = "poisson",
     observation    = "multinomial_cells",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(type = type)
   )
@@ -1406,7 +1406,7 @@ double_observer <- function(type = c("independent", "dependent")) {
 #' @return A `tobs_family` object for [tobs()].
 #' @examples
 #' \donttest{
-#' sim <- simulate_dyn_int_occu(N = 200, T_seasons = 4, S = 2, seed = 1)
+#' sim <- simulate_dyn_int_occu(N = 200, T.seasons = 4, S = 2, seed = 1)
 #' fit <- tobs(~ 1, data = sim$data, family = dyn_int_occu(),
 #'             detection = ~ 1, colonization = ~ 1, extinction = ~ 1,
 #'             y = sim$y, sources = sim$sources, control = list(verbose = FALSE))
@@ -1416,11 +1416,11 @@ double_observer <- function(type = c("independent", "dependent")) {
 dyn_int_occu <- function() {
   obs_family(
     name           = "dyn_int_occu",
-    class_long     = "multi-season integrated occupancy",
+    class.long     = "multi-season integrated occupancy",
     latent         = "bernoulli",
     observation    = "hmm_multisource",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list()
   )
@@ -1466,7 +1466,7 @@ dyn_int_occu <- function() {
 #' `mu_log_r` and narrows its SE at the same time.
 #'
 #' Measured on simulated data (39 `laplace` fits at 8 and 36 species,
-#' `sigma_logr = 0.5`): where `sigma_log_r` came back at
+#' `sigma.logr = 0.5`): where `sigma_log_r` came back at
 #' least 0.30, the nominal 95% interval covered 33 of 34 with a
 #' `sqrt(mean(z^2))` of 0.88; where it came back below, it covered 2 of 5, the
 #' point estimate was 2.2x further from the truth and the SE 28% narrower. So
@@ -1482,7 +1482,7 @@ dyn_int_occu <- function() {
 #' is the seed block rather than the estimator: `mu_log_r` is a POPULATION mean,
 #' each seed draws `S` log-dispersions around it, and that draw supplies about
 #' two thirds of the across-seed spread. The 18-species blocks drew theirs
-#' 18-21% wider than `sigma_logr / sqrt(S)`. Put the draw at its expectation and
+#' 18-21% wider than `sigma.logr / sqrt(S)`. Put the draw at its expectation and
 #' the scale is 1.077 / 1.101 / 0.977; rebuild the SE at the simulated sigma as
 #' well and it is 0.990 / 1.035 / 0.963 (NOTES_measurements.md). The residual
 #' there is the attenuation of
@@ -1512,23 +1512,23 @@ dyn_int_occu <- function() {
 #' @examples
 #' f <- ms_abun(mixture = "negbin")
 #' f
-ms_abun <- function(K_max = NULL,
+ms_abun <- function(K.max = NULL,
                     mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
-  .tobs_check_K_max(K_max, "ms_abun")
+  .tobs_check_K_max(K.max, "ms_abun")
   obs_family(
     name           = "ms_abun",
-    class_long     = "multispecies N-mixture",
+    class.long     = "multispecies N-mixture",
     latent         = mixture,
     observation    = "binomial_N",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture),
+    params         = list(K_max = K.max, mixture = mixture),
     # latent() factors and the spatial-factor route are fit by the
     # block-coordinate driver. A plain shared field with no factors keeps the
     # dedicated C++ path and reaches no outer loop.
-    control_groups = c("block_coordinate", "block_coordinate_factor",
+    control.groups = c("block_coordinate", "block_coordinate_factor",
                        "nuts_grad_threads", "nuts_logr")
   )
 }
@@ -1568,9 +1568,9 @@ ms_abun <- function(K_max = NULL,
 #'   marginal, with a fixed-hyper areal field block on the initial-abundance
 #'   arm; a `temporal()` term is not sampled.
 #'
-#' @param K_max abundance-state truncation for the forward recursion (states
+#' @param K.max abundance-state truncation for the forward recursion (states
 #'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
-#'   may exceed that (the forward cost is roughly cubic in `K_max`).
+#'   may exceed that (the forward cost is roughly cubic in `K.max`).
 #' @param mixture initial-abundance distribution: `"poisson"` (default),
 #'   `"negbin"` (negative-binomial `N_1 ~ NB(mean = lambda, size = r)`), or their
 #'   zero-inflated counterparts `"zip"` / `"zinb"` (a structural-zero share
@@ -1585,17 +1585,17 @@ ms_abun <- function(K_max = NULL,
 #' @examples
 #' f <- dyn_abun(mixture = "negbin")
 #' f
-dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
+dyn_abun <- function(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) {
   mixture <- match.arg(mixture)
   obs_family(
     name           = "dyn_abun",
-    class_long     = "Dail-Madsen open N-mixture",
+    class.long     = "Dail-Madsen open N-mixture",
     latent         = "dail_madsen",
     observation    = "binomial_N",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture)
+    params         = list(K_max = K.max, mixture = mixture)
   )
 }
 
@@ -1609,7 +1609,7 @@ dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb
 #' `pi_b = integral_bin g(x; sigma) f(x) dx` and `1 - sum_b pi_b`, where `f(x)` is
 #' the distance density (uniform for a line transect, proportional to distance for
 #' a point transect). The latent `N` is summed out in closed form (truncation
-#' `K_max`), so the fit is a direct Laplace approximation (no EM), with a NUTS
+#' `K.max`), so the fit is a direct Laplace approximation (no EM), with a NUTS
 #' path over the same marginal; the per-bin detection integrals are evaluated by
 #' Gauss-Legendre quadrature.
 #'
@@ -1647,7 +1647,7 @@ dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb
 #' @examples
 #' \donttest{
 #' sim <- simulate_distance(N = 200, key = "halfnorm", transect = "line",
-#'                          n_abund_covs = 1, n_sigma_covs = 1, seed = 1)
+#'                          n.abund.covs = 1, n.sigma.covs = 1, seed = 1)
 #' fit <- tobs(~ abund_cov1, data = sim$data,
 #'             family = distance(key = "halfnorm", transect = "line",
 #'                               cutpoints = sim$cutpoints),
@@ -1658,22 +1658,22 @@ dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb
 distance <- function(key = c("halfnorm", "hazard"),
                      transect = c("line", "point"),
                      cutpoints = NULL,
-                     K_max = NULL, mixture = c("poisson", "negbin")) {
+                     K.max = NULL, mixture = c("poisson", "negbin")) {
   key      <- match.arg(key)
   transect <- match.arg(transect)
   mixture  <- match.arg(mixture)
   obs_family(
     name           = "distance",
-    class_long     = "binned distance sampling",
+    class.long     = "binned distance sampling",
     latent         = mixture,
     observation    = "distance_binned",
     replicates     = "optional",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(key = key, transect = transect,
-                          cutpoints = cutpoints, K_max = K_max,
+                          cutpoints = cutpoints, K_max = K.max,
                           mixture = mixture),
-    control_groups = "nuts_logr"
+    control.groups = "nuts_logr"
   )
 }
 
@@ -1725,7 +1725,7 @@ distance <- function(key = c("halfnorm", "hazard"),
 #' @param transect Transect geometry: `"line"` (default) or `"point"`.
 #' @param cutpoints Distance-bin edges, length `dim(y)[2] + 1`, strictly
 #'   increasing and starting at `>= 0`.
-#' @param K_max Truncation for the latent abundance sum. Defaults to
+#' @param K.max Truncation for the latent abundance sum. Defaults to
 #'   `3 * max(rowSums(y)) + 100`.
 #' @param mixture Abundance mixing distribution. `"poisson"` only; the
 #'   negative-binomial size is not yet carried as a per-species random effect.
@@ -1739,27 +1739,27 @@ distance <- function(key = c("halfnorm", "hazard"),
 ms_distance <- function(key = c("halfnorm", "hazard"),
                         transect = c("line", "point"),
                         cutpoints = NULL,
-                        K_max = NULL, mixture = c("poisson", "negbin")) {
+                        K.max = NULL, mixture = c("poisson", "negbin")) {
   key      <- match.arg(key)
   transect <- match.arg(transect)
   mixture  <- match.arg(mixture)
   obs_family(
     name           = "ms_distance",
-    class_long     = "multispecies binned distance sampling",
+    class.long     = "multispecies binned distance sampling",
     latent         = mixture,
     observation    = "distance_binned",
     replicates     = "optional",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(key = key, transect = transect,
-                          cutpoints = cutpoints, K_max = K_max,
+                          cutpoints = cutpoints, K_max = K.max,
                           mixture = mixture),
     # max.iter / tol / sigma.beta come from the laplace_em group; quad.order (the
     # Gauss-Legendre order for the per-bin detection integrals) is this family's
     # own knob.
-    control_keys   = "quad.order",
+    control.keys   = "quad.order",
     # latent() factors and a shared field are fit by the block-coordinate driver
-    control_groups = c("block_coordinate", "block_coordinate_factor")
+    control.groups = c("block_coordinate", "block_coordinate_factor")
   )
 }
 
@@ -1771,7 +1771,7 @@ ms_distance <- function(key = c("halfnorm", "hazard"),
 #' removal passes, where pass `k` removes
 #' `Binomial(N_i - sum_{l<k} y_{il}, p_{ik})` of the individuals still present.
 #' The declining catch sequence identifies detection `p` and abundance `N`; the
-#' latent `N` is summed out in closed form (truncation `K_max`), so the fit is a
+#' latent `N` is summed out in closed form (truncation `K.max`), so the fit is a
 #' direct Laplace approximation (no EM), with a NUTS path over the same marginal.
 #'
 #' The `tobs()` `formula` is the abundance (`log lambda`) model; `detection` is
@@ -1799,20 +1799,20 @@ ms_distance <- function(key = c("halfnorm", "hazard"),
 #'   estimates of abundance. *Biometrics* 61, 1093-1101.
 #' @export
 #' @examples
-#' f <- removal(K_max = 100)
+#' f <- removal(K.max = 100)
 #' f
-removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
+removal <- function(K.max = NULL, mixture = c("poisson", "negbin")) {
   mixture <- match.arg(mixture)
   obs_family(
     name           = "removal",
-    class_long     = "removal sampling",
+    class.long     = "removal sampling",
     latent         = mixture,
     observation    = "removal_sequence",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
-    params         = list(K_max = K_max, mixture = mixture),
-    control_groups = "nuts_logr"
+    params         = list(K_max = K.max, mixture = mixture),
+    control.groups = "nuts_logr"
   )
 }
 
@@ -1862,11 +1862,11 @@ removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 fp_occu <- function() {
   obs_family(
     name           = "fp_occu",
-    class_long     = "multistate false-positive occupancy",
+    class.long     = "multistate false-positive occupancy",
     latent         = "bernoulli",
     observation    = "multistate_detection",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working"
   )
 }
@@ -1897,7 +1897,7 @@ fp_occu <- function() {
 #'
 #' @section Inputs:
 #' `y` is an `n_sites x n_bins` integer matrix of per-distance-band counts;
-#' `y_rem` an `n_sites x n_periods` integer matrix of per-removal-period counts.
+#' `y.rem` an `n_sites x n_periods` integer matrix of per-removal-period counts.
 #' The per-site row totals must match (the same detected birds cross-classified).
 #'
 #' @section Engines:
@@ -1921,11 +1921,11 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
   transect <- match.arg(transect)
   obs_family(
     name           = "gdistremoval",
-    class_long     = "joint distance + removal sampling",
+    class.long     = "joint distance + removal sampling",
     latent         = "poisson",
     observation    = "distance_removal",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(transect = transect, cutpoints = cutpoints)
   )
@@ -1962,7 +1962,7 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 #' @param transect Transect geometry: `"line"` (default) or `"point"`.
 #' @param cutpoints Distance-bin edges, length `dim(y)[2] + 1`, strictly
 #'   increasing and starting at `>= 0`.
-#' @param K_max Truncation for the latent abundance HMM. Defaults to
+#' @param K.max Truncation for the latent abundance HMM. Defaults to
 #'   `3 * max(period total) + 40`.
 #' @param mixture Initial-abundance mixing distribution. `"poisson"` (default),
 #'   `"negbin"` (negative binomial, `Var(N_1) = lambda + lambda^2 / r`, with an
@@ -2005,7 +2005,7 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 #'                    dynamics = "notrend")
 #' f
 distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
-                          K_max = NULL,
+                          K.max = NULL,
                           mixture = c("poisson", "negbin", "zip", "zinb"),
                           dynamics = c("constant", "notrend", "trend", "autoreg",
                                        "ricker", "gompertz")) {
@@ -2014,14 +2014,14 @@ distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
   dynamics <- match.arg(dynamics)
   obs_family(
     name           = "distsamp_open",
-    class_long     = "open-population distance sampling",
+    class.long     = "open-population distance sampling",
     latent         = mixture,
     observation    = "distance_open",
     replicates     = "required",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(transect = transect, cutpoints = cutpoints,
-                          K_max = K_max, mixture = mixture, dynamics = dynamics)
+                          K_max = K.max, mixture = mixture, dynamics = dynamics)
   )
 }
 
@@ -2074,15 +2074,15 @@ occu_categorical <- function(classes = NULL) {
   }
   obs_family(
     name           = "occu_categorical",
-    class_long     = "presence + nominal class hurdle",
+    class.long     = "presence + nominal class hurdle",
     latent         = "hurdle",
     observation    = "binomial_plus_multinomial",
     replicates     = "single",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     response       = "vector",
     params         = list(classes = classes),
-    control_keys   = c("max.iter", "tol", "prior.prec", "sigma.beta")
+    control.keys   = c("max.iter", "tol", "prior.prec", "sigma.beta")
   )
 }
 
@@ -2382,7 +2382,7 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
   }
   obs_family(
     name           = "cover",
-    class_long     = "vegetation cover hurdle",
+    class.long     = "vegetation cover hurdle",
     latent         = "hurdle",
     observation    = switch(positive,
                             beta            = "binomial_plus_beta",
@@ -2392,7 +2392,7 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
                             ordinal         = "binomial_plus_ordinal",
                             gaussian        = "binomial_plus_gaussian"),
     replicates     = "single",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     # The cover response is a plain length-N cover vector, so it may sit on the
     # top formula LHS (`cover.flat ~ ...`) and drop `y =`.
@@ -2406,7 +2406,7 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
     # carries the trend), rather than a generic unknown-control-key rejection.
     # `sigma.pos.grid` is retained for the same reason: its removal error names
     # `alpha.grid`, the axis that replaced it.
-    control_keys   = c(
+    control.keys   = c(
       "max.iter", "tol", "n.threads", "n.threads.outer", "prior.sigma", "prior.alpha",
       "prior.phi",
       "phi.grid", "sigma.grid", "sigma.pos.grid", "rho.grid", "tau.grid",

@@ -109,8 +109,8 @@ test_that("multiscale NUTS target drops missing cover and matches the R oracle",
   for (positive in c("lognormal", "beta")) {
     set.seed(if (positive == "beta") 22L else 11L)
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 25L, plots_per_cell = 4L, visits_per_plot = 3L,
-      beta_pos = if (positive == "beta") c(stats::qlogis(0.3), -0.3)
+      n.cells = 25L, plots.per.cell = 4L, visits.per.plot = 3L,
+      beta.pos = if (positive == "beta") c(stats::qlogis(0.3), -0.3)
                  else c(log(0.10), -0.4),
       positive = positive, phi = if (positive == "beta") 12 else 0.35,
       sigma = 0, alpha = 0, seed = if (positive == "beta") 22L else 11L)
@@ -168,7 +168,7 @@ test_that("multiscale NUTS target drops missing cover and matches the R oracle",
 
 test_that("multiscale builder carries missing cover as the sentinel", {
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 20L, plots_per_cell = 3L, visits_per_plot = 2L,
+    n.cells = 20L, plots.per.cell = 3L, visits.per.plot = 2L,
     positive = "lognormal", sigma = 0, alpha = 0, seed = 7L)
 
   full <- .omc_bind_model(sim, "lognormal")
@@ -191,7 +191,7 @@ test_that("multiscale builder carries missing cover as the sentinel", {
   y_bad <- sim$y_pos
   y_bad[det[1L]] <- -1
   expect_error(.omc_bind_model(sim, "lognormal", y_pos = y_bad),
-               "y_pos > 0")
+               "y.pos > 0")
 })
 
 
@@ -201,8 +201,8 @@ test_that("multiscale fit with missing cover moves the cover arm alone", {
   skip_on_cran()
 
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 60L, plots_per_cell = 4L, visits_per_plot = 3L,
-    beta_pos = c(log(0.10), -0.4), positive = "lognormal", phi = 0.35,
+    n.cells = 60L, plots.per.cell = 4L, visits.per.plot = 3L,
+    beta.pos = c(log(0.10), -0.4), positive = "lognormal", phi = 0.35,
     sigma = 0, alpha = 0, seed = 31L)
 
   det <- which(!is.na(sim$y) & sim$y == 1L)
@@ -214,7 +214,7 @@ test_that("multiscale fit with missing cover moves the cover arm alone", {
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-    y = sim$y, y_pos = y_pos, method = "laplace",
+    y = sim$y, y.pos = y_pos, method = "laplace",
     control = list(verbose = FALSE)))
 
   full <- fit_one(sim$y_pos)
@@ -255,8 +255,8 @@ test_that("multiscale shared-field fit takes missing cover", {
   skip_if_fast()
 
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 40L, plots_per_cell = 4L, visits_per_plot = 3L,
-    beta_pos = c(log(0.10), -0.4), positive = "lognormal", phi = 0.35,
+    n.cells = 40L, plots.per.cell = 4L, visits.per.plot = 3L,
+    beta.pos = c(log(0.10), -0.4), positive = "lognormal", phi = 0.35,
     sigma = 0.5, alpha = 1, seed = 31L)
 
   det <- which(!is.na(sim$y) & sim$y == 1L)
@@ -269,7 +269,7 @@ test_that("multiscale shared-field fit takes missing cover", {
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot,
     positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-    y = sim$y, y_pos = y_pos, method = "nested_laplace",
+    y = sim$y, y.pos = y_pos, method = "nested_laplace",
     control = list(sigma.grid = c(0.3, 0.6, 1.0),
                    diagnose.k = FALSE, max.iter = 500L, verbose = FALSE)))
 

@@ -43,7 +43,7 @@ test_that("the marginal matches a direct two-state computation", {
 })
 
 test_that("analytic gradient matches finite differences", {
-  sim <- simulate_fp_occu(N = 100, J = 5, n_occ_covs = 1, seed = 7)
+  sim <- simulate_fp_occu(N = 100, J = 5, n.occ.covs = 1, seed = 7)
   model <- tulpaObs:::.tobs_build_fp_occu(~ occ_cov1, ~ 1, sim$data, sim$y)
   lay  <- tulpaObs:::.tobs_fp_occu_nuts_layout(2L, 1L, 1L, 1L)
   marg <- tulpaObs:::.tobs_fp_occu_nuts_marginal(model)
@@ -58,7 +58,7 @@ test_that("analytic gradient matches finite differences", {
 })
 
 test_that("C++ fp_occu NUTS log-posterior matches the R oracle byte-for-byte", {
-  sim <- simulate_fp_occu(N = 60, J = 5, n_occ_covs = 1, seed = 12)
+  sim <- simulate_fp_occu(N = 60, J = 5, n.occ.covs = 1, seed = 12)
   model <- tulpaObs:::.tobs_build_fp_occu(~ occ_cov1, ~ 1, sim$data, sim$y)
   lay  <- tulpaObs:::.tobs_fp_occu_nuts_layout(2L, 1L, 1L, 1L)
   marg <- tulpaObs:::.tobs_fp_occu_nuts_marginal(model)
@@ -76,7 +76,7 @@ test_that("C++ fp_occu NUTS log-posterior matches the R oracle byte-for-byte", {
 test_that("fp_occu Laplace recovers truth", {
   skip_if_fast()
   beta_psi <- c(qlogis(0.5), 0.7)
-  sim <- simulate_fp_occu(N = 600, J = 6, n_occ_covs = 1, beta_psi = beta_psi,
+  sim <- simulate_fp_occu(N = 600, J = 6, n.occ.covs = 1, beta.psi = beta_psi,
                           p11 = 0.6, p10 = 0.05, b = 0.5, seed = 11)
   fit <- tobs(formula = ~ occ_cov1, data = sim$data, family = fp_occu(),
               detection = ~ 1, y = sim$y, method = "laplace",
@@ -99,7 +99,7 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
   n_seed <- 30L
   covered <- matrix(NA, n_seed, length(truth))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_fp_occu(N = 400, J = 6, n_occ_covs = 1, beta_psi = beta_psi,
+    sim <- simulate_fp_occu(N = 400, J = 6, n.occ.covs = 1, beta.psi = beta_psi,
                             p11 = 0.6, p10 = 0.05, b = 0.5, seed = 400 + s)
     fit <- tobs(formula = ~ occ_cov1, data = sim$data, family = fp_occu(),
                 detection = ~ 1, y = sim$y, method = "laplace",
@@ -140,8 +140,8 @@ test_that("fp_occu supports a covariate on the false-positive arm", {
 
 test_that("S3 surface works for fp_occu fits", {
   skip_if_fast()
-  sim <- simulate_fp_occu(N = 300, J = 5, n_occ_covs = 1,
-                          beta_psi = c(qlogis(0.5), 0.6), seed = 3)
+  sim <- simulate_fp_occu(N = 300, J = 5, n.occ.covs = 1,
+                          beta.psi = c(qlogis(0.5), 0.6), seed = 3)
   fit <- tobs(formula = ~ occ_cov1, data = sim$data, family = fp_occu(),
               detection = ~ 1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE))
@@ -183,7 +183,7 @@ test_that("fp_occu NUTS recovers truth and scores WAIC", {
   skip_on_cran()
   skip_if_fast()
   beta_psi <- c(qlogis(0.5), 0.6)
-  sim <- simulate_fp_occu(N = 300, J = 6, n_occ_covs = 1, beta_psi = beta_psi,
+  sim <- simulate_fp_occu(N = 300, J = 6, n.occ.covs = 1, beta.psi = beta_psi,
                           p11 = 0.6, p10 = 0.05, b = 0.5, seed = 31)
   fit <- tobs(formula = ~ occ_cov1, data = sim$data, family = fp_occu(),
               detection = ~ 1, y = sim$y, method = "nuts",

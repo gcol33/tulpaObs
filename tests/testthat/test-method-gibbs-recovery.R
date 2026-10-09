@@ -8,8 +8,8 @@
 
 sim_occu_fixed <- function(seed = 41, N = 400L, J = 5L,
                            beta_occ = c(0.4, -0.8), beta_det = c(0.0, 0.4)) {
-  simulate_occu(N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L,
-                beta_occ = beta_occ, beta_det = beta_det, seed = seed)
+  simulate_occu(N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L,
+                beta.occ = beta_occ, beta.det = beta_det, seed = seed)
 }
 
 test_that("method = 'laplace_gibbs' recovers occupancy/detection fixed effects", {
@@ -160,15 +160,15 @@ test_that("dyn_occu fits under laplace_gibbs / laplace_mi and pools calibrated S
   # backward-sample) and is encoded by counting its transitions. A site with no
   # interval starting in the origin state contributes no transition trial; a
   # padded one-trial row per such site pulls gamma about 2.4 SE low here.
-  sim <- simulate_dyn_occu(N = 120L, J = 4L, n_seasons = 4L, seed = 3L)
+  sim <- simulate_dyn_occu(N = 120L, J = 4L, n.seasons = 4L, seed = 3L)
   fits <- .fit_three_routes(function(m, ctl)
     tobs(~ 1, data = sim$data, family = dyn_occu(), detection = ~ 1,
          colonization = ~ 1, extinction = ~ 1, y = sim$y, method = m,
          control = ctl))
   .gibbs_vs_laplace(fits, "dyn_occu")
 
-  sv <- simulate_dyn_occu(N = 150L, J = 3L, n_seasons = 5L,
-                          beta_gamma = c(-1, 0.8), seed = 1L)
+  sv <- simulate_dyn_occu(N = 150L, J = 3L, n.seasons = 5L,
+                          beta.gamma = c(-1, 0.8), seed = 1L)
   fits <- .fit_three_routes(function(m, ctl)
     tobs(~ 1, data = sv$data, family = dyn_occu(), detection = ~ 1,
          colonization = ~ gamma_cov, extinction = ~ 1, y = sv$y, method = m,

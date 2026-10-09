@@ -52,12 +52,12 @@
   cover_obs <- pos_mask & is.finite(y_pos_num)
   if (identical(positive, "beta")) {
     if (any(cover_obs & (y_pos_num <= 0 | y_pos_num >= 1)))
-      stop("Beta positive arm requires 0 < y_pos < 1 at every detected visit ",
-           "with an observed cover; clip with pmin(pmax(y_pos, eps), 1 - eps).",
+      stop("Beta positive arm requires 0 < y.pos < 1 at every detected visit ",
+           "with an observed cover; clip with pmin(pmax(y.pos, eps), 1 - eps).",
            call. = FALSE)
   } else if (!identical(positive, "gaussian")) {
     if (any(cover_obs & (y_pos_num <= 0)))
-      stop("Lognormal positive arm requires y_pos > 0 at every detected visit ",
+      stop("Lognormal positive arm requires y.pos > 0 at every detected visit ",
            "with an observed cover.", call. = FALSE)
   }
   y_pos_num[pos_mask & !cover_obs] <- NA_real_
@@ -77,10 +77,10 @@
                                    pos_visit_formula = NULL,
                                    pos_visit_data    = NULL) {
   if (!is.matrix(y) || !is.matrix(y_pos)) {
-    stop("y and y_pos must be matrices (n_sites x max_visits).", call. = FALSE)
+    stop("y and y.pos must be matrices (n_sites x max_visits).", call. = FALSE)
   }
   if (!all(dim(y) == dim(y_pos))) {
-    stop("y and y_pos must have identical dimensions.", call. = FALSE)
+    stop("y and y.pos must have identical dimensions.", call. = FALSE)
   }
   .tobs_check_site_count(nrow(y), nrow(data), "rows")
 
@@ -213,7 +213,7 @@
   }
   if (length(y_pos_values) != n_visits_valid) {
     stop(sprintf(paste0(
-      "compact occu_cover: y_pos has %d rows but the detection response has %d ",
+      "compact occu_cover: y.pos has %d rows but the detection response has %d ",
       "valid visits. The occurrence and cover tobs_data(compact = TRUE) calls ",
       "must use the same df / site / visit so they align."),
       length(y_pos_values), n_visits_valid), call. = FALSE)
@@ -540,7 +540,7 @@
   if (!is.null(pos_re_parse)) {
     if (!identical(model$cover_aggregate %||% "none", "none")) {
       stop("occu_cover(): a random effect on the positive-cover arm needs ",
-           "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
+           "per-visit cover (cover.aggregate = \"none\"); it cannot map onto ",
            "cell-aggregated cover rows (one per unit).", call. = FALSE)
     }
     model$re_pos <- design(pos_re_parse, pos_visits, "positive cover")

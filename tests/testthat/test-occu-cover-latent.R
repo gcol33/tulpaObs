@@ -76,10 +76,10 @@
   suppressWarnings(tobs(
     formula = ~ xocc + icar(graph = sim$adj, group_var = "cell_idx"),
     data = sim$site,
-    family = occu_cover(family, cover_aggregate = "latent"),
+    family = occu_cover(family, cover.aggregate = "latent"),
     detection = ~ det_cov,
     positive = ~ xpos + share(spatial(), alpha = grid(c(0, 0.8, 1.5))),
-    y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
+    y = sim$Y, y.pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(1.6), length.out = 4)),
@@ -226,9 +226,9 @@ test_that("beta latent Expected curvature is the PSD Fisher marginal info", {
 })
 
 test_that("family carries the latent choice and dispatcher gates it", {
-  expect_identical(occu_cover("beta", cover_aggregate = "latent")$params$cover_aggregate,
+  expect_identical(occu_cover("beta", cover.aggregate = "latent")$params$cover_aggregate,
                    "latent")
-  expect_identical(occu_cover("lognormal", cover_aggregate = "latent")$params$cover_aggregate,
+  expect_identical(occu_cover("lognormal", cover.aggregate = "latent")$params$cover_aggregate,
                    "latent")
 
   adj <- chain_adj(10L)
@@ -238,9 +238,9 @@ test_that("family carries the latent choice and dispatcher gates it", {
   # Explicit latent on the non-spatial laplace path -> error.
   expect_error(
     tobs(formula = ~ xocc, data = sim$site,
-         family = occu_cover("lognormal", cover_aggregate = "latent"),
+         family = occu_cover("lognormal", cover.aggregate = "latent"),
          detection = ~ det_cov, positive = ~ xpos,
-         y = sim$Y, y_pos = sim$Ypos, visits = sim$vd, method = "laplace"),
+         y = sim$Y, y.pos = sim$Ypos, visits = sim$vd, method = "laplace"),
     "spatial")
 
   # Explicit latent with a VISIT-level positive covariate -> error.
@@ -250,9 +250,9 @@ test_that("family carries the latent choice and dispatcher gates it", {
   expect_error(
     tobs(formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
          data = sim$site,
-         family = occu_cover("lognormal", cover_aggregate = "latent"),
+         family = occu_cover("lognormal", cover.aggregate = "latent"),
          detection = ~ det_cov, positive = ~ pcov,
-         y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
+         y = sim$Y, y.pos = sim$Ypos, visits = sim2$vd,
          method = "nested_laplace",
          control = list(verbose = FALSE, engine = "joint")),
     "cell-level positive design")

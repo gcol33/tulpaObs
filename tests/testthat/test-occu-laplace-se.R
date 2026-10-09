@@ -27,9 +27,9 @@ test_that("Louis-corrected SE matches MC sd of beta_psi_hat (D1 sweep)", {
   se_hat   <- beta_hat
 
   for (s in seq_len(n_seeds)) {
-    sim <- simulate_occu(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                         beta_occ = truth[1:2],
-                         beta_det = truth[3:4],
+    sim <- simulate_occu(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                         beta.occ = truth[1:2],
+                         beta.det = truth[3:4],
                          seed = 7000L + s)
     fit <- tryCatch(
       tobs(formula = ~ occ_cov1, data = sim$data, family = occu(),
@@ -81,9 +81,9 @@ test_that("95% Wald CI on psi block covers truth at near-nominal rate", {
   ok <- logical(n_seeds)
 
   for (s in seq_len(n_seeds)) {
-    sim <- simulate_occu(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                         beta_occ = truth[1:2],
-                         beta_det = truth[3:4],
+    sim <- simulate_occu(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                         beta.occ = truth[1:2],
+                         beta.det = truth[3:4],
                          seed = 8000L + s)
     fit <- tryCatch(
       tobs(formula = ~ occ_cov1, data = sim$data, family = occu(),
@@ -131,9 +131,9 @@ test_that("Louis fix also applies when priors = FALSE (unpenalised path)", {
   se_hat   <- beta_hat
 
   for (s in seq_len(n_seeds)) {
-    sim <- simulate_occu(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                         beta_occ = truth[1:2],
-                         beta_det = truth[3:4],
+    sim <- simulate_occu(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                         beta.occ = truth[1:2],
+                         beta.det = truth[3:4],
                          seed = 9000L + s)
     fit <- tryCatch(
       tobs(formula = ~ occ_cov1, data = sim$data, family = occu(),
@@ -185,8 +185,8 @@ test_that(".louis_info_psi_single closed-form sanity check", {
   expect_equal(as.matrix(I_obs), as.matrix(expected), tolerance = 1e-10)
 
   # With a prior, diag should be augmented by 1/sd^2 on each coefficient.
-  pr <- occu_priors(beta_occ_intercept = list(mean = 0, sd = 2),
-                    beta_occ_slope     = list(mean = 0, sd = 4))
+  pr <- occu_priors(beta.occ.intercept = list(mean = 0, sd = 2),
+                    beta.occ.slope     = list(mean = 0, sd = 4))
   I_obs_p <- tulpaObs:::.louis_info_psi_single(
     X_occ      = X,
     beta_psi   = beta_psi,

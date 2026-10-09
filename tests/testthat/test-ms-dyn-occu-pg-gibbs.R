@@ -12,9 +12,9 @@
 
 test_that("ms_dyn_occu() method = 'pg_gibbs' S3 + convergence", {
   skip_on_cran()
-  sim <- simulate_ms_dyn_occu(N = 70, J = 3, n_species = 8, n_seasons = 4,
-                              beta_comm_mean = c(stats::qlogis(0.5)),
-                              beta_comm_sd = c(0.6), gamma = 0.3, epsilon = 0.2,
+  sim <- simulate_ms_dyn_occu(N = 70, J = 3, n.species = 8, n.seasons = 4,
+                              beta.comm.mean = c(stats::qlogis(0.5)),
+                              beta.comm.sd = c(0.6), gamma = 0.3, epsilon = 0.2,
                               seed = 1)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
               colonization = ~ 1, extinction = ~ 1, y = sim$y,
@@ -38,8 +38,8 @@ test_that("ms_dyn_occu() pg_gibbs recovers gamma/eps + community means + SD", {
   psi1_t <- stats::qlogis(0.5); g_t <- 0.3; e_t <- 0.2; sdpsi_t <- 0.7
   psi1_e <- gam_e <- eps_e <- sdpsi_e <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_dyn_occu(N = 100, J = 4, n_species = 14, n_seasons = 5,
-                                beta_comm_mean = c(psi1_t), beta_comm_sd = c(sdpsi_t),
+    sim <- simulate_ms_dyn_occu(N = 100, J = 4, n.species = 14, n.seasons = 5,
+                                beta.comm.mean = c(psi1_t), beta.comm.sd = c(sdpsi_t),
                                 gamma = g_t, epsilon = e_t, seed = 400 + s)
     fg <- tryCatch(
       tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,

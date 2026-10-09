@@ -13,7 +13,7 @@ test_that("removal_laplace matches unmarked::multinomPois", {
   skip_if_fast()
   skip_if_not_installed("unmarked")
 
-  sim <- simulate_removal(N = 200, K = 4, n_abund_covs = 1, n_det_covs = 1,
+  sim <- simulate_removal(N = 200, K = 4, n.abund.covs = 1, n.det.covs = 1,
                           seed = 7)
   N <- nrow(sim$y); K <- ncol(sim$y)
   # removal_laplace consumes a long (site x occasion) response: abundance design
@@ -85,7 +85,7 @@ test_that("ms_abun recovers the community-mean (lambda, p) intercepts (tiny fixt
   # fixture rather than a multi-seed sweep -- a CI smoke gate that catches a gross
   # regression in the multispecies recovery (the offline spAbundance probe in
   # dev_notes/ remains the precise cross-check).
-  sim <- simulate_ms_abun(n_species = 8L, N = 70L, J = 4L, seed = 21L)
+  sim <- simulate_ms_abun(n.species = 8L, N = 70L, J = 4L, seed = 21L)
   fit <- tobs(~ 1, data = data.frame(s = seq_len(70L)), family = ms_abun(),
               detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(8L)),
               method = "laplace", control = list(verbose = FALSE))

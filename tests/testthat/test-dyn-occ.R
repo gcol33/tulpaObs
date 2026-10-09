@@ -147,8 +147,8 @@ test_that("a season-varying rate covariate routes to the interval path", {
   # A [n_sites x (T-1)] matrix covariate on colonization / extinction triggers
   # the interval-indexed design; a plain site-level covariate does NOT (it stays
   # on the byte-identical constant-rate path).
-  sv <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 5,
-                          beta_gamma = c(-1, 0.8), seed = 1)
+  sv <- simulate_dyn_occu(N = 40, J = 3, n.seasons = 5,
+                          beta.gamma = c(-1, 0.8), seed = 1)
   m_sv <- tulpaObs:::.tobs_build_model(
     occ_formula = ~ 1, det_formula = ~ 1, data = sv$data, y = sv$y,
     col_formula = ~ gamma_cov, ext_formula = ~ 1)
@@ -194,10 +194,10 @@ test_that("dyn_occu recovers season-varying gamma/epsilon + ~95% coverage", {
   est   <- matrix(NA_real_, n_seed, 4)
   cover <- matrix(FALSE, n_seed, 4)
   for (s in seq_len(n_seed)) {
-    sv <- simulate_dyn_occu(N = 400, J = 5, n_seasons = 7,
-                            beta_occ = 0.3, beta_det = 0.4,
-                            beta_gamma = c(-1.0, 0.9),
-                            beta_epsilon = c(-1.5, -0.7), seed = 300 + s)
+    sv <- simulate_dyn_occu(N = 400, J = 5, n.seasons = 7,
+                            beta.occ = 0.3, beta.det = 0.4,
+                            beta.gamma = c(-1.0, 0.9),
+                            beta.epsilon = c(-1.5, -0.7), seed = 300 + s)
     fit <- tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y,
                 detection = ~ 1, colonization = ~ gamma_cov,
                 extinction = ~ eps_cov, method = "laplace",
@@ -220,8 +220,8 @@ test_that("dyn_occu recovers season-varying gamma/epsilon + ~95% coverage", {
 test_that("a season-varying detection covariate routes to the season path", {
   # A [n_sites x T] matrix covariate on detection triggers the season-indexed
   # (T-column) design; a plain site-level covariate does NOT.
-  sv <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 5,
-                          beta_det_season = c(0.2, -0.8), seed = 1)
+  sv <- simulate_dyn_occu(N = 40, J = 3, n.seasons = 5,
+                          beta.det.season = c(0.2, -0.8), seed = 1)
   m_sv <- tulpaObs:::.tobs_build_model(
     occ_formula = ~ 1, det_formula = ~ det_cov, data = sv$data, y = sv$y,
     col_formula = ~ 1, ext_formula = ~ 1)
@@ -264,8 +264,8 @@ test_that("dyn_occu recovers season-varying detection + ~95% coverage", {
   est   <- matrix(NA_real_, n_seed, 2)
   cover <- matrix(FALSE, n_seed, 2)
   for (s in seq_len(n_seed)) {
-    sv <- simulate_dyn_occu(N = 350, J = 4, n_seasons = 6, beta_occ = 0.4,
-                            beta_det_season = c(0.2, -0.8),
+    sv <- simulate_dyn_occu(N = 350, J = 4, n.seasons = 6, beta.occ = 0.4,
+                            beta.det.season = c(0.2, -0.8),
                             gamma = 0.25, epsilon = 0.15, seed = 400 + s)
     fit <- tobs(~ 1, data = sv$data, family = dyn_occu(), y = sv$y,
                 detection = ~ det_cov, colonization = ~ 1, extinction = ~ 1,

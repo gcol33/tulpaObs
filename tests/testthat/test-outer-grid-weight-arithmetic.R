@@ -38,7 +38,7 @@
     family = occu_cover("lognormal"), detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial(), alpha = grid(
       c(0, exp(seq(log(0.1), log(3), length.out = 5))))),
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(engine = "joint", verbose = FALSE, sigma.beta = 5,
                    sigma.grid = exp(seq(log(0.2), log(1.6), length.out = 5)),

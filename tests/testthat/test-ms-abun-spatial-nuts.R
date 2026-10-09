@@ -34,9 +34,9 @@ test_that("ms_abun() NUTS + car_proper shared field recovers means + field (#73)
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(6L)
-  sim <- simulate_ms_abun(n_species = 12, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 12, J = 5, n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
                           graph = adj, sigma.field = 0.6, seed = 7)
   # Reference nested-Laplace (sfMsNMix) fit -- NUTS should reproduce its field.
   nl <- tobs(~ abund_cov1 + car_proper(graph = adj), detection = ~ det_cov1,
@@ -62,9 +62,9 @@ test_that("ms_abun() NUTS + icar shared field samples clean + centred (#113)", {
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(6L)
-  sim <- simulate_ms_abun(n_species = 12, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 12, J = 5, n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
                           graph = adj, sigma.field = 0.6, seed = 7)
   nl <- tobs(~ abund_cov1 + icar(graph = adj), detection = ~ det_cov1,
              family = ms_abun(), data = sim$data, y = sim$y, species = sim$species,
@@ -87,9 +87,9 @@ test_that("ms_abun() NUTS + bym2 shared field samples clean + recovers field (#1
   skip_on_cran()
   skip_if_fast()
   adj <- rook_adj(6L)
-  sim <- simulate_ms_abun(n_species = 12, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 12, J = 5, n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
                           graph = adj, sigma.field = 0.6, seed = 9)
   nl <- tobs(~ abund_cov1 + bym2(graph = adj), detection = ~ det_cov1,
              family = ms_abun(), data = sim$data, y = sim$y, species = sim$species,

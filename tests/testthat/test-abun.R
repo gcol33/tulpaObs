@@ -16,8 +16,8 @@ test_that("single Poisson N-mixture fit recovers truth", {
   skip_if_fast()
   beta_lambda <- c(log(4), 0.6, -0.4)
   beta_p      <- c(0.2, 0.5)
-  sim <- simulate_abun(N = 400, J = 5, n_abund_covs = 2, n_det_covs = 1,
-                       beta_lambda = beta_lambda, beta_p = beta_p, seed = 11)
+  sim <- simulate_abun(N = 400, J = 5, n.abund.covs = 2, n.det.covs = 1,
+                       beta.lambda = beta_lambda, beta.p = beta_p, seed = 11)
 
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = abun(), detection = ~ det_cov1, y = sim$y,
@@ -53,8 +53,8 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
 
   covered <- matrix(NA, n_seed, length(truth))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_abun(N = 150, J = 4, n_abund_covs = 2, n_det_covs = 1,
-                         beta_lambda = beta_lambda, beta_p = beta_p, seed = 100 + s)
+    sim <- simulate_abun(N = 150, J = 4, n.abund.covs = 2, n.det.covs = 1,
+                         beta.lambda = beta_lambda, beta.p = beta_p, seed = 100 + s)
     fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
                 family = abun(), detection = ~ det_cov1, y = sim$y,
                 method = "laplace")
@@ -71,9 +71,9 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
 test_that("S3 surface works for N-mixture fits", {
   skip_if_fast()
   # Explicit betas so the abund_cov1 effect direction is deterministic.
-  sim <- simulate_abun(N = 200, J = 4, n_abund_covs = 2, n_det_covs = 1,
-                       beta_lambda = c(log(4), 0.5, -0.3),
-                       beta_p = c(0.3, 0.4), seed = 3)
+  sim <- simulate_abun(N = 200, J = 4, n.abund.covs = 2, n.det.covs = 1,
+                       beta.lambda = c(log(4), 0.5, -0.3),
+                       beta.p = c(0.3, 0.4), seed = 3)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = abun(), detection = ~ det_cov1, y = sim$y,
               method = "laplace")
@@ -111,8 +111,8 @@ test_that("negbin N-mixture recovers truth, surfaces dispersion, covers CIs", {
   size_true   <- 2                       # Var(N) = lambda + lambda^2 / 2
 
   # --- point recovery on one well-identified fit ---
-  sim <- simulate_abun(N = 400, J = 6, n_abund_covs = 2, n_det_covs = 1,
-                       beta_lambda = beta_lambda, beta_p = beta_p,
+  sim <- simulate_abun(N = 400, J = 6, n.abund.covs = 2, n.det.covs = 1,
+                       beta.lambda = beta_lambda, beta.p = beta_p,
                        mixture = "negbin", size = size_true, seed = 21)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = abun(mixture = "negbin"), detection = ~ det_cov1,
@@ -145,8 +145,8 @@ test_that("negbin N-mixture recovers truth, surfaces dispersion, covers CIs", {
   covered <- matrix(NA, n_seed, 6L)
   tr <- c(truth, log(size_true))
   for (s in seq_len(n_seed)) {
-    sm <- simulate_abun(N = 200, J = 5, n_abund_covs = 2, n_det_covs = 1,
-                        beta_lambda = beta_lambda, beta_p = beta_p,
+    sm <- simulate_abun(N = 200, J = 5, n.abund.covs = 2, n.det.covs = 1,
+                        beta.lambda = beta_lambda, beta.p = beta_p,
                         mixture = "negbin", size = size_true, seed = 300 + s)
     ft <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sm$data,
                family = abun(mixture = "negbin"), detection = ~ det_cov1,
@@ -162,8 +162,8 @@ test_that("negbin N-mixture recovers truth, surfaces dispersion, covers CIs", {
 })
 
 test_that("poisson and negbin paths differ only by the dispersion coordinate", {
-  sim <- simulate_abun(N = 150, J = 4, n_abund_covs = 1, n_det_covs = 1,
-                       beta_lambda = c(log(4), 0.5), beta_p = c(0.3, 0.4),
+  sim <- simulate_abun(N = 150, J = 4, n.abund.covs = 1, n.det.covs = 1,
+                       beta.lambda = c(log(4), 0.5), beta.p = c(0.3, 0.4),
                        mixture = "negbin", size = 2, seed = 7)
   base <- list(formula = ~ abund_cov1, data = sim$data, detection = ~ det_cov1,
                y = sim$y, method = "laplace", control = list(verbose = FALSE))
@@ -371,7 +371,7 @@ test_that("cpp_abun_nuts_joint_logpost matches the R oracle (byte-exact)", {
   set.seed(7)
   for (is_nb in c(FALSE, TRUE)) {
     mix <- if (is_nb) "negbin" else "poisson"
-    sim <- simulate_abun(N = 40, J = 4, n_abund_covs = 1, n_det_covs = 1,
+    sim <- simulate_abun(N = 40, J = 4, n.abund.covs = 1, n.det.covs = 1,
                          mixture = mix, size = 3, seed = 19)
     y <- sim$y; n_sites <- nrow(y); mv <- ncol(y)
     valid  <- as.vector(t(!is.na(y)))
@@ -409,7 +409,7 @@ test_that("abun() declares nuts among its methods and samples an icar field", {
   # dropped, so the field is centred and the geometry is well conditioned (the
   # recovery test above checks calibration + 0 divergences; here just confirm the
   # public path returns a nuts fit with a centred field).
-  sim <- simulate_abun(N = 12, J = 3, n_abund_covs = 1, n_det_covs = 1, seed = 5)
+  sim <- simulate_abun(N = 12, J = 3, n.abund.covs = 1, n.det.covs = 1, seed = 5)
   adj <- matrix(0L, 12, 12)
   for (i in 1:11) { adj[i, i + 1L] <- 1L; adj[i + 1L, i] <- 1L }
   fit <- tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, y = sim$y,
@@ -424,8 +424,8 @@ test_that("abun() declares nuts among its methods and samples an icar field", {
 test_that("tobs(abun(), method='nuts') recovers truth and scores WAIC", {
   skip_on_cran(); skip_if_fast()
   set.seed(101)
-  sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 2, n_det_covs = 1,
-                       beta_lambda = c(log(4), 0.5, -0.3), beta_p = c(0.2, -0.4),
+  sim <- simulate_abun(N = 60, J = 4, n.abund.covs = 2, n.det.covs = 1,
+                       beta.lambda = c(log(4), 0.5, -0.3), beta.p = c(0.2, -0.4),
                        mixture = "poisson", seed = 101)
   fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, y = sim$y,
               family = abun(), detection = ~ det_cov1, method = "nuts",
@@ -449,8 +449,8 @@ test_that("tobs(abun(), method='nuts') recovers truth and scores WAIC", {
 test_that("tobs(abun(mixture='negbin'), method='nuts') recovers dispersion", {
   skip_on_cran(); skip_if_fast()
   set.seed(101)
-  sim <- simulate_abun(N = 60, J = 4, n_abund_covs = 2, n_det_covs = 1,
-                       beta_lambda = c(log(4), 0.5, -0.3), beta_p = c(0.2, -0.4),
+  sim <- simulate_abun(N = 60, J = 4, n.abund.covs = 2, n.det.covs = 1,
+                       beta.lambda = c(log(4), 0.5, -0.3), beta.p = c(0.2, -0.4),
                        mixture = "negbin", size = 3, seed = 101)
   fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data, y = sim$y,
               family = abun(mixture = "negbin"), detection = ~ det_cov1,

@@ -32,8 +32,8 @@ test_that("occu_cover WAIC pointwise density is finite when a detected beta cove
   skip_on_cran()
   set.seed(4)
   N <- 90L; J <- 4L
-  sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L,
-                             n_pos_covs = 1L, phi = 30, sigma_pos = 0.4,
+  sim <- simulate_occu_cover(N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L,
+                             n.pos.covs = 1L, phi = 30, sigma.pos = 0.4,
                              positive = "beta", seed = 4L)
   long <- data.frame(site_id = rep(seq_len(N), each = J),
                      visit = rep(seq_len(J), times = N),
@@ -46,7 +46,7 @@ test_that("occu_cover WAIC pointwise density is finite when a detected beta cove
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
   fit <- tobs(formula = ~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
               detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y,
-              y_pos = y_pos, visits = od$det.covs, method = "laplace",
+              y.pos = y_pos, visits = od$det.covs, method = "laplace",
               control = list(verbose = FALSE, max.iter = 60L))
 
   # Baseline WAIC is finite.

@@ -436,7 +436,7 @@
 #' (`method = "nested_laplace"`) instead projects the shared occupancy-cover
 #' field and returns a `tobs_prediction` of posterior draws -- the same tidy /
 #' `change` contract as [predict.tobs_fit()] for `occu_cover()`: pass
-#' `type = "change"` with `times = c(t1, t2)` and `time_col` for a per-cell
+#' `type = "change"` with `times = c(t1, t2)` and `time.col` for a per-cell
 #' delta map. Each prediction unit is a row of `newdata` (or a `cell` column
 #' indexing the field cells), and every quantity is marginalized per draw over
 #' the grid-integrated joint posterior.
@@ -446,11 +446,13 @@
 #'   the nested-Laplace fit, one row per spatial unit (or a `cell` column).
 #' @param type Separate-Laplace fit: one of `"expected"`, `"occupancy"`,
 #'   `"conditional"`. Nested-Laplace fit: `"occurrence"`, `"cover_cond"`,
-#'   `"cover_exp"`, or `"change"` (the legacy aliases are accepted and mapped).
-#' @param include_RE Ignored for the separate-Laplace fit (no spatial
+#'   `"cover_exp"`, or `"change"`; the separate-Laplace names `"expected"`,
+#'   `"occupancy"` and `"conditional"` map to `"cover_exp"`, `"occurrence"` and
+#'   `"cover_cond"`.
+#' @param include.RE Ignored for the separate-Laplace fit (no spatial
 #'   projection); the nested-Laplace fit always projects the shared field.
-#' @param times,time_col,level,nsim,draws Nested-Laplace fit only: `times =
-#'   c(t1, t2)` and `time_col` drive the `"change"` map; `level` is the credible
+#' @param times,time.col,level,nsim,draws Nested-Laplace fit only: `times =
+#'   c(t1, t2)` and `time.col` drive the `"change"` map; `level` is the credible
 #'   level, `nsim` the draw count (or `"auto"` for a trajectory, as in
 #'   [predict.tobs_fit()]), `draws` whether to attach the draw matrices.
 #' @param mc.tol,nsim.max,mc.floor Nested-Laplace fit, trajectory only: the
@@ -467,8 +469,8 @@
 #'   `tobs_prediction`.
 #' @export
 predict.cover_fit <- function(object, newdata = NULL,
-                                     type = NULL, include_RE = FALSE,
-                                     times = NULL, time_col = NULL,
+                                     type = NULL, include.RE = FALSE,
+                                     times = NULL, time.col = NULL,
                                      level = 0.95, nsim = 1000L, draws = TRUE,
                                      weights = NULL, aggregate = FALSE,
                                      mc.tol = 0.05, nsim.max = 10000L,
@@ -485,7 +487,7 @@ predict.cover_fit <- function(object, newdata = NULL,
                    type)
     return(.tobs_predict_joint(object, newdata = newdata, type = type,
                                times = times, level = level, nsim = nsim,
-                               draws = draws, time_col = time_col,
+                               draws = draws, time_col = time.col,
                                weights = weights, aggregate = aggregate,
                                mc.tol = mc.tol, nsim.max = nsim.max,
                                mc.floor = mc.floor))
@@ -500,7 +502,7 @@ predict.cover_fit <- function(object, newdata = NULL,
   if (missing(newdata) || is.null(newdata)) {
     stop("`newdata` is required.", call. = FALSE)
   }
-  if (isTRUE(include_RE) && !is.null(object$encoding$spatial_spec)) {
+  if (isTRUE(include.RE) && !is.null(object$encoding$spatial_spec)) {
     message("predict.cover_fit(): spatial RE projection at new ",
             "locations is not implemented for the separate-Laplace fit; ",
             "returning fixed-effects-only predictions.")

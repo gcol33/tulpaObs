@@ -192,7 +192,7 @@ test_that("silencing the console leaves the heartbeat file channel alone", {
 #
 # `max.outer` / `factor.starts` used to be admitted route-wide, so every Laplace
 # family accepted them and all but six dropped them. They are now opted into per
-# family via obs_family(control_groups=), still gated by route.
+# family via obs_family(control.groups=), still gated by route.
 
 fcheck <- function(control, method, family) {
   tulpaObs:::.tobs_validate_control(

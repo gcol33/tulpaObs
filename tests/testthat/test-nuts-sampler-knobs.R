@@ -34,8 +34,8 @@ test_that("the sampler table answers for both thinning and thread knobs", {
 test_that("n.thin reaches a single-species count NUTS fit", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_abun(N = 40, J = 3, n_abund_covs = 1, n_det_covs = 1,
-                       beta_lambda = c(log(5), 0.3), beta_p = c(0.4, -0.2),
+  sim <- simulate_abun(N = 40, J = 3, n.abund.covs = 1, n.det.covs = 1,
+                       beta.lambda = c(log(5), 0.3), beta.p = c(0.4, -0.2),
                        seed = 2)
   f <- function(...) tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1,
                           y = sim$y, family = abun(), method = "nuts",
@@ -55,8 +55,8 @@ test_that("n.thin reaches a single-species count NUTS fit", {
 test_that("control$sigma.logr reaches the negbin NUTS prior", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_abun(N = 40, J = 3, n_abund_covs = 1, n_det_covs = 1,
-                       beta_lambda = c(log(5), 0.3), beta_p = c(0.4, -0.2),
+  sim <- simulate_abun(N = 40, J = 3, n.abund.covs = 1, n.det.covs = 1,
+                       beta.lambda = c(log(5), 0.3), beta.p = c(0.4, -0.2),
                        mixture = "negbin", size = 3, seed = 2)
   f <- function(...) tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1,
                           y = sim$y, family = abun(mixture = "negbin"),
@@ -73,9 +73,9 @@ test_that("n.thin and n.threads.grad reach a community NUTS fit", {
   skip_if_fast()
   skip_on_cran()
   S   <- 4L
-  sim <- simulate_ms_occu(N = 40, J = 3, n_species = S,
-                          beta_comm_mean = c(0, 0.6), beta_comm_sd = c(0.6, 0.3),
-                          alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+  sim <- simulate_ms_occu(N = 40, J = 3, n.species = S,
+                          beta.comm.mean = c(0, 0.6), beta.comm.sd = c(0.6, 0.3),
+                          alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                           seed = 3)
   f <- function(...) tobs(~ x, data = sim$data, detection = ~ 1, y = sim$y,
                           family = ms_occu(), species = paste0("sp", seq_len(S)),

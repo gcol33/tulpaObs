@@ -37,8 +37,8 @@ test_that("occu_multiscale_cover NUTS C++ FullGradFn matches the R oracle", {
   for (positive in c("lognormal", "beta")) {
     set.seed(if (positive == "beta") 22L else 11L)
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 25L, plots_per_cell = 4L, visits_per_plot = 3L,
-      beta_pos = if (positive == "beta") c(stats::qlogis(0.3), -0.3)
+      n.cells = 25L, plots.per.cell = 4L, visits.per.plot = 3L,
+      beta.pos = if (positive == "beta") c(stats::qlogis(0.3), -0.3)
                  else c(log(0.10), -0.4),
       positive = positive, phi = if (positive == "beta") 12 else 0.35,
       sigma = 0, alpha = 0, seed = if (positive == "beta") 22L else 11L)
@@ -70,14 +70,14 @@ test_that("occu_multiscale_cover NUTS C++ FullGradFn matches the R oracle", {
 
 test_that("occu_multiscale_cover NUTS rejects a coupled trend field", {
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 20L, plots_per_cell = 3L, visits_per_plot = 2L,
+    n.cells = 20L, plots.per.cell = 3L, visits.per.plot = 2L,
     trend = TRUE, positive = "lognormal", seed = 5L)
   expect_error(
     tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell") +
                      icar(graph = sim$adj, group_var = "cell", weight = tcov),
          data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
          detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-         y = sim$y, y_pos = sim$y_pos, method = "nuts"),
+         y = sim$y, y.pos = sim$y_pos, method = "nuts"),
     "non-spatial")
 })
 
@@ -105,16 +105,16 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
     # No areal field (sigma = 0): the truth is the non-spatial three-level model.
     # Within-plot replication (J = 4) separates theta and p.
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 70L, plots_per_cell = 4L, visits_per_plot = 4L,
-      beta_psi = truth$beta_psi, beta_theta = truth$beta_theta,
-      beta_p = truth$beta_p, beta_pos = truth$beta_pos,
+      n.cells = 70L, plots.per.cell = 4L, visits.per.plot = 4L,
+      beta.psi = truth$beta_psi, beta.theta = truth$beta_theta,
+      beta.p = truth$beta_p, beta.pos = truth$beta_pos,
       positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 600L + s)
 
     fit <- tryCatch(suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-      y = sim$y, y_pos = sim$y_pos, method = "nuts",
+      y = sim$y, y.pos = sim$y_pos, method = "nuts",
       control = list(n.iter = 600L, n.warmup = 600L, n.chains = 2L,
                      seed = 100L + s, verbose = FALSE))),
       error = function(e) NULL)
@@ -127,7 +127,7 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-      y = sim$y, y_pos = sim$y_pos, method = "laplace",
+      y = sim$y, y.pos = sim$y_pos, method = "laplace",
       control = list(verbose = FALSE)))
     lap[s, ] <- fl$means[nm]
   }
@@ -179,13 +179,13 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
   skip_on_cran()
   skip_if_fast()
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 50L, plots_per_cell = 4L, visits_per_plot = 4L,
+    n.cells = 50L, plots.per.cell = 4L, visits.per.plot = 4L,
     positive = "lognormal", phi = 0.35, sigma = 0, alpha = 0, seed = 909L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-    y = sim$y, y_pos = sim$y_pos, method = "nuts",
+    y = sim$y, y.pos = sim$y_pos, method = "nuts",
     control = list(n.iter = 500L, n.warmup = 500L, n.chains = 2L,
                    seed = 1L, verbose = FALSE)))
 

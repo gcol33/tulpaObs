@@ -120,7 +120,7 @@ test_that("occu_cover() spatial fit surfaces pareto_k at the top level + glance"
       occurrence = ~ occ_cov1 + icar(graph = adj), data = cell_dat,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1, positive = ~ pos_cov1,
-      y = od$y, y_pos = y_pos, visits = od$det.covs,
+      y = od$y, y.pos = y_pos, visits = od$det.covs,
       method = "nested_laplace",
       control = list(verbose = FALSE, diagnose.k = diag_k, k.samples = 200L)
     ))

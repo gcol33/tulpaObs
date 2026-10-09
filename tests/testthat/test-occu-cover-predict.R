@@ -34,7 +34,7 @@
         family = occu_cover("lognormal"),
         detection = ~ det_cov1,
         positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1.0))),
-        y = od$y, y_pos = y_pos, visits = od$det.covs,
+        y = od$y, y.pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 300L,
                        engine = "joint",
@@ -82,7 +82,7 @@ test_that("change decomposition identity holds per draw and in the summary", {
     skip_if_fast()
     f <- .ocp_build_fit()
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 600L)
+                  times = c(0, 1), time.col = "year", nsim = 600L)
     dr <- attr(pr, "draws")
     expect_equal(dr$delta_cover_from_occ + dr$delta_cover_from_ab,
                  dr$delta_cover_exp, tolerance = 1e-6)
@@ -97,7 +97,7 @@ test_that("type = change emits the exact column contract keyed by cell", {
     skip_if_fast()
     f <- .ocp_build_fit()
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 200L)
+                  times = c(0, 1), time.col = "year", nsim = 200L)
     point_cols <- c("psi_T1", "psi_T2", "delta_psi",
                     "cover_cond_T1", "cover_cond_T2", "delta_cover_cond",
                     "cover_exp_T1", "cover_exp_T2", "delta_cover_exp",
@@ -132,10 +132,10 @@ test_that("weights pool rows per draw into one change table per cell", {
     N  <- f$N; w <- mx$w
     set.seed(11)
     un <- predict(f$fit, newdata = mx$nd, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 300L)
+                  times = c(0, 1), time.col = "year", nsim = 300L)
     set.seed(11)
     po <- predict(f$fit, newdata = mx$nd, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 300L,
+                  times = c(0, 1), time.col = "year", nsim = 300L,
                   weights = "w")
     expect_equal(nrow(po), N)
     expect_equal(po$cell, seq_len(N))
@@ -163,7 +163,7 @@ test_that("weights pool rows per draw into one change table per cell", {
     # A numeric vector gives the same table as the column name.
     set.seed(11)
     pv <- predict(f$fit, newdata = mx$nd, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 300L,
+                  times = c(0, 1), time.col = "year", nsim = 300L,
                   weights = mx$nd$w)
     expect_equal(as.data.frame(pv), as.data.frame(po))
 
@@ -197,7 +197,7 @@ test_that("times = c(t1, ..., tK) widens the change table into a trajectory", {
     f  <- .ocp_build_fit()
     tt <- c(0, 0.25, 0.5, 0.75, 1)
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
-                  times = tt, time_col = "year", nsim = 400L)
+                  times = tt, time.col = "year", nsim = 400L)
 
     # A level column per step; a delta per step against the baseline, suffixed
     # by the step it was taken at. The baseline names no delta of its own.
@@ -238,7 +238,7 @@ test_that("type = trajectory returns a long table on one draw set", {
     skip_if_fast()
     f  <- .ocp_build_fit()
     tt <- c(0, 0.5, 1)
-    pr <- function(...) predict(f$fit, newdata = f$cell_dat, time_col = "year",
+    pr <- function(...) predict(f$fit, newdata = f$cell_dat, time.col = "year",
                                 nsim = 300L, ...)
     set.seed(3); tr <- pr(type = "trajectory", times = tt)
     qs <- c("psi", "cover_cond", "cover_exp")
@@ -291,7 +291,7 @@ test_that("type = trajectory returns a long table on one draw set", {
     # heavy right tail of conditional cover on some cells sets the draw count.
     expect_identical(attr(tr, "nsim_used"), 300L)
     expect_gt(attr(tr, "mc_se_max"), 0)
-    au <- predict(f$fit, newdata = f$cell_dat, time_col = "year",
+    au <- predict(f$fit, newdata = f$cell_dat, time.col = "year",
                   type = "trajectory", times = tt, nsim = "auto",
                   mc.tol = 0.2, draws = FALSE)
     expect_lte(attr(au, "mc_se_max"), 0.2)
@@ -310,7 +310,7 @@ test_that("type = trajectory arguments are validated", {
     skip_on_cran()
     skip_if_fast()
     f  <- .ocp_build_fit()
-    pr <- function(...) predict(f$fit, newdata = f$cell_dat, time_col = "year",
+    pr <- function(...) predict(f$fit, newdata = f$cell_dat, time.col = "year",
                                 nsim = 20L, ...)
     expect_error(pr(type = "trajectory"), "needs `times`")
     expect_error(pr(type = "change", times = c(0, 1), aggregate = TRUE),
@@ -324,7 +324,7 @@ test_that("two times keep the unsuffixed change schema", {
     skip_if_fast()
     f  <- .ocp_build_fit()
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 200L)
+                  times = c(0, 1), time.col = "year", nsim = 200L)
     # REGRESSION GUARD for the trajectory generalization: with one step there is
     # nothing to index, so the delta columns a change map has always had must
     # come back unsuffixed and no `_T2` delta may appear beside them.
@@ -387,7 +387,7 @@ test_that("in-sample occurrence tracks the plug-in predictor", {
     sim <- simulate_occu_cover(
         N = N, J = J, positive = "lognormal", adj = adj,
         sigma = 0.8, alpha = 0.6, trend = TRUE,
-        sigma_trend = 0.7, alpha_trend = 0.5, seed = seed
+        sigma.trend = 0.7, alpha.trend = 0.5, seed = seed
     )
     long <- data.frame(
         site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -403,7 +403,7 @@ test_that("in-sample occurrence tracks the plug-in predictor", {
         family = occu_cover("lognormal"),
         detection = ~ det_cov1,
         positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5))),
-        y = od$y, y_pos = y_pos, visits = od$det.covs,
+        y = od$y, y.pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 250L,
                        engine = "joint",
@@ -419,7 +419,7 @@ test_that("trend fit: change map runs through the time-varying field", {
     f <- .ocp_build_trend_fit()
     # this fit has >1 coupled field block
     expect_gt(length(f$fit$joint_fit$arm_layout$field_starts), 1L)
-    # auto-resolve time_col from the fit's stored trend weight
+    # auto-resolve time.col from the fit's stored trend weight
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
                   times = c(-1, 1), nsim = 400L)
     expect_s3_class(pr, "tobs_prediction")
@@ -432,21 +432,21 @@ test_that("trend fit: change map runs through the time-varying field", {
     expect_gt(stats::sd(pr$delta_cover_exp), 0)
     # single-time prediction also works on the trend fit
     p1 <- predict(f$fit, newdata = f$cell_dat, type = "cover_exp",
-                  time_col = "time", nsim = 300L)
+                  time.col = "time", nsim = 300L)
     expect_equal(nrow(p1), f$N)
     expect_true(all(p1$mean >= 0))
 })
 
-test_that("trend fit errors clearly when time_col is unavailable", {
+test_that("trend fit errors clearly when time.col is unavailable", {
     skip_on_cran()
     skip_if_fast()
     f <- .ocp_build_trend_fit()
-    # drop the stored trend weight and don't pass time_col -> clear error
+    # drop the stored trend weight and don't pass time.col -> clear error
     fit2 <- f$fit
     fit2$trend_weight <- NULL
     expect_error(
         predict(fit2, newdata = f$cell_dat, type = "occurrence"),
-        "time_col"
+        "time.col"
     )
 })
 
@@ -473,7 +473,7 @@ test_that("trend fit errors clearly when time_col is unavailable", {
     sim <- simulate_occu_cover(
         N = N, J = J, positive = "lognormal", adj = adj,
         sigma = 0.8, alpha = 0.6, trend = TRUE,
-        sigma_trend = 0.7, alpha_trend = 0.5, seed = seed
+        sigma.trend = 0.7, alpha.trend = 0.5, seed = seed
     )
     long <- data.frame(
         site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -489,7 +489,7 @@ test_that("trend fit errors clearly when time_col is unavailable", {
         family = occu_cover("lognormal"),
         detection = ~ det_cov1,
         positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5))),
-        y = od$y, y_pos = y_pos, visits = od$det.covs,
+        y = od$y, y.pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 250L, engine = "joint",
                        trend = list(weight = "time"),
@@ -511,7 +511,7 @@ test_that("change CI covers the known per-cell occupancy change", {
     delta_true <- p_at(t2) - p_at(t1)
 
     pr <- predict(f$fit, newdata = f$cell_dat, type = "change",
-                  times = c(t1, t2), time_col = "time", nsim = 1500L)
+                  times = c(t1, t2), time.col = "time", nsim = 1500L)
 
     covered <- pr$delta_psi.lwr <= delta_true & delta_true <= pr$delta_psi.upr
     # 95% CIs over the N cells of one realization; conservative floor (observed
@@ -532,13 +532,13 @@ test_that("change CI covers the known per-cell occupancy change", {
 .ocp_build_coef_fit <- function(method = "laplace", N = 60L, J = 4L, seed = 21L,
                                 ctl = list()) {
     sim <- simulate_occu_cover(
-        N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-        beta_occ = c(0.3, 0.8), beta_p = c(0.2, -0.5), beta_pos = c(-1, 0.4),
-        positive = "lognormal", sigma_pos = 0.4, seed = seed)
+        N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+        beta.occ = c(0.3, 0.8), beta.p = c(0.2, -0.5), beta.pos = c(-1, 0.4),
+        positive = "lognormal", sigma.pos = 0.4, seed = seed)
     y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
     fit <- tobs(~ occ_cov1, data = sim$data, family = occu_cover("lognormal"),
                detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-               y_pos = y_pos, visits = sim$visit_data, method = method,
+               y.pos = y_pos, visits = sim$visit_data, method = method,
                control = utils::modifyList(list(verbose = FALSE), ctl))
     list(fit = fit, sim = sim)
 }
@@ -606,13 +606,13 @@ test_that("predict(newdata = ) refuses a fit carrying a shared field or RE", {
     side <- 4L; adj <- rook(side)
     sim <- simulate_occu_cover(
         N = side * side, J = 4, positive = "lognormal",
-        beta_occ = c(qlogis(0.5), 0.8), beta_p = c(0.3, 0.5),
-        beta_pos = c(log(0.12), -0.4), sigma_pos = 0.4,
+        beta.occ = c(qlogis(0.5), 0.8), beta.p = c(0.3, 0.5),
+        beta.pos = c(log(0.12), -0.4), sigma.pos = 0.4,
         adj = adj, sigma = 0.8, alpha = 0.7, seed = 1L)
     y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
     f <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
              family = occu_cover("lognormal"), detection = ~ det_cov1,
-             positive = ~ pos_cov1 + share(spatial()), y = sim$y, y_pos = y_pos,
+             positive = ~ pos_cov1 + share(spatial()), y = sim$y, y.pos = y_pos,
              visits = sim$visit_data, method = "nuts",
              control = list(n.iter = 150L, n.warmup = 150L, n.chains = 1L,
                             verbose = FALSE))

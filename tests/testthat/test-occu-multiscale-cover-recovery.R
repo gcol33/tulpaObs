@@ -18,21 +18,21 @@
 
 
 test_that("occu_multiscale_cover() requires a cell-declaring areal term", {
-  sim <- simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
-                                        visits_per_plot = 2L, seed = 1L)
+  sim <- simulate_occu_multiscale_cover(n.cells = 12L, plots.per.cell = 3L,
+                                        visits.per.plot = 2L, seed = 1L)
   fam <- occu_multiscale_cover(response = "lognormal")
 
   # No areal term -> cells are undeclared, on either method.
   expect_error(
     tobs(formula = ~ x_cell, data = sim$data, family = fam,
          detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-         y = sim$y, y_pos = sim$y_pos, method = "nested_laplace"),
+         y = sim$y, y.pos = sim$y_pos, method = "nested_laplace"),
     "areal"
   )
   expect_error(
     tobs(formula = ~ x_cell, data = sim$data, family = fam,
          detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-         y = sim$y, y_pos = sim$y_pos, method = "laplace"),
+         y = sim$y, y.pos = sim$y_pos, method = "laplace"),
     "areal"
   )
 
@@ -40,7 +40,7 @@ test_that("occu_multiscale_cover() requires a cell-declaring areal term", {
   expect_error(
     tobs(formula = ~ x_cell + icar(graph = sim$adj), data = sim$data,
          family = fam, detection = ~ x_pdet, availability = ~ x_plot,
-         positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))), y = sim$y, y_pos = sim$y_pos,
+         positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))), y = sim$y, y.pos = sim$y_pos,
          method = "nested_laplace"),
     "group_var"
   )
@@ -66,9 +66,9 @@ test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplac
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 80L, plots_per_cell = 5L, visits_per_plot = 3L,
-      beta_psi = truth$beta_psi, beta_theta = truth$beta_theta,
-      beta_p = truth$beta_p, beta_pos = truth$beta_pos,
+      n.cells = 80L, plots.per.cell = 5L, visits.per.plot = 3L,
+      beta.psi = truth$beta_psi, beta.theta = truth$beta_theta,
+      beta.p = truth$beta_p, beta.pos = truth$beta_pos,
       positive = "lognormal", sigma = truth$sigma, alpha = truth$alpha,
       seed = 5000L + s)
 
@@ -76,7 +76,7 @@ test_that("occu_multiscale_cover() recovers the four arms + field (nested-Laplac
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-      y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+      y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
       control = list(sigma.grid = c(0.3, 0.6, 1.0),
                      diagnose.k = FALSE, max.iter = 500L))),
       error = function(e) NULL)
@@ -121,14 +121,14 @@ test_that("occu_multiscale_cover() beta positive arm fits end-to-end", {
   skip_on_cran()
   skip_if_fast()
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 50L, plots_per_cell = 4L, visits_per_plot = 3L,
-    beta_pos = c(stats::qlogis(0.3), -0.3), positive = "beta", phi = 12,
+    n.cells = 50L, plots.per.cell = 4L, visits.per.plot = 3L,
+    beta.pos = c(stats::qlogis(0.3), -0.3), positive = "beta", phi = 12,
     sigma = 0.6, alpha = 1.0, seed = 909L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "beta"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
     control = list(sigma.grid = c(0.3, 0.6, 1.0),
                    diagnose.k = FALSE, max.iter = 500L)))
   expect_s3_class(fit, "tobs_fit")
@@ -142,15 +142,15 @@ test_that("occu_multiscale_cover(\"gaussian\") fits + recovers (nested_laplace, 
   skip_if_fast()
   # Identity-Gaussian cover arm on the shared-field joint engine: mu = eta.
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 60L, plots_per_cell = 4L, visits_per_plot = 2L,
-    beta_psi = c(0.4, 0.6), beta_theta = c(0.4, 0.5), beta_p = c(0.3, 0.5),
-    beta_pos = c(2.0, -0.4), positive = "gaussian", phi = 0.35,
+    n.cells = 60L, plots.per.cell = 4L, visits.per.plot = 2L,
+    beta.psi = c(0.4, 0.6), beta.theta = c(0.4, 0.5), beta.p = c(0.3, 0.5),
+    beta.pos = c(2.0, -0.4), positive = "gaussian", phi = 0.35,
     sigma = 0.6, alpha = 1.0, seed = 3L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "gaussian"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
     control = list(sigma.grid = c(0.3, 0.6, 1.0),
                    diagnose.k = FALSE, max.iter = 500L)))
   expect_s3_class(fit, "tobs_fit")
@@ -166,15 +166,15 @@ test_that("occu_multiscale_cover(\"gaussian\") non-spatial Laplace recovers (#12
   int_e <- slope_e <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 80L, plots_per_cell = 4L, visits_per_plot = 4L,
-      beta_psi = c(0.2, 0.6), beta_theta = c(0.5, 0.4), beta_p = c(0.3, -0.4),
-      beta_pos = c(2.0, -0.4), positive = "gaussian", phi = 0.35,
+      n.cells = 80L, plots.per.cell = 4L, visits.per.plot = 4L,
+      beta.psi = c(0.2, 0.6), beta.theta = c(0.5, 0.4), beta.p = c(0.3, -0.4),
+      beta.pos = c(2.0, -0.4), positive = "gaussian", phi = 0.35,
       sigma = 0, alpha = 0, seed = 400L + s)
     fit <- tryCatch(suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "gaussian"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-      y = sim$y, y_pos = sim$y_pos, method = "laplace",
+      y = sim$y, y.pos = sim$y_pos, method = "laplace",
       control = list(verbose = FALSE))), error = function(e) NULL)
     if (is.null(fit)) next
     int_e[s]   <- fit$means[["pos_(Intercept)"]]
@@ -188,13 +188,13 @@ test_that("occu_multiscale_cover() fitted() / predict() (#53)", {
   skip_on_cran()
   skip_if_fast()
   sim <- simulate_occu_multiscale_cover(
-    n_cells = 40L, plots_per_cell = 4L, visits_per_plot = 3L,
+    n.cells = 40L, plots.per.cell = 4L, visits.per.plot = 3L,
     sigma = 0.6, alpha = 1.0, positive = "lognormal", seed = 77L)
   fit <- suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
     control = list(sigma.grid = c(0.3, 0.6, 1.0),
                    diagnose.k = FALSE, max.iter = 500L)))
 
@@ -248,15 +248,15 @@ test_that("occu_multiscale_cover() non-spatial Laplace recovers truth (#53)", {
   est <- matrix(NA_real_, n_seed, 8L)
   for (s in seq_len(n_seed)) {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 80L, plots_per_cell = 4L, visits_per_plot = 4L,
-      beta_psi = truth$beta_psi, beta_theta = truth$beta_theta,
-      beta_p = truth$beta_p, beta_pos = truth$beta_pos,
+      n.cells = 80L, plots.per.cell = 4L, visits.per.plot = 4L,
+      beta.psi = truth$beta_psi, beta.theta = truth$beta_theta,
+      beta.p = truth$beta_p, beta.pos = truth$beta_pos,
       positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 300L + s)
     fit <- suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "beta"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-      y = sim$y, y_pos = sim$y_pos, method = "laplace",
+      y = sim$y, y.pos = sim$y_pos, method = "laplace",
       control = list(verbose = FALSE)))
     expect_s3_class(fit, "tobs_fit")
     est[s, ] <- as.numeric(fit$means[c(
@@ -280,15 +280,15 @@ test_that("occu_multiscale_cover() coupled trend field recovers its shape (#53)"
   field_cor <- rep(NA_real_, n_seeds)
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 60L, plots_per_cell = 5L, visits_per_plot = 3L,
-      sigma = 0.6, alpha = 1.0, trend = TRUE, sigma_trend = 0.8,
-      alpha_trend = 1.0, positive = "lognormal", seed = 1200L + s)
+      n.cells = 60L, plots.per.cell = 5L, visits.per.plot = 3L,
+      sigma = 0.6, alpha = 1.0, trend = TRUE, sigma.trend = 0.8,
+      alpha.trend = 1.0, positive = "lognormal", seed = 1200L + s)
     fit <- tryCatch(suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell") +
                   icar(graph = sim$adj, group_var = "cell", weight = tcov),
       data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-      y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+      y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
       control = list(sigma.grid = c(0.3, 0.6, 1.0),
                      diagnose.k = FALSE,
                      max.iter = 400L))),
@@ -321,22 +321,22 @@ test_that("occu_multiscale_cover() surfaces + reduces without within-plot replic
   # 1) Surfaced: a single-releve fit emits the identifiability note; a fit with
   #    within-plot replicate visits does not.
   sim1 <- simulate_occu_multiscale_cover(
-    n_cells = 30L, plots_per_cell = 4L, visits_per_plot = 1L,
+    n.cells = 30L, plots.per.cell = 4L, visits.per.plot = 1L,
     positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 801L)
   msg1 <- testthat::capture_messages(suppressWarnings(tobs(
     ~ x_cell + icar(graph = sim1$adj, group_var = "cell"), sim1$data,
     family = occu_multiscale_cover("beta"), detection = ~ x_pdet,
-    availability = ~ x_plot, positive = ~ x_cov, y = sim1$y, y_pos = sim1$y_pos,
+    availability = ~ x_plot, positive = ~ x_cov, y = sim1$y, y.pos = sim1$y_pos,
     method = "laplace", control = list(verbose = FALSE))))
   expect_true(any(grepl("within-plot replication", msg1)))
 
   sim2 <- simulate_occu_multiscale_cover(
-    n_cells = 30L, plots_per_cell = 4L, visits_per_plot = 3L,
+    n.cells = 30L, plots.per.cell = 4L, visits.per.plot = 3L,
     positive = "beta", phi = 12, sigma = 0, alpha = 0, seed = 802L)
   msg2 <- testthat::capture_messages(suppressWarnings(tobs(
     ~ x_cell + icar(graph = sim2$adj, group_var = "cell"), sim2$data,
     family = occu_multiscale_cover("beta"), detection = ~ x_pdet,
-    availability = ~ x_plot, positive = ~ x_cov, y = sim2$y, y_pos = sim2$y_pos,
+    availability = ~ x_plot, positive = ~ x_cov, y = sim2$y, y.pos = sim2$y_pos,
     method = "laplace", control = list(verbose = FALSE))))
   expect_false(any(grepl("within-plot replication", msg2)))
 
@@ -350,14 +350,14 @@ test_that("occu_multiscale_cover() surfaces + reduces without within-plot replic
   psi_int <- psi_x <- prod_hat <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 120L, plots_per_cell = 4L, visits_per_plot = 1L,
-      beta_psi = b_psi, beta_theta = b_theta, beta_p = b_p,
-      beta_pos = c(stats::qlogis(0.3), 0.0), positive = "beta", phi = 12,
+      n.cells = 120L, plots.per.cell = 4L, visits.per.plot = 1L,
+      beta.psi = b_psi, beta.theta = b_theta, beta.p = b_p,
+      beta.pos = c(stats::qlogis(0.3), 0.0), positive = "beta", phi = 12,
       sigma = 0, alpha = 0, seed = 810L + s)
     fit <- tryCatch(suppressMessages(suppressWarnings(tobs(
       ~ x_cell + icar(graph = sim$adj, group_var = "cell"), sim$data,
       family = occu_multiscale_cover("beta"), detection = ~ x_pdet,
-      availability = ~ x_plot, positive = ~ x_cov, y = sim$y, y_pos = sim$y_pos,
+      availability = ~ x_plot, positive = ~ x_cov, y = sim$y, y.pos = sim$y_pos,
       method = "laplace", control = list(verbose = FALSE)))), error = function(e) NULL)
     if (is.null(fit)) next
     psi_int[s]  <- fit$means[["psi_(Intercept)"]]

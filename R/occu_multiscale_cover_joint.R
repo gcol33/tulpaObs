@@ -157,8 +157,8 @@
               else if (inherits(priors, "cover_priors")) occu_priors()
               else if (!is.null(sigma.beta)) {
                 sd0 <- list(mean = 0, sd = sigma.beta)
-                occu_priors(p_intercept = sd0, p_slope = sd0,
-                           beta_occ_intercept = sd0, beta_occ_slope = sd0)
+                occu_priors(p.intercept = sd0, p.slope = sd0,
+                           beta.occ.intercept = sd0, beta.occ.slope = sd0)
               } else .resolve_occu_priors(priors)
   cover_spec <- if (inherits(priors, "cover_priors")) priors else cover_priors()
 

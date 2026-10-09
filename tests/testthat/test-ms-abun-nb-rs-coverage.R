@@ -16,12 +16,12 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   unconverged <- integer(0)
   for (s in seq_len(n_seed)) {
     seed <- 500L + s
-    sim <- simulate_ms_abun(n_species = S, N = 100, J = 5,
-                            n_abund_covs = 1, n_det_covs = 1,
-                            mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
-                            sd_lambda = 0.4, sd_p = 0.35,
+    sim <- simulate_ms_abun(n.species = S, N = 100, J = 5,
+                            n.abund.covs = 1, n.det.covs = 1,
+                            mu.lambda = c(log(5), 0.4), mu.p = c(0.3, -0.3),
+                            sd.lambda = 0.4, sd.p = 0.35,
                             mixture = "negbin", size = 5,
-                            sigma_logr = SIGMA_LOGR, seed = seed)
+                            sigma.logr = SIGMA_LOGR, seed = seed)
     fit <- tryCatch(
       suppressWarnings(
         tobs(~ abund_cov1, data = sim$data, y = sim$y,

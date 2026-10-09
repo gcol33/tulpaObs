@@ -37,7 +37,7 @@ test_that("occu(): newdata predicts per row and takes a seen group's effect", {
   both <- predict(fit, newdata = nd, type = "both")
   .pnd_same(both$occupancy, occ)
   .pnd_same(both$detection,
-            predict(fit, X_det.0 = cbind(1, nd$w), type = "detection"))
+            predict(fit, X.det.0 = cbind(1, nd$w), type = "detection"))
 
   expect_error(predict(fit, newdata = nd, X.0 = cbind(1, 0)), "not several")
   expect_error(predict(fit, newdata = nd, terms = "x"), "not several")
@@ -73,7 +73,7 @@ test_that("int_occu(): newdata detection expands once per source", {
   det <- predict(fit, newdata = nd, type = "detection")
   expect_named(det, c("src1", "src2"))
   X <- cbind(1, nd$det_cov)
-  .pnd_same(det, predict(fit, X_det.0 = list(src1 = X, src2 = X),
+  .pnd_same(det, predict(fit, X.det.0 = list(src1 = X, src2 = X),
                          type = "detection"))
 })
 

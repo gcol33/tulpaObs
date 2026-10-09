@@ -29,10 +29,10 @@
                                               pos_visit_formula = NULL,
                                               pos_visit_data    = NULL) {
   if (!is.matrix(y) || !is.matrix(y_pos)) {
-    stop("y and y_pos must be matrices (n_plots x max_visits).", call. = FALSE)
+    stop("y and y.pos must be matrices (n_plots x max_visits).", call. = FALSE)
   }
   if (!all(dim(y) == dim(y_pos))) {
-    stop("y and y_pos must have identical dimensions.", call. = FALSE)
+    stop("y and y.pos must have identical dimensions.", call. = FALSE)
   }
   .tobs_check_site_count(nrow(y), nrow(data), "rows (plots)")
   n_plots    <- nrow(y)
@@ -582,8 +582,8 @@
     stop("occu_multiscale_cover() requires `y` (an n_plots x max_visits ",
          "detection-history matrix).", call. = FALSE)
   }
-  if (is.null(dots[["y_pos"]])) {
-    stop("occu_multiscale_cover() requires `y_pos` (n_plots x max_visits; ",
+  if (is.null(dots[["y.pos"]])) {
+    stop("occu_multiscale_cover() requires `y.pos` (n_plots x max_visits; ",
          "values used only where y == 1).", call. = FALSE)
   }
   # `alpha.grid` states the copy axis's nodes, `alpha.n` how many nodes the
@@ -691,7 +691,7 @@
     pos_formula       = vd_pos$det_formula,
     data              = data,
     y                 = y,
-    y_pos             = dots[["y_pos"]],
+    y_pos             = dots[["y.pos"]],
     plot_cell         = plot_cell,
     n_cells           = n_cells,
     positive          = family$params$positive,
@@ -728,37 +728,37 @@
 #' occupancy (`sigma`) and cover (`alpha * sigma`) arms. The data-generating
 #' process for [occu_multiscale_cover()] recovery tests.
 #'
-#' @param n_cells number of areal cells (graph nodes).
-#' @param plots_per_cell plots (the availability units) per cell.
-#' @param visits_per_plot detection replicate visits per plot.
-#' @param beta_psi,beta_theta,beta_p,beta_pos length-2 `c(intercept, slope)`
+#' @param n.cells number of areal cells (graph nodes).
+#' @param plots.per.cell plots (the availability units) per cell.
+#' @param visits.per.plot detection replicate visits per plot.
+#' @param beta.psi,beta.theta,beta.p,beta.pos length-2 `c(intercept, slope)`
 #'   coefficients for the four arms (one covariate each).
 #' @param positive `"lognormal"` or `"beta"` cover arm.
 #' @param phi cover dispersion (lognormal log-scale SD, or beta precision).
-#' @param adj `n_cells x n_cells` adjacency; default a 1-D chain.
+#' @param adj `n.cells x n.cells` adjacency; default a 1-D chain.
 #' @param sigma areal-field marginal SD on the occupancy arm.
 #' @param alpha cover-arm field scaling (`alpha * sigma` on the cover arm).
 #' @param trend add a second, spatially-varying-coefficient (SVC) areal field
 #'   weighted per cell by a cell-level covariate `tcov` (added to `data`):
-#'   `tcov_c * sigma_trend * f_trend[c]` on occupancy and
-#'   `tcov_c * alpha_trend * sigma_trend * f_trend[c]` on cover. Default `FALSE`.
-#' @param sigma_trend,alpha_trend trend-field marginal SD and its cover-arm
+#'   `tcov_c * sigma.trend * f_trend[c]` on occupancy and
+#'   `tcov_c * alpha.trend * sigma.trend * f_trend[c]` on cover. Default `FALSE`.
+#' @param sigma.trend,alpha.trend trend-field marginal SD and its cover-arm
 #'   scaling (used only when `trend = TRUE`).
 #' @param seed optional RNG seed.
 #' @return A list with `y`, `y_pos` (`[n_plots x visits_per_plot]`), the
 #'   plot-level `data` (cell id `cell`, covariates), `adj`, and `truth`.
 #' @examples
-#' sim <- simulate_occu_multiscale_cover(n_cells = 10, plots_per_cell = 2,
-#'                                       visits_per_plot = 2, seed = 1)
+#' sim <- simulate_occu_multiscale_cover(n.cells = 10, plots.per.cell = 2,
+#'                                       visits.per.plot = 2, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_occu_multiscale_cover <- function(n_cells = 60L,
-                                           plots_per_cell = 4L,
-                                           visits_per_plot = 2L,
-                                           beta_psi   = c(0.4, 0.6),
-                                           beta_theta = c(0.2, 0.5),
-                                           beta_p     = c(0.0, 0.5),
-                                           beta_pos   = c(log(0.10), -0.4),
+simulate_occu_multiscale_cover <- function(n.cells = 60L,
+                                           plots.per.cell = 4L,
+                                           visits.per.plot = 2L,
+                                           beta.psi   = c(0.4, 0.6),
+                                           beta.theta = c(0.2, 0.5),
+                                           beta.p     = c(0.0, 0.5),
+                                           beta.pos   = c(log(0.10), -0.4),
                                            positive   = c("lognormal", "beta",
                                                            "gaussian"),
                                            phi        = 0.35,
@@ -766,17 +766,17 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
                                            sigma      = 0.7,
                                            alpha      = 1.0,
                                            trend      = FALSE,
-                                           sigma_trend = 0.7,
-                                           alpha_trend = 1.0,
+                                           sigma.trend = 0.7,
+                                           alpha.trend = 1.0,
                                            seed       = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
-  n_cells <- as.integer(n_cells)
-  J <- as.integer(visits_per_plot)
+  n.cells <- as.integer(n.cells)
+  J <- as.integer(visits.per.plot)
 
   if (is.null(adj)) {
-    adj <- matrix(0, n_cells, n_cells)
-    for (i in seq_len(n_cells - 1L)) { adj[i, i + 1L] <- 1; adj[i + 1L, i] <- 1 }
+    adj <- matrix(0, n.cells, n.cells)
+    for (i in seq_len(n.cells - 1L)) { adj[i, i + 1L] <- 1; adj[i + 1L, i] <- 1 }
   }
 
   # ICAR field, Sorbye-Rue scaled (geo-mean marginal variance 1).
@@ -791,39 +791,39 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
   f_trend <- NULL; tcov <- NULL
   if (isTRUE(trend)) {
     f_trend <- draw_field()
-    tcov    <- stats::rnorm(n_cells)
+    tcov    <- stats::rnorm(n.cells)
   }
 
   # Plot -> cell map (balanced).
-  plot_cell <- rep(seq_len(n_cells), each = plots_per_cell)
+  plot_cell <- rep(seq_len(n.cells), each = plots.per.cell)
   n_plots   <- length(plot_cell)
 
   # Covariates: cell-level (psi), plot-level (theta, p, pos).
-  x_cell  <- stats::rnorm(n_cells)
+  x_cell  <- stats::rnorm(n.cells)
   x_plot  <- stats::rnorm(n_plots)
   x_pdet  <- stats::rnorm(n_plots)
   x_cov   <- stats::rnorm(n_plots)
 
   # Cell occupancy (intercept field + optional cell-level SVC trend).
-  eta_psi <- beta_psi[1L] + beta_psi[2L] * x_cell + sigma * f
-  if (isTRUE(trend)) eta_psi <- eta_psi + tcov * sigma_trend * f_trend
+  eta_psi <- beta.psi[1L] + beta.psi[2L] * x_cell + sigma * f
+  if (isTRUE(trend)) eta_psi <- eta_psi + tcov * sigma.trend * f_trend
   psi     <- stats::plogis(eta_psi)
-  z       <- stats::rbinom(n_cells, 1L, psi)
+  z       <- stats::rbinom(n.cells, 1L, psi)
 
   # Plot availability (only meaningful where the cell is occupied).
-  eta_theta <- beta_theta[1L] + beta_theta[2L] * x_plot
+  eta_theta <- beta.theta[1L] + beta.theta[2L] * x_plot
   theta     <- stats::plogis(eta_theta)
   a         <- stats::rbinom(n_plots, 1L, theta) * z[plot_cell]
 
   # Detection + cover per visit.
   y     <- matrix(0L, n_plots, J)
   y_pos <- matrix(NA_real_, n_plots, J)
-  eta_p   <- beta_p[1L]   + beta_p[2L]   * x_pdet
+  eta_p   <- beta.p[1L]   + beta.p[2L]   * x_pdet
   p_plot  <- stats::plogis(eta_p)
-  eta_pos <- beta_pos[1L] + beta_pos[2L] * x_cov + alpha * sigma * f[plot_cell]
+  eta_pos <- beta.pos[1L] + beta.pos[2L] * x_cov + alpha * sigma * f[plot_cell]
   if (isTRUE(trend)) {
     eta_pos <- eta_pos +
-      tcov[plot_cell] * alpha_trend * sigma_trend * f_trend[plot_cell]
+      tcov[plot_cell] * alpha.trend * sigma.trend * f_trend[plot_cell]
   }
   for (i in seq_len(n_plots)) {
     if (a[i] == 1L) {
@@ -852,14 +852,14 @@ simulate_occu_multiscale_cover <- function(n_cells = 60L,
     y_pos = y_pos,
     data  = data,
     adj   = adj,
-    truth = list(beta_psi = beta_psi, beta_theta = beta_theta,
-                 beta_p = beta_p, beta_pos = beta_pos,
+    truth = list(beta_psi = beta.psi, beta_theta = beta.theta,
+                 beta_p = beta.p, beta_pos = beta.pos,
                  positive = positive, phi = phi,
                  sigma = sigma, alpha = alpha,
                  f = f, psi = psi, z = z, theta = theta, a = a,
                  plot_cell = plot_cell,
-                 trend = isTRUE(trend), sigma_trend = if (isTRUE(trend)) sigma_trend else NA_real_,
-                 alpha_trend = if (isTRUE(trend)) alpha_trend else NA_real_,
+                 trend = isTRUE(trend), sigma_trend = if (isTRUE(trend)) sigma.trend else NA_real_,
+                 alpha_trend = if (isTRUE(trend)) alpha.trend else NA_real_,
                  f_trend = f_trend, tcov = tcov)
   )
 }

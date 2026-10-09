@@ -346,7 +346,7 @@ test_that("a bare share() takes the resolution; a share() with nodes refuses it"
       formula = ~ occ_cov1 + icar(graph = adj), data = cell_dat,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1, positive = pos_formula,
-      y = od$y, y_pos = y_pos, visits = od$det.covs,
+      y = od$y, y.pos = y_pos, visits = od$det.covs,
       method = "nested_laplace",
       control = c(list(verbose = FALSE, engine = "joint", max.iter = 100L),
                   ctrl)))
@@ -400,10 +400,10 @@ test_that("a bare share() takes the resolution; a share() with nodes refuses it"
   adj <- .aq_adj(); N <- nrow(adj)
   sim <- simulate_occu_cover(
     N = N, J = 6L, positive = "lognormal",
-    beta_occ = c(qlogis(0.7), 0.3), beta_p = c(qlogis(0.65), 0.1),
-    beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3,
+    beta.occ = c(qlogis(0.7), 0.3), beta.p = c(qlogis(0.65), 0.1),
+    beta.pos = c(log(0.25), 0.0), sigma.pos = 0.3,
     adj = adj, sigma = 0.5, alpha = alpha,
-    pos_field = pos_field, sigma_pos_int = 0.6, sigma_pos_trend = 0.0,
+    pos.field = pos_field, sigma.pos.int = 0.6, sigma.pos.trend = 0.0,
     seed = seed)
   if (is.null(sim$data$cell)) sim$data$cell <- seq_len(N)
   list(sim = sim, adj = adj)
@@ -414,7 +414,7 @@ test_that("a bare share() takes the resolution; a share() with nodes refuses it"
     occurrence = ~ occ_cov1 + icar(graph = f$adj, group_var = "cell"),
     detection = ~ 1, positive = positive,
     family = occu_cover(response = "lognormal"),
-    data = f$sim$data, y = f$sim$y, y_pos = f$sim$y_pos,
+    data = f$sim$data, y = f$sim$y, y.pos = f$sim$y_pos,
     method = "nested_laplace",
     control = c(list(progress = FALSE), list(...))))
 }

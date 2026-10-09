@@ -2,7 +2,7 @@
 # test-occu-cover-aggregate.R
 # - cell-aggregated cover.
 #
-# occu_cover(cover_aggregate = "mean"/"median") collapses the cover arm to one
+# occu_cover(cover.aggregate = "mean"/"median") collapses the cover arm to one
 # observation per occupancy unit (the mean / median cover over that unit's
 # detected visits) so the cover arm contributes to the shared field at the cell
 # scale rather than the per-visit scale. Covers: aggregation resolution +
@@ -49,10 +49,10 @@
   suppressWarnings(tobs(
     formula = ~ xocc + icar(graph = sim$adj, group_var = "cell_idx"),
     data = sim$site,
-    family = occu_cover("beta", cover_aggregate = cover_aggregate),
+    family = occu_cover("beta", cover.aggregate = cover_aggregate),
     detection = ~ det_cov,
     positive = ~ xpos + share(spatial(), alpha = grid(c(0, 0.8, 1.5))),
-    y = sim$Y, y_pos = sim$Ypos, visits = sim$vd,
+    y = sim$Y, y.pos = sim$Ypos, visits = sim$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint",
                    sigma.grid = exp(seq(log(0.4), log(1.6), length.out = 4)),
@@ -64,11 +64,11 @@
 test_that("aggregation resolution, fall-back, and error gates", {
   # The family carries the cover_aggregate choice (NULL until set).
   expect_null(occu_cover("beta")$params$cover_aggregate)
-  expect_identical(occu_cover("beta", cover_aggregate = "mean")$params$cover_aggregate,
+  expect_identical(occu_cover("beta", cover.aggregate = "mean")$params$cover_aggregate,
                    "mean")
-  expect_identical(occu_cover("beta", cover_aggregate = "median")$params$cover_aggregate,
+  expect_identical(occu_cover("beta", cover.aggregate = "median")$params$cover_aggregate,
                    "median")
-  expect_error(occu_cover("beta", cover_aggregate = "nonsense"), "should be one of")
+  expect_error(occu_cover("beta", cover.aggregate = "nonsense"), "should be one of")
 
   sim <- .agg_sim(seed = 11L, n_cells = 12L, n_per = 3L, J = 6L)
 
@@ -88,7 +88,7 @@ test_that("aggregation resolution, fall-back, and error gates", {
     data = sim$site, family = occu_cover("beta"),     # default
     detection = ~ det_cov,                            # visit-level pos covariate
     positive = ~ pcov + share(spatial(), alpha = grid(c(0, 1.0))),
-    y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
+    y = sim$Y, y.pos = sim$Ypos, visits = sim2$vd,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 200L, engine = "joint",
                    sigma.grid = exp(seq(log(0.5), log(1.5), length.out = 3)),
@@ -98,9 +98,9 @@ test_that("aggregation resolution, fall-back, and error gates", {
   # Explicit aggregation + a visit-level positive covariate -> error.
   expect_error(
     tobs(formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
-         data = sim$site, family = occu_cover("beta", cover_aggregate = "mean"),
+         data = sim$site, family = occu_cover("beta", cover.aggregate = "mean"),
          detection = ~ det_cov, positive = ~ pcov,
-         y = sim$Y, y_pos = sim$Ypos, visits = sim2$vd,
+         y = sim$Y, y.pos = sim$Ypos, visits = sim2$vd,
          method = "nested_laplace",
          control = list(verbose = FALSE, engine = "joint")),
     "cell-level positive design")
@@ -108,9 +108,9 @@ test_that("aggregation resolution, fall-back, and error gates", {
   # Explicit aggregation on the non-spatial laplace path -> error.
   expect_error(
     tobs(formula = ~ xocc, data = sim$site,
-         family = occu_cover("beta", cover_aggregate = "mean"),
+         family = occu_cover("beta", cover.aggregate = "mean"),
          detection = ~ det_cov, positive = ~ xpos,
-         y = sim$Y, y_pos = sim$Ypos, visits = sim$vd, method = "laplace"),
+         y = sim$Y, y.pos = sim$Ypos, visits = sim$vd, method = "laplace"),
     "shared-field spatial path")
 })
 

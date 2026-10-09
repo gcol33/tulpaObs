@@ -24,8 +24,8 @@ test_that("ms_dyn_occu() constructor returns a tobs_family", {
 test_that("ms_dyn_occu() recovers community means + per-species coefs", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n_species = 14, n_seasons = 4,
-                              beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+  sim <- simulate_ms_dyn_occu(N = 90, J = 3, n.species = 14, n.seasons = 4,
+                              beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                               gamma = 0.2, epsilon = 0.1, seed = 31)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
               detection = ~ 1, y = sim$y,
@@ -70,8 +70,8 @@ test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
              "gamma_(Intercept)" = stats::qlogis(0.2),
              "eps_(Intercept)"   = stats::qlogis(0.1))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_dyn_occu(N = 80, J = 3, n_species = 12, n_seasons = 4,
-                                beta_comm_mean = c(0.3), beta_comm_sd = c(0.6),
+    sim <- simulate_ms_dyn_occu(N = 80, J = 3, n.species = 12, n.seasons = 4,
+                                beta.comm.mean = c(0.3), beta.comm.sd = c(0.6),
                                 gamma = 0.2, epsilon = 0.1, seed = 400 + s)
     fit <- tryCatch(
       tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
@@ -92,7 +92,7 @@ test_that("ms_dyn_occu() community-mean 95% CIs cover near the nominal rate", {
 test_that("ms_dyn_occu() S3 methods work", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_dyn_occu(N = 50, J = 3, n_species = 8, n_seasons = 4,
+  sim <- simulate_ms_dyn_occu(N = 50, J = 3, n.species = 8, n.seasons = 4,
                               seed = 5)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
               detection = ~ 1, y = sim$y, species = paste0("sp", seq_len(8)),
@@ -131,7 +131,7 @@ test_that("ms_dyn_occu() S3 methods work", {
 
 
 test_that("ms_dyn_occu() capability gates", {
-  sim <- simulate_ms_dyn_occu(N = 30, J = 3, n_species = 4, n_seasons = 3,
+  sim <- simulate_ms_dyn_occu(N = 30, J = 3, n.species = 4, n.seasons = 3,
                               seed = 1)
   # nested_laplace needs a shared areal field on the occupancy formula (#123);
   # without one it errors with a pointer rather than silently downgrading.
@@ -161,8 +161,8 @@ test_that("ms_dyn_occu() capability gates", {
 test_that("ms_dyn_occu() nested_laplace is registered and gated", {
   expect_true("nested_laplace" %in% tulpaObs:::.tobs_family_methods$ms_dyn_occu)
   side <- 5L; A <- rook_adj(side)
-  sim <- simulate_ms_dyn_occu(N = side * side, J = 3, n_species = 4,
-                              n_seasons = 3, field = .msdyn_field(side), seed = 1)
+  sim <- simulate_ms_dyn_occu(N = side * side, J = 3, n.species = 4,
+                              n.seasons = 3, field = .msdyn_field(side), seed = 1)
   # a field needs nested_laplace; plain laplace with a field errors with a pointer
   expect_error(
     tobs(~ 1 + icar(graph = A), data = sim$data, family = ms_dyn_occu(),
@@ -191,8 +191,8 @@ test_that("ms_dyn_occu() + icar recovers the shared field + community means", {
              "eps_(Intercept)"   = stats::qlogis(0.12))
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_dyn_occu(N = N, J = 4, n_species = 8, n_seasons = 4,
-                                beta_comm_mean = 0.2, beta_comm_sd = 0.5,
+    sim <- simulate_ms_dyn_occu(N = N, J = 4, n.species = 8, n.seasons = 4,
+                                beta.comm.mean = 0.2, beta.comm.sd = 0.5,
                                 gamma = 0.2, epsilon = 0.12, field = ftrue,
                                 seed = 500 + s)
     fit <- tryCatch(
@@ -237,8 +237,8 @@ test_that("ms_dyn_occu() + spatial SVC bar recovers intercept + trend fields", {
   n_seed <- 10L
   c0 <- c1 <- numeric(n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_dyn_occu(N = N, J = 4, n_species = 8, n_seasons = 4,
-                                beta_comm_mean = 0.2, beta_comm_sd = 0.5,
+    sim <- simulate_ms_dyn_occu(N = N, J = 4, n.species = 8, n.seasons = 4,
+                                beta.comm.mean = 0.2, beta.comm.sd = 0.5,
                                 gamma = 0.2, epsilon = 0.12,
                                 field = f0, trend = f1, seed = 700 + s)
     sim$data$cell <- seq_len(N)

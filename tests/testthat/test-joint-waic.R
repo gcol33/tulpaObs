@@ -25,7 +25,7 @@ test_that("occu_cover() non-spatial: WAIC + pointwise log-lik (#26)", {
   fit <- tobs(formula = ~ occ_cov1, data = cell_dat,
               family = occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = od$y, y_pos = y_pos, visits = od$det.covs,
+              y = od$y, y.pos = y_pos, visits = od$det.covs,
               method = "laplace", control = list(verbose = FALSE))
 
   ll <- tulpaObs:::.tobs_pointwise_loglik(fit)
@@ -52,7 +52,7 @@ test_that("occu_cover() beta arm: pointwise log-lik is finite (#26)", {
 
   fit <- tobs(formula = ~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
               detection = ~ det_cov1, positive = ~ pos_cov1,
-              y = od$y, y_pos = y_pos, visits = od$det.covs,
+              y = od$y, y.pos = y_pos, visits = od$det.covs,
               method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit)
   expect_true(is.finite(w$estimates["waic", "Estimate"]))
@@ -76,7 +76,7 @@ test_that("occu_cover() spatial joint: WAIC + pointwise log-lik (#26)", {
     family = occu_cover("lognormal"),
     detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5))),
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 200L, engine = "joint",
                    sigma.grid = c(0.5, 1.0))

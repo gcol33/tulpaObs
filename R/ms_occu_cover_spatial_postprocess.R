@@ -462,11 +462,11 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
 #' adj <- matrix(0, 16, 16)
 #' adj[cbind(1:15, 2:16)] <- 1
 #' adj <- adj + t(adj)
-#' sim <- simulate_ms_occu_cover_spatial(adj, n_species = 6, K = 2, J = 4,
+#' sim <- simulate_ms_occu_cover_spatial(adj, n.species = 6, K = 2, J = 4,
 #'                                       seed = 1)
 #' fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
 #'             family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-#'             positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+#'             positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
 #'             species = sim$species, method = "laplace",
 #'             control = list(n.factors = 2, max.iter = 30, verbose = FALSE))
 #' round(tobs_associations(fit, summary = "median"), 2)

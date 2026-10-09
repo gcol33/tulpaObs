@@ -356,8 +356,8 @@
     stop("occu_cover() requires `y` (N x J detection-history matrix).",
          call. = FALSE)
   }
-  if (is.null(dots[["y_pos"]])) {
-    stop("occu_cover() requires `y_pos` (N x J positive-cover matrix; ",
+  if (is.null(dots[["y.pos"]])) {
+    stop("occu_cover() requires `y.pos` (N x J positive-cover matrix; ",
          "values used only where y == 1).", call. = FALSE)
   }
   # `alpha.grid` states the copy axis's nodes, `alpha.n` how many nodes the
@@ -373,10 +373,10 @@
   # with a clear error rather than a silent dense rebuild.
   ragged <- inherits(y, "tobs_ragged")
   if (ragged) {
-    y_pos_arg <- dots[["y_pos"]]
+    y_pos_arg <- dots[["y.pos"]]
     if (inherits(y_pos_arg, "tobs_ragged")) {
       if (!identical(y_pos_arg$site, y$site) || !identical(y_pos_arg$visit, y$visit))
-        stop("occu_cover(): compact `y` and `y_pos` are not aligned (different ",
+        stop("occu_cover(): compact `y` and `y.pos` are not aligned (different ",
              "site / visit order). Build both with tobs_data(compact = TRUE) on ",
              "the same df / site / visit.", call. = FALSE)
       y_pos_values <- y_pos_arg$values
@@ -505,7 +505,7 @@
       model_sp <- .tobs_build_occu_cover(
         occ_formula = nuts_sp$fe, det_formula = vd_det$det_formula,
         pos_formula = vd_pos$det_formula, data = data, y = y,
-        y_pos = dots[["y_pos"]], positive = family$params$positive,
+        y_pos = dots[["y.pos"]], positive = family$params$positive,
         det_visit_formula = vd_det$det_visit_formula,
         det_visit_data    = vd_det$visits,
         pos_visit_formula = vd_pos$det_visit_formula,
@@ -603,18 +603,18 @@
                      (if (has_spatial) "mean" else "none")
   if (!has_spatial && cover_aggregate != "none") {
     stop(sprintf(paste0(
-      "occu_cover(cover_aggregate = \"%s\") aggregates the cover arm on the ",
+      "occu_cover(cover.aggregate = \"%s\") aggregates the cover arm on the ",
       "shared-field spatial path (method = \"nested_laplace\"); the non-spatial ",
-      "laplace fit uses per-visit cover (cover_aggregate = \"none\")."),
+      "laplace fit uses per-visit cover (cover.aggregate = \"none\")."),
       cover_aggregate), call. = FALSE)
   }
   if (cover_aggregate != "none" && pos_is_visit_level) {
     if (agg_explicit) {
       stop(sprintf(paste0(
-        "occu_cover() cell-aggregated cover (cover_aggregate = \"%s\") needs a ",
+        "occu_cover() cell-aggregated cover (cover.aggregate = \"%s\") needs a ",
         "cell-level positive design, but the `positive` formula references the ",
         "visit-level covariate(s) %s (carried in `visits`). Use a cell-level ",
-        "positive covariate (a column of `data`), or cover_aggregate = \"none\" ",
+        "positive covariate (a column of `data`), or cover.aggregate = \"none\" ",
         "for per-visit cover."), cover_aggregate,
         paste(intersect(all.vars(pos_formula), visit_cov_names),
               collapse = ", ")), call. = FALSE)
@@ -631,8 +631,8 @@
       stop(sprintf(paste0(
         "occu_cover(): an arm-specific cover field (to = \"positive\" / ",
         "share(residual = )) uses ",
-        "per-visit cover (cover_aggregate = \"none\"); it cannot map onto ",
-        "cell-aggregated cover rows. Got cover_aggregate = \"%s\"."),
+        "per-visit cover (cover.aggregate = \"none\"); it cannot map onto ",
+        "cell-aggregated cover rows. Got cover.aggregate = \"%s\"."),
         cover_aggregate), call. = FALSE)
     }
     cover_aggregate <- "none"
@@ -668,8 +668,8 @@
   }
   if (ragged && cover_aggregate != "none") {
     stop("occu_cover(): compact (ragged) input uses per-visit cover ",
-         "(cover_aggregate = \"none\"); the cell-aggregated cover path reads the ",
-         "dense detection grid. Pass cover_aggregate = \"none\", or build densely.",
+         "(cover.aggregate = \"none\"); the cell-aggregated cover path reads the ",
+         "dense detection grid. Pass cover.aggregate = \"none\", or build densely.",
          call. = FALSE)
   }
 
@@ -729,7 +729,7 @@
       pos_formula      = pos_site_formula,
       data             = data,
       y                = y,
-      y_pos            = dots[["y_pos"]],
+      y_pos            = dots[["y.pos"]],
       positive         = family$params$positive,
       det_visit_formula = vd_det$det_visit_formula,
       det_visit_data    = vd_det$visits,

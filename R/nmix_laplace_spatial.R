@@ -396,7 +396,7 @@ print.nmix_spatial_fit <- function(x, ...) {
   mix <- x$mixture %||% "P"
   cat(sprintf("tulpa spatial N-mixture (%s, mixture = %s) nested-Laplace fit\n",
               label, mix))
-  cat(sprintf("  n_sites = %d   n_obs = %d   n_spatial = %d   K_max = %d\n",
+  cat(sprintf("  n_sites = %d   n_obs = %d   n_spatial = %d   K.max = %d\n",
               x$n_sites, x$n_obs, x$n_spatial, x$K_max))
   if (identical(mix, "NB") && is.finite(x$r_mean %||% NA_real_)) {
     cat(sprintf("  NB size r: mean = %.3g   sd = %.3g (grid-integrated)\n",
@@ -521,7 +521,7 @@ print.nmix_spatial_fit <- function(x, ...) {
   if (is.null(K_max)) return(as.integer(floor$value + 100L))
   K_max <- as.integer(K_max)
   if (K_max < floor$value) {
-    stop(sprintf("K_max must be >= %s.", floor$label), call. = FALSE)
+    stop(sprintf("K.max must be >= %s.", floor$label), call. = FALSE)
   }
   K_max
 }
@@ -595,8 +595,8 @@ print.nmix_spatial_fit <- function(x, ...) {
 # not hold. One wording, one threshold, one call.
 .count_spatial_warn_boundary <- function(out) {
   if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(paste0("Max posterior weight on N = K_max is %.2e at one or ",
-                           "more grid points; raise K_max."),
+    warning(sprintf(paste0("Max posterior weight on N = K.max is %.2e at one or ",
+                           "more grid points; raise K.max."),
                     max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
   }
   invisible(out)

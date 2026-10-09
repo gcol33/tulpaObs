@@ -21,7 +21,7 @@
     detection  = ~ 1,
     positive   = positive,
     family     = occu_cover(response = "lognormal"),
-    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    data = sim$data, y = sim$y, y.pos = sim$y_pos,
     method = "nested_laplace",
     control = list(progress = FALSE, integration = "ccd"), ...))
 }
@@ -33,10 +33,10 @@
 .res_sim <- function(adj, seed) {
   simulate_occu_cover(
     N = nrow(adj), J = 6L, positive = "lognormal",
-    beta_occ = c(qlogis(0.7), 0.3), beta_p = c(qlogis(0.65), 0.1),
-    beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3, adj = adj,
+    beta.occ = c(qlogis(0.7), 0.3), beta.p = c(qlogis(0.65), 0.1),
+    beta.pos = c(log(0.25), 0.0), sigma.pos = 0.3, adj = adj,
     sigma = 0.5, alpha = 1.0,
-    pos_field = TRUE, sigma_pos_int = 0.6, sigma_pos_trend = 0.0, seed = seed)
+    pos.field = TRUE, sigma.pos.int = 0.6, sigma.pos.trend = 0.0, seed = seed)
 }
 
 # The truth's OWN orthogonal decomposition, per seed. The simulator draws the
@@ -133,7 +133,7 @@ test_that("a residual is refused where its block cannot go", {
       occurrence = ~ occ_cov1, detection = ~ 1,
       positive = ~ 1 + share(spatial(), residual = "full"),
       family = occu_cover(response = "lognormal"),
-      data = sim$data, y = sim$y, y_pos = sim$y_pos, method = "laplace",
+      data = sim$data, y = sim$y, y.pos = sim$y_pos, method = "laplace",
       control = list(progress = FALSE))),
     "rides the joint nested-Laplace engine", fixed = TRUE)
 
@@ -162,7 +162,7 @@ test_that("a residual is refused where its block cannot go", {
       occurrence = ~ occ_cov1, detection = ~ 1,
       positive = ~ 1 + share(spatial(), residual = 4),
       family = occu_cover(response = "lognormal"),
-      data = sim$data, y = sim$y, y_pos = sim$y_pos,
+      data = sim$data, y = sim$y, y.pos = sim$y_pos,
       method = "nested_laplace", control = list(progress = FALSE))),
     "needs a spatial field on the occurrence formula", fixed = TRUE)
 })
@@ -260,7 +260,7 @@ test_that("a deviation composes with a psi RE and with a trend field", {
       positive   = stats::reformulate(
         c("1", sprintf("share(spatial(), residual = %s)", rr))),
       family = occu_cover(response = "lognormal"),
-      data = sim$data, y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+      data = sim$data, y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
       control = list(progress = FALSE, integration = "ccd")))
     # The RE is still read off its own block, at its own position.
     expect_true("sigma_re" %in% names(f$means))
@@ -276,7 +276,7 @@ test_that("a deviation composes with a psi RE and with a trend field", {
     detection  = ~ 1,
     positive   = ~ 1 + share(spatial(), residual = 4),
     family = occu_cover(response = "lognormal"),
-    data = sim$data, y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    data = sim$data, y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
     control = list(progress = FALSE, integration = "ccd")))
   expect_false(is.null(f$trend_field))
   expect_length(f$residual$field, nrow(adj))

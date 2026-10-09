@@ -140,7 +140,7 @@ nmix_laplace <- function(y,
   # fitted dispersion; NB keeps the shared ceiling.
   if (nb) headroom <- -1L
   if (K_max < max(y)) {
-    stop("`K_max` must be >= max(y).", call. = FALSE)
+    stop("`K.max` must be >= max(y).", call. = FALSE)
   }
 
   if (!is.numeric(r_max) || length(r_max) != 1L || r_max <= 0) {
@@ -228,7 +228,7 @@ nmix_laplace <- function(y,
   }
   if (is.finite(max_bw) && max_bw > .NMIX_BOUNDARY_TOL) {
     warning(sprintf(
-      "Max posterior weight on N = K_max is %.2e at %d sites; raise K_max.",
+      "Max posterior weight on N = K.max is %.2e at %d sites; raise K.max.",
       max_bw, sum(fit$boundary_weight > .NMIX_BOUNDARY_TOL)
     ), call. = FALSE)
   }
@@ -240,7 +240,7 @@ nmix_laplace <- function(y,
 print.nmix_fit <- function(x, ...) {
   mix <- x$mixture %||% "P"
   cat(sprintf("tulpa N-mixture Laplace fit (mixture = %s)\n", mix))
-  cat(sprintf("  n_sites = %d   n_obs = %d   K_max = %d\n",
+  cat(sprintf("  n_sites = %d   n_obs = %d   K.max = %d\n",
               x$n_sites, x$n_obs, x$K_max))
   cat(sprintf("  log_lik = %.4f   n_iter = %d   converged = %s\n",
               x$log_lik, x$n_iter, x$converged))

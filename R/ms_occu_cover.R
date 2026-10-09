@@ -84,9 +84,9 @@
     z
   }
   y     <- to_array(y,     "y")
-  y_pos <- to_array(y_pos, "y_pos")
+  y_pos <- to_array(y_pos, "y.pos")
   if (!all(dim(y) == dim(y_pos))) {
-    stop("y and y_pos must have identical dimensions ",
+    stop("y and y.pos must have identical dimensions ",
          "[n_sites x max_visits x n_species].", call. = FALSE)
   }
 
@@ -128,17 +128,17 @@
     yp   <- matrix(as.numeric(y_pos[, , s]), n_sites, max_visits)
     pmsk <- vs & (ys == 1L)
     if (any(!is.finite(yp[pmsk]))) {
-      stop(sprintf("species '%s': y_pos must be finite at every detected visit.",
+      stop(sprintf("species '%s': y.pos must be finite at every detected visit.",
                    species_names[s]), call. = FALSE)
     }
     if (identical(positive, "beta")) {
       if (any(pmsk & (yp <= 0 | yp >= 1))) {
-        stop(sprintf("species '%s': beta cover requires 0 < y_pos < 1 at every ",
+        stop(sprintf("species '%s': beta cover requires 0 < y.pos < 1 at every ",
                      species_names[s]), "detected visit.", call. = FALSE)
       }
     } else if (identical(positive, "lognormal")) {
       if (any(pmsk & (yp <= 0))) {
-        stop(sprintf("species '%s': lognormal cover requires y_pos > 0 at every ",
+        stop(sprintf("species '%s': lognormal cover requires y.pos > 0 at every ",
                      species_names[s]), "detected visit.", call. = FALSE)
       }
     }
@@ -622,19 +622,19 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 #' 3D arrays `[n_sites x J x n_species]` suitable for [tobs()] with
 #' [ms_occu_cover()] (`y_pos` is `NA` where not detected).
 #'
-#' @param n_species Number of species (default 12).
+#' @param n.species Number of species (default 12).
 #' @param N Number of sites / cells (default 120).
 #' @param J Number of replicate visits (default 5).
-#' @param n_occ_covs,n_det_covs,n_pos_covs Number of covariates on each arm
+#' @param n.occ.covs,n.det.covs,n.pos.covs Number of covariates on each arm
 #'   (drawn IID standard normal, shared across species).
-#' @param mu_occ,mu_p,mu_pos Community-mean coefficient vectors
+#' @param mu.occ,mu.p,mu.pos Community-mean coefficient vectors
 #'   `c(intercept, slopes...)` on each arm's link scale. Defaults pick
 #'   weakly-informative values.
-#' @param sd_occ,sd_p,sd_pos Per-coefficient community SD on each arm (length 1,
+#' @param sd.occ,sd.p,sd.pos Per-coefficient community SD on each arm (length 1,
 #'   recycled, or one per coefficient). Default 0.5 / 0.4 / 0.4.
 #' @param positive `"lognormal"` (default) or `"beta"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
-#' @param sigma_pos Lognormal residual SD when `positive = "lognormal"`
+#' @param sigma.pos Lognormal residual SD when `positive = "lognormal"`
 #'   (default 0.4).
 #' @param seed Optional integer seed.
 #' @return A list with `y` (3D detection array), `y_pos` (3D cover array, `NA`
@@ -643,40 +643,40 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 #'   (species names), and `truth` (community means / SDs, per-species
 #'   coefficients, the dispersion, and the latent state).
 #' @examples
-#' sim <- simulate_ms_occu_cover(n_species = 4, N = 30, J = 3, seed = 1)
+#' sim <- simulate_ms_occu_cover(n.species = 4, N = 30, J = 3, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
-                                   n_occ_covs = 1, n_det_covs = 1, n_pos_covs = 1,
-                                   mu_occ = NULL, mu_p = NULL, mu_pos = NULL,
-                                   sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
+simulate_ms_occu_cover <- function(n.species = 12, N = 120, J = 5,
+                                   n.occ.covs = 1, n.det.covs = 1, n.pos.covs = 1,
+                                   mu.occ = NULL, mu.p = NULL, mu.pos = NULL,
+                                   sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
                                    positive = c("lognormal", "beta", "gaussian"),
-                                   phi = 30, sigma_pos = 0.4, seed = NULL) {
+                                   phi = 30, sigma.pos = 0.4, seed = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
   N <- as.integer(N); J <- as.integer(J)
   is_beta  <- identical(positive, "beta")
   is_gauss <- identical(positive, "gaussian")
 
-  if (is.null(mu_occ)) mu_occ <- c(stats::qlogis(0.4), rep(0.6, n_occ_covs))
-  if (is.null(mu_p))   mu_p   <- c(0.0, rep(-0.3, n_det_covs))
-  if (is.null(mu_pos)) {
+  if (is.null(mu.occ)) mu.occ <- c(stats::qlogis(0.4), rep(0.6, n.occ.covs))
+  if (is.null(mu.p))   mu.p   <- c(0.0, rep(-0.3, n.det.covs))
+  if (is.null(mu.pos)) {
     pos_int <- if (is_beta) stats::qlogis(0.3) else if (is_gauss) 2 else log(0.1)
-    mu_pos <- c(pos_int, rep(0.4, n_pos_covs))
+    mu.pos <- c(pos_int, rep(0.4, n.pos.covs))
   }
-  P_occ <- length(mu_occ); P_p <- length(mu_p); P_pos <- length(mu_pos)
+  P_occ <- length(mu.occ); P_p <- length(mu.p); P_pos <- length(mu.pos)
   rec <- function(sd, p) if (length(sd) == 1L) rep(sd, p) else sd
-  sd_occ <- rec(sd_occ, P_occ); sd_p <- rec(sd_p, P_p); sd_pos <- rec(sd_pos, P_pos)
+  sd.occ <- rec(sd.occ, P_occ); sd.p <- rec(sd.p, P_p); sd.pos <- rec(sd.pos, P_pos)
 
   # Per-species coefficients = community mean + Gaussian deviation.
   draw_beta <- function(mu, sd) {
-    matrix(stats::rnorm(n_species * length(mu), 0, rep(sd, each = n_species)),
-           n_species, length(mu)) +
-      matrix(mu, n_species, length(mu), byrow = TRUE)
+    matrix(stats::rnorm(n.species * length(mu), 0, rep(sd, each = n.species)),
+           n.species, length(mu)) +
+      matrix(mu, n.species, length(mu), byrow = TRUE)
   }
-  beta_occ <- draw_beta(mu_occ, sd_occ)
-  beta_p   <- draw_beta(mu_p,   sd_p)
-  beta_pos <- draw_beta(mu_pos, sd_pos)
+  beta_occ <- draw_beta(mu.occ, sd.occ)
+  beta_p   <- draw_beta(mu.p,   sd.p)
+  beta_pos <- draw_beta(mu.pos, sd.pos)
 
   # Shared (community) covariates.
   make_covs <- function(n, prefix) {
@@ -684,19 +684,19 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
     df <- as.data.frame(matrix(stats::rnorm(N * n), N, n))
     names(df) <- paste0(prefix, seq_len(n)); df
   }
-  occ_covs <- make_covs(n_occ_covs, "occ_cov")
+  occ_covs <- make_covs(n.occ.covs, "occ_cov")
   data <- if (is.null(occ_covs)) data.frame(row.names = seq_len(N)) else occ_covs
   X_occ <- if (is.null(occ_covs)) stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
            else stats::model.matrix(~ ., occ_covs)
 
-  det_covs <- if (n_det_covs <= 0L) NULL
-              else { df <- as.data.frame(matrix(stats::rnorm(N * J * n_det_covs),
-                                                N * J, n_det_covs))
-                     names(df) <- paste0("det_cov", seq_len(n_det_covs)); df }
-  pos_covs <- if (n_pos_covs <= 0L) NULL
-              else { df <- as.data.frame(matrix(stats::rnorm(N * J * n_pos_covs),
-                                                N * J, n_pos_covs))
-                     names(df) <- paste0("pos_cov", seq_len(n_pos_covs)); df }
+  det_covs <- if (n.det.covs <= 0L) NULL
+              else { df <- as.data.frame(matrix(stats::rnorm(N * J * n.det.covs),
+                                                N * J, n.det.covs))
+                     names(df) <- paste0("det_cov", seq_len(n.det.covs)); df }
+  pos_covs <- if (n.pos.covs <= 0L) NULL
+              else { df <- as.data.frame(matrix(stats::rnorm(N * J * n.pos.covs),
+                                                N * J, n.pos.covs))
+                     names(df) <- paste0("pos_cov", seq_len(n.pos.covs)); df }
   visit_data <- do.call(cbind, Filter(Negate(is.null), list(det_covs, pos_covs)))
   if (is.null(visit_data)) visit_data <- data.frame(row.names = seq_len(N * J))
   X_p   <- if (is.null(det_covs)) stats::model.matrix(~ 1, data.frame(row.names = seq_len(N * J)))
@@ -704,14 +704,14 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
   X_pos <- if (is.null(pos_covs)) stats::model.matrix(~ 1, data.frame(row.names = seq_len(N * J)))
            else stats::model.matrix(~ ., pos_covs)
 
-  species_names <- paste0("sp", seq_len(n_species))
-  y     <- array(NA_integer_, dim = c(N, J, n_species),
+  species_names <- paste0("sp", seq_len(n.species))
+  y     <- array(NA_integer_, dim = c(N, J, n.species),
                  dimnames = list(NULL, NULL, species_names))
-  y_pos <- array(NA_real_,    dim = c(N, J, n_species),
+  y_pos <- array(NA_real_,    dim = c(N, J, n.species),
                  dimnames = list(NULL, NULL, species_names))
-  z_all <- matrix(NA_integer_, N, n_species)
+  z_all <- matrix(NA_integer_, N, n.species)
 
-  for (s in seq_len(n_species)) {
+  for (s in seq_len(n.species)) {
     psi <- stats::plogis(as.numeric(X_occ %*% beta_occ[s, ]))
     eta_p   <- as.numeric(X_p   %*% beta_p[s, ])
     eta_pos <- as.numeric(X_pos %*% beta_pos[s, ])
@@ -726,8 +726,8 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
           y_pos[i, j, s] <- if (is_beta) {
             mu <- stats::plogis(eta_pos[idx]); stats::rbeta(1L, mu * phi, (1 - mu) * phi)
           } else if (is_gauss) {
-            stats::rnorm(1L, eta_pos[idx], sigma_pos)
-          } else exp(stats::rnorm(1L, eta_pos[idx], sigma_pos))
+            stats::rnorm(1L, eta_pos[idx], sigma.pos)
+          } else exp(stats::rnorm(1L, eta_pos[idx], sigma.pos))
         }
       }
     }
@@ -737,13 +737,13 @@ simulate_ms_occu_cover <- function(n_species = 12, N = 120, J = 5,
     y = y, y_pos = y_pos, data = data, visit_data = visit_data,
     species = species_names,
     truth = list(
-      mu_occ = mu_occ, mu_p = mu_p, mu_pos = mu_pos,
-      sd_occ = sd_occ, sd_p = sd_p, sd_pos = sd_pos,
+      mu_occ = mu.occ, mu_p = mu.p, mu_pos = mu.pos,
+      sd_occ = sd.occ, sd_p = sd.p, sd_pos = sd.pos,
       beta_occ = beta_occ, beta_p = beta_p, beta_pos = beta_pos,
       z = z_all, positive = positive,
       phi       = if (is_beta) phi else NA_real_,
-      sigma_pos = if (is_beta) NA_real_ else sigma_pos,
-      disp      = if (is_beta) phi else sigma_pos
+      sigma_pos = if (is_beta) NA_real_ else sigma.pos,
+      disp      = if (is_beta) phi else sigma.pos
     )
   )
 }

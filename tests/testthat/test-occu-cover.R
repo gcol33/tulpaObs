@@ -51,7 +51,7 @@ test_that("occu_cover() rejects structured terms in v1", {
       family    = occu_cover("lognormal"),
       detection = ~ det_cov1,
       positive  = ~ det_cov1,
-      y         = od$y, y_pos = y_pos, visits = od$det.covs,
+      y         = od$y, y.pos = y_pos, visits = od$det.covs,
       method    = "laplace", control = list(verbose = FALSE)
     )),
     "non-spatial"
@@ -65,8 +65,8 @@ test_that("occu_cover() nobs() counts the valid visit rows", {
   skip_if_fast()
 
   N <- 60L; J <- 4L
-  sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L,
-                             n_pos_covs = 1L, positive = "lognormal",
+  sim <- simulate_occu_cover(N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L,
+                             n.pos.covs = 1L, positive = "lognormal",
                              seed = 4242L)
   long <- data.frame(
     site_id  = rep(seq_len(N), each = J),
@@ -82,7 +82,7 @@ test_that("occu_cover() nobs() counts the valid visit rows", {
 
   fit <- tobs(formula = ~ occ_cov1, data = cell_dat,
               family = occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = od$y, y_pos = y_pos,
+              positive = ~ pos_cov1, y = od$y, y.pos = y_pos,
               visits = od$det.covs, method = "laplace",
               control = list(verbose = FALSE, max.iter = 200L))
 
@@ -116,11 +116,11 @@ test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
       N         = N, J = J,
-      n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-      beta_occ  = beta_occ_truth,
-      beta_p    = beta_p_truth,
-      beta_pos  = beta_pos_truth,
-      sigma_pos = sigma_pos_truth,
+      n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+      beta.occ  = beta_occ_truth,
+      beta.p    = beta_p_truth,
+      beta.pos  = beta_pos_truth,
+      sigma.pos = sigma_pos_truth,
       positive  = "lognormal",
       seed      = 9000L + s
     )
@@ -142,7 +142,7 @@ test_that("occu_cover() recovers parameters (lognormal positive, 20 seeds)", {
            family    = occu_cover("lognormal"),
            detection = ~ det_cov1,
            positive  = ~ pos_cov1,
-           y         = od$y, y_pos = y_pos, visits = od$det.covs,
+           y         = od$y, y.pos = y_pos, visits = od$det.covs,
            method    = "laplace",
            control   = list(verbose = FALSE, max.iter = 500L)),
       error = function(e) NULL
@@ -215,8 +215,8 @@ test_that("occu_cover() recovers parameters (beta positive, 20 seeds)", {
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
-      N = N, J = J, beta_occ = beta_occ_truth, beta_p = beta_p_truth,
-      beta_pos = beta_pos_truth, positive = "beta", phi = phi_truth,
+      N = N, J = J, beta.occ = beta_occ_truth, beta.p = beta_p_truth,
+      beta.pos = beta_pos_truth, positive = "beta", phi = phi_truth,
       seed = 7000L + s
     )
     long <- data.frame(
@@ -236,7 +236,7 @@ test_that("occu_cover() recovers parameters (beta positive, 20 seeds)", {
       tobs(formula = ~ occ_cov1, data = cell_dat,
            family = occu_cover("beta"),
            detection = ~ det_cov1, positive = ~ pos_cov1,
-           y = od$y, y_pos = y_pos, visits = od$det.covs,
+           y = od$y, y.pos = y_pos, visits = od$det.covs,
            method = "laplace",
            control = list(verbose = FALSE, max.iter = 500L)),
       error = function(e) NULL

@@ -154,7 +154,7 @@ test_that("dyn_abun() areal field + AR1 temporal composes and recovers the lambd
     for (t in 1:Td) { for (j in 1:Jd) ya[, j, t] <- rbinom(nsite, Ncur, 0.5)
       if (t < Td) Ncur <- rbinom(nsite, Ncur, 0.6) + rpois(nsite, 2) }
     f <- tobs(~ abund_cov1 + icar(graph = adj) + temporal(season, type = "ar1"),
-              data = dat, family = dyn_abun(K_max = 30L), detection = ~ 1, y = ya,
+              data = dat, family = dyn_abun(K.max = 30L), detection = ~ 1, y = ya,
               method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
     expect_length(f$temporal_field, Tt)
     expect_false(is.null(f$temporal_hyper))

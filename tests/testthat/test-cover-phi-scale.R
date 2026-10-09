@@ -42,10 +42,10 @@
 .phi_scale_fit <- function(positive, truth, seed, N = 20L, J = 3L) {
   adj <- chain_adj(N)
   args <- list(N = N, J = J, positive = positive, adj = adj,
-               beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5),
+               beta.occ = c(0.2, 0.6), beta.p = c(0.4, -0.5),
                sigma = 0.02, alpha = 1.0, seed = seed)
-  args$beta_pos <- if (positive == "beta") c(-0.6, 0.3) else c(log(0.25), 0.3)
-  if (positive == "beta") args$phi <- truth else args$sigma_pos <- truth
+  args$beta.pos <- if (positive == "beta") c(-0.6, 0.3) else c(log(0.25), 0.3)
+  if (positive == "beta") args$phi <- truth else args$sigma.pos <- truth
   sim <- do.call(simulate_occu_cover, args)
 
   long <- data.frame(site_id = rep(seq_len(N), each = J),
@@ -62,7 +62,7 @@
     data = cbind(data.frame(site_id = seq_len(N)), sim$data),
     family = occu_cover(positive), detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial()),
-    y = od$y, y_pos = y_pos, visits = od$det.covs, method = "nested_laplace",
+    y = od$y, y.pos = y_pos, visits = od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, engine = "joint", progress = FALSE,
                    sigma.grid = .phi_scale_sig_grid,
                    phi.grid.pos = if (positive == "beta") .phi_scale_be_grid
@@ -147,15 +147,15 @@ test_that("occu_cover() joint agrees between its reported and per-draw dispersio
 # -----------------------------------------------------------------------------
 
 .phi_scale_ms_fit <- function(truth, seed, n_cells = 20L) {
-  sim <- simulate_occu_multiscale_cover(n_cells = n_cells, plots_per_cell = 3L,
-                                        visits_per_plot = 2L, phi = truth,
+  sim <- simulate_occu_multiscale_cover(n.cells = n_cells, plots.per.cell = 3L,
+                                        visits.per.plot = 2L, phi = truth,
                                         sigma = 0.02, seed = seed)
   suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot,
     positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE,
                    sigma.grid = .phi_scale_sig_grid,
                    phi.grid.pos = .phi_scale_ln_grid)))

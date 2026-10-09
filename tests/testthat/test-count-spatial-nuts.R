@@ -147,7 +147,7 @@ test_that("dyn_abun() NUTS + car_proper field reproduces the nested-Laplace fiel
     if (t < Td) Ncur <- rbinom(ng, Ncur, 0.6) + rpois(ng, 2)
   }
   nl <- tobs(~ abund_cov1 + car_proper(graph = adj), data = data.frame(abund_cov1 = xab),
-             family = dyn_abun(K_max = 20L), detection = ~ 1, y = ya,
+             family = dyn_abun(K.max = 20L), detection = ~ 1, y = ya,
              method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
   nu <- tulpaObs:::.tobs_fit_dyn_abun_nuts_spatial(
     nl$model, .csn_spatial(nl), mixture = "poisson",
@@ -259,7 +259,7 @@ test_that("dyn_abun() NUTS + icar field reproduces the nested-Laplace field, 0 d
     if (t < Td) Ncur <- rbinom(ng, Ncur, 0.6) + rpois(ng, 2)
   }
   nl <- tobs(~ abund_cov1 + icar(graph = adj), data = data.frame(abund_cov1 = xab),
-             family = dyn_abun(K_max = 20L), detection = ~ 1, y = ya,
+             family = dyn_abun(K.max = 20L), detection = ~ 1, y = ya,
              method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
   nu <- tulpaObs:::.tobs_fit_dyn_abun_nuts_spatial(
     nl$model, .csn_spatial(nl), mixture = "poisson",
@@ -367,7 +367,7 @@ test_that("dyn_abun() NUTS + bym2 field reproduces the nested-Laplace field, 0 d
     if (t < Td) Ncur <- rbinom(ng, Ncur, 0.6) + rpois(ng, 2)
   }
   nl <- tobs(~ abund_cov1 + bym2(graph = adj), data = data.frame(abund_cov1 = xab),
-             family = dyn_abun(K_max = 20L), detection = ~ 1, y = ya,
+             family = dyn_abun(K.max = 20L), detection = ~ 1, y = ya,
              method = "nested_laplace", control = list(verbose = FALSE, progress = FALSE))
   nu <- tulpaObs:::.tobs_fit_dyn_abun_nuts_spatial(
     nl$model, .csn_spatial(nl), mixture = "poisson",

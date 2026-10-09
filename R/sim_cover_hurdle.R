@@ -22,19 +22,19 @@
 #' }
 #'
 #' Both layers share the same design matrix by default (one continuous
-#' covariate plus an intercept). When `spatial_range` is supplied, a simple
+#' covariate plus an intercept). When `spatial.range` is supplied, a simple
 #' exponential-kernel Gaussian field on a random unit-square coordinate set
 #' is added to both linear predictors; the two layers see independently
 #' simulated draws of that field, which matches the two-independent-arm fit.
 #' The joint engine's shared field is a different generative model.
 #'
 #' @param N Number of sites (default 200).
-#' @param beta_occ Length-2 occurrence coefficients (intercept, slope on x).
-#' @param beta_pos Length-2 log-cover coefficients (intercept, slope on x).
-#' @param sigma_pos Lognormal residual standard deviation (default 0.4).
-#' @param spatial_range Length scale of the exponential spatial field
+#' @param beta.occ Length-2 occurrence coefficients (intercept, slope on x).
+#' @param beta.pos Length-2 log-cover coefficients (intercept, slope on x).
+#' @param sigma.pos Lognormal residual standard deviation (default 0.4).
+#' @param spatial.range Length scale of the exponential spatial field
 #'   (in unit-square distance). `NULL` disables the spatial layer.
-#' @param spatial_var Marginal variance of the spatial field (default 1).
+#' @param spatial.var Marginal variance of the spatial field (default 1).
 #' @param seed Optional integer seed.
 #' @param response Positive-arm likelihood: `"lognormal"` (default) or `"gaussian"`.
 #' @return A list with:
@@ -50,17 +50,17 @@
 #' sim <- simulate_cover(N = 200, seed = 1)
 #' head(sim$data)
 simulate_cover <- function(N             = 200L,
-                                  beta_occ      = c(-0.5, 0.8),
-                                  beta_pos      = c(-1.0, 0.3),
-                                  sigma_pos     = 0.4,
+                                  beta.occ      = c(-0.5, 0.8),
+                                  beta.pos      = c(-1.0, 0.3),
+                                  sigma.pos     = 0.4,
                                   response      = c("lognormal", "gaussian"),
-                                  spatial_range = NULL,
-                                  spatial_var   = 1,
+                                  spatial.range = NULL,
+                                  spatial.var   = 1,
                                   seed          = NULL) {
   response <- match.arg(response)
   if (!is.null(seed)) set.seed(seed)
   N <- as.integer(N)
-  if (length(beta_occ) != 2L || length(beta_pos) != 2L) {
+  if (length(beta.occ) != 2L || length(beta.pos) != 2L) {
     stop("`beta_occ` and `beta_pos` must each be length-2 ",
          "(intercept + slope on x).", call. = FALSE)
   }
@@ -69,14 +69,14 @@ simulate_cover <- function(N             = 200L,
   coords <- cbind(lon = stats::runif(N), lat = stats::runif(N))
   X      <- cbind(`(Intercept)` = 1, x = x)
 
-  eta_occ <- as.numeric(X %*% beta_occ)
-  eta_pos <- as.numeric(X %*% beta_pos)
+  eta_occ <- as.numeric(X %*% beta.occ)
+  eta_pos <- as.numeric(X %*% beta.pos)
 
   spatial_occ <- rep(0, N)
   spatial_pos <- rep(0, N)
-  if (!is.null(spatial_range)) {
-    spatial_occ <- .draw_exp_field(coords, spatial_range, spatial_var)
-    spatial_pos <- .draw_exp_field(coords, spatial_range, spatial_var)
+  if (!is.null(spatial.range)) {
+    spatial_occ <- .draw_exp_field(coords, spatial.range, spatial.var)
+    spatial_pos <- .draw_exp_field(coords, spatial.range, spatial.var)
     eta_occ <- eta_occ + spatial_occ
     eta_pos <- eta_pos + spatial_pos
   }
@@ -88,14 +88,14 @@ simulate_cover <- function(N             = 200L,
     # Delta-normal hurdle: the positive magnitude is a plain Gaussian on the raw
     # response (no log, no [0, 1] clamp); absence is the 0 sentinel. mu on the
     # response scale is eta_pos.
-    mag   <- stats::rnorm(N, eta_pos, sigma_pos)
+    mag   <- stats::rnorm(N, eta_pos, sigma.pos)
     cover <- ifelse(occur == 1L, mag, 0)
     mu_truth <- eta_pos
   } else {
-    log_cover <- stats::rnorm(N, eta_pos, sigma_pos)
+    log_cover <- stats::rnorm(N, eta_pos, sigma.pos)
     cover     <- ifelse(occur == 1L, exp(log_cover), 0)
     cover     <- pmin(cover, 1)
-    mu_truth  <- exp(eta_pos + sigma_pos^2 / 2)
+    mu_truth  <- exp(eta_pos + sigma.pos^2 / 2)
   }
 
   data <- data.frame(
@@ -110,9 +110,9 @@ simulate_cover <- function(N             = 200L,
     y      = cover,
     coords = coords,
     truth  = list(
-      beta_occ    = beta_occ,
-      beta_pos    = beta_pos,
-      sigma_pos   = sigma_pos,
+      beta_occ    = beta.occ,
+      beta_pos    = beta.pos,
+      sigma_pos   = sigma.pos,
       response    = response,
       p           = p,
       mu          = mu_truth,
@@ -160,8 +160,8 @@ simulate_cover <- function(N             = 200L,
 #'
 #' @param N Number of sites (default 300).
 #' @param adj `n_s x n_s` integer adjacency matrix for the BYM2 field.
-#' @param beta_occ Length-2 occurrence coefficients (intercept + slope).
-#' @param beta_pos Length-2 cover-arm coefficients (intercept + slope).
+#' @param beta.occ Length-2 occurrence coefficients (intercept + slope).
+#' @param beta.pos Length-2 cover-arm coefficients (intercept + slope).
 #' @param sigma Marginal spatial-field amplitude (default 0.6); the
 #'   occurrence-arm linear predictor adds `sigma * z[region]`.
 #' @param rho BYM2 mixing parameter, in `[0, 1]` (default 0.7).
@@ -171,7 +171,7 @@ simulate_cover <- function(N             = 200L,
 #' @param positive Likelihood for the positive arm: `"beta"` or
 #'   `"lognormal"`.
 #' @param phi Beta precision when `positive = "beta"` (default 30).
-#' @param sigma_pos_resid Lognormal residual SD when `positive =
+#' @param sigma.pos.resid Lognormal residual SD when `positive =
 #'   "lognormal"` (default 0.4); independent of the spatial `sigma`.
 #' @param seed Optional integer seed.
 #' @return A list with:
@@ -194,15 +194,15 @@ simulate_cover <- function(N             = 200L,
 #' head(sim$data)
 simulate_cover_joint <- function(N               = 300L,
                                  adj,
-                                 beta_occ        = c(-0.3, 0.7),
-                                 beta_pos        = c( 0.4, -0.5),
+                                 beta.occ        = c(-0.3, 0.7),
+                                 beta.pos        = c( 0.4, -0.5),
                                  sigma           = 0.6,
                                  rho             = 0.7,
                                  alpha           = 1.0,
                                  positive        = c("beta", "lognormal",
                                                      "gaussian"),
                                  phi             = 30,
-                                 sigma_pos_resid = 0.4,
+                                 sigma.pos.resid = 0.4,
                                  seed            = NULL) {
   positive <- match.arg(positive)
   if (!is.null(seed)) set.seed(seed)
@@ -211,7 +211,7 @@ simulate_cover_joint <- function(N               = 300L,
     stop("`adj` must be a square integer adjacency matrix.", call. = FALSE)
   }
   n_s <- nrow(adj)
-  if (length(beta_occ) != 2L || length(beta_pos) != 2L) {
+  if (length(beta.occ) != 2L || length(beta.pos) != 2L) {
     stop("`beta_occ` and `beta_pos` must each be length-2 ",
          "(intercept + slope on x).", call. = FALSE)
   }
@@ -230,9 +230,9 @@ simulate_cover_joint <- function(N               = 300L,
   w_s     <- sigma * (sqrt(rho) * phi_f + sqrt(1 - rho) * theta_f)
 
   x       <- stats::rnorm(N)
-  eta_occ <- beta_occ[1] + beta_occ[2] * x + w_s[region]
+  eta_occ <- beta.occ[1] + beta.occ[2] * x + w_s[region]
   occur   <- stats::rbinom(N, 1L, stats::plogis(eta_occ))
-  eta_pos <- beta_pos[1] + beta_pos[2] * x + alpha * w_s[region]
+  eta_pos <- beta.pos[1] + beta.pos[2] * x + alpha * w_s[region]
   is_pos  <- occur == 1L
 
   y <- numeric(N)
@@ -244,10 +244,10 @@ simulate_cover_joint <- function(N               = 300L,
     y <- pmin(pmax(y, 0), 1 - 1e-6)
   } else if (positive == "gaussian") {
     # Identity-Gaussian arm: raw magnitude, no log, no clamp.
-    mag       <- stats::rnorm(N, eta_pos, sigma_pos_resid)
+    mag       <- stats::rnorm(N, eta_pos, sigma.pos.resid)
     y[is_pos] <- mag[is_pos]
   } else {
-    log_y     <- stats::rnorm(N, eta_pos, sigma_pos_resid)
+    log_y     <- stats::rnorm(N, eta_pos, sigma.pos.resid)
     y[is_pos] <- exp(log_y[is_pos])
     y         <- pmin(y, 1 - 1e-6)
   }
@@ -257,8 +257,8 @@ simulate_cover_joint <- function(N               = 300L,
     y     = y,
     adj   = adj,
     truth = list(
-      beta_occ        = beta_occ,
-      beta_pos        = beta_pos,
+      beta_occ        = beta.occ,
+      beta_pos        = beta.pos,
       sigma           = sigma,
       rho             = rho,
       alpha           = alpha,
@@ -266,7 +266,7 @@ simulate_cover_joint <- function(N               = 300L,
       positive        = positive,
       phi             = if (positive == "beta") phi else NA_real_,
       sigma_pos_resid = if (positive %in% c("lognormal", "gaussian"))
-                        sigma_pos_resid else NA_real_,
+                        sigma.pos.resid else NA_real_,
       phi_f           = phi_f,
       theta_f         = theta_f,
       w_s             = w_s,

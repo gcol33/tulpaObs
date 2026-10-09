@@ -5,7 +5,7 @@
 
 test_that("ms_occu two-state marginal matches the C++ single-season kernel", {
   skip_on_cran()
-  sim <- simulate_ms_occu(N = 60, J = 3, n_species = 6, seed = 11)
+  sim <- simulate_ms_occu(N = 60, J = 3, n.species = 6, seed = 11)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
@@ -30,7 +30,7 @@ test_that("ms_occu two-state marginal matches the C++ single-season kernel", {
 
 test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_occu", {
   skip_on_cran()
-  sim <- simulate_ms_occu(N = 60, J = 3, n_species = 6, seed = 21)
+  sim <- simulate_ms_occu(N = 60, J = 3, n.species = 6, seed = 21)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
@@ -47,7 +47,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_occu", {
 test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_int_occu", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_int_occu(N = 80, J = c(3, 4), n_species = 6, seed = 22)
+  sim <- simulate_ms_int_occu(N = 80, J = c(3, 4), n.species = 6, seed = 22)
   fit <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
@@ -60,7 +60,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_int_occu", {
 test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_dyn_occu", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_dyn_occu(N = 50, J = 3, n_species = 6, n_seasons = 4,
+  sim <- simulate_ms_dyn_occu(N = 50, J = 3, n.species = 6, n.seasons = 4,
                               gamma = 0.2, epsilon = 0.1, seed = 23)
   fit <- tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:6),
@@ -81,7 +81,7 @@ test_that("tobs_waic / tobs_dic / tobs_cpo work on ms_dyn_occu", {
 test_that("dic() works on ms_abun nuts (ms_nmix)", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 5, N = 25, J = 3, seed = 3)
+  sim <- simulate_ms_abun(n.species = 5, N = 25, J = 3, seed = 3)
   fit <- tobs(~ abund_cov1, data = sim$data, family = ms_abun(),
               detection = ~ det_cov1, y = sim$y, species = sim$species,
               method = "nuts",
@@ -105,12 +105,12 @@ test_that("dic() works on the spatial-factor ms_occu_cover() nuts fit", {
     A
   }
   adj <- rook_adj(5L)
-  sims <- simulate_ms_occu_cover_spatial(adj, n_species = 5L, J = 4L, K = 1L,
-                                         sd_occ = 0.5, sd_load = 1.1,
-                                         sigma_pos = 0.4, seed = 3L)
+  sims <- simulate_ms_occu_cover_spatial(adj, n.species = 5L, J = 4L, K = 1L,
+                                         sd.occ = 0.5, sd.load = 1.1,
+                                         sigma.pos = 0.4, seed = 3L)
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sims$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = sims$y, y_pos = sims$y_pos,
+              positive = ~ pos_cov1, y = sims$y, y.pos = sims$y_pos,
               species = sims$species, method = "nuts",
               control = list(n.iter = 200L, n.warmup = 200L, n.chains = 1L,
                              n.factors = 1L, verbose = FALSE))

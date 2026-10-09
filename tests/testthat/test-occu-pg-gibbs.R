@@ -12,7 +12,7 @@
 # =============================================================================
 
 test_that("occu() method = 'pg_gibbs' gates + S3", {
-  sim <- simulate_occu(N = 120, J = 4, n_occ_covs = 1, n_det_covs = 1, seed = 1)
+  sim <- simulate_occu(N = 120, J = 4, n.occ.covs = 1, n.det.covs = 1, seed = 1)
   fit <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
               y = sim$y, method = "pg_gibbs",
               control = list(n.iter = 1000L, n.warmup = 500L, n.chains = 2L,
@@ -35,8 +35,8 @@ test_that("occu() method = 'pg_gibbs' gates + S3", {
 test_that("occu() pg_gibbs posterior matches the Laplace fit (calibration)", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_occu(N = 400, J = 5, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.3, 0.6), beta_det = c(0.2, -0.4), seed = 5)
+  sim <- simulate_occu(N = 400, J = 5, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.3, 0.6), beta.det = c(0.2, -0.4), seed = 5)
   fl <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
              y = sim$y, method = "laplace", control = list(verbose = FALSE))
   fg <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
@@ -57,8 +57,8 @@ test_that("occu() pg_gibbs matches the NUTS posterior (both exact)", {
   # PG-Gibbs and NUTS both target the EXACT posterior (unlike Laplace), so on the
   # same data their posterior means and SDs must agree -- a stronger anchor than
   # the Laplace calibration, which only holds asymptotically.
-  sim <- simulate_occu(N = 300, J = 5, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.3, 0.6), beta_det = c(0.2, -0.4), seed = 11)
+  sim <- simulate_occu(N = 300, J = 5, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.3, 0.6), beta.det = c(0.2, -0.4), seed = 11)
   fn <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
              y = sim$y, method = "nuts",
              control = list(n.iter = 1500L, n.warmup = 750L, n.chains = 3L,
@@ -80,8 +80,8 @@ test_that("occu() pg_gibbs agrees with spOccupancy::PGOcc (reference impl)", {
   # External reference: spOccupancy::PGOcc IS the Polson-Scott-Windle PG Gibbs
   # sampler this method reimplements. On matched data the two posteriors must
   # overlap -- the reference-implementation anchor the DoD asks for.
-  sim <- simulate_occu(N = 300, J = 5, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.3, 0.6), beta_det = c(0.2, -0.4), seed = 21)
+  sim <- simulate_occu(N = 300, J = 5, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.3, 0.6), beta.det = c(0.2, -0.4), seed = 21)
   y <- sim$y; y[y < 0L] <- NA
   fg <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
              y = sim$y, method = "pg_gibbs",
@@ -113,8 +113,8 @@ test_that("occu() pg_gibbs recovers coefficients with nominal coverage", {
   est <- matrix(NA_real_, n_seed, 4L)
   cov_hit <- 0L; cov_tot <- 0L
   for (s in seq_len(n_seed)) {
-    sim <- simulate_occu(N = 400, J = 5, n_occ_covs = 1, n_det_covs = 1,
-                         beta_occ = c(bo0, bo1), beta_det = c(bd0, bd1),
+    sim <- simulate_occu(N = 400, J = 5, n.occ.covs = 1, n.det.covs = 1,
+                         beta.occ = c(bo0, bo1), beta.det = c(bd0, bd1),
                          seed = 200 + s)
     fg <- tryCatch(
       tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,

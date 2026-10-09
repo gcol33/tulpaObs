@@ -107,8 +107,8 @@ test_that("ms_int_occu b_from_z round-trips a whitened deviation matrix", {
 test_that("ms_int_occu NUTS recovers community means + de-attenuates the variance", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_int_occu(N = 150, J = c(3, 4), n_species = 12,
-                              n_data = 2, seed = 23)
+  sim <- simulate_ms_int_occu(N = 150, J = c(3, 4), n.species = 12,
+                              n.data = 2, seed = 23)
   sp <- paste0("sp", seq_len(12))
   lap <- tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
               y = sim$y, species = sp, method = "laplace",
@@ -147,8 +147,8 @@ test_that("ms_int_occu NUTS community-mean 95% CIs cover at the nominal rate", {
   truth <- c("psi_(Intercept)" = 0, "p1_(Intercept)" = 0, "p2_(Intercept)" = 0)
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_ms_int_occu(N = 150, J = c(3, 4), n_species = 12,
-                                n_data = 2, seed = 300 + s)
+    sim <- simulate_ms_int_occu(N = 150, J = c(3, 4), n.species = 12,
+                                n.data = 2, seed = 300 + s)
     fit <- tryCatch(tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
                     y = sim$y, species = sp, method = "nuts",
                     control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,

@@ -34,7 +34,7 @@ test_that("occu_cover() shared field + per-group RE: fit runs and reports the RE
   sim <- .ocfr_sim(1L, side = 6L, n_g = 6L)
   fit <- tobs(~ x + icar(graph = sim$adj) + re(g), data = sim$data,
               family = occu_cover("lognormal"), detection = ~ 1, positive = ~ 1,
-              y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+              y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$method, "nested_laplace")
@@ -67,7 +67,7 @@ test_that("occu_cover() spatial + RE recovers the means, field, and RE variance"
     fit <- tobs(~ x + icar(graph = sim$adj) + re(g), data = sim$data,
                 family = occu_cover("lognormal"), detection = ~ 1,
                 positive = ~ 1 + share(spatial()),
-                y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+                y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     c(psi_x = unname(fit$means[["psi_x"]]),
       p0    = unname(fit$means[["p_(Intercept)"]]),
@@ -95,14 +95,14 @@ test_that("occu_cover() spatial + RE gates the unsupported configurations", {
   expect_error(
     tobs(~ x + icar(graph = sim$adj) + re(g, type = "slope", covariate = "x"),
          data = sim$data, family = occu_cover("lognormal"),
-         detection = ~ 1, positive = ~ 1, y = sim$y, y_pos = sim$y_pos,
+         detection = ~ 1, positive = ~ 1, y = sim$y, y.pos = sim$y_pos,
          method = "nested_laplace", control = list(progress = FALSE)),
     "random INTERCEPT only")
   # The spatial path has one engine, so any other `control$engine` value errors.
   expect_error(
     tobs(~ x + icar(graph = sim$adj) + re(g), data = sim$data,
          family = occu_cover("lognormal"), detection = ~ 1, positive = ~ 1,
-         y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+         y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
          control = list(engine = "v3_nested", progress = FALSE)),
     "unknown control\\$engine")
 })

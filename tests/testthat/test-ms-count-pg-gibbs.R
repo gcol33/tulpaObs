@@ -12,7 +12,7 @@
 
 test_that("jsdm()/ms_count() method='pg_gibbs' gates + S3", {
   skip_on_cran()
-  sim <- simulate_jsdm(N = 60, n_species = 8, seed = 1)
+  sim <- simulate_jsdm(N = 60, n.species = 8, seed = 1)
   fit <- tobs(~ x, data = sim$data, family = jsdm(), y = sim$y,
               species = paste0("sp", seq_len(8)), method = "pg_gibbs",
               control = list(n.iter = 800L, n.warmup = 400L, n.chains = 2L,
@@ -22,7 +22,7 @@ test_that("jsdm()/ms_count() method='pg_gibbs' gates + S3", {
   expect_true(all(is.finite(fit$rhat)) && all(fit$rhat < 1.1))
   expect_true(all(c("sd_mu", "coef_mu") %in% names(fit$ms_community)))
   # A Poisson community count rejects pg_gibbs (not a logistic response).
-  sp <- simulate_ms_count(N = 60, n_species = 6, response = "poisson", seed = 2)
+  sp <- simulate_ms_count(N = 60, n.species = 6, response = "poisson", seed = 2)
   expect_error(
     tobs(~ x, data = sp$data, family = ms_count("poisson"), y = sp$y,
          species = paste0("sp", seq_len(6)), method = "pg_gibbs"),
@@ -36,8 +36,8 @@ test_that("jsdm() pg_gibbs recovers community means + SD (not attenuated)", {
   mu_t <- c(0.2, 0.7); sd_t <- c(0.7, 0.5)
   mu_e <- sd_e <- matrix(NA_real_, n_seed, 2L); cor_e <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_jsdm(N = 160, n_species = 20, beta_comm_mean = mu_t,
-                         beta_comm_sd = sd_t, seed = 300 + s)
+    sim <- simulate_jsdm(N = 160, n.species = 20, beta.comm.mean = mu_t,
+                         beta.comm.sd = sd_t, seed = 300 + s)
     fg <- tryCatch(
       tobs(~ x, data = sim$data, family = jsdm(), y = sim$y,
            species = paste0("sp", seq_len(20)), method = "pg_gibbs",
@@ -62,8 +62,8 @@ test_that("ms_count('binomial') pg_gibbs recovers the community slope", {
   n_seed <- 8L
   b1 <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_count(N = 140, n_species = 14, response = "binomial",
-                             beta_comm_mean = c(0.3, 0.6), beta_comm_sd = c(0.6, 0.4),
+    sim <- simulate_ms_count(N = 140, n.species = 14, response = "binomial",
+                             beta.comm.mean = c(0.3, 0.6), beta.comm.sd = c(0.6, 0.4),
                              trials = 6, seed = 500 + s)
     fb <- tryCatch(
       tobs(~ x, data = sim$data, family = ms_count("binomial"), y = sim$y,

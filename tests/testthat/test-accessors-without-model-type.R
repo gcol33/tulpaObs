@@ -14,8 +14,8 @@ test_that("the S3 handler lookup declines a missing model type", {
 test_that("ranef() on a cover() fit returns the empty frame", {
   skip_if_fast()
   skip_on_cran()
-  sc <- simulate_cover(N = 200L, beta_occ = c(-0.5, 0.8), beta_pos = c(-1, 0.3),
-                       sigma_pos = 0.4, response = "lognormal", seed = 51L)
+  sc <- simulate_cover(N = 200L, beta.occ = c(-0.5, 0.8), beta.pos = c(-1, 0.3),
+                       sigma.pos = 0.4, response = "lognormal", seed = 51L)
   fc <- tobs(~ x, data = sc$data, family = cover("lognormal"), y = sc$y,
              method = "laplace", control = ctl)
   re <- ranef(fc)

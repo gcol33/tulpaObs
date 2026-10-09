@@ -37,7 +37,7 @@ predict(fit, newdata = grid)         # marginalized per-site psi
 follows from it.
 
 ```r
-tobs(~ forest, data = sites, family = abun(K_max = 50), detection = ~ effort, y = counts)
+tobs(~ forest, data = sites, family = abun(K.max = 50), detection = ~ effort, y = counts)
 tobs(~ moisture, data = plots, family = cover(response = "beta"), y = pct_cover)
 tobs(~ elev, data = sites, family = ms_occu(), detection = ~ effort, y = y_array,
      species = species_id)
@@ -185,10 +185,10 @@ species arrays. Three helpers build the same `tobs_data` object from any of them
 ```r
 tobs_format(y, occ.covs = sites, det.covs = list(wind = wind_mat), coords = xy)
 tobs_data(visits_df, y = "detected", site = "site_id", visit = "visit")
-tobs_format_ms(y_array, occ.covs = sites, species_names = spp)
+tobs_format_ms(y_array, occ.covs = sites, species.names = spp)
 
 occu_cover_inputs(plot_df, site = "plot", visit = "visit",
-                  response = "present", y_pos = "cover")
+                  response = "present", y.pos = "cover")
 ```
 
 `summary()`, `plot()`, and `print()` on a `tobs_data` report naive occupancy and detection,
@@ -204,8 +204,8 @@ data. The package's own recovery tests are built on these:
 
 ```r
 sim <- simulate_occu(N = 200, J = 4,
-                     beta_occ = c(-0.5, 1.2, 0.4),
-                     beta_det = c(0.2, -0.8),
+                     beta.occ = c(-0.5, 1.2, 0.4),
+                     beta.det = c(0.2, -0.8),
                      seed = 1)
 
 fit <- tobs(~ occ_cov1 + occ_cov2, data = sim$data, family = occu(),

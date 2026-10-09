@@ -22,7 +22,7 @@ test_that("ms_abun(mixture = 'zip' / 'zinb') constructor + gates", {
   # ZI is the non-spatial community fit; a shared field would silently map to
   # Poisson / negbin, so it errors with a pointer instead of dropping the
   # structural-zero share.
-  sim <- simulate_ms_abun(n_species = 5, N = 30, J = 3, mixture = "zip",
+  sim <- simulate_ms_abun(n.species = 5, N = 30, J = 3, mixture = "zip",
                           omega = 0.3, seed = 1)
   adj <- matrix(0L, 30, 30); adj[cbind(1:29, 2:30)] <- 1L; adj <- adj + t(adj)
   expect_error(
@@ -37,14 +37,14 @@ test_that("ms_abun(mixture = 'zip') fits, exposes + recovers the structural-zero
   skip_on_cran()
   skip_if_fast()
   set.seed(21)
-  sim <- simulate_ms_abun(n_species = 6, N = 60, J = 5,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(5), 0.4), mu_p = c(0.4, -0.3),
-                          sd_lambda = 0.35, sd_p = 0.3,
-                          mixture = "zip", omega = 0.35, sigma_omega = 0.3,
+  sim <- simulate_ms_abun(n.species = 6, N = 60, J = 5,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(5), 0.4), mu.p = c(0.4, -0.3),
+                          sd.lambda = 0.35, sd.p = 0.3,
+                          mixture = "zip", omega = 0.35, sigma.omega = 0.3,
                           seed = 21)
   fit <- tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
-              family = ms_abun(mixture = "zip", K_max = 60L),
+              family = ms_abun(mixture = "zip", K.max = 60L),
               species = sim$species, method = "laplace",
               control = list(verbose = FALSE, progress = FALSE, n.quad = 2L))
   expect_s3_class(fit, "tobs_fit")
@@ -86,15 +86,15 @@ test_that("ms_abun(mixture = 'zip') community-mean CIs cover across seeds", {
   covered <- logical(0)
   om_hat <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_abun(n_species = 6, N = 55, J = 4,
-                            n_abund_covs = 1, n_det_covs = 1,
-                            mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
-                            sd_lambda = 0.35, sd_p = 0.3,
-                            mixture = "zip", omega = om_t, sigma_omega = 0.3,
+    sim <- simulate_ms_abun(n.species = 6, N = 55, J = 4,
+                            n.abund.covs = 1, n.det.covs = 1,
+                            mu.lambda = c(log(5), 0.4), mu.p = c(0.3, -0.3),
+                            sd.lambda = 0.35, sd.p = 0.3,
+                            mixture = "zip", omega = om_t, sigma.omega = 0.3,
                             seed = 700 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
-           family = ms_abun(mixture = "zip", K_max = 50L),
+           family = ms_abun(mixture = "zip", K.max = 50L),
            species = sim$species, method = "laplace",
            control = list(verbose = FALSE, progress = FALSE, n.quad = 2L)),
       error = function(e) NULL)
@@ -117,14 +117,14 @@ test_that("ms_abun(mixture = 'zinb') wires log_r + omega through the joint path"
   # ZINB has the known zero-source confounding (structural omega vs NB
   # overdispersion); a well-identified regime -- higher counts + more visits.
   set.seed(41)
-  sim <- simulate_ms_abun(n_species = 6, N = 80, J = 6,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(9), 0.4), mu_p = c(0.5, -0.2),
-                          sd_lambda = 0.35, sd_p = 0.3,
+  sim <- simulate_ms_abun(n.species = 6, N = 80, J = 6,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(9), 0.4), mu.p = c(0.5, -0.2),
+                          sd.lambda = 0.35, sd.p = 0.3,
                           mixture = "zinb", size = 6, omega = 0.25,
-                          sigma_omega = 0.3, seed = 41)
+                          sigma.omega = 0.3, seed = 41)
   fit <- tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
-              family = ms_abun(mixture = "zinb", K_max = 150L),
+              family = ms_abun(mixture = "zinb", K.max = 150L),
               species = sim$species, method = "laplace",
               control = list(verbose = FALSE, progress = FALSE, n.quad = 2L))
 

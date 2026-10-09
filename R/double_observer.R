@@ -342,10 +342,10 @@
 #'
 #' @param N Number of sites (default 200).
 #' @param type `"independent"` (default) or `"dependent"` (role-swapping).
-#' @param n_abund_covs,n_det_covs Number of abundance / detection covariates.
-#' @param beta_lambda Log-abundance coefficients `c(intercept, slopes...)`.
-#'   Default `c(log(8), runif(n_abund_covs, -0.5, 0.5))`.
-#' @param beta_p1,beta_p2 Per-observer detection coefficients (logit). Default
+#' @param n.abund.covs,n.det.covs Number of abundance / detection covariates.
+#' @param beta.lambda Log-abundance coefficients `c(intercept, slopes...)`.
+#'   Default `c(log(8), runif(n.abund.covs, -0.5, 0.5))`.
+#' @param beta.p1,beta.p2 Per-observer detection coefficients (logit). Default
 #'   moderate detection.
 #' @param seed Optional random seed.
 #' @return A list with `y` (`N x 3` cell counts for `"independent"`, `N x 2` for
@@ -357,29 +357,29 @@
 #' @export
 simulate_double_observer <- function(N = 200,
                                      type = c("independent", "dependent"),
-                                     n_abund_covs = 1, n_det_covs = 1,
-                                     beta_lambda = NULL, beta_p1 = NULL,
-                                     beta_p2 = NULL, seed = NULL) {
+                                     n.abund.covs = 1, n.det.covs = 1,
+                                     beta.lambda = NULL, beta.p1 = NULL,
+                                     beta.p2 = NULL, seed = NULL) {
   type <- match.arg(type)
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda))
-    beta_lambda <- c(log(8), stats::runif(n_abund_covs, -0.5, 0.5))
-  if (is.null(beta_p1))
-    beta_p1 <- c(stats::qlogis(0.5), stats::runif(n_det_covs, -0.3, 0.3))
-  if (is.null(beta_p2))
-    beta_p2 <- c(stats::qlogis(0.45), stats::runif(n_det_covs, -0.3, 0.3))
+  if (is.null(beta.lambda))
+    beta.lambda <- c(log(8), stats::runif(n.abund.covs, -0.5, 0.5))
+  if (is.null(beta.p1))
+    beta.p1 <- c(stats::qlogis(0.5), stats::runif(n.det.covs, -0.3, 0.3))
+  if (is.null(beta.p2))
+    beta.p2 <- c(stats::qlogis(0.45), stats::runif(n.det.covs, -0.3, 0.3))
 
-  abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
-  names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
-  det_covs <- data.frame(matrix(stats::rnorm(N * n_det_covs), N, n_det_covs))
-  names(det_covs) <- paste0("det_cov", seq_len(n_det_covs))
+  abund_covs <- data.frame(matrix(stats::rnorm(N * n.abund.covs), N, n.abund.covs))
+  names(abund_covs) <- paste0("abund_cov", seq_len(n.abund.covs))
+  det_covs <- data.frame(matrix(stats::rnorm(N * n.det.covs), N, n.det.covs))
+  names(det_covs) <- paste0("det_cov", seq_len(n.det.covs))
   data <- cbind(abund_covs, det_covs)
 
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   X_det    <- stats::model.matrix(~ ., det_covs)
-  lambda <- exp(as.vector(X_lambda %*% beta_lambda))
-  p1 <- plogis(as.vector(X_det %*% beta_p1))
-  p2 <- plogis(as.vector(X_det %*% beta_p2))
+  lambda <- exp(as.vector(X_lambda %*% beta.lambda))
+  p1 <- plogis(as.vector(X_det %*% beta.p1))
+  p2 <- plogis(as.vector(X_det %*% beta.p2))
   N_lat <- stats::rpois(N, lambda)
 
   if (identical(type, "dependent")) {
@@ -395,8 +395,8 @@ simulate_double_observer <- function(N = 200,
     }
     colnames(y) <- c("primary", "secondary_only")
     return(list(y = y, data = data, primary = primary,
-                truth = list(beta_lambda = beta_lambda, beta_p1 = beta_p1,
-                             beta_p2 = beta_p2, lambda = lambda, p1 = p1, p2 = p2,
+                truth = list(beta_lambda = beta.lambda, beta_p1 = beta.p1,
+                             beta_p2 = beta.p2, lambda = lambda, p1 = p1, p2 = p2,
                              N = N_lat, type = type)))
   }
 
@@ -411,7 +411,7 @@ simulate_double_observer <- function(N = 200,
   }
   colnames(y) <- c("obs1_only", "obs2_only", "both")
   list(y = y, data = data,
-       truth = list(beta_lambda = beta_lambda, beta_p1 = beta_p1,
-                    beta_p2 = beta_p2, lambda = lambda, p1 = p1, p2 = p2,
+       truth = list(beta_lambda = beta.lambda, beta_p1 = beta.p1,
+                    beta_p2 = beta.p2, lambda = lambda, p1 = p1, p2 = p2,
                     N = N_lat, type = type))
 }

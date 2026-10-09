@@ -22,18 +22,18 @@
 .ocic_sim <- function(seed, arm = "p", N = 100L, J = 5L, n_g = 8L,
                       sigma_re = 0.9) {
   simulate_occu_cover(
-    N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-    positive = "lognormal", sigma_pos = 0.4,
-    re_det_groups = if (identical(arm, "p")) n_g else NULL, sigma_re_p = sigma_re,
-    re_pos_groups = if (identical(arm, "pos")) n_g else NULL,
-    sigma_re_pos = sigma_re, seed = seed)
+    N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+    positive = "lognormal", sigma.pos = 0.4,
+    re.det.groups = if (identical(arm, "p")) n_g else NULL, sigma.re.p = sigma_re,
+    re.pos.groups = if (identical(arm, "pos")) n_g else NULL,
+    sigma.re.pos = sigma_re, seed = seed)
 }
 
 .ocic_fit <- function(sim, detection = ~ det_cov1, positive = ~ pos_cov1,
                       n.iter = 250L, seed = 3L) {
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
   tobs(formula = ~ occ_cov1, data = sim$data, family = occu_cover("lognormal"),
-       detection = detection, positive = positive, y = sim$y, y_pos = y_pos,
+       detection = detection, positive = positive, y = sim$y, y.pos = y_pos,
        visits = sim$visit_data, method = "nuts",
        control = list(verbose = FALSE, progress = FALSE, n.iter = n.iter,
                       n.warmup = n.iter, n.chains = 1L, seed = seed))
@@ -245,8 +245,8 @@ test_that("a sampled coupled field is scored per site", {
     if (cc < side) adj[i, idx(r, cc + 1L)] <- 1L
   }
   sim <- simulate_occu_cover(
-    N = N, J = J, positive = "lognormal", beta_occ = c(stats::qlogis(0.5), 0.8),
-    beta_p = c(0.3, 0.5), beta_pos = c(log(0.12), -0.4), sigma_pos = 0.4,
+    N = N, J = J, positive = "lognormal", beta.occ = c(stats::qlogis(0.5), 0.8),
+    beta.p = c(0.3, 0.5), beta.pos = c(log(0.12), -0.4), sigma.pos = 0.4,
     adj = adj, sigma = 0.7, alpha = 1.0, seed = 11L)
   long <- data.frame(site_id = rep(seq_len(N), each = J),
                      visit = rep(seq_len(J), times = N),
@@ -262,7 +262,7 @@ test_that("a sampled coupled field is scored per site", {
   fit <- tobs(formula = ~ occ_cov1 + car_proper(graph = adj),
               data = cbind(data.frame(site_id = seq_len(N)), sim$data),
               family = occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1 + share(spatial()), y = od$y, y_pos = y_pos,
+              positive = ~ pos_cov1 + share(spatial()), y = od$y, y.pos = y_pos,
               visits = od$det.covs, method = "nuts",
               control = list(verbose = FALSE, progress = FALSE, n.iter = 300L,
                              n.warmup = 300L, n.chains = 1L, seed = 4L))

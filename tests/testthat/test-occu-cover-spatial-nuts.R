@@ -46,8 +46,8 @@
     beta_pos <- if (positive == "beta") c(stats::qlogis(0.25), -0.4)
                 else c(log(0.12), -0.4)
   sim <- simulate_occu_cover(
-    N = N, J = J, positive = positive, beta_occ = beta_occ, beta_p = beta_p,
-    beta_pos = beta_pos, phi = phi, sigma_pos = sigma_pos,
+    N = N, J = J, positive = positive, beta.occ = beta_occ, beta.p = beta_p,
+    beta.pos = beta_pos, phi = phi, sigma.pos = sigma_pos,
     adj = adj, sigma = sigma, alpha = alpha, seed = seed)
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -69,7 +69,7 @@
        else stats::as.formula(sprintf("~ occ_cov1 + %s(graph = inp$adj)", field))
   tobs(formula = f, data = inp$cell_dat, family = occu_cover(inp$positive),
        detection = ~ det_cov1, positive = positive, y = inp$od$y,
-       y_pos = inp$y_pos, visits = inp$od$det.covs, method = method,
+       y.pos = inp$y_pos, visits = inp$od$det.covs, method = method,
        control = control)
 }
 
@@ -477,7 +477,7 @@ test_that("occu_cover NUTS samples icar; rejects an RE term; advertises nuts", {
   fit_icar <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = inp$adj), data = inp$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,
-    positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+    positive = ~ pos_cov1, y = inp$od$y, y.pos = inp$y_pos,
     visits = inp$od$det.covs, method = "nuts",
     control = list(verbose = FALSE, n.iter = 300L, n.warmup = 200L)))
   expect_identical(fit_icar$method, "nuts")
@@ -492,7 +492,7 @@ test_that("occu_cover NUTS samples icar; rejects an RE term; advertises nuts", {
       data = cbind(inp$cell_dat, site_id = seq_len(inp$N)),
       family = occu_cover("lognormal"),
       detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
-      y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
+      y.pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
       control = list(verbose = FALSE))),
     "nested_laplace")
 })
@@ -508,7 +508,7 @@ test_that("occu_cover NUTS samples a single bar-form field (#203)", {
   run  <- function(f) suppressWarnings(tobs(
     formula = f, data = dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
-    y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts", control = ctl))
+    y.pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts", control = ctl))
 
   # A single-column bar desugars to exactly icar(graph, group_var = node), so the
   # resolved field description is the same object the non-bar spelling builds.
@@ -550,7 +550,7 @@ test_that("occu_cover NUTS samples a two-field bar, one block each (#203, #214)"
   run <- function(f) suppressWarnings(tobs(
     formula = f, data = dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1, y = inp$od$y,
-    y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
+    y.pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
     control = list(verbose = FALSE, n.iter = 50L, n.warmup = 50L)))
 
   # An intercept + SVC bar declares two fields, and the sampler now carries one
@@ -684,7 +684,7 @@ test_that("occu_cover spatial NUTS beta SDs calibrate to nested-Laplace SEs", {
   nl <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = inp$adj), data = inp$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,
-    positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+    positive = ~ pos_cov1, y = inp$od$y, y.pos = inp$y_pos,
     visits = inp$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 400L, engine = "joint")))
 

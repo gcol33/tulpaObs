@@ -136,7 +136,7 @@ test_that("per-site observed-info block matches the numerical Hessian (Poisson +
   }
 })
 
-test_that("edge cases: empty-visit site and inadmissible K_max", {
+test_that("edge cases: empty-visit site and inadmissible K.max", {
   dat <- simulate_nmix_panel(seed = 404, mixture = "P", n_sites = 10, J = 3)
   # Drop every visit of site 5 -> that site has no data.
   obs5 <- which(dat$site_idx == 5L)
@@ -169,7 +169,7 @@ test_that("edge cases: empty-visit site and inadmissible K_max", {
   expect_true(all(is.finite(ev_floor$log_lik_site)))
 })
 
-test_that("print.nmix_marginal reports mixture / site / K_max summary", {
+test_that("print.nmix_marginal reports mixture / site / K.max summary", {
   dat <- simulate_nmix_panel(seed = 505, mixture = "P", n_sites = 10, J = 3)
   marg <- nmix_site_marginal(
     y = dat$y, site_idx = dat$site_idx,

@@ -36,7 +36,7 @@
     family = occu_cover("lognormal"),
     detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial(), alpha = grid(.trend_alpha)),
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter,
                    engine = "joint",
@@ -52,7 +52,7 @@
                 icar(graph = sim$adj, weight = time),
     data = d$cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs,
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = max.iter, engine = "joint")
   ))
@@ -67,7 +67,7 @@ test_that("occu_cover trend smoke fit runs end-to-end and exposes both fields", 
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     sigma = 0.8, alpha = 1.0, trend = TRUE,
-    sigma_trend = 0.7, alpha_trend = 0.9, seed = 31337L
+    sigma.trend = 0.7, alpha.trend = 0.9, seed = 31337L
   )
   expect_true("time" %in% names(sim$data))
   expect_length(sim$truth$f2, N)
@@ -112,7 +112,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
     sigma = 0.8, alpha = 1.0, trend = TRUE,
-    sigma_trend = 0.7, alpha_trend = 0.9, seed = 31337L
+    sigma.trend = 0.7, alpha.trend = 0.9, seed = 31337L
   )
   d <- .trend_data(sim, N, J)
 
@@ -132,7 +132,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial(), alpha = grid(.trend_alpha)),
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 300L, engine = "joint",
                    trend = list(weight = "time"))
   ))
@@ -147,7 +147,7 @@ test_that("trend field via a weighted formula term matches the control$trend rou
                 icar(graph = sim$adj, weight = time),
     data = d$cell_dat, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, engine = "joint",
                    trend = list(weight = "time"))
   )), "not both")
@@ -198,7 +198,7 @@ test_that("predict propagates a positive-arm covariate from newdata", {
   fit <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 200L, engine = "joint")))
 
   b_pos <- fit$means[["pos_pos_cov1"]]
@@ -220,7 +220,7 @@ test_that("predict propagates a positive-arm covariate from newdata", {
 
   # type = "change" over the positive covariate gives a non-zero conditional change.
   chp <- predict(fit, newdata = nd0, type = "change", times = c(0, 1),
-                 time_col = "pos_cov1", nsim = 3000, draws = TRUE)
+                 time.col = "pos_cov1", nsim = 3000, draws = TRUE)
   ch <- as.data.frame(chp)
   expect_true(all(abs(ch$delta_cover_cond) > 1e-8))
   expect_lt(abs(mean(log(ch$cover_cond_T2) - log(ch$cover_cond_T1)) - b_pos), 0.05)
@@ -255,10 +255,10 @@ test_that("occu_cover trend recovers slopes, both couplings, both fields (10 see
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
-      N = N, J = J, beta_occ = beta_occ_truth, beta_p = beta_p_truth,
-      beta_pos = beta_pos_truth, sigma_pos = 0.35, positive = "lognormal",
+      N = N, J = J, beta.occ = beta_occ_truth, beta.p = beta_p_truth,
+      beta.pos = beta_pos_truth, sigma.pos = 0.35, positive = "lognormal",
       adj = adj, sigma = sigma_truth, alpha = alpha_truth, trend = TRUE,
-      sigma_trend = sigma_trend_truth, alpha_trend = alpha_trend_truth,
+      sigma.trend = sigma_trend_truth, alpha.trend = alpha_trend_truth,
       seed = 6000L + s
     )
     fit <- tryCatch(.trend_fit(sim, N, J, max.iter = 100L),
@@ -311,18 +311,18 @@ test_that("occu_cover change reports start/end CI + directional P(delta>0)", {
   # cell, so the change is positive and its direction is near-certain everywhere.
   sim <- simulate_occu_cover(
     N = N, J = J, positive = "lognormal", adj = adj,
-    beta_occ = c(stats::qlogis(0.3), 1.5), sigma = 0.6, alpha = 1.0,
+    beta.occ = c(stats::qlogis(0.3), 1.5), sigma = 0.6, alpha = 1.0,
     seed = 4242L)
   d <- .trend_data(sim, N, J)
   fit <- suppressWarnings(tobs(
     formula = ~ occ_cov1 + icar(graph = sim$adj), data = d$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = d$od$y, y_pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
+    y = d$od$y, y.pos = d$y_pos, visits = d$od$det.covs, method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 200L, engine = "joint")))
 
   nd <- data.frame(cell = seq_len(N), occ_cov1 = 0, pos_cov1 = 0)
   ch <- predict(fit, newdata = nd, type = "change",
-                times = c(-1.5, 1.5), time_col = "occ_cov1",
+                times = c(-1.5, 1.5), time.col = "occ_cov1",
                 nsim = 400, draws = TRUE)
   chd <- as.data.frame(ch)
 
@@ -380,7 +380,7 @@ test_that("standalone occu() change reports psi start/end CI + P(delta>0)", {
 
   nd <- data.frame(cell = seq_len(N), x = 0)
   ch <- predict(fit, newdata = nd, type = "change",
-                times = c(-1, 1), time_col = "x", nsim = 300, draws = TRUE)
+                times = c(-1, 1), time.col = "x", nsim = 300, draws = TRUE)
   chd <- as.data.frame(ch)
 
   expect_true(all(c("psi_T1.sd", "psi_T1.lwr", "psi_T1.upr",

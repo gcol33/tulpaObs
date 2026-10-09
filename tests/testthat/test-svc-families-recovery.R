@@ -165,7 +165,7 @@ test_that("dyn_abun() recovers a known svc() surface on the initial-abundance ar
     y[, j, t] <- stats::rbinom(N, Nmat[, t], p_det)
 
   fit <- tobs(.svc_fam_formula(covariate = FALSE), data = tr$df, y = y,
-              family = dyn_abun(K_max = 25L), detection = ~ 1,
+              family = dyn_abun(K.max = 25L), detection = ~ 1,
               omega = ~ 1, gamma = ~ 1, method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
   surf <- as.numeric(fit$svc_field)

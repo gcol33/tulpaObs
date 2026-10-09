@@ -16,17 +16,17 @@
 #     threading.
 # =============================================================================
 
-test_that("ms_abun(mixture = 'zip') errors when K_max is below the largest count", {
+test_that("ms_abun(mixture = 'zip') errors when K.max is below the largest count", {
   set.seed(11)
-  sim <- simulate_ms_abun(n_species = 5, N = 40, J = 4,
-                          n_abund_covs = 0, n_det_covs = 0,
-                          mu_lambda = log(9), mu_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 5, N = 40, J = 4,
+                          n.abund.covs = 0, n.det.covs = 0,
+                          mu.lambda = log(9), mu.p = 0.4,
                           mixture = "zip", omega = 0.25, seed = 11)
   ymax <- max(unlist(sim$y), na.rm = TRUE)
   expect_gt(ymax, 5)   # counts around lambda = 9 clear a tiny K_max
   expect_error(
     tobs(~ 1, data = sim$data, detection = ~ 1, y = sim$y,
-         family = ms_abun(mixture = "zip", K_max = 5L),
+         family = ms_abun(mixture = "zip", K.max = 5L),
          species = sim$species, method = "laplace",
          control = list(verbose = FALSE, progress = FALSE, n.quad = 2L)),
     "below the largest observed count")
@@ -42,11 +42,11 @@ test_that("ms_abun(mixture = 'zip') default prior recovers sigma_omega without c
   sig_ml    <- rep(NA_real_, n_seed)
   om_prior  <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_abun(n_species = 6, N = 60, J = 4,
-                            n_abund_covs = 1, n_det_covs = 1,
-                            mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
-                            sd_lambda = 0.35, sd_p = 0.3,
-                            mixture = "zip", omega = 0.3, sigma_omega = truth_sig,
+    sim <- simulate_ms_abun(n.species = 6, N = 60, J = 4,
+                            n.abund.covs = 1, n.det.covs = 1,
+                            mu.lambda = c(log(5), 0.4), mu.p = c(0.3, -0.3),
+                            sd.lambda = 0.35, sd.p = 0.3,
+                            mixture = "zip", omega = 0.3, sigma.omega = truth_sig,
                             seed = 500 + s)
     fit_p <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,

@@ -14,11 +14,11 @@
 
 .msan_pieces <- function(mixture, n_species = 5, N = 30, J = 3, seed = 7) {
   is_nb <- identical(mixture, "negbin")
-  sim <- simulate_ms_abun(n_species = n_species, N = N, J = J,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(3), 0.4), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
-                          mixture = mixture, size = 4, sigma_logr = 0.3,
+  sim <- simulate_ms_abun(n.species = n_species, N = N, J = J,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(3), 0.4), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
+                          mixture = mixture, size = 4, sigma.logr = 0.3,
                           seed = seed)
   model <- tulpaObs:::.tobs_build_ms_abun(
     abund_formula = ~ abund_cov1, det_formula = ~ det_cov1,
@@ -206,10 +206,10 @@ test_that("ms_abun NUTS rejects a ceiling below a cell's own max(y)", {
 test_that("ms_abun NUTS recovers community means (Poisson)", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 8, N = 40, J = 4,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4, seed = 42)
+  sim <- simulate_ms_abun(n.species = 8, N = 40, J = 4,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4, seed = 42)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
               detection = ~ det_cov1, species = sim$species, method = "nuts",
               control = list(n.iter = 300L, n.warmup = 300L, seed = 1L,
@@ -237,10 +237,10 @@ test_that("ms_abun NUTS community-mean 95% CIs cover at the nominal rate", {
   n_seed <- 20L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_abun(n_species = 8, N = 40, J = 4,
-                            n_abund_covs = 1, n_det_covs = 1,
-                            mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.4),
-                            sd_lambda = 0.5, sd_p = 0.4, seed = 200 + s)
+    sim <- simulate_ms_abun(n.species = 8, N = 40, J = 4,
+                            n.abund.covs = 1, n.det.covs = 1,
+                            mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.4),
+                            sd.lambda = 0.5, sd.p = 0.4, seed = 200 + s)
     fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
                 detection = ~ det_cov1, species = sim$species, method = "nuts",
                 control = list(n.iter = 300L, n.warmup = 300L, seed = 1L,
@@ -259,11 +259,11 @@ test_that("ms_abun NUTS community-mean 95% CIs cover at the nominal rate", {
 test_that("ms_abun NUTS (negbin) recovers means + community dispersion", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 8, N = 45, J = 4,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.4), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
-                          mixture = "negbin", size = 4, sigma_logr = 0.3,
+  sim <- simulate_ms_abun(n.species = 8, N = 45, J = 4,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.4), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
+                          mixture = "negbin", size = 4, sigma.logr = 0.3,
                           seed = 31)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = ms_abun(mixture = "negbin"),
@@ -290,7 +290,7 @@ test_that("ms_abun NUTS (negbin) recovers means + community dispersion", {
 test_that("ms_abun NUTS S3 methods + WAIC work", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_abun(n_species = 8, N = 30, J = 3, seed = 3)
+  sim <- simulate_ms_abun(n.species = 8, N = 30, J = 3, seed = 3)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, family = ms_abun(),
               detection = ~ det_cov1, species = sim$species, method = "nuts",
               control = list(n.iter = 300L, n.warmup = 300L, seed = 1L,

@@ -20,9 +20,9 @@
                               alpha_true = 1.0, positive = "lognormal") {
   adj <- chain_adj(N)
   sim <- simulate_occu_cover(
-    N = N, J = J, beta_occ = c(stats::qlogis(0.4), 0.7),
-    beta_p = c(0.0, 0.8), beta_pos = c(log(0.20), -0.4),
-    sigma_pos = 0.35, positive = positive, adj = adj,
+    N = N, J = J, beta.occ = c(stats::qlogis(0.4), 0.7),
+    beta.p = c(0.0, 0.8), beta.pos = c(log(0.20), -0.4),
+    sigma.pos = 0.35, positive = positive, adj = adj,
     sigma = sigma_true, alpha = alpha_true, seed = seed)
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
@@ -38,14 +38,14 @@
     family = occu_cover(positive),
     detection = ~ det_cov1,
     positive = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1.0))),
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(engine = "joint", verbose = FALSE, max.iter = 400L,
                    sigma.grid = c(0.5, 1.0, 1.5, 2.0))))
   fit_nofield <- tobs(
     formula = ~ occ_cov1, data = cell_dat, family = occu_cover(positive),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "laplace", control = list(verbose = FALSE))
   list(fit_field = fit_field, fit_nofield = fit_nofield, sim = sim)
 }

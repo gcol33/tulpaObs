@@ -19,13 +19,13 @@ mscopy_control <- function(pos, method = "nested_laplace",
   tobs(formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
        data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
        detection = ~ x_pdet, availability = ~ x_plot, positive = pos,
-       y = sim$y, y_pos = sim$y_pos, method = method, control = control)
+       y = sim$y, y.pos = sim$y_pos, method = method, control = control)
   cap$args
 }
 
 mscopy_sim <- function() {
-  simulate_occu_multiscale_cover(n_cells = 12L, plots_per_cell = 3L,
-                                 visits_per_plot = 2L, seed = 1L)
+  simulate_occu_multiscale_cover(n.cells = 12L, plots.per.cell = 3L,
+                                 visits.per.plot = 2L, seed = 1L)
 }
 
 
@@ -104,6 +104,6 @@ test_that("occu_multiscale_cover(): a share() with no field to copy is refused",
          family = occu_multiscale_cover(response = "lognormal"),
          detection = ~ x_pdet, availability = ~ x_plot,
          positive = ~ x_cov + share(spatial()),
-         y = sim$y, y_pos = sim$y_pos, method = "nested_laplace"),
+         y = sim$y, y.pos = sim$y_pos, method = "nested_laplace"),
     "areal")
 })

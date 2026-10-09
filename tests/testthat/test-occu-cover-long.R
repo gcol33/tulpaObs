@@ -43,7 +43,7 @@ test_that("occu_cover_inputs() builds aligned arms + a per-site design", {
   n_sites <- length(unique(dd$site_key))
 
   res <- occu_cover_inputs(dd, site = "site_key", visit = "visit",
-                           response = "occur", y_pos = "cover.flat",
+                           response = "occur", y.pos = "cover.flat",
                            det.covs = c("x1", "hab"), compact = TRUE)
 
   # Compact arms: ragged carriers, aligned occurrence / cover row order.
@@ -66,7 +66,7 @@ test_that("occu_cover_inputs() builds aligned arms + a per-site design", {
 
   # occ.covs subsets the site-level frame; dense build matches the same dims.
   sub <- occu_cover_inputs(dd, site = "site_key", visit = "visit",
-                           response = "occur", y_pos = "cover.flat",
+                           response = "occur", y.pos = "cover.flat",
                            occ.covs = c("cell_idx", "time.sc"),
                            det.covs = c("x1", "hab"), compact = FALSE)
   expect_identical(names(sub$site_data), c("cell_idx", "time.sc"))
@@ -79,19 +79,19 @@ test_that("occu_cover_inputs() / long-frame tobs() reject bad keys", {
 
   expect_error(
     occu_cover_inputs(dd, site = "site_key", visit = "visit",
-                      response = "nope", y_pos = "cover.flat"),
+                      response = "nope", y.pos = "cover.flat"),
     "not found")
   expect_error(
     occu_cover_inputs(dd, site = "site_key", visit = "visit",
-                      response = "occur", y_pos = NULL),
+                      response = "occur", y.pos = NULL),
     "single column name")
 
   # response= signals long-frame mode; supplying y too is contradictory.
   adj <- chain_adj(4L)
   expect_error(
     tobs(occurrence = ~ time.sc + spatial(~ 1 || cell_idx, graph = adj),
-         data = dd, family = occu_cover(response = "beta", cover_aggregate = "none"),
-         detection = ~ x1, response = "occur", y_pos = "cover.flat",
+         data = dd, family = occu_cover(response = "beta", cover.aggregate = "none"),
+         detection = ~ x1, response = "occur", y.pos = "cover.flat",
          site = "site_key", visit = "visit", y = matrix(0, 1, 1)),
     "OR a pre-built")
 })
@@ -119,18 +119,18 @@ test_that("single long-frame occu_cover fit == the hand-built tobs_data route", 
   fit_mi <- tobs(
     occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
     data = od$occ.covs,
-    family = occu_cover(response = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover.aggregate = "none"),
     detection = ~ x1 + hab, positive = ~ hab,
-    y = od$y, y_pos = ocv$y, visits = od$det.covs,
+    y = od$y, y.pos = ocv$y, visits = od$det.covs,
     method = "nested_laplace", control = ctrl)
 
   # (2) the new single-fit long-frame path (compact defaults on for nested_laplace).
   fit_long <- tobs(
     occurrence = ~ time.sc + spatial(~ 1 + time.sc || cell_idx, graph = adj),
     data = dd,
-    family = occu_cover(response = "beta", cover_aggregate = "none"),
+    family = occu_cover(response = "beta", cover.aggregate = "none"),
     detection = ~ x1 + hab, positive = ~ hab,
-    site = "site_key", visit = "visit", response = "occur", y_pos = "cover.flat",
+    site = "site_key", visit = "visit", response = "occur", y.pos = "cover.flat",
     det.covs = c("x1", "hab"),
     method = "nested_laplace", control = ctrl)
 
@@ -166,12 +166,12 @@ test_that("occu_cover_inputs() picks the cover type from `positive`", {
   # Beta (default) is a proportion -> the > 1 values are rejected.
   expect_error(
     occu_cover_inputs(dd, site = "site_key", visit = "visit",
-                      response = "occur", y_pos = "cover.flat"),
+                      response = "occur", y.pos = "cover.flat"),
     "\\[0, 1\\]")
 
   # positive = "lognormal" stores the same column as a positive real.
   res <- occu_cover_inputs(dd, site = "site_key", visit = "visit",
-                           response = "occur", y_pos = "cover.flat",
+                           response = "occur", y.pos = "cover.flat",
                            det.covs = c("x1", "hab"),
                            positive = "lognormal", compact = TRUE)
   expect_s3_class(res$y_pos, "tobs_ragged")
@@ -206,14 +206,14 @@ test_that("single long-frame lognormal fit == the hand-built positive route", {
   fit_mi <- tobs(
     occurrence = ~ occ_cov1, data = od$occ.covs, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ 1,
-    y = od$y, y_pos = yp, visits = od$det.covs,
+    y = od$y, y.pos = yp, visits = od$det.covs,
     method = "laplace", control = ctrl)
 
   # The single-fit long-frame path, which picks type = "positive" from the family.
   fit_long <- tobs(
     occurrence = ~ occ_cov1, data = long, family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ 1,
-    site = "site", visit = "visit", response = "occur", y_pos = "cover",
+    site = "site", visit = "visit", response = "occur", y.pos = "cover",
     det.covs = "det_cov1", method = "laplace", control = ctrl)
 
   expect_equal(fit_long$means, fit_mi$means, tolerance = 1e-8)

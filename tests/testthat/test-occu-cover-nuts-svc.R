@@ -26,10 +26,10 @@
   N   <- side * side
   adj <- rook_adj(side)
   sim <- simulate_occu_cover(
-    N = N, J = J, positive = "lognormal", beta_occ = c(stats::qlogis(0.5), 0.8),
-    beta_p = c(0.3, 0.5), beta_pos = c(log(0.12), -0.4), sigma_pos = 0.4,
+    N = N, J = J, positive = "lognormal", beta.occ = c(stats::qlogis(0.5), 0.8),
+    beta.p = c(0.3, 0.5), beta.pos = c(log(0.12), -0.4), sigma.pos = 0.4,
     adj = adj, sigma = sigma, alpha = alpha, trend = TRUE,
-    sigma_trend = sigma_trend, alpha_trend = alpha_trend, seed = seed)
+    sigma.trend = sigma_trend, alpha.trend = alpha_trend, seed = seed)
   long <- data.frame(
     site_id = rep(seq_len(N), each = J), visit = rep(seq_len(J), times = N),
     y = as.vector(t(sim$y)), det_cov1 = sim$visit_data$det_cov1,
@@ -51,7 +51,7 @@
     field, field))
   pos <- stats::as.formula(paste("~ pos_cov1 +", copy_call))
   tobs(formula = f, data = inp$cell_dat, family = occu_cover("lognormal"),
-       detection = ~ det_cov1, positive = pos, y = inp$od$y, y_pos = inp$y_pos,
+       detection = ~ det_cov1, positive = pos, y = inp$od$y, y.pos = inp$y_pos,
        visits = inp$od$det.covs, method = "nuts", control = control)
 }
 
@@ -92,7 +92,7 @@
 .ocsvc_model <- function(inp) {
   lap <- tobs(formula = ~ occ_cov1, data = inp$cell_dat,
               family = occu_cover("lognormal"), detection = ~ det_cov1,
-              positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+              positive = ~ pos_cov1, y = inp$od$y, y.pos = inp$y_pos,
               visits = inp$od$det.covs, method = "laplace",
               control = list(verbose = FALSE, max.iter = 60L))
   model <- lap$model
@@ -418,7 +418,7 @@ test_that("occu_cover NUTS gates the field structures it does not sample (#214)"
   fit_args <- function(f, pos = ~ pos_cov1 + share(spatial())) {
     tobs(formula = f, data = inp$cell_dat, family = occu_cover("lognormal"),
          detection = ~ det_cov1, positive = pos, y = inp$od$y,
-         y_pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
+         y.pos = inp$y_pos, visits = inp$od$det.covs, method = "nuts",
          control = list(verbose = FALSE, n.iter = 50L, n.warmup = 50L))
   }
   # A correlated bar is one free-Sigma MCAR block across the fields, not two

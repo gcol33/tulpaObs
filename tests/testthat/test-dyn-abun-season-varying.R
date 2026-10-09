@@ -65,9 +65,9 @@ test_that("scalar (constant-rate) kernel is bit-identical to the broadcast path"
 
 
 test_that("binder builds long-form omega design only when season-varying", {
-  sim_sv <- simulate_dyn_abun(N = 20, T = 4, J = 2, n_abund_covs = 1,
-                              beta_lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
-                              beta_omega = c(qlogis(0.6), 0.5), seed = 9)
+  sim_sv <- simulate_dyn_abun(N = 20, T = 4, J = 2, n.abund.covs = 1,
+                              beta.lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
+                              beta.omega = c(qlogis(0.6), 0.5), seed = 9)
   m_sv <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim_sv$data, sim_sv$y,
                                           omega_formula = ~ season_cov, K_max = 20)
   expect_true(m_sv$omega_season_varying)
@@ -89,11 +89,11 @@ test_that("dyn_abun recovers a season-varying survival slope", {
   beta_omega <- c(qlogis(0.6), 0.8)         # logit intercept + season slope
   est <- numeric(3); se <- numeric(3); int <- numeric(3)
   for (k in seq_len(3)) {
-    sim <- simulate_dyn_abun(N = 300, T = 5, J = 3, n_abund_covs = 1,
-                             beta_lambda = c(log(7), 0.3), p = 0.55, gamma = 1.2,
-                             beta_omega = beta_omega, seed = 200 + k)
+    sim <- simulate_dyn_abun(N = 300, T = 5, J = 3, n.abund.covs = 1,
+                             beta.lambda = c(log(7), 0.3), p = 0.55, gamma = 1.2,
+                             beta.omega = beta_omega, seed = 200 + k)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data,
-                family = dyn_abun(K_max = 35), detection = ~ 1, y = sim$y,
+                family = dyn_abun(K.max = 35), detection = ~ 1, y = sim$y,
                 omega = ~ season_cov, method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     if (k == 1L) {
@@ -118,11 +118,11 @@ test_that("dyn_abun recovers a season-varying recruitment slope", {
   beta_gamma <- c(log(1.0), 0.6)            # log intercept + season slope
   est <- numeric(3); se <- numeric(3); int <- numeric(3)
   for (k in seq_len(3)) {
-    sim <- simulate_dyn_abun(N = 300, T = 5, J = 3, n_abund_covs = 1,
-                             beta_lambda = c(log(7), 0.3), p = 0.55, omega = 0.6,
-                             beta_gamma = beta_gamma, seed = 300 + k)
+    sim <- simulate_dyn_abun(N = 300, T = 5, J = 3, n.abund.covs = 1,
+                             beta.lambda = c(log(7), 0.3), p = 0.55, omega = 0.6,
+                             beta.gamma = beta_gamma, seed = 300 + k)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data,
-                family = dyn_abun(K_max = 35), detection = ~ 1, y = sim$y,
+                family = dyn_abun(K.max = 35), detection = ~ 1, y = sim$y,
                 gamma = ~ season_cov, method = "laplace",
                 control = list(verbose = FALSE, progress = FALSE))
     if (k == 1L) {
@@ -145,10 +145,10 @@ test_that("constant-rate dyn_abun fit is unchanged (no-regression at fit level)"
   # A constant-rate (intercept-only omega/gamma) fit must recover truth exactly as
   # the pre-season-varying kernel did; the simulator's constant-rate RNG stream is
   # preserved, so this anchors the whole constant-rate path end to end.
-  sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(6), 0.4), p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(6), 0.4), p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 11)
-  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 35),
+  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 35),
               detection = ~ 1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
   truth <- c(log(6), 0.4, qlogis(0.5), qlogis(0.6), log(1.2))
@@ -232,9 +232,9 @@ test_that("simulator: an arm design of neither shape is refused", {
 test_that("simulate() hands the long-form arm designs to the simulator", {
   # The R side passes model$X_processes[[3]] / [[4]] straight through, so what
   # reaches the kernel is whatever shape the binder built.
-  sim <- simulate_dyn_abun(N = 20, T = 4, J = 2, n_abund_covs = 1,
-                           beta_lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
-                           beta_omega = c(qlogis(0.6), 0.5), seed = 9)
+  sim <- simulate_dyn_abun(N = 20, T = 4, J = 2, n.abund.covs = 1,
+                           beta.lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
+                           beta.omega = c(qlogis(0.6), 0.5), seed = 9)
   m <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
                                        omega_formula = ~ season_cov, K_max = 20)
   draws <- matrix(0, 1L, sum(vapply(m$process_info, function(pp) pp$p, integer(1))))

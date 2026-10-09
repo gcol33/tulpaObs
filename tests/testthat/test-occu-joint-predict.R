@@ -217,13 +217,13 @@ test_that("occu() SVC joint fit predicts occupancy, detection and change", {
   expect_true(all(pb$detection$mean > 0 & pb$detection$mean < 1))
 
   ch <- as.data.frame(predict(fit, newdata = nd, type = "change",
-                              times = c(-1, 1), time_col = "x",
+                              times = c(-1, 1), time.col = "x",
                               nsim = 200, draws = FALSE))
   expect_true(all(c("psi_T1", "psi_T2", "delta_psi") %in% names(ch)))
   expect_equal(ch$delta_psi, ch$psi_T2 - ch$psi_T1, tolerance = 1e-8)
 
   tr <- as.data.frame(predict(fit, newdata = nd, type = "change",
-                              times = c(-1, 0, 1), time_col = "x",
+                              times = c(-1, 0, 1), time.col = "x",
                               nsim = 200, draws = FALSE))
   expect_true(all(c(paste0("psi_T", 1:3), paste0("psi_T", 1:3, ".lwr"),
                     paste0("delta_psi_T", 2:3)) %in% names(tr)))
@@ -231,12 +231,12 @@ test_that("occu() SVC joint fit predicts occupancy, detection and change", {
 
   set.seed(9)
   tj <- predict(fit, newdata = nd, type = "trajectory", times = c(-1, 0, 1),
-                time_col = "x", nsim = 200, draws = FALSE)
+                time.col = "x", nsim = 200, draws = FALSE)
   expect_identical(names(tj), c("cell", "time", "psi_mean", "psi_median",
                                 "psi_lwr", "psi_upr"))
   expect_equal(nrow(tj), 3L * N)
   set.seed(9)
   ag <- predict(fit, newdata = nd, type = "trajectory", times = c(-1, 0, 1),
-                time_col = "x", nsim = 200, draws = FALSE, aggregate = TRUE)
+                time.col = "x", nsim = 200, draws = FALSE, aggregate = TRUE)
   expect_equal(ag$psi_mean, as.vector(tapply(tj$psi_mean, tj$time, mean)))
 })

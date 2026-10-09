@@ -142,8 +142,8 @@
   spec <- if (inherits(priors, "occu_priors")) priors
           else if (!is.null(sigma.beta)) {
             sd0 <- list(mean = 0, sd = sigma.beta)
-            occu_priors(p_intercept = sd0, p_slope = sd0,
-                       beta_occ_intercept = sd0, beta_occ_slope = sd0)
+            occu_priors(p.intercept = sd0, p.slope = sd0,
+                       beta.occ.intercept = sd0, beta.occ.slope = sd0)
           } else .resolve_occu_priors(priors)
   .prior_for_submodel(spec, "psi", coef_names)
 }
@@ -281,8 +281,8 @@ predict.occu_categorical_fit <- function(object, newdata, ...) {
 #' Simulate from an occu_categorical model
 #'
 #' @param N number of units.
-#' @param beta_occ length-2 presence coefficients (intercept, slope on `x`).
-#' @param beta_class a `2 x (K-1)` matrix of class coefficients (rows
+#' @param beta.occ length-2 presence coefficients (intercept, slope on `x`).
+#' @param beta.class a `2 x (K-1)` matrix of class coefficients (rows
 #'   intercept / slope on `x`; columns the non-baseline classes), or `NULL`
 #'   for a built-in 3-class default.
 #' @param seed optional RNG seed.
@@ -292,23 +292,23 @@ predict.occu_categorical_fit <- function(object, newdata, ...) {
 #' sim <- simulate_occu_categorical(N = 100, seed = 1)
 #' table(sim$y)
 #' @export
-simulate_occu_categorical <- function(N = 500L, beta_occ = c(0.2, 0.8),
-                                      beta_class = NULL, seed = NULL) {
+simulate_occu_categorical <- function(N = 500L, beta.occ = c(0.2, 0.8),
+                                      beta.class = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_class)) {
-    beta_class <- matrix(c(0.4, 1.0, -0.5, -0.8, 0.2, 0.6), nrow = 2)  # K = 4
+  if (is.null(beta.class)) {
+    beta.class <- matrix(c(0.4, 1.0, -0.5, -0.8, 0.2, 0.6), nrow = 2)  # K = 4
   }
-  K <- ncol(beta_class) + 1L
+  K <- ncol(beta.class) + 1L
   x <- stats::rnorm(N)
   X <- cbind(1, x)
-  psi   <- stats::plogis(as.numeric(X %*% beta_occ))
+  psi   <- stats::plogis(as.numeric(X %*% beta.occ))
   present <- stats::rbinom(N, 1L, psi)
-  eta <- X %*% beta_class
+  eta <- X %*% beta.class
   E   <- exp(eta); denom <- 1 + rowSums(E)
   P   <- cbind(E / denom, 1 / denom)                       # N x K
   cls <- apply(P, 1L, function(pr) sample.int(K, 1L, prob = pr))
   y   <- ifelse(present == 1L, cls, 0L)
   list(data = data.frame(x = x), y = as.integer(y),
-       truth = list(beta_occ = beta_occ, beta_class = beta_class, K = K))
+       truth = list(beta_occ = beta.occ, beta_class = beta.class, K = K))
 }
 

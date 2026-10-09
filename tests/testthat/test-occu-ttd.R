@@ -3,34 +3,34 @@
 #
 # Two-state occupancy marginal with a censored-exponential time-to-detection
 # emission: z ~ Bernoulli(psi), t | z=1 ~ Exp(rate lambda) censored at
-# surveyLength. Latent z integrates out in closed form; the exact marginal is
+# survey.length. Latent z integrates out in closed form; the exact marginal is
 # maximised (optim BFGS) with an observed-information vcov -- the
 # royle_nichols() recipe with a continuous emission. Non-spatial laplace only.
 # =============================================================================
 
 test_that("occu_ttd() constructor + gates", {
-  f <- occu_ttd(surveyLength = 3)
+  f <- occu_ttd(survey.length = 3)
   expect_s3_class(f, "tobs_family")
   expect_equal(f$name, "occu_ttd")
   expect_equal(f$params$surveyLength, 3)
   sim <- simulate_occu_ttd(N = 40, J = 3, Tmax = 2, seed = 1)
   # NUTS is not a supported engine (v1 laplace only).
   expect_error(
-    tobs(~ psi_cov1, data = sim$data, family = occu_ttd(surveyLength = 2),
+    tobs(~ psi_cov1, data = sim$data, family = occu_ttd(survey.length = 2),
          detection = ~ rate_cov1, y = sim$y, method = "nuts"),
     "laplace")
   # Visit-level rate covariates rejected (rate is site-level in v1).
   vd <- data.frame(z = rnorm(40 * 3))
   expect_error(
-    tobs(~ psi_cov1, data = sim$data, family = occu_ttd(surveyLength = 2),
+    tobs(~ psi_cov1, data = sim$data, family = occu_ttd(survey.length = 2),
          detection = ~ rate_cov1, y = sim$y, visits = vd),
     "site-level")
 })
 
 test_that("occu_ttd() fits + full S3 surface", {
-  sim <- simulate_occu_ttd(N = 200, J = 5, beta_psi = c(qlogis(0.6), 0.7),
-                           beta_rate = c(log(0.7), -0.4), Tmax = 3, seed = 3)
-  fit <- tobs(~ psi_cov1, data = sim$data, family = occu_ttd(surveyLength = 3),
+  sim <- simulate_occu_ttd(N = 200, J = 5, beta.psi = c(qlogis(0.6), 0.7),
+                           beta.rate = c(log(0.7), -0.4), Tmax = 3, seed = 3)
+  fit <- tobs(~ psi_cov1, data = sim$data, family = occu_ttd(survey.length = 3),
               detection = ~ rate_cov1, y = sim$y,
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
@@ -64,11 +64,11 @@ test_that("occu_ttd() recovers psi + rate coefficients (multi-seed)", {
   pi_ <- ps <- ri <- rs <- rep(NA_real_, n_seed)
   hit <- tot <- 0L
   for (s in seq_len(n_seed)) {
-    sim <- simulate_occu_ttd(N = 300, J = 5, beta_psi = c(bpsi0, bpsi1),
-                             beta_rate = c(brate0, brate1), Tmax = 3,
+    sim <- simulate_occu_ttd(N = 300, J = 5, beta.psi = c(bpsi0, bpsi1),
+                             beta.rate = c(brate0, brate1), Tmax = 3,
                              seed = 700 + s)
     fit <- tryCatch(
-      tobs(~ psi_cov1, data = sim$data, family = occu_ttd(surveyLength = 3),
+      tobs(~ psi_cov1, data = sim$data, family = occu_ttd(survey.length = 3),
            detection = ~ rate_cov1, y = sim$y,
            control = list(verbose = FALSE, progress = FALSE)),
       error = function(e) NULL)

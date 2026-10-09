@@ -34,7 +34,7 @@ test_that("joint smoke fit runs end-to-end and returns finite betas", {
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
                    engine = "joint")
@@ -86,7 +86,7 @@ test_that("joint smoke fit runs end-to-end under beta positive arm", {
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("beta"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
                    engine = "joint")
@@ -131,7 +131,7 @@ test_that("joint returns the joint betas+field posterior covariance", {
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L,
                    engine = "joint")
@@ -188,7 +188,7 @@ test_that("joint parameter-surface vcov carries beta x hyper cross-cov", {
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace",
     control = list(verbose = FALSE, max.iter = 500L, engine = "joint")
   ))
@@ -237,7 +237,7 @@ test_that("joint errors on non-spatial occu_cover", {
     tobs(formula = ~ occ_cov1, data = cell_dat,
          family = occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1,
-         y = od$y, y_pos = y_pos, visits = od$det.covs,
+         y = od$y, y.pos = y_pos, visits = od$det.covs,
          method = "nested_laplace",
          control = list(verbose = FALSE, engine = "joint")),
     "spatial term"
@@ -282,7 +282,7 @@ test_that("joint regularises the cover (pos) intercept by default", {
 
   # An explicit cover_priors() narrows the cover arm.
   ap3 <- tulpaObs:::.occu_cover_coupled_arm_priors(
-    cover_priors(pos_intercept = list(mean = 0, sd = 0.5)), responses)
+    cover_priors(pos.intercept = list(mean = 0, sd = 0.5)), responses)
   expect_false(is.null(ap3$pos))
   expect_gt(ap3$pos$prec[1], ap$pos$prec[1])      # sd 0.5 -> higher precision than default sd 3
 })
@@ -312,8 +312,8 @@ test_that("joint recovers slopes, hypers, field shape (10 seeds)", {
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
-      N = N, J = J, beta_occ = beta_occ_truth, beta_p = beta_p_truth,
-      beta_pos = beta_pos_truth, sigma_pos = sigma_pos_truth,
+      N = N, J = J, beta.occ = beta_occ_truth, beta.p = beta_p_truth,
+      beta.pos = beta_pos_truth, sigma.pos = sigma_pos_truth,
       positive = "lognormal", adj = adj,
       sigma = sigma_truth, alpha = alpha_truth, seed = 5000L + s
     )
@@ -332,7 +332,7 @@ test_that("joint recovers slopes, hypers, field shape (10 seeds)", {
         formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
         family = occu_cover("lognormal"),
         detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-        y = od$y, y_pos = y_pos, visits = od$det.covs,
+        y = od$y, y.pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 80L,
                        engine = "joint")
@@ -409,8 +409,8 @@ test_that("joint (beta arm) recovers slopes + field shape (10 seeds)", {
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
-      N = N, J = J, beta_occ = beta_occ_truth, beta_p = beta_p_truth,
-      beta_pos = beta_pos_truth, phi = phi_pos_truth,
+      N = N, J = J, beta.occ = beta_occ_truth, beta.p = beta_p_truth,
+      beta.pos = beta_pos_truth, phi = phi_pos_truth,
       positive = "beta", adj = adj,
       sigma = sigma_truth, alpha = alpha_truth, seed = 7000L + s
     )
@@ -429,7 +429,7 @@ test_that("joint (beta arm) recovers slopes + field shape (10 seeds)", {
         formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
         family = occu_cover("beta"),
         detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-        y = od$y, y_pos = y_pos, visits = od$det.covs,
+        y = od$y, y.pos = y_pos, visits = od$det.covs,
         method = "nested_laplace",
         control = list(verbose = FALSE, max.iter = 80L,
                        engine = "joint")

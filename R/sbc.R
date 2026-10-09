@@ -293,7 +293,7 @@
     detection = spec$det,
     positive  = .tobs_sbc_pos_formula(spec),
     y         = data$y,
-    y_pos     = y_pos,
+    y.pos     = y_pos,
     visits    = data$visits,
     method    = spec$method,
     control   = spec$control))
@@ -1300,7 +1300,7 @@
   suppressWarnings(do.call(tobs, list(
     formula = spec$lambda, data = data$cells, family = spec$family,
     detection = spec$detection, removal = spec$removal,
-    y = data$y$yDist, y_rem = data$y$yRem,
+    y = data$y$yDist, y.rem = data$y$yRem,
     method = spec$method, control = spec$control)))
 }
 
@@ -1945,7 +1945,7 @@
   suppressWarnings(do.call(tobs, list(
     formula = spec$occ, data = data$cells, family = spec$family,
     detection = spec$det, positive = spec$pos,
-    y = data$y, y_pos = data$y_pos, species = spec$species,
+    y = data$y, y.pos = data$y_pos, species = spec$species,
     method = spec$method, control = spec$control)))
 }
 
@@ -2286,7 +2286,7 @@
   suppressWarnings(do.call(tobs, list(
     formula = full_formula, data = data$cells, family = spec$family,
     detection = spec$det, availability = spec$theta, positive = spec$pos,
-    y = data$y, y_pos = data$y_pos,
+    y = data$y, y.pos = data$y_pos,
     method = spec$method, control = spec$control)))
 }
 
@@ -3351,7 +3351,7 @@
 #'             family = occu_cover("lognormal"),
 #'             detection = ~ det_cov1,
 #'             positive = ~ pos_cov1 + share(spatial()),
-#'             y = od$y, y_pos = y_pos, visits = od$det.covs,
+#'             y = od$y, y.pos = y_pos, visits = od$det.covs,
 #'             method = "nested_laplace", control = ctl)
 #' sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)
 #' }

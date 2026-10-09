@@ -80,23 +80,23 @@
 #' N >= 600 with informative covariates. Setting any `sd` to `Inf` disables
 #' that component of the prior (same penalised objective, just `1/Inf^2 = 0`).
 #'
-#' @param p_intercept Prior on the detection intercept (logit scale).
+#' @param p.intercept Prior on the detection intercept (logit scale).
 #'   A list `list(mean = numeric(1), sd = numeric(1))`.
 #'   Default `list(mean = 0, sd = 1.5)`.
-#' @param p_slope Prior on detection slopes (every non-intercept detection
+#' @param p.slope Prior on detection slopes (every non-intercept detection
 #'   coefficient). Default `list(mean = 0, sd = 2.5)`.
-#' @param beta_occ_intercept Prior on the occupancy (psi / psi1) intercept.
+#' @param beta.occ.intercept Prior on the occupancy (psi / psi1) intercept.
 #'   Default `list(mean = 0, sd = 2)`.
-#' @param beta_occ_slope Prior on occupancy slopes. Default
+#' @param beta.occ.slope Prior on occupancy slopes. Default
 #'   `list(mean = 0, sd = 5)`.
 #' @return An `occu_priors` object, ready to pass to `tobs(..., priors = ...)`.
 #' @examples
 #' # disable the detection-slope penalty
-#' priors <- occu_priors(p_slope = list(mean = 0, sd = Inf))
+#' priors <- occu_priors(p.slope = list(mean = 0, sd = Inf))
 #' priors
 #'
 #' \donttest{
-#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
 #'                      seed = 1)
 #' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
 #'             detection = ~ det_cov1, y = sim$y, method = "laplace",
@@ -105,15 +105,15 @@
 #' coef(fit)
 #' }
 #' @export
-occu_priors <- function(p_intercept       = list(mean = 0, sd = 1.5),
-                        p_slope           = list(mean = 0, sd = 2.5),
-                        beta_occ_intercept = list(mean = 0, sd = 2),
-                        beta_occ_slope    = list(mean = 0, sd = 5)) {
+occu_priors <- function(p.intercept       = list(mean = 0, sd = 1.5),
+                        p.slope           = list(mean = 0, sd = 2.5),
+                        beta.occ.intercept = list(mean = 0, sd = 2),
+                        beta.occ.slope    = list(mean = 0, sd = 5)) {
   .build_prior_spec(
-    list(p_intercept        = p_intercept,
-         p_slope            = p_slope,
-         beta_occ_intercept = beta_occ_intercept,
-         beta_occ_slope     = beta_occ_slope),
+    list(p_intercept        = p.intercept,
+         p_slope            = p.slope,
+         beta_occ_intercept = beta.occ.intercept,
+         beta_occ_slope     = beta.occ.slope),
     "occu_priors")
 }
 
@@ -157,8 +157,8 @@ print.occu_priors <- function(x, ...) {
   }
   if (is.list(priors)) {
     args <- priors[intersect(names(priors),
-                             c("p_intercept", "p_slope",
-                               "beta_occ_intercept", "beta_occ_slope"))]
+                             c("p.intercept", "p.slope",
+                               "beta.occ.intercept", "beta.occ.slope"))]
     return(do.call(occu_priors, args))
   }
   stop("`priors` must be NULL, FALSE, an `occu_priors` object, or a named list.",
@@ -382,20 +382,20 @@ print.occu_priors <- function(x, ...) {
 #'   (that solver carries its own); add the spatial term through the
 #'   nested-Laplace path to combine the two.
 #'
-#' @param occ_intercept Prior on the occurrence (presence) intercept, logit
+#' @param occ.intercept Prior on the occurrence (presence) intercept, logit
 #'   scale. `list(mean, sd)`. Default `list(mean = 0, sd = 2)`.
-#' @param occ_slope Prior on occurrence slopes. Default
+#' @param occ.slope Prior on occurrence slopes. Default
 #'   `list(mean = 0, sd = 2.5)`.
-#' @param pos_intercept Prior on the positive-cover intercept (logit scale for
+#' @param pos.intercept Prior on the positive-cover intercept (logit scale for
 #'   `"beta"`, log scale for `"lognormal"`). Default `list(mean = 0, sd = 3)`.
-#' @param pos_slope Prior on positive-cover slopes. Default
+#' @param pos.slope Prior on positive-cover slopes. Default
 #'   `list(mean = 0, sd = 2.5)`.
 #' @return A `cover_priors` object, ready to pass to `tobs(..., priors = ...)`.
 #' @seealso [occu_priors()]
 #' @examples
 #' # regularise the occurrence arm, leave the positive arm unpenalised
-#' priors <- cover_priors(pos_intercept = list(mean = 0, sd = Inf),
-#'                        pos_slope     = list(mean = 0, sd = Inf))
+#' priors <- cover_priors(pos.intercept = list(mean = 0, sd = Inf),
+#'                        pos.slope     = list(mean = 0, sd = Inf))
 #' priors
 #'
 #' \donttest{
@@ -406,15 +406,15 @@ print.occu_priors <- function(x, ...) {
 #' coef(fit)
 #' }
 #' @export
-cover_priors <- function(occ_intercept = list(mean = 0, sd = 2),
-                         occ_slope     = list(mean = 0, sd = 2.5),
-                         pos_intercept = list(mean = 0, sd = 3),
-                         pos_slope     = list(mean = 0, sd = 2.5)) {
+cover_priors <- function(occ.intercept = list(mean = 0, sd = 2),
+                         occ.slope     = list(mean = 0, sd = 2.5),
+                         pos.intercept = list(mean = 0, sd = 3),
+                         pos.slope     = list(mean = 0, sd = 2.5)) {
   .build_prior_spec(
-    list(occ_intercept = occ_intercept,
-         occ_slope     = occ_slope,
-         pos_intercept = pos_intercept,
-         pos_slope     = pos_slope),
+    list(occ_intercept = occ.intercept,
+         occ_slope     = occ.slope,
+         pos_intercept = pos.intercept,
+         pos_slope     = pos.slope),
     "cover_priors")
 }
 
@@ -450,8 +450,8 @@ print.cover_priors <- function(x, ...) {
   }
   if (is.list(priors)) {
     args <- priors[intersect(names(priors),
-                             c("occ_intercept", "occ_slope",
-                               "pos_intercept", "pos_slope"))]
+                             c("occ.intercept", "occ.slope",
+                               "pos.intercept", "pos.slope"))]
     return(do.call(cover_priors, args))
   }
   stop("`priors` for cover() must be NULL, FALSE, a cover_priors object, ",

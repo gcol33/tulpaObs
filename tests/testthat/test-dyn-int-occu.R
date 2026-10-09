@@ -17,7 +17,7 @@ test_that("dyn_int_occu() constructor + gates", {
   f <- dyn_int_occu()
   expect_s3_class(f, "tobs_family")
   expect_equal(f$name, "dyn_int_occu")
-  sim <- simulate_dyn_int_occu(N = 60, T_seasons = 3, S = 2, seed = 1)
+  sim <- simulate_dyn_int_occu(N = 60, T.seasons = 3, S = 2, seed = 1)
   # colonization / extinction are required.
   expect_error(
     tobs(~ 1, data = sim$data, family = dyn_int_occu(), detection = ~ 1,
@@ -37,7 +37,7 @@ test_that("dyn_int_occu() constructor + gates", {
 })
 
 test_that("dyn_int_occu() fits + full S3 surface", {
-  sim <- simulate_dyn_int_occu(N = 250, T_seasons = 4, S = 2, J = 3,
+  sim <- simulate_dyn_int_occu(N = 250, T.seasons = 4, S = 2, J = 3,
                                psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                p = c(0.4, 0.6), seed = 3)
   fit <- tobs(~ 1, data = sim$data, family = dyn_int_occu(), detection = ~ 1,
@@ -76,7 +76,7 @@ test_that("dyn_int_occu() recovers psi1 / gamma / eps + per-source detection", {
                    p_src2 = stats::qlogis(0.6))
   cov_hits <- 0L; cov_tot <- 0L
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_int_occu(N = 350, T_seasons = 5, S = 2, J = 3,
+    sim <- simulate_dyn_int_occu(N = 350, T.seasons = 5, S = 2, J = 3,
                                  psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                  p = c(0.35, 0.6), seed = 400 + s)
     fit <- tryCatch(
@@ -116,7 +116,7 @@ test_that("dyn_int_occu() anchor: one source reduces to dyn_occu()", {
   skip_if_fast()
   # With source 2 entirely NA (absent), the multi-source emission is just source
   # 1's, so the integrated dynamic fit must reproduce dyn_occu() on source 1.
-  sim <- simulate_dyn_int_occu(N = 300, T_seasons = 4, S = 2, J = 3,
+  sim <- simulate_dyn_int_occu(N = 300, T.seasons = 4, S = 2, J = 3,
                                psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                p = c(0.4, 0.5), seed = 11)
   y_int <- sim$y; y_int[[2L]][] <- NA_integer_
@@ -148,7 +148,7 @@ test_that("dyn_int_occu() anchor: one season of data reduces to int_occu()", {
   skip_if_fast()
   # T = 2 with season 2 entirely NA leaves one season of emission; the transition
   # marginalises out, so the fit must reproduce int_occu() on the season-1 data.
-  sim <- simulate_dyn_int_occu(N = 300, T_seasons = 2, S = 2, J = 3,
+  sim <- simulate_dyn_int_occu(N = 300, T.seasons = 2, S = 2, J = 3,
                                psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                p = c(0.4, 0.5), seed = 21)
   y2 <- sim$y; for (s in seq_len(2L)) y2[[s]][, , 2L] <- NA_integer_
@@ -180,10 +180,10 @@ test_that("dyn_int_occu() recovers under partial season overlap", {
   n_seed <- 20L
   ps <- gm <- ep <- p1 <- p2 <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_int_occu(N = 400, T_seasons = 6, S = 2, J = 3,
+    sim <- simulate_dyn_int_occu(N = 400, T.seasons = 6, S = 2, J = 3,
                                  psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                  p = c(0.4, 0.55),
-                                 source_seasons = list(1:4, 3:6), seed = 800 + s)
+                                 source.seasons = list(1:4, 3:6), seed = 800 + s)
     fit <- tryCatch(
       tobs(~ 1, data = sim$data, family = dyn_int_occu(), detection = ~ 1,
            colonization = ~ 1, extinction = ~ 1, y = sim$y, sources = sim$sources,

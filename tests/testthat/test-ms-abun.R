@@ -9,10 +9,10 @@ test_that("ms_abun recovers community means and per-species coefficients", {
   skip_on_cran()
   skip_if_fast()
   set.seed(11)
-  sim <- simulate_ms_abun(n_species = 14, N = 90, J = 4,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(4), 0.5), mu_p = c(0.4, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4, seed = 11)
+  sim <- simulate_ms_abun(n.species = 14, N = 90, J = 4,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(4), 0.5), mu.p = c(0.4, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4, seed = 11)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = ms_abun(), detection = ~ det_cov1,
               species = sim$species, method = "laplace",
@@ -43,10 +43,10 @@ test_that("ms_abun community-mean 95% CIs cover at the nominal rate", {
   n_seed <- 20L
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_ms_abun(n_species = 12, N = 60, J = 4,
-                            n_abund_covs = 1, n_det_covs = 1,
-                            mu_lambda = c(log(4), 0.5), mu_p = c(0.3, -0.4),
-                            sd_lambda = 0.5, sd_p = 0.4, seed = 100 + s)
+    sim <- simulate_ms_abun(n.species = 12, N = 60, J = 4,
+                            n.abund.covs = 1, n.det.covs = 1,
+                            mu.lambda = c(log(4), 0.5), mu.p = c(0.3, -0.4),
+                            sd.lambda = 0.5, sd.p = 0.4, seed = 100 + s)
     fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
                 family = ms_abun(), detection = ~ det_cov1,
                 species = sim$species, method = "laplace",
@@ -64,7 +64,7 @@ test_that("ms_abun S3 methods work", {
   skip_on_cran()
   skip_if_fast()
   set.seed(3)
-  sim <- simulate_ms_abun(n_species = 8, N = 40, J = 3, seed = 3)
+  sim <- simulate_ms_abun(n.species = 8, N = 40, J = 3, seed = 3)
   fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y,
               family = ms_abun(), detection = ~ det_cov1,
               species = sim$species, method = "laplace",
@@ -111,11 +111,11 @@ test_that("ms_abun(mixture = \"negbin\") wires NB through the joint optimizer", 
   skip_on_cran()
   skip_if_fast()
   set.seed(31)
-  sim <- simulate_ms_abun(n_species = 8, N = 60, J = 4,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(3), 0.4),
-                          mu_p      = c(0.3, -0.3),
-                          sd_lambda = 0.5, sd_p = 0.4,
+  sim <- simulate_ms_abun(n.species = 8, N = 60, J = 4,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(3), 0.4),
+                          mu.p      = c(0.3, -0.3),
+                          sd.lambda = 0.5, sd.p = 0.4,
                           mixture = "negbin", size = 4, seed = 31)
   # n_quad = 3 keeps the AGHQ grid tractable (3^4 = 81 nodes per species
   # vs the default 5^4 = 625) without losing the small-cluster debias the

@@ -14,10 +14,10 @@
 # =============================================================================
 
 .mspg_sim <- function(seed, ns = 18) {
-  simulate_ms_occu(N = 110, J = 5, n_species = ns,
-                   beta_comm_mean = c(stats::qlogis(0.45), 0.7),
-                   beta_comm_sd = c(0.6, 0.4),
-                   alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5), seed = seed)
+  simulate_ms_occu(N = 110, J = 5, n.species = ns,
+                   beta.comm.mean = c(stats::qlogis(0.45), 0.7),
+                   beta.comm.sd = c(0.6, 0.4),
+                   alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5), seed = seed)
 }
 
 test_that("ms_occu() method = 'pg_gibbs' S3 + convergence", {

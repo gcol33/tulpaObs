@@ -48,7 +48,7 @@
   ok <- is.finite(weights) & weights > 0
   if (!any(ok)) {
     stop("Spatial community N-mixture: every grid point produced a non-finite ",
-         "log-marginal. Check K_max / the adjacency graph / the grids.",
+         "log-marginal. Check K.max / the adjacency graph / the grids.",
          call. = FALSE)
   }
   w <- weights; w[!ok] <- 0; w <- w / sum(w)

@@ -58,7 +58,7 @@ test_that("scan flags single-visit (K=1) as non-identifiable, pooled years as id
   d <- make_plot_data()
   res <- occu_aggregation_scan(
     d, response = "y_det", coords = c("x", "y"), year = "year",
-    plot = "plot", cell_sizes = 0.9, block_lengths = c(1L, 3L),
+    plot = "plot", cell.sizes = 0.9, block.lengths = c(1L, 3L),
     score = "info")
 
   expect_s3_class(res, "tobs_aggregation_scan")
@@ -79,7 +79,7 @@ test_that("auto changepoint segmentation runs and yields one block under closure
   d <- make_plot_data()
   res <- occu_aggregation_scan(
     d, response = "y_det", coords = c("x", "y"), year = "year",
-    cell_sizes = 0.9, block_lengths = NULL, score = "count")
+    cell.sizes = 0.9, block.lengths = NULL, score = "count")
   expect_false(is.null(res$segmentation))
   expect_equal(nrow(res$segmentation), length(unique(d$year)))
   expect_equal(length(unique(res$segmentation$segment)), 1L)
@@ -89,17 +89,17 @@ test_that("count mode reports structural conditions without fitting", {
   d <- make_plot_data()
   res <- occu_aggregation_scan(
     d, response = "y_det", coords = c("x", "y"), year = "year",
-    cell_sizes = 0.9, block_lengths = c(1L, 3L), score = "count")
+    cell.sizes = 0.9, block.lengths = c(1L, 3L), score = "count")
   expect_true(all(is.na(res$candidates$se_p)))
   row_l1 <- res$candidates[res$candidates$block == "1yr", ]
   expect_false(.scan_is_true_test(row_l1$identifiable))   # K=1, no replication
 })
 
-test_that("auto cell-size ladder is proposed when cell_sizes is NULL", {
+test_that("auto cell-size ladder is proposed when cell.sizes is NULL", {
   d <- make_plot_data()
   res <- occu_aggregation_scan(
     d, response = "y_det", coords = c("x", "y"), year = "year",
-    cell_sizes = NULL, block_lengths = 3L, score = "count")
+    cell.sizes = NULL, block.lengths = 3L, score = "count")
   expect_gt(length(res$cell_sizes), 1L)
   expect_equal(nrow(res$candidates), length(res$cell_sizes))
 })
@@ -108,7 +108,7 @@ test_that("print.tobs_aggregation_scan() reports the scan summary (#276)", {
   d <- make_plot_data()
   res <- occu_aggregation_scan(
     d, response = "y_det", coords = c("x", "y"), year = "year",
-    plot = "plot", cell_sizes = 0.9, block_lengths = c(1L, 3L),
+    plot = "plot", cell.sizes = 0.9, block.lengths = c(1L, 3L),
     score = "info")
   expect_output(print(res), "Occupancy aggregation scan")
 })
@@ -117,7 +117,7 @@ test_that("plot.tobs_aggregation_scan() draws the identifiability heatmap (#276)
   d <- make_plot_data()
   res <- occu_aggregation_scan(
     d, response = "y_det", coords = c("x", "y"), year = "year",
-    plot = "plot", cell_sizes = 0.9, block_lengths = c(1L, 3L),
+    plot = "plot", cell.sizes = 0.9, block.lengths = c(1L, 3L),
     score = "info")
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)
@@ -128,9 +128,9 @@ test_that("input validation rejects bad response and missing columns", {
   d <- make_plot_data()
   d$bad <- d$y_det + 1L
   expect_error(
-    occu_aggregation_scan(d, "bad", c("x", "y"), "year", cell_sizes = 1),
+    occu_aggregation_scan(d, "bad", c("x", "y"), "year", cell.sizes = 1),
     "0/1")
   expect_error(
-    occu_aggregation_scan(d, "nope", c("x", "y"), "year", cell_sizes = 1),
+    occu_aggregation_scan(d, "nope", c("x", "y"), "year", cell.sizes = 1),
     "not found")
 })

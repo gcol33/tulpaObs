@@ -637,30 +637,30 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
 #' array `[n_sites x n_bins x n_species]` suitable for [tobs()] with
 #' [ms_distance()].
 #'
-#' @param n_species Number of species (default 10).
+#' @param n.species Number of species (default 10).
 #' @param N Number of sites (default 100).
 #' @param cutpoints Distance-bin edges (default `c(0, 25, 50, 75, 100)`).
 #' @param transect Transect geometry: `"line"` (default) or `"point"`.
 #' @param key Detection function: `"halfnorm"` (default) or `"hazard"`.
 #' @param shape Hazard-rate log-shape, shared across species (ignored under the
 #'   half-normal key). Default 0.
-#' @param n_abund_covs,n_det_covs Number of abundance / detection-scale
+#' @param n.abund.covs,n.det.covs Number of abundance / detection-scale
 #'   covariates (default 1 and 0).
-#' @param mu_lambda Community-mean abundance coefficients on the log scale.
-#'   Default `c(log(30), rep(0.4, n_abund_covs))`.
-#' @param mu_sigma Community-mean detection-scale coefficients on the log scale.
-#'   Default `c(log(40), rep(0, n_det_covs))`.
-#' @param sd_lambda,sd_sigma Per-coefficient community SDs. Default 0.4 and 0.2.
-#' @param n_factors If `> 0`, add `n_factors` per-site latent factors with
+#' @param mu.lambda Community-mean abundance coefficients on the log scale.
+#'   Default `c(log(30), rep(0.4, n.abund.covs))`.
+#' @param mu.sigma Community-mean detection-scale coefficients on the log scale.
+#'   Default `c(log(40), rep(0, n.det.covs))`.
+#' @param sd.lambda,sd.sigma Per-coefficient community SDs. Default 0.4 and 0.2.
+#' @param n.factors If `> 0`, add `n.factors` per-site latent factors with
 #'   per-species loadings to `log lambda` (the lfMsDS truth). Default 0.
-#' @param load_sd SD of the factor loadings (default 0.5).
+#' @param load.sd SD of the factor loadings (default 0.5).
 #' @param field Optional length-`N` shared spatial field added to every species'
-#'   `log lambda`. When given alongside `n_factors > 0` the loadings are centred
+#'   `log lambda`. When given alongside `n.factors > 0` the loadings are centred
 #'   across species, so the field owns the shared spatial mean.
-#' @param quad_order Gauss-Legendre nodes per bin used to integrate the per-bin
+#' @param quad.order Gauss-Legendre nodes per bin used to integrate the per-bin
 #'   detection probabilities (default 64, matching [ms_distance()]). Set it to
-#'   the `quad_order` the model will be fit at: the rule is
-#'   `(cutpoints, transect, quad_order)`, so a different order integrates a
+#'   the `quad.order` the model will be fit at: the rule is
+#'   `(cutpoints, transect, quad.order)`, so a different order integrates a
 #'   different pi and the data would come from a model the fit does not use.
 #' @param seed Optional random seed.
 #' @return A list with `y`, `data`, `species`, `cutpoints`, and `truth`
@@ -669,35 +669,35 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
 #'   correlation `cor_res`). The latent `N` is drawn inside the shared C++
 #'   simulator and is not returned.
 #' @examples
-#' sim <- simulate_ms_distance(n_species = 4, N = 30, seed = 1)
+#' sim <- simulate_ms_distance(n.species = 4, N = 30, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_ms_distance <- function(n_species = 10, N = 100,
+simulate_ms_distance <- function(n.species = 10, N = 100,
                                  cutpoints = c(0, 25, 50, 75, 100),
                                  transect = c("line", "point"),
                                  key = c("halfnorm", "hazard"), shape = 0,
-                                 n_abund_covs = 1, n_det_covs = 0,
-                                 mu_lambda = NULL, mu_sigma = NULL,
-                                 sd_lambda = 0.4, sd_sigma = 0.2,
-                                 n_factors = 0, load_sd = 0.5,
-                                 field = NULL, quad_order = 64L, seed = NULL) {
+                                 n.abund.covs = 1, n.det.covs = 0,
+                                 mu.lambda = NULL, mu.sigma = NULL,
+                                 sd.lambda = 0.4, sd.sigma = 0.2,
+                                 n.factors = 0, load.sd = 0.5,
+                                 field = NULL, quad.order = 64L, seed = NULL) {
   transect <- match.arg(transect)
   key      <- match.arg(key)
   if (!is.null(seed)) set.seed(seed)
   if (!is.null(field)) N <- length(field)
-  if (is.null(mu_lambda)) mu_lambda <- c(log(30), rep(0.4, n_abund_covs))
-  if (is.null(mu_sigma))  mu_sigma  <- c(log(40), rep(0, n_det_covs))
-  p_lam <- length(mu_lambda); p_sig <- length(mu_sigma)
-  sd_lambda <- if (length(sd_lambda) == 1L) rep(sd_lambda, p_lam) else sd_lambda
-  sd_sigma  <- if (length(sd_sigma)  == 1L) rep(sd_sigma,  p_sig) else sd_sigma
+  if (is.null(mu.lambda)) mu.lambda <- c(log(30), rep(0.4, n.abund.covs))
+  if (is.null(mu.sigma))  mu.sigma  <- c(log(40), rep(0, n.det.covs))
+  p_lam <- length(mu.lambda); p_sig <- length(mu.sigma)
+  sd.lambda <- if (length(sd.lambda) == 1L) rep(sd.lambda, p_lam) else sd.lambda
+  sd.sigma  <- if (length(sd.sigma)  == 1L) rep(sd.sigma,  p_sig) else sd.sigma
 
   make_covs <- function(n_covs, prefix) {
     if (n_covs <= 0L) return(data.frame(row.names = seq_len(N)))
     m <- matrix(stats::rnorm(N * n_covs), N, n_covs)
     df <- as.data.frame(m); names(df) <- paste0(prefix, seq_len(n_covs)); df
   }
-  abund_covs <- make_covs(n_abund_covs, "abund_cov")
-  det_covs   <- make_covs(n_det_covs,   "det_cov")
+  abund_covs <- make_covs(n.abund.covs, "abund_cov")
+  det_covs   <- make_covs(n.det.covs,   "det_cov")
   data <- data.frame(row.names = seq_len(N))
   if (ncol(abund_covs)) data <- cbind(data, abund_covs)
   if (ncol(det_covs))   data <- cbind(data, det_covs)
@@ -708,33 +708,33 @@ simulate_ms_distance <- function(n_species = 10, N = 100,
   X_lambda <- design_of(abund_covs)
   X_sigma  <- design_of(det_covs)
 
-  beta_lambda <- matrix(stats::rnorm(n_species * p_lam, 0,
-                                     rep(sd_lambda, each = n_species)),
-                        n_species, p_lam) +
-                 matrix(mu_lambda, n_species, p_lam, byrow = TRUE)
-  beta_sigma <- matrix(stats::rnorm(n_species * p_sig, 0,
-                                    rep(sd_sigma, each = n_species)),
-                       n_species, p_sig) +
-                matrix(mu_sigma, n_species, p_sig, byrow = TRUE)
+  beta_lambda <- matrix(stats::rnorm(n.species * p_lam, 0,
+                                     rep(sd.lambda, each = n.species)),
+                        n.species, p_lam) +
+                 matrix(mu.lambda, n.species, p_lam, byrow = TRUE)
+  beta_sigma <- matrix(stats::rnorm(n.species * p_sig, 0,
+                                    rep(sd.sigma, each = n.species)),
+                       n.species, p_sig) +
+                matrix(mu.sigma, n.species, p_sig, byrow = TRUE)
 
   f <- if (is.null(field)) numeric(N) else as.numeric(field)
-  Q <- as.integer(n_factors)
+  Q <- as.integer(n.factors)
   loadings <- NULL; factors <- NULL; cor_res <- NULL
-  fac_off <- matrix(0, N, n_species)
+  fac_off <- matrix(0, N, n.species)
   if (Q > 0L) {
-    loadings <- matrix(stats::rnorm(n_species * Q, 0, load_sd), n_species, Q)
+    loadings <- matrix(stats::rnorm(n.species * Q, 0, load.sd), n.species, Q)
     if (!is.null(field)) loadings <- scale(loadings, scale = FALSE)
     factors  <- matrix(stats::rnorm(N * Q), N, Q)
     fac_off  <- factors %*% t(loadings)
-    cor_res  <- stats::cov2cor(tcrossprod(loadings) + diag(1e-8, n_species))
+    cor_res  <- stats::cov2cor(tcrossprod(loadings) + diag(1e-8, n.species))
   }
 
   B <- length(cutpoints) - 1L
-  species_names <- paste0("sp", seq_len(n_species))
-  y <- array(0L, dim = c(N, B, n_species),
+  species_names <- paste0("sp", seq_len(n.species))
+  y <- array(0L, dim = c(N, B, n.species),
              dimnames = list(NULL, NULL, species_names))
-  lambda <- matrix(NA_real_, N, n_species)
-  sigma  <- matrix(NA_real_, N, n_species)
+  lambda <- matrix(NA_real_, N, n.species)
+  sigma  <- matrix(NA_real_, N, n.species)
   # Draw through cpp_simulate_distance, the same kernel the likelihood
   # integrates against (src/distance_quad.h): a separate R-side quadrature for
   # the per-bin probabilities would simulate from a pi the model is not fit
@@ -744,7 +744,7 @@ simulate_ms_distance <- function(n_species = 10, N = 100,
   # kernel. A one-row `draws` matrix pins the coefficients (no draw selection).
   tc <- if (identical(transect, "point")) 1L else 0L
   kc <- .dist_key_code(key)
-  for (s in seq_len(n_species)) {
+  for (s in seq_len(n.species)) {
     off_s  <- f + fac_off[, s]
     has_off <- any(off_s != 0)
     Xl_s   <- if (has_off) cbind(X_lambda, .offset = off_s) else X_lambda
@@ -752,7 +752,7 @@ simulate_ms_distance <- function(n_species = 10, N = 100,
     res <- cpp_simulate_distance(
       Xl_s, X_sigma,
       matrix(c(beta_s, beta_sigma[s, ]), nrow = 1L),
-      as.numeric(cutpoints), kc, tc, as.integer(quad_order),
+      as.numeric(cutpoints), kc, tc, as.integer(quad.order),
       as.numeric(shape),
       N, B, ncol(Xl_s), p_sig, FALSE, NA_real_, 1L)
     y[, , s] <- res[[1L]]
@@ -763,8 +763,8 @@ simulate_ms_distance <- function(n_species = 10, N = 100,
   list(
     y = y, data = data, species = species_names, cutpoints = cutpoints,
     truth = list(
-      mu_lambda = mu_lambda, mu_sigma = mu_sigma,
-      sd_lambda = sd_lambda, sd_sigma = sd_sigma,
+      mu_lambda = mu.lambda, mu_sigma = mu.sigma,
+      sd_lambda = sd.lambda, sd_sigma = sd.sigma,
       beta_lambda = beta_lambda, beta_sigma = beta_sigma,
       lambda = lambda, sigma = sigma,
       field = if (!is.null(field)) f else NULL,

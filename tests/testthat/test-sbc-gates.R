@@ -75,7 +75,7 @@ test_that("the RE half of the gate fires from `fit$re` alone (#340)", {
 
 test_that("sbc() on a nested_laplace fit with (1 | g) refuses like laplace (#340)", {
   skip_on_cran()
-  sim <- simulate_occu(N = 60, J = 4, n_occ_covs = 1, seed = 11)
+  sim <- simulate_occu(N = 60, J = 4, n.occ.covs = 1, seed = 11)
   d <- sim$data
   set.seed(6)
   d$g <- factor(sample(letters[1:6], nrow(d), TRUE))

@@ -179,8 +179,8 @@ test_that("both engines pin the dispersion from one estimator", {
   N <- 20L; J <- 3L
   adj <- chain_adj(N)
   sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", adj = adj,
-    beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5),
-    beta_pos = c(log(0.25), 0.3), sigma = 0.8, alpha = 1.0, sigma_pos = 0.4,
+    beta.occ = c(0.2, 0.6), beta.p = c(0.4, -0.5),
+    beta.pos = c(log(0.25), 0.3), sigma = 0.8, alpha = 1.0, sigma.pos = 0.4,
     seed = 707L)
   long <- data.frame(site_id = rep(seq_len(N), each = J),
                      visit = rep(seq_len(J), times = N),
@@ -195,7 +195,7 @@ test_that("both engines pin the dispersion from one estimator", {
     data = cbind(data.frame(site_id = seq_len(N)), sim$data),
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-    y = od$y, y_pos = y_pos, visits = od$det.covs, method = "nested_laplace",
+    y = od$y, y.pos = y_pos, visits = od$det.covs, method = "nested_laplace",
     control = c(list(verbose = FALSE, progress = FALSE, engine = "joint",
                      phi.grid.pos = phi.grid.pos), list(...))))
 }
@@ -246,15 +246,15 @@ test_that("a multi-node phi.grid.pos is integrated on the stated nodes", {
 
 test_that("a one-node phi.grid.pos is the dispersion occu_multiscale_cover holds", {
   skip_on_cran()
-  sim <- simulate_occu_multiscale_cover(n_cells = 20L, plots_per_cell = 3L,
-                                        visits_per_plot = 2L, phi = 0.4,
+  sim <- simulate_occu_multiscale_cover(n.cells = 20L, plots.per.cell = 3L,
+                                        visits.per.plot = 2L, phi = 0.4,
                                         sigma = 0.02, seed = 101L)
   fit_at <- function(v) suppressWarnings(tobs(
     formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
     data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
     detection = ~ x_pdet, availability = ~ x_plot,
     positive = ~ x_cov + share(spatial(), alpha = grid(c(0, 0.5, 1, 2))),
-    y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+    y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
     control = list(verbose = FALSE, progress = FALSE,
                    sigma.grid = c(0.1, 0.5, 1), phi.grid.pos = v)))
   f4 <- fit_at(0.4)

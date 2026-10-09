@@ -102,18 +102,18 @@
   yD <- as.matrix(y); yR <- as.matrix(y_rem)
   if (any(yD < 0 | yD != round(yD), na.rm = TRUE) ||
       any(yR < 0 | yR != round(yR), na.rm = TRUE)) {
-    stop("gdistremoval() y / y_rem must be non-negative integer counts.",
+    stop("gdistremoval() y / y.rem must be non-negative integer counts.",
          call. = FALSE)
   }
   if (nrow(yD) != nrow(yR)) {
-    stop("gdistremoval() y and y_rem must have the same number of sites (rows).",
+    stop("gdistremoval() y and y.rem must have the same number of sites (rows).",
          call. = FALSE)
   }
   # The same detected birds are cross-classified, so the per-site totals MUST
   # agree; a mismatch is a data error, surfaced up front (input-totals rule).
   if (!isTRUE(all.equal(rowSums(yD), rowSums(yR)))) {
-    stop("gdistremoval() per-site totals of y (distance) and y_rem (removal) ",
-         "must match: rowSums(y) == rowSums(y_rem) (the same detected birds ",
+    stop("gdistremoval() per-site totals of y (distance) and y.rem (removal) ",
+         "must match: rowSums(y) == rowSums(y.rem) (the same detected birds ",
          "cross-classified by distance band and removal period).", call. = FALSE)
   }
   if (length(cutpoints) != ncol(yD) + 1L) {
@@ -229,8 +229,8 @@
   if (is.null(y))
     stop("gdistremoval() requires `y` (an n_sites x n_bins integer matrix of ",
          "per-distance-band detected counts).", call. = FALSE)
-  if (is.null(dots[["y_rem"]]))
-    stop("gdistremoval() requires `y_rem` (an n_sites x n_periods integer ",
+  if (is.null(dots[["y.rem"]]))
+    stop("gdistremoval() requires `y.rem` (an n_sites x n_periods integer ",
          "matrix of per-removal-period detected counts).", call. = FALSE)
   if (!is.null(visits))
     stop("gdistremoval() detection is site-level; visit-level covariates ",
@@ -241,7 +241,7 @@
          "gdistremoval(cutpoints = ...).", call. = FALSE)
   model <- .tobs_build_gdistremoval(
     abund_formula = formula, det_formula = detection,
-    rem_formula = dots[["removal"]] %||% ~1, data = data, y = y, y_rem = dots[["y_rem"]],
+    rem_formula = dots[["removal"]] %||% ~1, data = data, y = y, y_rem = dots[["y.rem"]],
     cutpoints = cutpoints, transect = family$params$transect)
   .tobs_reject_unwired_structs(
     model, "gdistremoval()",
@@ -361,11 +361,11 @@
 #'
 #' @param N Number of sites (default 200).
 #' @param cutpoints Distance-bin edges `0 = c_0 < ... < c_B`.
-#' @param n_periods Number of removal periods.
+#' @param n.periods Number of removal periods.
 #' @param transect `"line"` (default) or `"point"`.
-#' @param n_abund_covs,n_det_covs,n_rem_covs Number of abundance / distance /
+#' @param n.abund.covs,n.det.covs,n.rem.covs Number of abundance / distance /
 #'   removal covariates.
-#' @param beta_lambda,beta_sigma,beta_r Coefficients on the log-abundance,
+#' @param beta.lambda,beta.sigma,beta.r Coefficients on the log-abundance,
 #'   log-scale, and logit-removal arms (`c(intercept, slopes...)`). Defaults give
 #'   moderate abundance / detection.
 #' @param seed Optional random seed.
@@ -377,36 +377,36 @@
 #' dim(sim$y_rem)
 #' @export
 simulate_gdistremoval <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
-                                  n_periods = 4L, transect = "line",
-                                  n_abund_covs = 1, n_det_covs = 1, n_rem_covs = 1,
-                                  beta_lambda = NULL, beta_sigma = NULL,
-                                  beta_r = NULL, seed = NULL) {
+                                  n.periods = 4L, transect = "line",
+                                  n.abund.covs = 1, n.det.covs = 1, n.rem.covs = 1,
+                                  beta.lambda = NULL, beta.sigma = NULL,
+                                  beta.r = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda))
-    beta_lambda <- c(log(25), stats::runif(n_abund_covs, -0.4, 0.4))
-  if (is.null(beta_sigma))
-    beta_sigma <- c(log(stats::median(cutpoints[-1])),
-                    stats::runif(n_det_covs, -0.2, 0.2))
-  if (is.null(beta_r))
-    beta_r <- c(stats::qlogis(0.4), stats::runif(n_rem_covs, -0.3, 0.3))
+  if (is.null(beta.lambda))
+    beta.lambda <- c(log(25), stats::runif(n.abund.covs, -0.4, 0.4))
+  if (is.null(beta.sigma))
+    beta.sigma <- c(log(stats::median(cutpoints[-1])),
+                    stats::runif(n.det.covs, -0.2, 0.2))
+  if (is.null(beta.r))
+    beta.r <- c(stats::qlogis(0.4), stats::runif(n.rem.covs, -0.3, 0.3))
 
   mk <- function(k, tag) {
     d <- data.frame(matrix(stats::rnorm(N * k), N, k))
     names(d) <- paste0(tag, seq_len(k)); d
   }
-  ac <- mk(n_abund_covs, "abund_cov"); dc <- mk(n_det_covs, "det_cov")
-  rc <- mk(n_rem_covs, "rem_cov")
+  ac <- mk(n.abund.covs, "abund_cov"); dc <- mk(n.det.covs, "det_cov")
+  rc <- mk(n.rem.covs, "rem_cov")
   data <- cbind(ac, dc, rc)
 
-  lambda <- exp(as.vector(stats::model.matrix(~ ., ac) %*% beta_lambda))
-  sigma  <- exp(as.vector(stats::model.matrix(~ ., dc) %*% beta_sigma))
-  r      <- plogis(as.vector(stats::model.matrix(~ ., rc) %*% beta_r))
+  lambda <- exp(as.vector(stats::model.matrix(~ ., ac) %*% beta.lambda))
+  sigma  <- exp(as.vector(stats::model.matrix(~ ., dc) %*% beta.sigma))
+  r      <- plogis(as.vector(stats::model.matrix(~ ., rc) %*% beta.r))
 
   dr <- .gdr_draw(lambda, sigma, r, as.numeric(cutpoints), transect,
-                  as.integer(n_periods))
+                  as.integer(n.periods))
   colnames(dr$yDist) <- paste0("band", seq_len(ncol(dr$yDist)))
-  colnames(dr$yRem)  <- paste0("period", seq_len(n_periods))
+  colnames(dr$yRem)  <- paste0("period", seq_len(n.periods))
   list(y = dr$yDist, y_rem = dr$yRem, data = data,
-       truth = list(beta_lambda = beta_lambda, beta_sigma = beta_sigma,
-                    beta_r = beta_r, lambda = lambda, sigma = sigma, r = r))
+       truth = list(beta_lambda = beta.lambda, beta_sigma = beta.sigma,
+                    beta_r = beta.r, lambda = lambda, sigma = sigma, r = r))
 }

@@ -45,32 +45,32 @@
          method = "nuts", control = .nconv_ctl())
   },
   int_occu = function() {
-    sim <- simulate_int_occu(N_total = 150, n_data = 1L, J = 4L,
-                             beta_occ = c(0, 0.4), beta_det = list(c(0, -0.3)),
+    sim <- simulate_int_occu(N.total = 150, n.data = 1L, J = 4L,
+                             beta.occ = c(0, 0.4), beta.det = list(c(0, -0.3)),
                              seed = 6)
     tobs(~ x, data = sim$data, family = int_occu(), detection = ~ 1, y = sim$y,
          method = "nuts", control = .nconv_ctl())
   },
   ms_occu = function() {
-    sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4,
-                            beta_comm_mean = c(0, 0.6),
-                            beta_comm_sd = c(0.6, 0.3),
-                            alpha_comm_mean = c(0.2), alpha_comm_sd = c(0.5),
+    sim <- simulate_ms_occu(N = 40, J = 3, n.species = 4,
+                            beta.comm.mean = c(0, 0.6),
+                            beta.comm.sd = c(0.6, 0.3),
+                            alpha.comm.mean = c(0.2), alpha.comm.sd = c(0.5),
                             seed = 7)
     tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1, y = sim$y,
          species = paste0("sp", seq_len(4)), method = "nuts",
          control = .nconv_ctl(n.iter = 80L, n.warmup = 80L))
   },
   ms_dyn_occu = function() {
-    sim <- simulate_ms_dyn_occu(N = 45, J = 3, n_species = 5, n_seasons = 3,
-                                beta_comm_mean = c(0.3), beta_comm_sd = c(0.7),
+    sim <- simulate_ms_dyn_occu(N = 45, J = 3, n.species = 5, n.seasons = 3,
+                                beta.comm.mean = c(0.3), beta.comm.sd = c(0.7),
                                 gamma = 0.2, epsilon = 0.1, seed = 12)
     tobs(~ 1, data = sim$data, family = ms_dyn_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(5)), method = "nuts",
          control = .nconv_ctl())
   },
   ms_int_occu = function() {
-    sim <- simulate_ms_int_occu(N = 60, J = c(3, 3), n_species = 5, n_data = 2,
+    sim <- simulate_ms_int_occu(N = 60, J = c(3, 3), n.species = 5, n.data = 2,
                                 seed = 23)
     tobs(~ 1, data = sim$data, family = ms_int_occu(), detection = ~ 1,
          y = sim$y, species = paste0("sp", seq_len(5)), method = "nuts",
@@ -88,41 +88,41 @@
          method = "nuts", control = .nconv_ctl())
   },
   ms_count = function() {
-    sim <- simulate_ms_count(N = 40, n_species = 4, beta_comm_mean = c(1, 0.5),
+    sim <- simulate_ms_count(N = 40, n.species = 4, beta.comm.mean = c(1, 0.5),
                              response = "poisson", seed = 5)
     tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
          species = colnames(sim$y), method = "nuts",
          control = .nconv_ctl(n.iter = 80L, n.warmup = 80L))
   },
   abun = function() {
-    sim <- simulate_abun(N = 50, J = 3, n_abund_covs = 1, n_det_covs = 1,
+    sim <- simulate_abun(N = 50, J = 3, n.abund.covs = 1, n.det.covs = 1,
                          seed = 11)
     tobs(~ abund_cov1, data = sim$data, family = abun(), detection = ~ det_cov1,
          y = sim$y, method = "nuts", control = .nconv_ctl())
   },
   ms_abun = function() {
-    sim <- simulate_ms_abun(n_species = 3, N = 25, J = 3, n_abund_covs = 1,
-                            n_det_covs = 1, mu_lambda = c(log(3), 0.4),
-                            mu_p = c(0.3, -0.3), sd_lambda = 0.5, sd_p = 0.4,
+    sim <- simulate_ms_abun(n.species = 3, N = 25, J = 3, n.abund.covs = 1,
+                            n.det.covs = 1, mu.lambda = c(log(3), 0.4),
+                            mu.p = c(0.3, -0.3), sd.lambda = 0.5, sd.p = 0.4,
                             seed = 7)
-    tobs(~ abund_cov1, data = sim$data, family = ms_abun(K_max = 60L),
+    tobs(~ abund_cov1, data = sim$data, family = ms_abun(K.max = 60L),
          detection = ~ det_cov1, y = sim$y, species = sim$species,
          method = "nuts", control = .nconv_ctl(n.iter = 80L, n.warmup = 80L))
   },
   removal = function() {
-    sim <- simulate_removal(N = 50, K = 4, n_abund_covs = 1, n_det_covs = 1,
-                            beta_lambda = c(log(6), 0.4), beta_p = c(0.3, -0.3),
+    sim <- simulate_removal(N = 50, K = 4, n.abund.covs = 1, n.det.covs = 1,
+                            beta.lambda = c(log(6), 0.4), beta.p = c(0.3, -0.3),
                             seed = 12)
-    tobs(~ abund_cov1, data = sim$data, family = removal(K_max = 40L),
+    tobs(~ abund_cov1, data = sim$data, family = removal(K.max = 40L),
          detection = ~ det_cov1, y = sim$y, method = "nuts",
          control = .nconv_ctl())
   },
   distance = function() {
     cuts <- seq(0, 1, length.out = 5)
     sim <- simulate_distance(N = 60, cutpoints = cuts, key = "halfnorm",
-                             transect = "line", n_abund_covs = 1,
-                             n_sigma_covs = 1, beta_lambda = c(log(20), 0.3),
-                             beta_sigma = c(log(0.45), 0.2), seed = 13)
+                             transect = "line", n.abund.covs = 1,
+                             n.sigma.covs = 1, beta.lambda = c(log(20), 0.3),
+                             beta.sigma = c(log(0.45), 0.2), seed = 13)
     tobs(~ abund_cov1, data = sim$data,
          family = distance(key = "halfnorm", transect = "line",
                            cutpoints = sim$cutpoints),
@@ -130,8 +130,8 @@
          control = .nconv_ctl())
   },
   fp_occu = function() {
-    sim <- simulate_fp_occu(N = 120, J = 5, n_occ_covs = 1,
-                            beta_psi = c(stats::qlogis(0.5), 0.6), p11 = 0.6,
+    sim <- simulate_fp_occu(N = 120, J = 5, n.occ.covs = 1,
+                            beta.psi = c(stats::qlogis(0.5), 0.6), p11 = 0.6,
                             p10 = 0.05, b = 0.5, seed = 15)
     tobs(~ occ_cov1, data = sim$data, family = fp_occu(), detection = ~ 1,
          y = sim$y, method = "nuts", control = .nconv_ctl())
@@ -139,23 +139,23 @@
   dyn_abun = function() {
     # The forward recursion is cubic in K_max, so the truncation (not the site
     # count) sets this fixture's cost.
-    sim <- simulate_dyn_abun(N = 25, T = 2, J = 3, n_abund_covs = 1,
-                             beta_lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
+    sim <- simulate_dyn_abun(N = 25, T = 2, J = 3, n.abund.covs = 1,
+                             beta.lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 14)
-    tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 12),
+    tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 12),
          detection = ~ 1, y = sim$y, method = "nuts",
          control = .nconv_ctl(n.iter = 80L, n.warmup = 80L))
   },
   cover = function() {
-    sim <- simulate_cover(N = 120, beta_occ = c(-0.4, 0.8),
-                          beta_pos = c(-1, 0.3), sigma_pos = 0.4, seed = 1)
+    sim <- simulate_cover(N = 120, beta.occ = c(-0.4, 0.8),
+                          beta.pos = c(-1, 0.3), sigma.pos = 0.4, seed = 1)
     tobs(~ x, data = sim$data, family = cover("lognormal"), y = sim$y,
          method = "nuts", control = .nconv_ctl())
   },
   occu_cover = function() {
     N <- 60L; J <- 3L
-    sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L,
-                               n_pos_covs = 1L, sigma_pos = 0.4,
+    sim <- simulate_occu_cover(N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L,
+                               n.pos.covs = 1L, sigma.pos = 0.4,
                                positive = "lognormal", seed = 2)
     long <- data.frame(site_id = rep(seq_len(N), each = J),
                        visit = rep(seq_len(J), times = N),
@@ -167,26 +167,26 @@
     y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
     tobs(~ occ_cov1, data = cbind(data.frame(site_id = seq_len(N)), sim$data),
          family = occu_cover("lognormal"), detection = ~ det_cov1,
-         positive = ~ pos_cov1, y = od$y, y_pos = y_pos,
+         positive = ~ pos_cov1, y = od$y, y.pos = y_pos,
          visits = od$det.covs, method = "nuts", control = .nconv_ctl())
   },
   occu_multiscale_cover = function() {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = 30L, plots_per_cell = 3L, visits_per_plot = 3L,
+      n.cells = 30L, plots.per.cell = 3L, visits.per.plot = 3L,
       positive = "lognormal", phi = 0.35, sigma = 0, alpha = 0, seed = 909L)
     suppressWarnings(tobs(
       formula = ~ x_cell + icar(graph = sim$adj, group_var = "cell"),
       data = sim$data, family = occu_multiscale_cover(response = "lognormal"),
       detection = ~ x_pdet, availability = ~ x_plot, positive = ~ x_cov,
-      y = sim$y, y_pos = sim$y_pos, method = "nuts", control = .nconv_ctl()))
+      y = sim$y, y.pos = sim$y_pos, method = "nuts", control = .nconv_ctl()))
   },
   ms_occu_cover = function() {
     N <- 60L; J <- 3L; S <- 5L
     sim <- simulate_ms_occu_cover(
-      n_species = S, N = N, J = J,
-      mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
-      mu_pos = c(log(0.12), 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-      positive = "lognormal", sigma_pos = 0.4, seed = 21)
+      n.species = S, N = N, J = J,
+      mu.occ = c(stats::qlogis(0.45), 0.7), mu.p = c(0.2, -0.4),
+      mu.pos = c(log(0.12), 0.5), sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
+      positive = "lognormal", sigma.pos = 0.4, seed = 21)
     long <- data.frame(site_id = rep(seq_len(N), each = J),
                        visit = rep(seq_len(J), times = N), yy = 0L,
                        det_cov1 = sim$visit_data$det_cov1,
@@ -195,7 +195,7 @@
                      det.covs = c("det_cov1", "pos_cov1"))$det.covs
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-         y_pos = sim$y_pos, visits = vis, species = sim$species,
+         y.pos = sim$y_pos, visits = vis, species = sim$species,
          method = "nuts", control = .nconv_ctl())
   })
 

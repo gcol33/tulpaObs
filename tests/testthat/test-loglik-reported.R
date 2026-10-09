@@ -30,7 +30,7 @@ test_that("a fit with no value to report declines with a reason, not NaN", {
 test_that("t_occu() PG fits report logLik and WAIC from the per-(site, season) marginal", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_t_occu(N = 60L, T_seasons = 5L, J = 3L, beta_occ = c(0.2, 0.6),
+  sim <- simulate_t_occu(N = 60L, T.seasons = 5L, J = 3L, beta.occ = c(0.2, 0.6),
                          p = 0.4, rho = 0.6, sigma = 0.7, seed = 31L)
   fit <- tobs(~ x, data = sim$data, family = t_occu(), detection = ~ 1,
               y = sim$y, method = "pg_gibbs",
@@ -60,7 +60,7 @@ test_that("t_occu() PG fits report logLik and WAIC from the per-(site, season) m
 test_that("ms_abun() Laplace fits surface their log marginal and N", {
   skip_if_fast()
   skip_on_cran()
-  sim <- simulate_ms_abun(n_species = 6L, N = 80L, J = 3L, seed = 0L)
+  sim <- simulate_ms_abun(n.species = 6L, N = 80L, J = 3L, seed = 0L)
   fit <- tobs(~ 1, data = sim$data, family = ms_abun(mixture = "poisson"),
               detection = ~ 1, y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
@@ -74,7 +74,7 @@ test_that("jsdm() / ms_count() sampler fits report a finite logLik", {
   skip_on_cran()
   smp <- list(verbose = FALSE, progress = FALSE, n.iter = 200L, n.warmup = 200L,
               n.chains = 2L, seed = 1L)
-  sj <- simulate_jsdm(N = 80L, n_species = 6L, seed = 0L)
+  sj <- simulate_jsdm(N = 80L, n.species = 6L, seed = 0L)
   fj <- tobs(~ x, data = sj$data, family = jsdm(), y = sj$y,
              species = paste0("sp", 1:6), method = "nuts", control = smp)
   .ll_finite(fj, "jsdm nuts")
@@ -83,7 +83,7 @@ test_that("jsdm() / ms_count() sampler fits report a finite logLik", {
              control = list(verbose = FALSE, progress = FALSE, n.iter = 800L,
                             n.warmup = 300L, n.chains = 2L))
   .ll_finite(fg, "jsdm pg_gibbs")
-  sc <- simulate_ms_count(N = 80L, n_species = 6L, response = "poisson",
+  sc <- simulate_ms_count(N = 80L, n.species = 6L, response = "poisson",
                           seed = 0L)
   fc <- tobs(~ x, data = sc$data, family = ms_count("poisson"), y = sc$y,
              species = paste0("sp", 1:6), method = "nuts", control = smp)

@@ -66,7 +66,7 @@ test_that(".tobs_ms_occu_oracle() ll_cell(idx=) matches ll_cell()[idx, ]", {
 test_that(".tobs_ms_abun_oracle() ll_cell(idx=) matches ll_cell()[idx, ]", {
   set.seed(4)
   Ns <- 7L; S <- 3L
-  d <- simulate_ms_abun(n_species = S, N = Ns, J = 3L, seed = 4L)
+  d <- simulate_ms_abun(n.species = S, N = Ns, J = 3L, seed = 4L)
   model <- .tobs_build_ms_abun(~ 1, ~ 1, d$data, d$y, colnames(d$y))
   ms <- tulpaObs:::.tobs_ms_abun_marginals(model)
   eta_p_list <- lapply(seq_len(S), function(s)

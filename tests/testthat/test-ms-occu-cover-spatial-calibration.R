@@ -38,9 +38,9 @@ test_that("recovery holds across seeds (field, loadings, sign anchor)", {
   seeds <- c(2024L, 4040L, 5151L, 77L, 303L)
   fcor <- lcor <- numeric(length(seeds))
   for (k in seq_along(seeds)) {
-    sim <- simulate_ms_occu_cover_spatial(adj, n_species = 16L, J = 6L,
-                                          sd_occ = 0.5, sd_load = 1.2,
-                                          sigma_pos = 0.4, seed = seeds[k])
+    sim <- simulate_ms_occu_cover_spatial(adj, n.species = 16L, J = 6L,
+                                          sd.occ = 0.5, sd.load = 1.2,
+                                          sigma.pos = 0.4, seed = seeds[k])
     fit <- .mcal_fit(adj, sim)
     # The sign anchor (sp1 loading made positive) must resolve the (L, w) ->
     # (-L, -w) symmetry the same way the simulator does, so the *signed*
@@ -67,10 +67,10 @@ test_that("held-out cell psi intervals are calibrated, including rare species", 
     seed <- seeds[k]
     # Genuinely rare taxa: low occupancy intercept + wide community SD pushes a
     # handful of species to prevalence < 0.15.
-    sim <- simulate_ms_occu_cover_spatial(adj, n_species = 18L, J = 6L,
-                                          mu_occ = c(stats::qlogis(0.18), 0.7),
-                                          sd_occ = 0.9, sd_load = 1.2,
-                                          sigma_pos = 0.4, seed = seed)
+    sim <- simulate_ms_occu_cover_spatial(adj, n.species = 18L, J = 6L,
+                                          mu.occ = c(stats::qlogis(0.18), 0.7),
+                                          sd.occ = 0.9, sd.load = 1.2,
+                                          sigma.pos = 0.4, seed = seed)
     prev_s <- colMeans(sim$truth$z)
 
     # Blank all detection / cover observations at a random fifth of the cells;

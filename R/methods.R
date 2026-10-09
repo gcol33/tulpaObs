@@ -433,7 +433,7 @@ glance.tobs_fit <- function(x, ...) {
 #'   `converged()`: a single `TRUE` / `FALSE`.
 #' @examples
 #' \donttest{
-#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
 #'                      seed = 1)
 #' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
 #'             detection = ~ det_cov1, y = sim$y, method = "laplace",
@@ -1219,8 +1219,8 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
 #'   `occu_cover` fit: `"occurrence"`, `"cover_cond"`, `"cover_exp"`,
 #'   `"change"` or `"trajectory"`. `"detection"` / `"both"` on a `single`/`int_occu()` fit needs
-#'   `X_det.0`.
-#' @param X_det.0 Optional detection design for out-of-sample `"detection"` /
+#'   `X.det.0`.
+#' @param X.det.0 Optional detection design for out-of-sample `"detection"` /
 #'   `"both"` prediction on a `single`-season or [int_occu()] fit: a plain
 #'   design matrix for a single-season fit, or
 #'   a list of one design matrix per source (named by source, or in source
@@ -1237,21 +1237,21 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   vector of more than one term is an error, since a second term would be
 #'   held at its mean rather than grouped over its levels. For a grid over
 #'   more than one covariate, build the design matrix and pass it as `X.0`.
-#' @param n_points Number of prediction points per continuous term.
+#' @param n.points Number of prediction points per continuous term.
 #' @param newdata data.frame of prediction units. For `occu_cover`: one row per
 #'   field cell (or carrying a `cell` column mapping rows to field cells),
 #'   defaulting to the training data. For the families predicting from a design
 #'   matrix (`occu()`, `dyn_occu()`, `int_occu()`, `abun()`, `removal()`,
 #'   `distance()`, `fp_occu()`, `dyn_abun()`): the covariates of the arm `type`
 #'   selects, expanded through that arm's fitted formula (factor levels and
-#'   transforms as fitted) in place of `X.0` / `X_det.0`; an `int_occu()`
+#'   transforms as fitted) in place of `X.0` / `X.det.0`; an `int_occu()`
 #'   detection prediction expands it once per source. A random-effect term
 #'   on the predicted arm whose grouping variable is a column of `newdata`
 #'   adds each row's fitted group effect (its BLUP / posterior mean, times the
 #'   slope covariate for a random slope); a level the fit did not see adds 0,
 #'   the population mean. Without that column, and always through `X.0` /
-#'   `X_det.0`, the prediction is population-level. Give `newdata` or
-#'   `X.0` / `X_det.0` / `terms`, not both.
+#'   `X.det.0`, the prediction is population-level. Give `newdata` or
+#'   `X.0` / `X.det.0` / `terms`, not both.
 #' @param times `occu_cover` `type = "change"` / `"trajectory"`: numeric values
 #'   of the time covariate. For `"change"`, at least two: `c(t1, t2)`
 #'   differences one against the other, `c(t1, ..., tK)` differences every step
@@ -1283,7 +1283,7 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   are probabilities or cover fractions, so one floor serves all three.
 #' @param draws `occu_cover` only: if `TRUE` (default), carry the per-unit
 #'   `[cell x nsim]` draw matrices in `attr(, "draws")`.
-#' @param time_col `occu_cover` only: name of the time covariate weighting the
+#' @param time.col `occu_cover` only: name of the time covariate weighting the
 #'   trend field / driving the change map; auto-resolved from the fit's stored
 #'   trend weight when omitted.
 #' @param weights `occu_cover` (and the joint `occu()` SVC route) only: pool
@@ -1328,10 +1328,10 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
                                           "state"),
                                  quantiles = c(0.025, 0.5, 0.975),
-                                 terms = NULL, n_points = 50L,
+                                 terms = NULL, n.points = 50L,
                                  newdata = NULL, times = NULL, level = 0.95,
-                                 nsim = 1000L, draws = TRUE, time_col = NULL,
-                                 X_det.0 = NULL, weights = NULL,
+                                 nsim = 1000L, draws = TRUE, time.col = NULL,
+                                 X.det.0 = NULL, weights = NULL,
                                  aggregate = FALSE, mc.tol = 0.05,
                                  nsim.max = 10000L, mc.floor = 0.001, ...) {
   if (!is.null(weights) &&
@@ -1375,7 +1375,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
                                 if (identical(nmix_type, "detection")) 2L else 1L)
     return(.tobs_predict_nmix(object, X.0 = X.0, type = nmix_type,
                               quantiles = quantiles, terms = terms,
-                              n_points = n_points))
+                              n_points = n.points))
   }
   # Distance sampling: response types are "lambda" (abundance / density) and
   # "sigma" (detection scale); route before the occupancy match.arg(type).
@@ -1430,7 +1430,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (!is.null(.tobs_joint_fit(object))) {
       return(.tobs_predict_joint(object, newdata = nd, type = oc_type,
                                  times = times, level = level, nsim = nsim,
-                                 draws = draws, time_col = time_col,
+                                 draws = draws, time_col = time.col,
                                  weights = weights, aggregate = aggregate,
                                  mc.tol = mc.tol, nsim.max = nsim.max,
                                  mc.floor = mc.floor))
@@ -1494,7 +1494,7 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (is.null(nd) && is.data.frame(X.0)) nd <- X.0
     return(.tobs_predict_occu_joint(object, newdata = nd, type = oc_type,
                                     times = times, level = level, nsim = nsim,
-                                    draws = draws, time_col = time_col,
+                                    draws = draws, time_col = time.col,
                                     weights = weights, aggregate = aggregate,
                                     mc.tol = mc.tol, nsim.max = nsim.max,
                                     mc.floor = mc.floor))
@@ -1528,11 +1528,11 @@ predict.tobs_fit <- function(object, X.0 = NULL,
     if (type %in% c("occupancy", "both"))
       X.0 <- .tobs_predict_design(object, newdata, X.0, terms, 1L)
     if (type %in% c("detection", "both")) {
-      if (!is.null(X_det.0)) {
-        stop("predict(): give one of `newdata` or `X_det.0`, not both.",
+      if (!is.null(X.det.0)) {
+        stop("predict(): give one of `newdata` or `X.det.0`, not both.",
              call. = FALSE)
       }
-      X_det.0 <- if (identical(model$model_type, "integrated")) {
+      X.det.0 <- if (identical(model$model_type, "integrated")) {
         n_src <- model$n_sources %||% (length(model$process_info) - 1L)
         stats::setNames(
           lapply(seq_len(n_src), function(s)
@@ -1546,14 +1546,14 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   }
 
   # In-sample mode
-  if (is.null(X.0) && is.null(X_det.0) && is.null(terms)) return(fitted(object))
+  if (is.null(X.0) && is.null(X.det.0) && is.null(terms)) return(fitted(object))
 
   draws <- object$draws
   pi_list <- model$process_info
 
   # Terms-based mode
   if (!is.null(terms)) {
-    return(predict_terms(object, terms, type, quantiles, n_points))
+    return(predict_terms(object, terms, type, quantiles, n.points))
   }
 
   # Design-matrix mode
@@ -1588,31 +1588,31 @@ predict.tobs_fit <- function(object, X.0 = NULL,
   # documented).
   det_out <- NULL
   if (want_det) {
-    if (is.null(X_det.0)) {
-      stop("predict(type = \"", type, "\") needs X_det.0, the detection ",
+    if (is.null(X.det.0)) {
+      stop("predict(type = \"", type, "\") needs X.det.0, the detection ",
            "design at the new points (a plain matrix, or a named list of ",
            "per-source matrices for an int_occu() fit).", call. = FALSE)
     }
     if (identical(model$model_type, "integrated")) {
-      if (!is.list(X_det.0) || is.data.frame(X_det.0)) {
+      if (!is.list(X.det.0) || is.data.frame(X.det.0)) {
         stop("predict(type = \"", type, "\") on an int_occu() fit needs ",
-             "X_det.0 as a list, one detection design matrix per source ",
+             "X.det.0 as a list, one detection design matrix per source ",
              "(matching fitted()$p's per-source shape).", call. = FALSE)
       }
       n_src <- model$n_sources %||% (length(pi_list) - 1L)
       src_nm <- vapply(seq_len(n_src), function(s) pi_list[[1L + s]]$name,
                        character(1))
-      if (is.null(names(X_det.0))) {
-        if (length(X_det.0) != n_src) {
+      if (is.null(names(X.det.0))) {
+        if (length(X.det.0) != n_src) {
           stop(sprintf(
-            "predict(): X_det.0 has %d unnamed entries but the fit has %d sources (%s); name each entry or supply exactly one per source in order.",
-            length(X_det.0), n_src, paste(src_nm, collapse = ", ")))
+            "predict(): X.det.0 has %d unnamed entries but the fit has %d sources (%s); name each entry or supply exactly one per source in order.",
+            length(X.det.0), n_src, paste(src_nm, collapse = ", ")))
         }
         src_off <- seq_len(n_src)
       } else {
-        src_off <- match(src_nm, names(X_det.0))
+        src_off <- match(src_nm, names(X.det.0))
         if (anyNA(src_off)) {
-          stop("predict(): X_det.0 must name every source (",
+          stop("predict(): X.det.0 must name every source (",
                paste(src_nm, collapse = ", "), ").", call. = FALSE)
         }
       }
@@ -1621,10 +1621,10 @@ predict.tobs_fit <- function(object, X.0 = NULL,
       names(det_out) <- src_nm
       for (s in seq_len(n_src)) {
         pp <- pi_list[[1L + s]]
-        Xs <- X_det.0[[src_off[s]]]
+        Xs <- X.det.0[[src_off[s]]]
         if (ncol(Xs) != pp$p) {
           stop(sprintf(
-            "X_det.0[[\"%s\"]] has %d columns but source %s has %d detection coefficients",
+            "X.det.0[[\"%s\"]] has %d columns but source %s has %d detection coefficients",
             src_nm[s], ncol(Xs), src_nm[s], pp$p))
         }
         det_out[[s]] <- .tobs_quantile_df(
@@ -1633,12 +1633,12 @@ predict.tobs_fit <- function(object, X.0 = NULL,
       }
     } else {
       p_det <- pi_list[[2L]]$p
-      if (ncol(X_det.0) != p_det) {
-        stop(sprintf("X_det.0 has %d columns but model has %d detection coefficients",
-                     ncol(X_det.0), p_det))
+      if (ncol(X.det.0) != p_det) {
+        stop(sprintf("X.det.0 has %d columns but model has %d detection coefficients",
+                     ncol(X.det.0), p_det))
       }
       det_out <- .tobs_quantile_df(
-        .tobs_psi_draws(draws, X_det.0, p_det, offset = p_occ), quantiles)
+        .tobs_psi_draws(draws, X.det.0, p_det, offset = p_occ), quantiles)
     }
   }
 
@@ -1794,14 +1794,14 @@ plot.tobs_prediction <- function(x, ...) {
 #' @param covariate Name of covariate.
 #' @param process `"occupancy"` (default), `"detection"`, or `"abundance"` (the
 #'   state process of a count family, on the intensity scale).
-#' @param n_points Number of prediction points (default 100).
+#' @param n.points Number of prediction points (default 100).
 #' @return A data.frame with covariate values and the predicted response.
 #' @examples
 #' \donttest{
-#' sim <- simulate_abun(N = 100, J = 4, n_abund_covs = 2, n_det_covs = 1,
+#' sim <- simulate_abun(N = 100, J = 4, n.abund.covs = 2, n.det.covs = 1,
 #'                      seed = 1)
 #' fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data,
-#'             family = abun(K_max = 50), detection = ~ det_cov1, y = sim$y,
+#'             family = abun(K.max = 50), detection = ~ det_cov1, y = sim$y,
 #'             control = list(verbose = FALSE))
 #' me <- tobs_marginal_effect(fit, "abund_cov1", process = "abundance")
 #' head(me)   # estimate is on the abundance (lambda) scale, not a probability
@@ -1810,14 +1810,14 @@ plot.tobs_prediction <- function(x, ...) {
 tobs_marginal_effect <- function(object, covariate,
                                  process = c("occupancy", "detection",
                                              "abundance"),
-                                 n_points = 100L) {
+                                 n.points = 100L) {
   process <- match.arg(process)
   type <- switch(process,
                  detection = "detection",
                  abundance = "abundance",   # state process 1 on the log scale
                  "occupancy")
   predict_terms(object, terms = covariate, type = type,
-                quantiles = c(0.025, 0.5, 0.975), n_points = n_points)
+                quantiles = c(0.025, 0.5, 0.975), n_points = n.points)
 }
 
 #' Estimate species richness from community model
@@ -1830,7 +1830,7 @@ tobs_marginal_effect <- function(object, covariate,
 #' @return A data.frame with site-level richness estimates.
 #' @examples
 #' \donttest{
-#' sim <- simulate_ms_occu(N = 40, J = 3, n_species = 5, seed = 1)
+#' sim <- simulate_ms_occu(N = 40, J = 3, n.species = 5, seed = 1)
 #' fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
 #'             y = sim$y, species = paste0("sp", 1:5),
 #'             control = list(verbose = FALSE))
@@ -1921,7 +1921,7 @@ update.tobs_fit <- function(object, ..., evaluate = TRUE) {
 #'   `prefit_checked` (`FALSE` where the family carries no site-by-visit grid).
 #' @examples
 #' \donttest{
-#' sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
 #'                      seed = 1)
 #' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
 #'             detection = ~ det_cov1, y = sim$y, method = "laplace",
@@ -2361,7 +2361,7 @@ tobs_check_id <- function(model, fit = NULL) {
 #'   intensity), carrying the levels used in `attr(, "quantiles")`.
 #' @examples
 #' \donttest{
-#' sim <- simulate_occu(N = 30, J = 3, n_occ_covs = 1, seed = 1)
+#' sim <- simulate_occu(N = 30, J = 3, n.occ.covs = 1, seed = 1)
 #' d   <- transform(sim$data, cell = seq_len(30))
 #' adj <- matrix(0L, 30, 30)
 #' adj[cbind(1:29, 2:30)] <- 1L

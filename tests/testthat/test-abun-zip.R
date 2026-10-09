@@ -23,11 +23,11 @@ test_that("abun(mixture = 'zip' / 'zinb') constructor + gates", {
 
 test_that("abun(mixture = 'zip') fits + exposes the structural-zero logit", {
   skip_on_cran()
-  sim <- simulate_abun(N = 150, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                       beta_lambda = c(log(6), 0.5), beta_p = c(0.3, -0.3),
+  sim <- simulate_abun(N = 150, J = 5, n.abund.covs = 1, n.det.covs = 1,
+                       beta.lambda = c(log(6), 0.5), beta.p = c(0.3, -0.3),
                        mixture = "zip", omega = 0.35, seed = 2)
   fit <- tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
-              family = abun(mixture = "zip", K_max = 60L), method = "laplace",
+              family = abun(mixture = "zip", K.max = 60L), method = "laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$mixture, "zip")
@@ -50,12 +50,12 @@ test_that("abun(mixture = 'zip') recovers betas + omega (multi-seed)", {
   li <- ls <- pi_ <- ps <- om <- rep(NA_real_, n_seed)
   hit <- tot <- 0L
   for (s in seq_len(n_seed)) {
-    sim <- simulate_abun(N = 250, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                         beta_lambda = c(bl0, bl1), beta_p = c(bp0, bp1),
+    sim <- simulate_abun(N = 250, J = 5, n.abund.covs = 1, n.det.covs = 1,
+                         beta.lambda = c(bl0, bl1), beta.p = c(bp0, bp1),
                          mixture = "zip", omega = om_t, seed = 300 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
-           family = abun(mixture = "zip", K_max = 60L), method = "laplace",
+           family = abun(mixture = "zip", K.max = 60L), method = "laplace",
            control = list(verbose = FALSE, progress = FALSE)),
       error = function(e) NULL)
     if (is.null(fit) || !isTRUE(fit$convergence$converged)) next
@@ -86,13 +86,13 @@ test_that("abun(mixture = 'zinb') recovers betas + omega + size (multi-seed)", {
   bl0 <- log(10); bl1 <- 0.4; om_t <- 0.25; size_t <- 6
   li <- ls <- om <- rr <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_abun(N = 400, J = 8, n_abund_covs = 1, n_det_covs = 1,
-                         beta_lambda = c(bl0, bl1), beta_p = c(0.5, -0.2),
+    sim <- simulate_abun(N = 400, J = 8, n.abund.covs = 1, n.det.covs = 1,
+                         beta.lambda = c(bl0, bl1), beta.p = c(0.5, -0.2),
                          mixture = "zinb", size = size_t, omega = om_t,
                          seed = 500 + s)
     fit <- tryCatch(
       tobs(~ abund_cov1, data = sim$data, detection = ~ det_cov1, y = sim$y,
-           family = abun(mixture = "zinb", K_max = 150L), method = "laplace",
+           family = abun(mixture = "zinb", K.max = 150L), method = "laplace",
            control = list(verbose = FALSE, progress = FALSE)),
       error = function(e) NULL)
     if (is.null(fit) || !isTRUE(fit$convergence$converged)) next

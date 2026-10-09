@@ -52,7 +52,7 @@
 
 # `y` is an n_sites x max_visits time-to-detection matrix: a value in
 # (0, Tmax) is a detection time; a value >= Tmax (or exactly Tmax) is a
-# non-detection censored at Tmax; NA is a visit not conducted. `surveyLength`
+# non-detection censored at Tmax; NA is a visit not conducted. `survey.length`
 # (Tmax) is a scalar, a per-site vector, or an n_sites x max_visits matrix.
 .tobs_build_occu_ttd <- function(state_formula, rate_formula, data, y,
                                  surveyLength = 1) {
@@ -67,11 +67,11 @@
     Tmax <- matrix(Tmax, n_sites, max_visits)
   else Tmax <- as.matrix(Tmax)
   if (!all(dim(Tmax) == dim(y))) {
-    stop("surveyLength must be a scalar, a length-n_sites vector, or an ",
+    stop("survey.length must be a scalar, a length-n_sites vector, or an ",
          "n_sites x max_visits matrix matching `y`.", call. = FALSE)
   }
   if (any(Tmax[!is.na(y)] <= 0)) {
-    stop("surveyLength (Tmax) must be positive at every surveyed visit.",
+    stop("survey.length (Tmax) must be positive at every surveyed visit.",
          call. = FALSE)
   }
   if (any(y[!is.na(y)] < 0)) {
@@ -167,7 +167,7 @@
   }
   if (is.null(y)) {
     stop("occu_ttd() requires `y` (an N x J time-to-detection matrix; a value ",
-         ">= surveyLength is a non-detection, NA a visit not conducted).",
+         ">= survey.length is a non-detection, NA a visit not conducted).",
          call. = FALSE)
   }
   if (!is.null(visits)) {
@@ -298,11 +298,11 @@
 #'
 #' @param N Number of sites (default 200).
 #' @param J Number of replicate surveys per site (default 4).
-#' @param n_psi_covs,n_rate_covs Number of occupancy / rate covariates.
-#' @param beta_psi Occupancy coefficients `c(intercept, slopes...)` (logit).
-#'   Default `c(qlogis(0.6), runif(n_psi_covs, -0.5, 0.5))`.
-#' @param beta_rate Log detection-rate coefficients `c(intercept, slopes...)`.
-#'   Default `c(log(0.6), runif(n_rate_covs, -0.4, 0.4))`.
+#' @param n.psi.covs,n.rate.covs Number of occupancy / rate covariates.
+#' @param beta.psi Occupancy coefficients `c(intercept, slopes...)` (logit).
+#'   Default `c(qlogis(0.6), runif(n.psi.covs, -0.5, 0.5))`.
+#' @param beta.rate Log detection-rate coefficients `c(intercept, slopes...)`.
+#'   Default `c(log(0.6), runif(n.rate.covs, -0.4, 0.4))`.
 #' @param Tmax Survey length (scalar). Default 3.
 #' @param seed Optional random seed.
 #' @return A list with `y` (N x J TTD matrix), `data`, `Tmax`, and `truth`.
@@ -310,25 +310,25 @@
 #' sim <- simulate_occu_ttd(N = 50, J = 3, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_occu_ttd <- function(N = 200, J = 4, n_psi_covs = 1, n_rate_covs = 1,
-                              beta_psi = NULL, beta_rate = NULL, Tmax = 3,
+simulate_occu_ttd <- function(N = 200, J = 4, n.psi.covs = 1, n.rate.covs = 1,
+                              beta.psi = NULL, beta.rate = NULL, Tmax = 3,
                               seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_psi))
-    beta_psi  <- c(stats::qlogis(0.6), stats::runif(n_psi_covs, -0.5, 0.5))
-  if (is.null(beta_rate))
-    beta_rate <- c(log(0.6), stats::runif(n_rate_covs, -0.4, 0.4))
+  if (is.null(beta.psi))
+    beta.psi  <- c(stats::qlogis(0.6), stats::runif(n.psi.covs, -0.5, 0.5))
+  if (is.null(beta.rate))
+    beta.rate <- c(log(0.6), stats::runif(n.rate.covs, -0.4, 0.4))
 
-  psi_covs  <- data.frame(matrix(stats::rnorm(N * n_psi_covs), N, n_psi_covs))
-  names(psi_covs) <- paste0("psi_cov", seq_len(n_psi_covs))
-  rate_covs <- data.frame(matrix(stats::rnorm(N * n_rate_covs), N, n_rate_covs))
-  names(rate_covs) <- paste0("rate_cov", seq_len(n_rate_covs))
+  psi_covs  <- data.frame(matrix(stats::rnorm(N * n.psi.covs), N, n.psi.covs))
+  names(psi_covs) <- paste0("psi_cov", seq_len(n.psi.covs))
+  rate_covs <- data.frame(matrix(stats::rnorm(N * n.rate.covs), N, n.rate.covs))
+  names(rate_covs) <- paste0("rate_cov", seq_len(n.rate.covs))
   data <- cbind(psi_covs, rate_covs)
 
   X_psi  <- stats::model.matrix(~ ., psi_covs)
   X_rate <- stats::model.matrix(~ ., rate_covs)
-  psi    <- plogis(as.vector(X_psi  %*% beta_psi))
-  lambda <- exp(as.vector(X_rate %*% beta_rate))
+  psi    <- plogis(as.vector(X_psi  %*% beta.psi))
+  lambda <- exp(as.vector(X_rate %*% beta.rate))
   z      <- stats::rbinom(N, 1L, psi)
 
   y <- matrix(NA_real_, N, J)
@@ -341,6 +341,6 @@ simulate_occu_ttd <- function(N = 200, J = 4, n_psi_covs = 1, n_rate_covs = 1,
   }
 
   list(y = y, data = data, Tmax = Tmax,
-       truth = list(beta_psi = beta_psi, beta_rate = beta_rate,
+       truth = list(beta_psi = beta.psi, beta_rate = beta.rate,
                     psi = psi, rate = lambda, z = z, Tmax = Tmax))
 }

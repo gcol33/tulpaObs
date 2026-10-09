@@ -654,7 +654,7 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 #' @seealso [count()] (single species), [ms_occu()], [ms_abun()]
 #' @examples
 #' \donttest{
-#' sim <- simulate_ms_count(N = 120, n_species = 8, seed = 1)
+#' sim <- simulate_ms_count(N = 120, n.species = 8, seed = 1)
 #' fit <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
 #'             species = colnames(sim$y), method = "laplace")
 #' summary(fit)
@@ -665,15 +665,15 @@ ms_count <- function(response = c("poisson", "negbin", "gaussian",
   response <- match.arg(response)
   obs_family(
     name           = "ms_count",
-    class_long     = "multispecies count / relative-abundance GLMM",
+    class.long     = "multispecies count / relative-abundance GLMM",
     latent         = "none",
     observation    = response,
     replicates     = "single",
-    default_engine = "laplace",
+    default.engine = "laplace",
     status         = "working",
     params         = list(response = response),
     # latent() factors and a shared field are fit by the block-coordinate driver
-    control_groups = c("block_coordinate", "block_coordinate_factor",
+    control.groups = c("block_coordinate", "block_coordinate_factor",
                        "nuts_grad_threads", "nuts_logr"),
     response       = "matrix"
   )

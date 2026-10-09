@@ -587,7 +587,7 @@
   if (is.null(ref) || !isTRUE(ref$ok)) {
     stop("dyn_abun() AGHQ random-effect refinement did not produce a usable fit ",
          "(singular marginal Hessian or non-finite optimum). Try a different ",
-         "K_max or simplify the RE structure.", call. = FALSE)
+         "K.max or simplify the RE structure.", call. = FALSE)
   }
 
   is_nb <- identical(ref$mixture, "negbin")
@@ -965,7 +965,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #' suitable for [tobs()] with [dyn_abun()].
 #'
 #' Survival and recruitment are constant across seasons by default. Supplying
-#' `beta_omega` (logit-scale) or `beta_gamma` (log-scale) instead makes the rate
+#' `beta.omega` (logit-scale) or `beta.gamma` (log-scale) instead makes the rate
 #' depend on a per-(site, interval) season covariate `z`: `omega_{i,t} =
 #' plogis(beta_omega[1] + beta_omega[2] * z_{i,t})`, `gamma_{i,t} =
 #' exp(beta_gamma[1] + beta_gamma[2] * z_{i,t})`. The covariate is returned as a
@@ -975,13 +975,13 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #' @param N Number of sites (default 150).
 #' @param T Number of primary seasons (default 4).
 #' @param J Number of secondary visits per season (default 3).
-#' @param n_abund_covs Number of initial-abundance covariates (default 1).
-#' @param beta_lambda Initial-abundance coefficients (log). Default
-#'   `c(log(5), runif(n_abund_covs, -0.4, 0.4))`.
+#' @param n.abund.covs Number of initial-abundance covariates (default 1).
+#' @param beta.lambda Initial-abundance coefficients (log). Default
+#'   `c(log(5), runif(n.abund.covs, -0.4, 0.4))`.
 #' @param p,omega,gamma Detection, apparent-survival, and recruitment parameters
 #'   (scalars; defaults 0.5, 0.6, 1.0). `omega` / `gamma` set the constant rate
-#'   used when `beta_omega` / `beta_gamma` are `NULL`.
-#' @param beta_omega,beta_gamma Optional length-2 coefficients
+#'   used when `beta.omega` / `beta.gamma` are `NULL`.
+#' @param beta.omega,beta.gamma Optional length-2 coefficients
 #'   `c(intercept, slope)` for a season-varying survival (logit link) or
 #'   recruitment (log link) rate driven by a per-(site, interval) season
 #'   covariate. `NULL` (default) keeps the constant `omega` / `gamma`.
@@ -1001,18 +1001,18 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #' sim <- simulate_dyn_abun(N = 40, T = 3, J = 3, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
-                              beta_lambda = NULL, p = 0.5, omega = 0.6,
-                              gamma = 1.0, beta_omega = NULL, beta_gamma = NULL,
+simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n.abund.covs = 1,
+                              beta.lambda = NULL, p = 0.5, omega = 0.6,
+                              gamma = 1.0, beta.omega = NULL, beta.gamma = NULL,
                               mixture = c("poisson", "negbin"),
                               r = 2, zi = 0, seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda)) beta_lambda <- c(log(5), stats::runif(n_abund_covs, -0.4, 0.4))
-  abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
-  names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
+  if (is.null(beta.lambda)) beta.lambda <- c(log(5), stats::runif(n.abund.covs, -0.4, 0.4))
+  abund_covs <- data.frame(matrix(stats::rnorm(N * n.abund.covs), N, n.abund.covs))
+  names(abund_covs) <- paste0("abund_cov", seq_len(n.abund.covs))
   X_lambda <- stats::model.matrix(~ ., abund_covs)
-  lambda <- exp(as.vector(X_lambda %*% beta_lambda))
+  lambda <- exp(as.vector(X_lambda %*% beta.lambda))
   is_nb <- identical(mixture, "negbin")
   nIv <- T - 1L
 
@@ -1020,14 +1020,14 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
   # scalar; a supplied beta_omega / beta_gamma drives the rate off a shared
   # season covariate carried as a [N x (T-1)] matrix column of `data`.
   season_cov <- NULL
-  if (!is.null(beta_omega) || !is.null(beta_gamma)) {
+  if (!is.null(beta.omega) || !is.null(beta.gamma)) {
     season_cov <- matrix(stats::rnorm(N * nIv), N, nIv)
   }
-  omega_mat <- if (!is.null(beta_omega))
-                 stats::plogis(beta_omega[1] + beta_omega[2] * season_cov)
+  omega_mat <- if (!is.null(beta.omega))
+                 stats::plogis(beta.omega[1] + beta.omega[2] * season_cov)
                else matrix(omega, N, nIv)
-  gamma_mat <- if (!is.null(beta_gamma))
-                 exp(beta_gamma[1] + beta_gamma[2] * season_cov)
+  gamma_mat <- if (!is.null(beta.gamma))
+                 exp(beta.gamma[1] + beta.gamma[2] * season_cov)
                else matrix(gamma, N, nIv)
 
   # Structural zeros (zip / zinb): a site is never occupied (N_t = 0 for all t)
@@ -1051,9 +1051,9 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n_abund_covs = 1,
   data <- abund_covs
   if (!is.null(season_cov)) data$season_cov <- season_cov
   list(y = y, data = data,
-       truth = list(beta_lambda = beta_lambda, lambda = lambda, p = p,
+       truth = list(beta_lambda = beta.lambda, lambda = lambda, p = p,
                     omega = omega, gamma = gamma,
-                    beta_omega = beta_omega, beta_gamma = beta_gamma,
+                    beta_omega = beta.omega, beta_gamma = beta.gamma,
                     omega_mat = omega_mat, gamma_mat = gamma_mat,
                     season_cov = season_cov, mixture = mixture,
                     zi = zi, struct_zero = struct_zero,

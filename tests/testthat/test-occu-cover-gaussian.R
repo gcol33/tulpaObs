@@ -15,7 +15,7 @@ test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
   skip_on_cran()
   N <- 120L; J <- 5L
   sim <- simulate_occu_cover(N = N, J = J, positive = "gaussian",
-    beta_pos = c(2.0, -0.4), sigma_pos = 0.5, seed = 11L)
+    beta.pos = c(2.0, -0.4), sigma.pos = 0.5, seed = 11L)
   long <- data.frame(site_id = rep(1:N, each = J), visit = rep(1:J, times = N),
     y = as.vector(t(sim$y)), det_cov1 = sim$visit_data$det_cov1,
     pos_cov1 = sim$visit_data$pos_cov1)
@@ -24,7 +24,7 @@ test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
   cell <- cbind(data.frame(site_id = 1:N), sim$data)
   yp <- sim$y_pos; yp[is.na(yp)] <- 0
   fit <- tobs(formula = ~ occ_cov1, data = cell, family = occu_cover("gaussian"),
-    detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y_pos = yp,
+    detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y.pos = yp,
     visits = od$det.covs, method = "laplace", control = list(verbose = FALSE))
   w <- waic(fit)
   expect_true(is.finite(w$estimates["waic", "Estimate"]) && is.finite(w$estimates["p_waic", "Estimate"]))
@@ -32,7 +32,7 @@ test_that("occu_cover(gaussian): WAIC works, PPC gated, NUTS available", {
   # NUTS is wired for the gaussian arm; a short sample returns a fit rather
   # than routing gaussian through the lognormal dispatch.
   nut <- tobs(formula = ~ occ_cov1, data = cell, family = occu_cover("gaussian"),
-    detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y_pos = yp,
+    detection = ~ det_cov1, positive = ~ pos_cov1, y = od$y, y.pos = yp,
     visits = od$det.covs, method = "nuts",
     control = list(n.iter = 400L, n.warmup = 300L, verbose = FALSE))
   expect_equal(nut$method, "nuts")
@@ -62,11 +62,11 @@ test_that("occu_cover() recovers parameters (gaussian positive, 20 seeds)", {
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
       N         = N, J = J,
-      n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-      beta_occ  = beta_occ_truth,
-      beta_p    = beta_p_truth,
-      beta_pos  = beta_pos_truth,
-      sigma_pos = sigma_pos_truth,
+      n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+      beta.occ  = beta_occ_truth,
+      beta.p    = beta_p_truth,
+      beta.pos  = beta_pos_truth,
+      sigma.pos = sigma_pos_truth,
       positive  = "gaussian",
       seed      = 9200L + s
     )
@@ -88,7 +88,7 @@ test_that("occu_cover() recovers parameters (gaussian positive, 20 seeds)", {
            family    = occu_cover("gaussian"),
            detection = ~ det_cov1,
            positive  = ~ pos_cov1,
-           y         = od$y, y_pos = y_pos, visits = od$det.covs,
+           y         = od$y, y.pos = y_pos, visits = od$det.covs,
            method    = "laplace",
            control   = list(verbose = FALSE, max.iter = 500L)),
       error = function(e) NULL

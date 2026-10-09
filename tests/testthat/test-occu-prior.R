@@ -182,20 +182,20 @@ test_that("occu_priors() validates its arguments", {
                 fixed = TRUE)
 
   expect_error(
-    occu_priors(p_intercept = list(mean = 0, sd = -1)),
+    occu_priors(p.intercept = list(mean = 0, sd = -1)),
     "must be positive"
   )
   expect_error(
-    occu_priors(p_intercept = list(mean = NA, sd = 1)),
+    occu_priors(p.intercept = list(mean = NA, sd = 1)),
     "must be finite"
   )
   expect_error(
-    occu_priors(p_intercept = list(sd = 1)),
+    occu_priors(p.intercept = list(sd = 1)),
     "must be a list with `mean` and `sd`"
   )
 
   # Inf sd is allowed (no penalty on that bucket).
-  pr <- occu_priors(p_slope = list(mean = 0, sd = Inf))
+  pr <- occu_priors(p.slope = list(mean = 0, sd = Inf))
   expect_true(is.infinite(pr$p_slope$sd))
 })
 

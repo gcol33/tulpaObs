@@ -33,28 +33,28 @@ test_that("the closed-form half-normal band probabilities match numeric integrat
 # --- (3) dispatch + input gates --------------------------------------------
 
 test_that("gdistremoval() gates its required inputs", {
-  sim <- simulate_gdistremoval(N = 40, cutpoints = cutp, n_periods = 3L, seed = 1)
+  sim <- simulate_gdistremoval(N = 40, cutpoints = cutp, n.periods = 3L, seed = 1)
   ok  <- list(data = sim$data, y = sim$y, y_rem = sim$y_rem,
               family = gdistremoval(cutpoints = cutp))
 
   # missing detection / y / y_rem / cutpoints
-  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y_rem = ok$y_rem,
+  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y.rem = ok$y_rem,
                     family = ok$family), "detection")
-  expect_error(tobs(~ 1, data = ok$data, y_rem = ok$y_rem, family = ok$family,
+  expect_error(tobs(~ 1, data = ok$data, y.rem = ok$y_rem, family = ok$family,
                     detection = ~ 1), "requires `y`")
   expect_error(tobs(~ 1, data = ok$data, y = ok$y, family = ok$family,
-                    detection = ~ 1), "y_rem")
-  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y_rem = ok$y_rem,
+                    detection = ~ 1), "y.rem")
+  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y.rem = ok$y_rem,
                     family = gdistremoval(), detection = ~ 1), "cutpoints")
 
   # engine gate: only laplace
-  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y_rem = ok$y_rem,
+  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y.rem = ok$y_rem,
                     family = ok$family, detection = ~ 1, method = "nuts"),
                "laplace")
 
   # per-site totals of the two responses must match (same detected birds)
   yr_bad <- sim$y_rem; yr_bad[1, 1] <- yr_bad[1, 1] + 5L
-  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y_rem = yr_bad,
+  expect_error(tobs(~ 1, data = ok$data, y = ok$y, y.rem = yr_bad,
                     family = ok$family, detection = ~ 1),
                "totals of y .* must match|cross-classified")
 })
@@ -65,10 +65,10 @@ test_that("gdistremoval() gates its required inputs", {
 test_that("a gdistremoval fit recovers a single data set and wires S3", {
   skip_on_cran()
   set.seed(11)
-  sim <- simulate_gdistremoval(N = 300, cutpoints = cutp, n_periods = 4L,
-           beta_lambda = c(log(30), 0.3), beta_sigma = c(log(18), 0.1),
-           beta_r = c(stats::qlogis(0.4), -0.2), seed = 11)
-  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, y_rem = sim$y_rem,
+  sim <- simulate_gdistremoval(N = 300, cutpoints = cutp, n.periods = 4L,
+           beta.lambda = c(log(30), 0.3), beta.sigma = c(log(18), 0.1),
+           beta.r = c(stats::qlogis(0.4), -0.2), seed = 11)
+  fit <- tobs(~ abund_cov1, data = sim$data, y = sim$y, y.rem = sim$y_rem,
               family = gdistremoval(cutpoints = cutp), detection = ~ det_cov1,
               removal = ~ rem_cov1, method = "laplace",
               control = list(verbose = FALSE))
@@ -110,10 +110,10 @@ test_that("gdistremoval recovers lambda / sigma / r with ~95% coverage", {
   est <- matrix(NA_real_, n_seed, np); cov <- matrix(FALSE, n_seed, np)
   conv <- logical(n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_gdistremoval(N = 300, cutpoints = cutp, n_periods = 4L,
-             beta_lambda = bl, beta_sigma = bs, beta_r = br, seed = 100 + s)
+    sim <- simulate_gdistremoval(N = 300, cutpoints = cutp, n.periods = 4L,
+             beta.lambda = bl, beta.sigma = bs, beta.r = br, seed = 100 + s)
     fit <- tryCatch(
-      tobs(~ abund_cov1, data = sim$data, y = sim$y, y_rem = sim$y_rem,
+      tobs(~ abund_cov1, data = sim$data, y = sim$y, y.rem = sim$y_rem,
            family = gdistremoval(cutpoints = cutp), detection = ~ det_cov1,
            removal = ~ rem_cov1, method = "laplace",
            control = list(verbose = FALSE)),

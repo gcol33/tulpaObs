@@ -20,7 +20,7 @@
 
 
 test_that("simulate_ms_distance() returns a well-formed community design", {
-  d <- simulate_ms_distance(n_species = 5, N = 30, cutpoints = .msds_cut,
+  d <- simulate_ms_distance(n.species = 5, N = 30, cutpoints = .msds_cut,
                             seed = 1)
   expect_equal(dim(d$y), c(30L, 4L, 5L))
   expect_length(d$species, 5L)
@@ -28,14 +28,14 @@ test_that("simulate_ms_distance() returns a well-formed community design", {
   expect_true(all(d$y >= 0L))
   expect_equal(dim(d$truth$beta_lambda), c(5L, 2L))
   # factors are optional truth
-  df <- simulate_ms_distance(n_species = 6, N = 30, cutpoints = .msds_cut,
-                             n_factors = 2, seed = 1)
+  df <- simulate_ms_distance(n.species = 6, N = 30, cutpoints = .msds_cut,
+                             n.factors = 2, seed = 1)
   expect_equal(dim(df$truth$loadings), c(6L, 2L))
   expect_equal(dim(df$truth$cor_res), c(6L, 6L))
 })
 
 test_that("ms_distance() gates unsupported combinations", {
-  d <- simulate_ms_distance(n_species = 4, N = 25, cutpoints = .msds_cut,
+  d <- simulate_ms_distance(n.species = 4, N = 25, cutpoints = .msds_cut,
                             seed = 3)
   # cutpoints are required on the family
   expect_error(
@@ -66,7 +66,7 @@ test_that("ms_distance() gates unsupported combinations", {
 # re-calibrate, so it stays ungated and keeps this path exercised on every push
 # while the recovery block below moves to the recovery tier.
 test_that("a small msDS fit wires the community S3 surface", {
-  d <- simulate_ms_distance(n_species = 3, N = 25, cutpoints = .msds_cut,
+  d <- simulate_ms_distance(n.species = 3, N = 25, cutpoints = .msds_cut,
                             seed = 4)
   fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
               family = ms_distance(cutpoints = .msds_cut), y = d$y,
@@ -102,7 +102,7 @@ test_that("a small msDS fit wires the community S3 surface", {
 test_that("msDS recovers the community means and per-species structure", {
   skip_if_fast()
   skip_on_cran()
-  d <- simulate_ms_distance(n_species = 10, N = 100, cutpoints = .msds_cut,
+  d <- simulate_ms_distance(n.species = 10, N = 100, cutpoints = .msds_cut,
                             seed = 4)
   fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
               family = ms_distance(cutpoints = .msds_cut), y = d$y,
@@ -159,7 +159,7 @@ test_that("msDS community means are unbiased over seeds with nominal coverage", 
   hit <- matrix(NA, n_seed, 3L)
   truth <- NULL
   for (s in seq_len(n_seed)) {
-    d <- simulate_ms_distance(n_species = 10, N = 100, cutpoints = .msds_cut,
+    d <- simulate_ms_distance(n.species = 10, N = 100, cutpoints = .msds_cut,
                               seed = 100 + s)
     truth <- c(d$truth$mu_lambda, d$truth$mu_sigma)
     fit <- tobs(~ abund_cov1, detection = ~ 1, data = d$data,
@@ -187,8 +187,8 @@ test_that("msDS community means are unbiased over seeds with nominal coverage", 
 test_that("lfMsDS recovers residual species co-occurrence", {
   skip_if_fast()
   skip_on_cran()
-  d <- simulate_ms_distance(n_species = 8, N = 80, cutpoints = .msds_cut,
-                            n_factors = 2, load_sd = 0.5, seed = 5)
+  d <- simulate_ms_distance(n.species = 8, N = 80, cutpoints = .msds_cut,
+                            n.factors = 2, load.sd = 0.5, seed = 5)
   fit <- tobs(~ abund_cov1 + latent(2), detection = ~ 1, data = d$data,
               family = ms_distance(cutpoints = .msds_cut), y = d$y,
               species = d$species, method = "laplace",
@@ -209,8 +209,8 @@ test_that("sfMsDS recovers the shared field alongside the factors", {
   co <- expand.grid(r = seq_len(side), c = seq_len(side))
   f  <- 0.5 * scale(sin(co$r / side * pi) + cos(co$c / side * pi))[, 1]
   f  <- f - mean(f)
-  d  <- simulate_ms_distance(n_species = 8, cutpoints = .msds_cut,
-                             n_factors = 2, field = f, seed = 6)
+  d  <- simulate_ms_distance(n.species = 8, cutpoints = .msds_cut,
+                             n.factors = 2, field = f, seed = 6)
   fit <- tobs(~ abund_cov1 + icar(graph = A) + latent(2), detection = ~ 1,
               data = d$data, family = ms_distance(cutpoints = .msds_cut),
               y = d$y, species = d$species, method = "nested_laplace",

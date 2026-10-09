@@ -700,12 +700,12 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 #'
 #' @param N Number of sites (default 100).
 #' @param J Number of replicate visits (default 4).
-#' @param n_abund_covs Number of abundance covariates (default 2).
-#' @param n_det_covs Number of detection covariates (default 1).
-#' @param beta_lambda Abundance coefficients `c(intercept, slopes...)` on the
-#'   log scale. Default `c(log(3), runif(n_abund_covs, -0.5, 0.5))`.
-#' @param beta_p Detection coefficients `c(intercept, slopes...)` on the logit
-#'   scale. Default `c(0, runif(n_det_covs, -0.5, 0.5))` (intercept 0 = p 0.5).
+#' @param n.abund.covs Number of abundance covariates (default 2).
+#' @param n.det.covs Number of detection covariates (default 1).
+#' @param beta.lambda Abundance coefficients `c(intercept, slopes...)` on the
+#'   log scale. Default `c(log(3), runif(n.abund.covs, -0.5, 0.5))`.
+#' @param beta.p Detection coefficients `c(intercept, slopes...)` on the logit
+#'   scale. Default `c(0, runif(n.det.covs, -0.5, 0.5))` (intercept 0 = p 0.5).
 #' @param mixture Abundance mixing distribution: `"poisson"` (default),
 #'   `"negbin"` (negative binomial, overdispersed), or their zero-inflated
 #'   counterparts `"zip"` / `"zinb"` (a structural-zero share `omega` of sites
@@ -725,26 +725,26 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
 #' dim(sim$y)
 #' @export
 simulate_abun <- function(N = 100, J = 4,
-                          n_abund_covs = 2, n_det_covs = 1,
-                          beta_lambda = NULL, beta_p = NULL,
+                          n.abund.covs = 2, n.det.covs = 1,
+                          beta.lambda = NULL, beta.p = NULL,
                           mixture = c("poisson", "negbin", "zip", "zinb"),
                           size = 2, omega = 0.3, seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda)) beta_lambda <- c(log(3), stats::runif(n_abund_covs, -0.5, 0.5))
-  if (is.null(beta_p))      beta_p      <- c(0, stats::runif(n_det_covs, -0.5, 0.5))
+  if (is.null(beta.lambda)) beta.lambda <- c(log(3), stats::runif(n.abund.covs, -0.5, 0.5))
+  if (is.null(beta.p))      beta.p      <- c(0, stats::runif(n.det.covs, -0.5, 0.5))
 
-  abund_covs <- data.frame(matrix(stats::rnorm(N * n_abund_covs), N, n_abund_covs))
-  names(abund_covs) <- paste0("abund_cov", seq_len(n_abund_covs))
-  det_covs <- data.frame(matrix(stats::rnorm(N * n_det_covs), N, n_det_covs))
-  names(det_covs) <- paste0("det_cov", seq_len(n_det_covs))
+  abund_covs <- data.frame(matrix(stats::rnorm(N * n.abund.covs), N, n.abund.covs))
+  names(abund_covs) <- paste0("abund_cov", seq_len(n.abund.covs))
+  det_covs <- data.frame(matrix(stats::rnorm(N * n.det.covs), N, n.det.covs))
+  names(det_covs) <- paste0("det_cov", seq_len(n.det.covs))
   data <- cbind(abund_covs, det_covs)
 
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   X_det    <- stats::model.matrix(~ ., det_covs)
 
-  lambda <- exp(as.vector(X_lambda %*% beta_lambda))
-  p      <- plogis(as.vector(X_det %*% beta_p))
+  lambda <- exp(as.vector(X_lambda %*% beta.lambda))
+  p      <- plogis(as.vector(X_det %*% beta.p))
   is_nb  <- mixture %in% c("negbin", "zinb")
   is_zi  <- mixture %in% c("zip", "zinb")
   Nlat   <- if (is_nb) stats::rnbinom(N, size = size, mu = lambda)
@@ -762,7 +762,7 @@ simulate_abun <- function(N = 100, J = 4,
   list(
     y = y,
     data = data,
-    truth = list(beta_lambda = beta_lambda, beta_p = beta_p,
+    truth = list(beta_lambda = beta.lambda, beta_p = beta.p,
                  lambda = lambda, p = p, N = Nlat,
                  mixture = mixture,
                  size  = if (is_nb) size else NA_real_,

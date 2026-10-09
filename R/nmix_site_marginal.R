@@ -214,7 +214,7 @@ nmix_site_marginal <- function(y,
   # does not read the pre-resolved K_max as an explicit user truncation.
   trunc <- .nmix_truncation(K_max, y)
   K_max <- trunc$K_max
-  if (K_max < max(y)) stop("`K_max` must be >= max(y).", call. = FALSE)
+  if (K_max < max(y)) stop("`K.max` must be >= max(y).", call. = FALSE)
   headroom <- if (is.null(headroom)) trunc$headroom else as.integer(headroom)
 
   if (!is.null(K_site)) {
@@ -311,7 +311,7 @@ nmix_site_marginal <- function(y,
 #' @exportS3Method print nmix_marginal
 print.nmix_marginal <- function(x, ...) {
   cat(sprintf("tulpa N-mixture per-site marginal (mixture = %s)\n", x$mixture))
-  cat(sprintf("  n_sites = %d   n_obs = %d   K_max = %d\n",
+  cat(sprintf("  n_sites = %d   n_obs = %d   K.max = %d\n",
               x$n_sites, x$n_obs, x$K_max))
   cat(sprintf("  p_lambda = %d   p_p = %d\n", x$p_lambda, x$p_p))
   cat("  closures: eval(eta_lambda, eta_p, r), eval_beta(beta_lambda, beta_p, r), obs_info_block(s, ev)\n")

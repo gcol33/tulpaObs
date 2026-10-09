@@ -50,8 +50,8 @@ test_that("the C++ forward marginal matches an independent R forward recursion",
 })
 
 test_that("analytic gradient matches finite differences (forward-mode diff)", {
-  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
                            gamma = 1, seed = 2)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y, K_max = 30)
   lay  <- tulpaObs:::.tobs_dyn_abun_nuts_layout(2L, 1L, 1L, 1L)
@@ -67,7 +67,7 @@ test_that("analytic gradient matches finite differences (forward-mode diff)", {
 })
 
 test_that("C++ dyn_abun NUTS log-posterior matches the R oracle byte-for-byte", {
-  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n_abund_covs = 1, seed = 12)
+  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n.abund.covs = 1, seed = 12)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y, K_max = 25)
   lay  <- tulpaObs:::.tobs_dyn_abun_nuts_layout(2L, 1L, 1L, 1L)
   marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
@@ -86,10 +86,10 @@ test_that("dyn_abun Laplace recovers truth", {
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(6), 0.4)
-  sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n_abund_covs = 1,
-                           beta_lambda = beta_lambda, p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n.abund.covs = 1,
+                           beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 11)
-  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 35),
+  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 35),
               detection = ~ 1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
@@ -112,10 +112,10 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
   n_seed <- 20L
   covered <- matrix(NA, n_seed, length(truth))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_abun(N = 150, T = 3, J = 3, n_abund_covs = 1,
-                             beta_lambda = beta_lambda, p = 0.5, omega = 0.6,
+    sim <- simulate_dyn_abun(N = 150, T = 3, J = 3, n.abund.covs = 1,
+                             beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 500 + s)
-    fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 30),
+    fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 30),
                 detection = ~ 1, y = sim$y, method = "laplace",
                 control = list(verbose = FALSE))
     lo <- fit$means - 1.96 * fit$sds; hi <- fit$means + 1.96 * fit$sds
@@ -129,9 +129,9 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
 test_that("S3 surface works for dyn_abun fits", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(6), 0.4), seed = 3)
-  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 28),
+  sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(6), 0.4), seed = 3)
+  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 28),
               detection = ~ 1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE))
   expect_equal(dim(vcov(fit)), c(5L, 5L))
@@ -168,8 +168,8 @@ test_that("dyn_abun rejects single-season data", {
 })
 
 test_that("dyn_abun NB analytic gradient (incl log_r) matches finite differences", {
-  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
                            gamma = 1, mixture = "negbin", r = 2, seed = 2)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
                                            mixture = "negbin", K_max = 35)
@@ -187,7 +187,7 @@ test_that("dyn_abun NB analytic gradient (incl log_r) matches finite differences
 })
 
 test_that("C++ dyn_abun NB NUTS log-posterior matches the R oracle byte-for-byte", {
-  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n_abund_covs = 1,
+  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n.abund.covs = 1,
                            mixture = "negbin", r = 2.5, seed = 12)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
                                            mixture = "negbin", K_max = 25)
@@ -209,11 +209,11 @@ test_that("dyn_abun negbin Laplace recovers truth (incl dispersion)", {
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(7), 0.4)
-  sim <- simulate_dyn_abun(N = 300, T = 4, J = 3, n_abund_covs = 1,
-                           beta_lambda = beta_lambda, p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 300, T = 4, J = 3, n.abund.covs = 1,
+                           beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, mixture = "negbin", r = 3, seed = 21)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
-              family = dyn_abun(K_max = 45, mixture = "negbin"),
+              family = dyn_abun(K.max = 45, mixture = "negbin"),
               detection = ~ 1, y = sim$y, method = "laplace",
               control = list(verbose = FALSE))
   expect_s3_class(fit, "tobs_fit")
@@ -231,10 +231,10 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(6), 0.4)
-  sim <- simulate_dyn_abun(N = 70, T = 3, J = 3, n_abund_covs = 1,
-                           beta_lambda = beta_lambda, p = 0.5, omega = 0.6,
+  sim <- simulate_dyn_abun(N = 70, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 31)
-  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K_max = 26),
+  fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 26),
               detection = ~ 1, y = sim$y, method = "nuts",
               control = list(n.iter = 250L, n.warmup = 250L, seed = 1L,
                              adapt.delta = 0.9, verbose = FALSE))
@@ -277,7 +277,7 @@ test_that("dyn_abun() NUTS samples a single initial-abundance RE and recovers it
                               beta_lambda = c(log(6), 0.3), p = 0.5, omega = 0.6,
                               gamma = 1, sigma_b = 0.5, seed = 9)
   fit <- tobs(formula = ~ x1 + (1 | g), data = s$data,
-              family = dyn_abun(K_max = 28), detection = ~ 1, y = s$y,
+              family = dyn_abun(K.max = 28), detection = ~ 1, y = s$y,
               method = "nuts", verbose = FALSE,
               control = list(n.iter = 350L, n.warmup = 250L, seed = 1L))
   expect_identical(fit$method, "nuts")
@@ -305,7 +305,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE"
                                 beta_lambda = c(log(4), 0.4), p = 0.5, omega = 0.5,
                                 gamma = 0.5, sigma_b = 0.6, seed = 20 + k)
     fit <- tobs(formula = ~ x1 + (1 | g), data = s$data,
-                family = dyn_abun(K_max = 30), detection = ~ 1, y = s$y,
+                family = dyn_abun(K.max = 30), detection = ~ 1, y = s$y,
                 method = "laplace", verbose = FALSE,
                 control = list(progress = FALSE, n.quad = 5L))
     if (k == 1L) {
@@ -362,7 +362,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped detection RE", {
     s <- sim_dyn_abun_p_re(N = 100, T = 3, J = 4, ngrp = 12,
                            beta_lambda = c(log(8), 0.3), beta_p = stats::qlogis(0.5),
                            omega = 0.6, gamma = 1, sigma_b = 0.6, seed = 40 + k)
-    fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 45),
+    fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K.max = 45),
                 detection = ~ (1 | g), y = s$y, method = "laplace", verbose = FALSE,
                 control = list(progress = FALSE, n.quad = 5L))
     if (k == 1L) {
@@ -387,7 +387,7 @@ test_that("dyn_abun() NUTS samples a single detection RE and recovers it", {
   s <- sim_dyn_abun_p_re(N = 60, T = 3, J = 3, ngrp = 6,
                          beta_lambda = c(log(6), 0.3), beta_p = stats::qlogis(0.5),
                          omega = 0.6, gamma = 1, sigma_b = 0.5, seed = 14)
-  fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K_max = 28),
+  fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K.max = 28),
               detection = ~ (1 | g), y = s$y, method = "nuts", verbose = FALSE,
               control = list(n.iter = 350L, n.warmup = 250L, n.chains = 1L,
                              seed = 1L))
@@ -407,13 +407,13 @@ test_that("dyn_abun() RE is one arm at a time (lambda OR p, not both)", {
   # A random effect on BOTH the initial-abundance and detection arms in one fit is
   # rejected (the AGHQ path integrates one arm at a time).
   expect_error(
-    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K_max = 25),
+    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K.max = 25),
          detection = ~ (1 | g), y = s$y, method = "laplace",
          control = list(progress = FALSE)),
     "BOTH|one arm")
   # NUTS: a shared term across the two arms also routes to the one-arm error.
   expect_error(
-    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K_max = 25),
+    tobs(formula = ~ x1 + (1 | g), data = s$data, family = dyn_abun(K.max = 25),
          detection = ~ (1 | g), y = s$y, method = "nuts",
          control = list(n.iter = 20L, n.warmup = 10L)),
     "ONE arm|one arm|BOTH")
@@ -452,7 +452,7 @@ test_that("dyn_abun() areal ICAR recovers the initial-abundance slope + field", 
   for (s in 1:2) {
     sim <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 500 + s)
     fit <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = sim$data,
-                family = dyn_abun(K_max = 25), detection = ~ 1, y = sim$y,
+                family = dyn_abun(K.max = 25), detection = ~ 1, y = sim$y,
                 method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
     if (s == 1L) {
       expect_identical(fit$method, "nested_laplace")
@@ -478,7 +478,7 @@ test_that("dyn_abun() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   adj <- rook_adj(4L)
   s <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 3)
   fit <- tobs(formula = ~ abund_cov1 + bym2(graph = adj), data = s$data,
-              family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y,
+              family = dyn_abun(K.max = 20), detection = ~ 1, y = s$y,
               method = "nested_laplace", control = list(progress = FALSE, verbose = FALSE))
   expect_identical(fit$method, "nested_laplace")
   expect_true(all(is.finite(vcov(fit))))
@@ -486,7 +486,7 @@ test_that("dyn_abun() areal spatial: bym2 fits; nuts+icar samples (#113)", {
   # NUTS + areal now samples an intrinsic icar() field via the #71 sum-to-zero
   # reparameterisation (full recovery lives in test-count-spatial-nuts.R).
   fit_icar <- tobs(formula = ~ abund_cov1 + icar(graph = adj), data = s$data,
-    family = dyn_abun(K_max = 20), detection = ~ 1, y = s$y, method = "nuts",
+    family = dyn_abun(K.max = 20), detection = ~ 1, y = s$y, method = "nuts",
     control = list(n.iter = 40L, n.warmup = 40L, max.treedepth = 8L,
                    verbose = FALSE, progress = FALSE))
   expect_identical(fit_icar$method, "nuts")
@@ -507,7 +507,7 @@ test_that("dyn_abun() bym2 + proper-CAR recover the initial-abundance field + sl
     slope_ok <- field_cor <- logical(0); slopes <- numeric(0)
     for (s in 1:2) {
       sim <- .sim_da_spatial(adj, Tn = 3L, J = 2L, seed = 500 + s)
-      fit <- tobs(formula = tf, data = sim$data, family = dyn_abun(K_max = 25),
+      fit <- tobs(formula = tf, data = sim$data, family = dyn_abun(K.max = 25),
                   detection = ~ 1, y = sim$y, method = "nested_laplace",
                   control = list(progress = FALSE, verbose = FALSE))
       est <- fit$means[["lambda_abund_cov1"]]; se <- fit$sds[["lambda_abund_cov1"]]
@@ -544,7 +544,7 @@ test_that("dyn_abun() temporal()-only field recovers the AR1 field + slope (#114
     }
     fit <- tryCatch(tobs(~ x + temporal(period, type = "ar1"),
                          data = data.frame(x = x, period = period),
-                         family = dyn_abun(K_max = 30L), detection = ~ 1, y = y,
+                         family = dyn_abun(K.max = 30L), detection = ~ 1, y = y,
                          method = "nested_laplace",
                          control = list(verbose = FALSE, progress = FALSE)),
                     error = function(e) NULL)
@@ -590,7 +590,7 @@ test_that("dyn_abun() NUTS + temporal field samples the AR1 field, 0 divergences
   }
   fit <- tobs(~ x + temporal(period, type = "ar1"),
               data = data.frame(x = x, period = period),
-              family = dyn_abun(K_max = 30L), detection = ~ 1, y = y, method = "nuts",
+              family = dyn_abun(K.max = 30L), detection = ~ 1, y = y, method = "nuts",
               control = list(n.iter = 40L, n.warmup = 40L, max.treedepth = 6L,
                              verbose = FALSE, progress = FALSE))
   expect_identical(fit$method, "nuts")
@@ -609,7 +609,7 @@ test_that("dyn_abun() NUTS + temporal + areal errors (temporal-only under NUTS, 
   expect_error(
     tobs(~ abund_cov1 + icar(graph = adj) + temporal(period, type = "ar1"),
          data = data.frame(abund_cov1 = rnorm(ng), period = period),
-         family = dyn_abun(K_max = 20L), detection = ~ 1, y = y, method = "nuts",
+         family = dyn_abun(K.max = 20L), detection = ~ 1, y = y, method = "nuts",
          control = list(verbose = FALSE, progress = FALSE)),
     "temporal"
   )

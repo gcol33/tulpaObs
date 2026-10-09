@@ -19,7 +19,7 @@
 test_that("dyn_int_occu() nested_laplace field is registered and gated", {
   expect_true("nested_laplace" %in% tulpaObs:::.tobs_family_methods$dyn_int_occu)
   side <- 5L; A <- rook_adj(side)
-  sim <- simulate_dyn_int_occu(N = side * side, T_seasons = 4, S = 2, J = 3,
+  sim <- simulate_dyn_int_occu(N = side * side, T.seasons = 4, S = 2, J = 3,
                                field = .dio_field(side), seed = 1)
   # a field needs nested_laplace; plain laplace with a field errors with a pointer
   expect_error(
@@ -46,7 +46,7 @@ test_that("dyn_int_occu() + icar recovers the shared field + transitions", {
   fcor <- rep(NA_real_, n_seed)
   gm <- ep <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_int_occu(N = N, T_seasons = 4, S = 2, J = 3,
+    sim <- simulate_dyn_int_occu(N = N, T.seasons = 4, S = 2, J = 3,
                                  psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                  p = c(0.45, 0.6), field = ftrue, seed = 200 + s)
     fit <- tryCatch(
@@ -90,7 +90,7 @@ test_that("dyn_int_occu() + SVC bar recovers intercept + trend fields", {
   n_seed <- 12L
   c0 <- c1 <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_int_occu(N = N, T_seasons = 4, S = 2, J = 3,
+    sim <- simulate_dyn_int_occu(N = N, T.seasons = 4, S = 2, J = 3,
                                  psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                  p = c(0.45, 0.6), field = f0, trend = f1,
                                  seed = 600 + s)

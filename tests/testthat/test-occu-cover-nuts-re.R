@@ -26,12 +26,12 @@
                        sigma_re = 0.8, beta_occ = NULL, beta_p = NULL,
                        beta_pos = NULL, sigma_pos = 0.4) {
   simulate_occu_cover(
-    N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-    positive = "lognormal", beta_occ = beta_occ, beta_p = beta_p,
-    beta_pos = beta_pos, sigma_pos = sigma_pos,
-    re_det_groups = if (identical(arm, "p")) n_g else NULL, sigma_re_p = sigma_re,
-    re_pos_groups = if (identical(arm, "pos")) n_g else NULL,
-    sigma_re_pos = sigma_re, seed = seed)
+    N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+    positive = "lognormal", beta.occ = beta_occ, beta.p = beta_p,
+    beta.pos = beta_pos, sigma.pos = sigma_pos,
+    re.det.groups = if (identical(arm, "p")) n_g else NULL, sigma.re.p = sigma_re,
+    re.pos.groups = if (identical(arm, "pos")) n_g else NULL,
+    sigma.re.pos = sigma_re, seed = seed)
 }
 
 .ocnre_fit <- function(sim, detection = ~ det_cov1 + (1 | habitat),
@@ -39,7 +39,7 @@
                        occurrence = ~ occ_cov1) {
   y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
   tobs(formula = occurrence, data = sim$data, family = occu_cover("lognormal"),
-       detection = detection, positive = positive, y = sim$y, y_pos = y_pos,
+       detection = detection, positive = positive, y = sim$y, y.pos = y_pos,
        visits = sim$visit_data, method = method,
        control = utils::modifyList(list(verbose = FALSE, progress = FALSE),
                                    control))

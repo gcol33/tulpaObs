@@ -117,7 +117,7 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
       formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1, positive = ~ pos_cov1,
-      y = yy, y_pos = ypp, visits = od$det.covs,
+      y = yy, y.pos = ypp, visits = od$det.covs,
       method = "nested_laplace", control = ctrl
     ))
   }
@@ -126,7 +126,7 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = list(a = y1, b = y2), y_pos = list(yp1, yp2),
+    y = list(a = y1, b = y2), y.pos = list(yp1, yp2),
     visits = od$det.covs,
     method = "nested_laplace", control = ctrl_fused
   ))
@@ -145,7 +145,7 @@ test_that("2-species batch is per-species bit-identical to 2 independent fits", 
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = list(a = y1, b = y2), y_pos = list(yp1, yp2),
+    y = list(a = y1, b = y2), y.pos = list(yp1, yp2),
     visits = od$det.covs, method = "nested_laplace", control = ctrl
   ))
   expect_identical(batch_default$backend, "looped")
@@ -224,7 +224,7 @@ test_that("the default looped batch backend is per-species bit-identical to inde
       formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
       family = occu_cover("lognormal"),
       detection = ~ det_cov1, positive = ~ pos_cov1,
-      y = yy, y_pos = ypp, visits = od$det.covs,
+      y = yy, y.pos = ypp, visits = od$det.covs,
       method = "nested_laplace", control = ctrl
     ))
   }
@@ -233,7 +233,7 @@ test_that("the default looped batch backend is per-species bit-identical to inde
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = list(a = y1, b = y2), y_pos = list(yp1, yp2),
+    y = list(a = y1, b = y2), y.pos = list(yp1, yp2),
     visits = od$det.covs, method = "nested_laplace", control = ctrl
   ))
   expect_identical(batch_default$backend, "looped")
@@ -288,7 +288,7 @@ test_that("a fused batch with a one-node phi.grid.pos holds the node for every s
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = yy, y_pos = ypp, visits = od$det.covs,
+    y = yy, y.pos = ypp, visits = od$det.covs,
     method = "nested_laplace", control = ctrl))
 
   batch <- fit(list(a = y1, b = y2), list(yp1, yp2),
@@ -419,7 +419,7 @@ test_that("a fused species fit is the fit, draws, prediction and summary of its 
     formula = ~ occ_cov1 + bym2(graph = adj), data = cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = yy, y_pos = ypp, visits = od$det.covs,
+    y = yy, y.pos = ypp, visits = od$det.covs,
     method = "nested_laplace", control = control))
 
   # Each fit draws posterior samples, so the fused species and the independent

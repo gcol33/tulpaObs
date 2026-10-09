@@ -29,7 +29,7 @@
     occurrence = ~ occ_cov1 + icar(graph = adj), data = cell_dat,
     family = occu_cover("beta"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = od$y, y_pos = y_pos, visits = od$det.covs,
+    y = od$y, y.pos = y_pos, visits = od$det.covs,
     method = "nested_laplace", control = ctrl))
 }
 

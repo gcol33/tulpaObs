@@ -506,7 +506,7 @@
   ok <- is.finite(weights) & weights > 0
   if (!any(ok)) {
     stop("Spatial community N-mixture (newton): every grid node produced a ",
-         "non-finite log-marginal. Check K_max / the adjacency graph / the grids.",
+         "non-finite log-marginal. Check K.max / the adjacency graph / the grids.",
          call. = FALSE)
   }
 
@@ -528,8 +528,8 @@
     hyper$rho <- .tobs_weighted_moment(weights, rho_vec)
   if (any(boundary > 1e-4, na.rm = TRUE)) {
     warning(sprintf(paste0(
-      "Max posterior weight on N = K_max is %.2e at one or more grid nodes; ",
-      "raise K_max."), max(boundary, na.rm = TRUE)), call. = FALSE)
+      "Max posterior weight on N = K.max is %.2e at one or more grid nodes; ",
+      "raise K.max."), max(boundary, na.rm = TRUE)), call. = FALSE)
   }
 
   # main-convention `raw` -> the SAME assembler the EM path uses, so the fit
@@ -844,19 +844,19 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #' `y_{s,i,j} ~ Binomial(N_{s,i}, p_{s,i,j})`. The returned `y` is a 3D array
 #' `[n_sites x J x n_species]` suitable for [tobs()] with [ms_abun()].
 #'
-#' @param n_species Number of species (default 12).
+#' @param n.species Number of species (default 12).
 #' @param N Number of sites (default 80).
 #' @param J Number of replicate visits (default 4).
-#' @param n_abund_covs Number of abundance covariates (default 1).
-#' @param n_det_covs Number of detection covariates (default 1).
-#' @param mu_lambda Community-mean abundance coefficients `c(intercept,
-#'   slopes...)` on the log scale. Default `c(log(3), rep(0.4, n_abund_covs))`.
-#' @param mu_p Community-mean detection coefficients on the logit scale.
-#'   Default `c(0.3, rep(-0.3, n_det_covs))`.
-#' @param sd_lambda Per-coefficient community SD for the abundance arm (the
-#'   sqrt-diagonal of `Sigma_lambda`). Length 1 (recycled) or `1 + n_abund_covs`.
+#' @param n.abund.covs Number of abundance covariates (default 1).
+#' @param n.det.covs Number of detection covariates (default 1).
+#' @param mu.lambda Community-mean abundance coefficients `c(intercept,
+#'   slopes...)` on the log scale. Default `c(log(3), rep(0.4, n.abund.covs))`.
+#' @param mu.p Community-mean detection coefficients on the logit scale.
+#'   Default `c(0.3, rep(-0.3, n.det.covs))`.
+#' @param sd.lambda Per-coefficient community SD for the abundance arm (the
+#'   sqrt-diagonal of `Sigma_lambda`). Length 1 (recycled) or `1 + n.abund.covs`.
 #'   Default 0.5.
-#' @param sd_p Per-coefficient community SD for the detection arm. Default 0.4.
+#' @param sd.p Per-coefficient community SD for the detection arm. Default 0.4.
 #' @param mixture Abundance mixing distribution: `"poisson"` (default),
 #'   `"negbin"`, or their zero-inflated counterparts `"zip"` / `"zinb"` (a
 #'   per-species structural-zero share).
@@ -864,7 +864,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   \eqn{\exp(\mu_{\log r})} (ignored under Poisson). Default 3. The per-species
 #'   sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
 #'   \eqn{b^{\log r}_s \sim N(0, \sigma_{\log r}^2)}.
-#' @param sigma_logr Standard deviation of the per-species log-dispersion random
+#' @param sigma.logr Standard deviation of the per-species log-dispersion random
 #'   effect `log_r_s` (used only under `mixture = "negbin"` / `"zinb"`). Default
 #'   0.4. Set to 0 for a shared (single-`r`) community.
 #' @param omega Community-mean structural-zero probability, equal to
@@ -872,7 +872,7 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   `"zinb"`). Default 0.3. The per-species structural-zero probabilities are
 #'   \eqn{\omega_s = \mathrm{plogis}(\mu_\omega + b^\omega_s)} with
 #'   \eqn{b^\omega_s \sim N(0, \sigma_\omega^2)}.
-#' @param sigma_omega Standard deviation of the per-species structural-zero-logit
+#' @param sigma.omega Standard deviation of the per-species structural-zero-logit
 #'   random effect `logit_omega_s` (used only under zero-inflation). Default 0.4.
 #'   Set to 0 for a shared (single-`omega`) community.
 #' @param graph Optional `N x N` 0/1 adjacency matrix. When supplied, a single
@@ -911,26 +911,26 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
 #'   each call site; `tests/testthat/helper-community-mean.R` is the assertion
 #'   that consumes them.
 #' @examples
-#' sim <- simulate_ms_abun(n_species = 4, N = 30, J = 3, seed = 1)
+#' sim <- simulate_ms_abun(n.species = 4, N = 30, J = 3, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
-                             n_abund_covs = 1, n_det_covs = 1,
-                             mu_lambda = NULL, mu_p = NULL,
-                             sd_lambda = 0.5, sd_p = 0.4,
+simulate_ms_abun <- function(n.species = 12, N = 80, J = 4,
+                             n.abund.covs = 1, n.det.covs = 1,
+                             mu.lambda = NULL, mu.p = NULL,
+                             sd.lambda = 0.5, sd.p = 0.4,
                              mixture = c("poisson", "negbin", "zip", "zinb"),
-                             size = 3, sigma_logr = 0.4,
-                             omega = 0.3, sigma_omega = 0.4,
+                             size = 3, sigma.logr = 0.4,
+                             omega = 0.3, sigma.omega = 0.4,
                              graph = NULL, sigma.field = 0.6,
                              seed = NULL) {
   mixture <- match.arg(mixture)
   if (!is.null(seed)) set.seed(seed)
   if (!is.null(graph)) N <- nrow(graph)
-  if (is.null(mu_lambda)) mu_lambda <- c(log(3), rep(0.4, n_abund_covs))
-  if (is.null(mu_p))      mu_p      <- c(0.3, rep(-0.3, n_det_covs))
-  p_lam <- length(mu_lambda); p_p <- length(mu_p)
-  sd_lambda <- if (length(sd_lambda) == 1L) rep(sd_lambda, p_lam) else sd_lambda
-  sd_p      <- if (length(sd_p) == 1L)      rep(sd_p, p_p)        else sd_p
+  if (is.null(mu.lambda)) mu.lambda <- c(log(3), rep(0.4, n.abund.covs))
+  if (is.null(mu.p))      mu.p      <- c(0.3, rep(-0.3, n.det.covs))
+  p_lam <- length(mu.lambda); p_p <- length(mu.p)
+  sd.lambda <- if (length(sd.lambda) == 1L) rep(sd.lambda, p_lam) else sd.lambda
+  sd.p      <- if (length(sd.p) == 1L)      rep(sd.p, p_p)        else sd.p
 
   # n_*_covs may be 0 (an intercept-only arm). Build each covariate frame with
   # N rows and the requested number of columns, then stitch a single N-row data
@@ -942,8 +942,8 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
     names(df) <- paste0(prefix, seq_len(n_covs))
     df
   }
-  abund_covs <- make_covs(n_abund_covs, "abund_cov")
-  det_covs   <- make_covs(n_det_covs,   "det_cov")
+  abund_covs <- make_covs(n.abund.covs, "abund_cov")
+  det_covs   <- make_covs(n.det.covs,   "det_cov")
   data <- data.frame(row.names = seq_len(N))
   if (ncol(abund_covs)) data <- cbind(data, abund_covs)
   if (ncol(det_covs))   data <- cbind(data, det_covs)
@@ -956,24 +956,24 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
   X_lambda <- design_of(abund_covs)
   X_det    <- design_of(det_covs)
 
-  beta_lambda <- matrix(stats::rnorm(n_species * p_lam, 0, rep(sd_lambda, each = n_species)),
-                        n_species, p_lam) + matrix(mu_lambda, n_species, p_lam, byrow = TRUE)
-  beta_p <- matrix(stats::rnorm(n_species * p_p, 0, rep(sd_p, each = n_species)),
-                   n_species, p_p) + matrix(mu_p, n_species, p_p, byrow = TRUE)
+  beta_lambda <- matrix(stats::rnorm(n.species * p_lam, 0, rep(sd.lambda, each = n.species)),
+                        n.species, p_lam) + matrix(mu.lambda, n.species, p_lam, byrow = TRUE)
+  beta_p <- matrix(stats::rnorm(n.species * p_p, 0, rep(sd.p, each = n.species)),
+                   n.species, p_p) + matrix(mu.p, n.species, p_p, byrow = TRUE)
 
   # Per-species NB size r_s = exp(mu_log_r + b_logr_s), b_logr_s ~ N(0, sigma_logr^2);
   # mu_log_r = log(size). NA-valued under Poisson.
   is_nb    <- mixture %in% c("negbin", "zinb")
   is_zi    <- mixture %in% c("zip", "zinb")
   mu_log_r <- if (is_nb) log(size) else NA_real_
-  b_logr   <- if (is_nb) stats::rnorm(n_species, 0, sigma_logr) else rep(0, n_species)
-  r_s      <- if (is_nb) exp(mu_log_r + b_logr) else rep(NA_real_, n_species)
+  b_logr   <- if (is_nb) stats::rnorm(n.species, 0, sigma.logr) else rep(0, n.species)
+  r_s      <- if (is_nb) exp(mu_log_r + b_logr) else rep(NA_real_, n.species)
 
   # Per-species structural-zero probability omega_s = plogis(mu_omega + b_omega_s),
   # b_omega_s ~ N(0, sigma_omega^2); mu_omega = qlogis(omega). NA under no-ZI.
   mu_omega <- if (is_zi) stats::qlogis(omega) else NA_real_
-  b_omega  <- if (is_zi) stats::rnorm(n_species, 0, sigma_omega) else rep(0, n_species)
-  omega_s  <- if (is_zi) stats::plogis(mu_omega + b_omega) else rep(NA_real_, n_species)
+  b_omega  <- if (is_zi) stats::rnorm(n.species, 0, sigma.omega) else rep(0, n.species)
+  omega_s  <- if (is_zi) stats::plogis(mu_omega + b_omega) else rep(NA_real_, n.species)
 
   # Shared spatial field f ~ N(0, Q^{-1}) on the graph (Q = D - W + ridge, a
   # proper GMRF), centred and scaled to sigma.field. Zero when no graph.
@@ -986,12 +986,12 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
     field <- as.numeric(sigma.field * f0 / stats::sd(f0))
   }
 
-  species_names <- paste0("sp", seq_len(n_species))
-  y <- array(NA_integer_, dim = c(N, J, n_species),
+  species_names <- paste0("sp", seq_len(n.species))
+  y <- array(NA_integer_, dim = c(N, J, n.species),
              dimnames = list(NULL, NULL, species_names))
-  lambda <- matrix(NA_real_, N, n_species); p_arr <- matrix(NA_real_, N, n_species)
-  Nlat   <- matrix(NA_integer_, N, n_species)
-  for (s in seq_len(n_species)) {
+  lambda <- matrix(NA_real_, N, n.species); p_arr <- matrix(NA_real_, N, n.species)
+  Nlat   <- matrix(NA_integer_, N, n.species)
+  for (s in seq_len(n.species)) {
     lam <- exp(as.vector(X_lambda %*% beta_lambda[s, ]) + field)
     pp  <- plogis(as.vector(X_det %*% beta_p[s, ]))
     Ns  <- if (is_nb) stats::rnbinom(N, size = r_s[s], mu = lam)
@@ -1007,8 +1007,8 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
   list(
     y = y, data = data, species = species_names,
     truth = list(
-      mu_lambda = mu_lambda, mu_p = mu_p,
-      sd_lambda = sd_lambda, sd_p = sd_p,
+      mu_lambda = mu.lambda, mu_p = mu.p,
+      sd_lambda = sd.lambda, sd_p = sd.p,
       # The mean of what this seed drew, beside the constant it drew around.
       # The two differ by sd / sqrt(n_species), which is not small: at
       # sigma_logr = 0.5 and 18 species it is 0.12 on mu_log_r, about two
@@ -1022,13 +1022,13 @@ simulate_ms_abun <- function(n_species = 12, N = 80, J = 4,
       size = if (is_nb) size else NA_real_,
       mu_log_r = mu_log_r,
       mu_log_r_real = if (is_nb) mu_log_r + mean(b_logr) else NA_real_,
-      sigma_log_r = if (is_nb) sigma_logr else NA_real_,
+      sigma_log_r = if (is_nb) sigma.logr else NA_real_,
       b_logr = b_logr,
       r_s = r_s,
       omega = if (is_zi) omega else NA_real_,
       mu_omega = mu_omega,
       mu_omega_real = if (is_zi) mu_omega + mean(b_omega) else NA_real_,
-      sigma_omega = if (is_zi) sigma_omega else NA_real_,
+      sigma_omega = if (is_zi) sigma.omega else NA_real_,
       b_omega = b_omega,
       omega_s = omega_s)
   )

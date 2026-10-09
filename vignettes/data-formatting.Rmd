@@ -42,9 +42,9 @@ shows the layout.
 ```{r sim-occu}
 sim <- simulate_occu(
   N = 120, J = 5,
-  n_occ_covs = 1, n_det_covs = 1,
-  beta_occ = c(0.2, 0.9),
-  beta_det = c(0.5, 0.4),
+  n.occ.covs = 1, n.det.covs = 1,
+  beta.occ = c(0.2, 0.9),
+  beta.det = c(0.5, 0.4),
   seed = 1
 )
 y   <- sim$y
@@ -227,7 +227,7 @@ ms_hand$species_names
 
 The list-of-matrices form is convenient when species come from separate files:
 each matrix is one species, the list names become the species dimension. Passing
-a pre-built `N x J x species` array works the same way, with `species_names`
+a pre-built `N x J x species` array works the same way, with `species.names`
 supplied separately or defaulted to `sp1`, `sp2`, and so on.
 
 Which constructor to reach for follows from where the data already sits.
@@ -389,7 +389,7 @@ A community model stacks species on a third dimension. `simulate_ms_occu()`
 returns an `N x J x species` array, and `species` names that dimension.
 
 ```{r ms-shape}
-sm <- simulate_ms_occu(N = 80, J = 4, n_species = 6, seed = 3)
+sm <- simulate_ms_occu(N = 80, J = 4, n.species = 6, seed = 3)
 dim(sm$y)   # sites x visits x species
 ```
 
@@ -398,8 +398,8 @@ shared occupancy state across sources. `simulate_int_occu()` returns `y`
 as a list of matrices that differ in their visit counts.
 
 ```{r int-shape}
-si <- simulate_int_occu(N_total = 100, n_data = 2, J = c(4, 3),
-                        n_shared = 20, seed = 42)
+si <- simulate_int_occu(N.total = 100, n.data = 2, J = c(4, 3),
+                        n.shared = 20, seed = 42)
 vapply(si$y, dim, integer(2))   # each source: sites x its own visit count
 ```
 
@@ -409,7 +409,7 @@ A dynamic model adds the season as a third dimension.
 processes.
 
 ```{r dyn-shape}
-sd <- simulate_dyn_occu(N = 60, J = 3, n_seasons = 4, seed = 1)
+sd <- simulate_dyn_occu(N = 60, J = 3, n.seasons = 4, seed = 1)
 dim(sd$y)   # sites x visits x seasons
 ```
 

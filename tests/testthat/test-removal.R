@@ -42,8 +42,8 @@ test_that("removal marginal equals independent Poissons (Poisson abundance)", {
 
 test_that("analytic gradient matches finite differences (Poisson + NB)", {
   for (mix in c("P", "NB")) {
-    sim <- simulate_removal(N = 60, K = 4, n_abund_covs = 1, n_det_covs = 1,
-                            beta_lambda = c(log(8), 0.4), beta_p = c(0.3, -0.4),
+    sim <- simulate_removal(N = 60, K = 4, n.abund.covs = 1, n.det.covs = 1,
+                            beta.lambda = c(log(8), 0.4), beta.p = c(0.3, -0.4),
                             mixture = if (mix == "NB") "negbin" else "poisson",
                             size = 3, seed = 7)
     model <- tulpaObs:::.tobs_build_removal(
@@ -67,7 +67,7 @@ test_that("analytic gradient matches finite differences (Poisson + NB)", {
 test_that("C++ removal NUTS log-posterior matches the R oracle byte-for-byte", {
   for (mix in c("P", "NB")) {
     is_nb <- identical(mix, "NB")
-    sim <- simulate_removal(N = 50, K = 4, n_abund_covs = 1, n_det_covs = 1,
+    sim <- simulate_removal(N = 50, K = 4, n.abund.covs = 1, n.det.covs = 1,
                             mixture = if (is_nb) "negbin" else "poisson",
                             size = 3, seed = 12)
     model <- tulpaObs:::.tobs_build_removal(~ abund_cov1, ~ det_cov1, sim$data, sim$y)
@@ -90,8 +90,8 @@ test_that("single Poisson removal fit recovers truth", {
   skip_if_fast()
   beta_lambda <- c(log(8), 0.6, -0.4)
   beta_p      <- c(0.2, 0.4)
-  sim <- simulate_removal(N = 400, K = 5, n_abund_covs = 2, n_det_covs = 1,
-                          beta_lambda = beta_lambda, beta_p = beta_p, seed = 11)
+  sim <- simulate_removal(N = 400, K = 5, n.abund.covs = 2, n.det.covs = 1,
+                          beta.lambda = beta_lambda, beta.p = beta_p, seed = 11)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = removal(), detection = ~ det_cov1, y = sim$y,
               method = "laplace", control = list(verbose = FALSE))
@@ -118,8 +118,8 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
   truth <- c(beta_lambda, beta_p)
   covered <- matrix(NA, n_seed, length(truth))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_removal(N = 200, K = 5, n_abund_covs = 2, n_det_covs = 1,
-                            beta_lambda = beta_lambda, beta_p = beta_p, seed = 200 + s)
+    sim <- simulate_removal(N = 200, K = 5, n.abund.covs = 2, n.det.covs = 1,
+                            beta.lambda = beta_lambda, beta.p = beta_p, seed = 200 + s)
     fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
                 family = removal(), detection = ~ det_cov1, y = sim$y,
                 method = "laplace", control = list(verbose = FALSE))
@@ -138,8 +138,8 @@ test_that("negbin removal recovers truth and surfaces dispersion", {
   beta_lambda <- c(log(10), 0.5, -0.3)
   beta_p      <- c(0.3, 0.4)
   size_true   <- 3
-  sim <- simulate_removal(N = 400, K = 6, n_abund_covs = 2, n_det_covs = 1,
-                          beta_lambda = beta_lambda, beta_p = beta_p,
+  sim <- simulate_removal(N = 400, K = 6, n.abund.covs = 2, n.det.covs = 1,
+                          beta.lambda = beta_lambda, beta.p = beta_p,
                           mixture = "negbin", size = size_true, seed = 21)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = removal(mixture = "negbin"), detection = ~ det_cov1,
@@ -158,9 +158,9 @@ test_that("negbin removal recovers truth and surfaces dispersion", {
 
 test_that("S3 surface works for removal fits", {
   skip_if_fast()
-  sim <- simulate_removal(N = 200, K = 4, n_abund_covs = 2, n_det_covs = 1,
-                          beta_lambda = c(log(8), 0.5, -0.3),
-                          beta_p = c(0.3, 0.4), seed = 3)
+  sim <- simulate_removal(N = 200, K = 4, n.abund.covs = 2, n.det.covs = 1,
+                          beta.lambda = c(log(8), 0.5, -0.3),
+                          beta.p = c(0.3, 0.4), seed = 3)
   fit <- tobs(formula = ~ abund_cov1 + abund_cov2, data = sim$data,
               family = removal(), detection = ~ det_cov1, y = sim$y,
               method = "laplace", control = list(verbose = FALSE))
@@ -205,8 +205,8 @@ test_that("removal NUTS recovers truth and scores WAIC", {
   skip_if_fast()
   beta_lambda <- c(log(7), 0.5)
   beta_p      <- c(0.3, -0.3)
-  sim <- simulate_removal(N = 80, K = 5, n_abund_covs = 1, n_det_covs = 1,
-                          beta_lambda = beta_lambda, beta_p = beta_p, seed = 31)
+  sim <- simulate_removal(N = 80, K = 5, n.abund.covs = 1, n.det.covs = 1,
+                          beta.lambda = beta_lambda, beta.p = beta_p, seed = 31)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = removal(),
               detection = ~ det_cov1, y = sim$y, method = "nuts",
               control = list(n.iter = 500L, n.warmup = 500L, seed = 1L,
@@ -256,7 +256,7 @@ test_that("removal() NUTS samples a single intercept RE and recovers sigma + bet
                              beta_lambda = c(log(5), 0.3), beta_p = qlogis(0.5),
                              sigma_b = 0.6, seed = 7)
   fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data,
-              y = s$y, family = removal(K_max = 45L), method = "nuts",
+              y = s$y, family = removal(K.max = 45L), method = "nuts",
               verbose = FALSE,
               control = list(n.iter = 400L, n.warmup = 300L, seed = 1L))
   expect_identical(fit$method, "nuts")
@@ -280,7 +280,7 @@ test_that("removal() Laplace AGHQ recovers a site-grouped intercept RE (sigma + 
                              beta_lambda = c(log(6), 0.3), beta_p = qlogis(0.5),
                              sigma_b = 0.7, seed = 11)
   fit <- tobs(formula = ~ x1 + (1 | g), detection = ~ 1, data = s$data,
-              y = s$y, family = removal(K_max = 60L), method = "laplace",
+              y = s$y, family = removal(K.max = 60L), method = "laplace",
               verbose = FALSE, control = list(n.quad = 5L))
   expect_s3_class(fit, "tobs_fit")
   expect_identical(fit$nmix_re$arm, "lambda")

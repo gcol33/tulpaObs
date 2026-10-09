@@ -25,12 +25,12 @@ test_that("ms_occu_cover NUTS R oracle gradient matches finite differences", {
   skip_on_cran()
   skip_if_fast()
   set.seed(1)
-  sim <- simulate_ms_occu_cover(n_species = 4, N = 40, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 4, N = 40, J = 3,
                                 positive = "lognormal", seed = 1)
   vis <- .msoc_nuts_visits(40, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE, max.iter = 5L))
   model <- fit$model
   S <- model$n_species
@@ -64,12 +64,12 @@ test_that("ms_occu_cover NUTS C++ FullGradFn matches the R oracle byte-for-byte"
   skip_on_cran()
   skip_if_fast()
   set.seed(1)
-  sim <- simulate_ms_occu_cover(n_species = 4, N = 40, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 4, N = 40, J = 3,
                                 positive = "lognormal", seed = 1)
   vis <- .msoc_nuts_visits(40, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE, max.iter = 5L))
   model <- fit$model
   S <- model$n_species; pil <- model$process_info
@@ -117,14 +117,14 @@ test_that("ms_occu_cover NUTS recovers community means + de-attenuates the varia
   skip_if_fast()
   set.seed(21)
   sim <- simulate_ms_occu_cover(
-    n_species = 12, N = 90, J = 4,
-    mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
-    mu_pos = c(log(0.12), 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-    positive = "lognormal", sigma_pos = 0.4, seed = 21)
+    n.species = 12, N = 90, J = 4,
+    mu.occ = c(stats::qlogis(0.45), 0.7), mu.p = c(0.2, -0.4),
+    mu.pos = c(log(0.12), 0.5), sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
+    positive = "lognormal", sigma.pos = 0.4, seed = 21)
   vis <- .msoc_nuts_visits(90, 4, sim$visit_data)
   args0 <- list(occurrence = ~ occ_cov1, data = sim$data,
                 family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
-                positive = ~ pos_cov1, y = sim$y, y_pos = sim$y_pos,
+                positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
                 visits = vis, species = sim$species)
   lap <- do.call(tobs, c(args0, method = "laplace", list(control = list(verbose = FALSE))))
   nut <- do.call(tobs, c(args0, method = "nuts",
@@ -160,12 +160,12 @@ test_that("ms_occu_cover dispersion-RE oracle gradient matches finite difference
   skip_on_cran()
   skip_if_fast()
   set.seed(1)
-  sim <- simulate_ms_occu_cover(n_species = 4, N = 40, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 4, N = 40, J = 3,
                                 positive = "lognormal", seed = 1)
   vis <- .msoc_nuts_visits(40, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE, max.iter = 5L))
   model <- fit$model; S <- model$n_species; pil <- model$process_info
   P_occ <- pil[[1]]$p; P_p <- pil[[2]]$p; P_pos <- pil[[3]]$p
@@ -195,12 +195,12 @@ test_that("ms_occu_cover dispersion-RE C++ FullGradFn matches the R oracle", {
   skip_on_cran()
   skip_if_fast()
   set.seed(1)
-  sim <- simulate_ms_occu_cover(n_species = 4, N = 40, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 4, N = 40, J = 3,
                                 positive = "lognormal", seed = 1)
   vis <- .msoc_nuts_visits(40, 3, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "laplace", control = list(verbose = FALSE, max.iter = 5L))
   model <- fit$model; S <- model$n_species; pil <- model$process_info
   P_occ <- pil[[1]]$p; P_p <- pil[[2]]$p; P_pos <- pil[[3]]$p
@@ -222,14 +222,14 @@ test_that("ms_occu_cover dispersion-RE NUTS fits and recovers the means", {
   skip_if_fast()
   set.seed(5)
   sim <- simulate_ms_occu_cover(
-    n_species = 8, N = 90, J = 4,
-    mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
-    mu_pos = c(log(0.4), 0.5), sd_occ = 0.5, sd_p = 0.4, sd_pos = 0.4,
-    positive = "lognormal", sigma_pos = 0.4, seed = 5)
+    n.species = 8, N = 90, J = 4,
+    mu.occ = c(stats::qlogis(0.45), 0.7), mu.p = c(0.2, -0.4),
+    mu.pos = c(log(0.4), 0.5), sd.occ = 0.5, sd.p = 0.4, sd.pos = 0.4,
+    positive = "lognormal", sigma.pos = 0.4, seed = 5)
   vis <- .msoc_nuts_visits(90, 4, sim$visit_data)
   fit <- tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
               detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-              y_pos = sim$y_pos, visits = vis, species = sim$species,
+              y.pos = sim$y_pos, visits = vis, species = sim$species,
               method = "nuts",
               control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
                              dispersion.re = TRUE, adapt.delta = 0.95,
@@ -277,16 +277,16 @@ test_that("ms_occu_cover NUTS community-covariance 95% CIs cover at the nominal 
   covered <- logical(0)
   for (s in seq_len(n_seed)) {
     sim <- simulate_ms_occu_cover(
-      n_species = 12, N = 90, J = 4,
-      mu_occ = c(stats::qlogis(0.45), 0.7), mu_p = c(0.2, -0.4),
-      mu_pos = c(log(0.12), 0.5),
-      sd_occ = sd_true$occ, sd_p = sd_true$p, sd_pos = sd_true$pos,
-      positive = "lognormal", sigma_pos = 0.4, seed = 500 + s)
+      n.species = 12, N = 90, J = 4,
+      mu.occ = c(stats::qlogis(0.45), 0.7), mu.p = c(0.2, -0.4),
+      mu.pos = c(log(0.12), 0.5),
+      sd.occ = sd_true$occ, sd.p = sd_true$p, sd.pos = sd_true$pos,
+      positive = "lognormal", sigma.pos = 0.4, seed = 500 + s)
     vis <- .msoc_nuts_visits(90, 4, sim$visit_data)
     fit <- tryCatch(
       tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
            detection = ~ det_cov1, positive = ~ pos_cov1, y = sim$y,
-           y_pos = sim$y_pos, visits = vis, species = sim$species,
+           y.pos = sim$y_pos, visits = vis, species = sim$species,
            method = "nuts",
            control = list(n.iter = 400L, n.warmup = 400L, seed = 1L,
                           verbose = FALSE, progress = FALSE)),

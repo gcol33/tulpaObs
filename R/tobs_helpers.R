@@ -469,7 +469,7 @@
   # `factor.starts` sets how many candidate starting directions the first factor
   # pass selects over; each costs a full loading-EM run against the family's own
   # oracle, so it is the dominant cost on families whose oracle marginalises a
-  # latent state. Opted into per family via `obs_family(control_groups=)`, NOT
+  # latent state. Opted into per family via `obs_family(control.groups=)`, NOT
   # admitted route-wide: only the community families fit by
   # `.tobs_community_latent_ascent()` have an outer alternation to cap, and a
   # route-wide allowance let `max.outer` be passed to every Laplace family and
@@ -531,7 +531,7 @@
   # serially.
   nuts       = c("n.threads", "adapt.delta", "max.treedepth"),
   # NUTS knobs only some families read, opted into via
-  # `obs_family(control_groups=)` and hosted on the nuts route alone.
+  # `obs_family(control.groups=)` and hosted on the nuts route alone.
   # OpenMP threads inside ONE gradient evaluation of the community NUTS
   # targets whose per-species loop is parallel (ms_occu, ms_dyn_occu,
   # ms_count, jsdm, ms_abun). Distinct from `n.threads`, which spreads whole
@@ -562,7 +562,7 @@
 }
 
 # Family-opted capability groups, gated by route. A family declares these via
-# `obs_family(control_groups=)`; they are admitted only on the engines that host
+# `obs_family(control.groups=)`; they are admitted only on the engines that host
 # them, so a Laplace-only group stays rejected under a sampler route.
 .tobs_family_group_hosts <- list(
   block_coordinate        = c("laplace", "nested_laplace"),

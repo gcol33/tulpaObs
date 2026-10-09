@@ -4,9 +4,9 @@
 # extra parameters of the occupancy likelihood with the engine's own term prior.
 
 visit_re_data <- function(seed, N = 250L, J = 4L, n_groups = 10L, sigma = 1) {
-  sim <- simulate_occu(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.3, 0.8), beta_det = c(0, 0.6),
-                       n_visit_groups = n_groups, sigma_visit = sigma,
+  sim <- simulate_occu(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.3, 0.8), beta.det = c(0, 0.6),
+                       n.visit.groups = n_groups, sigma.visit = sigma,
                        seed = seed)
   sim$v <- data.frame(det_cov1 = rep(sim$data$det_cov1, each = J),
                       visit_group = sim$visits$visit_group)
@@ -18,7 +18,7 @@ test_that("simulate_occu() draws a per-visit group effect only when asked", {
   expect_null(plain$visits)
   expect_null(plain$truth$b_visit)
 
-  sim <- simulate_occu(N = 30, J = 3, n_visit_groups = 4, sigma_visit = 0.5,
+  sim <- simulate_occu(N = 30, J = 3, n.visit.groups = 4, sigma.visit = 0.5,
                        seed = 1)
   expect_equal(nrow(sim$visits), 90L)
   expect_identical(levels(sim$visits$visit_group), as.character(1:4))
@@ -118,8 +118,8 @@ test_that("NUTS names a visit coefficient in place beside a site random effect (
   skip_if_fast()
   set.seed(2)
   N <- 200L; J <- 4L
-  sim <- simulate_occu(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.5, 1), beta_det = c(0, 0), seed = 2)
+  sim <- simulate_occu(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.5, 1), beta.det = c(0, 0), seed = 2)
   d <- cbind(sim$data, g = factor(rep(1:10, length.out = N)))
   vx <- rnorm(N * J)
   p <- plogis(-0.2 + 2.5 * vx)

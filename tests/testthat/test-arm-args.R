@@ -8,11 +8,11 @@
 #   simulate_ms_dyn_occu()   simulate_ms_int_occu()
 
 test_that("community simulators carry their family-constructor names", {
-  d <- simulate_ms_dyn_occu(N = 8, J = 2, n_species = 2, n_seasons = 3, seed = 1)
+  d <- simulate_ms_dyn_occu(N = 8, J = 2, n.species = 2, n.seasons = 3, seed = 1)
   expect_type(d, "list")
   expect_true(all(c("y", "data", "truth") %in% names(d)))
 
-  i <- simulate_ms_int_occu(N = 8, J = c(2, 2), n_species = 2, seed = 1)
+  i <- simulate_ms_int_occu(N = 8, J = c(2, 2), n.species = 2, seed = 1)
   expect_type(i, "list")
   expect_true("y" %in% names(i))
 })
@@ -33,7 +33,7 @@ test_that("arm-formula arguments fit end to end under their bare names", {
   expect_true(all(is.finite(coef(fp))))
 
   # dyn_occu: the colonization / extinction arms.
-  sd <- simulate_dyn_occu(N = 60, J = 3, n_seasons = 3, seed = 8)
+  sd <- simulate_dyn_occu(N = 60, J = 3, n.seasons = 3, seed = 8)
   dy <- tobs(~ 1, data = sd$data, family = dyn_occu(), detection = ~ 1,
              y = sd$y, colonization = ~ 1, extinction = ~ 1,
              control = list(verbose = FALSE))
@@ -45,7 +45,7 @@ test_that("arm-formula arguments fit end to end under their bare names", {
 })
 
 test_that("a missing required arm argument errors with a pointer", {
-  sd <- simulate_dyn_occu(N = 30, J = 2, n_seasons = 2, seed = 3)
+  sd <- simulate_dyn_occu(N = 30, J = 2, n.seasons = 2, seed = 3)
   expect_error(
     tobs(~ 1, data = sd$data, family = dyn_occu(), detection = ~ 1,
          y = sd$y, extinction = ~ 1, control = list(verbose = FALSE)),

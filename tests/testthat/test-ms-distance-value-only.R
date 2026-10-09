@@ -35,8 +35,8 @@ max_ulp_gap <- function(actual, expected) {
 
 test_that("cpp_distance_site_sweep(value_only = TRUE) matches the full sweep exactly", {
   set.seed(101)
-  sim <- simulate_ms_distance(n_species = 4, N = 30, key = "halfnorm",
-                              n_abund_covs = 1, seed = 101)
+  sim <- simulate_ms_distance(n.species = 4, N = 30, key = "halfnorm",
+                              n.abund.covs = 1, seed = 101)
   model <- tulpaObs:::.tobs_build_ms_distance(
     ~ abund_cov1, ~ 1, sim$data, sim$y, sim$species, sim$cutpoints,
     key = "halfnorm", transect = "line")
@@ -59,8 +59,8 @@ test_that("cpp_distance_site_sweep(value_only = TRUE) matches the full sweep exa
 
 test_that("value_only path matches under the hazard-rate key (nd == 2 detection block)", {
   set.seed(102)
-  sim <- simulate_ms_distance(n_species = 4, N = 25, key = "hazard", shape = 0.3,
-                              n_abund_covs = 1, seed = 102)
+  sim <- simulate_ms_distance(n.species = 4, N = 25, key = "hazard", shape = 0.3,
+                              n.abund.covs = 1, seed = 102)
   model <- tulpaObs:::.tobs_build_ms_distance(
     ~ abund_cov1, ~ 1, sim$data, sim$y, sim$species, sim$cutpoints,
     key = "hazard", transect = "line")
@@ -80,8 +80,8 @@ test_that("value_only path matches under the hazard-rate key (nd == 2 detection 
 
 test_that("oracle ll_cell() uses the value-only path and matches the site-subset contract", {
   set.seed(103)
-  sim <- simulate_ms_distance(n_species = 3, N = 40, key = "halfnorm",
-                              n_abund_covs = 1, seed = 103)
+  sim <- simulate_ms_distance(n.species = 3, N = 40, key = "halfnorm",
+                              n.abund.covs = 1, seed = 103)
   model <- tulpaObs:::.tobs_build_ms_distance(
     ~ abund_cov1, ~ 1, sim$data, sim$y, sim$species, sim$cutpoints,
     key = "halfnorm", transect = "line")

@@ -7,11 +7,11 @@ test_that("ms_abun(negbin) recovers mu_log_r, sigma_log_r, and per-species r_s",
   skip_on_cran()
   skip_if_fast()
   set.seed(14)
-  sim <- simulate_ms_abun(n_species = 22, N = 130, J = 5,
-                          n_abund_covs = 1, n_det_covs = 1,
-                          mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
-                          sd_lambda = 0.4, sd_p = 0.35,
-                          mixture = "negbin", size = 5, sigma_logr = 0.5,
+  sim <- simulate_ms_abun(n.species = 22, N = 130, J = 5,
+                          n.abund.covs = 1, n.det.covs = 1,
+                          mu.lambda = c(log(5), 0.4), mu.p = c(0.3, -0.3),
+                          sd.lambda = 0.4, sd.p = 0.35,
+                          mixture = "negbin", size = 5, sigma.logr = 0.5,
                           seed = 14)
 
   # n.quad = 3 keeps the AGHQ grid tractable: the per-species RE dimension is

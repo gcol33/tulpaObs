@@ -105,7 +105,7 @@ test_that("builder range check fires on an observed out-of-range cover, not on N
   expect_error(
     tulpaObs:::.tobs_build_occu_cover(~ 1, ~ 1, ~ 1, data,
                                       y, matrix(c(0.3, 1.4), 1, 2), "beta"),
-    "0 < y_pos < 1")
+    "0 < y.pos < 1")
   expect_silent(
     tulpaObs:::.tobs_build_occu_cover(~ 1, ~ 1, ~ 1, data,
                                       y, matrix(c(0.3, NA), 1, 2), "beta"))
@@ -134,7 +134,7 @@ test_that("MAR cover is unbiased and leaves occupancy / detection unchanged (non
       tobs(formula   = ~ occ_cov1, data = cell_dat,
            family    = occu_cover("lognormal"),
            detection = ~ det_cov1, positive = ~ pos_cov1,
-           y         = od$y, y_pos = y_pos, visits = od$det.covs,
+           y         = od$y, y.pos = y_pos, visits = od$det.covs,
            method    = "laplace",
            control   = list(verbose = FALSE, max.iter = 500L)),
       error = function(e) NULL)
@@ -142,8 +142,8 @@ test_that("MAR cover is unbiased and leaves occupancy / detection unchanged (non
 
   for (s in seq_len(n_seeds)) {
     sim <- simulate_occu_cover(
-      N = N, J = J, beta_occ = beta_occ_truth, beta_p = beta_p_truth,
-      beta_pos = beta_pos_truth, sigma_pos = sigma_pos_truth,
+      N = N, J = J, beta.occ = beta_occ_truth, beta.p = beta_p_truth,
+      beta.pos = beta_pos_truth, sigma.pos = sigma_pos_truth,
       positive = "lognormal", seed = 4200L + s)
 
     long <- data.frame(
@@ -234,9 +234,9 @@ test_that("MAR cover fits and stays close to full on the spatial compact path", 
     suppressWarnings(tobs(
       occurrence = ~ spatial(~ 1 || cell_idx, graph = adj),
       data = od$occ.covs,
-      family = occu_cover(response = "beta", cover_aggregate = "none"),
+      family = occu_cover(response = "beta", cover.aggregate = "none"),
       detection = ~ det_cov1, positive = ~ pos_cov1 + share(spatial()),
-      y = od$y, y_pos = ocv$y, visits = od$det.covs,
+      y = od$y, y.pos = ocv$y, visits = od$det.covs,
       method = "nested_laplace", control = ctrl))
   }
 

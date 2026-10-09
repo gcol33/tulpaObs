@@ -17,9 +17,9 @@
                         beta_occ = NULL, beta_p = NULL, beta_pos = NULL,
                         phi = 30, sigma_pos = 0.4) {
   sim <- simulate_occu_cover(
-    N = N, J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
-    beta_occ = beta_occ, beta_p = beta_p, beta_pos = beta_pos,
-    phi = phi, sigma_pos = sigma_pos, positive = positive, seed = seed)
+    N = N, J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
+    beta.occ = beta_occ, beta.p = beta_p, beta.pos = beta_pos,
+    phi = phi, sigma.pos = sigma_pos, positive = positive, seed = seed)
   long <- data.frame(
     site_id  = rep(seq_len(N), each = J),
     visit    = rep(seq_len(J), times = N),
@@ -36,7 +36,7 @@
 .ocn_fit <- function(inp, method = "laplace", control = list()) {
   tobs(formula = ~ occ_cov1, data = inp$cell_dat,
        family = occu_cover(inp$positive), detection = ~ det_cov1,
-       positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+       positive = ~ pos_cov1, y = inp$od$y, y.pos = inp$y_pos,
        visits = inp$od$det.covs, method = method, control = control)
 }
 
@@ -93,7 +93,7 @@ test_that("occu_cover NUTS now samples the coupled icar field; family advertises
   fit_icar <- suppressWarnings(tobs(
     formula = ~ 1 + icar(graph = adj), data = inp$cell_dat,
     family = occu_cover("lognormal"), detection = ~ det_cov1,
-    positive = ~ pos_cov1, y = inp$od$y, y_pos = inp$y_pos,
+    positive = ~ pos_cov1, y = inp$od$y, y.pos = inp$y_pos,
     visits = inp$od$det.covs, method = "nuts",
     control = list(verbose = FALSE, n.iter = 400L, n.warmup = 250L)))
   expect_identical(fit_icar$method, "nuts")

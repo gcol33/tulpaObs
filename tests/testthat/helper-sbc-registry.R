@@ -39,7 +39,7 @@
   occu_ttd = function(N = 100L) {
     sim <- simulate_occu_ttd(N = N, J = 4L, seed = 15L)
     suppressWarnings(tobs(~ psi_cov1, data = sim$data,
-                          family = occu_ttd(surveyLength = sim$Tmax),
+                          family = occu_ttd(survey.length = sim$Tmax),
                           detection = ~ rate_cov1, y = sim$y,
                           method = "laplace", control = .sbc_reg_ctl))
   },
@@ -65,9 +65,9 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   double_observer = function(N = 150L) {
-    sim <- simulate_double_observer(N = N, beta_lambda = c(log(8), 0.4),
-                                    beta_p1 = c(stats::qlogis(0.5), 0.2),
-                                    beta_p2 = c(stats::qlogis(0.45), -0.1),
+    sim <- simulate_double_observer(N = N, beta.lambda = c(log(8), 0.4),
+                                    beta.p1 = c(stats::qlogis(0.5), 0.2),
+                                    beta.p2 = c(stats::qlogis(0.45), -0.1),
                                     seed = 19L)
     suppressWarnings(tobs(~ abund_cov1, data = sim$data,
                           family = double_observer(),
@@ -75,8 +75,8 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   dyn_occu = function(N = 80L) {
-    sim <- simulate_dyn_occu(N = N, J = 4L, n_seasons = 5L,
-                             beta_occ = c(0.2, 0.6), beta_det = c(0.4),
+    sim <- simulate_dyn_occu(N = N, J = 4L, n.seasons = 5L,
+                             beta.occ = c(0.2, 0.6), beta.det = c(0.4),
                              gamma = 0.25, epsilon = 0.15, seed = 21L)
     suppressWarnings(tobs(~ x, data = sim$data, family = dyn_occu(),
                           detection = ~ 1, colonization = ~ 1,
@@ -101,7 +101,7 @@
   },
   dyn_abun = function(N = 80L) {
     sim <- simulate_dyn_abun(N = N, T = 4L, J = 3L,
-                             beta_lambda = c(log(5), 0.3), p = 0.5,
+                             beta.lambda = c(log(5), 0.3), p = 0.5,
                              omega = 0.6, gamma = 1.0, seed = 23L)
     suppressWarnings(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(),
                           detection = ~ 1, omega = ~ 1, gamma = ~ 1, y = sim$y,
@@ -109,12 +109,12 @@
   },
   gdistremoval = function(N = 150L) {
     cutp <- c(0, 25, 50, 75, 100)
-    sim <- simulate_gdistremoval(N = N, cutpoints = cutp, n_periods = 4L,
-                                 beta_lambda = c(log(30), 0.3),
-                                 beta_sigma = c(log(18), 0.1),
-                                 beta_r = c(stats::qlogis(0.4), -0.2), seed = 11L)
+    sim <- simulate_gdistremoval(N = N, cutpoints = cutp, n.periods = 4L,
+                                 beta.lambda = c(log(30), 0.3),
+                                 beta.sigma = c(log(18), 0.1),
+                                 beta.r = c(stats::qlogis(0.4), -0.2), seed = 11L)
     suppressWarnings(tobs(~ abund_cov1, data = sim$data, y = sim$y,
-                          y_rem = sim$y_rem,
+                          y.rem = sim$y_rem,
                           family = gdistremoval(cutpoints = cutp),
                           detection = ~ det_cov1, removal = ~ rem_cov1,
                           method = "laplace", control = .sbc_reg_ctl))
@@ -126,9 +126,9 @@
   },
   distsamp_open = function(N = 100L) {
     cutp <- c(0, 10, 20, 30, 40)
-    sim <- simulate_distsamp_open(N = N, cutpoints = cutp, n_seasons = 4L,
-                                  beta_lambda = c(log(15), 0.3),
-                                  beta_sigma = c(log(15), 0.1),
+    sim <- simulate_distsamp_open(N = N, cutpoints = cutp, n.seasons = 4L,
+                                  beta.lambda = c(log(15), 0.3),
+                                  beta.sigma = c(log(15), 0.1),
                                   omega = 0.7, gamma = 2.5, seed = 7L)
     suppressWarnings(tobs(~ abund_cov1, data = sim$data,
                           family = distsamp_open(cutpoints = cutp),
@@ -142,7 +142,7 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   dyn_int_occu = function(N = 60L) {
-    sim <- simulate_dyn_int_occu(N = N, T_seasons = 4L, S = 2L, J = 3L,
+    sim <- simulate_dyn_int_occu(N = N, T.seasons = 4L, S = 2L, J = 3L,
                                  psi1 = 0.5, gamma = 0.3, eps = 0.2,
                                  p = c(0.4, 0.6), seed = 25L)
     suppressWarnings(tobs(~ 1, data = sim$data, family = dyn_int_occu(),
@@ -151,7 +151,7 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   t_occu = function(N = 100L) {
-    sim <- simulate_t_occu(N = N, T_seasons = 6L, J = 3L, beta_occ = c(0.2, 0.6),
+    sim <- simulate_t_occu(N = N, T.seasons = 6L, J = 3L, beta.occ = c(0.2, 0.6),
                            p = 0.4, rho = 0.6, sigma = 0.7, seed = 31L)
     suppressWarnings(tobs(~ x, data = sim$data, family = t_occu(),
                           detection = ~ 1, y = sim$y,
@@ -164,9 +164,9 @@
   # same plain Laplace-EM calibrates cleanly. Shrinking N/S here for
   # fixture speed would silently resurrect that failure.
   ms_occu = function(N = 80L, n_species = 20L) {
-    sim <- simulate_ms_occu(N = N, J = 4L, n_species = n_species,
-                            beta_comm_mean = c(0.2, 0.5), beta_comm_sd = c(0.6, 0.3),
-                            alpha_comm_mean = c(0, 0.3), alpha_comm_sd = c(0.4, 0.2),
+    sim <- simulate_ms_occu(N = N, J = 4L, n.species = n_species,
+                            beta.comm.mean = c(0.2, 0.5), beta.comm.sd = c(0.6, 0.3),
+                            alpha.comm.mean = c(0, 0.3), alpha.comm.sd = c(0.4, 0.2),
                             seed = 0L)
     suppressWarnings(tobs(~ x, data = sim$data, family = ms_occu(),
                           detection = ~ x, y = sim$y,
@@ -178,28 +178,28 @@
   # species-count-dependent non-Gaussianity; a smaller fixture silently
   # resurrects the original S~3 failure.
   ms_int_occu = function(N = 140L, n_species = 14L) {
-    sim <- simulate_ms_int_occu(N = N, J = c(3, 4), n_species = n_species,
-                                n_data = 2, seed = 0L)
+    sim <- simulate_ms_int_occu(N = N, J = c(3, 4), n.species = n_species,
+                                n.data = 2, seed = 0L)
     suppressWarnings(tobs(~ 1, data = sim$data, family = ms_int_occu(),
                           detection = ~ 1, y = sim$y,
                           species = paste0("sp", seq_len(n_species)),
                           method = "laplace", control = .sbc_reg_ctl))
   },
   ms_occu_cover = function(N = 60L) {
-    sim <- simulate_ms_occu_cover(n_species = 4L, N = N, J = 5L,
+    sim <- simulate_ms_occu_cover(n.species = 4L, N = N, J = 5L,
                                   positive = "lognormal",
-                                  sd_occ = 0.6, sd_p = 0.4, sd_pos = 0.3,
+                                  sd.occ = 0.6, sd.p = 0.4, sd.pos = 0.3,
                                   seed = 3L)
     suppressWarnings(tobs(~ occ_cov1, data = sim$data,
                           family = ms_occu_cover("lognormal"),
                           detection = ~ 1, positive = ~ 1,
-                          y = sim$y, y_pos = sim$y_pos,
+                          y = sim$y, y.pos = sim$y_pos,
                           species = paste0("sp", seq_len(4L)),
                           method = "laplace", control = .sbc_reg_ctl))
   },
   cover = function(N = 200L) {
-    sim <- simulate_cover(N = N, beta_occ = c(-0.5, 0.8), beta_pos = c(-1.0, 0.3),
-                          sigma_pos = 0.4, response = "lognormal", seed = 51L)
+    sim <- simulate_cover(N = N, beta.occ = c(-0.5, 0.8), beta.pos = c(-1.0, 0.3),
+                          sigma.pos = 0.4, response = "lognormal", seed = 51L)
     suppressWarnings(tobs(~ x, data = sim$data, family = cover("lognormal"),
                           y = sim$y, method = "laplace", control = .sbc_reg_ctl))
   },
@@ -207,15 +207,15 @@
   # suspected) to share ms_occu's failure mode.
   occu_multiscale_cover = function(n_cells = 40L) {
     sim <- simulate_occu_multiscale_cover(
-      n_cells = n_cells, plots_per_cell = 4L, visits_per_plot = 2L,
-      beta_psi = c(0.4, 0.6), beta_theta = c(0.2, 0.5),
-      beta_p = c(0.0, 0.5), beta_pos = c(log(0.10), -0.4),
+      n.cells = n_cells, plots.per.cell = 4L, visits.per.plot = 2L,
+      beta.psi = c(0.4, 0.6), beta.theta = c(0.2, 0.5),
+      beta.p = c(0.0, 0.5), beta.pos = c(log(0.10), -0.4),
       positive = "lognormal", phi = 0.35, seed = 61L)
     suppressWarnings(tobs(~ x_cell + icar(graph = sim$adj, group_var = "cell"),
                           data = sim$data,
                           family = occu_multiscale_cover(response = "lognormal"),
                           detection = ~ x_pdet, availability = ~ x_plot,
-                          positive = ~ x_cov, y = sim$y, y_pos = sim$y_pos,
+                          positive = ~ x_cov, y = sim$y, y.pos = sim$y_pos,
                           method = "laplace", control = .sbc_reg_ctl))
   },
   # ms_count: S=20 (matching ms_occu's resolved scale), not a smaller/faster
@@ -223,7 +223,7 @@
   # ms_occu/ms_int_occu on a small fixture; resolved the same species-count
   # way. A smaller fixture silently resurrects that failure.
   ms_count = function(N = 150L, n_species = 20L) {
-    sim <- simulate_ms_count(N = N, n_species = n_species, response = "poisson",
+    sim <- simulate_ms_count(N = N, n.species = n_species, response = "poisson",
                              seed = 0L)
     suppressWarnings(tobs(~ x, data = sim$data, family = ms_count("poisson"),
                           y = sim$y, species = paste0("sp", seq_len(n_species)),
@@ -232,14 +232,14 @@
   # jsdm() shares ms_count()'s exact community Laplace-EM -- same S=20 scale
   # for the same reason.
   jsdm = function(N = 150L, n_species = 20L) {
-    sim <- simulate_jsdm(N = N, n_species = n_species, seed = 0L)
+    sim <- simulate_jsdm(N = N, n.species = n_species, seed = 0L)
     suppressWarnings(tobs(~ x, data = sim$data, family = jsdm(),
                           y = sim$y, species = paste0("sp", seq_len(n_species)),
                           method = "laplace", control = .sbc_reg_ctl))
   },
   ms_distance = function(N = 150L, n_species = 20L) {
     cutp <- c(0, 25, 50, 75, 100)
-    sim <- simulate_ms_distance(n_species = n_species, N = N, cutpoints = cutp,
+    sim <- simulate_ms_distance(n.species = n_species, N = N, cutpoints = cutp,
                                 transect = "line", key = "halfnorm", seed = 0L)
     suppressWarnings(tobs(~ abund_cov1, data = sim$data,
                           family = ms_distance(key = "halfnorm", transect = "line",
@@ -249,8 +249,8 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   ms_dyn_occu = function(N = 150L, n_species = 20L, n_seasons = 4L, J = 3L) {
-    sim <- simulate_ms_dyn_occu(N = N, J = J, n_species = n_species,
-                                n_seasons = n_seasons, seed = 0L)
+    sim <- simulate_ms_dyn_occu(N = N, J = J, n.species = n_species,
+                                n.seasons = n_seasons, seed = 0L)
     suppressWarnings(tobs(~ 1, data = sim$data, family = ms_dyn_occu(),
                           detection = ~ 1, y = sim$y,
                           species = paste0("sp", seq_len(n_species)),
@@ -260,7 +260,7 @@
   # available at all -- the default optimizer = "em" (n.quad = 1) uses a
   # different engine that does not expose them.
   ms_abun = function(N = 150L, n_species = 20L, J = 3L) {
-    sim <- simulate_ms_abun(n_species = n_species, N = N, J = J, seed = 0L)
+    sim <- simulate_ms_abun(n.species = n_species, N = N, J = J, seed = 0L)
     suppressWarnings(tobs(~ 1, data = sim$data,
                           family = ms_abun(mixture = "poisson"),
                           detection = ~ 1, y = sim$y,

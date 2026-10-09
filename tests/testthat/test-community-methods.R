@@ -4,7 +4,7 @@
 
 test_that("predict() / residuals() work on ms_occu", {
   skip_on_cran()
-  sim <- simulate_ms_occu(N = 50, J = 3, n_species = 5, seed = 1)
+  sim <- simulate_ms_occu(N = 50, J = 3, n.species = 5, seed = 1)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:5), method = "laplace",
               control = list(verbose = FALSE))
@@ -26,7 +26,7 @@ test_that("predict() / residuals() work on ms_occu", {
 test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
   skip_on_cran()
   skip_if_fast()
-  sd_ <- simulate_ms_dyn_occu(N = 40, J = 3, n_species = 5, n_seasons = 3,
+  sd_ <- simulate_ms_dyn_occu(N = 40, J = 3, n.species = 5, n.seasons = 3,
                               gamma = 0.2, epsilon = 0.1, seed = 2)
   fd <- tobs(~ 1, data = sd_$data, family = ms_dyn_occu(), detection = ~ 1,
              y = sd_$y, species = paste0("sp", 1:5), method = "laplace",
@@ -34,7 +34,7 @@ test_that("predict() / residuals() work on ms_dyn_occu and ms_int_occu", {
   expect_equal(dim(predict(fd)), c(40L, 5L))
   expect_true(all(is.finite(residuals(fd)$occ)))
 
-  si <- simulate_ms_int_occu(N = 60, J = c(3, 4), n_species = 5, seed = 3)
+  si <- simulate_ms_int_occu(N = 60, J = c(3, 4), n.species = 5, seed = 3)
   fi <- tobs(~ 1, data = si$data, family = ms_int_occu(), detection = ~ 1,
              y = si$y, species = paste0("sp", 1:5), method = "laplace",
              control = list(verbose = FALSE))
@@ -50,7 +50,7 @@ test_that("fitted() / predict() / residuals() work on jsdm", {
   # ms_count() post-fit surface: fitted()/predict() return the per-(site,
   # species) mean on the response scale (a probability here) under `$mu`, and
   # residuals() returns the unit-level series in `$occ`.
-  sim <- simulate_ms_occu(N = 40, J = 1, n_species = 5, seed = 4)
+  sim <- simulate_ms_occu(N = 40, J = 1, n.species = 5, seed = 4)
   yj  <- apply(sim$y, c(1, 3),
                function(v) as.integer(any(v[!is.na(v)] == 1)))
   fit <- tobs(~ x, data = sim$data, family = jsdm(), y = yj,
@@ -108,7 +108,7 @@ test_that("every registered community arm is wired to the shared predictor", {
 
 test_that("predict(newdata = ) on ms_abun uses the log link, not plogis", {
   skip_on_cran()
-  sim <- simulate_ms_abun(n_species = 4, N = 40, J = 3, seed = 1)
+  sim <- simulate_ms_abun(n.species = 4, N = 40, J = 3, seed = 1)
   fit <- suppressWarnings(
     tobs(~ abund_cov1, data = sim$data, family = ms_abun(mixture = "poisson"),
          detection = ~ 1, y = sim$y, species = paste0("sp", 1:4),
@@ -140,7 +140,7 @@ test_that("predict(newdata = ) on ms_abun uses the log link, not plogis", {
 test_that("predict(newdata = ) on ms_distance reports lambda and sigma", {
   skip_on_cran()
   cutp <- c(0, 25, 50, 75, 100)
-  sim <- simulate_ms_distance(n_species = 3, N = 40, cutpoints = cutp,
+  sim <- simulate_ms_distance(n.species = 3, N = 40, cutpoints = cutp,
                               transect = "line", key = "halfnorm", seed = 0L)
   fit <- suppressWarnings(
     tobs(~ abund_cov1, data = sim$data,
@@ -166,12 +166,12 @@ test_that("predict(newdata = ) on ms_distance reports lambda and sigma", {
 test_that("predict(newdata = ) on ms_occu_cover reports all three arms", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_ms_occu_cover(n_species = 3, N = 30, J = 3,
+  sim <- simulate_ms_occu_cover(n.species = 3, N = 30, J = 3,
                                 positive = "lognormal", seed = 1)
   fit <- suppressWarnings(
     tobs(~ occ_cov1, data = sim$data, family = ms_occu_cover("lognormal"),
          detection = ~ det_cov1, positive = ~ pos_cov1,
-         y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+         y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
          species = sim$species, method = "laplace",
          control = list(verbose = FALSE, max.iter = 15L)))
 
@@ -197,7 +197,7 @@ test_that("predict(newdata = ) on ms_occu_cover reports all three arms", {
 
 test_that("a community fit carrying a latent field refuses newdata", {
   skip_on_cran()
-  sim <- simulate_ms_occu(N = 50, J = 3, n_species = 5, seed = 1)
+  sim <- simulate_ms_occu(N = 50, J = 3, n.species = 5, seed = 1)
   fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
               y = sim$y, species = paste0("sp", 1:5), method = "laplace",
               control = list(verbose = FALSE))

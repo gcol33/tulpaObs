@@ -6,8 +6,8 @@
 # uniform across many independent fits on self-generated data.
 
 test_that("pit_residuals() on occu() is not degenerate at 1 for detected sites", {
-  sim <- simulate_occu(N = 300, J = 6, n_occ_covs = 1, n_det_covs = 1,
-                       beta_occ = c(0.3, 1.0), beta_det = c(0.7, 0.6), seed = 1)
+  sim <- simulate_occu(N = 300, J = 6, n.occ.covs = 1, n.det.covs = 1,
+                       beta.occ = c(0.3, 1.0), beta.det = c(0.7, 0.6), seed = 1)
   fit <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
               y = sim$y, method = "laplace", control = list(verbose = FALSE))
   pit <- pit_residuals(fit, n.samples = 250)
@@ -23,8 +23,8 @@ test_that("pit_residuals() KS p-values are not degenerate over seeds (calibratio
   skip_if_fast()
   n_seeds <- 20L
   pvals <- vapply(seq_len(n_seeds), function(seed) {
-    sim <- simulate_occu(N = 150, J = 5, n_occ_covs = 1, n_det_covs = 1,
-                         beta_occ = c(0.2, 0.8), beta_det = c(0.5, 0.5), seed = seed)
+    sim <- simulate_occu(N = 150, J = 5, n.occ.covs = 1, n.det.covs = 1,
+                         beta.occ = c(0.2, 0.8), beta.det = c(0.5, 0.5), seed = seed)
     fit <- tobs(~ occ_cov1, data = sim$data, family = occu(), detection = ~ det_cov1,
                 y = sim$y, method = "laplace", control = list(verbose = FALSE))
     pit <- pit_residuals(fit, n.samples = 250)

@@ -35,12 +35,12 @@
                       sigma_re = 2.0) {
   adj <- rook_adj(side)
   simulate_occu_cover(
-    N = nrow(adj), J = J, n_occ_covs = 1L, n_det_covs = 1L, n_pos_covs = 1L,
+    N = nrow(adj), J = J, n.occ.covs = 1L, n.det.covs = 1L, n.pos.covs = 1L,
     positive = "lognormal", adj = adj, sigma = 0.6, alpha = 0.6,
-    re_det_groups = if (identical(arm, "p")) n_g else NULL,
-    sigma_re_p = sigma_re,
-    re_pos_groups = if (identical(arm, "pos")) n_g else NULL,
-    sigma_re_pos = sigma_re, seed = seed)
+    re.det.groups = if (identical(arm, "p")) n_g else NULL,
+    sigma.re.p = sigma_re,
+    re.pos.groups = if (identical(arm, "pos")) n_g else NULL,
+    sigma.re.pos = sigma_re, seed = seed)
 }
 
 .ocnl_fit <- function(sim, adj, arm = "p") {
@@ -48,7 +48,7 @@
   pos <- if (identical(arm, "pos")) ~ pos_cov1 + (1 | habitat) else ~ pos_cov1
   tobs(occurrence = ~ occ_cov1 + icar(graph = adj), data = sim$data,
        family = occu_cover("lognormal"), detection = det, positive = pos,
-       y = sim$y, y_pos = sim$y_pos, visits = sim$visit_data,
+       y = sim$y, y.pos = sim$y_pos, visits = sim$visit_data,
        method = "nested_laplace",
        control = list(verbose = FALSE, progress = FALSE))
 }
@@ -228,7 +228,7 @@ test_that("the criteria score an occupancy-arm random effect", {
   fit <- tobs(occurrence = ~ x + icar(graph = sim$adj) + (1 | region),
               data = sim$data, family = occu_cover("lognormal"),
               detection = ~ 1, positive = ~ 1,
-              y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
+              y = sim$y, y.pos = sim$y_pos, method = "nested_laplace",
               control = list(verbose = FALSE, progress = FALSE))
   expect_identical(fit$re$psi$arm, "psi")
   expect_gt(fit$means[["sigma_re"]], 0.4)

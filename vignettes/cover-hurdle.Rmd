@@ -128,9 +128,9 @@ separate.
 library(tulpaObs)
 sim <- simulate_cover(
   N         = 400,
-  beta_occ  = c(-0.4, 0.7),
-  beta_pos  = c(-1.0, 0.3),
-  sigma_pos = 0.4,
+  beta.occ  = c(-0.4, 0.7),
+  beta.pos  = c(-1.0, 0.3),
+  sigma.pos = 0.4,
   seed      = 7
 )
 head(sim$data)
@@ -175,10 +175,10 @@ cover-arm signal. A Gaussian fit on the whole column would try to straddle both
 and land badly between them. The hurdle fits the spike with a binomial and the
 spread with the positive family, each on its own data.
 
-The simulator exposes the knobs that matter for the fit's behaviour. `beta_occ`
+The simulator exposes the knobs that matter for the fit's behaviour. `beta.occ`
 sets the occurrence intercept and slope, so lowering the intercept thins the
 positives and raising the slope sharpens the dependence of presence on `x`;
-`beta_pos` does the same for conditional cover. `sigma_pos` is the lognormal
+`beta.pos` does the same for conditional cover. `sigma.pos` is the lognormal
 residual SD, the width of the positive distribution on the log scale, and
 shrinking it tightens the cover values around the fitted curve. The `seed`
 argument fixes the random draw so the example reproduces exactly, which is what

@@ -847,10 +847,10 @@
 #'
 #' @param N Number of sites (default 200).
 #' @param cutpoints Distance-bin edges `0 = c_0 < ... < c_B`.
-#' @param n_seasons Number of primary periods (default 4).
+#' @param n.seasons Number of primary periods (default 4).
 #' @param transect `"line"` (default) or `"point"`.
-#' @param n_abund_covs,n_det_covs Number of abundance / distance covariates.
-#' @param beta_lambda,beta_sigma Coefficients on the log-abundance and log-scale
+#' @param n.abund.covs,n.det.covs Number of abundance / distance covariates.
+#' @param beta.lambda,beta.sigma Coefficients on the log-abundance and log-scale
 #'   arms. Defaults give moderate abundance / detection.
 #' @param omega,gamma Apparent survival probability and recruitment rate
 #'   (intercept-only defaults 0.7 / 2.5).
@@ -873,13 +873,13 @@
 #' @return A list with `y` (`[n_sites x n_bins x n_seasons]` distance-band
 #'   counts), `data`, and `truth`.
 #' @examples
-#' sim <- simulate_distsamp_open(N = 40, n_seasons = 3, seed = 1)
+#' sim <- simulate_distsamp_open(N = 40, n.seasons = 3, seed = 1)
 #' dim(sim$y)
 #' @export
 simulate_distsamp_open <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
-                                   n_seasons = 4L, transect = "line",
-                                   n_abund_covs = 1, n_det_covs = 1,
-                                   beta_lambda = NULL, beta_sigma = NULL,
+                                   n.seasons = 4L, transect = "line",
+                                   n.abund.covs = 1, n.det.covs = 1,
+                                   beta.lambda = NULL, beta.sigma = NULL,
                                    omega = 0.7, gamma = 2.5,
                                    mixture = c("poisson", "negbin", "zip", "zinb"),
                                    size = 3, zi = 0.3,
@@ -889,31 +889,31 @@ simulate_distsamp_open <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
   mixture  <- match.arg(mixture)
   dynamics <- match.arg(dynamics)
   if (!is.null(seed)) set.seed(seed)
-  if (is.null(beta_lambda))
-    beta_lambda <- c(log(15), stats::runif(n_abund_covs, -0.3, 0.3))
-  if (is.null(beta_sigma))
-    beta_sigma <- c(log(stats::median(cutpoints[-1])),
-                    stats::runif(n_det_covs, -0.2, 0.2))
+  if (is.null(beta.lambda))
+    beta.lambda <- c(log(15), stats::runif(n.abund.covs, -0.3, 0.3))
+  if (is.null(beta.sigma))
+    beta.sigma <- c(log(stats::median(cutpoints[-1])),
+                    stats::runif(n.det.covs, -0.2, 0.2))
 
   mk <- function(k, tag) {
     d <- data.frame(matrix(stats::rnorm(N * k), N, k))
     names(d) <- paste0(tag, seq_len(k)); d
   }
-  ac <- mk(n_abund_covs, "abund_cov"); dc <- mk(n_det_covs, "det_cov")
+  ac <- mk(n.abund.covs, "abund_cov"); dc <- mk(n.det.covs, "det_cov")
   data <- cbind(ac, dc)
-  lambda <- exp(as.vector(stats::model.matrix(~ ., ac) %*% beta_lambda))
-  sigma  <- exp(as.vector(stats::model.matrix(~ ., dc) %*% beta_sigma))
+  lambda <- exp(as.vector(stats::model.matrix(~ ., ac) %*% beta.lambda))
+  sigma  <- exp(as.vector(stats::model.matrix(~ ., dc) %*% beta.sigma))
 
   if (!identical(dynamics, "constant")) {
-    if (is.null(K)) K <- 4 * exp(beta_lambda[1])
+    if (is.null(K)) K <- 4 * exp(beta.lambda[1])
     fv <- list(lambda = lambda, sigma = sigma, omega = rep(omega, N),
                gamma = rep(gamma, N), K = rep(K, N), r = rep(r, N))
     y <- .dso_draw_dyn(fv, dynamics, as.numeric(cutpoints), transect,
-                       as.integer(n_seasons))
+                       as.integer(n.seasons))
     dimnames(y) <- list(NULL, paste0("band", seq_len(dim(y)[2])),
-                        paste0("period", seq_len(n_seasons)))
+                        paste0("period", seq_len(n.seasons)))
     return(list(y = y, data = data,
-      truth = list(beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+      truth = list(beta_lambda = beta.lambda, beta_sigma = beta.sigma,
                    omega = omega, gamma = gamma, K = K, r = r, lambda = lambda,
                    sigma = sigma, mixture = "poisson", dynamics = dynamics)))
   }
@@ -921,12 +921,12 @@ simulate_distsamp_open <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
   use_nb <- mixture %in% c("negbin", "zinb")
   is_zi  <- mixture %in% c("zip", "zinb")
   y <- .dso_draw(lambda, sigma, rep(omega, N), rep(gamma, N),
-                 as.numeric(cutpoints), transect, as.integer(n_seasons),
+                 as.numeric(cutpoints), transect, as.integer(n.seasons),
                  r = if (use_nb) size else NULL, zi = if (is_zi) zi else 0)
   dimnames(y) <- list(NULL, paste0("band", seq_len(dim(y)[2])),
-                      paste0("period", seq_len(n_seasons)))
+                      paste0("period", seq_len(n.seasons)))
   list(y = y, data = data,
-       truth = list(beta_lambda = beta_lambda, beta_sigma = beta_sigma,
+       truth = list(beta_lambda = beta.lambda, beta_sigma = beta.sigma,
                     omega = omega, gamma = gamma, lambda = lambda, sigma = sigma,
                     mixture = mixture, dynamics = dynamics,
                     r = if (use_nb) size else NULL, zi = if (is_zi) zi else NULL))

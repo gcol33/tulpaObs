@@ -18,7 +18,7 @@
 test_that("a NUTS fit records the sampler control it actually resolved", {
   skip_on_cran(); skip_if_fast()
   set.seed(1)
-  sim <- simulate_abun(N = 15L, J = 3L, n_abund_covs = 1L, seed = 1L)
+  sim <- simulate_abun(N = 15L, J = 3L, n.abund.covs = 1L, seed = 1L)
   fit <- suppressWarnings(tobs(
     ~ abund_cov1, data = sim$data, y = sim$y, family = abun(),
     detection = ~ det_cov1, method = "nuts",
@@ -37,7 +37,7 @@ test_that("a NUTS fit records the sampler control it actually resolved", {
 
 test_that("a laplace fit carries no sampler_control (nothing to default from)", {
   skip_on_cran(); skip_if_fast()
-  sim <- simulate_abun(N = 15L, J = 3L, n_abund_covs = 1L, seed = 2L)
+  sim <- simulate_abun(N = 15L, J = 3L, n.abund.covs = 1L, seed = 2L)
   fit <- suppressWarnings(tobs(
     ~ abund_cov1, data = sim$data, y = sim$y, family = abun(),
     detection = ~ det_cov1, method = "laplace",
@@ -47,7 +47,7 @@ test_that("a laplace fit carries no sampler_control (nothing to default from)", 
 
 test_that(".tobs_sbc_control() defaults a NUTS spec's control from fit$sampler_control", {
   skip_on_cran(); skip_if_fast()
-  sim <- simulate_abun(N = 15L, J = 3L, n_abund_covs = 1L, seed = 3L)
+  sim <- simulate_abun(N = 15L, J = 3L, n.abund.covs = 1L, seed = 3L)
   fit <- suppressWarnings(tobs(
     ~ abund_cov1, data = sim$data, y = sim$y, family = abun(),
     detection = ~ det_cov1, method = "nuts",
@@ -70,7 +70,7 @@ test_that(".tobs_sbc_control() defaults a NUTS spec's control from fit$sampler_c
 
 test_that(".tobs_sbc_control() falls back to engine defaults for a non-NUTS fit", {
   skip_on_cran(); skip_if_fast()
-  sim <- simulate_abun(N = 15L, J = 3L, n_abund_covs = 1L, seed = 5L)
+  sim <- simulate_abun(N = 15L, J = 3L, n.abund.covs = 1L, seed = 5L)
   fit <- suppressWarnings(tobs(
     ~ abund_cov1, data = sim$data, y = sim$y, family = abun(),
     detection = ~ det_cov1, method = "laplace",

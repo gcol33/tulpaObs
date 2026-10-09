@@ -231,8 +231,8 @@ test_that("single-source int_occu recovers (psi intercept, psi slope) across see
   n_seed <- 10L
   psi_int <- psi_slope <- numeric(n_seed)
   for (s in seq_len(n_seed)) {
-    sim <- simulate_int_occu(N_total = 250, n_data = 1L, J = 5L,
-                             beta_occ = c(0, 0.4), beta_det = list(c(0, -0.3)),
+    sim <- simulate_int_occu(N.total = 250, n.data = 1L, J = 5L,
+                             beta.occ = c(0, 0.4), beta.det = list(c(0, -0.3)),
                              seed = 30L + s)
     fit <- tobs(~ x, data = sim$data, family = int_occu(), detection = ~ 1,
                 y = sim$y, method = "laplace", control = list(verbose = FALSE))

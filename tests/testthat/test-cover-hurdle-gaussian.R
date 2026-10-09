@@ -14,7 +14,7 @@ test_that("cover(response = 'gaussian') constructor is wired through", {
 })
 
 test_that("simulate_cover(response = 'gaussian') round-trips an unbounded response", {
-  sim <- simulate_cover(N = 500, beta_pos = c(2.0, 0.3), sigma_pos = 0.5,
+  sim <- simulate_cover(N = 500, beta.pos = c(2.0, 0.3), sigma.pos = 0.5,
                         response = "gaussian", seed = 42)
   expect_named(sim, c("data", "y", "coords", "truth"))
   expect_equal(sim$truth$response, "gaussian")
@@ -29,9 +29,9 @@ test_that("simulate_cover(response = 'gaussian') round-trips an unbounded respon
 test_that("single fit recovers truth (gaussian arm, identity mean)", {
   sim <- simulate_cover(
     N         = 800,
-    beta_occ  = c(-0.3, 0.7),
-    beta_pos  = c(2.0, 0.4),
-    sigma_pos = 0.5,
+    beta.occ  = c(-0.3, 0.7),
+    beta.pos  = c(2.0, 0.4),
+    sigma.pos = 0.5,
     response  = "gaussian",
     seed      = 2026
   )
@@ -79,7 +79,7 @@ test_that("gaussian presence is y != 0 (negative magnitudes are present)", {
 })
 
 test_that("cover(gaussian): WAIC works, PPC gated, NUTS available", {
-  sim <- simulate_cover(N = 400, beta_pos = c(2.0, 0.4), sigma_pos = 0.5,
+  sim <- simulate_cover(N = 400, beta.pos = c(2.0, 0.4), sigma.pos = 0.5,
                         response = "gaussian", seed = 21)
   fit <- tobs(formula = ~ x, data = sim$data,
               family = cover(response = "gaussian"), y = sim$y)
@@ -108,8 +108,8 @@ test_that("repeat fits recover truth in aggregate (gaussian, 20 seeds)", {
   sigma_diffs <- numeric(n_seeds)
   conv <- logical(n_seeds)
   for (r in seq_len(n_seeds)) {
-    sim <- simulate_cover(N = 600, beta_occ = truth$beta_occ,
-                          beta_pos = truth$beta_pos, sigma_pos = truth$sigma_pos,
+    sim <- simulate_cover(N = 600, beta.occ = truth$beta_occ,
+                          beta.pos = truth$beta_pos, sigma.pos = truth$sigma_pos,
                           response = "gaussian", seed = 500L + r)
     fit <- tryCatch(
       tobs(formula = ~ x, data = sim$data,

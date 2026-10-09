@@ -371,13 +371,13 @@
 #' @param S Number of species (default 2).
 #' @param N Number of sites (default 300).
 #' @param J Number of replicate visits (default 4).
-#' @param n_state_covs Number of shared occupancy covariates (default 1).
-#' @param beta_first Length-`S` list of first-order natural-parameter
+#' @param n.state.covs Number of shared occupancy covariates (default 1).
+#' @param beta.first Length-`S` list of first-order natural-parameter
 #'   coefficients `c(intercept, slopes...)`. Default moderate occupancy.
-#' @param beta_second Length-`choose(S, 2)` list of second-order (interaction)
+#' @param beta.second Length-`choose(S, 2)` list of second-order (interaction)
 #'   coefficients (in `combn(S, 2)` order). Default a single positive
 #'   interaction for `S = 2`, else 0.
-#' @param beta_p Length-`S` list of detection coefficients (logit). Default
+#' @param beta.p Length-`S` list of detection coefficients (logit). Default
 #'   `c(qlogis(0.5), ...)`.
 #' @param seed Optional random seed.
 #' @return A list with `y` (a length-`S` list of `N x J` matrices), `data`,
@@ -386,23 +386,23 @@
 #' sim <- simulate_occu_multi(S = 2, N = 50, J = 3, seed = 1)
 #' length(sim$y)
 #' @export
-simulate_occu_multi <- function(S = 2, N = 300, J = 4, n_state_covs = 1,
-                                beta_first = NULL, beta_second = NULL,
-                                beta_p = NULL, seed = NULL) {
+simulate_occu_multi <- function(S = 2, N = 300, J = 4, n.state.covs = 1,
+                                beta.first = NULL, beta.second = NULL,
+                                beta.p = NULL, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   pairs <- .occu_multi_pairs(S)
-  if (is.null(beta_first))
-    beta_first <- lapply(seq_len(S), function(s)
-      c(stats::qlogis(0.45), stats::runif(n_state_covs, -0.4, 0.4)))
-  if (is.null(beta_second))
-    beta_second <- lapply(seq_along(pairs), function(m)
-      c(if (S == 2L) 1.0 else 0.0, rep(0, n_state_covs)))
-  if (is.null(beta_p))
-    beta_p <- lapply(seq_len(S), function(s) c(stats::qlogis(0.5)))
+  if (is.null(beta.first))
+    beta.first <- lapply(seq_len(S), function(s)
+      c(stats::qlogis(0.45), stats::runif(n.state.covs, -0.4, 0.4)))
+  if (is.null(beta.second))
+    beta.second <- lapply(seq_along(pairs), function(m)
+      c(if (S == 2L) 1.0 else 0.0, rep(0, n.state.covs)))
+  if (is.null(beta.p))
+    beta.p <- lapply(seq_len(S), function(s) c(stats::qlogis(0.5)))
 
-  if (n_state_covs > 0L) {
-    state_covs <- data.frame(matrix(stats::rnorm(N * n_state_covs), N, n_state_covs))
-    names(state_covs) <- paste0("scov", seq_len(n_state_covs))
+  if (n.state.covs > 0L) {
+    state_covs <- data.frame(matrix(stats::rnorm(N * n.state.covs), N, n.state.covs))
+    names(state_covs) <- paste0("scov", seq_len(n.state.covs))
     data    <- state_covs
     X_state <- stats::model.matrix(~ ., state_covs)
   } else {
@@ -412,12 +412,12 @@ simulate_occu_multi <- function(S = 2, N = 300, J = 4, n_state_covs = 1,
   X_det   <- stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
 
   natpar1 <- vapply(seq_len(S), function(s)
-    as.vector(X_state %*% beta_first[[s]]), numeric(N))            # [N x S]
+    as.vector(X_state %*% beta.first[[s]]), numeric(N))            # [N x S]
   natpar2 <- if (length(pairs))
     vapply(seq_along(pairs), function(m)
-      as.vector(X_state %*% beta_second[[m]]), numeric(N)) else matrix(0, N, 0)
+      as.vector(X_state %*% beta.second[[m]]), numeric(N)) else matrix(0, N, 0)
   p_mat <- vapply(seq_len(S), function(s)
-    plogis(as.vector(X_det %*% beta_p[[s]])), numeric(N))          # [N x S]
+    plogis(as.vector(X_det %*% beta.p[[s]])), numeric(N))          # [N x S]
 
   Z <- .occu_multi_states(S)
   Zpair <- matrix(0, nrow(Z), length(pairs))
@@ -438,6 +438,6 @@ simulate_occu_multi <- function(S = 2, N = 300, J = 4, n_state_covs = 1,
   }
   names(y) <- species
   list(y = y, data = data, species = species,
-       truth = list(beta_first = beta_first, beta_second = beta_second,
-                    beta_p = beta_p, z = z_all, pairs = pairs))
+       truth = list(beta_first = beta.first, beta_second = beta.second,
+                    beta_p = beta.p, z = z_all, pairs = pairs))
 }

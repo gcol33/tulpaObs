@@ -43,7 +43,7 @@
     formula = ~ occ_cov1 + bym2(graph = adj), data = fx$cell_dat,
     family = occu_cover("lognormal"),
     detection = ~ det_cov1, positive = ~ pos_cov1,
-    y = y, y_pos = y_pos, visits = fx$od$det.covs,
+    y = y, y.pos = y_pos, visits = fx$od$det.covs,
     method = "nested_laplace", control = control))
 }
 
@@ -132,16 +132,16 @@ test_that("a cover-arm field SD reports the engine read of its precision axis", 
   adj <- rook_adj(5L)
   sim <- simulate_occu_cover(
     N = nrow(adj), J = 6L, positive = "lognormal",
-    beta_occ = c(qlogis(0.6), 0.3), beta_p = c(qlogis(0.65), 0.1),
-    beta_pos = c(log(0.25), 0.0), sigma_pos = 0.3,
+    beta.occ = c(qlogis(0.6), 0.3), beta.p = c(qlogis(0.65), 0.1),
+    beta.pos = c(log(0.25), 0.0), sigma.pos = 0.3,
     adj = adj, sigma = 0.5, alpha = 0.0,
-    pos_field = TRUE, sigma_pos_int = 0.0, sigma_pos_trend = 0.7, seed = 3L)
+    pos.field = TRUE, sigma.pos.int = 0.0, sigma.pos.trend = 0.7, seed = 3L)
   fit <- suppressWarnings(tobs(
     occurrence = ~ occ_cov1 + icar(graph = adj, group_var = "cell"),
     detection = ~ 1,
     positive = ~ 1 + spatial(~ 0 + time || cell, graph = adj),
     family = occu_cover(response = "lognormal"),
-    data = sim$data, y = sim$y, y_pos = sim$y_pos,
+    data = sim$data, y = sim$y, y.pos = sim$y_pos,
     method = "nested_laplace", control = list(progress = FALSE)))
   hs <- fit$hyper_summary
   row <- grep("^sigma_pos_field", hs$parameter)
