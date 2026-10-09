@@ -292,31 +292,11 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
                  nrow(A_dense), n_sites), call. = FALSE)
   }
 
-  prior_range <- ts$prior_range
-  prior_sigma <- ts$prior_sigma
-  # Coarser default grid than the single-species SPDE path (3 x 3): each
-  # community grid point is an n_species-fold-more-expensive EM, so the outer
-  # (range x sigma [x r]) product is kept small -- the same rationale the areal
-  # community fitters use for their coarser sigma/rho/r grids.
-  if (is.null(range_grid)) {
-    r_med <- prior_range[1]
-    range_grid <- exp(seq(log(r_med * 0.4), log(r_med * 2.2), length.out = 3L))
-  }
-  if (is.null(sigma_grid)) {
-    s_scale <- prior_sigma[1]
-    sigma_grid <- exp(seq(log(s_scale * 0.4), log(s_scale * 1.8), length.out = 3L))
-  }
-  if (any(range_grid <= 0)) stop("range_grid must be strictly positive.", call. = FALSE)
-  if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
+  sg <- .tobs_spde_outer_grid(ts, range_grid, sigma_grid)
+  range_grid <- sg$range_grid; sigma_grid <- sg$sigma_grid
+  prior_range <- sg$prior_range; prior_sigma <- sg$prior_sigma
   r_grid_use <- .nmix_community_r_grid(mixture, r_grid)
   is_nb <- identical(mixture, "NB")
-
-  build_Q <- function(range_val, sigma_val) {
-    kappa    <- sqrt(8 * ts$nu) / range_val
-    tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
-    Q <- Matrix::forceSymmetric(tulpa::tulpa_spde_precision_Q(ts, kappa, tau_spde))
-    list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
-  }
 
   ws  <- .nmix_community_warm_start(lf$y, p_lam, p_p)
   orc <- .nmix_community_oracle(lf, X_lambda, n_sites, n_species, K_max)
@@ -326,25 +306,15 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
   # integrated posterior is proper (the SPDE PC prior lives in R, as on the
   # single-species path). Returns the raw per-grid community fit.
   run_driver <- function(theta_grid) {
-    n <- nrow(theta_grid)
-    Q_list <- vector("list", n); log_dets <- numeric(n); pc_lp <- numeric(n)
-    cache <- list()
-    for (k in seq_len(n)) {
-      key <- paste0(theta_grid[k, 1L], "_", theta_grid[k, 2L])
-      if (is.null(cache[[key]])) cache[[key]] <- build_Q(theta_grid[k, 1L], theta_grid[k, 2L])
-      Q_list[[k]] <- cache[[key]]$Q; log_dets[k] <- cache[[key]]$log_det
-      pc_lp[k] <- tulpa::tulpa_spde_log_hyperprior(
-        theta_grid[k, 1L], theta_grid[k, 2L],
-        list(prior_range = prior_range, prior_sigma = prior_sigma))
-    }
+    pr <- sg$precision(theta_grid)
     raw <- .cpp_nmix_progress(cpp_nmix_community_spatial_spde,
       oracle = orc$ptr, X_lambda_R = X_lambda, A_R = A_dense,
-      Q_list = Q_list, log_det_Q = log_dets,
+      Q_list = pr$Q_list, log_det_Q = pr$log_det,
       theta_grid_R = theta_grid, r_grid = as.numeric(theta_grid[, 3L]),
       mu_init = ws$mu, Sigma_lambda_init = ws$Sigma_lambda,
       Sigma_p_init = ws$Sigma_p,
       max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
-    raw$log_marginal <- raw$log_marginal + pc_lp
+    raw$log_marginal <- raw$log_marginal + pr$pc_lp
     raw
   }
 

@@ -253,7 +253,7 @@
   # posterior so BFGS runs on analytic gradients (fast) rather than a numeric
   # gradient / numeric Hessian over the expensive forward-HMM marginal.
   eval_dm <- function(theta) {
-    tryCatch(cpp_dyn_abun_total_log_lik(
+    ev <- tryCatch(cpp_dyn_abun_total_log_lik(
       y_flat, N, T, J, K,
       as.numeric(X_lambda %*% theta[idx$lambda]),
       as.numeric(X_p      %*% theta[idx$p]),
@@ -261,60 +261,25 @@
       as.numeric(X_gamma  %*% theta[idx$gamma]),
       use_nb = is_nb, eta_logr = if (is_nb) theta[ir] else 0.0),
       error = function(e) NULL)
+    if (!is.null(ev)) ev$llr <- ev$log_lik_site
+    ev
   }
 
-  # ZIP marginal log-lik and its posterior "not-a-structural-zero" weight w_i.
-  # A detected site is certainly not a structural zero (w = 1); an all-zero site
-  # mixes the structural point mass in, w_i = (1 - om) L_dm_i / L_i. The score wrt
-  # the ZI logit is (1 - w_i) - om summed (the standard ZIP score).
-  zip_pieces <- function(theta, ev) {
-    om <- stats::plogis(theta[izi]); log1m <- log1p(-om)
-    llr <- ev$log_lik_site
-    ll <- numeric(N); w <- rep(1, N)
-    ll[!az] <- log1m + llr[!az]
-    a <- log1m + llr[az]; b <- log(om); mx <- pmax(a, b)
-    Li <- mx + log(exp(a - mx) + exp(b - mx))
-    ll[az] <- Li
-    w[az] <- exp(a - Li)                        # (1 - om) L_dm / L on all-zero sites
-    list(log_lik = sum(ll), w = w, om = om)
-  }
-
-  neg_ll <- function(theta) {
-    ev <- eval_dm(theta)
-    if (is.null(ev) || any(!is.finite(ev$log_lik_site))) return(1e10)
-    val <- -zip_pieces(theta, ev)$log_lik
-    if (is.finite(val)) val else 1e10
-  }
-  # Analytic gradient: the Dail-Madsen per-site eta gradients scaled by w_i (they
-  # enter L only through the L_dm component), summed through the arm designs; plus
-  # the ZI-logit score. omega / gamma per-site gradients are returned as [N] under
-  # constant rates (the season-varying [N x (T-1)] layout is not used on the ZIP
-  # v1 path -- intercept-only rate arms).
-  neg_grad <- function(theta) {
-    ev <- eval_dm(theta)
-    if (is.null(ev)) return(rep(0, length(theta)))
-    zp <- zip_pieces(theta, ev); w <- zp$w; om <- zp$om
+  # Arm gradients: the Dail-Madsen per-site eta gradients scaled by w_i (they
+  # enter L only through the L_dm component), summed through the arm designs.
+  # omega / gamma per-site gradients are returned as [N] under constant rates
+  # (the season-varying [N x (T-1)] layout is not used on the ZIP v1 path --
+  # intercept-only rate arms).
+  grad_arms <- function(theta, ev, w) {
     g <- numeric(length(theta))
     g[idx$lambda] <- as.numeric(crossprod(X_lambda, w * ev$grad_eta_lambda))
     g[idx$p]      <- as.numeric(crossprod(X_p,      w * ev$grad_eta_p))
     g[idx$omega]  <- as.numeric(crossprod(X_omega,  w * as.numeric(ev$grad_eta_omega)))
     g[idx$gamma]  <- as.numeric(crossprod(X_gamma,  w * as.numeric(ev$grad_eta_gamma)))
-    # ZI logit score: the two-component mixture (structural-zero point mass +
-    # Dail-Madsen marginal) has per-site score (1 - om) - w_i, where w_i is the
-    # posterior weight on the DM component (= 1 for a detected site, giving the
-    # -om pull; = (1 - om) L_dm / L on an all-zero site). Summed:
-    g[izi] <- sum((1 - om) - w)
-    # The NB dispersion score is returned only SUMMED across sites (not per-site),
-    # so it cannot be ZIP-weighted analytically; central-difference just this one
-    # coordinate on the exact ZIP objective (two extra marginal evals).
-    if (is_nb) {
-      h <- 1e-4; th <- theta
-      th[ir] <- theta[ir] + h; fp <- -neg_ll(th)
-      th[ir] <- theta[ir] - h; fm <- -neg_ll(th)
-      g[ir] <- (fp - fm) / (2 * h)
-    }
-    -g
+    g
   }
+  zl <- .tobs_zip_layer(eval_dm, grad_arms, az, izi, ir)
+  neg_ll <- zl$neg_ll; neg_grad <- zl$neg_grad
 
   # Naive warm start. The analytic-gradient BFGS below climbs to the joint mode
   # from here, so a separate no-ZI Dail-Madsen pre-fit (a second expensive
@@ -327,7 +292,7 @@
   theta0[idx$lambda[1]] <- log(max(nz_mean / 0.5, 0.5) + 0.5)
   theta0[idx$omega[1]]  <- stats::qlogis(0.6); theta0[idx$gamma[1]] <- log(0.5)
   if (is_nb) theta0[ir] <- log(2)
-  theta0[izi] <- stats::qlogis(min(max(mean(az) * 0.5, 0.05), 0.7))
+  theta0[izi] <- zl$zi_logit0
 
   # Analytic-gradient BFGS over the exact ZIP marginal (the ZI logit and, for
   # ZINB, log_r are the only runaway corners; a huge NB overdispersion mimics

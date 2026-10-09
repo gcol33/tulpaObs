@@ -80,6 +80,48 @@
 }
 
 
+# Pack a count nested-Laplace result into a `tobs_fit`: grid-integrated
+# fixed-effect moments, named means / SDs / covariance, 1000 pseudo-draws from
+# the grid mixture, and the NA NUTS diagnostics a deterministic fit carries.
+# `nested_laplace` is the prior / result record for the path; `extra` holds
+# any path-specific slots, spliced in after `spatial`.
+.count_spatial_pack_fit <- function(res, model, spatial, nested_laplace,
+                                    extra = list()) {
+  fe <- .count_spatial_fe_moments(res, ncol(model$X_processes[[1]]))
+  pi_list <- model$process_info
+  nms <- paste0(pi_list[[1L]]$name, "_", pi_list[[1L]]$coef_names)
+
+  means <- fe$beta; names(means) <- nms
+  V <- fe$vcov; dimnames(V) <- list(nms, nms)
+  sds <- .tobs_sds_from_vcov(V, nms)
+
+  n_draws <- 1000L
+  draws <- .tobs_grid_mixture_draws(n_draws, fe$grid_mixture$weights,
+                                    fe$grid_mixture$modes, fe$grid_mixture$covs)
+  colnames(draws) <- nms
+
+  structure(c(list(
+    draws = draws, means = means, sds = sds, vcov = V,
+    skew = NULL, sla_status = "off",
+    n_samples = n_draws, n_params = length(means),
+    log_prob = rep(NA_real_, n_draws)),
+    .tobs_na_nuts_diagnostics(n_draws),
+    list(
+    col_names = nms, param_names = nms,
+    intercepts = compute_intercepts(model, means),
+    model = model,
+    spatial = spatial),
+    extra,
+    list(
+    process_info = pi_list,
+    method = "nested_laplace",
+    nested_laplace = nested_laplace,
+    convergence = list(converged = TRUE, n_iter = as.integer(res$n_iter %||% 1L)),
+    correction = "none"
+  )), class = c("tobs_fit", "tulpa_fit"))
+}
+
+
 # Fit an areal-spatial count model. `model` is the (autoscaled) count tobs_model;
 # `spatial` is the resolved tobs_spatial areal term on the abundance formula.
 # Returns a `tobs_fit`; the caller (`.tobs_fit_model`) transforms the per-process
@@ -113,7 +155,6 @@
   }
 
   X <- model$X_processes[[1]]
-  p <- ncol(X)
   y <- as.numeric(model$y_count)
   N <- length(y)
   fam <- switch(model$response %||% "poisson",
@@ -137,36 +178,8 @@
                    keep_grid_hessians = TRUE)
   )
 
-  fe <- .count_spatial_fe_moments(res, p)
-  pi_list <- model$process_info
-  nms <- paste0(pi_list[[1L]]$name, "_", pi_list[[1L]]$coef_names)
-
-  means <- fe$beta; names(means) <- nms
-  V <- fe$vcov; dimnames(V) <- list(nms, nms)
-  sds <- .tobs_sds_from_vcov(V, nms)
-
-  n_draws <- 1000L
-  draws <- .tobs_grid_mixture_draws(n_draws, fe$grid_mixture$weights,
-                                    fe$grid_mixture$modes, fe$grid_mixture$covs)
-  colnames(draws) <- nms
-
-  fit <- structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    skew = NULL, sla_status = "off",
-    n_samples = n_draws, n_params = length(means),
-    log_prob = rep(NA_real_, n_draws)),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names = nms, param_names = nms,
-    intercepts = compute_intercepts(model, means),
-    model = model,
-    spatial = spatial,
-    process_info = pi_list,
-    method = "nested_laplace",
-    nested_laplace = list(multi_prior = prior, occ_fit = res),
-    convergence = list(converged = TRUE, n_iter = as.integer(res$n_iter %||% 1L)),
-    correction = "none"
-  )), class = c("tobs_fit", "tulpa_fit"))
+  fit <- .count_spatial_pack_fit(res, model, spatial,
+                                 nested_laplace = list(multi_prior = prior, occ_fit = res))
 
   # Shared field summary: each areal block's SD (sigma = 1/sqrt(tau) marginalized
   # over the outer grid) and its demeaned per-cell field, read off `res`. Reuses
@@ -217,7 +230,6 @@
 .tobs_fit_count_gp <- function(model, spatial, max_iter = 50L, tol = 1e-6,
                                verbose = FALSE, ...) {
   X <- model$X_processes[[1]]
-  p <- ncol(X)
   y <- as.numeric(model$y_count)
   N <- length(y)
   resp <- model$response %||% "poisson"
@@ -238,44 +250,14 @@
     control = list(max_iter = as.integer(max_iter), tol = as.numeric(tol),
                    keep_grid_hessians = TRUE))
 
-  fe <- .count_spatial_fe_moments(res, p)
-  pi_list <- model$process_info
-  nms <- paste0(pi_list[[1L]]$name, "_", pi_list[[1L]]$coef_names)
-
-  means <- fe$beta; names(means) <- nms
-  V <- fe$vcov; dimnames(V) <- list(nms, nms)
-  sds <- .tobs_sds_from_vcov(V, nms)
-
-  n_draws <- 1000L
-  draws <- .tobs_grid_mixture_draws(n_draws, fe$grid_mixture$weights,
-                                    fe$grid_mixture$modes, fe$grid_mixture$covs)
-  colnames(draws) <- nms
-
   # GP hyperparameter posterior (marginal SD sqrt(sigma2) and the range phi_gp),
-  # grid-integrated by tulpa; surfaced on fit$spatial for the user.
+  # grid-integrated by tulpa; surfaced on fit$spatial for the user. The GP field
+  # itself is integrated out (no per-cell map).
   gp_hyper <- list(theta_names = res$theta_names,
                    mean = res$theta_mean, sd = res$theta_sd,
                    median = res$theta_median,
                    ci_lo = res$theta_ci_lo, ci_hi = res$theta_ci_hi)
-
-  fit <- structure(c(list(
-    draws = draws, means = means, sds = sds, vcov = V,
-    skew = NULL, sla_status = "off",
-    n_samples = n_draws, n_params = length(means),
-    log_prob = rep(NA_real_, n_draws)),
-    .tobs_na_nuts_diagnostics(n_draws),
-    list(
-    col_names = nms, param_names = nms,
-    intercepts = compute_intercepts(model, means),
-    model = model,
-    spatial = spatial,
-    spatial_field = NULL,          # GP field integrated out (no per-cell map)
-    gp_hyper = gp_hyper,
-    process_info = pi_list,
-    method = "nested_laplace",
-    nested_laplace = list(prior = prior, occ_fit = res),
-    convergence = list(converged = TRUE, n_iter = as.integer(res$n_iter %||% 1L)),
-    correction = "none"
-  )), class = c("tobs_fit", "tulpa_fit"))
-  fit
+  .count_spatial_pack_fit(res, model, spatial,
+                          nested_laplace = list(prior = prior, occ_fit = res),
+                          extra = list(spatial_field = NULL, gp_hyper = gp_hyper))
 }

@@ -516,27 +516,11 @@
          llr = as.numeric(ev$log_lik_site) + band)
   }
 
-  # ZIP marginal log-lik + posterior "not-a-structural-zero" weight w_i.
-  zip_pieces <- function(theta, op) {
-    om <- stats::plogis(theta[izi]); log1m <- log1p(-om)
-    llr <- op$llr; ll <- numeric(N); w <- rep(1, N)
-    ll[!az] <- log1m + llr[!az]
-    a <- log1m + llr[az]; b <- log(om); mx <- pmax(a, b)
-    Li <- mx + log(exp(a - mx) + exp(b - mx))
-    ll[az] <- Li; w[az] <- exp(a - Li)
-    list(log_lik = sum(ll), w = w, om = om)
-  }
-
-  neg_ll <- function(theta) {
-    op <- eval_open(theta); if (is.null(op)) return(1e10)
-    val <- -zip_pieces(theta, op)$log_lik
-    if (is.finite(val)) val else 1e10
-  }
-  neg_grad <- function(theta) {
-    op <- eval_open(theta); if (is.null(op)) return(rep(0, length(theta)))
-    zp <- zip_pieces(theta, op); w <- zp$w; om <- zp$om; ev <- op$ev
-    # sigma enters via eta_p (pdist) AND the band multinomials; the per-site
-    # dL/dsigma mirrors .dso_grad, weighted by the structural-zero posterior w_i.
+  # Arm gradients weighted by the structural-zero posterior w_i. sigma enters
+  # via eta_p (pdist) AND the band multinomials; the per-site dL/dsigma mirrors
+  # .dso_grad.
+  grad_arms <- function(theta, op, w) {
+    ev <- op$ev
     sig <- op$sigma; cpd <- op$cpd; pd <- op$pdist
     h   <- 1e-5 * pmax(sig, 1)
     dcpd <- (.gdr_dist_cp(sig + h, cutpoints, transect) -
@@ -549,17 +533,10 @@
     g[idx$sigma]  <- as.numeric(crossprod(Xs, w * dL_dsig * sig))
     g[idx$omega]  <- as.numeric(crossprod(Xo, w * as.numeric(ev$grad_eta_omega)))
     g[idx$gamma]  <- as.numeric(crossprod(Xg, w * as.numeric(ev$grad_eta_gamma)))
-    g[izi] <- sum((1 - om) - w)
-    # The NB log_r score is returned summed (not per-site), so it cannot be
-    # ZIP-weighted analytically; central-difference just this coordinate.
-    if (is_nb) {
-      th <- theta; hh <- 1e-4
-      th[ir] <- theta[ir] + hh; fp <- -neg_ll(th)
-      th[ir] <- theta[ir] - hh; fm <- -neg_ll(th)
-      g[ir] <- (fp - fm) / (2 * hh)
-    }
-    -g
+    g
   }
+  zl <- .tobs_zip_layer(eval_open, grad_arms, az, izi, ir)
+  neg_ll <- zl$neg_ll; neg_grad <- zl$neg_grad
 
   # Warm start: lambda from the detected-site scale, moderate dynamics, the
   # structural-zero logit from a modest share of the all-zero sites.
@@ -572,7 +549,7 @@
   theta0[idx$sigma[1]]  <- log(max(sig0, 1e-2))
   theta0[idx$omega[1]]  <- stats::qlogis(0.6)
   theta0[idx$gamma[1]]  <- log(max(mean(model$ntot), 1))
-  theta0[izi]           <- stats::qlogis(min(max(mean(az) * 0.5, 0.05), 0.7))
+  theta0[izi]           <- zl$zi_logit0
   if (is_nb) theta0[ir] <- log(2)
 
   par_names <- c(paste0("lambda_", colnames(Xl)), paste0("sigma_", colnames(Xs)),

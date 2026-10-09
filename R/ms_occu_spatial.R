@@ -244,53 +244,23 @@
                  nrow(A_dense), model$n_sites), call. = FALSE)
   }
 
-  prior_range <- ts$prior_range
-  prior_sigma <- ts$prior_sigma
-  # Coarser default grid than the single-species SPDE path (3 x 3): each
-  # community grid point is an n_species-fold-more-expensive EM, matching the
-  # rationale nmix_community_laplace_spde() uses.
-  if (is.null(range_grid)) {
-    r_med <- prior_range[1]
-    range_grid <- exp(seq(log(r_med * 0.4), log(r_med * 2.2), length.out = 3L))
-  }
-  if (is.null(sigma_grid)) {
-    s_scale <- prior_sigma[1]
-    sigma_grid <- exp(seq(log(s_scale * 0.4), log(s_scale * 1.8), length.out = 3L))
-  }
-  if (any(range_grid <= 0)) stop("range_grid must be strictly positive.", call. = FALSE)
-  if (any(sigma_grid <= 0)) stop("sigma_grid must be strictly positive.", call. = FALSE)
-
-  build_Q <- function(range_val, sigma_val) {
-    kappa    <- sqrt(8 * ts$nu) / range_val
-    tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
-    Q <- Matrix::forceSymmetric(tulpa::tulpa_spde_precision_Q(ts, kappa, tau_spde))
-    list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
-  }
+  sg <- .tobs_spde_outer_grid(ts, range_grid, sigma_grid)
 
   ws   <- .ms_occu_spatial_warm_start(model$summaries, p_psi, p_p)
   mats <- .ms_occu_spatial_count_mats(model$summaries, model$n_sites, model$n_species)
 
-  grid <- expand.grid(range = range_grid, sigma = sigma_grid, KEEP.OUT.ATTRS = FALSE)
+  grid <- expand.grid(range = sg$range_grid, sigma = sg$sigma_grid,
+                      KEEP.OUT.ATTRS = FALSE)
   theta_grid <- as.matrix(grid[, c("range", "sigma")])
-  n <- nrow(theta_grid)
-  Q_list <- vector("list", n); log_dets <- numeric(n); pc_lp <- numeric(n)
-  cache <- list()
-  for (k in seq_len(n)) {
-    key <- paste0(theta_grid[k, 1L], "_", theta_grid[k, 2L])
-    if (is.null(cache[[key]])) cache[[key]] <- build_Q(theta_grid[k, 1L], theta_grid[k, 2L])
-    Q_list[[k]] <- cache[[key]]$Q; log_dets[k] <- cache[[key]]$log_det
-    pc_lp[k] <- tulpa::tulpa_spde_log_hyperprior(
-      theta_grid[k, 1L], theta_grid[k, 2L],
-      list(prior_range = prior_range, prior_sigma = prior_sigma))
-  }
+  pr <- sg$precision(theta_grid)
   colnames(theta_grid) <- c("range", "sigma")
   raw <- cpp_ms_occu_spatial_spde(
     X_psi = X_psi, X_p = X_p, n_valid = mats$n_valid, n_det = mats$n_det,
-    A_R = A_dense, Q_list = Q_list, log_det_Q = log_dets,
+    A_R = A_dense, Q_list = pr$Q_list, log_det_Q = pr$log_det,
     theta_grid_R = theta_grid,
     mu_init = ws$mu, Sigma_psi_init = ws$Sigma_psi, Sigma_p_init = ws$Sigma_p,
     max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
-  raw$log_marginal <- raw$log_marginal + pc_lp
+  raw$log_marginal <- raw$log_marginal + pr$pc_lp
 
   .ms_occu_spatial_post(raw, p_psi, p_p, n_mesh, "spde", c("range", "sigma"))
 }
