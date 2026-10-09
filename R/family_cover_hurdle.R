@@ -95,8 +95,8 @@
   .cover_dots <- list(...)
   enc      <- encode_cover_hurdle(formula, data, y, positive = positive,
                                   breaks = family$params$breaks,
-                                  presence_formula = .cover_dots$presence,
-                                  positive_formula = .cover_dots$positive)
+                                  presence_formula = .cover_dots[["presence"]],
+                                  positive_formula = .cover_dots[["positive"]])
   temporal <- enc$temporal
   re       <- enc$re
 

@@ -229,7 +229,7 @@
   if (is.null(y))
     stop("gdistremoval() requires `y` (an n_sites x n_bins integer matrix of ",
          "per-distance-band detected counts).", call. = FALSE)
-  if (is.null(dots$y_rem))
+  if (is.null(dots[["y_rem"]]))
     stop("gdistremoval() requires `y_rem` (an n_sites x n_periods integer ",
          "matrix of per-removal-period detected counts).", call. = FALSE)
   if (!is.null(visits))
@@ -241,7 +241,7 @@
          "gdistremoval(cutpoints = ...).", call. = FALSE)
   model <- .tobs_build_gdistremoval(
     abund_formula = formula, det_formula = detection,
-    rem_formula = dots$removal %||% ~1, data = data, y = y, y_rem = dots$y_rem,
+    rem_formula = dots[["removal"]] %||% ~1, data = data, y = y, y_rem = dots[["y_rem"]],
     cutpoints = cutpoints, transect = family$params$transect)
   .tobs_reject_unwired_structs(
     model, "gdistremoval()",

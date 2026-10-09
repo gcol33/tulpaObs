@@ -360,7 +360,7 @@
                                     verbose    = TRUE,
                                     ...) {
   dots <- list(...)
-  newton.max <- as.integer(dots$newton.max %||% 30L)
+  newton.max <- as.integer(dots[["newton.max"]] %||% 30L)
 
   pi_list <- model$process_info
   P_occ <- pi_list[[1L]]$p
@@ -417,9 +417,9 @@
   # developed and first validated). Disable with control$re.aghq = FALSE, set
   # nodes with control$n.quad; larger RE dims keep the EM covariance + the
   # attenuation flag.
-  re_aghq  <- !isFALSE(dots$re.aghq)
-  aghq_nq  <- as.integer(dots$n.quad %||% .tobs_n_quad("ms_occu_cover"))
-  aghq_cap <- as.integer(dots$re.aghq.maxdim %||% 4L)
+  re_aghq  <- !isFALSE(dots[["re.aghq"]])
+  aghq_nq  <- as.integer(dots[["n.quad"]] %||% .tobs_n_quad("ms_occu_cover"))
+  aghq_cap <- as.integer(dots[["re.aghq.maxdim"]] %||% 4L)
 
   fit <- .tobs_community_em(
     S = S, P = P, arm_idx = arm_idx,

@@ -350,7 +350,7 @@
                                   verbose    = TRUE,
                                   ...) {
   dots <- list(...)
-  newton.max <- as.integer(dots$newton.max %||% 30L)
+  newton.max <- as.integer(dots[["newton.max"]] %||% 30L)
 
   pi_list <- model$process_info
   D       <- model$n_sources

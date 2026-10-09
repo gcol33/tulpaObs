@@ -159,16 +159,7 @@
     # log(y_pos); for beta, a moment-matched precision. Under mean / median
     # aggregation the modelled observation is the per-unit mean / median, so the
     # dispersion is pre-fit on those aggregated values.
-    pos_vals <- if (aggregated) {
-      aggfun  <- if (identical(cover_aggregate, "median")) stats::median else mean
-      det_mat <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
-      sw      <- which(rowSums(det_mat) > 0L)
-      vapply(sw, function(i) as.numeric(aggfun(model$y_pos[i, det_mat[i, ]])),
-             numeric(1))
-    } else {
-      pv <- model$y_pos[model$valid & model$y == 1L]
-      pv[is.finite(pv)]
-    }
+    pos_vals <- .occu_cover_pos_prefit_values(model, cover_aggregate)
     phi_pos_init <- if (is_beta) {
       if (length(pos_vals) >= 2L) {
         mu_hat   <- mean(pos_vals)
@@ -202,7 +193,7 @@
   # unsorted, so the mark survives; the pos-arm amplitude below re-derives
   # through `sort()` and is marked again there.
   alpha_axis <- .tobs_alpha_axis_base(dots)
-  sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
+  sigma_grid <- dots[["sigma.grid"]] %||% .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields: each is a per-cell-weighted areal field that
   # contributes weight_i * sigma_trend * z[cell_i] on occupancy and
@@ -215,7 +206,7 @@
   coupled_trends <- lapply(fields[-1L], function(f) {
     list(weight = f$weight, weight_label = f$weight_label %||% "trend")
   })
-  trend_spec <- .occu_cover_resolve_trend(dots$trend, model)
+  trend_spec <- .occu_cover_resolve_trend(dots[["trend"]], model)
   if (!is.null(trend_spec)) {
     if (length(coupled_trends) > 0L) {
       stop("occu_cover(): give the trend field EITHER as a weighted areal term ",
@@ -259,7 +250,7 @@
   #
   # A one-node `phi.grid.pos` states the dispersion outright, so it replaces the
   # pre-fit as the value the arm holds.
-  phi_pos_pin <- if (!is_latent) .cover_phi_stated_pin(dots$phi.grid.pos)
+  phi_pos_pin <- if (!is_latent) .cover_phi_stated_pin(dots[["phi.grid.pos"]])
   if (!is_latent) {
     phi_pos_init <- phi_pos_pin %||% .occu_cover_prefit_dispersion(
       arms_out$responses$pos, model$positive, phi_pos_init,
@@ -407,23 +398,23 @@
       block_start = b0 + 1L, n_blocks = length(re_blocks) - b0)
   }
   if (has_re) {
-    add_re_term("psi", re_spec$group_idx, re_auto(dots$re.sigma.grid),
+    add_re_term("psi", re_spec$group_idx, re_auto(dots[["re.sigma.grid"]]),
                 NULL, re_spec$n_groups, re_spec$var %||% NA_character_,
                 re_spec$levels, 1L, "(Intercept)", FALSE)
   }
   if (has_re_det) {
     for (d in re_det_terms) {
-      add_re_term("p", d$codes, re_auto(dots$re.sigma.grid.p),
+      add_re_term("p", d$codes, re_auto(dots[["re.sigma.grid.p"]]),
                   d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
-                  d$correlated, logchol_grid = dots$re.logchol.grid.p,
+                  d$correlated, logchol_grid = dots[["re.logchol.grid.p"]],
                   coef_scales = d$coef_scales)
     }
   }
   if (has_re_pos) {
     for (d in re_pos_terms) {
-      add_re_term("pos", d$codes, re_auto(dots$re.sigma.grid.pos),
+      add_re_term("pos", d$codes, re_auto(dots[["re.sigma.grid.pos"]]),
                   d$Z, d$n_groups, d$var, d$levels, d$n_coefs, d$coef_names,
-                  d$correlated, logchol_grid = dots$re.logchol.grid.pos,
+                  d$correlated, logchol_grid = dots[["re.logchol.grid.pos"]],
                   coef_scales = d$coef_scales)
     }
   }
@@ -473,16 +464,16 @@
   # first inner solve. The tensor grid multiplies by one node per pinned axis, so
   # it costs the deviation nothing; that is the integrator this path uses, and it
   # overrides an explicit request rather than failing on it.
-  if (has_residual && !identical(dots$integration, "grid")) {
-    if (!is.null(dots$integration)) {
+  if (has_residual && !identical(dots[["integration"]], "grid")) {
+    if (!is.null(dots[["integration"]])) {
       warning(sprintf(paste0(
         "occu_cover(): share(residual = ) integrates on the tensor grid; ",
         "control$integration = \"%s\" is not used. The deviation's %d ",
         "basis-coefficient axes are pinned, and a central composite design ",
         "over them costs a factorial in their count and buys nothing."),
-        dots$integration, length(residual_blocks)), call. = FALSE)
+        dots[["integration"]], length(residual_blocks)), call. = FALSE)
     }
-    dots$integration <- "grid"
+    dots[["integration"]] <- "grid"
   }
 
   # Arm-specific cover field blocks. Each field column of the `to = "positive"` bar
@@ -503,7 +494,7 @@
   # is re-applied on the translated tau vector; the source vector's own marker is
   # the provenance, which covers both the explicit pos-field grid and the shared
   # sigma grid it falls back to.
-  pos_armspec_sigma_grid <- dots$sigma.grid.pos.field %||%
+  pos_armspec_sigma_grid <- dots[["sigma.grid.pos.field"]] %||%
     .tobs_default_armspec_sigma_grid()
   pos_armspec_tau_grid   <- .tobs_sigma_to_tau_grid(pos_armspec_sigma_grid)
 
@@ -581,7 +572,7 @@
   # and a stated grid -- which never passes through that function -- reaches the
   # engine unmarked and is integrated exactly as written.
   if (is_latent) {
-    su_grid <- dots$sigma.u.grid %||% .tobs_default_sigma_u_grid(sigma_u_init)
+    su_grid <- dots[["sigma.u.grid"]] %||% .tobs_default_sigma_u_grid(sigma_u_init)
     phi_grid_arg <- list(pos = .tobs_num_auto(su_grid))
   } else {
     # Stated in the same surface as the pre-fit above (`?occu_cover` documents
@@ -629,7 +620,7 @@
     #
     # A one-node grid is a pin, already written into the arm's `phi` above, so
     # it carries no axis.
-    phi_grid_pos <- dots$phi.grid.pos
+    phi_grid_pos <- dots[["phi.grid.pos"]]
     phi_stated   <- !is.null(phi_grid_pos)
     if (!phi_stated)
       phi_grid_pos <- .cover_phi_grid_span(model$positive, phi_pos_init,
@@ -646,7 +637,7 @@
   # and the fixed within-unit dispersion. Last-writer-wins under the fixed name;
   # the joint driver holds the resolved shared_ptr for the duration of the fit.
   if (is_latent) {
-    n_quad_latent <- as.integer(dots$n.quad %||% .tobs_n_quad(
+    n_quad_latent <- as.integer(dots[["n.quad"]] %||% .tobs_n_quad(
       if (is_beta) "cover_latent_beta" else "cover_latent_lognormal"))
     if (is_beta) {
       cpp_register_occu_cover_beta_latent_coupling(
@@ -690,7 +681,7 @@
     # The MCAR block carries p(p+1)/2 + 1 latent axes (log-Cholesky Sigma +
     # alpha), so the outer grid uses the mode-centred CCD by default rather than
     # a dense tensor (the same recipe the cover-hurdle MCAR path uses).
-    if (is.null(dots$integration)) dots$integration <- "ccd"
+    if (is.null(dots[["integration"]])) dots[["integration"]] <- "ccd"
   } else if (has_trend) {
     # Multi-block path: the intercept ICAR block plus one ICAR block per coupled
     # trend field, all on the same graph and each copied onto the pos arm with
@@ -763,11 +754,11 @@
     # Which density an outer axis carries when the call states none. A formal
     # of the driver, not a control knob. The sampler puts a flat prior on its
     # field hypers, so the two routes are only comparable when this can be set.
-    hyperprior    = dots$hyperprior %||% "proper",
+    hyperprior    = dots[["hyperprior"]] %||% "proper",
     control = c(list(
       max_iter  = as.integer(max.iter),
       tol       = as.numeric(tol),
-      n_threads = as.integer(dots$n.threads %||% 1L),
+      n_threads = as.integer(dots[["n.threads"]] %||% 1L),
       store_Q   = TRUE,
       # Inner-Newton curvature: the engine's default observed Hessian under its
       # LM guard. On the full 25 km Calluna fit it converges in a median of 5
@@ -775,7 +766,7 @@
       # step converged linearly, median 48 (p90 121), and left cells at the cap.
       # The final mode-pass re-factorizes with the observed Hessian either way,
       # so this steers only the path to the mode.
-      hessian   = dots$hessian,
+      hessian   = dots[["hessian"]],
       # Cholesky factor reuse (Shamanskii / chord) is exposed but defaults off for
       # the grid fit. Reuse also makes the off-factor scatter `grad_only` (skipping
       # the beta Hessian fill, the dominant per-iteration cost --
@@ -784,15 +775,15 @@
       # converged log-marginal. The grid fit keeps refresh 1 by default since its
       # SEs/log-det use the true per-iteration curvature; raise via
       # `control$inner.refresh` if a grid fit is scatter-bound and SEs allow it.
-      inner_refresh = as.integer(dots$inner.refresh %||% 1L),
+      inner_refresh = as.integer(dots[["inner.refresh"]] %||% 1L),
       # Outer-grid parallelism (lever 2). The cover hurdle's large spatial
       # field takes the sparse inner-solve path, whose outer grid now runs
       # across `n.threads.outer` threads (per-thread Hessian builder / scratch
       # / specs). Defaults to serial; set it for the full-field fits.
       # `force.sparse` forces the sparse path on small fields (testing / the
       # parallel and factor-reuse paths live there).
-      n_threads_outer = as.integer(dots$n.threads.outer %||% 1L),
-      force_sparse    = isTRUE(dots$force.sparse),
+      n_threads_outer = as.integer(dots[["n.threads.outer"]] %||% 1L),
+      force_sparse    = isTRUE(dots[["force.sparse"]]),
       # Adaptive-grid refinement defaults ON. Non-convergent inner Newton
       # cells (degenerate sigma + small non-zero alpha hyperpoints) drop to
       # -Inf log_marginal under the engine's NaN-safe edge-score path
@@ -804,8 +795,8 @@
       # adaptive_grid. Exposed so a fit can request a genuinely fixed outer grid
       # (`adaptive.grid = FALSE` AND `var.of.means.consistency = FALSE`), which
       # the fused batch driver requires for per-species bit-identity.
-      var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
-      var_of_means_min_ess      = dots$var.of.means.min.ess,
+      var_of_means_consistency  = dots[["var.of.means.consistency"]]  %||% TRUE,
+      var_of_means_min_ess      = dots[["var.of.means.min.ess"]],
       # Cheap-pass screening of the outer grid. Every cell of a copy fit's
       # grid costs a full inner Newton on the areal field, while the posterior
       # mass sits on a handful of them, so `prune = TRUE` first sweeps the
@@ -834,8 +825,8 @@
       # the prior. `copy.slab = "flat"` makes the continuum flat in log alpha
       # over the span `alpha.grid` declares, and `copy.atom.mass = 0` drops the
       # point mass; NULL leaves both at the engine defaults.
-      copy_slab       = dots$copy.slab,
-      copy_atom_mass  = dots$copy.atom.mass,
+      copy_slab       = dots[["copy.slab"]],
+      copy_atom_mass  = dots[["copy.atom.mass"]],
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF. It draws `k_samples`
       # extra hyperparameter points and re-solves the inner Laplace at each on the
       # full areal field, so it dominates the runtime -- ~200 re-solves vs the
@@ -856,40 +847,40 @@
       # unreachable from here: this control list is a whitelist, so a knob it
       # does not name cannot be requested at all. Both keep the engine's own
       # default of off, so a fit that asks for neither is unchanged.
-      subspace_debias = dots$subspace.debias %||% FALSE,
-      cila            = dots$cila %||% FALSE,
-      diagnose_k = dots$diagnose.k %||% FALSE,
+      subspace_debias = dots[["subspace.debias"]] %||% FALSE,
+      cila            = dots[["cila"]] %||% FALSE,
+      diagnose_k = dots[["diagnose.k"]] %||% FALSE,
       # diagnose.draws is the diagnostic's precision knob (k.samples is the legacy
       # alias). The outer Pareto-k is scored ONCE over this many importance draws.
-      k_samples = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
+      k_samples = as.integer(dots[["diagnose.draws"]] %||% dots[["k.samples"]] %||% 500L),
       # Bootstrap outer Pareto-k uncertainty. The k-hat's sampling uncertainty is
       # bootstrapped from its raw importance log-ratios (k.bootstrap replicates, NO
       # new solves): reports the SE, 95% CI and the band_confident flag. A tighter
       # k needs more actual tail ratios -- raise diagnose.draws, NOT k.bootstrap.
       # k.tail.points (NULL = automatic PSIS rule) is an expert tail-threshold
       # control; k.conf.bands the reliability-band boundaries.
-      k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
-      k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
-      k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),
+      k_bootstrap   = as.integer(dots[["k.bootstrap"]] %||% 1000L),
+      k_tail_points = if (is.null(dots[["k.tail.points"]])) NULL else as.integer(dots[["k.tail.points"]]),
+      k_conf_bands  = dots[["k.conf.bands"]] %||% c(0.5, 0.7),
       # Diagnostic parallelism. When `diagnose.k = TRUE` the `k.samples` importance
       # re-solves are independent and run after the grid (every core free), each
       # solved single-threaded, so widening their outer pool is a bit-identical
       # wall-clock speedup. NULL (default) follows the fit's own thread grant
       # (`n.threads.outer` / inner `n.threads`); "auto" grabs the performance
       # cores; an integer pins the width. Forwarded verbatim.
-      k_threads  = dots$k.threads,
+      k_threads  = dots[["k.threads"]],
       # Grid-cell checkpoint/resume. An EVA-scale occu_cover fit runs for
       # hours; `control$checkpoint = list(path =, resume =)` makes the outer
       # grid append each completed cell to `path` and a resume run load the
       # finished cells and solve only the rest, so a killed/rebooted fit
       # resumes instead of restarting. Forwarded verbatim to the engine.
-      checkpoint = dots$checkpoint,
+      checkpoint = dots[["checkpoint"]],
       # Outer-grid node layout. "ccd" places a central composite design over
       # the >= 3 latent axes (intercept + trend sigma/alpha) and crosses the
       # pos-arm phi tensor on top; "grid" forces the dense tensor. Forwarded
       # so a two-field trend fit can request CCD from the consumer side; NULL
       # falls through to the engine default.
-      integration = dots$integration,
+      integration = dots[["integration"]],
       # Outer-grid progress + ETA. Two channels, like the cover() hurdle, both
       # ON by default: `progress` gates the Rcout console progress bar -- ON by
       # default (NOT tied to `verbose`), set dots$progress = FALSE to silence
@@ -899,9 +890,9 @@
       # overrides. `[[` (exact) not `$`: `dots$progress` prefix-matches
       # `progress.file`.
       progress          = dots[["progress"]] %||% TRUE,
-      progress.every    = dots$progress.every,
-      progress.throttle = dots$progress.throttle,
-      progress.file     = dots$progress.file
+      progress.every    = dots[["progress.every"]],
+      progress.throttle = dots[["progress.throttle"]],
+      progress.file     = dots[["progress.file"]]
     ),
     .tobs_outer_grid_control(dots))
   )
@@ -961,7 +952,7 @@
               alpha_request_trend = if (has_trend)
                 .tobs_alpha_axis_trend(dots, alpha_axis) else NULL,
               pos_field_specs = pos_field_specs,
-              n_threads = as.integer(dots$n.threads.outer %||% 1L))
+              n_threads = as.integer(dots[["n.threads.outer"]] %||% 1L))
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
 

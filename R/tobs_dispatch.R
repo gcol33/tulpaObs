@@ -36,10 +36,10 @@
                                approx = "gaussian_laplace",
                                correction = "none", ...) {
   dots <- list(...)
-  if (is.null(dots$colonization)) {
+  if (is.null(dots[["colonization"]])) {
     stop("dyn_occu() requires a `colonization = ~ ...` argument.", call. = FALSE)
   }
-  if (is.null(dots$extinction)) {
+  if (is.null(dots[["extinction"]])) {
     stop("dyn_occu() requires an `extinction = ~ ...` argument.", call. = FALSE)
   }
   model <- .tobs_build_model(
@@ -47,8 +47,8 @@
     det_formula  = detection,
     data         = data,
     y            = y,
-    col_formula  = dots$colonization,
-    ext_formula  = dots$extinction
+    col_formula  = dots[["colonization"]],
+    ext_formula  = dots[["extinction"]]
   )
   # Season-varying colonization / extinction (a [n_sites x (T-1)] matrix column)
   # and season-varying detection (a [n_sites x T] matrix column) are wired for the
@@ -85,15 +85,15 @@
          "list of n_species count vectors).", call. = FALSE)
   }
   response <- family$params$response %||% "poisson"
-  if (!is.null(dots$trials) && !identical(response, "binomial")) {
+  if (!is.null(dots[["trials"]]) && !identical(response, "binomial")) {
     stop("ms_count(): `trials` applies only to ms_count(response = ",
          "\"binomial\"); drop it for the ", response, " response.",
          call. = FALSE)
   }
   bind  <- .tobs_bind_formulas(list(mu = formula), data)
   model <- .tobs_build_ms_count(
-    formula = bind$fe$mu, data = data, y = y, species = dots$species,
-    response = response, trials = dots$trials, structured_terms = bind$terms)
+    formula = bind$fe$mu, data = data, y = y, species = dots[["species"]],
+    response = response, trials = dots[["trials"]], structured_terms = bind$terms)
 
   # Polya-Gamma Gibbs (method = "pg_gibbs", #126): the logistic responses
   # (binomial / bernoulli) admit PG augmentation, so the community coefficient
@@ -235,7 +235,7 @@
 
   model <- .tobs_build_ms_occu(
     occ_formula = bind$fe$psi, det_formula = bind$fe$p,
-    data = data, y = y, species = dots$species,
+    data = data, y = y, species = dots[["species"]],
     structured_terms = bind$terms)
   structs <- .tobs_structures_from_model(model)
 
@@ -402,7 +402,7 @@
   # separate fitter.
   bind  <- .tobs_bind_formulas(list(mu = formula), data)
   model <- .tobs_build_ms_count(
-    formula = bind$fe$mu, data = data, y = y, species = dots$species,
+    formula = bind$fe$mu, data = data, y = y, species = dots[["species"]],
     response = "bernoulli", structured_terms = bind$terms)
 
   structs <- .tobs_structures_from_model(model)
@@ -779,8 +779,8 @@
   }
   model <- .tobs_build_dyn_abun(
     occ_formula = formula, det_formula = detection, data = data, y = y,
-    omega_formula = dots$omega %||% ~1,
-    gamma_formula = dots$gamma %||% ~1,
+    omega_formula = dots[["omega"]] %||% ~1,
+    gamma_formula = dots[["gamma"]] %||% ~1,
     mixture = family$params$mixture %||% "poisson", K_max = family$params$K_max)
   do.call(.tobs_fit_model, c(
     list(model = model,
@@ -806,7 +806,7 @@
   }
   model <- .tobs_build_fp_occu(
     occ_formula = formula, det_formula = detection, data = data, y = y,
-    fp_formula = dots$p10 %||% ~1, b_formula = dots$certainty %||% ~1)
+    fp_formula = dots[["p10"]] %||% ~1, b_formula = dots[["certainty"]] %||% ~1)
   do.call(.tobs_fit_model, c(
     list(model = model,
          method = .map_engine(engine, family = "fp_occu"), priors = priors,
@@ -827,15 +827,15 @@
     stop("ms_abun() requires `y` (a 3D array [n_sites x max_visits x ",
          "n_species] or a named list of count matrices).", call. = FALSE)
   }
-  if (is.null(dots$species)) {
+  if (is.null(dots[["species"]])) {
     stop("ms_abun() requires a `species` argument (the species labels).",
          call. = FALSE)
   }
   model <- .tobs_build_ms_abun(
     abund_formula = formula, det_formula = detection,
-    data = data, y = y, species = dots$species,
-    det_visit_formula = dots$det_visit_formula,
-    det_visit_data    = dots$det_visit_data)
+    data = data, y = y, species = dots[["species"]],
+    det_visit_formula = dots[["det_visit_formula"]],
+    det_visit_data    = dots[["det_visit_data"]])
 
   # NUTS (method = "nuts"): sample the exact joint posterior of the non-spatial
   # community N-mixture (community means, per-species deviations, and community
@@ -1023,7 +1023,7 @@
     stop("ms_distance() requires `y` (a 3D array [n_sites x n_bins x ",
          "n_species] or a named list of per-bin count matrices).", call. = FALSE)
   }
-  if (is.null(dots$species)) {
+  if (is.null(dots[["species"]])) {
     stop("ms_distance() requires a `species` argument (the species labels).",
          call. = FALSE)
   }
@@ -1034,7 +1034,7 @@
   }
   model <- .tobs_build_ms_distance(
     abund_formula = formula, det_formula = detection,
-    data = data, y = y, species = dots$species,
+    data = data, y = y, species = dots[["species"]],
     cutpoints  = family$params$cutpoints,
     key        = family$params$key      %||% "halfnorm",
     transect   = family$params$transect %||% "line",
@@ -1096,16 +1096,16 @@
          "n_species] or a named list of detection-history matrices).",
          call. = FALSE)
   }
-  if (is.null(dots$y_pos)) {
+  if (is.null(dots[["y_pos"]])) {
     stop("ms_occu_cover() requires `y_pos` (a 3D array / list matching `y`; ",
          "values used only where y == 1).", call. = FALSE)
   }
-  if (is.null(dots$species)) {
+  if (is.null(dots[["species"]])) {
     stop("ms_occu_cover() requires a `species` argument (the species labels).",
          call. = FALSE)
   }
 
-  pos_formula <- dots$positive %||% detection
+  pos_formula <- dots[["positive"]] %||% detection
 
   # A single icar() shared field on the occupancy arm routes to the K=1
   # reduced-rank spatial-factor community fitter (Laplace-EM): per-species
@@ -1143,9 +1143,9 @@
       pos_formula      = vd_pos$det_formula,
       data             = data,
       y                = y,
-      y_pos            = dots$y_pos,
+      y_pos            = dots[["y_pos"]],
       positive         = family$params$positive,
-      species          = dots$species,
+      species          = dots[["species"]],
       adj              = sp$graph,
       K                = if (auto_K) 1L else as.integer(nf),
       cover_factor     = isTRUE(sp$cover_factor),
@@ -1225,9 +1225,9 @@
     pos_formula      = vd_pos$det_formula,
     data             = data,
     y                = y,
-    y_pos            = dots$y_pos,
+    y_pos            = dots[["y_pos"]],
     positive         = family$params$positive,
-    species          = dots$species,
+    species          = dots[["species"]],
     det_visit_formula = vd_det$det_visit_formula,
     det_visit_data    = vd_det$visits,
     pos_visit_formula = vd_pos$det_visit_formula,
@@ -1286,8 +1286,8 @@
   bind <- .tobs_bind_formulas(list(psi1 = formula, p = detection), data)
   model <- .tobs_build_ms_dyn_occu(
     occ_formula = bind$fe$psi1, det_formula = bind$fe$p,
-    col_formula = dots$colonization, ext_formula = dots$extinction,
-    data = data, y = y, species = dots$species,
+    col_formula = dots[["colonization"]], ext_formula = dots[["extinction"]],
+    data = data, y = y, species = dots[["species"]],
     structured_terms = bind$terms)
   structs <- .tobs_structures_from_model(model)
 
@@ -1388,7 +1388,7 @@
   }
   model <- .tobs_build_ms_int_occu(
     occ_formula = formula, det_formula = detection,
-    data = data, y = y, species = dots$species, site_map = dots$site_map)
+    data = data, y = y, species = dots[["species"]], site_map = dots[["site_map"]])
 
   # The community integrated family consumes no structured term on either
   # engine: the shared community Laplace-EM and the PG-Gibbs sampler both fit

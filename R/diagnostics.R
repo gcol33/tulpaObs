@@ -86,7 +86,7 @@ waic.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
                                    n.threads = .tobs_default_threads(n.threads))
   dots <- .tobs_loo_dots(x, loo.unit, list(...), "waic()")
-  out <- loo::waic(.tobs_loglik_fold_group(ll_mat, dots$group))
+  out <- loo::waic(.tobs_loglik_fold_group(ll_mat, dots[["group"]]))
   attr(out, "loo_unit") <- loo.unit
   out
 }
@@ -105,7 +105,7 @@ loo.tobs_fit <- function(x, n.draws = 1000L, loo.unit = c("obs", "cell"),
   ll_mat <- .tobs_pointwise_loglik(x, n.draws = n.draws,
                                    n.threads = .tobs_default_threads(n.threads))
   dots <- .tobs_loo_dots(x, loo.unit, list(...), "loo()")
-  out <- .tobs_loo_one(.tobs_loglik_fold_group(ll_mat, dots$group), x$chain_id)
+  out <- .tobs_loo_one(.tobs_loglik_fold_group(ll_mat, dots[["group"]]), x$chain_id)
   attr(out, "loo_unit") <- loo.unit
   out
 }
@@ -180,7 +180,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
          "cover() and occu_cover() with a spatial field; a non-spatial fit has ",
          "no cells, so use the default `loo.unit = \"obs\"`.", call. = FALSE)
   }
-  dots$group <- grp
+  dots[["group"]] <- grp
   dots
 }
 

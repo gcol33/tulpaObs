@@ -86,8 +86,8 @@
   sp_control <- tobs_args$control
   sp_control[["batch.backend"]] <- NULL
   sp_dots <- tobs_args$dots
-  sp_dots$species <- NULL
-  sp_dots$y_pos <- .tobs_response_slice(y_pos, s)
+  sp_dots[["species"]] <- NULL
+  sp_dots[["y_pos"]] <- .tobs_response_slice(y_pos, s)
   c(list(
       formula   = tobs_args$formula,
       data      = tobs_args$data,
@@ -103,8 +103,8 @@
 
 .tobs_fit_occu_cover_batch <- function(tobs_args, y, B) {
   dots     <- tobs_args$dots
-  y_pos    <- dots$y_pos
-  species  <- dots$species
+  y_pos    <- dots[["y_pos"]]
+  species  <- dots[["species"]]
 
   B_pos <- .tobs_multiresponse_n(y_pos)
   if (is.null(B_pos)) {
@@ -269,9 +269,9 @@
     }
   }
 
-  site     <- dots$site
-  response <- dots$response
-  det.covs <- dots$det.covs
+  site     <- dots[["site"]]
+  response <- dots[["response"]]
+  det.covs <- dots[["det.covs"]]
   if (is.null(site) || is.null(response)) {
     stop("tobs(by = ): supply `site = ` and `response = ` (the long-format ",
          "site identifier and response column names).", call. = FALSE)
@@ -298,7 +298,7 @@
   # occu_cover: a site x visit response. Detection arm = `response` (0/1), cover
   # arm = `y_pos` (continuous), both pivoted onto the shared grid. Visit-level
   # covariates flow to `visits` as the det.covs matrices tobs_data() returns.
-  y_pos <- dots$y_pos
+  y_pos <- dots[["y_pos"]]
   if (is.null(visit) || is.null(y_pos)) {
     stop("tobs(by = ) for occu_cover(): supply `visit = ` (the long-format ",
          "visit/replicate column) and `y_pos = ` (the cover column).",
@@ -423,9 +423,9 @@
   ypos_list <- lapply(arms, `[[`, "y_pos")
   names(y_list) <- labels
   fit_dots <- dots
-  fit_dots$site <- NULL; fit_dots$visit <- NULL
-  fit_dots$response <- NULL; fit_dots$det.covs <- NULL
-  fit_dots$y_pos <- ypos_list
+  fit_dots[["site"]] <- NULL; fit_dots[["visit"]] <- NULL
+  fit_dots[["response"]] <- NULL; fit_dots[["det.covs"]] <- NULL
+  fit_dots[["y_pos"]] <- ypos_list
 
   .tobs_fit_occu_cover_batch(
     tobs_args = list(formula = formula, data = cell_data, family = family,
@@ -560,16 +560,16 @@
            call. = FALSE)
     }
   }
-  if (is.null(dots$site) || is.null(visit) || is.null(dots$response) ||
-      is.null(dots$y_pos)) {
+  if (is.null(dots[["site"]]) || is.null(visit) || is.null(dots[["response"]]) ||
+      is.null(dots[["y_pos"]])) {
     stop("occu_cover() from a long frame needs `site = `, `visit = `, ",
          "`response = ` (the 0/1 detection column) and `y_pos = ` (the cover ",
          "column).", call. = FALSE)
   }
   .occu_cover_arms_from_long(
-    data, site = dots$site, visit = visit, response = dots$response,
-    y_pos = dots$y_pos, occ.covs = dots$occ.covs, det.covs = dots$det.covs,
-    coords = dots$coords, compact = compact, pos_type = pos_type)
+    data, site = dots[["site"]], visit = visit, response = dots[["response"]],
+    y_pos = dots[["y_pos"]], occ.covs = dots[["occ.covs"]], det.covs = dots[["det.covs"]],
+    coords = dots[["coords"]], compact = compact, pos_type = pos_type)
 }
 
 
@@ -654,8 +654,8 @@ occu_cover_inputs <- function(data, site, visit, response, y_pos,
   # cover vector to the shared site set; a site the species never reports is NA
   # (dropped from both arms by the cover encoder, i.e. not observed there).
   fit_dots <- dots
-  fit_dots$site <- NULL; fit_dots$response <- NULL
-  fit_dots$visit <- NULL; fit_dots$det.covs <- NULL; fit_dots$y_pos <- NULL
+  fit_dots[["site"]] <- NULL; fit_dots[["response"]] <- NULL
+  fit_dots[["visit"]] <- NULL; fit_dots[["det.covs"]] <- NULL; fit_dots[["y_pos"]] <- NULL
 
   fits <- vector("list", B)
   for (b in seq_len(B)) {

@@ -426,8 +426,8 @@
 
   dots <- list(...)
   blocks <- .tobs_svc_field_blocks(svc, X_occ, n_sites, "occu",
-                                   sigma_grid = dots$sigma.grid,
-                                   phi_grid = dots$phi.grid)
+                                   sigma_grid = dots[["sigma.grid"]],
+                                   phi_grid = dots[["phi.grid"]])
 
   prior_spec <- .resolve_occu_priors(priors)
   marg <- .tobs_occu_svc_marginal(model, prior_spec)

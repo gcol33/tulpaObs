@@ -214,7 +214,7 @@
          "covariates (`visits`) are not yet supported.", call. = FALSE)
   model <- .tobs_build_double_observer(
     abund_formula = formula, det_formula = detection, data = data, y = y,
-    type = type, primary = dots$primary)
+    type = type, primary = dots[["primary"]])
   .tobs_reject_unwired_structs(
     model, "double_observer()",
     hint = paste0("the double-observer marginal is fitted on fixed effects ",

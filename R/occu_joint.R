@@ -208,7 +208,7 @@
   # The `1 / sigma^2` translation drops the auto-grid marker, so it is re-applied
   # on the tau vector every block receives; the source vector's own marker is the
   # provenance.
-  sigma_grid <- dots$sigma.grid %||% .tobs_default_occu_joint_sigma_grid()
+  sigma_grid <- dots[["sigma.grid"]] %||% .tobs_default_occu_joint_sigma_grid()
   tau_grid   <- .tobs_mark_auto(1.0 / (as.numeric(sigma_grid)^2),
                                 tulpa::is_auto_grid(sigma_grid))
 
@@ -277,10 +277,10 @@
     control = c(list(
       max_iter        = as.integer(max.iter),
       tol             = as.numeric(tol),
-      n_threads       = as.integer(dots$n.threads %||% 1L),
+      n_threads       = as.integer(dots[["n.threads"]] %||% 1L),
       store_Q         = TRUE,
-      hessian         = dots$hessian %||% "lm",
-      inner_refresh   = as.integer(dots$inner.refresh %||% 1L),
+      hessian         = dots[["hessian"]] %||% "lm",
+      inner_refresh   = as.integer(dots[["inner.refresh"]] %||% 1L),
       # The outer grid runs across `n.threads.outer` threads (each cell an
       # independent inner Laplace solve). At EVA scale the per-cell inner solve on
       # the full areal field dominates, so the outer grid is the parallelism that
@@ -288,33 +288,33 @@
       # parallelism (leaving a few cores) rather than serial, since a standalone
       # occu() SVC fit on real data is the EVA-scale workload this path targets.
       n_threads_outer = as.integer(
-        .tobs_default_threads(dots$n.threads.outer)),
-      force_sparse    = isTRUE(dots$force.sparse),
-      var_of_means_consistency  = dots$var.of.means.consistency  %||% TRUE,
-      var_of_means_min_ess      = dots$var.of.means.min.ess,
+        .tobs_default_threads(dots[["n.threads.outer"]])),
+      force_sparse    = isTRUE(dots[["force.sparse"]]),
+      var_of_means_consistency  = dots[["var.of.means.consistency"]]  %||% TRUE,
+      var_of_means_min_ess      = dots[["var.of.means.min.ess"]],
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF on this path. At EVA
       # scale it importance-samples the hyperparameter posterior with `k_samples`
       # extra inner solves on the full areal field, which dominates the runtime
       # (the engine note records ~50x at EVA scale) -- and the single-arm
       # occupancy field posterior is well-behaved, so the diagnostic is an opt-in,
       # not a default cost. Set control$diagnose.k = TRUE to compute it.
-      diagnose_k = dots$diagnose.k %||% FALSE,
+      diagnose_k = dots[["diagnose.k"]] %||% FALSE,
       # diagnose.draws is the precision knob (k.samples is the legacy alias); the
       # outer Pareto-k is scored ONCE over this many importance draws.
-      k_samples = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
+      k_samples = as.integer(dots[["diagnose.draws"]] %||% dots[["k.samples"]] %||% 500L),
       # Bootstrap outer Pareto-k uncertainty: SE / 95% CI / band_confident from
       # resampling the raw log-ratios (NO new solves). Raise diagnose.draws, not
       # k.bootstrap, for a tighter k. k.tail.points (NULL = automatic PSIS rule) is
       # an expert control; k.conf.bands the band boundaries.
-      k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
-      k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
-      k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),
-      checkpoint = dots$checkpoint,
-      integration = dots$integration,
+      k_bootstrap   = as.integer(dots[["k.bootstrap"]] %||% 1000L),
+      k_tail_points = if (is.null(dots[["k.tail.points"]])) NULL else as.integer(dots[["k.tail.points"]]),
+      k_conf_bands  = dots[["k.conf.bands"]] %||% c(0.5, 0.7),
+      checkpoint = dots[["checkpoint"]],
+      integration = dots[["integration"]],
       progress          = dots[["progress"]] %||% TRUE,
-      progress.every    = dots$progress.every,
-      progress.throttle = dots$progress.throttle,
-      progress.file     = dots$progress.file
+      progress.every    = dots[["progress.every"]],
+      progress.throttle = dots[["progress.throttle"]],
+      progress.file     = dots[["progress.file"]]
     ),
     .tobs_outer_grid_control(dots))
   )
@@ -323,7 +323,7 @@
               has_trend = has_trend, n_trend = n_trend,
               coupled_trends = coupled_trends, model = model,
               n_threads = as.integer(
-                .tobs_default_threads(dots$n.threads.outer)))
+                .tobs_default_threads(dots[["n.threads.outer"]])))
 
   fit <- do.call(tulpa::tulpa_nested_laplace_joint, fit_call)
   .occu_jc_postprocess(fit, ctx)

@@ -595,7 +595,7 @@
     stop("occu_multiscale_cover() requires `y` (an n_plots x max_visits ",
          "detection-history matrix).", call. = FALSE)
   }
-  if (is.null(dots$y_pos)) {
+  if (is.null(dots[["y_pos"]])) {
     stop("occu_multiscale_cover() requires `y_pos` (n_plots x max_visits; ",
          "values used only where y == 1).", call. = FALSE)
   }
@@ -617,12 +617,12 @@
             "occu_cover() if a two-level model is intended.")
   }
 
-  theta_formula <- dots$availability %||% ~ 1
+  theta_formula <- dots[["availability"]] %||% ~ 1
   # A share() on the cover formula names the coupling amplitude of the shared
   # field, exactly as on occu_cover(). Strip it off first so the rejection below
   # and the visit-design build see a clean fixed-effects formula; it is
   # translated once the field blocks are resolved.
-  pos_copy      <- .occu_cover_extract_pos_copies(dots$positive %||% detection)
+  pos_copy      <- .occu_cover_extract_pos_copies(dots[["positive"]] %||% detection)
   pos_formula   <- pos_copy$formula
   is_nuts       <- identical(engine, "nuts")
   non_spatial   <- identical(engine, "laplace") || is_nuts
@@ -704,7 +704,7 @@
     pos_formula       = vd_pos$det_formula,
     data              = data,
     y                 = y,
-    y_pos             = dots$y_pos,
+    y_pos             = dots[["y_pos"]],
     plot_cell         = plot_cell,
     n_cells           = n_cells,
     positive          = family$params$positive,

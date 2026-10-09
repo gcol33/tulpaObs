@@ -356,7 +356,7 @@
     stop("occu_cover() requires `y` (N x J detection-history matrix).",
          call. = FALSE)
   }
-  if (is.null(dots$y_pos)) {
+  if (is.null(dots[["y_pos"]])) {
     stop("occu_cover() requires `y_pos` (N x J positive-cover matrix; ",
          "values used only where y == 1).", call. = FALSE)
   }
@@ -373,7 +373,7 @@
   # with a clear error rather than a silent dense rebuild.
   ragged <- inherits(y, "tobs_ragged")
   if (ragged) {
-    y_pos_arg <- dots$y_pos
+    y_pos_arg <- dots[["y_pos"]]
     if (inherits(y_pos_arg, "tobs_ragged")) {
       if (!identical(y_pos_arg$site, y$site) || !identical(y_pos_arg$visit, y$visit))
         stop("occu_cover(): compact `y` and `y_pos` are not aligned (different ",
@@ -385,7 +385,7 @@
     }
   }
 
-  pos_formula <- dots$positive
+  pos_formula <- dots[["positive"]]
 
   # Placement -> arm: a spatial-field term written in the positive (or detection)
   # formula is pulled off that arm formula and carried as a (call, arm) pair, so
@@ -494,7 +494,7 @@
       model_sp <- .tobs_build_occu_cover(
         occ_formula = nuts_sp$fe, det_formula = vd_det$det_formula,
         pos_formula = vd_pos$det_formula, data = data, y = y,
-        y_pos = dots$y_pos, positive = family$params$positive,
+        y_pos = dots[["y_pos"]], positive = family$params$positive,
         det_visit_formula = vd_det$det_visit_formula,
         det_visit_data    = vd_det$visits,
         pos_visit_formula = vd_pos$det_visit_formula,
@@ -718,7 +718,7 @@
       pos_formula      = pos_site_formula,
       data             = data,
       y                = y,
-      y_pos            = dots$y_pos,
+      y_pos            = dots[["y_pos"]],
       positive         = family$params$positive,
       det_visit_formula = vd_det$det_visit_formula,
       det_visit_data    = vd_det$visits,

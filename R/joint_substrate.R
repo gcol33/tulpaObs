@@ -516,6 +516,24 @@
 # the marginal estimator used with the RESIDUAL variance in place of the
 # marginal one, so the correction reaches it in the same direction (a marginal
 # variance is too large, so the precision it implies is too small).
+# The cover observations the pos arm models, for the marginal dispersion
+# pre-fit: under `cover_aggregate = "none"` every detected visit's finite cover,
+# read through the one visit view so a dense grid and a compact carrier hand
+# the pre-fit the same values; under mean / median aggregation the per-unit
+# aggregate over those visits (the padded grid, aggregation being dense-only).
+.occu_cover_pos_prefit_values <- function(model, cover_aggregate = "none") {
+  if (identical(cover_aggregate, "none")) {
+    view <- .occu_cover_visit_view(model)
+    pv   <- view$y_pos_visit[view$y_det_visit == 1L]
+    return(pv[is.finite(pv)])
+  }
+  aggfun  <- if (identical(cover_aggregate, "median")) stats::median else mean
+  det_mat <- model$valid & (model$y == 1L) & is.finite(model$y_pos)
+  sw      <- which(rowSums(det_mat) > 0L)
+  vapply(sw, function(i) as.numeric(aggfun(model$y_pos[i, det_mat[i, ]])),
+         numeric(1))
+}
+
 .occu_cover_prefit_dispersion <- function(arm, positive, fallback,
                                           scored = NULL) {
   y <- as.numeric(arm$y)

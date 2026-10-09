@@ -625,7 +625,7 @@
   }
   model <- .tobs_build_distsamp_open(
     abund_formula = formula, det_formula = detection,
-    omega_formula = dots$omega %||% ~1, gamma_formula = dots$gamma %||% ~1,
+    omega_formula = dots[["omega"]] %||% ~1, gamma_formula = dots[["gamma"]] %||% ~1,
     data = data, y = y, cutpoints = cutpoints,
     transect = family$params$transect, K_max = family$params$K_max,
     mixture = mixture, dynamics = dynamics)

@@ -348,7 +348,7 @@
   em   <- .tobs_ms_count_run_em(
     model, priors = priors, max.iter = max.iter, tol = tol,
     sigma.beta = sigma.beta, verbose = verbose,
-    newton.max = as.integer(dots$newton.max %||% 30L))
+    newton.max = as.integer(dots[["newton.max"]] %||% 30L))
   build_ms_count_fit(model, em$fit, em$arm_idx, em$disp)
 }
 

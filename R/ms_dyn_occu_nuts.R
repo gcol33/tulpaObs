@@ -314,7 +314,7 @@
   .tobs_fill_sampler(environment(), "nuts")
 
   dots <- list(...)
-  newton.max <- as.integer(dots$newton.max %||% 30L)
+  newton.max <- as.integer(dots[["newton.max"]] %||% 30L)
   pieces <- .tobs_ms_dyn_occu_nuts_pieces(model)
   lay <- .tobs_ms_dyn_occu_nuts_layout(pieces$P_psi1, pieces$P_p,
                                        pieces$P_gam, pieces$P_eps, pieces$S)

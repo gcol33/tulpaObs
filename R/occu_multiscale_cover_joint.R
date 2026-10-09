@@ -221,12 +221,12 @@
   # the arm's dispersion, through the same pair `cover()` and `occu_cover()` use.
   # A one-node `phi.grid.pos` states the dispersion outright and replaces the
   # pre-fit as the value the arm holds; it then carries no axis.
-  phi_pos_pin  <- .cover_phi_stated_pin(dots$phi.grid.pos)
+  phi_pos_pin  <- .cover_phi_stated_pin(dots[["phi.grid.pos"]])
   phi_pos_init <- .cover_phi_sd_to_engine(
     phi_pos_pin %||% phi_pos_init, .cover_pos_engine_family(model$positive))
 
   alpha_axis <- .tobs_alpha_axis_base(dots)
-  sigma_grid <- dots$sigma.grid %||% .tobs_default_sigma_grid()
+  sigma_grid <- dots[["sigma.grid"]] %||% .tobs_default_sigma_grid()
 
   # Coupled trend (SVC) fields: every weighted areal term in the psi formula
   # beyond the unweighted intercept field is a spatially-varying coefficient --
@@ -317,7 +317,7 @@
   # caller's declaration, so it is re-applied on the converted vector: a plain
   # vector stays a pin, and a caller who wrapped theirs in `auto_grid()` keeps
   # both halves of what they declared.
-  phi_grid_pos <- dots$phi.grid.pos
+  phi_grid_pos <- dots[["phi.grid.pos"]]
   phi_grid_arg <- if (!is.null(phi_grid_pos) && is.null(phi_pos_pin))
                     list(pos = .tobs_mark_auto(
                       .cover_phi_sd_to_engine(
@@ -336,35 +336,35 @@
     control = c(list(
       max_iter        = as.integer(max.iter),
       tol             = as.numeric(tol),
-      n_threads       = as.integer(dots$n.threads %||% 1L),
+      n_threads       = as.integer(dots[["n.threads"]] %||% 1L),
       store_Q         = TRUE,
-      hessian         = dots$hessian,
-      inner_refresh   = as.integer(dots$inner.refresh %||% 1L),
-      n_threads_outer = as.integer(dots$n.threads.outer %||% 1L),
-      force_sparse    = isTRUE(dots$force.sparse),
+      hessian         = dots[["hessian"]],
+      inner_refresh   = as.integer(dots[["inner.refresh"]] %||% 1L),
+      n_threads_outer = as.integer(dots[["n.threads.outer"]] %||% 1L),
+      force_sparse    = isTRUE(dots[["force.sparse"]]),
       # Outer Pareto-k-hat accuracy diagnostic defaults OFF, matching the
       # occu_cover_joint and occu_joint paths: the `k_samples` extra inner
       # re-solves on the full areal field dominate the runtime and scale with the
       # field, while the diagnostic only reports k-hat (it does not move the betas
       # / SDs / field). Opt in with control$diagnose.k
       # = TRUE.
-      diagnose_k = dots$diagnose.k %||% FALSE,
+      diagnose_k = dots[["diagnose.k"]] %||% FALSE,
       # diagnose.draws is the precision knob (k.samples is the legacy alias); the
       # outer Pareto-k is scored ONCE over this many importance draws.
-      k_samples = as.integer(dots$diagnose.draws %||% dots$k.samples %||% 500L),
+      k_samples = as.integer(dots[["diagnose.draws"]] %||% dots[["k.samples"]] %||% 500L),
       # Bootstrap outer Pareto-k uncertainty: SE / 95% CI / band_confident from
       # resampling the raw log-ratios (NO new solves). Raise diagnose.draws, not
       # k.bootstrap, for a tighter k. k.tail.points (NULL = automatic PSIS rule) is
       # an expert control; k.conf.bands the band boundaries.
-      k_bootstrap   = as.integer(dots$k.bootstrap %||% 1000L),
-      k_tail_points = if (is.null(dots$k.tail.points)) NULL else as.integer(dots$k.tail.points),
-      k_conf_bands  = dots$k.conf.bands %||% c(0.5, 0.7),
+      k_bootstrap   = as.integer(dots[["k.bootstrap"]] %||% 1000L),
+      k_tail_points = if (is.null(dots[["k.tail.points"]])) NULL else as.integer(dots[["k.tail.points"]]),
+      k_conf_bands  = dots[["k.conf.bands"]] %||% c(0.5, 0.7),
       # Diagnostic parallelism: the independent k.samples re-solves run after
       # the grid (cores free), so widening their outer pool is a bit-identical
       # speedup. NULL follows the fit's thread grant; "auto" grabs the
       # performance cores; an integer pins it. Forwarded verbatim.
-      k_threads  = dots$k.threads,
-      checkpoint = dots$checkpoint
+      k_threads  = dots[["k.threads"]],
+      checkpoint = dots[["checkpoint"]]
     ),
     .tobs_outer_grid_control(dots))
   )
@@ -406,7 +406,7 @@
   idx_joint     <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx, field_idx)
   mix           <- .joint_inner_vcov_mixture(
     fit, idx_joint, n_dense = p_beta, w = w, ok_cells = ok_cells,
-    n_threads = as.integer(dots$n.threads.outer %||% 1L))
+    n_threads = as.integer(dots[["n.threads.outer"]] %||% 1L))
 
   if (is.null(mix)) {
     # Older tulpa without stored per-grid Q: marginal-only diagonal fallback.

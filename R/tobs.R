@@ -139,29 +139,43 @@
 #'   detection logit on the visits it made. It is fitted with
 #'   `method = "laplace"` or `"nuts"`, and other families refuse it.
 #' @param method inference route, naming a fully-specified path rather than a
-#'   pair of orthogonal knobs:
+#'   pair of orthogonal knobs. Each family accepts a subset of the routes below
+#'   (listed per route, from the package's support table); an unsupported
+#'   method errors with the list of methods that family supports, and the
+#'   structured terms a route carries for a given family are on that family's
+#'   help page.
 #'   * `"auto"` -- the family's default route (see `default_engine`).
 #'   * `"laplace"` -- EM + Laplace with Gaussian marginals (fast default).
+#'     Every family except [t_occu()].
 #'   * `"laplace_sla"` -- Laplace with skew-corrected (simplified-Laplace)
-#'     marginals.
+#'     marginals. [occu()], [dyn_occu()], [int_occu()], [cover()].
 #'   * `"laplace_gibbs"` / `"laplace_mi"` -- Laplace with a post-EM Gibbs /
 #'     multiple-imputation correction. The fixed-effect prior threads into the
 #'     correction refits, so these use the same
 #'     weakly-informative default prior as `"laplace"`; pass `priors = FALSE`
-#'     for the unpenalised correction.
-#'   * `"pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact single-season
-#'     occupancy posterior (the spOccupancy `PGOcc` engine). A real MCMC chain
+#'     for the unpenalised correction. [occu()], [dyn_occu()], [int_occu()].
+#'   * `"pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact occupancy
+#'     posterior (the spOccupancy `PGOcc` engines). A real MCMC chain
 #'     (with `Rhat` / `ESS` diagnostics), distinct from `"laplace_gibbs"` (a
 #'     stochastic-EM variance correction). Sampler controls (`n.iter`,
-#'     `n.warmup`, `n.chains`, `n.thin`, `seed`, `sigma.beta`). v1: single-season
-#'     `occu()`, site-level detection, no structured terms.
-#'   * `"nested_laplace"` -- multi-block nested Laplace (single-season
-#'     occupancy and cover-hurdle joint).
+#'     `n.warmup`, `n.chains`, `n.thin`, `seed`, `sigma.beta`). [occu()]
+#'     (site-level detection; an `icar()` field on occupancy), [ms_occu()],
+#'     [ms_dyn_occu()], [ms_int_occu()], [jsdm()], [ms_count()], and
+#'     [t_occu()], whose only route it is.
+#'   * `"nested_laplace"` -- multi-block nested Laplace: the structured terms
+#'     (areal fields, shared cover-hurdle fields, latent factors) are
+#'     integrated over a grid of their hyperparameters. [occu()],
+#'     [dyn_occu()], [int_occu()], [dyn_int_occu()], [ms_occu()],
+#'     [ms_dyn_occu()], [jsdm()], [count()], [ms_count()], [abun()],
+#'     [ms_abun()], [dyn_abun()], [removal()], [distance()], [ms_distance()],
+#'     [fp_occu()], [cover()], [occu_cover()], [occu_multiscale_cover()].
 #'   * `"nested_laplace_sla"` -- nested Laplace with skew-corrected marginals.
-#'   * `"nuts"` -- HMC / NUTS sampler (every structure; reports Rhat / ESS).
-#'   Not every method is available for every family (e.g. the cover hurdle has
-#'   no `"nuts"` path; `"nested_laplace"` is occupancy- and cover-only). An
-#'   unsupported method errors with the list of methods that family supports.
+#'     [occu()], [cover()].
+#'   * `"nuts"` -- HMC / NUTS sampler (reports Rhat / ESS). [occu()],
+#'     [dyn_occu()], [int_occu()], [ms_occu()], [ms_dyn_occu()],
+#'     [ms_int_occu()], [jsdm()], [ms_count()], [abun()], [ms_abun()],
+#'     [dyn_abun()], [removal()], [distance()], [fp_occu()], [cover()],
+#'     [occu_cover()], [ms_occu_cover()], [occu_multiscale_cover()].
 #' @param priors optional prior specification. For occupancy families fit
 #'   with a Laplace method (`method = "laplace"`, `"laplace_sla"`,
 #'   `"nested_laplace"`), pass a list or [occu_priors()] object to set
@@ -505,8 +519,8 @@ tobs <- function(formula,
     # pipeline; the cover encoder reads both per-arm formulas.
     .tobs_dots <- list(...)
     if (inherits(family, "tobs_family") && identical(family$name, "cover") &&
-        !is.null(.tobs_dots$presence)) {
-      formula <- .tobs_dots$presence
+        !is.null(.tobs_dots[["presence"]])) {
+      formula <- .tobs_dots[["presence"]]
     } else {
       stop("A state-process formula is required (`occurrence =` for the cover ",
            "hurdle, `formula =` otherwise).", call. = FALSE)
@@ -540,7 +554,7 @@ tobs <- function(formula,
   # sub-fits below thread the cover positive-arm formula through their `dots`
   # (the old `...` spelling). Fold it back in so those paths still receive it.
   fwd_dots <- list(...)
-  if (!is.null(positive)) fwd_dots$positive <- positive
+  if (!is.null(positive)) fwd_dots[["positive"]] <- positive
 
   if (!is.null(by)) {
     return(.tobs_fit_by_species(
@@ -559,7 +573,7 @@ tobs <- function(formula,
   # nested-Laplace route (the joint engine reads the ragged arms with no per-site
   # visit cap) and is overridable via control$compact.
   if (is.null(by) && identical(family$name, "occu_cover") &&
-      is.data.frame(data) && !is.null(fwd_dots$response)) {
+      is.data.frame(data) && !is.null(fwd_dots[["response"]])) {
     if (!is.null(y)) {
       stop("occu_cover(): supply the long-frame `response = ` OR a pre-built ",
            "`y = `, not both.", call. = FALSE)
@@ -573,12 +587,12 @@ tobs <- function(formula,
     data   <- arms$site_data
     y      <- arms$y
     visits <- arms$visits
-    fwd_dots$y_pos    <- arms$y_pos
-    fwd_dots$response <- NULL
-    fwd_dots$site     <- NULL
-    fwd_dots$det.covs <- NULL
-    fwd_dots$occ.covs <- NULL
-    fwd_dots$coords   <- NULL
+    fwd_dots[["y_pos"]]    <- arms$y_pos
+    fwd_dots[["response"]] <- NULL
+    fwd_dots[["site"]]     <- NULL
+    fwd_dots[["det.covs"]] <- NULL
+    fwd_dots[["occ.covs"]] <- NULL
+    fwd_dots[["coords"]]   <- NULL
   }
 
   # Response on the top formula LHS. A single-vector-response family (cover

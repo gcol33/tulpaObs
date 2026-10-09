@@ -86,6 +86,13 @@ test_that("compact == dense: byte-identical fit on uncapped data", {
   expect_equal(fit_c$sds,   fit_d$sds,   tolerance = 1e-8)
   expect_identical(fit_c$N, fit_d$N)
 
+  # The cover-dispersion pre-fit reads the detected visits' cover through the
+  # one visit view, so the compact carrier hands it the dense grid's values.
+  pv_d <- .occu_cover_pos_prefit_values(fit_d$model)
+  pv_c <- .occu_cover_pos_prefit_values(fit_c$model)
+  expect_gt(length(pv_c), 0L)
+  expect_equal(sort(pv_c), sort(pv_d))
+
   # Downstream predictions and WAIC are the same (seed the draws so the
   # comparison is on the algebra, not Monte-Carlo noise).
   nd <- data.frame(cell = seq_len(nc), time.sc = 0,
