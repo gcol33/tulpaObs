@@ -18,9 +18,8 @@
 # branches) drives the inner Newton.
 #
 # Spatial path only. Non-spatial occu_cover stays on method = "laplace";
-# the spatial v3 nested-Laplace path (.tobs_fit_occu_cover_nested) stays
-# as the default under method = "nested_laplace". This file is reached
-# via control$engine = "joint" -- same pattern as v2_joint.
+# every spatial occu_cover() fit under method = "nested_laplace" builds its
+# arms here.
 # =============================================================================
 
 

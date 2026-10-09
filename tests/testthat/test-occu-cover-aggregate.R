@@ -112,15 +112,6 @@ test_that("aggregation resolution, fall-back, and error gates", {
          detection = ~ det_cov, positive = ~ xpos,
          y = sim$Y, y_pos = sim$Ypos, visits = sim$vd, method = "laplace"),
     "shared-field spatial path")
-
-  # Explicit aggregation on a v2/v3 escape hatch -> error.
-  expect_error(
-    tobs(formula = ~ icar(graph = sim$adj, group_var = "cell_idx"),
-         data = sim$site, family = occu_cover("beta", cover_aggregate = "mean"),
-         detection = ~ det_cov, positive = ~ xpos,
-         y = sim$Y, y_pos = sim$Ypos, visits = sim$vd, method = "nested_laplace",
-         control = list(engine = "v3_nested")),
-    "joint engine")
 })
 
 

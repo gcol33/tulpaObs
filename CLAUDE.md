@@ -775,8 +775,7 @@ nuts both error w/ pointer); sampled-field (estimated-variance) route =
 `R/occu_cover_joint.R`): `joint` engine via `tulpa_nested_laplace_joint()` w/
 `occu_cover_{lognormal,beta}` cell-coupling spec (tulpa#32) — 3-arm joint
 nested-Laplace, outer-grid over `(sigma, alpha)`, per-cell occupancy mixture
-closed-form derivs drive inner Newton. Much faster than v3_nested, completes at
-sizes v3_nested does not. Lognormal + beta recovery
+closed-form derivs drive inner Newton. Lognormal + beta recovery
 (`test-occu-cover-coupling.R`); status `"working"` (#96). Shared-field occ
 SLOPE Wald CI mildly anti-conservative small-N (NUTS non-spatial calibrated). Outer Pareto-k diagnostic (`control$diagnose.k`) defaults OFF
 (#101): dominates joint-fit wall time (re-solves the inner Laplace on the full
@@ -826,8 +825,9 @@ p arm excluded via `field_coef=0` (NOT `svc_weight=0`). Resolved by
 `.occu_cover_spatial_fields()`; off-path errors via `.tobs_reject_weighted_spatial()`.
 `test-occu-cover-trend.R`.
 
-**Escape hatches**: `control$engine="v3_nested"` (pure-R outer-BFGS,
-`R/occu_cover_nested.R`, lognormal only), `"v2_joint"` (v2 joint Laplace).
+**`control$engine` takes `"joint"` only**: the spatial path has one fitter, any
+other value errors at dispatch (`R/occu_cover_dispatch.R`), never a silent
+fallthrough. The pure-R outer-BFGS and joint-MAP hatches are gone.
 
 **Compact (ragged) input**: `tobs_data(compact=TRUE)` (the DEFAULT under
 `method="nested_laplace"`: `R/tobs.R`, the `control[["compact"]]` default) returns a
@@ -1207,7 +1207,7 @@ TRAP surviving all of the above: magnitude MUST come from the JOINT marginal, ne
   nuts_chains.R            — multi-chain pooling + shared split-Rhat/bulk-ESS (.tobs_nuts_rhat_ess)
   ms_occu_cover.R / ms_occu_cover_spatial{,_nuts}.R — community joint; spatial-factor JSDM (tulpa#67) Laplace-EM + NUTS
   occu_multiscale_cover{,_joint,_nuts}.R — 3-level occu+cover (#29) + 4-arm joint fitter + non-spatial NUTS (src/occu_multiscale_cover_nuts.cpp)
-  occu_cover_spatial.R / occu_cover_nested.R — v2_joint / v3_nested escape hatches
+  occu_cover_spatial.R     — shared areal helpers: `.occu_cover_icar_Q` / `_icar_scale` / `_draw_icar_field` + `.occu_cover_spatial_fields()` (psi-formula field / arm-field / RE resolver the joint fitter consumes)
   formula_terms.R / formula_parse.R  — term registry+ctors; AST parser
   inputs.R                 — single source of truth for response/site/visit input: .tobs_check_site_count() (site-count cross-check every binder used to hand-roll), .tobs_input_dims()/fit$dims canonical totals, .tobs_unpack_frame() (tobs_data -> data/y/visits)
   spatial.R / methods.R / diagnostics.R / data.R / within_between.R — precompute; S3; diags; data+sims; decomposition

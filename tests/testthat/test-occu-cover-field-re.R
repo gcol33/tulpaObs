@@ -93,11 +93,11 @@ test_that("occu_cover() spatial + RE gates the unsupported configurations", {
          detection = ~ 1, positive = ~ 1, y = sim$y, y_pos = sim$y_pos,
          method = "nested_laplace", control = list(progress = FALSE)),
     "random INTERCEPT only")
-  # The v3 escape hatch has no RE block.
+  # The spatial path has one engine, so any other `control$engine` value errors.
   expect_error(
     tobs(~ x + icar(graph = sim$adj) + re(g), data = sim$data,
          family = occu_cover("lognormal"), detection = ~ 1, positive = ~ 1,
          y = sim$y, y_pos = sim$y_pos, method = "nested_laplace",
          control = list(engine = "v3_nested", progress = FALSE)),
-    "joint engine")
+    "unknown control\\$engine")
 })

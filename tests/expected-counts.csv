@@ -266,7 +266,7 @@
 "test-occu-areal-recovery.R","full",13,0,1457.2
 "test-occu-areal-recovery.R","smoke",0,4,0.1
 "test-occu-categorical.R","smoke",35,2,0.4
-"test-occu-cover-aggregate.R","smoke",17,4,0.5
+"test-occu-cover-aggregate.R","smoke",16,4,1.5
 "test-occu-cover-batch-fused.R","full",138,0,2.7
 "test-occu-cover-batch-fused.R","smoke",0,3,0.1
 "test-occu-cover-batch.R","full",40,0,0.5
@@ -326,7 +326,7 @@
 "test-occu-cover-spatial-mcar.R","smoke",7,2,0.1
 "test-occu-cover-spatial-nuts.R","full",220,0,1705.2
 "test-occu-cover-spatial-nuts.R","smoke",139,12,7.1
-"test-occu-cover-spatial.R","smoke",2,1,0.1
+"test-occu-cover-spatial.R","smoke",2,0,0.1
 "test-occu-cover-trend.R","full",64,0,92
 "test-occu-cover-trend.R","smoke",0,7,0.2
 "test-occu-cover.R","smoke",5,3,0.1

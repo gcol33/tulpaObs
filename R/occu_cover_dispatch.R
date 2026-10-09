@@ -438,6 +438,17 @@
          "method = \"nested_laplace\", or build the data densely for NUTS.",
          call. = FALSE)
   }
+  # `control$engine` names the spatial nested-Laplace fitter, and "joint" is the
+  # only one; any other value errors here rather than falling through onto the
+  # default. The key is consumed so no fitter sees it.
+  engine_pick <- control[["engine"]] %||% "joint"
+  if (!identical(engine_pick, "joint")) {
+    stop("occu_cover(): unknown control$engine = \"",
+         paste(format(engine_pick), collapse = " "), "\"; the spatial ",
+         "nested-Laplace path has one engine, \"joint\" (the default). ",
+         "Drop the key.", call. = FALSE)
+  }
+  control[["engine"]] <- NULL
   # Random intercepts (crossed, nested) AND random slopes are supported on the
   # detection / positive-cover arms: an intercept rides one `iid` block per term,
   # an uncorrelated slope one weighted `iid` block per coefficient, a correlated
@@ -802,71 +813,11 @@
       model$re_psi <- re_spec
     }
 
-    # joint (3-arm nested-Laplace via tulpa's cell_coupling spec) is the
-    # default: outer-grid integration over (sigma, alpha [, sigma_trend,
-    # alpha_trend]) with inner Newton driven by the occu_cover_{lognormal,beta}
-    # cell-coupling spec. 150-300x faster than v3 at N=100 and reliably completes
-    # at N=200+ where v3 trips on a missing-value compare in its outer BFGS. v3
-    # pure-R nested-Laplace and v2's joint Laplace stay reachable via
-    # control$engine = "v3_nested" / "v2_joint" as debug escape hatches; both
-    # take only the single intercept field.
+    # The 3-arm nested-Laplace fit via tulpa's cell_coupling spec: outer-grid
+    # integration over (sigma, alpha [, sigma_trend, alpha_trend]) with the
+    # inner Newton driven by the occu_cover_{lognormal,beta} cell-coupling spec;
+    # the coupling lives in the positive formula via share().
     correlated <- isTRUE(spatial_info$correlated)
-    # Default 3-arm nested-Laplace fitter (coupling lives in the positive
-    # formula via share()); "v2_joint" / "v3_nested" are the single-field escape
-    # hatches handled below.
-    engine_pick <- control[["engine"]] %||% "joint"
-    control[["engine"]] <- NULL
-    if (correlated && engine_pick %in% c("v2_joint", "v3_nested")) {
-      stop(sprintf(paste0(
-        "occu_cover(): a correlated spatial bar (`|`, free-Sigma MCAR) needs ",
-        "the default joint engine; the \"%s\" escape hatch couples a ",
-        "single shared field only."), engine_pick), call. = FALSE)
-    }
-    if (engine_pick %in% c("v2_joint", "v3_nested")) {
-      if (length(spatial_info$armspec)) {
-        stop(sprintf(paste0(
-          "occu_cover() an arm-specific field (to = \"positive\" / ",
-          "\"detection\") needs the default joint engine; the \"%s\" ",
-          "escape hatch couples a single shared field only."), engine_pick),
-          call. = FALSE)
-      }
-      if (!is.null(re_spec) || !is.null(model$re_det) || !is.null(model$re_pos)) {
-        stop(sprintf(paste0(
-          "occu_cover() per-group RE needs the default joint engine; ",
-          "the \"%s\" escape hatch has no RE block."),
-          engine_pick), call. = FALSE)
-      }
-      # The v2/v3 escape hatches model per-visit cover only; cell-aggregated
-      # cover is a joint feature. An explicit request errors; the bare
-      # default falls back to per-visit on these engines.
-      if (cover_aggregate != "none") {
-        if (agg_explicit) {
-          stop(sprintf(paste0(
-            "occu_cover() cell-aggregated cover (cover_aggregate = \"%s\") is ",
-            "wired on the default joint engine; the \"%s\" escape hatch ",
-            "models per-visit cover only."), cover_aggregate, engine_pick),
-            call. = FALSE)
-        }
-        model$cover_aggregate <- "none"
-      }
-      if (length(fields) > 1L) {
-        stop(sprintf(paste0(
-          "occu_cover() engine \"%s\" couples a single shared field; ",
-          "weighted SVC field(s) need the default joint engine."),
-          engine_pick), call. = FALSE)
-      }
-      if (!is.null(gv)) {
-        stop(sprintf(paste0(
-          "occu_cover() engine \"%s\" binds the field 1:1 to sites and does ",
-          "not support group_var; use the default joint engine."),
-          engine_pick), call. = FALSE)
-      }
-      fit_args <- c(list(model = model, adj = base_graph, priors = priors),
-                    control)
-      fitter <- if (engine_pick == "v2_joint") .tobs_fit_occu_cover_spatial
-                else .tobs_fit_occu_cover_nested
-      return(do.call(fitter, fit_args))
-    }
     fit_args <- c(list(model = model, fields = fields, priors = priors,
                        re_spec = re_spec, correlated = correlated,
                        pos_armspec = spatial_info$armspec[["pos"]],

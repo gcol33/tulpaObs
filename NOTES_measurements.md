@@ -1065,8 +1065,9 @@ simulator on the FIELD (sd / cor), never by reading `sigma` off both sides. Also
 
 ## Outer Pareto-k diagnostic cost (occu_cover joint, tulpa#118, issue #101)
 
-`joint` engine (`R/occu_cover_joint.R`) vs `v3_nested`: ~150-300x faster at N=100,
-completes at N=200+ where v3_nested does not. Outer Pareto-k diagnostic
+`joint` engine (`R/occu_cover_joint.R`) vs the pure-R outer-BFGS nested
+Laplace it replaced (the `v3_nested` hatch, removed in #402): ~150-300x faster
+at N=100, completes at N=200+ where that path did not. Outer Pareto-k diagnostic
 (`control$diagnose.k`, default OFF): 84-98% of joint-fit wall time, since it
 re-solves the inner Laplace at `k.samples`=200x on the full field vs the grid's
 ~30-70 points. Per-phase profiling: the binding per-solve cost is the

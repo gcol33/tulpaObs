@@ -12,6 +12,11 @@
   with `std::bad_alloc`. The covariance and the per-cell fixed-effect blocks
   are the same numbers (relative difference 7e-16 on an ICAR fit), and a cell
   of zero weight is no longer extracted.
+* The `occu_cover()` escape hatches `control$engine = "v3_nested"` (pure-R
+  outer-BFGS nested Laplace, lognormal only) and `"v2_joint"` (joint Laplace
+  MAP over the field) are removed (#402). The spatial `nested_laplace` path has
+  one fitter, the `joint` engine; `control$engine` accepts `"joint"` only and
+  any other value errors at dispatch.
 
 ## 0.5.0
 

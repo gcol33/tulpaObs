@@ -1,8 +1,8 @@
 # Joint-coupled fitter. Calls tulpa_nested_laplace_joint() with the
 # 3-arm responses and the occu_cover_lognormal cell-coupling spec, then
-# unpacks the integrated posterior into a tobs_fit shaped to match
-# .tobs_fit_occu_cover_nested's output (so methods.R / generic accessors
-# work without per-engine branching).
+# unpacks the integrated posterior into a tobs_fit carrying the same slots as
+# the non-spatial fitters (so methods.R / generic accessors work without
+# per-engine branching).
 #
 # Hyperparam grid: outer axes are (sigma, alpha), Cartesian product
 # defaulting to the engine's 5-point sigma grid and the engine's
