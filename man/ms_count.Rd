@@ -47,6 +47,25 @@ non-Gaussian community intervals. A shared areal field or latent factors are
 available through \code{method = "nested_laplace"} / the \code{latent()} term; see the
 package overview for the spatial and factor variants.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the shared community Laplace-EM, the default;
+\code{latent()} factors alone run here through the block-coordinate driver.
+\item \code{method = "nested_laplace"} -- a shared areal field \code{icar()} on the
+abundance formula (the spAbundance \code{sfMsAbund} model), with or without
+\code{latent()} factors, by block coordinate ascent; the field is required on
+this route.
+\item \code{method = "nuts"} -- the exact joint community posterior sampled by the
+in-tree C++ target, warm-started at the Laplace-EM mode, as described
+above; non-spatial.
+\item \code{method = "pg_gibbs"} -- a per-species Polya-Gamma conjugate Gibbs with
+community mean and Inverse-Gamma variance updates, for the logistic
+\code{"binomial"} response only (another response errors with a pointer);
+non-spatial.
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_ms_count(N = 120, n_species = 8, seed = 1)

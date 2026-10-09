@@ -29,6 +29,21 @@ intercept-only and are set with the \code{p10 = ~ ...} and \code{certainty = ~ .
 arguments to \code{\link[=tobs]{tobs()}} (\code{certainty} is the \code{b} arm). The response \code{y} is an
 \verb{n_sites x J} integer matrix in \verb{\{0, 1, 2\}} (NA visits dropped).
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- analytic-gradient BFGS over the exact marginal with
+an observed-information covariance; a grouped random effect on the \code{psi}
+or \code{p11} arm is integrated by adaptive Gauss-Hermite quadrature.
+\item \code{method = "nested_laplace"} -- an areal \code{icar()} / \code{car_proper()} field on
+the occupancy arm (BFGS over the marginal plus the CAR prior), optionally
+composed with a \code{temporal()} field, through the shared areal-BFGS driver.
+\item \code{method = "nuts"} -- the in-tree C++ NUTS sampler over the same marginal,
+with a fixed-hyper areal or temporal field block on the occupancy arm (one
+of the two, not both).
+}
+}
+
 \examples{
 f <- fp_occu()
 f

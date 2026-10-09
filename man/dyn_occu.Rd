@@ -20,6 +20,22 @@ the \code{detection} formula gives per-season detection. All season-varying path
 run under \code{method = "laplace"} (the exact HMM-forward marginal refine
 calibrates the coefficients); they are gated under \code{"nuts"} with a pointer.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- EM + Laplace over the exact HMM-forward marginal,
+the default and the route every season-varying path runs on.
+\item \code{method = "laplace_sla"} -- the Laplace fit with simplified-Laplace
+skew-corrected marginals.
+\item \code{method = "laplace_gibbs"} / \code{method = "laplace_mi"} -- the Laplace fit
+with a post-EM Gibbs / multiple-imputation variance correction.
+\item \code{method = "nested_laplace"} -- an areal field on the occupancy arm through
+the nested-Laplace EM, its hyperparameters integrated on an outer grid.
+\item \code{method = "nuts"} -- the unified C++ NUTS sampler over the HMM marginal;
+season-varying colonisation / extinction / detection error with a pointer.
+}
+}
+
 \examples{
 f <- dyn_occu()
 f

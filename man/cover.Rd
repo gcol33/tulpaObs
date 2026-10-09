@@ -48,6 +48,27 @@ Latent presence (Bernoulli) plus conditional positive cover (beta or
 lognormal). Does not share the replicate-detection assumption of the other
 families -- see \code{vignette("families")} for the conceptual caveat.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- two independent \code{tulpa_laplace()} fits, one per
+arm (presence, positive), non-spatial; the default.
+\item \code{method = "laplace_sla"} -- the same two fits with simplified-Laplace
+skew-corrected marginals.
+\item \code{method = "nested_laplace"} -- the joint nested-Laplace engine: shared or
+arm-specific areal fields, weighted trend fields, \code{temporal()} and \code{re()}
+blocks, every hyperparameter integrated on an outer grid; the route the
+\code{"lognormal_trunc"} and \code{"ordinal"} arms require.
+\item \code{method = "nested_laplace_sla"} -- the nested route with skew-corrected
+marginals.
+\item \code{method = "nuts"} -- the non-spatial sampler over the exact two-arm
+coefficient vector \code{c(beta_presence, beta_positive, log_disp)}, giving
+calibrated intervals and a per-draw pointwise likelihood for WAIC / LOO;
+\code{"beta"}, \code{"lognormal"} and \code{"gaussian"} arms only, and any structured
+term errors with a pointer to \code{"nested_laplace"}.
+}
+}
+
 \section{Response on the formula left-hand side}{
 
 The cover response is a single length-N vector, so it may sit on the top

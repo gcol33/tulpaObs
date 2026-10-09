@@ -27,6 +27,19 @@ recursion; the exact marginal is maximised with an observed-information vcov.
 coefficients). v1: every source covers all sites and the same season grid,
 constant transitions, site-level detection.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the non-spatial fit: the HMM-forward marginal
+maximised with analytic forward-backward gradients and an
+observed-information covariance.
+\item \code{method = "nested_laplace"} -- a shared \code{icar()} field on the first-season
+occupancy formula (spOccupancy \code{stIntPGOcc}) through the shared areal-BFGS
+driver, the field hyperparameters integrated on an outer grid; that field
+is the only structured term accepted and is required on this route.
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_dyn_int_occu(N = 200, T_seasons = 4, S = 2, seed = 1)

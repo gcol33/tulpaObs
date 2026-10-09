@@ -30,6 +30,12 @@
 #' `[n_sites x max_visits]` matrices), the occupancy `formula` and `detection`
 #' formula are site-level.
 #'
+#' @section Engines:
+#' * `method = "pg_gibbs"` -- the Polya-Gamma Gibbs sampler: conditional on the
+#'   year effects the seasons factorise, so the joint (coefficients, AR1 year
+#'   effect) update is one exact Gaussian Markov random field draw; the only
+#'   route.
+#'
 #' @return A `tobs_family` object.
 #' @examples
 #' f <- t_occu()

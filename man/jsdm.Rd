@@ -13,6 +13,25 @@ A \code{tobs_family} object.
 Multivariate occurrence with shared latent factors. No observation
 replication -- treats observed presence/absence as the response.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the community Laplace-EM shared with \code{\link[=ms_count]{ms_count()}}
+(a logit-link community GLMM); \code{latent()} factors alone (lfJSDM) run here
+through the block-coordinate driver.
+\item \code{method = "nuts"} -- samples the exact joint community posterior
+(community means, per-species deviations, community covariance) over the
+Bernoulli response, warm-started at the Laplace-EM mode; non-spatial, an
+areal or \code{latent()} term errors with a pointer.
+\item \code{method = "pg_gibbs"} -- a per-species Polya-Gamma conjugate Gibbs with
+community mean and Inverse-Gamma variance updates, giving a calibrated
+community-variance posterior; non-spatial.
+\item \code{method = "nested_laplace"} -- a shared areal field (\code{icar()} /
+\code{car_proper()} / \code{bym2()}), with or without \code{latent()} factors (sfJSDM),
+by block coordinate ascent; the areal term is required on this route.
+}
+}
+
 \examples{
 f <- jsdm()
 f

@@ -40,6 +40,21 @@ the per-pass detection (\verb{logit p}) model. The response \code{y} is an
 \verb{n_sites x K} integer matrix of per-pass removals with the passes in column
 order; complete pass sequences are required (no \code{NA}).
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- a direct Laplace approximation over the closed-form
+marginal (Poisson or negative binomial); a grouped random effect is
+integrated by adaptive Gauss-Hermite quadrature.
+\item \code{method = "nested_laplace"} -- an areal \code{icar()} / \code{car_proper()} field on
+the abundance arm, optionally composed with a \code{temporal()} field, through
+the shared areal-BFGS driver.
+\item \code{method = "nuts"} -- the in-tree C++ NUTS sampler over the same marginal,
+with a fixed-hyper areal or temporal field block on the abundance arm (one
+of the two, not both).
+}
+}
+
 \examples{
 f <- removal(K_max = 100)
 f

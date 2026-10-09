@@ -24,6 +24,14 @@ visit-level covariates), exactly as for the occupancy / N-mixture front doors.
 The latent \code{N} marginalises in closed form (a Poisson sum to \code{K_max}), so the
 fit maximises the exact marginal with an observed-information vcov.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the exact marginal maximised (BFGS) with an
+observed-information covariance; the only route (no field, no sampler).
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_royle_nichols(N = 150, J = 5, seed = 1)

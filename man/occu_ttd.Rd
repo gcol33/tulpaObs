@@ -29,6 +29,14 @@ observed-information vcov.
 is a detection; a value \verb{>= surveyLength} is a non-detection (censored);
 \code{NA} is a survey not conducted.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the exact marginal maximised (BFGS) with an
+observed-information covariance; the only route (no field, no sampler).
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_occu_ttd(N = 200, J = 4, Tmax = 3, seed = 1)

@@ -58,6 +58,19 @@ adding an areal term (\code{icar()} / \code{car_proper()} / \code{bym2()}) or \c
 alongside gives a shared spatial field. Both route through the same
 block-coordinate engine as the other community families.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the shared community Laplace-EM over the existing
+distance kernel, plain or with \code{latent()} factors alone (lfMsDS).
+\item \code{method = "nested_laplace"} -- a shared field (\code{icar()} / \code{car_proper()} /
+\code{bym2()} / \code{spde()}) on the abundance formula, with or without factors
+(sfMsDS), by block coordinate ascent; the field is required on this route.
+}
+
+Poisson only, and no sampler route.
+}
+
 \section{Inputs}{
 
 \code{y} is a 3D array \verb{[n_sites x n_bins x n_species]} or a named list of

@@ -400,6 +400,24 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
 #' occupancy and detection per-species deviations are independent, each with its
 #' own community covariance, fit by a community Laplace-EM.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the shared community Laplace-EM, the default;
+#'   `latent()` factors alone (lfMsPGOcc) run here through the block-coordinate
+#'   driver.
+#' * `method = "nuts"` -- the non-spatial community sampler over the closed-form
+#'   per-(species, site) two-state marginal, sampling the community means,
+#'   per-species deviations and both per-arm community covariances jointly,
+#'   warm-started at the Laplace-EM mode; an areal term errors with a pointer to
+#'   `"nested_laplace"`.
+#' * `method = "pg_gibbs"` -- the hierarchical Polya-Gamma Gibbs sampler
+#'   (spOccupancy `msPGOcc`), giving a calibrated community-variance posterior;
+#'   non-spatial.
+#' * `method = "nested_laplace"` -- a shared areal field (`icar()` / `bym2()` /
+#'   `car_proper()`) on the occupancy arm: a plain intercept field runs the
+#'   in-tree C++ community-spatial nested Laplace-EM, a varying-coefficient bar
+#'   (svcMsPGOcc) or `latent()` factors beside the field (sfMsPGOcc) run the
+#'   block-coordinate fitter; the field is required on this route.
+#'
 #' @return A `tobs_family` object.
 #' @seealso [occu()], [ms_dyn_occu()], [ms_int_occu()]
 #' @examples

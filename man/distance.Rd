@@ -59,6 +59,22 @@ the site-level detection-scale (\verb{log sigma}) model. The response \code{y} i
 \verb{n_sites x n_bins} integer matrix of per-bin detected counts. The bin edges and
 transect geometry travel with the family: \code{distance(cutpoints = ...)}.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- a direct Laplace approximation over the closed-form
+marginal (Poisson or negative binomial); a grouped random effect on the
+abundance arm is integrated by adaptive Gauss-Hermite quadrature.
+\item \code{method = "nested_laplace"} -- an areal \code{icar()} / \code{car_proper()} / \code{bym2()}
+field on the abundance arm, optionally composed with a \code{temporal()} field,
+through the shared areal-BFGS driver; a hazard-rate fit recovers the shape
+alongside the field.
+\item \code{method = "nuts"} -- the in-tree C++ NUTS sampler over the same marginal,
+with a fixed-hyper areal or temporal field block on the abundance arm (one
+of the two, not both); the hazard-rate log-shape rides alongside.
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_distance(N = 200, key = "halfnorm", transect = "line",

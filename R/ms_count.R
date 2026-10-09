@@ -626,6 +626,21 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
 #' available through `method = "nested_laplace"` / the `latent()` term; see the
 #' package overview for the spatial and factor variants.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the shared community Laplace-EM, the default;
+#'   `latent()` factors alone run here through the block-coordinate driver.
+#' * `method = "nested_laplace"` -- a shared areal field `icar()` on the
+#'   abundance formula (the spAbundance `sfMsAbund` model), with or without
+#'   `latent()` factors, by block coordinate ascent; the field is required on
+#'   this route.
+#' * `method = "nuts"` -- the exact joint community posterior sampled by the
+#'   in-tree C++ target, warm-started at the Laplace-EM mode, as described
+#'   above; non-spatial.
+#' * `method = "pg_gibbs"` -- a per-species Polya-Gamma conjugate Gibbs with
+#'   community mean and Inverse-Gamma variance updates, for the logistic
+#'   `"binomial"` response only (another response errors with a pointer);
+#'   non-spatial.
+#'
 #' @param response One of `"poisson"`, `"negbin"`, `"gaussian"`, or
 #'   `"binomial"`. The binomial response is the community `k`-of-`n` GLMM
 #'   (community `svcPGBinom`): supply the per-site (or per-`site x species`)

@@ -14,25 +14,38 @@ Per-species dynamic (HMM) occupancy with Gaussian community hyperpriors on
 the per-species first-season occupancy and detection coefficients, and shared
 community-wide colonisation / extinction transition coefficients.
 }
-\section{Scope}{
+\section{Engines}{
 
-The Laplace engine is the supported route: the shared colonisation /
-extinction dynamics and the per-species first-season occupancy / detection
-components recover across seeds (see \code{tests/testthat/test-ms-dyn-occu.R},
-community-mean 95\% CI coverage measured ~0.98). A shared areal field on the
-first-season occupancy formula (\code{~ 1 + icar(graph = adj)}) fits the
-\code{spOccupancy} \code{stMsPGOcc} model under \code{method = "nested_laplace"}: the field
-is shared across species, and because the first-season occupancy \code{psi1} only
-sets the initial mixing weight of each species' HMM, the block-coordinate
-driver alternates the community EM (field as a \code{psi1} offset) with an areal
-field Newton, the field recovering cleanly (\code{cor} ~0.94). A
-spatially-varying-coefficient bar (\code{~ spatial(~ 1 + w || cell, graph = adj)})
-adds a shared covariate-weighted field alongside the intercept field, fitting
-the \code{svcTMsPGOcc} model through the same K-field weighted-ICAR solve as the
-community count SVC (both fields recover, \code{cor} ~0.90 / ~0.89). \code{icar()} only;
-a NUTS sampler and \code{bym2()} / \code{car_proper()} fields are a deliberate
-follow-up; \code{method = "nuts"} errors from the dispatcher with a pointer rather
-than silently downgrading.
+\itemize{
+\item \code{method = "laplace"} -- the shared community Laplace-EM, the default: the
+shared colonisation / extinction dynamics and the per-species first-season
+occupancy / detection components recover across seeds (see
+\code{tests/testthat/test-ms-dyn-occu.R}, community-mean 95\% CI coverage
+measured ~0.98).
+\item \code{method = "pg_gibbs"} -- the community Polya-Gamma machinery of \code{msPGOcc}
+with a two-state HMM forward-filtering backward-sampling latent step
+(spOccupancy \code{tMsPGOcc}), giving a calibrated community-variance
+posterior; constant transitions, site-level detection, no structured term.
+\item \code{method = "nested_laplace"} -- a shared areal field on the first-season
+occupancy formula (\code{~ 1 + icar(graph = adj)}) fits the \code{spOccupancy}
+\code{stMsPGOcc} model: the field is shared across species, and because the
+first-season occupancy \code{psi1} only sets the initial mixing weight of each
+species' HMM, the block-coordinate driver alternates the community EM
+(field as a \code{psi1} offset) with an areal field Newton, the field recovering
+cleanly (\code{cor} ~0.94). A spatially-varying-coefficient bar
+(\code{~ spatial(~ 1 + w || cell, graph = adj)}) adds a shared
+covariate-weighted field alongside the intercept field, fitting the
+\code{svcTMsPGOcc} model through the same K-field weighted-ICAR solve as the
+community count SVC (both fields recover, \code{cor} ~0.90 / ~0.89). \code{icar()}
+only; \code{bym2()} / \code{car_proper()} fields are a follow-up. The field is
+required on this route.
+\item \code{method = "nuts"} -- the non-spatial community sampler over the exact
+per-species HMM-forward marginal (in-tree C++), sampling the community
+means, per-species first-season / detection deviations, both per-arm
+community covariances and the shared colonisation / extinction
+coefficients jointly, warm-started at the Laplace-EM mode; an areal term
+errors with a pointer to \code{"nested_laplace"}.
+}
 }
 
 \examples{

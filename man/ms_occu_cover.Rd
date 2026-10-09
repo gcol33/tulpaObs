@@ -50,6 +50,20 @@ required. The occupancy \code{formula}, the \code{detection} formula, and the co
 returns the community means; \code{ranef()} the per-species coefficient deviations.
 }
 
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the community Laplace-EM (per-species deviations
+integrated, closed-form community covariance M-step), non-spatial or with
+the reduced-rank spatial factors below.
+\item \code{method = "nuts"} -- the community sampler over the exact per-(species,
+cell) two-state marginal, warm-started at the Laplace-EM mode: non-spatial
+it samples the community means, per-species deviations, the three per-arm
+community covariances and the shared log-dispersion jointly; with a shared
+areal field it samples the spatial-factor model below.
+}
+}
+
 \section{Reduced-rank spatial factors}{
 
 A single areal field term (\code{icar(graph = adj)}, \code{car_proper(graph = adj)}, or

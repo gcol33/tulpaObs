@@ -20,6 +20,21 @@ spatially-structured detection field, broadcast to every source, under
 \code{fit$spatial_field_det}. All sources must share one detection formula; areal
 terms belong on the state arm.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- EM + Laplace over the multi-source two-state
+marginal, the default.
+\item \code{method = "laplace_sla"} -- the Laplace fit with simplified-Laplace
+skew-corrected marginals.
+\item \code{method = "laplace_gibbs"} / \code{method = "laplace_mi"} -- the Laplace fit
+with a post-EM Gibbs / multiple-imputation variance correction.
+\item \code{method = "nested_laplace"} -- an areal field on the state arm through the
+nested-Laplace EM, its hyperparameters integrated on an outer grid.
+\item \code{method = "nuts"} -- the unified C++ NUTS sampler over the same marginal.
+}
+}
+
 \examples{
 f <- int_occu()
 f

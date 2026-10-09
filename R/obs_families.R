@@ -101,6 +101,27 @@ obs_family <- function(name,
 #' Latent Bernoulli occupancy state with binomial detection per visit. The
 #' MacKenzie et al. (2002) single-season model.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- penalized EM + Laplace with Gaussian marginals, the
+#'   default.
+#' * `method = "laplace_sla"` -- the Laplace fit with simplified-Laplace
+#'   skew-corrected marginals.
+#' * `method = "laplace_gibbs"` / `method = "laplace_mi"` -- the Laplace fit
+#'   with a post-EM Gibbs / multiple-imputation variance correction
+#'   (Rubin-pooled refits, not an MCMC chain).
+#' * `method = "pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact
+#'   posterior (the spOccupancy `PGOcc` engine): site-level detection, an areal
+#'   `icar()` field is accepted; a `temporal()` / `re()` / `latent()` / `svc()`
+#'   term errors with a pointer.
+#' * `method = "nested_laplace"` -- multi-block nested Laplace: areal, temporal
+#'   and random-effect hyperparameters are integrated on an outer grid, and
+#'   `predict()` interpolates all-NA detection sites from the field.
+#' * `method = "nested_laplace_sla"` -- the nested route with skew-corrected
+#'   marginals.
+#' * `method = "nuts"` -- the unified C++ NUTS sampler over the structured
+#'   terms (spatial, temporal, `re()`, `svc()`, `latent()`), reporting Rhat /
+#'   ESS.
+#'
 #' @return A `tobs_family` object.
 #' @export
 #' @examples
@@ -131,6 +152,18 @@ occu <- function() {
 #' run under `method = "laplace"` (the exact HMM-forward marginal refine
 #' calibrates the coefficients); they are gated under `"nuts"` with a pointer.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- EM + Laplace over the exact HMM-forward marginal,
+#'   the default and the route every season-varying path runs on.
+#' * `method = "laplace_sla"` -- the Laplace fit with simplified-Laplace
+#'   skew-corrected marginals.
+#' * `method = "laplace_gibbs"` / `method = "laplace_mi"` -- the Laplace fit
+#'   with a post-EM Gibbs / multiple-imputation variance correction.
+#' * `method = "nested_laplace"` -- an areal field on the occupancy arm through
+#'   the nested-Laplace EM, its hyperparameters integrated on an outer grid.
+#' * `method = "nuts"` -- the unified C++ NUTS sampler over the HMM marginal;
+#'   season-varying colonisation / extinction / detection error with a pointer.
+#'
 #' @return A `tobs_family` object.
 #' @export
 #' @examples
@@ -160,6 +193,17 @@ dyn_occu <- function() {
 #' `fit$spatial_field_det`. All sources must share one detection formula; areal
 #' terms belong on the state arm.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- EM + Laplace over the multi-source two-state
+#'   marginal, the default.
+#' * `method = "laplace_sla"` -- the Laplace fit with simplified-Laplace
+#'   skew-corrected marginals.
+#' * `method = "laplace_gibbs"` / `method = "laplace_mi"` -- the Laplace fit
+#'   with a post-EM Gibbs / multiple-imputation variance correction.
+#' * `method = "nested_laplace"` -- an areal field on the state arm through the
+#'   nested-Laplace EM, its hyperparameters integrated on an outer grid.
+#' * `method = "nuts"` -- the unified C++ NUTS sampler over the same marginal.
+#'
 #' @return A `tobs_family` object.
 #' @export
 #' @examples
@@ -182,6 +226,21 @@ int_occu <- function() {
 #'
 #' Multivariate occurrence with shared latent factors. No observation
 #' replication -- treats observed presence/absence as the response.
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- the community Laplace-EM shared with [ms_count()]
+#'   (a logit-link community GLMM); `latent()` factors alone (lfJSDM) run here
+#'   through the block-coordinate driver.
+#' * `method = "nuts"` -- samples the exact joint community posterior
+#'   (community means, per-species deviations, community covariance) over the
+#'   Bernoulli response, warm-started at the Laplace-EM mode; non-spatial, an
+#'   areal or `latent()` term errors with a pointer.
+#' * `method = "pg_gibbs"` -- a per-species Polya-Gamma conjugate Gibbs with
+#'   community mean and Inverse-Gamma variance updates, giving a calibrated
+#'   community-variance posterior; non-spatial.
+#' * `method = "nested_laplace"` -- a shared areal field (`icar()` /
+#'   `car_proper()` / `bym2()`), with or without `latent()` factors (sfJSDM),
+#'   by block coordinate ascent; the areal term is required on this route.
 #'
 #' @return A `tobs_family` object.
 #' @export
@@ -217,6 +276,15 @@ jsdm <- function() {
 #'
 #' The response is a numeric vector (one value per site), supplied via `y =` or
 #' on a two-sided `formula` left-hand side (`count.value ~ predictors`).
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- one tulpa GLMM block; the negative-binomial size
+#'   and the Gaussian residual variance are estimated by an outer dispersion
+#'   loop.
+#' * `method = "nested_laplace"` -- a plain areal field (`icar()` /
+#'   `car_proper()`) on the formula as a latent GMRF, integrated over its
+#'   hyperparameters by the nested-Laplace EM; the areal term is required on
+#'   this route.
 #'
 #' @param response The response distribution: `"poisson"` (log link),
 #'   `"negbin"` (negative binomial, log link, an estimated size / dispersion),
@@ -768,6 +836,16 @@ occu_cover <- function(response = c("beta", "lognormal", "gaussian"),
 #' `positive` formula carry community covariates shared across species. `coef()`
 #' returns the community means; `ranef()` the per-species coefficient deviations.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the community Laplace-EM (per-species deviations
+#'   integrated, closed-form community covariance M-step), non-spatial or with
+#'   the reduced-rank spatial factors below.
+#' * `method = "nuts"` -- the community sampler over the exact per-(species,
+#'   cell) two-state marginal, warm-started at the Laplace-EM mode: non-spatial
+#'   it samples the community means, per-species deviations, the three per-arm
+#'   community covariances and the shared log-dispersion jointly; with a shared
+#'   areal field it samples the spatial-factor model below.
+#'
 #' @section Reduced-rank spatial factors:
 #' A single areal field term (`icar(graph = adj)`, `car_proper(graph = adj)`, or
 #' `bym2(graph = adj)`) on the occupancy `formula` fits the reduced-rank (HMSC /
@@ -930,7 +1008,7 @@ ms_occu_cover <- function(response = c("beta", "lognormal", "gaussian")) {
 #' a resurvey of the same plot in a later period) makes the third level
 #' estimable.
 #'
-#' @section Scope:
+#' @section Engines:
 #' Three engines. `method = "nested_laplace"` carries a single shared areal
 #' field coupled across the occupancy (`sigma`) and cover (`alpha * sigma`)
 #' arms, integrated over the outer `(sigma, alpha)` grid. `method = "laplace"`
@@ -1057,10 +1135,20 @@ occu_multiscale_cover <- function(response = c("beta", "lognormal", "gaussian"))
 #' with `log lambda_i = X_lambda beta_lambda`, and counts
 #' `y_ij | N_i ~ Binomial(N_i, p_ij)` with `logit p_ij = X_p beta_p`. The
 #' abundance formula is the `tobs()` `formula`; the per-visit detection formula
-#' is `detection`. The marginal likelihood integrates `N` out exactly, so the
-#' fit is a direct Laplace approximation (no EM): `method = "laplace"`
-#' (fixed effects) or `method = "nested_laplace"` (an areal `icar()` / `bym2()`
-#' / `car()` offset on the abundance arm).
+#' is `detection`. The marginal likelihood integrates `N` out exactly, so no
+#' route runs an EM over `N`.
+#' @section Engines:
+#' * `method = "laplace"` -- a direct Laplace approximation over the closed-form
+#'   marginal with an observed-Fisher covariance; a grouped random effect on one
+#'   arm is integrated by adaptive Gauss-Hermite quadrature.
+#' * `method = "nested_laplace"` -- an areal `icar()` / `bym2()` / `car_proper()`
+#'   field on the abundance arm, its hyperparameters integrated on an outer grid
+#'   (grid-integrated coefficient covariance).
+#' * `method = "nuts"` -- the in-tree C++ NUTS sampler over the same marginal,
+#'   Poisson or negative binomial (`log_r` sampled), warm-started at the Laplace
+#'   mode; with an areal term a fixed-hyper non-centered field on the abundance
+#'   arm (`icar()` / `car_proper()` / `bym2()`); `"zip"` / `"zinb"` are
+#'   `"laplace"`-only, and a field does not combine with a random effect here.
 #' @examples
 #' \donttest{
 #' sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
@@ -1097,6 +1185,10 @@ abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb")) 
 #' visit-level covariates), exactly as for the occupancy / N-mixture front doors.
 #' The latent `N` marginalises in closed form (a Poisson sum to `K_max`), so the
 #' fit maximises the exact marginal with an observed-information vcov.
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- the exact marginal maximised (BFGS) with an
+#'   observed-information covariance; the only route (no field, no sampler).
 #'
 #' @param K_max Upper summation bound for the latent abundance (default: a
 #'   data-driven Poisson-tail guess).
@@ -1146,6 +1238,10 @@ royle_nichols <- function(K_max = NULL) {
 #' is a detection; a value `>= surveyLength` is a non-detection (censored);
 #' `NA` is a survey not conducted.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the exact marginal maximised (BFGS) with an
+#'   observed-information covariance; the only route (no field, no sampler).
+#'
 #' @param surveyLength Survey length `Tmax` (the censoring time): a scalar, a
 #'   length-`N` vector, or an `N x J` matrix. Default 1.
 #' @return A `tobs_family` object for [tobs()].
@@ -1185,6 +1281,11 @@ occu_ttd <- function(surveyLength = 1) {
 #'
 #' `y` is a length-`S` list of `N x J` 0/1/NA detection matrices (or a 3D
 #' `[sites x visits x species]` array); `species` names the arms.
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- the enumerated `2^S`-state marginal maximised
+#'   (BFGS) with an observed-information covariance; the only route (no field,
+#'   no sampler).
 #'
 #' @return A `tobs_family` object for [tobs()].
 #' @examples
@@ -1239,6 +1340,11 @@ occu_multi <- function() {
 #' interchangeable pair) the dependent protocol reduces to a two-pass [removal()]
 #' model.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the closed-form Poisson-multinomial marginal
+#'   maximised (BFGS) with an observed-information covariance; the only route
+#'   (no field, no sampler).
+#'
 #' @param type `"independent"` (default; `N x 3` cell counts) or `"dependent"`
 #'   (removal-style, `N x 2` cell counts, needs `primary =` for identifiability).
 #' @return A `tobs_family` object for [tobs()].
@@ -1290,6 +1396,15 @@ double_observer <- function(type = c("independent", "dependent")) {
 #' coefficients). v1: every source covers all sites and the same season grid,
 #' constant transitions, site-level detection.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the non-spatial fit: the HMM-forward marginal
+#'   maximised with analytic forward-backward gradients and an
+#'   observed-information covariance.
+#' * `method = "nested_laplace"` -- a shared `icar()` field on the first-season
+#'   occupancy formula (spOccupancy `stIntPGOcc`) through the shared areal-BFGS
+#'   driver, the field hyperparameters integrated on an outer grid; that field
+#'   is the only structured term accepted and is required on this route.
+#'
 #' @return A `tobs_family` object for [tobs()].
 #' @examples
 #' \donttest{
@@ -1327,6 +1442,22 @@ dyn_int_occu <- function() {
 #'   path alongside the abundance / detection coefficients. Zero-inflation is a
 #'   non-spatial `laplace` fit with an intercept-only structural-zero logit; a
 #'   shared field stays Poisson / negbin.
+#' @section Engines:
+#' * `method = "laplace"` -- the in-tree C++ community Laplace-EM (per-species
+#'   coefficient random effects, closed-form community covariance M-step, AGHQ
+#'   variance debias), the default; `latent()` factors run here through the
+#'   block-coordinate driver.
+#' * `method = "nested_laplace"` -- a shared areal field (`icar()` / `bym2()` /
+#'   `car_proper()`) on the abundance arm (the spAbundance `sfMsNMix` model),
+#'   Poisson or grid-integrated negative-binomial size; with `latent()` factors
+#'   beside the field the spatial-factor model by block coordinate ascent.
+#' * `method = "nuts"` -- the non-spatial community sampler over the closed-form
+#'   per-(species, site) marginal, sampling the community means, per-species
+#'   deviations and community covariances jointly (Poisson, or per-species
+#'   negative-binomial `log_r_s`), warm-started at the Laplace-EM mode; with a
+#'   shared `car_proper()` field (Poisson) a fixed-hyper non-centered field
+#'   joins the sampler, while `icar()` / `bym2()`, `temporal()` and `re()`
+#'   terms stay on `"nested_laplace"`.
 #' @section Reading the negbin community dispersion:
 #' Under `mixture = "negbin"` the community mean `mu_log_r` reaches
 #' `coef()` / `vcov()` / `confint()` with a marginal Wald SE, and the variance
@@ -1427,6 +1558,18 @@ ms_abun <- function(K_max = NULL,
 #' rates. The response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or
 #' a list of per-season count matrices); missing visits are `NA`.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- analytic-gradient BFGS over the forward marginal
+#'   with an observed-information covariance; a grouped random effect on the
+#'   initial-abundance arm is integrated by adaptive Gauss-Hermite quadrature.
+#' * `method = "nested_laplace"` -- an areal `icar()` / `car_proper()` field on
+#'   the initial-abundance arm (BFGS over the forward marginal plus the CAR
+#'   prior), optionally composed with a `temporal()` field, through the shared
+#'   areal-BFGS driver.
+#' * `method = "nuts"` -- the in-tree C++ NUTS sampler over the same forward
+#'   marginal, with a fixed-hyper areal field block on the initial-abundance
+#'   arm; a `temporal()` term is not sampled.
+#'
 #' @param K_max abundance-state truncation for the forward recursion (states
 #'   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if abundance
 #'   may exceed that (the forward cost is roughly cubic in `K_max`).
@@ -1476,6 +1619,18 @@ dyn_abun <- function(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb
 #' the site-level detection-scale (`log sigma`) model. The response `y` is an
 #' `n_sites x n_bins` integer matrix of per-bin detected counts. The bin edges and
 #' transect geometry travel with the family: `distance(cutpoints = ...)`.
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- a direct Laplace approximation over the closed-form
+#'   marginal (Poisson or negative binomial); a grouped random effect on the
+#'   abundance arm is integrated by adaptive Gauss-Hermite quadrature.
+#' * `method = "nested_laplace"` -- an areal `icar()` / `car_proper()` / `bym2()`
+#'   field on the abundance arm, optionally composed with a `temporal()` field,
+#'   through the shared areal-BFGS driver; a hazard-rate fit recovers the shape
+#'   alongside the field.
+#' * `method = "nuts"` -- the in-tree C++ NUTS sampler over the same marginal,
+#'   with a fixed-hyper areal or temporal field block on the abundance arm (one
+#'   of the two, not both); the hazard-rate log-shape rides alongside.
 #'
 #' @param key detection-function key. `"halfnorm"` (default) or `"hazard"`
 #'   (the hazard-rate shape `b` is estimated as a scalar, reported as
@@ -1552,6 +1707,15 @@ distance <- function(key = c("halfnorm", "hazard"),
 #' alongside gives a shared spatial field. Both route through the same
 #' block-coordinate engine as the other community families.
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the shared community Laplace-EM over the existing
+#'   distance kernel, plain or with `latent()` factors alone (lfMsDS).
+#' * `method = "nested_laplace"` -- a shared field (`icar()` / `car_proper()` /
+#'   `bym2()` / `spde()`) on the abundance formula, with or without factors
+#'   (sfMsDS), by block coordinate ascent; the field is required on this route.
+#'
+#' Poisson only, and no sampler route.
+#'
 #' @section Inputs:
 #' `y` is a 3D array `[n_sites x n_bins x n_species]` or a named list of
 #' `n_sites x n_bins` per-bin count matrices. `formula` is the abundance
@@ -1617,6 +1781,17 @@ ms_distance <- function(key = c("halfnorm", "hazard"),
 #' `n_sites x K` integer matrix of per-pass removals with the passes in column
 #' order; complete pass sequences are required (no `NA`).
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- a direct Laplace approximation over the closed-form
+#'   marginal (Poisson or negative binomial); a grouped random effect is
+#'   integrated by adaptive Gauss-Hermite quadrature.
+#' * `method = "nested_laplace"` -- an areal `icar()` / `car_proper()` field on
+#'   the abundance arm, optionally composed with a `temporal()` field, through
+#'   the shared areal-BFGS driver.
+#' * `method = "nuts"` -- the in-tree C++ NUTS sampler over the same marginal,
+#'   with a fixed-hyper areal or temporal field block on the abundance arm (one
+#'   of the two, not both).
+#'
 #' @inheritParams abun
 #' @return A `tobs_family` object.
 #' @references
@@ -1663,6 +1838,17 @@ removal <- function(K_max = NULL, mixture = c("poisson", "negbin")) {
 #' intercept-only and are set with the `p10 = ~ ...` and `certainty = ~ ...`
 #' arguments to [tobs()] (`certainty` is the `b` arm). The response `y` is an
 #' `n_sites x J` integer matrix in `{0, 1, 2}` (NA visits dropped).
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- analytic-gradient BFGS over the exact marginal with
+#'   an observed-information covariance; a grouped random effect on the `psi`
+#'   or `p11` arm is integrated by adaptive Gauss-Hermite quadrature.
+#' * `method = "nested_laplace"` -- an areal `icar()` / `car_proper()` field on
+#'   the occupancy arm (BFGS over the marginal plus the CAR prior), optionally
+#'   composed with a `temporal()` field, through the shared areal-BFGS driver.
+#' * `method = "nuts"` -- the in-tree C++ NUTS sampler over the same marginal,
+#'   with a fixed-hyper areal or temporal field block on the occupancy arm (one
+#'   of the two, not both).
 #'
 #' @return A `tobs_family` object.
 #' @references
@@ -1716,6 +1902,10 @@ fp_occu <- function() {
 #' `y_rem` an `n_sites x n_periods` integer matrix of per-removal-period counts.
 #' The per-site row totals must match (the same detected birds cross-classified).
 #'
+#' @section Engines:
+#' * `method = "laplace"` -- the closed-form marginal maximised (BFGS) with an
+#'   observed-information covariance; the only route (no field, no sampler).
+#'
 #' @param transect Transect geometry: `"line"` (default) or `"point"`.
 #' @param cutpoints Distance-bin edges, length `ncol(y) + 1`, strictly increasing
 #'   and starting at `>= 0`.
@@ -1766,6 +1956,10 @@ gdistremoval <- function(transect = c("line", "point"), cutpoints = NULL) {
 #' @section Inputs:
 #' `y` is a 3D array `[n_sites x n_bins x n_seasons]` of per-distance-band counts
 #' at each primary period (secondary occasions absorbed into the period total).
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- the forward-HMM marginal maximised (BFGS) with an
+#'   observed-information covariance; the only route (no field, no sampler).
 #'
 #' @param transect Transect geometry: `"line"` (default) or `"point"`.
 #' @param cutpoints Distance-bin edges, length `dim(y)[2] + 1`, strictly
@@ -1856,8 +2050,8 @@ distsamp_open <- function(transect = c("line", "point"), cutpoints = NULL,
 #' It may sit on the formula left-hand side (`y ~ ...`), so `y =` can be dropped.
 #' The `formula` predictors are shared by both arms.
 #'
-#' @section Scope:
-#' Non-spatial Laplace (`method = "laplace"`). The multinomial math is the
+#' @section Engines:
+#' Non-spatial Laplace (`method = "laplace"`), the only route. The multinomial math is the
 #' FD-validated tulpa kernel (`multinomial_logit.h`); the non-spatial fit is the
 #' vectorised R Newton over the same closed forms. Spatial fields / NUTS (the
 #' native multi-process likelihood) and the latent-class *misclassification*
@@ -1900,6 +2094,23 @@ occu_categorical <- function(classes = NULL) {
 #' Latent presence (Bernoulli) plus conditional positive cover (beta or
 #' lognormal). Does not share the replicate-detection assumption of the other
 #' families -- see `vignette("families")` for the conceptual caveat.
+#'
+#' @section Engines:
+#' * `method = "laplace"` -- two independent `tulpa_laplace()` fits, one per
+#'   arm (presence, positive), non-spatial; the default.
+#' * `method = "laplace_sla"` -- the same two fits with simplified-Laplace
+#'   skew-corrected marginals.
+#' * `method = "nested_laplace"` -- the joint nested-Laplace engine: shared or
+#'   arm-specific areal fields, weighted trend fields, `temporal()` and `re()`
+#'   blocks, every hyperparameter integrated on an outer grid; the route the
+#'   `"lognormal_trunc"` and `"ordinal"` arms require.
+#' * `method = "nested_laplace_sla"` -- the nested route with skew-corrected
+#'   marginals.
+#' * `method = "nuts"` -- the non-spatial sampler over the exact two-arm
+#'   coefficient vector `c(beta_presence, beta_positive, log_disp)`, giving
+#'   calibrated intervals and a per-draw pointwise likelihood for WAIC / LOO;
+#'   `"beta"`, `"lognormal"` and `"gaussian"` arms only, and any structured
+#'   term errors with a pointer to `"nested_laplace"`.
 #'
 #' @section Response on the formula left-hand side:
 #' The cover response is a single length-N vector, so it may sit on the top

@@ -38,9 +38,9 @@ It may sit on the formula left-hand side (\code{y ~ ...}), so \verb{y =} can be 
 The \code{formula} predictors are shared by both arms.
 }
 
-\section{Scope}{
+\section{Engines}{
 
-Non-spatial Laplace (\code{method = "laplace"}). The multinomial math is the
+Non-spatial Laplace (\code{method = "laplace"}), the only route. The multinomial math is the
 FD-validated tulpa kernel (\code{multinomial_logit.h}); the non-spatial fit is the
 vectorised R Newton over the same closed forms. Spatial fields / NUTS (the
 native multi-process likelihood) and the latent-class \emph{misclassification}

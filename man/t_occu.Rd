@@ -19,6 +19,16 @@ Polya-Gamma Gibbs sampler spOccupancy uses); \code{y} is a 3D array
 \verb{[n_sites x max_visits]} matrices), the occupancy \code{formula} and \code{detection}
 formula are site-level.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "pg_gibbs"} -- the Polya-Gamma Gibbs sampler: conditional on the
+year effects the seasons factorise, so the joint (coefficients, AR1 year
+effect) update is one exact Gaussian Markov random field draw; the only
+route.
+}
+}
+
 \examples{
 f <- t_occu()
 f

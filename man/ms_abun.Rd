@@ -27,6 +27,27 @@ A \code{tobs_family} object.
 \description{
 Per-species N-mixture with shared community-level hyperparameters.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the in-tree C++ community Laplace-EM (per-species
+coefficient random effects, closed-form community covariance M-step, AGHQ
+variance debias), the default; \code{latent()} factors run here through the
+block-coordinate driver.
+\item \code{method = "nested_laplace"} -- a shared areal field (\code{icar()} / \code{bym2()} /
+\code{car_proper()}) on the abundance arm (the spAbundance \code{sfMsNMix} model),
+Poisson or grid-integrated negative-binomial size; with \code{latent()} factors
+beside the field the spatial-factor model by block coordinate ascent.
+\item \code{method = "nuts"} -- the non-spatial community sampler over the closed-form
+per-(species, site) marginal, sampling the community means, per-species
+deviations and community covariances jointly (Poisson, or per-species
+negative-binomial \code{log_r_s}), warm-started at the Laplace-EM mode; with a
+shared \code{car_proper()} field (Poisson) a fixed-hyper non-centered field
+joins the sampler, while \code{icar()} / \code{bym2()}, \code{temporal()} and \code{re()}
+terms stay on \code{"nested_laplace"}.
+}
+}
+
 \section{Reading the negbin community dispersion}{
 
 Under \code{mixture = "negbin"} the community mean \code{mu_log_r} reaches

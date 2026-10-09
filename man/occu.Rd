@@ -13,6 +13,31 @@ A \code{tobs_family} object.
 Latent Bernoulli occupancy state with binomial detection per visit. The
 MacKenzie et al. (2002) single-season model.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- penalized EM + Laplace with Gaussian marginals, the
+default.
+\item \code{method = "laplace_sla"} -- the Laplace fit with simplified-Laplace
+skew-corrected marginals.
+\item \code{method = "laplace_gibbs"} / \code{method = "laplace_mi"} -- the Laplace fit
+with a post-EM Gibbs / multiple-imputation variance correction
+(Rubin-pooled refits, not an MCMC chain).
+\item \code{method = "pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact
+posterior (the spOccupancy \code{PGOcc} engine): site-level detection, an areal
+\code{icar()} field is accepted; a \code{temporal()} / \code{re()} / \code{latent()} / \code{svc()}
+term errors with a pointer.
+\item \code{method = "nested_laplace"} -- multi-block nested Laplace: areal, temporal
+and random-effect hyperparameters are integrated on an outer grid, and
+\code{predict()} interpolates all-NA detection sites from the field.
+\item \code{method = "nested_laplace_sla"} -- the nested route with skew-corrected
+marginals.
+\item \code{method = "nuts"} -- the unified C++ NUTS sampler over the structured
+terms (spatial, temporal, \code{re()}, \code{svc()}, \code{latent()}), reporting Rhat /
+ESS.
+}
+}
+
 \examples{
 f <- occu()
 f

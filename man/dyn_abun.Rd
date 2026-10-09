@@ -44,6 +44,22 @@ transition interval) on \code{omega} / \code{gamma} gives interval-specific vita
 rates. The response \code{y} is a 3D array \verb{[n_sites x max_visits x n_seasons]} (or
 a list of per-season count matrices); missing visits are \code{NA}.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- analytic-gradient BFGS over the forward marginal
+with an observed-information covariance; a grouped random effect on the
+initial-abundance arm is integrated by adaptive Gauss-Hermite quadrature.
+\item \code{method = "nested_laplace"} -- an areal \code{icar()} / \code{car_proper()} field on
+the initial-abundance arm (BFGS over the forward marginal plus the CAR
+prior), optionally composed with a \code{temporal()} field, through the shared
+areal-BFGS driver.
+\item \code{method = "nuts"} -- the in-tree C++ NUTS sampler over the same forward
+marginal, with a fixed-hyper areal field block on the initial-abundance
+arm; a \code{temporal()} term is not sampled.
+}
+}
+
 \examples{
 f <- dyn_abun(mixture = "negbin")
 f

@@ -24,6 +24,15 @@ states, so the exact marginal is maximised with an observed-information vcov.
 \code{y} is a length-\code{S} list of \verb{N x J} 0/1/NA detection matrices (or a 3D
 \verb{[sites x visits x species]} array); \code{species} names the arms.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the enumerated \code{2^S}-state marginal maximised
+(BFGS) with an observed-information covariance; the only route (no field,
+no sampler).
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_occu_multi(S = 2, N = 300, seed = 1)

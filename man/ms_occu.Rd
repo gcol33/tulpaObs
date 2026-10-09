@@ -15,6 +15,28 @@ per-species coefficients of each arm (the spOccupancy \code{msPGOcc} model). The
 occupancy and detection per-species deviations are independent, each with its
 own community covariance, fit by a community Laplace-EM.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the shared community Laplace-EM, the default;
+\code{latent()} factors alone (lfMsPGOcc) run here through the block-coordinate
+driver.
+\item \code{method = "nuts"} -- the non-spatial community sampler over the closed-form
+per-(species, site) two-state marginal, sampling the community means,
+per-species deviations and both per-arm community covariances jointly,
+warm-started at the Laplace-EM mode; an areal term errors with a pointer to
+\code{"nested_laplace"}.
+\item \code{method = "pg_gibbs"} -- the hierarchical Polya-Gamma Gibbs sampler
+(spOccupancy \code{msPGOcc}), giving a calibrated community-variance posterior;
+non-spatial.
+\item \code{method = "nested_laplace"} -- a shared areal field (\code{icar()} / \code{bym2()} /
+\code{car_proper()}) on the occupancy arm: a plain intercept field runs the
+in-tree C++ community-spatial nested Laplace-EM, a varying-coefficient bar
+(svcMsPGOcc) or \code{latent()} factors beside the field (sfMsPGOcc) run the
+block-coordinate fitter; the field is required on this route.
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_ms_occu(N = 80, J = 4, n_species = 8, seed = 1)

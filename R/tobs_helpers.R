@@ -374,10 +374,9 @@
   # nuts: the non-spatial sampler over the exact two-state coefficient marginal
   # via the in-tree C++ FullGradFn (R/occu_cover_nuts.R, src/occu_cover_nuts.cpp),
   # warm-started at the Laplace mode -- calibrated (non-Gaussian) intervals and a
-  # per-draw pointwise likelihood for WAIC / LOO, beta or lognormal cover. A
-  # spatial occu_cover NUTS path is not yet wired (the shared coupled field is
-  # grid-integrated under nested_laplace; the spatial-factor community sampler
-  # ms_occu_cover() + icar() samples a shared field).
+  # per-draw pointwise likelihood for WAIC / LOO, beta or lognormal cover. With
+  # an areal term on psi, nuts samples the coupled field(s) together with their
+  # hyperparameters (src/nuts_field_hyper.h; `.tobs_fit_occu_cover_nuts_spatial`).
   occu_cover = c("laplace", "nested_laplace", "nuts"),
   # occu_multiscale_cover: three-level cell / plot / visit occupancy + cover.
   # "nested_laplace" carries the shared areal field (the four-arm cell-coupling
@@ -394,11 +393,11 @@
   # marginal) and the per-species deviations are integrated by a Laplace-EM.
   # Non-spatial only -- the community analogue of the joint-coupled spatial
   # engine (per-species RE layered on the shared coupled field) needs upstream
-  # tulpa support, so nested_laplace is not offered. nuts: the reduced-rank
-  # spatial-factor path (a shared icar/car/bym2 field with per-species loadings)
-  # samples the exact joint posterior via tulpa's NUTS + the in-tree C++
-  # FullGradFn. Non-spatial ms_occu_cover has no NUTS path (gated in the
-  # dispatcher).
+  # tulpa support, so nested_laplace is not offered. nuts: non-spatial, the
+  # community sampler over the exact per-(species, cell) two-state marginal
+  # (R/ms_occu_cover_nuts.R); with a shared icar/car/bym2 field, the reduced-rank
+  # spatial-factor sampler (per-species loadings) via tulpa's NUTS + the in-tree
+  # C++ FullGradFn.
   ms_occu_cover = c("laplace", "nuts"),
   # ms_dyn_occu / ms_int_occu: community dynamic / integrated occupancy. Per-
   # species coefficient RE with per-arm Gaussian community covariances, fit by the

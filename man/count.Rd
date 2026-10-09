@@ -33,6 +33,19 @@ or an identity-link Gaussian response.
 The response is a numeric vector (one value per site), supplied via \verb{y =} or
 on a two-sided \code{formula} left-hand side (\code{count.value ~ predictors}).
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- one tulpa GLMM block; the negative-binomial size
+and the Gaussian residual variance are estimated by an outer dispersion
+loop.
+\item \code{method = "nested_laplace"} -- a plain areal field (\code{icar()} /
+\code{car_proper()}) on the formula as a latent GMRF, integrated over its
+hyperparameters by the nested-Laplace EM; the areal term is required on
+this route.
+}
+}
+
 \examples{
 f <- count("poisson")
 f

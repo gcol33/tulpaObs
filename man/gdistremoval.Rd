@@ -45,6 +45,14 @@ distance scale \code{sigma} (\code{detection}), and logit per-period removal cap
 The per-site row totals must match (the same detected birds cross-classified).
 }
 
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the closed-form marginal maximised (BFGS) with an
+observed-information covariance; the only route (no field, no sampler).
+}
+}
+
 \examples{
 f <- gdistremoval(transect = "point", cutpoints = c(0, 10, 20, 30, 40))
 f

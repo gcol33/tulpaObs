@@ -76,6 +76,14 @@ default.
 at each primary period (secondary occasions absorbed into the period total).
 }
 
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the forward-HMM marginal maximised (BFGS) with an
+observed-information covariance; the only route (no field, no sampler).
+}
+}
+
 \examples{
 f <- distsamp_open(transect = "line", cutpoints = c(0, 10, 20, 30, 40),
                    dynamics = "notrend")

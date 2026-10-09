@@ -15,16 +15,27 @@ with Gaussian community hyperpriors on the per-species coefficients of the
 occupancy arm and of every per-source detection arm. Fit by a shared
 community Laplace-EM.
 }
-\section{Scope}{
+\section{Engines}{
 
-The Laplace engine is the supported route: the shared occupancy mean and the
-per-source detection community components recover near nominal across seeds
-and more than one source (see \code{tests/testthat/test-ms-int-occu.R}). A NUTS
-sampler and an areal-field path are a deliberate follow-up, not part of this
-family's working surface; \code{method = "nuts"} / \code{"nested_laplace"} error from the
-dispatcher with a pointer rather than silently downgrading. The binary
-community-mean intervals carry the mild Laplace under-dispersion typical of
-occupancy data (measured 95\% CI coverage ~0.89 at small per-species n).
+\itemize{
+\item \code{method = "laplace"} -- the shared community Laplace-EM, the default: the
+shared occupancy mean and the per-source detection community components
+recover near nominal across seeds and more than one source (see
+\code{tests/testthat/test-ms-int-occu.R}). The binary community-mean intervals
+carry the mild Laplace under-dispersion typical of occupancy data
+(measured 95\% CI coverage ~0.89 at small per-species n).
+\item \code{method = "pg_gibbs"} -- the community integrated Polya-Gamma Gibbs
+sampler (one latent state per species-site observed by every source),
+giving a calibrated community-variance posterior; site-level per-source
+detection.
+\item \code{method = "nuts"} -- the community integrated sampler over the exact
+multi-source two-state per-(species, site) marginal (in-tree C++),
+sampling the community means, per-species deviations and the \code{D + 1}
+per-arm community covariances jointly, warm-started at the Laplace-EM mode.
+}
+
+No route takes a structured term: a field or random effect on either formula
+errors with a pointer, and there is no nested-Laplace path for this family.
 }
 
 \examples{

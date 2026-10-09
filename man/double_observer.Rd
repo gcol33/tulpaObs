@@ -43,6 +43,15 @@ interchangeable pair) the dependent protocol reduces to a two-pass \code{\link[=
 model.
 }
 
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- the closed-form Poisson-multinomial marginal
+maximised (BFGS) with an observed-information covariance; the only route
+(no field, no sampler).
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_double_observer(N = 200, seed = 1)

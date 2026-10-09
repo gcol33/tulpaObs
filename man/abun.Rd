@@ -34,11 +34,26 @@ Royle's (2004) N-mixture model: latent abundance \code{N_i ~ Poisson(lambda_i)}
 with \verb{log lambda_i = X_lambda beta_lambda}, and counts
 \code{y_ij | N_i ~ Binomial(N_i, p_ij)} with \verb{logit p_ij = X_p beta_p}. The
 abundance formula is the \code{tobs()} \code{formula}; the per-visit detection formula
-is \code{detection}. The marginal likelihood integrates \code{N} out exactly, so the
-fit is a direct Laplace approximation (no EM): \code{method = "laplace"}
-(fixed effects) or \code{method = "nested_laplace"} (an areal \code{icar()} / \code{bym2()}
-/ \code{car()} offset on the abundance arm).
+is \code{detection}. The marginal likelihood integrates \code{N} out exactly, so no
+route runs an EM over \code{N}.
 }
+\section{Engines}{
+
+\itemize{
+\item \code{method = "laplace"} -- a direct Laplace approximation over the closed-form
+marginal with an observed-Fisher covariance; a grouped random effect on one
+arm is integrated by adaptive Gauss-Hermite quadrature.
+\item \code{method = "nested_laplace"} -- an areal \code{icar()} / \code{bym2()} / \code{car_proper()}
+field on the abundance arm, its hyperparameters integrated on an outer grid
+(grid-integrated coefficient covariance).
+\item \code{method = "nuts"} -- the in-tree C++ NUTS sampler over the same marginal,
+Poisson or negative binomial (\code{log_r} sampled), warm-started at the Laplace
+mode; with an areal term a fixed-hyper non-centered field on the abundance
+arm (\code{icar()} / \code{car_proper()} / \code{bym2()}); \code{"zip"} / \code{"zinb"} are
+\code{"laplace"}-only, and a field does not combine with a random effect here.
+}
+}
+
 \examples{
 \donttest{
 sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
