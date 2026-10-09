@@ -15,8 +15,9 @@
 
 
 # Layout helper: contiguous coordinate blocks of the packed vector
-# c(beta_psi, beta_theta, beta_p[site, visit], beta_pos[site, visit], log_disp),
-# matching .tobs_fit_occu_multiscale_cover_laplace's `idx`.
+# c(beta_psi, beta_theta, beta_p[site, visit], beta_pos[site, visit], log_disp).
+# The one coordinate layout of the non-spatial parameter vector: the Laplace
+# fitter, the NUTS target and the pointwise log-likelihood kernel all read it.
 .tobs_occu_mscale_cover_nuts_layout <- function(model) {
   pi_list <- model$process_info
   p_psi   <- pi_list[[1L]]$p; p_theta <- pi_list[[2L]]$p

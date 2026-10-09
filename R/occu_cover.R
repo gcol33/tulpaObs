@@ -104,28 +104,11 @@
     matrix(as.numeric(y_pos), n_sites, max_visits),
     valid & (y_int == 1L), positive)
 
-  # Reject structured terms in v1 (spatial sharing across arms is v2).
-  .occu_cover_reject_structured(occ_formula, "occupancy")
-  .occu_cover_reject_structured(det_formula, "detection")
-  .occu_cover_reject_structured(pos_formula, "positive cover")
-
-  # Site-level occupancy design.
-  X_occ <- stats::model.matrix(occ_formula, data)
-
-  # Site-level detection / positive design (intercept + any site-level covs).
-  # The visit-level path adds visit-varying covariates on top.
-  X_det_site <- stats::model.matrix(det_formula, data)
-  X_pos_site <- stats::model.matrix(pos_formula, data)
-
-  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
-                                           n_sites, max_visits, arm = "detection")
-  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
-                                           n_sites, max_visits, arm = "positive cover")
-
-  det_coef_names <- colnames(X_det_site)
-  pos_coef_names <- colnames(X_pos_site)
-  if (!is.null(X_det_visit)) det_coef_names <- c(det_coef_names, colnames(X_det_visit))
-  if (!is.null(X_pos_visit)) pos_coef_names <- c(pos_coef_names, colnames(X_pos_visit))
+  formulas <- list(occ = occ_formula, det = det_formula, pos = pos_formula,
+                   det_visit = det_visit_formula, pos_visit = pos_visit_formula)
+  arms <- .occu_cover_arm_designs(
+    formulas, data, visit_data = list(det = det_visit_data, pos = pos_visit_data),
+    n_sites = n_sites, max_per_unit = max_visits, positive = positive)
 
   structure(list(
     model_type  = "occu_cover",
@@ -135,14 +118,48 @@
     valid       = valid,
     n_sites     = n_sites,
     max_visits  = max_visits,
+    X_occ       = arms$X_occ,
+    X_det_site  = arms$X_det_site,
+    X_pos_site  = arms$X_pos_site,
+    X_det_visit = arms$X_det_visit,
+    X_pos_visit = arms$X_pos_visit,
+    formulas    = formulas,
+    data        = data,
+    process_info = arms$process_info
+  ), class = "tobs_model")
+}
+
+# The three occu_cover arm designs (psi site-level; p and pos site-level plus an
+# optional visit-level block) and the process_info they define. `formulas`
+# carries `occ`/`det`/`pos` and the optional `det_visit`/`pos_visit`;
+# `visit_data` the matching `det`/`pos` frames. `max_per_unit = NULL` is the
+# compact signal: the visit designs are built on the V valid rows and skip the
+# padded-grid row check. Every binder of a joint occupancy-cover model (dense,
+# compact, community) reads its designs from here, so the arms cannot drift.
+.occu_cover_arm_designs <- function(formulas, data, visit_data, n_sites,
+                                    max_per_unit, positive) {
+  .occu_cover_reject_structured(formulas$occ, "occupancy")
+  .occu_cover_reject_structured(formulas$det, "detection")
+  .occu_cover_reject_structured(formulas$pos, "positive cover")
+
+  X_occ      <- stats::model.matrix(formulas$occ, data)
+  X_det_site <- stats::model.matrix(formulas$det, data)
+  X_pos_site <- stats::model.matrix(formulas$pos, data)
+
+  X_det_visit <- .tobs_build_visit_X(formulas$det_visit, visit_data$det,
+                                     n_sites, max_per_unit, arm = "detection")
+  X_pos_visit <- .tobs_build_visit_X(formulas$pos_visit, visit_data$pos,
+                                     n_sites, max_per_unit, arm = "positive cover")
+
+  det_coef_names <- c(colnames(X_det_site), colnames(X_det_visit))
+  pos_coef_names <- c(colnames(X_pos_site), colnames(X_pos_visit))
+
+  list(
     X_occ       = X_occ,
     X_det_site  = X_det_site,
     X_pos_site  = X_pos_site,
     X_det_visit = X_det_visit,
     X_pos_visit = X_pos_visit,
-    formulas    = list(occ = occ_formula, det = det_formula, pos = pos_formula,
-                       det_visit = det_visit_formula, pos_visit = pos_visit_formula),
-    data        = data,
     process_info = list(
       list(name = "psi", p = ncol(X_occ),
            coef_names = colnames(X_occ), link = "logit"),
@@ -152,7 +169,7 @@
            coef_names = pos_coef_names,
            link = if (positive == "beta") "logit" else "identity")
     )
-  ), class = "tobs_model")
+  )
 }
 
 # ---------------------------------------------------------------------------
@@ -208,26 +225,13 @@
   y_pos_num <- .occu_cover_validate_pos_values(
     as.numeric(y_pos_values), y_det_visit == 1L, positive)
 
-  .occu_cover_reject_structured(occ_formula, "occupancy")
-  .occu_cover_reject_structured(det_formula, "detection")
-  .occu_cover_reject_structured(pos_formula, "positive cover")
-
-  # Site-level designs (n_sites rows) -- identical to the dense path.
-  X_occ      <- stats::model.matrix(occ_formula, data)
-  X_det_site <- stats::model.matrix(det_formula, data)
-  X_pos_site <- stats::model.matrix(pos_formula, data)
-
-  # Visit-level designs built directly on the V valid rows (max_per_unit = NULL
-  # -> the compact signal that skips the padded-grid row check).
-  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
-                                     n_sites, NULL, arm = "detection")
-  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
-                                     n_sites, NULL, arm = "positive cover")
-
-  det_coef_names <- colnames(X_det_site)
-  pos_coef_names <- colnames(X_pos_site)
-  if (!is.null(X_det_visit)) det_coef_names <- c(det_coef_names, colnames(X_det_visit))
-  if (!is.null(X_pos_visit)) pos_coef_names <- c(pos_coef_names, colnames(X_pos_visit))
+  # Visit-level designs are built directly on the V valid rows (max_per_unit =
+  # NULL).
+  formulas <- list(occ = occ_formula, det = det_formula, pos = pos_formula,
+                   det_visit = det_visit_formula, pos_visit = pos_visit_formula)
+  arms <- .occu_cover_arm_designs(
+    formulas, data, visit_data = list(det = det_visit_data, pos = pos_visit_data),
+    n_sites = n_sites, max_per_unit = NULL, positive = positive)
 
   structure(list(
     model_type     = "occu_cover",
@@ -239,23 +243,14 @@
     n_visits_valid = n_visits_valid,
     n_sites        = n_sites,
     max_visits     = max_visits,
-    X_occ          = X_occ,
-    X_det_site     = X_det_site,
-    X_pos_site     = X_pos_site,
-    X_det_visit    = X_det_visit,
-    X_pos_visit    = X_pos_visit,
-    formulas       = list(occ = occ_formula, det = det_formula, pos = pos_formula,
-                          det_visit = det_visit_formula, pos_visit = pos_visit_formula),
+    X_occ          = arms$X_occ,
+    X_det_site     = arms$X_det_site,
+    X_pos_site     = arms$X_pos_site,
+    X_det_visit    = arms$X_det_visit,
+    X_pos_visit    = arms$X_pos_visit,
+    formulas       = formulas,
     data           = data,
-    process_info = list(
-      list(name = "psi", p = ncol(X_occ),
-           coef_names = colnames(X_occ), link = "logit"),
-      list(name = "p",   p = length(det_coef_names),
-           coef_names = det_coef_names, link = "logit"),
-      list(name = "pos", p = length(pos_coef_names),
-           coef_names = pos_coef_names,
-           link = if (positive == "beta") "logit" else "identity")
-    )
+    process_info   = arms$process_info
   ), class = "tobs_model")
 }
 

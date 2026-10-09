@@ -403,53 +403,19 @@
   n_fields      <- length(field_starts0)
   field_idx     <- as.integer(unlist(lapply(field_starts0,
                                             function(s) s + seq_len(n_cells))))
-  idx_joint     <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx, field_idx)
-  mix           <- .joint_inner_vcov_mixture(
-    fit, idx_joint, n_dense = p_beta, w = w, ok_cells = ok_cells,
+  bfv <- .tobs_joint_beta_field_vcov(
+    fit, modes, w, ok_cells,
+    arms = list(list(idx = bpsi_idx,   mean = beta_psi_m),
+                list(idx = btheta_idx, mean = beta_theta_m),
+                list(idx = bp_idx,     mean = beta_p_m),
+                list(idx = bpos_idx,   mean = beta_pos_m)),
+    field_idx = field_idx, n_cells = n_cells, n_fields = n_fields,
     n_threads = as.integer(dots[["n.threads.outer"]] %||% 1L))
-
-  if (is.null(mix)) {
-    # Older tulpa without stored per-grid Q: marginal-only diagonal fallback.
-    beta_idx_all <- c(bpsi_idx, btheta_idx, bp_idx, bpos_idx)
-    inner_var    <- .joint_inner_var(fit, beta_idx_all)
-    total_var <- function(modes_block, mean_vec, iv_block) {
-      vom <- as.numeric(crossprod(w, modes_block^2)) - mean_vec^2
-      mov <- if (is.null(iv_block)) 0 else {
-        iv_k <- iv_block[ok_cells, , drop = FALSE]
-        iv_k[!is.finite(iv_k)] <- 0
-        as.numeric(crossprod(w, iv_k))
-      }
-      pmax(vom + mov, 0)
-    }
-    cuts <- cumsum(c(0L, p_psi, p_theta, p_p, p_pos))
-    iv_of <- function(k) if (is.null(inner_var)) NULL
-                         else inner_var[, (cuts[k] + 1L):cuts[k + 1L], drop = FALSE]
-    sds_beta <- c(
-      sqrt(total_var(modes[, bpsi_idx,   drop = FALSE], beta_psi_m,   iv_of(1L))),
-      sqrt(total_var(modes[, btheta_idx, drop = FALSE], beta_theta_m, iv_of(2L))),
-      sqrt(total_var(modes[, bp_idx,     drop = FALSE], beta_p_m,     iv_of(3L))),
-      sqrt(total_var(modes[, bpos_idx,   drop = FALSE], beta_pos_m,   iv_of(4L)))
-    )
-    beta_block    <- diag(sds_beta^2, nrow = p_beta)
-    field_modes   <- modes[, field_idx, drop = FALSE]
-    field_at_cell <- as.numeric(crossprod(w, field_modes))
-    field_var     <- as.numeric(crossprod(w, field_modes^2)) - field_at_cell^2
-    field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
-    Vj <- NULL
-    beta_covs <- NULL
-  } else {
-    Vj         <- mix$Vj
-    mbar_joint <- mix$mbar
-    diag_Vj    <- diag(Vj)
-    sds_beta   <- sqrt(pmax(diag_Vj[seq_len(p_beta)], 0))
-    beta_block <- Vj[seq_len(p_beta), seq_len(p_beta), drop = FALSE]
-    beta_covs  <- mix$beta_covs
-    n_field_cols   <- n_fields * n_cells
-    field_at_cell  <- mbar_joint[p_beta + seq_len(n_field_cols)]
-    field_var      <- diag_Vj[p_beta + seq_len(n_field_cols)]
-    field_demeaned <- .occu_cover_demean_fields(field_at_cell, n_cells, n_fields)
-  }
-  field_sd <- sqrt(pmax(field_var, 0))
+  sds_beta       <- bfv$sds_beta
+  beta_block     <- bfv$beta_block
+  beta_covs      <- bfv$beta_covs
+  field_demeaned <- bfv$field_demeaned
+  field_sd       <- bfv$field_sd
 
   cuts <- cumsum(c(0L, p_psi, p_theta, p_p, p_pos))
   sd_psi   <- sds_beta[(cuts[1] + 1L):cuts[2]]

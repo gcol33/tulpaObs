@@ -470,21 +470,8 @@
                                                     verbose = TRUE, sigma.beta = 5,
                                                     ...) {
   pi_list <- model$process_info
-  p_psi   <- pi_list[[1L]]$p; p_theta <- pi_list[[2L]]$p
-  p_p     <- pi_list[[3L]]$p; p_pos   <- pi_list[[4L]]$p
-  ps_p    <- ncol(model$X_p_site);   ps_pos <- ncol(model$X_pos_site)
-  off     <- cumsum(c(0L, p_psi, p_theta, p_p, p_pos))
-  idx <- list(
-    psi   = off[1] + seq_len(p_psi),
-    theta = off[2] + seq_len(p_theta),
-    p     = off[3] + seq_len(p_p),
-    pos   = off[4] + seq_len(p_pos),
-    disp  = off[5] + 1L)
-  idx$p_site   <- idx$p[seq_len(ps_p)]
-  idx$p_visit  <- if (p_p > ps_p)   idx$p[(ps_p + 1L):p_p]     else integer(0)
-  idx$pos_site <- idx$pos[seq_len(ps_pos)]
-  idx$pos_visit<- if (p_pos > ps_pos) idx$pos[(ps_pos + 1L):p_pos] else integer(0)
-  n_par <- off[5] + 1L
+  idx     <- .tobs_occu_mscale_cover_nuts_layout(model)
+  n_par   <- idx$total
   is_beta <- identical(model$positive, "beta")
 
   par_names <- c(

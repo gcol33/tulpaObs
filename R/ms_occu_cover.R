@@ -103,24 +103,13 @@
   }
   .tobs_check_site_count(n_sites, nrow(data), "sites")
 
-  # Reject structured terms on every arm (spatial sharing + per-species RE is
-  # not wired; see file header).
-  .occu_cover_reject_structured(occ_formula, "occupancy")
-  .occu_cover_reject_structured(det_formula, "detection")
-  .occu_cover_reject_structured(pos_formula, "positive cover")
-
-  X_occ      <- stats::model.matrix(occ_formula, data)
-  X_det_site <- stats::model.matrix(det_formula, data)
-  X_pos_site <- stats::model.matrix(pos_formula, data)
-  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
-                                     n_sites, max_visits, arm = "detection")
-  X_pos_visit <- .tobs_build_visit_X(pos_visit_formula, pos_visit_data,
-                                     n_sites, max_visits, arm = "positive cover")
-
-  det_coef_names <- colnames(X_det_site)
-  pos_coef_names <- colnames(X_pos_site)
-  if (!is.null(X_det_visit)) det_coef_names <- c(det_coef_names, colnames(X_det_visit))
-  if (!is.null(X_pos_visit)) pos_coef_names <- c(pos_coef_names, colnames(X_pos_visit))
+  # Structured terms are rejected on every arm (spatial sharing + per-species
+  # RE is not wired; see file header); the community shares one set of designs.
+  arms <- .occu_cover_arm_designs(
+    list(occ = occ_formula, det = det_formula, pos = pos_formula,
+         det_visit = det_visit_formula, pos_visit = pos_visit_formula),
+    data, visit_data = list(det = det_visit_data, pos = pos_visit_data),
+    n_sites = n_sites, max_per_unit = max_visits, positive = positive)
 
   # Validate + clean each species' detection / cover matrices (binary detection;
   # positive cover finite and in-support at detected visits), and stash the
@@ -170,22 +159,14 @@
     max_visits   = max_visits,
     n_species    = n_species,
     species_names = species_names,
-    X_occ        = X_occ,
-    X_det_site   = X_det_site,
-    X_pos_site   = X_pos_site,
-    X_det_visit  = X_det_visit,
-    X_pos_visit  = X_pos_visit,
+    X_occ        = arms$X_occ,
+    X_det_site   = arms$X_det_site,
+    X_pos_site   = arms$X_pos_site,
+    X_det_visit  = arms$X_det_visit,
+    X_pos_visit  = arms$X_pos_visit,
     formulas     = list(occ = occ_formula, det = det_formula, pos = pos_formula),
     data         = data,
-    process_info = list(
-      list(name = "psi", p = ncol(X_occ),
-           coef_names = colnames(X_occ), link = "logit"),
-      list(name = "p",   p = length(det_coef_names),
-           coef_names = det_coef_names, link = "logit"),
-      list(name = "pos", p = length(pos_coef_names),
-           coef_names = pos_coef_names,
-           link = if (positive == "beta") "logit" else "identity")
-    )
+    process_info = arms$process_info
   ), class = "tobs_model")
 }
 
