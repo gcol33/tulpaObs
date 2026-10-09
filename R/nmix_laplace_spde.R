@@ -101,55 +101,32 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
   }
 
   # --- Outer (range, sigma) grid centred on the PC-prior medians ----------
-  prior_range <- ts$prior_range
-  prior_sigma <- ts$prior_sigma
-  if (is.null(range_grid)) {
-    # PC prior on range: P(range < U_r) = alpha_r -> rate on r^{-1}; median
-    # range ~ U_r at alpha_r = 0.5. Centre a 5-point log grid there.
-    r_med <- prior_range[1]
-    range_grid <- exp(seq(log(r_med * 0.35), log(r_med * 2.5), length.out = 5L))
-  }
-  if (is.null(sigma_grid)) {
-    s_scale <- prior_sigma[1]
-    sigma_grid <- exp(seq(log(s_scale * 0.35), log(s_scale * 2.0), length.out = 5L))
-  }
-  range_grid <- .count_spatial_check_grid(range_grid, "range_grid", 0, Inf)
-  sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
+  # A user grid is range-checked at this door; the default is a 5-node log grid
+  # spanning 0.35x to 2.5x (range) / 2.0x (sigma) the PC-prior medians, wider
+  # than the community paths' default since each grid point here is one
+  # single-species Newton.
+  if (!is.null(range_grid))
+    range_grid <- .count_spatial_check_grid(range_grid, "range_grid", 0, Inf)
+  if (!is.null(sigma_grid))
+    sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
+  sg <- .tobs_spde_outer_grid(ts, range_grid, sigma_grid,
+                              range_span = c(0.35, 2.5), sigma_span = c(0.35, 2.0),
+                              n_grid = 5L)
+  range_grid <- sg$range_grid; sigma_grid <- sg$sigma_grid
   r_grid_use <- pp$r_grid
 
-  # --- Per-grid-point precision Q(range, sigma) and log|Q| ----------------
-  # kappa / tau_spde from the Matern parameterisation (matches fit_spde).
-  build_Q <- function(range_val, sigma_val) {
-    kappa    <- sqrt(8 * ts$nu) / range_val
-    tau_spde <- 1 / (sqrt(4 * pi) * kappa * sigma_val)
-    Q <- tulpa::tulpa_spde_precision_Q(ts, kappa, tau_spde)
-    Q <- Matrix::forceSymmetric(Q)
-    list(Q = as.matrix(Q), log_det = .spde_logdet_Q(Q))
-  }
-
-  # Outer grid: (r [NB], range, sigma). Poisson -> single r = Inf node.
+  # Outer grid: (r [NB], range, sigma). Poisson -> single r = Inf node. The
+  # per-grid-point precision Q(range, sigma), log|Q| and the PC log-prior come
+  # from the shared SPDE grid helper.
   grid <- expand.grid(range = range_grid, sigma = sigma_grid,
                       r = r_grid_use, KEEP.OUT.ATTRS = FALSE)
-  n_grid <- nrow(grid)
-  Q_list   <- vector("list", n_grid)
-  log_dets <- numeric(n_grid)
-  pc_lp    <- numeric(n_grid)
-  cache    <- list()
-  for (k in seq_len(n_grid)) {
-    key <- paste0(grid$range[k], "_", grid$sigma[k])
-    if (is.null(cache[[key]])) cache[[key]] <- build_Q(grid$range[k], grid$sigma[k])
-    Q_list[[k]]  <- cache[[key]]$Q
-    log_dets[k]  <- cache[[key]]$log_det
-    pc_lp[k]     <- tulpa::tulpa_spde_log_hyperprior(
-      grid$range[k], grid$sigma[k],
-      list(prior_range = prior_range, prior_sigma = prior_sigma))
-  }
   theta_grid <- as.matrix(grid[, c("range", "sigma", "r"), drop = FALSE])
+  pr <- sg$precision(theta_grid)
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_spde,
     y = y, site_idx = site_idx,
     X_lambda_R = X_lambda, X_p_R = X_p, A_R = A_dense,
-    Q_list = Q_list, log_det_Q = log_dets,
+    Q_list = pr$Q_list, log_det_Q = pr$log_det,
     theta_grid_R = theta_grid, r_grid = as.numeric(grid$r),
     beta_lambda_init = as.numeric(beta_lambda_init),
     beta_p_init = as.numeric(beta_p_init),
@@ -162,7 +139,7 @@ nmix_laplace_spde <- function(y, site_idx, X_lambda, X_p, spatial,
   # carried to (log range, log sigma), is the measure, and the grid's cell
   # widths on those same log coordinates are the quadrature element it is
   # integrated with.
-  lm_post <- fit$log_marginal + pc_lp
+  lm_post <- fit$log_marginal + pr$pc_lp
   weights <- .tobs_grid_weights(list(theta_grid = theta_grid),
                                 "range / sigma grid", lm_post)
 

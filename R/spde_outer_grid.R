@@ -1,17 +1,17 @@
 # spde_outer_grid.R - the (range, sigma) outer grid of a continuous Matern
-# (SPDE) field shared across species, and the per-grid-row FEM precision the
-# community Laplace-EM drivers integrate over (ms_occu() + spde(),
-# ms_abun() + spde()). Per grid row the proper Matern precision Q(range, sigma)
-# and log|Q| are assembled once on the R side (the same FEM assembly the
-# single-species SPDE path uses) and the PC log-prior on (range, sigma) is
-# evaluated, so the driver's log-marginal can be folded into a proper
-# integrated posterior.
+# (SPDE) field, and the per-grid-row FEM precision the nested-Laplace drivers
+# integrate over (abun() + spde(), ms_occu() + spde(), ms_abun() + spde()). Per
+# grid row the proper Matern precision Q(range, sigma) and log|Q| are assembled
+# once on the R side (the same FEM assembly the occupancy SPDE path uses) and
+# the PC log-prior on (range, sigma) is evaluated, so the driver's log-marginal
+# can be folded into a proper integrated posterior.
 #
 # `ts` is the term's tulpa SPDE spec (mesh, FEM matrices, nu, prior_range,
-# prior_sigma). The default grids are coarser than the single-species SPDE
-# path: each community grid point is an n_species-fold-more-expensive EM, so
-# the outer product is kept small, spanning `range_span` / `sigma_span` times
-# the PC-prior medians on a log scale with `n_grid` nodes per axis.
+# prior_sigma). The default grid spans `range_span` / `sigma_span` times the
+# PC-prior medians on a log scale with `n_grid` nodes per axis; the community
+# callers take the coarse default (each of their grid points is an
+# n_species-fold-more-expensive EM), the single-species N-mixture path passes
+# its wider 5-node spans.
 .tobs_spde_outer_grid <- function(ts, range_grid = NULL, sigma_grid = NULL,
                                   range_span = c(0.4, 2.2),
                                   sigma_span = c(0.4, 1.8), n_grid = 3L) {

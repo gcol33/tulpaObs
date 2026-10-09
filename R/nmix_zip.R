@@ -5,15 +5,16 @@
 # The observed per-site marginal is a two-component mixture,
 #   L_i = omega * 1{all y_i = 0} + (1 - omega) * L_royle_i,
 # with L_royle_i the (Poisson / NB) Royle marginal that nmix_site_marginal()
-# already exposes with its eta-level derivatives. This is a PURE-R additive layer
-# over the C++ per-site Royle pieces -- no marginal-kernel change, so the plain
+# already exposes. The structural-zero mixing is the shared `.tobs_zip_layer()`
+# over those per-site Royle pieces -- no marginal-kernel change, so the plain
 # abun() / removal() / distance() paths are untouched. omega is an intercept-only
-# structural-zero probability (logit). Mode found by BFGS on the exact ZIP
-# marginal; vcov = inverse of the numeric Hessian at the mode.
+# structural-zero probability (logit). Mode found by L-BFGS-B on the exact ZIP
+# marginal (no gradient supplied); vcov = inverse of the numeric Hessian at the
+# mode.
 #
 # Scope (v1): non-spatial laplace only, intercept-only omega. A zero-inflation
 # covariate design, an areal field, and a NUTS path are follow-ups (the
-# marginal + its gradient are already the additive layer they would share).
+# marginal is already the additive layer they would share).
 
 .tobs_fit_nmix_zip <- function(model, mixture = "zip", K_max = NULL,
                                max_iter = 300L, verbose = TRUE, ...) {
@@ -35,27 +36,22 @@
                             X_lambda = X_lambda, X_p = X_p,
                             mixture = if (is_nb) "NB" else "P", K_max = K_max)
 
-  # Exact ZIP negative log-likelihood at theta = [beta_lambda | beta_p |
-  # logit_omega | (log_r if ZINB)].
-  neg_ll <- function(theta) {
-    bl <- theta[seq_len(p_lam)]
-    bp <- theta[p_lam + seq_len(p_p)]
-    lo <- theta[p_lam + p_p + 1L]
-    r  <- if (is_nb) exp(theta[p_lam + p_p + 2L]) else Inf
-    om <- stats::plogis(lo)
-    ev <- tryCatch(mrg$eval_beta(bl, bp, r), error = function(e) NULL)
-    if (is.null(ev)) return(1e10)
-    llr <- ev$log_lik_site
-    if (any(!is.finite(llr))) return(1e10)
-    log1m <- log1p(-om)                       # log(1 - omega)
-    ll <- numeric(n_sites)
-    ll[!az] <- log1m + llr[!az]               # a detection rules out N = 0
-    a  <- log1m + llr[az]; b <- log(om)       # all-zero: mix in the structural 0
-    mx <- pmax(a, b)
-    ll[az] <- mx + log(exp(a - mx) + exp(b - mx))
-    val <- -sum(ll)
-    if (is.finite(val)) val else 1e10
+  # theta = [beta_lambda | beta_p | logit_omega | (log_r if ZINB)]. The Royle
+  # per-site marginal at theta is what the ZIP layer mixes the structural zero
+  # into.
+  izi <- p_lam + p_p + 1L
+  ir  <- if (is_nb) izi + 1L else NA_integer_
+  eval_royle <- function(theta) {
+    ev <- tryCatch(
+      mrg$eval_beta(theta[seq_len(p_lam)], theta[p_lam + seq_len(p_p)],
+                    if (is_nb) exp(theta[ir]) else Inf),
+      error = function(e) NULL)
+    if (!is.null(ev)) ev$llr <- ev$log_lik_site
+    ev
   }
+  zl <- .tobs_zip_layer(eval_royle, az = az, izi = izi, ir = ir,
+                        zi_seed = c(0.3, 0.02, 0.6))
+  neg_ll <- zl$neg_ll
 
   # Warm start: the no-ZI Royle betas, plus a structural-zero logit seeded from
   # a modest share of the observed all-zero sites.
@@ -67,8 +63,7 @@
   bl0 <- if (!is.null(warm)) as.numeric(warm$beta_lambda)
          else c(log(mean(y_long) + 0.5), rep(0, p_lam - 1L))
   bp0 <- if (!is.null(warm)) as.numeric(warm$beta_p) else rep(0, p_p)
-  lo0 <- stats::qlogis(min(max(mean(az) * 0.3, 0.02), 0.6))
-  theta0 <- c(bl0, bp0, lo0)
+  theta0 <- c(bl0, bp0, zl$zi_logit0)
   if (is_nb) {
     lr0 <- if (!is.null(warm) && is.finite(warm$log_r %||% NA_real_)) warm$log_r
            else log(2)
@@ -99,14 +94,14 @@
   raw <- list(
     beta_lambda = est[seq_len(p_lam)],
     beta_p      = est[p_lam + seq_len(p_p)],
-    logit_omega = est[p_lam + p_p + 1L],
+    logit_omega = est[izi],
     mixture     = if (is_nb) "NB" else "P",
     vcov        = vcov,
     log_lik     = -opt$value,
     K_max       = K_max,
     converged   = opt$convergence == 0L,
     n_iter      = NA_integer_)
-  if (is_nb) { raw$log_r <- est[p_lam + p_p + 2L]; raw$r <- exp(raw$log_r) }
+  if (is_nb) { raw$log_r <- est[ir]; raw$r <- exp(raw$log_r) }
 
   build_nmix_fit(raw, model, spatial = NULL)
 }
