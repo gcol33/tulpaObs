@@ -30,25 +30,25 @@
     (t(e$vectors[, pos, drop = FALSE]) / e$values[pos])
 }
 
-# Per-species BLUP deviations in long form: one row per (species, arm, term).
-# `arms` is a named character vector mapping the arm label (name) to the
-# `ms_community` blup field (value); fields absent from `cm` are skipped (e.g.
-# the optional per-species log_r RE of an NB N-mixture). Shared ranef() body for
-# every community family (ms_occu / ms_dyn_occu / ms_occu_cover / ms_nmix).
+# Per-species BLUP deviations in the ranef() layout: one row per (species, arm,
+# term), `group = "species"`, `level` the species name. `arms` is a named
+# character vector mapping the arm label (name) to the `ms_community` blup
+# field (value); fields absent from `cm` are skipped (e.g. the optional
+# per-species log_r RE of an NB N-mixture). The per-species deviation carries no
+# posterior SD, so `std.error` is NA. Shared ranef() body for every community
+# family (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover / ms_nmix / ...).
 .tobs_ranef_ms_long <- function(cm, arms) {
-  to_long <- function(B, arm) {
-    sp <- rownames(B); tm <- colnames(B)
-    data.frame(species = rep(sp, times = ncol(B)), arm = arm,
-               term = rep(tm, each = nrow(B)),
-               estimate = as.numeric(B), stringsAsFactors = FALSE)
-  }
   blocks <- Map(function(field, arm) {
     B <- cm[[field]]
-    if (is.null(B)) NULL else to_long(B, arm)
+    if (is.null(B)) return(NULL)
+    sp <- rownames(B) %||% as.character(seq_len(nrow(B)))
+    tm <- colnames(B) %||% paste0("coef", seq_len(ncol(B)))
+    .tobs_ranef_table(estimate = as.numeric(B),
+                      level = rep(sp, times = ncol(B)),
+                      term  = rep(tm, each = nrow(B)),
+                      arm = arm, group = "species")
   }, arms, names(arms))
-  out <- do.call(rbind, blocks)
-  rownames(out) <- NULL
-  out
+  .tobs_ranef_stack(blocks)
 }
 
 

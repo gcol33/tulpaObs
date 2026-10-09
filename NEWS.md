@@ -3,6 +3,15 @@
 ## 0.5.1
 
 * Requires tulpa (>= 0.7.1).
+* `ranef()` returns one layout on every family and engine: `arm`, `group`,
+  `level`, `term`, `estimate`, `std.error`. It used to return four: the
+  documented one from the single-species Laplace / NUTS paths, `species, arm,
+  term, estimate` from the community families, `arm, var, group, term, level,
+  blup, blup_sd` from a joint `occu_cover` fit and `arm, group, blup, blup_sd`
+  from a sampled count fit. `group` is now the grouping variable as written in
+  the formula (`observer`, not the positional `p1`), `level` its level (the
+  species on a community fit, under `group = "species"`), and `std.error` is
+  `NA` where the fitter reports no posterior SD.
 * The joint posterior covariance of an `occu_cover` or `occu_multiscale_cover`
   fit with a field is accumulated in the engine
   (`tulpa::tulpa_joint_inner_vcov_mixture()`, gcol33/tulpa#947) instead of

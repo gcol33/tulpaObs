@@ -474,73 +474,40 @@ converged.tobs_fit <- function(object, ...) isTRUE(convergence(object)$converged
 #' non-centred draws are reconstructed to the natural BLUP scale
 #' (`b_{g,c} = sigma_c * (L z_g)_c`) and summarised; the deterministic Laplace
 #' path returns the variance-component EM modes and their Schur-complement
-#' standard errors. When the fit carries no formula random effects this falls
-#' back to the generic flat random-effect table.
+#' standard errors. A community fit reports its per-species deviations from
+#' the community mean. Every family and engine returns the same columns.
 #'
 #' @param object A `tobs_fit` object.
 #' @param ... Ignored.
-#' @return A data frame with one row per group level and coefficient
-#'   (`group`, `level`, `term`, `estimate`, `std.error`), or the generic
-#'   `ranef` table when no `re_effects` are present.
+#' @return A data frame with one row per random-effect level and coefficient
+#'   and the columns `arm` (the linear predictor the effect enters: `psi`, `p`,
+#'   `lambda`, ...; `psi+p` for an effect shared across arms; `NA` when the fit
+#'   does not distinguish arms), `group` (the grouping variable; `"species"`
+#'   for the per-species deviations of a community fit), `level` (the group
+#'   level, or the species), `term` (the coefficient the effect shifts,
+#'   `"(Intercept)"` for a random intercept), `estimate` and `std.error`
+#'   (`NA` where the fitter reports no posterior SD, as for the community
+#'   deviations). Zero rows when the fit carries no random effects.
 #' @export
 ranef.tobs_fit <- function(object, ...) {
   fn <- .tobs_s3_handler("ranef", object$model$model_type)
   if (!is.null(fn)) return(fn(object))
-  if (identical(object$model$model_type, "occu_cover") && !is.null(object$re)) {
-    # occu_cover() shared-field + per-group RE: `fit$re` is a flat list of
-    # random-intercept terms, one per arm for a lone term, several for crossed /
-    # nested groupings sharing an arm. Stack them into one table with `arm` +
-    # `var` (grouping variable) columns; every arm carries its grouping `level`
-    # labels.
-    rows <- lapply(object$re, function(re) {
-      bl <- re$blup; bsd <- re$blup_sd
-      if (is.matrix(bl)) {
-        # Random slope: one (group, coefficient) row per cell of the
-        # [n_groups x n_coefs] BLUP matrix, tagged by the coefficient `term`.
-        cn  <- colnames(bl) %||% re$coef_names %||%
-               paste0("coef", seq_len(ncol(bl)))
-        lev <- re$levels %||% as.character(seq_len(nrow(bl)))
-        data.frame(arm     = re$arm,
-                   var     = re$var %||% NA_character_,
-                   group   = rep(lev, times = ncol(bl)),
-                   term    = rep(cn, each = nrow(bl)),
-                   level   = rep(seq_len(nrow(bl)), times = ncol(bl)),
-                   blup    = as.numeric(bl),
-                   blup_sd = as.numeric(bsd),
-                   stringsAsFactors = FALSE)
-      } else {
-        lev <- re$levels %||% as.character(seq_along(bl))
-        data.frame(arm     = re$arm,
-                   var     = re$var %||% NA_character_,
-                   group   = lev,
-                   term    = "(Intercept)",
-                   level   = seq_along(bl),
-                   blup    = bl,
-                   blup_sd = bsd,
-                   stringsAsFactors = FALSE)
-      }
-    })
-    out <- do.call(rbind, rows)
-    rownames(out) <- NULL
-    return(out)
+  # Per-term BLUP blocks: one block (a sampled count fit's random intercept) or
+  # a flat list of them keyed by arm / "<arm>:<var>" (a joint occu_cover fit's
+  # per-arm terms). A list of formula terms carries no `blup` and falls through.
+  re <- object$re
+  if (is.list(re)) {
+    blocks <- if (!is.null(re[["blup"]])) list(re) else
+      Filter(function(t) is.list(t) && !is.null(t[["blup"]]), re)
+    if (length(blocks)) {
+      return(.tobs_ranef_stack(lapply(blocks, .tobs_ranef_from_re_block)))
+    }
   }
-  if (!is.null(object$re) && !is.null(object$re$blup)) {
-    # Single-block per-group RE on a non-occu_cover fit (e.g. abun NUTS): one
-    # random intercept per group on the named arm, with per-group BLUP and its SD.
-    re <- object$re
-    return(data.frame(
-      arm   = re$arm,
-      group = re$levels %||% as.character(seq_along(re$blup)),
-      blup  = re$blup,
-      blup_sd = re$blup_sd,
-      stringsAsFactors = FALSE))
+  if (length(object$re_effects)) {
+    return(.tobs_ranef_stack(lapply(object$re_effects, function(tab)
+      .tobs_ranef_from_effects(object, tab))))
   }
-  if (!is.null(object$re_effects) && length(object$re_effects) > 0L) {
-    out <- do.call(rbind, object$re_effects)
-    rownames(out) <- NULL
-    return(out)
-  }
-  NextMethod()
+  .tobs_ranef_from_layout(object, NextMethod())
 }
 
 # One coefficient layout for every fit: a flat name `<arm>_<term>`, where the arm

@@ -104,7 +104,9 @@ test_that("a latent-factor community N-mixture recovers residual co-occurrence",
   expect_equal(dim(fit$ms_community$coef_lambda), c(8L, 2L))
   expect_true(all(is.finite(unlist(vcov(fit)))))
   rf <- ranef(fit)
-  expect_true(all(c("species", "arm", "term", "estimate") %in% names(rf)))
+  expect_identical(names(rf),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(rf$group == "species"))
   # fitted() is factor-aware: the factor offset enters lambda
   ft <- fitted(fit)
   expect_equal(dim(ft$lambda), c(80L, 8L))

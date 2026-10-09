@@ -198,7 +198,9 @@ test_that("ms_occu_cover() S3 methods work", {
   expect_s3_class(re, "data.frame")
   # n_species x (p_occ + p_p + p_pos) = 8 x (2 + 2 + 2)
   expect_equal(nrow(re), 8L * 6L)
-  expect_true(all(c("species", "arm", "term", "estimate") %in% names(re)))
+  expect_identical(names(re),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(re$group == "species"))
   expect_setequal(unique(re$arm), c("psi", "p", "pos"))
 
   fv <- fitted(fit)

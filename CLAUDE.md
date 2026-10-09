@@ -581,6 +581,14 @@ frame on every method (no `summary.cover_fit`). `simulate()` = ALWAYS a list of
 handler `.tobs_simulate_<key>(object, nsim)` returns the list, never unwraps at
 nsim = 1. `residuals()` keeps its LEVEL contract `list(occ, det)` -- `det` is
 scored against `z * p`, not a `fitted()` quantity, so it is not renamed.
+`ranef()` = `arm, group, level, term, estimate, std.error` on EVERY fit: every
+branch (family handler, `fit$re` BLUP blocks, `re_effects`, the engine's
+table) emits through `.tobs_ranef_table()` / `.tobs_ranef_stack()`
+(`R/re_effects.R`); `group` = grouping variable as written (`observer`, never
+the positional `p1`; `"species"` on a community fit), `std.error` NA where no
+SD exists. Arm of a `re_effects` table = `attr(, "process")` index into
+`.tobs_fit_arms()`, empty = visit-level detection. `test-ranef-layout.R` pins
+each branch without a fit.
 
 ### Diagnostic doors = S3 methods, NEVER a second name
 

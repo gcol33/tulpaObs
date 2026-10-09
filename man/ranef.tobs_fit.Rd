@@ -12,15 +12,21 @@
 \item{...}{Ignored.}
 }
 \value{
-A data frame with one row per group level and coefficient
-(\code{group}, \code{level}, \code{term}, \code{estimate}, \code{std.error}), or the generic
-\code{ranef} table when no \code{re_effects} are present.
+A data frame with one row per random-effect level and coefficient
+and the columns \code{arm} (the linear predictor the effect enters: \code{psi}, \code{p},
+\code{lambda}, ...; \code{psi+p} for an effect shared across arms; \code{NA} when the fit
+does not distinguish arms), \code{group} (the grouping variable; \code{"species"}
+for the per-species deviations of a community fit), \code{level} (the group
+level, or the species), \code{term} (the coefficient the effect shifts,
+\code{"(Intercept)"} for a random intercept), \code{estimate} and \code{std.error}
+(\code{NA} where the fitter reports no posterior SD, as for the community
+deviations). Zero rows when the fit carries no random effects.
 }
 \description{
 Returns the per-group random-effect posterior summaries. Under NUTS the
 non-centred draws are reconstructed to the natural BLUP scale
 (\verb{b_\{g,c\} = sigma_c * (L z_g)_c}) and summarised; the deterministic Laplace
 path returns the variance-component EM modes and their Schur-complement
-standard errors. When the fit carries no formula random effects this falls
-back to the generic flat random-effect table.
+standard errors. A community fit reports its per-species deviations from
+the community mean. Every family and engine returns the same columns.
 }

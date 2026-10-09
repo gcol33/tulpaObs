@@ -66,6 +66,10 @@ test_that("iid intercept RE is fit (not dropped) by the default Laplace engine",
 
   re <- ranef(fit)
   expect_s3_class(re, "data.frame")
+  expect_identical(names(re),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(re$arm == "psi" & re$group == "g" & re$term == "(Intercept)"))
+  expect_true(all(is.finite(re$std.error) & re$std.error > 0))
   expect_equal(nrow(re), 30L)
   expect_gt(cor(re$estimate, s$b_true), 0.7)
 })
@@ -309,7 +313,8 @@ test_that("a detection random intercept is fit on its own arm (AGHQ arm = det)",
 
   # Per-group detection BLUPs track the simulated observer effects.
   re <- ranef(fit)
-  rp <- re[re$group == "p1", ]
+  rp <- re[re$group == "observer", ]
+  expect_true(all(rp$arm == "p"))
   expect_equal(nrow(rp), 40L)
   expect_gt(cor(rp$estimate, s$b_obs), 0.6)
 

@@ -54,9 +54,14 @@ test_that("RE on the lambda arm fits and surfaces sigma_g + BLUPs", {
   expect_true(any(grepl("^re_g1_", names(fit$means))))
   expect_identical(fit$nmix_re$arm, "lambda")
 
-  # Per-group BLUP table surfaces through ranef().
+  # Per-group BLUP table surfaces through ranef() in the one layout.
   re <- ranef(fit)
-  expect_true(is.list(re) || is.data.frame(re))
+  expect_identical(names(re),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_equal(nrow(re), 6L)
+  expect_true(all(re$arm == "lambda" & re$group == "g" &
+                    re$term == "(Intercept)"))
+  expect_identical(re$level, levels(s$data$g))
 })
 
 test_that("RE on the p arm fits and the sigma carries the p<t> label", {

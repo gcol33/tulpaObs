@@ -138,7 +138,9 @@ test_that("msDS recovers the community means and per-species structure", {
   expect_gt(stats::cor(as.numeric(ft$lambda), as.numeric(d$truth$lambda)), 0.8)
   # S3
   rf <- ranef(fit)
-  expect_true(all(c("species", "arm", "term", "estimate") %in% names(rf)))
+  expect_identical(names(rf),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(rf$group == "species"))
   expect_true(all(c("lambda", "sigma") %in% unique(rf$arm)))
   expect_true(is.finite(nobs(fit)))
 })

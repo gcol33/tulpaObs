@@ -49,7 +49,12 @@ test_that("occu_cover() shared field + per-group RE: fit runs and reports the RE
   rf <- ranef(fit)
   expect_s3_class(rf, "data.frame")
   expect_equal(nrow(rf), 6L)
-  expect_true(all(c("group", "blup", "blup_sd") %in% names(rf)))
+  expect_identical(names(rf),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(rf$arm == "psi" & rf$group == "g" & rf$term == "(Intercept)"))
+  expect_identical(rf$level, fit$re$psi$levels)
+  expect_equal(rf$estimate, fit$re$psi$blup)
+  expect_equal(rf$std.error, fit$re$psi$blup_sd)
 })
 
 test_that("occu_cover() spatial + RE recovers the means, field, and RE variance", {

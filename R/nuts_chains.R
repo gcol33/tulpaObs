@@ -229,6 +229,8 @@
        group = as.integer(design[[1L]]$idx),
        n_groups = as.integer(design[[1L]]$n_groups),
        label = design[[1L]]$group_label %||% "g1",
+       var = .tobs_re_group_name(design[[1L]]$group_expr,
+                                 design[[1L]]$group_label %||% "g1"),
        levels = design[[1L]]$levels)
 }
 
@@ -274,6 +276,7 @@
   sig_dr  <- exp(draws[, ls_col])
   blup_dr <- sig_dr * draws[, z_cols, drop = FALSE]
   fit$re <- list(arm = re_info$arm_tag, group_label = re_info$label,
+                 var = re_info$var,
                  n_groups = re_info$n_groups, levels = re_info$levels,
                  sigma = mean(sig_dr), sigma_sd = stats::sd(sig_dr),
                  blup = colMeans(blup_dr), blup_sd = apply(blup_dr, 2L, stats::sd))

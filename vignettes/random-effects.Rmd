@@ -155,9 +155,10 @@ c(estimate = fit$means[[sig_name]], truth = 0.9)
 ```
 
 `ranef()` returns the per-group effects (the BLUPs, best linear unbiased
-predictors) as a data frame with one row per group and term: which
-grouping factor, which level, which coefficient, the estimate, and its
-standard error.
+predictors) as a data frame with one row per group and term: which arm
+the effect enters, which grouping factor, which level, which coefficient,
+the estimate, and its standard error. Every family returns these same
+columns.
 
 ```{r ranef-intercept}
 re <- ranef(fit)
@@ -383,7 +384,7 @@ detection BLUPs track the simulated observer effects.
 
 ```{r det-ranef}
 re_d <- ranef(fit_d)
-rp <- re_d[re_d$group == "p1", ]
+rp <- re_d[re_d$group == "observer", ]
 cor(rp$estimate, sd_re$b_obs)
 ```
 

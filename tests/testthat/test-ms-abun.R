@@ -90,7 +90,11 @@ test_that("ms_abun S3 methods work", {
   re <- ranef(fit)
   expect_s3_class(re, "data.frame")
   expect_equal(nrow(re), 8L * (2L + 2L))   # n_species x (p_lambda + p_p)
-  expect_true(all(c("species", "arm", "term", "estimate") %in% names(re)))
+  expect_identical(names(re),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(re$group == "species"))
+  expect_setequal(unique(re$level), sim$species)
+  expect_setequal(unique(re$arm), c("lambda", "p"))
 
   fv <- fitted(fit)
   expect_equal(dim(fv$lambda), c(40L, 8L))

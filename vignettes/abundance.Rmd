@@ -508,8 +508,8 @@ round(vcov(fr), 4)
 ```
 
 `ranef()` returns the per-group effects, the BLUPs, one row per group level
-and coefficient: the grouping factor, the level, the term, the estimate,
-and its standard error. The standard error is the genuine AGHQ marginal
+and coefficient: the arm, the grouping factor, the level, the term, the
+estimate, and its standard error. The standard error is the genuine AGHQ marginal
 posterior spread, wider for groups with fewer sites.
 
 ```{r re-ranef}

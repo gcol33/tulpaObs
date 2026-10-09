@@ -46,11 +46,15 @@ test_that("occu_cover() detection RE: fit runs and reports the RE on the p arm",
   expect_identical(fit$re$p$var, "habitat")
   expect_length(fit$re$p$blup, 6L)
   expect_identical(fit$re$p$levels, paste0("hab", 1:6))
-  # ranef() surfaces the BLUP table with an `arm` column and the level labels.
+  # ranef() surfaces the BLUP table in the one layout, on the p arm, under the
+  # grouping variable and its level labels.
   rf <- ranef(fit)
   expect_s3_class(rf, "data.frame")
-  expect_true(all(c("arm", "group", "blup", "blup_sd") %in% names(rf)))
-  expect_true(all(rf$arm == "p"))
+  expect_identical(names(rf),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(rf$arm == "p" & rf$group == "habitat"))
+  expect_identical(rf$level, paste0("hab", 1:6))
+  expect_equal(rf$estimate, fit$re$p$blup)
   expect_equal(nrow(rf), 6L)
 })
 
@@ -223,10 +227,12 @@ test_that("occu_cover() crossed detection RE: two groupings fit and report", {
   expect_length(fit$re[["p:observer"]]$blup, 4L)
   expect_true(all(c("sigma_re_p_habitat", "sigma_re_p_observer") %in%
                     names(fit$means)))
-  # ranef() stacks both groupings with an `arm` + `var` column.
+  # ranef() stacks both groupings, each under its grouping variable.
   rf <- ranef(fit)
-  expect_true(all(c("arm", "var", "group", "blup", "blup_sd") %in% names(rf)))
-  expect_setequal(unique(rf$var), c("habitat", "observer"))
+  expect_identical(names(rf),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_setequal(unique(rf$group), c("habitat", "observer"))
+  expect_true(all(rf$arm == "p"))
   expect_equal(nrow(rf), 10L)
 })
 

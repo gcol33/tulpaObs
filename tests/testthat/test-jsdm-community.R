@@ -119,7 +119,7 @@ test_that("jsdm() recovers community means with per-species coefficients", {
   expect_equal(dim(fv), c(300L, 16L))
   expect_true(all(fv > 0 & fv < 1))
   expect_true(is.finite(waic(f)$estimates["waic", "Estimate"]))
-  expect_equal(dim(ranef(f)), c(32L, 4L))
+  expect_equal(dim(ranef(f)), c(32L, 6L))
 })
 
 

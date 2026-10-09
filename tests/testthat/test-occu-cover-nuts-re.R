@@ -220,8 +220,10 @@ test_that("occu_cover NUTS RE: the fit reports the block and ranef() reads it", 
   rf <- ranef(fit)
   expect_s3_class(rf, "data.frame")
   expect_equal(nrow(rf), 5L)
-  expect_true(all(rf$arm == "p"))
-  expect_identical(rf$group, paste0("hab", 1:5))
+  expect_identical(names(rf),
+                   c("arm", "group", "level", "term", "estimate", "std.error"))
+  expect_true(all(rf$arm == "p" & rf$group == "habitat"))
+  expect_identical(rf$level, paste0("hab", 1:5))
 
   # A no-RE fit on the same data carries no RE surface at all.
   fit0 <- .ocnre_fit(sim, detection = ~ det_cov1,

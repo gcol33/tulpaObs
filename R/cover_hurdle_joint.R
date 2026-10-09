@@ -755,8 +755,10 @@
 # modes. The BLUP is the grid-weighted posterior mean over the converged cells,
 # centred (the intercept carries the level), with the grid-weighted SD; the
 # term's SD is that block's `sigma` axis averaged under the same weights. The
-# table has the shape `ranef()` stacks from `re_effects`. A lone term is keyed
-# `re` and its SD reported as `sigma_re`; several are numbered.
+# table has the shape `ranef()` stacks from `re_effects`: `group` is the
+# grouping variable, and the term sits on the occurrence arm (process 1). A
+# lone term is keyed `re` and its SD reported as `sigma_re`; several are
+# numbered.
 .cover_re_effects <- function(fit, bm, re) {
   if (!length(re)) return(list(effects = NULL, sigma = NULL))
   lay   <- fit$arm_layout
@@ -770,11 +772,14 @@
     cols <- lay$block_start[pos] + seq_len(lay$block_size[pos])
     mom  <- .tobs_joint_latent_moments(modes, bm$w, cols)
     lev  <- re[[k]]$levels %||% as.character(seq_along(cols))
-    effects[[keys[k]]] <- data.frame(
-      group = keys[k], level = lev, term = "(Intercept)",
+    tab <- data.frame(
+      group = .tobs_re_group_name(.tobs_re_group_expr(re[[k]]), keys[k]),
+      level = lev, term = "(Intercept)",
       estimate  = mom$mean - mean(mom$mean),
       std.error = sqrt(pmax(mom$var, 0)),
       stringsAsFactors = FALSE)
+    attr(tab, "process") <- 1L
+    effects[[keys[k]]] <- tab
     ax <- sprintf("b%d.sigma", pos)
     sigma[[paste0("sigma_", keys[k])]] <-
       if (ax %in% colnames(tg)) sum(bm$w * tg[, ax]) else NA_real_

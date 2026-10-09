@@ -77,7 +77,7 @@ test_that("community count Poisson NUTS recovers community means + agrees with L
                tolerance = 0.08)
   # S3 surface
   expect_true(all(is.finite(diag(vcov(nut)))))
-  expect_equal(dim(ranef(nut)), c(12L * 2L, 4L))
+  expect_equal(dim(ranef(nut)), c(12L * 2L, 6L))
 })
 
 test_that("ms_count NUTS community-mean 95% CIs cover at the nominal rate", {

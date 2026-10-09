@@ -172,3 +172,125 @@
   colnames(M) <- nms
   M
 }
+
+
+# =============================================================================
+# One ranef() layout for every fit.
+#
+# Every branch of ranef.tobs_fit() -- a family handler, the per-term BLUP blocks
+# a joint fit stores on `fit$re`, the `re_effects` tables of the single-species
+# paths, and the engine's own table -- emits through .tobs_ranef_table(), so a
+# consumer reads the same six columns on any family and engine:
+#   arm       the linear predictor the effect enters (`psi`, `p`, `lambda`, ...;
+#             `psi+p` for an effect shared across arms; NA when the fit does not
+#             distinguish arms)
+#   group     the grouping variable (`"species"` for a community fit's
+#             per-species deviations)
+#   level     the group level
+#   term      the coefficient the effect shifts, `(Intercept)` for an intercept
+#   estimate  the BLUP / posterior mean
+#   std.error its posterior SD, NA where the fitter reports none
+# =============================================================================
+
+.TOBS_RANEF_COLS <- c("arm", "group", "level", "term", "estimate", "std.error")
+
+.tobs_ranef_table <- function(estimate, level, term = "(Intercept)",
+                              arm = NA_character_, group = NA_character_,
+                              std.error = NA_real_) {
+  n <- length(estimate)
+  data.frame(arm       = rep_len(as.character(arm), n),
+             group     = rep_len(as.character(group), n),
+             level     = rep_len(as.character(level), n),
+             term      = rep_len(as.character(term), n),
+             estimate  = as.numeric(estimate),
+             std.error = rep_len(as.numeric(std.error), n),
+             stringsAsFactors = FALSE)
+}
+
+.tobs_ranef_empty <- function() .tobs_ranef_table(numeric(0), character(0))
+
+# Stack per-term tables into one; an empty list is the zero-row table.
+.tobs_ranef_stack <- function(rows) {
+  rows <- Filter(Negate(is.null), rows)
+  if (!length(rows)) return(.tobs_ranef_empty())
+  out <- do.call(rbind, unname(rows))
+  rownames(out) <- NULL
+  out
+}
+
+# The grouping variable's name: the term's grouping expression as written in
+# the formula (`g`, `g:h`), else the fallback label.
+.tobs_re_group_name <- function(group_expr, fallback) {
+  if (is.null(group_expr)) return(as.character(fallback))
+  paste(deparse(group_expr, width.cutoff = 500L), collapse = "")
+}
+
+# Arm name of a random-effect term from its process index into the fit's arms
+# (`.tobs_fit_arms()`): empty = a visit-level term on the detection arm; several
+# = one effect shared across those arms.
+.tobs_ranef_arm <- function(object, process) {
+  if (is.null(process)) return(NA_character_)
+  arms <- tryCatch(names(.tobs_fit_arms(object)), error = function(e) character(0))
+  idx <- if (length(process)) as.integer(process) else 2L
+  if (!length(arms) || any(idx < 1L | idx > length(arms))) return(NA_character_)
+  paste(arms[idx], collapse = "+")
+}
+
+# A per-term `re_effects` table (.tobs_re_effects_table()) in the ranef layout.
+.tobs_ranef_from_effects <- function(object, tab) {
+  .tobs_ranef_table(estimate  = tab$estimate, level = tab$level, term = tab$term,
+                    arm       = .tobs_ranef_arm(object, attr(tab, "process")),
+                    group     = .tobs_re_group_name(attr(tab, "group_expr"),
+                                                    tab$group),
+                    std.error = tab$std.error)
+}
+
+# A BLUP block a joint / sampled fit stores on `fit$re`: `blup` is a per-level
+# vector (random intercept) or an [n_groups x n_coefs] matrix (random slopes),
+# `blup_sd` its SD in the same shape, `levels` the group labels, `var` the
+# grouping variable (`group_label` on a block that records only the label).
+.tobs_ranef_from_re_block <- function(re) {
+  bl  <- re[["blup"]]; bsd <- re[["blup_sd"]]
+  if (is.null(bsd)) bsd <- NA_real_
+  group <- re[["var"]] %||% re[["group_label"]] %||% NA_character_
+  if (is.matrix(bl)) {
+    cn  <- colnames(bl) %||% re[["coef_names"]] %||%
+           paste0("coef", seq_len(ncol(bl)))
+    lev <- re[["levels"]] %||% as.character(seq_len(nrow(bl)))
+    .tobs_ranef_table(estimate = as.numeric(bl),
+                      level = rep(lev, times = ncol(bl)),
+                      term  = rep(cn, each = nrow(bl)),
+                      arm = re[["arm"]] %||% NA_character_, group = group,
+                      std.error = as.numeric(bsd))
+  } else {
+    lev <- re[["levels"]] %||% as.character(seq_along(bl))
+    .tobs_ranef_table(estimate = as.numeric(bl), level = lev,
+                      arm = re[["arm"]] %||% NA_character_, group = group,
+                      std.error = as.numeric(bsd))
+  }
+}
+
+# The engine's own ranef table (tulpa's `ranef.tulpa_fit()`: one `term` row per
+# group level and coefficient, named `<group>[<level>]` / `<group>.<coef>[<level>]`
+# from `re_layout`, with `estimate` and `sd`) in the ranef layout. The layout
+# is walked in the engine's own order (levels outer, coefficients inner) so
+# the names are never parsed; a table of another width keeps its names as
+# levels.
+.tobs_ranef_from_layout <- function(object, tab) {
+  if (!is.data.frame(tab) || !nrow(tab)) return(.tobs_ranef_empty())
+  rows <- lapply(object$re_layout %||% list(), function(rt) {
+    cls <- rt$coef_labels %||% "(Intercept)"
+    data.frame(group = rt$group_var %||% NA_character_,
+               level = rep(as.character(rt$levels), each = length(cls)),
+               term  = rep(cls, times = length(rt$levels)),
+               stringsAsFactors = FALSE)
+  })
+  key <- if (length(rows)) do.call(rbind, rows) else NULL
+  if (is.null(key) || nrow(key) != nrow(tab)) {
+    key <- data.frame(group = NA_character_, level = as.character(tab$term),
+                      term = "(Intercept)", stringsAsFactors = FALSE)
+  }
+  .tobs_ranef_table(estimate = tab$estimate, level = key$level, term = key$term,
+                    group = key$group,
+                    std.error = tab[["sd"]] %||% tab[["std.error"]] %||% NA_real_)
+}
