@@ -58,9 +58,13 @@ test_that("scalar (constant-rate) kernel is bit-identical to the broadcast path"
   vc <- tulpaObs:::cpp_dyn_abun_total_log_lik(
     yflat, 1L, T, J, K, log(lambda), qlogis(p),
     rep(qlogis(om_c), nIv), rep(log(gm_c), nIv))
+  # The kernel's constant-rate score adds the per-interval scores left to right
+  # in double precision, starting from 0. R's sum() accumulates in long double,
+  # which rounds differently, so the reference repeats the kernel's additions.
+  kernel_sum <- function(x) Reduce(`+`, as.numeric(x), 0)
   expect_identical(sc$log_lik, vc$log_lik)
-  expect_identical(as.numeric(sc$grad_eta_omega), sum(as.numeric(vc$grad_eta_omega)))
-  expect_identical(as.numeric(sc$grad_eta_gamma), sum(as.numeric(vc$grad_eta_gamma)))
+  expect_identical(as.numeric(sc$grad_eta_omega), kernel_sum(vc$grad_eta_omega))
+  expect_identical(as.numeric(sc$grad_eta_gamma), kernel_sum(vc$grad_eta_gamma))
 })
 
 
