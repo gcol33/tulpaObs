@@ -1,6 +1,15 @@
 # tulpaObs NEWS
 
-## Development version
+## 0.6.1
+
+* A random intercept or uncorrelated random slope on the joint
+  nested-Laplace route is read as the effect it is, `sigma * u`: tulpa's iid
+  block is non-centred, and the BLUPs, `ranef()` SDs, and the draws behind
+  `predict()`, `waic()`, `loo()` and `cpo()` had used the unit-scale latent
+  `u` (gcol33/tulpaObs#415). The BLUP SDs now also carry the within-cell
+  posterior variance. On the full MOT data a detection random intercept on
+  habitat had p_waic of 2-4e5 and `ranef()` SDs of ~1e-5 from this. Applies to
+  `occu_cover()` and `cover()`.
 
 * `occu_cover()` on the joint nested-Laplace route fits a `temporal(time, type =
   "rw1" | "rw2" | "ar1" | "iid")` term in the occurrence formula as one temporal
