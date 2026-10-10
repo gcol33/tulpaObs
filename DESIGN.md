@@ -60,6 +60,12 @@ R side:
   mode / covariance, its C++ target with that target's prior scales, the data
   spec and the coefficient names, and reads the pooled run back through
   `.tobs_count_nuts_attach()`.
+- `.TOBS_COUNT_ROUTES` `R/count_routes.R` -- the route table `.tobs_fit_model()`
+  reads for those same five families. A family is one row: its fitter per route
+  (`plain` / `re` / `field` / `field_bfgs` / `nuts` / `nuts_field`), each Laplace
+  route's `max.iter` / `tol`, and its gate parameters; a gate only one family has
+  goes in that family's `select` hook. The router picks the route and forwards
+  one argument pool, sampler knobs included, by each fitter's formals.
 - `compute_bym2_scale()` `R/spatial.R:62` -- the Riebler scale factor.
 - `.tobs_svc_columns()` `R/occu_svc.R:46` -- resolves `svc()` columns for BOTH
   backends, so Laplace and NUTS cannot disagree on which coefficients vary.
@@ -94,7 +100,8 @@ Do NOT "fix" these. Each was checked and each fails loudly if it drifts.
   gates genuinely differ per family.
 - **`max.iter` / `tol` at their call sites.** These are per-ROUTE Laplace-EM
   values, NOT sampler knobs, so they deliberately do not live in
-  `.TOBS_ENGINE_DEFAULTS`. See that file's scope note.
+  `.TOBS_ENGINE_DEFAULTS`. See that file's scope note. For the count families
+  the call site is the route's row in `.TOBS_COUNT_ROUTES`.
 
 ## The tell
 

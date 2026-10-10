@@ -104,6 +104,17 @@
 # Fitter: dispatch to tulpa's marginal N-mixture Laplace engine
 # ---------------------------------------------------------------------------
 
+# Route hook of the nmix row in .TOBS_COUNT_ROUTES. The N-mixture NUTS targets
+# sample the coefficients (and an areal field) only; a temporal term is not
+# wired on the sampler (#51).
+.tobs_abun_route <- function(model, structs, method) {
+  if (identical(method, "nuts") && !is.null(structs$temporal)) {
+    stop("method = \"nuts\" for abun() does not yet support temporal terms ",
+         "(#51); use method = \"laplace\".", call. = FALSE)
+  }
+  NULL
+}
+
 # Called from `.tobs_fit_model()` for `model$model_type == "nmix"`, after the
 # per-process design autoscaling. `model` here is the autoscaled model;
 # unscaling back to the natural coefficient scale happens in the caller.

@@ -173,6 +173,88 @@ test_that("every sampler fitter resolves the table as its first act", {
   }
 })
 
+test_that("the count-family route table names only resolvable fitters", {
+  # `.tobs_fit_model()` reaches the count / observation-family fitters only
+  # through .TOBS_COUNT_ROUTES, by name. A renamed fitter, a renamed formal, or
+  # a route name the router does not select would otherwise surface only on
+  # the fit that takes that route.
+  ns <- asNamespace("tulpaObs")
+  known <- c("plain", "re", "field", "field_bfgs", "nuts", "nuts_field", "zip")
+  for (mt in names(.TOBS_COUNT_ROUTES)) {
+    row <- .TOBS_COUNT_ROUTES[[mt]]
+    expect_true(is.character(row$family) && nzchar(row$family), info = mt)
+    if (!is.null(row$select)) {
+      expect_true(exists(row$select, envir = ns, mode = "function"), info = mt)
+    }
+    expect_true(all(names(row$routes) %in% known), info = mt)
+    expect_true(all(c("plain", "field", "nuts", "nuts_field") %in%
+                      names(row$routes)), info = mt)
+    for (rt in names(row$routes)) {
+      spec <- row$routes[[rt]]
+      lbl <- sprintf("%s/%s", mt, rt)
+      expect_true(exists(spec$fit, envir = ns, mode = "function"), info = lbl)
+      fm <- names(formals(get(spec$fit, envir = ns)))
+      expect_true(all(names(spec$args) %in% fm), info = lbl)
+      expect_true(all(names(spec$fixed) %in% fm), info = lbl)
+    }
+  }
+})
+
+test_that("count routes split sampler knobs from Laplace budgets", {
+  # The Laplace iteration budget is a per-route value and lives in the route
+  # row; the sampler knobs come from the engine table through the filler. A
+  # Laplace route without its budget would fall back to a fitter formal, and a
+  # NUTS route carrying one would be stating a knob no sampler reads.
+  for (mt in names(.TOBS_COUNT_ROUTES)) {
+    for (rt in names(.TOBS_COUNT_ROUTES[[mt]]$routes)) {
+      spec <- .TOBS_COUNT_ROUTES[[mt]]$routes[[rt]]
+      lbl <- sprintf("%s/%s", mt, rt)
+      if (startsWith(rt, "nuts")) {
+        expect_null(spec$max.iter, info = lbl)
+        expect_null(spec$tol, info = lbl)
+        expect_true(spec$fit %in% .ed_sampler_fitters, info = lbl)
+      } else {
+        expect_true(is.numeric(spec$max.iter) && spec$max.iter > 0, info = lbl)
+        expect_true(is.numeric(spec$tol) && spec$tol > 0, info = lbl)
+      }
+    }
+  }
+})
+
+test_that("count routes resolve from structure, engine and random effect", {
+  re <- list(structure(list(), class = "tobs_re"))
+  sp <- structure(list(type = "icar"), class = "tobs_spatial")
+  tp <- structure(list(type = "ar1"), class = "tobs_temporal")
+  st <- function(spatial = NULL, temporal = NULL, re = NULL, svc = NULL)
+    list(spatial = spatial, temporal = temporal, re = re, svc = svc,
+         latent = NULL)
+  rm <- .TOBS_COUNT_ROUTES$removal
+  m  <- list(model_type = "removal")
+  expect_identical(.tobs_count_route(rm, m, st(), "laplace"), "plain")
+  expect_identical(.tobs_count_route(rm, m, st(re = re), "laplace"), "re")
+  expect_identical(.tobs_count_route(rm, m, st(re = re), "nuts"), "nuts")
+  expect_identical(.tobs_count_route(rm, m, st(spatial = sp), "nested_laplace"),
+                   "field")
+  expect_identical(.tobs_count_route(rm, m, st(temporal = tp), "nested_laplace"),
+                   "field_bfgs")
+  expect_identical(.tobs_count_route(rm, m, st(spatial = sp), "nuts"),
+                   "nuts_field")
+  # A family without a field_bfgs route runs a temporal-only block on `field`,
+  # and one without an `re` route fits its random effect on `plain`.
+  expect_identical(.tobs_count_route(.TOBS_COUNT_ROUTES$distance,
+                                     list(model_type = "distance"),
+                                     st(temporal = tp), "nested_laplace"),
+                   "field")
+  expect_identical(.tobs_count_route(.TOBS_COUNT_ROUTES$nmix,
+                                     list(model_type = "nmix"),
+                                     st(re = re), "laplace"), "plain")
+  # A family hook takes the fit before the shared gates.
+  expect_identical(.tobs_count_route(.TOBS_COUNT_ROUTES$dyn_abun,
+                                     list(model_type = "dyn_abun",
+                                          mixture = "zip"),
+                                     st(), "laplace"), "zip")
+})
+
 test_that(".tobs_fill_sampler fills only the knobs a fitter declares", {
   # One call serves fitters with different knob sets: a pg_gibbs fitter has no
   # adapt.delta, and filling one into its frame would invent a knob it never

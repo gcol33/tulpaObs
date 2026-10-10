@@ -786,7 +786,7 @@
     list(model = model,
          method = .map_engine(engine, family = "dyn_abun"), priors = priors,
          approx = approx, correction = correction,
-         K.max = family$params$K_max, mixture = family$params$mixture),
+         K.max = family$params$K_max, mixture = model$mixture),
     control
   ))
 }

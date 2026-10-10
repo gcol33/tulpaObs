@@ -188,6 +188,23 @@
 # Fitter (called from .tobs_fit_model for model_type == "dyn_abun")
 # ---------------------------------------------------------------------------
 
+# Route hook of the dyn_abun row in .TOBS_COUNT_ROUTES. The zero-inflated open
+# N-mixture (zip / zinb) is a pure-R structural-zero layer over the Dail-Madsen
+# marginal, scoped to non-spatial laplace with an intercept-only structural-zero
+# probability: it takes the fit on its own route, and a field, an RE, or NUTS
+# stay Poisson / negbin.
+.tobs_dyn_abun_route <- function(model, structs, method) {
+  if (!model$mixture %in% c("zip", "zinb")) return(NULL)
+  if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
+      !is.null(structs$re) || identical(method, "nuts")) {
+    stop("Zero-inflated open N-mixture (zip / zinb) does not yet compose ",
+         "with a spatial field, a temporal term, a random effect, or NUTS; ",
+         "use mixture = \"poisson\" / \"negbin\" for those, or drop the term.",
+         call. = FALSE)
+  }
+  "zip"
+}
+
 .tobs_fit_dyn_abun <- function(model, max_iter = 300L, tol = 1e-8, verbose = TRUE) {
   raw <- dyn_abun_laplace(
     y_flat = model$y_flat, n_sites = model$n_sites, T = model$n_seasons,
@@ -219,9 +236,9 @@
 # ZI logit is named `zi_logit` (NOT `omega_*`, which is dyn_abun's SURVIVAL arm).
 #
 # Scope: non-spatial laplace only, intercept-only omega. An areal field, a
-# grouped RE, and a NUTS path stay Poisson / negbin (rejected upstream in
-# .tobs_fit_model with a pointer); the additive marginal + its gradient are the
-# layer those would share.
+# grouped RE, and a NUTS path stay Poisson / negbin (rejected by
+# .tobs_dyn_abun_route() with a pointer); the additive marginal + its gradient
+# are the layer those would share.
 .tobs_fit_dyn_abun_zip <- function(model, max_iter = 300L, tol = 1e-8,
                                    verbose = TRUE, ...) {
   is_nb <- identical(model$mixture, "zinb")

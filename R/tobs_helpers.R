@@ -701,21 +701,21 @@
 
 # Gate the resolved `method` against whether the formula carries a structured
 # (spatial / temporal) term, for the four observation families whose
-# Laplace and nested-Laplace fitters share one dispatch branch in
-# `.tobs_fit_model()` (abun, removal, distance, fp_occu; #354). Picking the
+# Laplace and nested-Laplace fitters share one route row in
+# `.TOBS_COUNT_ROUTES` (abun, removal, distance, fp_occu; #354). Picking the
 # engine from `has_field` alone while stamping the REQUESTED `method` on the fit
 # would let `method = "nested_laplace"` on a field-free formula silently run
 # plain Laplace, and `method = "laplace"` with a field silently run the areal
 # fit -- exactly the mislabelling `.tobs_family_methods` exists to make
 # impossible. Mirrors `.dispatch_count`
 # ("a field needs nested_laplace; nested_laplace needs a field"). NUTS is
-# skipped here: each family's own NUTS branch decides which structures it
+# skipped here: each family's own NUTS route decides which structures it
 # supports (some take a field, some do not), and is not rejected by this gate.
 #
 # `svc` is NOT `has_field`: unlike spatial()/temporal(), a continuous NNGP
 # varying coefficient on these four families is documented and dispatch-wired
 # to fit under EITHER method = "laplace" or "nested_laplace" (#144;
-# `svc_wired` a few lines above this function's call sites), so it must not
+# `svc_wired` in `.tobs_fit_model()`), so it must not
 # force `nested_laplace` the way spatial/temporal do. It still needs to
 # satisfy "nested_laplace needs a field on the formula" when it is the only
 # structured term present -- pass it via `has_svc`, which relaxes only that

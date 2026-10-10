@@ -71,15 +71,15 @@
   # the formula-RE AGHQ debias.
   if (is.null(n.quad))  n.quad  <- .tobs_n_quad("re_aghq")
   # The iteration budget is per route (engine_defaults.R, scope note): the
-  # Newton / EM routes default to 300 iterations at tol 1e-4, the BFGS routes
-  # over an exact marginal (dyn_abun, fp_occu) to their own. The EM converges
-  # linearly and slowly on the weakly identified psi-p ridge at J = 2, so the
-  # budget is set from the slowest converging fit, not the typical one
-  # (NOTES_measurements.md, "EM iterations to converge"). A cap only stops fits
-  # that have not met `tol`, so a fit converging earlier is unchanged by it.
-  # A caller's value
-  # reaches every route, so the caller's request is kept apart from the
-  # Newton default that fills it.
+  # count / observation families read theirs from their row of
+  # .TOBS_COUNT_ROUTES, the occupancy Newton / EM routes below default to 300
+  # iterations at tol 1e-4. The EM converges linearly and slowly on the weakly
+  # identified psi-p ridge at J = 2, so the budget is set from the slowest
+  # converging fit, not the typical one (NOTES_measurements.md, "EM iterations
+  # to converge"). A cap only stops fits that have not met `tol`, so a fit
+  # converging earlier is unchanged by it. A caller's value reaches every
+  # route, so the caller's request is kept apart from the default that fills
+  # it.
   max_iter_req <- max.iter
   tol_req      <- tol
   if (is.null(max.iter)) max.iter <- 300L
@@ -179,7 +179,7 @@
   scales       <- scale_info$scales
   process_info <- model$process_info
 
-  # Shared tail for the observation-family dispatch branches below. Each fitter
+  # Shared tail for the count / observation-family routes below. Each fitter
   # ran against the autoscaled `fit_model`, so the coefficients / covariance are
   # transformed back to the natural scale and the unscaled `model` is restored --
   # which drops every slot the fitter set on its own copy, so the fitted field's
@@ -195,302 +195,19 @@
     fit
   }
 
-  # N-mixture abundance: a closed-form marginal Laplace fit (tulpa owns the
-  # likelihood). No EM, no NUTS yet. `method` is "laplace" (non-spatial) or
-  # "nested_laplace" (areal spatial offset). Reuses the per-process autoscaler;
-  # the coefficient covariance is transformed back to natural scale alongside
-  # the means / draws.
-  if (identical(model$model_type, "nmix")) {
-    # NUTS: sample the exact coefficient posterior of the non-spatial N-mixture
-    # via the in-tree C++ FullGradFn over the closed-form marginal (R/abun_nuts.R).
-    # Spatial / RE / temporal terms are not yet wired on the sampler (#51).
-    if (identical(method, "nuts")) {
-      if (!is.null(temporal)) {
-        stop("method = \"nuts\" for abun() does not yet support temporal terms ",
-             "(#51); use method = \"laplace\".", call. = FALSE)
-      }
-      if (!is.null(spatial)) {
-        # Areal field on the abundance arm sampled by NUTS: a fixed-hyper
-        # non-centered icar()/car_proper() field (the field precision fixed at
-        # the nested-Laplace estimate), jointly with the coefficients.
-        fit <- .tobs_fit_abun_nuts_spatial(
-          fit_model, spatial, mixture = mixture, K_max = K.max,
-          sigma.beta = sigma.beta, sigma.logr = sigma.logr,
-          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-          n.thin = n.thin, n.threads = n.threads,
-          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-          seed = seed, verbose = verbose)
-      } else {
-      # Random effects: a single intercept RE on one arm samples under NUTS
-      # (non-centered per-site offset + log_sigma hyperparameter). Slopes /
-      # multi-term / both-arm RE stay on the AGHQ Laplace path.
-      fit <- .tobs_fit_abun_nuts(
-        fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
-        sigma.logr = sigma.logr,
-        re = re,
-        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-        n.thin = n.thin, n.threads = n.threads,
-        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-        seed = seed, verbose = verbose)
-      }
-      return(.tobs_finalize_family_fit(fit))
-    }
-    .tobs_check_areal_engine(method, has_field = !is.null(spatial), family = "abun")
-    nmix_method <- if (is.null(spatial)) "laplace" else "nested_laplace"
-    fit <- .tobs_fit_nmix(fit_model, method = nmix_method, spatial = spatial,
-                          temporal = temporal, re = re, priors = priors,
-                          mixture = mixture, K_max = K.max,
-                          max_iter = max.iter, tol = tol,
-                          n_quad = n.quad, lkj_eta = re.lkj,
-                          sigma_beta = sigma.beta,
-                          verbose = verbose)
-    return(.tobs_finalize_family_fit(fit))
-  }
-
-  # Removal sampling: the sequential-depletion abundance marginal (its latent N
-  # summed out in closed form, like the N-mixture). Non-spatial fixed effects
-  # only this round; "laplace" or "nuts".
-  if (identical(model$model_type, "removal")) {
-    if (!is.null(temporal))
-      .tobs_check_count_temporal(temporal, spatial, method, "removal", "abundance",
-                                 allow_temporal_only = TRUE,
-                                 allow_nuts_temporal = TRUE)
-    .tobs_check_areal_engine(
-      method, has_field = !is.null(spatial) || !is.null(temporal),
-      family = "removal", has_svc = !is.null(svc))
-    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
-      # Areal field on the abundance arm: icar() / car_proper() / bym2() under
-      # the nested-Laplace driver, optionally composed with a temporal() block
-      # or continuous varying-coefficient surfaces via the shared areal-BFGS
-      # driver, or a fixed-hyper non-centered car_proper() field sampled jointly
-      # with the coefficients under NUTS. A temporal() or svc() term on its own
-      # runs the same areal-BFGS driver with just that block.
-      if (identical(method, "nuts")) {
-        fit <- .tobs_fit_removal_nuts_spatial(
-          fit_model, spatial = spatial, temporal = temporal,
-          mixture = mixture, K_max = K.max,
-          sigma.beta = sigma.beta, sigma.logr = sigma.logr,
-          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-          n.thin = n.thin, n.threads = n.threads,
-          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-          seed = seed, verbose = verbose)
-      } else if (is.null(spatial)) {
-        fit <- .tobs_fit_removal_spatial_bfgs(fit_model, spatial = NULL,
-                                              temporal = temporal, svc = svc,
-                                              mixture = mixture,
-                                              K_max = K.max, max_iter = max.iter,
-                                              tol = tol, verbose = verbose)
-      } else {
-        fit <- .tobs_fit_removal_spatial(fit_model, spatial, temporal = temporal,
-                                         svc = svc, mixture = mixture,
-                                         K_max = K.max, max_iter = max.iter,
-                                         tol = tol, verbose = verbose)
-      }
-    } else if (identical(method, "nuts")) {
-      fit <- .tobs_fit_removal_nuts(
-        fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
-        sigma.logr = sigma.logr, re = re,
-        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-        n.thin = n.thin, n.threads = n.threads,
-        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-        seed = seed, verbose = verbose)
-    } else if (!is.null(re)) {
-      # Site-level grouped RE on the abundance OR detection arm via the shared
-      # count-model AGHQ path. n_quad = 1 is the joint Laplace (the
-      # small-cluster sigma attenuation regime); n_quad > 1 debiases it.
-      fit <- .tobs_fit_removal_re(fit_model, re = re, mixture = mixture,
-                                  K_max = K.max, max_iter = max.iter, tol = tol,
-                                  n_quad = n.quad, lkj_eta = re.lkj,
-                                  theta_prior_sd = sigma.beta, verbose = verbose)
-    } else {
-      fit <- .tobs_fit_removal(fit_model, mixture = mixture, K_max = K.max,
-                               max_iter = max.iter, tol = tol, verbose = verbose)
-    }
-    return(.tobs_finalize_family_fit(fit))
-  }
-
-  # Distance sampling: the binned multinomial-over-N marginal (its latent N
-  # summed out in closed form, like the N-mixture). Non-spatial fixed effects
-  # only this round; "laplace" or "nuts".
-  if (identical(model$model_type, "distance")) {
-    if (!is.null(temporal))
-      .tobs_check_count_temporal(temporal, spatial, method, "distance", "abundance",
-                                 allow_temporal_only = TRUE,
-                                 allow_nuts_temporal = TRUE)
-    .tobs_check_areal_engine(
-      method, has_field = !is.null(spatial) || !is.null(temporal),
-      family = "distance", has_svc = !is.null(svc))
-    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
-      # Areal field on the abundance arm: icar() / car_proper() (half-normal or
-      # hazard key) under the nested-Laplace driver, optionally composed with a
-      # temporal() block or continuous varying-coefficient surfaces via the shared
-      # areal-BFGS driver, or a fixed-hyper non-centered car_proper() field
-      # sampled under NUTS (half-normal key). A temporal() or svc() term on its
-      # own runs the same areal-BFGS driver with just that block.
-      if (identical(method, "nuts")) {
-        fit <- .tobs_fit_distance_nuts_spatial(
-          fit_model, spatial = spatial, temporal = temporal,
-          mixture = mixture, K_max = K.max,
-          sigma.beta = sigma.beta,
-          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-          n.thin = n.thin, n.threads = n.threads,
-          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-          seed = seed, verbose = verbose)
-      } else {
-        fit <- .tobs_fit_distance_spatial(fit_model, spatial, temporal = temporal,
-                                          svc = svc, mixture = mixture,
-                                          K_max = K.max, max_iter = max.iter,
-                                          tol = tol, verbose = verbose,
-                                          integration = integration)
-      }
-    } else if (identical(method, "nuts")) {
-      fit <- .tobs_fit_distance_nuts(
-        fit_model, mixture = mixture, K_max = K.max, sigma.beta = sigma.beta,
-        sigma.logr = sigma.logr, re = re,
-        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-        n.thin = n.thin, n.threads = n.threads,
-        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-        seed = seed, verbose = verbose)
-    } else if (!is.null(re)) {
-      # Site-level grouped RE on the abundance arm via the shared count-model
-      # AGHQ path (half-normal key, abundance arm only). n_quad = 1 is the joint
-      # Laplace, n_quad > 1 debiases the small-cluster attenuation.
-      fit <- .tobs_fit_distance_re(fit_model, re = re, mixture = mixture,
-                                   K_max = K.max, max_iter = max.iter, tol = tol,
-                                   n_quad = n.quad, lkj_eta = re.lkj,
-                                   theta_prior_sd = sigma.beta, verbose = verbose)
-    } else {
-      fit <- .tobs_fit_distance(fit_model, mixture = mixture, K_max = K.max,
-                                max_iter = max.iter, tol = tol, verbose = verbose)
-    }
-    return(.tobs_finalize_family_fit(fit))
-  }
-
-  # Open-population (Dail-Madsen) N-mixture: the latent abundance sequence summed
-  # out by an exact HMM forward recursion (not closed form). Non-spatial fixed
-  # effects only this round; "laplace" or "nuts".
-  if (identical(model$model_type, "dyn_abun")) {
-    # Zero-inflated open N-mixture (zip / zinb): a pure-R structural-zero layer
-    # over the Dail-Madsen marginal. Scope: non-spatial laplace with an
-    # intercept-only structural-zero probability; a field, an RE, or NUTS stay
-    # Poisson / negbin.
-    if (model$mixture %in% c("zip", "zinb")) {
-      if (!is.null(spatial) || !is.null(temporal) || !is.null(re) ||
-          identical(method, "nuts")) {
-        stop("Zero-inflated open N-mixture (zip / zinb) does not yet compose ",
-             "with a spatial field, a temporal term, a random effect, or NUTS; ",
-             "use mixture = \"poisson\" / \"negbin\" for those, or drop the term.",
-             call. = FALSE)
-      }
-      fit <- .tobs_fit_dyn_abun_zip(fit_model, max_iter = max_iter_req %||% 300L,
-                                    tol = tol_req %||% 1e-8, verbose = verbose)
-      return(.tobs_finalize_family_fit(fit))
-    }
-    if (!is.null(temporal))
-      .tobs_check_count_temporal(temporal, spatial, method, "dyn_abun",
-                                 "initial-abundance", allow_temporal_only = TRUE,
-                                 allow_nuts_temporal = TRUE)
-    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
-      # Areal field on the initial-abundance arm: icar() / car_proper() under the
-      # nested-Laplace forward-HMM driver, optionally composed with a temporal()
-      # block or continuous varying-coefficient surfaces via the shared areal-BFGS
-      # driver, or a fixed-hyper non-centered car_proper() field sampled jointly
-      # with the coefficients under NUTS. A temporal() or svc() term on its own
-      # runs the same areal-BFGS driver with just that block (#114, #144), or --
-      # for temporal -- a fixed-hyper non-centered temporal field on the NUTS
-      # field block (#114).
-      if (identical(method, "nuts")) {
-        fit <- .tobs_fit_dyn_abun_nuts_spatial(
-          fit_model, spatial = spatial, temporal = temporal,
-          mixture = model$mixture %||% "poisson",
-          K_max = K.max, sigma.beta = sigma.beta, sigma.logr = sigma.logr,
-          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-          n.thin = n.thin, n.threads = n.threads,
-          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-          seed = seed, verbose = verbose)
-      } else {
-        fit <- .tobs_fit_dyn_abun_spatial(fit_model, spatial, temporal = temporal,
-                                          svc = svc,
-                                          mixture = model$mixture %||% "poisson",
-                                          K_max = K.max, max_iter = max_iter_req %||% 300L,
-                                          tol = tol_req %||% 1e-8,
-                                          verbose = verbose, integration = integration)
-      }
-    } else if (identical(method, "nuts")) {
-      fit <- .tobs_fit_dyn_abun_nuts(
-        fit_model, sigma.beta = sigma.beta, sigma.logr = sigma.logr, re = re,
-        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-        n.thin = n.thin, n.threads = n.threads,
-        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-        seed = seed, verbose = verbose)
-    } else if (!is.null(re)) {
-      # Site-level grouped RE on the initial-abundance (lambda) arm via the
-      # exact HMM-forward AGHQ path. n_quad = 1 is the joint Laplace (the
-      # small-cluster sigma attenuation regime); n_quad > 1 debiases it.
-      fit <- .tobs_fit_dyn_abun_re(fit_model, re = re,
-                                   max_iter = max_iter_req %||% 300L,
-                                   tol = tol_req %||% 1e-8, verbose = verbose,
-                                   n_quad = n.quad, lkj_eta = re.lkj,
-                                   theta_prior_sd = sigma.beta)
-    } else {
-      fit <- .tobs_fit_dyn_abun(fit_model, max_iter = max_iter_req %||% 300L,
-                                tol = tol_req %||% 1e-8,
-                                verbose = verbose)
-    }
-    return(.tobs_finalize_family_fit(fit))
-  }
-
-  # False-positive occupancy: the Miller et al. (2011) multistate marginal (its
-  # latent occupancy z summed out in closed form). Non-spatial fixed effects only
-  # this round; "laplace" (analytic-gradient BFGS over the exact marginal) or
-  # "nuts".
-  if (identical(model$model_type, "fp_occu")) {
-    if (!is.null(temporal))
-      .tobs_check_count_temporal(temporal, spatial, method, "fp_occu", "occupancy",
-                                 allow_temporal_only = TRUE,
-                                 allow_nuts_temporal = TRUE)
-    .tobs_check_areal_engine(
-      method, has_field = !is.null(spatial) || !is.null(temporal),
-      family = "fp_occu", has_svc = !is.null(svc))
-    if (!is.null(spatial) || !is.null(temporal) || !is.null(svc)) {
-      # Areal field on the occupancy (psi) arm: icar() / car_proper() under the
-      # nested-Laplace two-state driver, optionally composed with a temporal()
-      # block or continuous varying-coefficient surfaces via the shared areal-BFGS
-      # driver, or a fixed-hyper non-centered car_proper() field sampled jointly
-      # with the coefficients under NUTS. A temporal() or svc() term on its own
-      # runs the same areal-BFGS driver with just that block (#114, #144).
-      if (identical(method, "nuts")) {
-        fit <- .tobs_fit_fp_occu_nuts_spatial(
-          fit_model, spatial = spatial, temporal = temporal, sigma.beta = sigma.beta,
-          n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-          n.thin = n.thin, n.threads = n.threads,
-          max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-          seed = seed, verbose = verbose)
-      } else {
-        fit <- .tobs_fit_fp_occu_spatial(fit_model, spatial, temporal = temporal,
-                                         svc = svc, max_iter = max.iter,
-                                         tol = tol_req %||% 1e-8, verbose = verbose,
-                                         integration = integration)
-      }
-    } else if (identical(method, "nuts")) {
-      fit <- .tobs_fit_fp_occu_nuts(
-        fit_model, sigma.beta = sigma.beta, sigma.logr = sigma.logr, re = re,
-        n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
-        n.thin = n.thin, n.threads = n.threads,
-        max.treedepth = max.treedepth, adapt.delta = adapt.delta,
-        seed = seed, verbose = verbose)
-    } else if (!is.null(re)) {
-      # Site-level grouped RE on the occupancy (psi) arm via the pure-R make_site
-      # AGHQ path. n_quad = 1 is the joint Laplace, n_quad > 1 debiases the
-      # small-cluster variance-component attenuation.
-      fit <- .tobs_fit_fp_occu_re(fit_model, re = re, max_iter = max.iter,
-                                  tol = tol, n_quad = n.quad, lkj_eta = re.lkj,
-                                  sigma.beta = sigma.beta, verbose = verbose)
-    } else {
-      fit <- .tobs_fit_fp_occu(fit_model, max_iter = max_iter_req %||% 500L,
-                               tol = tol_req %||% 1e-8,
-                               sigma.beta = NULL, verbose = verbose)
-    }
+  # Count / observation families: one route table (R/count_routes.R). The row
+  # gates the fit and names the route; the fitter receives the pool below
+  # restricted to the formals it declares, the sampler knobs as resolved above.
+  count_row <- .TOBS_COUNT_ROUTES[[model$model_type]]
+  if (!is.null(count_row)) {
+    route <- .tobs_count_route(count_row, model, structs, method)
+    pool <- c(list(model = fit_model, spatial = spatial, temporal = temporal,
+                   svc = svc, re = re, priors = priors, mixture = mixture,
+                   K_max = K.max, n_quad = n.quad, lkj_eta = re.lkj,
+                   integration = integration, verbose = verbose,
+                   sigma.beta = sigma.beta, sigma.logr = sigma.logr),
+              .tobs_sampler_control_snapshot(environment()))
+    fit <- .tobs_count_route_call(count_row, route, pool, max_iter_req, tol_req)
     return(.tobs_finalize_family_fit(fit))
   }
 
