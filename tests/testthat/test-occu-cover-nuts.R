@@ -221,9 +221,8 @@ test_that("occu_cover NUTS fit supports the S3 method surface", {
   # Calibrated WAIC from the per-draw pointwise likelihood.
   expect_true(is.finite(waic(nut)$estimates["waic", "Estimate"]))
 
-  # predict() for the non-spatial occu_cover fit needs the joint nested-Laplace
-  # object (the map paths live on the spatial fit); the NUTS and Laplace engines
-  # error identically, so the NUTS path matches the Laplace capability surface.
-  expect_error(predict(nut, type = "occurrence"), "joint")
-  expect_error(predict(lap, type = "occurrence"), "joint")
+  # In-sample predict() on a non-joint occu_cover fit is fitted(), on both
+  # engines, so the NUTS path matches the Laplace capability surface.
+  expect_identical(predict(nut, type = "occurrence"), fitted(nut))
+  expect_identical(predict(lap, type = "occurrence"), fitted(lap))
 })
