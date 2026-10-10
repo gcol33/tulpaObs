@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,8 +91,24 @@
 
     
     
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
+<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
+<p>pak resolves the dependency tree, pulling <code>tulpa</code> and
+<code>tulpaMesh</code> from the r-universe repository DESCRIPTION
+declares in <code>Additional_repositories</code>, at or above the
+<code>Imports</code> floor. A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux);
+both <code>tulpa</code> and <code>tulpaObs</code> compile their backends
+on first install.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="when-a-grouping-factor-needs-a-random-effect">When a grouping factor needs a random effect<a class="anchor" aria-label="anchor" href="#when-a-grouping-factor-needs-a-random-effect"></a>
 </h2>
@@ -214,7 +230,7 @@ its own intercept drawn from
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msup><mn>0.9</mn><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">N(0, 0.9^2)</annotation></semantics></math>,
 and add one site covariate <code>x</code>. Detection is constant at
 about 0.45 across six visits.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_re</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">seed</span> <span class="op">=</span> <span class="fl">101</span>, <span class="va">ng</span> <span class="op">=</span> <span class="fl">30L</span>, <span class="va">per</span> <span class="op">=</span> <span class="fl">25L</span>, <span class="va">J</span> <span class="op">=</span> <span class="fl">6L</span>,</span>
 <span>                   <span class="va">b0</span> <span class="op">=</span> <span class="fl">0.3</span>, <span class="va">b1</span> <span class="op">=</span> <span class="op">-</span><span class="fl">0.6</span>, <span class="va">sigma</span> <span class="op">=</span> <span class="fl">0.9</span>, <span class="va">p</span> <span class="op">=</span> <span class="fl">0.45</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="va">seed</span><span class="op">)</span></span>
@@ -229,14 +245,17 @@ about 0.45 across six visits.</p>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu">sim_re</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">d</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">d</span><span class="op">)</span></span>
+<span><span class="co">#&gt; 'data.frame':    750 obs. of  2 variables:</span></span>
+<span><span class="co">#&gt;  $ g: Factor w/ 30 levels "1","2","3","4",..: 1 1 1 1 1 1 1 1 1 1 ...</span></span>
+<span><span class="co">#&gt;  $ x: num  -0.326 0.552 -0.675 0.214 0.311 ...</span></span></code></pre></div>
 <p>The grouping factor <code>g</code> is a <code>factor</code>. Fit
 occupancy with a fixed slope on <code>x</code> and a random intercept
 for <code>g</code>. The default <code>method = "laplace"</code> fits the
 random effect through a variance-component EM; pass
 <code>verbose = FALSE</code> so the EM does not print its
 iterations.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">g</span><span class="op">)</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">s</span><span class="op">$</span><span class="va">d</span>,</span>
@@ -248,32 +267,49 @@ iterations.</p>
 <span><span class="op">)</span></span></code></pre></div>
 <p>The fixed effects come back from <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> as usual. The
 occupancy intercept and slope land near the simulated 0.3 and -0.6.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; (Intercept)           x </span></span>
+<span><span class="co">#&gt;   0.2369320  -0.6833076</span></span></code></pre></div>
 <p>The variance component is a hyperparameter in <code>fit$means</code>,
 named for the group it belongs to. There is one <code>sigma_</code>
 entry for the random intercept.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sig_name</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">sig_name</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>estimate <span class="op">=</span> <span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="va">sig_name</span><span class="op">]</span><span class="op">]</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] "sigma_g1_(Intercept)"</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>estimate <span class="op">=</span> <span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="va">sig_name</span><span class="op">]</span><span class="op">]</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
+<span><span class="co">#&gt;  estimate     truth </span></span>
+<span><span class="co">#&gt; 0.7309166 0.9000000</span></span></code></pre></div>
 <p><code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> returns the per-group effects (the BLUPs, best
 linear unbiased predictors) as a data frame with one row per group and
-term: which grouping factor, which level, which coefficient, the
-estimate, and its standard error.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+term: which arm the effect enters, which grouping factor, which level,
+which coefficient, the estimate, and its standard error. Every family
+returns these same columns.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">re</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">re</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt;   arm group level        term   estimate std.error</span></span>
+<span><span class="co">#&gt; 1 psi     g     1 (Intercept) -0.3783381 0.3687621</span></span>
+<span><span class="co">#&gt; 2 psi     g     2 (Intercept)  0.4034067 0.3834248</span></span>
+<span><span class="co">#&gt; 3 psi     g     3 (Intercept)  0.6410361 0.3966751</span></span>
+<span><span class="co">#&gt; 4 psi     g     4 (Intercept)  0.6755256 0.3915525</span></span>
+<span><span class="co">#&gt; 5 psi     g     5 (Intercept) -0.2302246 0.3732743</span></span>
+<span><span class="co">#&gt; 6 psi     g     6 (Intercept) -1.0928680 0.3860100</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">re</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 30</span></span></code></pre></div>
 <p>The point of the random effect is that these per-cluster intercepts
 track the truth. Plotting the recovered BLUPs against the simulated
 cluster effects shows the model recovers the cluster-level signal, with
 the shrinkage that pulls small-data clusters toward zero.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">b_true</span>, <span class="va">re</span><span class="op">$</span><span class="va">estimate</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"true cluster effect"</span>, ylab <span class="op">=</span> <span class="st">"estimated BLUP"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">b_true</span>, <span class="va">re</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="random-effects_files/figure-html/blup-plot-1.svg" class="r-plt" alt="Recovered per-cluster random intercepts against the simulated truth, scattered along the identity line with slight shrinkage toward zero" width="576"></p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">b_true</span>, <span class="va">re</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 0.8786531</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="the-em-the-small-cluster-bias-and-the-aghq-debias">The EM, the small-cluster bias, and the AGHQ debias<a class="anchor" aria-label="anchor" href="#the-em-the-small-cluster-bias-and-the-aghq-debias"></a>
@@ -292,16 +328,18 @@ the Laplace approximation misses, and re-estimates the variance
 component. The control is <code>re.aghq</code> (on by default) and
 <code>n.quad</code> (the number of quadrature nodes, default 9). The fit
 records what happened in <code>fit$aghq</code>.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">applied</span></span>
-<span><span class="va">fit</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">n_quad</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] TRUE</span></span>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">n_quad</span></span>
+<span><span class="co">#&gt; [1] 9</span></span></code></pre></div>
 <p>The effect is largest when groups are small. With per-group
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">n = 8</annotation></semantics></math>
 the measured sigma bias runs about 18% under the raw EM and drops to
 about 4% after the AGHQ pass, matching a NUTS fit. We can see the
 direction on a single small-cluster dataset by turning the pass off and
 on.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s8</span> <span class="op">&lt;-</span> <span class="fu">sim_re</span><span class="op">(</span>seed <span class="op">=</span> <span class="fl">21</span>, ng <span class="op">=</span> <span class="fl">30L</span>, per <span class="op">=</span> <span class="fl">8L</span>, sigma <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">fit_em</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">g</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">s8</span><span class="op">$</span><span class="va">d</span>, y <span class="op">=</span> <span class="va">s8</span><span class="op">$</span><span class="va">y</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
@@ -314,7 +352,9 @@ on.</p>
 <span><span class="va">get_sigma</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="va">f</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">f</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>truth <span class="op">=</span> <span class="fl">0.9</span>,</span>
 <span>  EM    <span class="op">=</span> <span class="fu">get_sigma</span><span class="op">(</span><span class="va">fit_em</span><span class="op">)</span>,</span>
-<span>  AGHQ  <span class="op">=</span> <span class="fu">get_sigma</span><span class="op">(</span><span class="va">fit_aghq</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>  AGHQ  <span class="op">=</span> <span class="fu">get_sigma</span><span class="op">(</span><span class="va">fit_aghq</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;     truth        EM      AGHQ </span></span>
+<span><span class="co">#&gt; 0.9000000 0.5597824 0.6318479</span></span></code></pre></div>
 <p>The EM estimate sits below the truth; the AGHQ pass corrects it
 upward. The mechanism is worth one sentence: a single Gaussian centred
 at the per-group mode underweights the tails of the integral over the
@@ -337,7 +377,7 @@ and its own slope on <code>x</code>, with a correlation between the two
 estimated as well. We simulate from a known
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">2 \times 2</annotation></semantics></math>
 covariance with a positive intercept-slope correlation.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_corr</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">seed</span> <span class="op">=</span> <span class="fl">402</span>, <span class="va">ng</span> <span class="op">=</span> <span class="fl">40L</span>, <span class="va">per</span> <span class="op">=</span> <span class="fl">25L</span>, <span class="va">J</span> <span class="op">=</span> <span class="fl">6L</span>,</span>
 <span>                     <span class="va">b0</span> <span class="op">=</span> <span class="fl">0.2</span>, <span class="va">b1</span> <span class="op">=</span> <span class="op">-</span><span class="fl">0.4</span>, <span class="va">p</span> <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>                     <span class="va">Sigma</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.3</span>, <span class="fl">0.3</span>, <span class="fl">0.4</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -361,8 +401,10 @@ covariance with a positive intercept-slope correlation.</p>
 for the slope) and the off-diagonal as a correlation named
 <code>cor_&lt;g&gt;_...</code>. The true correlation here is
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.3</mn><mi>/</mi><msqrt><mrow><mn>0.6</mn><mo>×</mo><mn>0.4</mn></mrow></msqrt><mo>≈</mo><mn>0.61</mn></mrow><annotation encoding="application/x-tex">0.3 / \sqrt{0.6 \times 0.4} \approx 0.61</annotation></semantics></math>.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_|^cor_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_|^cor_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt; sigma_g1_(Intercept)           sigma_g1_x cor_g1_(Intercept)_x </span></span>
+<span><span class="co">#&gt;            0.8249986            0.7169608            0.7626199</span></span></code></pre></div>
 <p>The Laplace correlation is regularized by a default
 LKJ(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mo>=</mo><mn>1.5</mn></mrow><annotation encoding="application/x-tex">\eta = 1.5</annotation></semantics></math>)
 penalty (<code>re.lkj</code>) on each correlated block. A random-effect
@@ -376,11 +418,13 @@ the correlation, use NUTS.</p>
 <p>The per-group slopes recover too. The <code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> table now
 carries both an <code>(Intercept)</code> term and an <code>x</code> term
 per group.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re_c</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_c</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">re_c</span><span class="op">$</span><span class="va">term</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] "(Intercept)" "x"</span></span>
 <span><span class="va">b1_hat</span> <span class="op">&lt;-</span> <span class="va">re_c</span><span class="op">$</span><span class="va">estimate</span><span class="op">[</span><span class="va">re_c</span><span class="op">$</span><span class="va">term</span> <span class="op">==</span> <span class="st">"x"</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">b1_hat</span>, <span class="va">sc</span><span class="op">$</span><span class="va">U</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">b1_hat</span>, <span class="va">sc</span><span class="op">$</span><span class="va">U</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 0.8839711</span></span></code></pre></div>
 <p>The uncorrelated forms <code>(x || g)</code>,
 <code>(1 + x || g)</code>, and the slope-only <code>(0 + x | g)</code>
 fit the same way; they drop the off-diagonal, so you get the standard
@@ -401,7 +445,7 @@ is crossed, <code>(1 | g/h)</code> is nested.</p>
 <p>Crossed grouping builds one random intercept for each observed
 combination of the two factors. We cross eight site groups with six
 survey rounds and give each combination its own occupancy intercept.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">55</span><span class="op">)</span></span>
 <span><span class="va">ng</span> <span class="op">&lt;-</span> <span class="fl">8L</span>; <span class="va">nh</span> <span class="op">&lt;-</span> <span class="fl">6L</span>; <span class="va">per</span> <span class="op">&lt;-</span> <span class="fl">12L</span></span>
 <span><span class="va">combos</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>g <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">ng</span><span class="op">)</span>, h <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">nh</span><span class="op">)</span><span class="op">)</span></span>
@@ -419,7 +463,10 @@ survey rounds and give each combination its own occupancy intercept.</p>
 <span>               family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>               control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_cr</span><span class="op">)</span><span class="op">)</span>      <span class="co"># one BLUP per observed g:h combination</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_cr</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 48</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_cr</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; (Intercept)           x </span></span>
+<span><span class="co">#&gt;   0.3424996  -0.5272869</span></span></code></pre></div>
 <p>The crossed term <code>(1 | g:h)</code> collapses to a single
 interaction factor, so the Laplace path treats it as one grouping factor
 and the AGHQ debias applies. The nested form <code>(1 | g/h)</code>
@@ -438,7 +485,7 @@ probability instead of occupancy. Here observers each have their own
 detection intercept, drawn from
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msup><mn>0.8</mn><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">N(0, 0.8^2)</annotation></semantics></math>,
 while occupancy depends on a site covariate with no random part.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_det</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">seed</span> <span class="op">=</span> <span class="fl">1</span>, <span class="va">N</span> <span class="op">=</span> <span class="fl">400L</span>, <span class="va">J</span> <span class="op">=</span> <span class="fl">6L</span>, <span class="va">ng</span> <span class="op">=</span> <span class="fl">40L</span>,</span>
 <span>                    <span class="va">b0</span> <span class="op">=</span> <span class="fl">0.4</span>, <span class="va">b1</span> <span class="op">=</span> <span class="op">-</span><span class="fl">0.7</span>, <span class="va">d0</span> <span class="op">=</span> <span class="fl">0.2</span>, <span class="va">sigma</span> <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="va">seed</span><span class="op">)</span></span>
@@ -461,9 +508,11 @@ while occupancy depends on a site covariate with no random part.</p>
 named for the detection process: <code>sigma_p&lt;t&gt;_</code> rather
 than the occupancy <code>sigma_g&lt;t&gt;_</code>. The AGHQ pass records
 that it ran on the detection arm.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_d</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="va">fit_d</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">arm</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] "sigma_p1_(Intercept)"</span></span>
+<span><span class="va">fit_d</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">arm</span></span>
+<span><span class="co">#&gt; [1] "det"</span></span></code></pre></div>
 <p>The detection arm is harder than the occupancy arm because only
 occupied sites carry information about detection. A site that is empty
 tells you nothing about how well the observer detects. The raw EM
@@ -472,10 +521,11 @@ in the measured sims), and the AGHQ pass on the exact detection marginal
 restores it to within about 1% with 88-96% fixed-effect interval
 coverage. The per-group detection BLUPs track the simulated observer
 effects.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re_d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_d</span><span class="op">)</span></span>
-<span><span class="va">rp</span> <span class="op">&lt;-</span> <span class="va">re_d</span><span class="op">[</span><span class="va">re_d</span><span class="op">$</span><span class="va">group</span> <span class="op">==</span> <span class="st">"p1"</span>, <span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">rp</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">sd_re</span><span class="op">$</span><span class="va">b_obs</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">rp</span> <span class="op">&lt;-</span> <span class="va">re_d</span><span class="op">[</span><span class="va">re_d</span><span class="op">$</span><span class="va">group</span> <span class="op">==</span> <span class="st">"observer"</span>, <span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">rp</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">sd_re</span><span class="op">$</span><span class="va">b_obs</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 0.900168</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="laplace-versus-nuts-for-random-effects">Laplace versus NUTS for random effects<a class="anchor" aria-label="anchor" href="#laplace-versus-nuts-for-random-effects"></a>
@@ -489,31 +539,37 @@ regularized point estimate. It is the tool for the forms Laplace
 declines and for any case where you want draws rather than a Gaussian
 approximation.</p>
 <p>Here is the same random intercept under NUTS. The variance component
-comes back on the log scale as <code>log_sigma_</code>, and
-<code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> reconstructs the per-group BLUPs by marginalising
-over the draws.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+is reported on the natural scale under the same <code>sigma_</code> name
+the Laplace fit uses, and <code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> reconstructs the
+per-group BLUPs by marginalising over the draws.</p>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_n</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">g</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">s</span><span class="op">$</span><span class="va">d</span>, y <span class="op">=</span> <span class="va">s</span><span class="op">$</span><span class="va">y</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
 <span>              family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"nuts"</span>,</span>
 <span>              control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n.iter <span class="op">=</span> <span class="fl">400</span>, n.warmup <span class="op">=</span> <span class="fl">200</span>, seed <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>                             verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">sig_l</span> <span class="op">&lt;-</span> <span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
-<span><span class="va">sig_n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="va">fit_n</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^log_sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_n</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>laplace <span class="op">=</span> <span class="va">sig_l</span>, nuts <span class="op">=</span> <span class="va">sig_n</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">sig_n</span> <span class="op">&lt;-</span> <span class="va">fit_n</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_n</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>laplace <span class="op">=</span> <span class="va">sig_l</span>, nuts <span class="op">=</span> <span class="va">sig_n</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   laplace      nuts     truth </span></span>
+<span><span class="co">#&gt; 0.7309166 0.7792917 0.9000000</span></span></code></pre></div>
 <p>The two backends agree on the variance, and the BLUPs agree across
 engines.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re_n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_n</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">re</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">re_n</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span></code></pre></div>
-<p>A few random-effect specifications are NUTS-only. The Laplace path
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">re</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">re_n</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 0.9994081</span></span></code></pre></div>
+<p>Two random-effect specifications are NUTS-only. The Laplace path
 errors, with a pointer to NUTS, for: a single random effect shared
 across both the occupancy and detection predictors (<code>share()</code>
-semantics); a random effect combined with a spatial field in the same
-fit; and a random effect combined with visit-level detection covariates.
-In each case the deterministic path would have to fit something it
-cannot represent exactly, so it stops rather than silently fitting a
-different model. NUTS handles all three.</p>
+semantics), and a random effect combined with a spatial field in the
+same fit. In each case the deterministic path would have to fit
+something it cannot represent exactly, so it stops rather than silently
+fitting a different model. NUTS handles both. A random effect beside
+visit-level detection covariates, or one grouped over visit rows, stays
+on the Laplace path: the detection arm is then fitted per (site, visit)
+row, and only the AGHQ debias declines, so the variance components are
+the EM values.</p>
 <p>The reason for the boundary is in how the Laplace path works. The
 variance-component EM splits the random effects into an occupancy arm
 and a detection arm by which predictor they sit in, then fits each arm’s
@@ -522,13 +578,15 @@ single effect that has to be the same realization in both predictors
 breaks that split: there is no way to fit it once on the occupancy arm
 and once on the detection arm and call the two the same. Likewise the
 AGHQ debias works on a per-site marginal with the latent occupancy state
-integrated out in closed form; a spatial field or a per-visit detection
-design changes that marginal in a way the closed form does not cover.
-Rather than approximate silently, the validator stops and names NUTS,
-which samples the joint posterior directly and needs none of these
-closed forms. The cost is speed: a NUTS fit takes seconds where Laplace
-takes a fraction of one, and you read convergence from <code>Rhat</code>
-and effective sample size rather than trusting a mode.</p>
+integrated out in closed form; a spatial field changes that marginal in
+a way the closed form does not cover, and a per-visit detection design
+couples every visit of a site so the integrand no longer factors by
+group. The first stops the fit; the second only switches the debias off.
+Rather than approximate silently, the validator names NUTS, which
+samples the joint posterior directly and needs none of these closed
+forms. The cost is speed: a NUTS fit takes seconds where Laplace takes a
+fraction of one, and you read convergence from <code>Rhat</code> and
+effective sample size rather than trusting a mode.</p>
 </div>
 <div class="section level2">
 <h2 id="practical-guidance">Practical guidance<a class="anchor" aria-label="anchor" href="#practical-guidance"></a>

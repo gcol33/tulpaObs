@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,8 +91,24 @@
 
     
     
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
+<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
+<p>pak resolves the dependency tree, pulling <code>tulpa</code> and
+<code>tulpaMesh</code> from the r-universe repository DESCRIPTION
+declares in <code>Additional_repositories</code>, at or above the
+<code>Imports</code> floor. A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux);
+both <code>tulpa</code> and <code>tulpaObs</code> compile their backends
+on first install.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="two-pieces-the-response-and-the-site-table">Two pieces: the response and the site table<a class="anchor" aria-label="anchor" href="#two-pieces-the-response-and-the-site-table"></a>
 </h2>
@@ -108,19 +124,30 @@ matrix: one row per site, one column per visit, holding <code>0</code>
 (not surveyed). The <code>data</code> frame has exactly <code>N</code>
 rows, one per site, aligned to the rows of <code>y</code>. A small
 simulated dataset shows the layout.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">120</span>, J <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.9</span><span class="op">)</span>,</span>
-<span>  beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
+<span>  n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.9</span><span class="op">)</span>,</span>
+<span>  beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">y</span>   <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 120   5</span></span>
 <span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, <span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dat</span>, <span class="fl">4</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt;      [,1] [,2] [,3] [,4] [,5]</span></span>
+<span><span class="co">#&gt; [1,]    0    0    1    0    0</span></span>
+<span><span class="co">#&gt; [2,]    0    1    1    0    1</span></span>
+<span><span class="co">#&gt; [3,]    0    1    1    1    0</span></span>
+<span><span class="co">#&gt; [4,]    0    0    0    0    0</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dat</span>, <span class="fl">4</span><span class="op">)</span></span>
+<span><span class="co">#&gt;     occ_cov1   det_cov1</span></span>
+<span><span class="co">#&gt; 1 -0.6264538 -0.5059575</span></span>
+<span><span class="co">#&gt; 2  0.1836433  1.3430388</span></span>
+<span><span class="co">#&gt; 3 -0.8356286 -0.2145794</span></span>
+<span><span class="co">#&gt; 4  1.5952808 -0.1795565</span></span></code></pre></div>
 <p>The matrix has 120 rows to match the 120 rows in <code>dat</code>.
 Row <code>i</code> of <code>y</code> is the detection history for the
 site described by row <code>i</code> of <code>dat</code>. That alignment
@@ -168,7 +195,7 @@ covariates can vary by visit (effort, observer, weather). When
 the <code>detection</code> formula is read from that single row and
 broadcast across all <code>J</code> visits. That is the common case, and
 it is what the simulators produce.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">occ_cov1</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -178,7 +205,9 @@ it is what the simulators produce.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 </span></span>
+<span><span class="co">#&gt;       0.3625745       0.9012885       0.3668280       0.5797823</span></span></code></pre></div>
 <p><code>occ_cov1</code> and <code>det_cov1</code> both came out of
 <code>dat</code>. The occupancy slope used the value once per site; the
 detection slope used the same value for each of the five visits at that
@@ -194,18 +223,25 @@ table.</p>
 is a long table with one row per site-visit: a site id, a visit number,
 and a 0/1 detection. Reshaping that into the <code>N x J</code> matrix
 is a <code><a href="https://rdrr.io/r/stats/reshape.html" class="external-link">reshape()</a></code> or a matrix-indexing step.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  site     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"S"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span>
 <span>  visit    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, times <span class="op">=</span> <span class="fl">6</span><span class="op">)</span>,</span>
 <span>  detected <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="fl">18</span>, <span class="fl">1</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
 <span>  elev     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">6</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>   <span class="co"># a site-level covariate</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">long</span>, <span class="fl">6</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">long</span>, <span class="fl">6</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   site visit detected       elev</span></span>
+<span><span class="co">#&gt; 1   S1     1        0  0.8816725</span></span>
+<span><span class="co">#&gt; 2   S1     2        0  0.8816725</span></span>
+<span><span class="co">#&gt; 3   S1     3        0  0.8816725</span></span>
+<span><span class="co">#&gt; 4   S2     1        0 -0.9745003</span></span>
+<span><span class="co">#&gt; 5   S2     2        0 -0.9745003</span></span>
+<span><span class="co">#&gt; 6   S2     3        0 -0.9745003</span></span></code></pre></div>
 <p>The direct route fills a matrix by indexing on the site and visit
 positions. Build the empty matrix at the right size, then scatter each
 row of the long table into its <code>[site, visit]</code> cell.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sites</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">visits</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">visit</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">ymat</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="cn">NA_integer_</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">sites</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">visits</span><span class="op">)</span>,</span>
@@ -213,19 +249,33 @@ row of the long table into its <code>[site, visit]</code> cell.</p>
 <span><span class="va">si</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">site</span>,  <span class="va">sites</span><span class="op">)</span></span>
 <span><span class="va">vi</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">visit</span>, <span class="va">visits</span><span class="op">)</span></span>
 <span><span class="va">ymat</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">si</span>, <span class="va">vi</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">detected</span><span class="op">)</span></span>
-<span><span class="va">ymat</span></span></code></pre></div>
+<span><span class="va">ymat</span></span>
+<span><span class="co">#&gt;    V1 V2 V3</span></span>
+<span><span class="co">#&gt; S1  0  0  0</span></span>
+<span><span class="co">#&gt; S2  0  0  0</span></span>
+<span><span class="co">#&gt; S3  0  0  0</span></span>
+<span><span class="co">#&gt; S4  0  1  0</span></span>
+<span><span class="co">#&gt; S5  0  0  1</span></span>
+<span><span class="co">#&gt; S6  1  0  1</span></span></code></pre></div>
 <p>The site-level table then takes one row per site, in the same site
 order as the matrix rows.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">site_dat</span> <span class="op">&lt;-</span> <span class="va">long</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">sites</span>, <span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">)</span>, <span class="st">"elev"</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">site_dat</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
-<span><span class="va">site_dat</span></span></code></pre></div>
+<span><span class="va">site_dat</span></span>
+<span><span class="co">#&gt;          elev</span></span>
+<span><span class="co">#&gt; 1  0.88167254</span></span>
+<span><span class="co">#&gt; 2 -0.97450027</span></span>
+<span><span class="co">#&gt; 3  0.39910492</span></span>
+<span><span class="co">#&gt; 4 -0.41543326</span></span>
+<span><span class="co">#&gt; 5 -0.01865714</span></span>
+<span><span class="co">#&gt; 6  1.57122440</span></span></code></pre></div>
 <p><code><a href="../reference/tobs_data.html">tobs_data()</a></code> packages both steps. Hand it the long frame
 and the column names; it returns a <code>tobs_data</code> object
 carrying the detection matrix, the site-level covariates, and any
 visit-level detection covariates as their own <code>N x J</code>
 matrices.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span></span>
 <span>  <span class="va">long</span>,</span>
 <span>  y     <span class="op">=</span> <span class="st">"detected"</span>,</span>
@@ -234,7 +284,13 @@ matrices.</p>
 <span>  occ.covs <span class="op">=</span> <span class="st">"elev"</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">obs</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; tobs_data: 6 sites, 3 visits</span></span>
+<span><span class="co">#&gt;   Occupancy covariates: elev</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span>
+<span><span class="co">#&gt;  int [1:6, 1:3] 0 0 0 0 0 1 0 0 0 1 ...</span></span>
+<span><span class="co">#&gt;  - attr(*, "dimnames")=List of 2</span></span>
+<span><span class="co">#&gt;   ..$ : chr [1:6] "S1" "S2" "S3" "S4" ...</span></span>
+<span><span class="co">#&gt;   ..$ : NULL</span></span></code></pre></div>
 <p><code>obs$y</code> is the same <code>6 x 3</code> matrix, with site
 ids on the rows. <code>obs$occ.covs</code> holds the per-site
 <code>elev</code> column. A detection covariate passed through
@@ -250,7 +306,7 @@ one is a common quiet error: a cover value of <code>0.6</code> run
 through the integer path truncates to <code>0</code>. The same long
 frame can feed an occurrence and a cover model side by side as long as
 each call names the matching column and <code>type</code>.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cov_long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  site  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"S"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  visit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, times <span class="op">=</span> <span class="fl">4</span><span class="op">)</span>,</span>
@@ -258,7 +314,12 @@ each call names the matching column and <code>type</code>.</p>
 <span><span class="op">)</span></span>
 <span><span class="va">cov_obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">cov_long</span>, y <span class="op">=</span> <span class="st">"cover"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
 <span>                     type <span class="op">=</span> <span class="st">"cover"</span><span class="op">)</span></span>
-<span><span class="va">cov_obs</span><span class="op">$</span><span class="va">y</span></span></code></pre></div>
+<span><span class="va">cov_obs</span><span class="op">$</span><span class="va">y</span></span>
+<span><span class="co">#&gt;    [,1] [,2]</span></span>
+<span><span class="co">#&gt; S1 0.45 0.68</span></span>
+<span><span class="co">#&gt; S2 0.73 0.21</span></span>
+<span><span class="co">#&gt; S3 0.31 0.35</span></span>
+<span><span class="co">#&gt; S4 0.50 0.23</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="building-a-tobs_data-object-by-hand">Building a <code>tobs_data</code> object by hand<a class="anchor" aria-label="anchor" href="#building-a-tobs_data-object-by-hand"></a>
@@ -272,7 +333,7 @@ no reshaping. The named elements it expects are <code>y</code> (the
 <code>N x J</code> matrix), <code>occ.covs</code> (a per-site data
 frame), and <code>det.covs</code> (a named list of <code>N x J</code>
 matrices, one per visit-varying covariate).</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">N</span> <span class="op">&lt;-</span> <span class="fl">5</span>; <span class="va">J</span> <span class="op">&lt;-</span> <span class="fl">3</span></span>
 <span><span class="va">y_hand</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="va">N</span> <span class="op">*</span> <span class="va">J</span>, <span class="fl">1</span>, <span class="fl">0.4</span><span class="op">)</span>, <span class="va">N</span>, <span class="va">J</span>,</span>
 <span>                   dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"S"</span>, <span class="fl">1</span><span class="op">:</span><span class="va">N</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"V"</span>, <span class="fl">1</span><span class="op">:</span><span class="va">J</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
@@ -281,7 +342,14 @@ matrices, one per visit-varying covariate).</p>
 <span><span class="va">obs_hand</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_format.html">tobs_format</a></span><span class="op">(</span>y <span class="op">=</span> <span class="va">y_hand</span>, occ.covs <span class="op">=</span> <span class="va">occ_hand</span>,</span>
 <span>                        det.covs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>effort <span class="op">=</span> <span class="va">eff_hand</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">obs_hand</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs_hand</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; tobs_data: 5 sites, 3 visits</span></span>
+<span><span class="co">#&gt;   Occupancy covariates: elev</span></span>
+<span><span class="co">#&gt;   Detection covariates: effort</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs_hand</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span>
+<span><span class="co">#&gt;  int [1:5, 1:3] 1 0 0 1 0 0 0 1 0 0 ...</span></span>
+<span><span class="co">#&gt;  - attr(*, "dimnames")=List of 2</span></span>
+<span><span class="co">#&gt;   ..$ : chr [1:5] "S1" "S2" "S3" "S4" ...</span></span>
+<span><span class="co">#&gt;   ..$ : chr [1:3] "V1" "V2" "V3"</span></span></code></pre></div>
 <p><code>obs_hand$det.covs$effort</code> carries one effort value per
 site-visit cell, so the detection formula <code>~ effort</code> reads a
 genuinely per-visit covariate rather than a broadcast site value. The
@@ -298,16 +366,18 @@ by visit can still go through <code>det.covs</code> as an
 matrices, and records <code>species_names</code> and
 <code>n_species</code> alongside <code>y</code>, <code>occ.covs</code>,
 and <code>det.covs</code>.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sp_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="kw">function</span><span class="op">(</span><span class="va">s</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="va">N</span> <span class="op">*</span> <span class="va">J</span>, <span class="fl">1</span>, <span class="fl">0.3</span><span class="op">)</span>, <span class="va">N</span>, <span class="va">J</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">sp_list</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"warbler"</span>, <span class="st">"finch"</span>, <span class="st">"wren"</span><span class="op">)</span></span>
 <span><span class="va">ms_hand</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_format_ms.html">tobs_format_ms</a></span><span class="op">(</span><span class="va">sp_list</span>, occ.covs <span class="op">=</span> <span class="va">occ_hand</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">ms_hand</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>          <span class="co"># sites x visits x species</span></span>
-<span><span class="va">ms_hand</span><span class="op">$</span><span class="va">species_names</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 5 3 3</span></span>
+<span><span class="va">ms_hand</span><span class="op">$</span><span class="va">species_names</span></span>
+<span><span class="co">#&gt; [1] "warbler" "finch"   "wren"</span></span></code></pre></div>
 <p>The list-of-matrices form is convenient when species come from
 separate files: each matrix is one species, the list names become the
 species dimension. Passing a pre-built <code>N x J x species</code>
-array works the same way, with <code>species_names</code> supplied
+array works the same way, with <code>species.names</code> supplied
 separately or defaulted to <code>sp1</code>, <code>sp2</code>, and so
 on.</p>
 <p>Which constructor to reach for follows from where the data already
@@ -329,25 +399,45 @@ an existing matrix, a site-covariate frame, and a named list of
 detection-covariate matrices into the same <code>tobs_data</code> class
 without any reshaping. Reach for it when your <code>y</code> is already
 a matrix.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">obs2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_format.html">tobs_format</a></span><span class="op">(</span></span>
 <span>  y        <span class="op">=</span> <span class="va">y</span>,</span>
 <span>  occ.covs <span class="op">=</span> <span class="va">dat</span><span class="op">[</span><span class="st">"occ_cov1"</span><span class="op">]</span>,</span>
 <span>  det.covs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>det_cov1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">det_cov1</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">obs2</span></span></code></pre></div>
+<span><span class="va">obs2</span></span>
+<span><span class="co">#&gt; tobs_data: 120 sites, 5 visits</span></span>
+<span><span class="co">#&gt;   Occupancy covariates: occ_cov1</span></span>
+<span><span class="co">#&gt;   Detection covariates: det_cov1</span></span></code></pre></div>
 <p>The <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> method reports the naive occupancy and
 detection rates, the distribution of detections per site, and the
 per-visit detection rate. Naive occupancy is the fraction of sites with
 any detection, which sits below true occupancy because an occupied site
 can be missed on every visit.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">obs2</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">obs2</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Occupancy data summary</span></span>
+<span><span class="co">#&gt;   Sites: 120 | Max visits: 5</span></span>
+<span><span class="co">#&gt;   Observations: 600 | Missing: 0 (0.0%)</span></span>
+<span><span class="co">#&gt;   Naive occupancy: 0.583 (70 / 120 sites)</span></span>
+<span><span class="co">#&gt;   Naive detection: 0.603</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Detection frequency (detections per site):</span></span>
+<span><span class="co">#&gt;  detections sites</span></span>
+<span><span class="co">#&gt;           0    50</span></span>
+<span><span class="co">#&gt;           1     7</span></span>
+<span><span class="co">#&gt;           2    17</span></span>
+<span><span class="co">#&gt;           3    22</span></span>
+<span><span class="co">#&gt;           4    16</span></span>
+<span><span class="co">#&gt;           5     8</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   Per-visit detection rate: V1=0.33  V2=0.33  V3=0.35  V4=0.32  V5=0.42</span></span></code></pre></div>
 <p>The <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> method draws the same information: detections
 per site, detection rate by visit, and visit completeness (the share of
 sites actually surveyed on each visit).</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">obs2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="data-formatting_files/figure-html/plot-data-1.svg" class="r-plt" alt="Three panels showing detections per site, detection rate by visit, and survey completeness by visit" width="576"></p>
 <p>These summaries are a quick check that the reshape did what you
 meant. A visit column that is mostly empty, or a naive occupancy of
 zero, usually points to a site or visit id that did not line up during
@@ -362,15 +452,19 @@ entries in its row. The fitter handles this directly: each
 <code>NA</code> becomes a missing marker internally, and the likelihood
 sums only over the visits that were actually observed. No imputation, no
 dropped sites.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">y_miss</span> <span class="op">&lt;-</span> <span class="va">y</span></span>
 <span><span class="va">y_miss</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">4</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA</span>   <span class="co"># site 1 surveyed 3 times</span></span>
 <span><span class="va">y_miss</span><span class="op">[</span><span class="fl">2</span>, <span class="fl">5</span><span class="op">]</span>   <span class="op">&lt;-</span> <span class="cn">NA</span>   <span class="co"># site 2 surveyed 4 times</span></span>
-<span><span class="va">y_miss</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span></span></code></pre></div>
+<span><span class="va">y_miss</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span></span>
+<span><span class="co">#&gt;      [,1] [,2] [,3] [,4] [,5]</span></span>
+<span><span class="co">#&gt; [1,]    0    0    1   NA   NA</span></span>
+<span><span class="co">#&gt; [2,]    0    1    1    0   NA</span></span>
+<span><span class="co">#&gt; [3,]    0    1    1    1    0</span></span></code></pre></div>
 <p>The fit runs unchanged on the gappy matrix, and the estimates stay
 close to the truth because the present visits still carry their
 information.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_miss</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">occ_cov1</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -380,7 +474,9 @@ information.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_miss</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_miss</span><span class="op">)</span></span>
+<span><span class="co">#&gt; psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 </span></span>
+<span><span class="co">#&gt;       0.3589342       0.9007435       0.3778563       0.5671907</span></span></code></pre></div>
 <p>A site with every visit missing is a special case: with no
 observations it contributes nothing to the detection likelihood, and
 under the spatial nested-Laplace engine it becomes a held-out site whose
@@ -398,41 +494,51 @@ people are a wrong <code>y</code> type and a row-count mismatch between
 <p>A single-season <code>y</code> must be a matrix. Passing a data frame
 or a bare vector stops the build with the expected shape spelled
 out.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>     detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span>,</span>
-<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `.tobs_build_single()`:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> y must be a matrix (n_sites x max_visits)</span></span></code></pre></div>
 <p>If the matrix has a different number of rows than <code>data</code>,
 the error quotes both counts so you can see which side is wrong.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">100</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>     detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">y</span>,</span>
-<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;">:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> y has 120 rows but data has 100 rows</span></span></code></pre></div>
 <p><code><a href="../reference/tobs_data.html">tobs_data()</a></code> validates earlier, while it is still
 reshaping the long frame. Naming a covariate column that is not in the
 frame stops with the missing name quoted, before any matrix is
 built.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">long</span>, y <span class="op">=</span> <span class="st">"detected"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
-<span>          occ.covs <span class="op">=</span> <span class="st">"elevation"</span><span class="op">)</span>   <span class="co"># column is named 'elev', not 'elevation'</span></span></code></pre></div>
+<span>          occ.covs <span class="op">=</span> <span class="st">"elevation"</span><span class="op">)</span>   <span class="co"># column is named 'elev', not 'elevation'</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `[.data.frame`:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> undefined columns selected</span></span></code></pre></div>
 <p>The <code>type</code> argument is checked against the response
 values. An occurrence response carrying a <code>2</code> is rejected,
 since occurrence data is 0/1; an abundance response with a negative
 count and a cover response outside <code>[0, 1]</code> fail the same way
 against their own domains.</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">bad</span> <span class="op">&lt;-</span> <span class="va">long</span></span>
 <span><span class="va">bad</span><span class="op">$</span><span class="va">detected</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
 <span><span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">bad</span>, y <span class="op">=</span> <span class="st">"detected"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
-<span>          type <span class="op">=</span> <span class="st">"occurrence"</span><span class="op">)</span></span></code></pre></div>
+<span>          type <span class="op">=</span> <span class="st">"occurrence"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `.tobs_response_values()`:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> tobs_data(type = 'occurrence'): y must be 0/1</span></span></code></pre></div>
 <p>The community and dynamic builders apply the matching check on their
 own shapes. A <code><a href="../reference/dyn_occu.html">dyn_occu()</a></code> fit wants a 3D
 <code>[site x visit x season]</code> array, and handing it a 2D matrix
 reports the array requirement directly.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/dyn_occu.html">dyn_occu</a></span><span class="op">(</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">y</span>,</span>
 <span>     colonization <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, extinction <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
-<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `.tobs_build_dynamic()`:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> y must be a 3D array [n_sites x max_visits x n_seasons] or a list of matrices</span></span></code></pre></div>
 <p>The pattern is the same across families: declare the site table and
 the response, let the builder reconcile them, and read the error when
 they do not match. When a fit refuses to start, checking
@@ -458,25 +564,30 @@ form the matching family expects.</p>
 <p>A community model stacks species on a third dimension.
 <code><a href="../reference/simulate_ms_occu.html">simulate_ms_occu()</a></code> returns an <code>N x J x species</code>
 array, and <code>species</code> names that dimension.</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_ms_occu.html">simulate_ms_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">80</span>, J <span class="op">=</span> <span class="fl">4</span>, n_species <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sm</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x species</span></span></code></pre></div>
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_ms_occu.html">simulate_ms_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">80</span>, J <span class="op">=</span> <span class="fl">4</span>, n.species <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sm</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x species</span></span>
+<span><span class="co">#&gt; [1] 80  4  6</span></span></code></pre></div>
 <p>An integrated model has one detection matrix per data source, with a
 shared occupancy state across sources. <code><a href="../reference/simulate_int_occu.html">simulate_int_occu()</a></code>
 returns <code>y</code> as a list of matrices that differ in their visit
 counts.</p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">si</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_int_occu.html">simulate_int_occu</a></span><span class="op">(</span>N_total <span class="op">=</span> <span class="fl">100</span>, n_data <span class="op">=</span> <span class="fl">2</span>, J <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span>,</span>
-<span>                        n_shared <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span>, <span class="va">dim</span>, <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span>   <span class="co"># each source: sites x its own visit count</span></span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">si</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_int_occu.html">simulate_int_occu</a></span><span class="op">(</span>N.total <span class="op">=</span> <span class="fl">100</span>, n.data <span class="op">=</span> <span class="fl">2</span>, J <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>                        n.shared <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span>, <span class="va">dim</span>, <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span>   <span class="co"># each source: sites x its own visit count</span></span>
+<span><span class="co">#&gt;      [,1] [,2]</span></span>
+<span><span class="co">#&gt; [1,]   60   60</span></span>
+<span><span class="co">#&gt; [2,]    4    3</span></span></code></pre></div>
 <p>A dynamic model adds the season as a third dimension.
 <code><a href="../reference/simulate_dyn_occu.html">simulate_dyn_occu()</a></code> returns an <code>N x J x season</code>
 array, and the fit needs <code>colonization</code> and
 <code>extinction</code> for the colonisation and extinction
 processes.</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sd</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dyn_occu.html">simulate_dyn_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">60</span>, J <span class="op">=</span> <span class="fl">3</span>, n_seasons <span class="op">=</span> <span class="fl">4</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sd</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x seasons</span></span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sd</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dyn_occu.html">simulate_dyn_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">60</span>, J <span class="op">=</span> <span class="fl">3</span>, n.seasons <span class="op">=</span> <span class="fl">4</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sd</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x seasons</span></span>
+<span><span class="co">#&gt; [1] 60  3  4</span></span></code></pre></div>
 <p>Each of those families has its own vignette that fits the model end
 to end. This one stops at the data shape, which is the part that is the
 same whether you go on to a Laplace fit or a full NUTS posterior.</p>

@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,9 +91,25 @@
 
     
     
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
+<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
+<p>pak resolves the dependency tree, pulling <code>tulpa</code> and
+<code>tulpaMesh</code> from the r-universe repository DESCRIPTION
+declares in <code>Additional_repositories</code>, at or above the
+<code>Imports</code> floor. A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux);
+both <code>tulpa</code> and <code>tulpaObs</code> compile their backends
+on first install.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="introduction">Introduction<a class="anchor" aria-label="anchor" href="#introduction"></a>
 </h2>
@@ -156,33 +172,33 @@ visits is Bernoulli with detection probability
 when
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>z</mi><mi>i</mi></msub><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">z_i = 1</annotation></semantics></math>
 and zero otherwise. The occupancy logit carries the spatial field:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">logit</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi mathvariant="bold-italic">𝒙</mi><mi>i</mi><mi>⊤</mi></msubsup><mi mathvariant="bold-italic">𝜷</mi><mo>+</mo><mi>u</mi><mo stretchy="false" form="prefix">(</mo><msub><mi mathvariant="bold-italic">𝒔</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">logit</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>p</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi mathvariant="bold-italic">𝒘</mi><mi>i</mi><mi>⊤</mi></msubsup><mi mathvariant="bold-italic">𝜶</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">logit</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐱</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛃</mi><mo>+</mo><mi>u</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>𝐬</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">logit</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>p</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐰</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛂</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \operatorname{logit}(\psi_i) = \mathbf{x}_i^\top \boldsymbol\beta + u(\mathbf{s}_i),
 \qquad
 \operatorname{logit}(p_i) = \mathbf{w}_i^\top \boldsymbol\alpha .
 </annotation></semantics></math></p>
 <p>Here
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi mathvariant="bold-italic">𝒙</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\mathbf{x}_i</annotation></semantics></math>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>𝐱</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\mathbf{x}_i</annotation></semantics></math>
 is the occupancy covariate row at site
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>i</mi><annotation encoding="application/x-tex">i</annotation></semantics></math>,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="bold-italic">𝜷</mi><annotation encoding="application/x-tex">\boldsymbol\beta</annotation></semantics></math>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>𝛃</mi><annotation encoding="application/x-tex">\boldsymbol\beta</annotation></semantics></math>
 its coefficients,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi mathvariant="bold-italic">𝒘</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\mathbf{w}_i</annotation></semantics></math>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>𝐰</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\mathbf{w}_i</annotation></semantics></math>
 and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="bold-italic">𝜶</mi><annotation encoding="application/x-tex">\boldsymbol\alpha</annotation></semantics></math>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>𝛂</mi><annotation encoding="application/x-tex">\boldsymbol\alpha</annotation></semantics></math>
 the detection covariates and their coefficients, and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi mathvariant="bold-italic">𝒔</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\mathbf{s}_i</annotation></semantics></math>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>𝐬</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\mathbf{s}_i</annotation></semantics></math>
 the spatial coordinates of site
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>i</mi><annotation encoding="application/x-tex">i</annotation></semantics></math>.
 The term
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo stretchy="false" form="prefix">(</mo><mi mathvariant="bold-italic">𝒔</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">u(\mathbf{s})</annotation></semantics></math>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo stretchy="false" form="prefix">(</mo><mi>𝐬</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">u(\mathbf{s})</annotation></semantics></math>
 is a continuous Gaussian random field: a smooth surface defined
 everywhere on the study area, evaluated at each site’s coordinates.</p>
 <p>The field is a Matern process. Its covariance between two points
 depends only on the distance
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>
 between them,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">Cov</mi><mo>⁡</mo></mrow><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>u</mi><mo stretchy="false" form="prefix">(</mo><mi mathvariant="bold-italic">𝒔</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mi>u</mi><mo stretchy="false" form="prefix">(</mo><msup><mi mathvariant="bold-italic">𝒔</mi><mo>′</mo></msup><mo stretchy="false" form="postfix">)</mo><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mspace width="0.167em"></mspace><mfrac><msup><mn>2</mn><mrow><mn>1</mn><mo>−</mo><mi>ν</mi></mrow></msup><mrow><mi mathvariant="normal">Γ</mi><mo stretchy="false" form="prefix">(</mo><mi>ν</mi><mo stretchy="false" form="postfix">)</mo></mrow></mfrac><mo stretchy="false" form="prefix">(</mo><mi>κ</mi><mi>d</mi><msup><mo stretchy="false" form="postfix">)</mo><mi>ν</mi></msup><msub><mi>K</mi><mi>ν</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>κ</mi><mi>d</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">Cov</mi><mo>⁡</mo></mrow><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>u</mi><mo stretchy="false" form="prefix">(</mo><mi>𝐬</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mi>u</mi><mo stretchy="false" form="prefix">(</mo><msup><mi>𝐬</mi><mo>′</mo></msup><mo stretchy="false" form="postfix">)</mo><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mspace width="0.167em"></mspace><mfrac><msup><mn>2</mn><mrow><mn>1</mn><mo>−</mo><mi>ν</mi></mrow></msup><mrow><mi mathvariant="normal">Γ</mi><mo stretchy="false" form="prefix">(</mo><mi>ν</mi><mo stretchy="false" form="postfix">)</mo></mrow></mfrac><mo stretchy="false" form="prefix">(</mo><mi>κ</mi><mi>d</mi><msup><mo stretchy="false" form="postfix">)</mo><mi>ν</mi></msup><msub><mi>K</mi><mi>ν</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>κ</mi><mi>d</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
 \operatorname{Cov}\bigl(u(\mathbf{s}), u(\mathbf{s}')\bigr)
    = \sigma^2 \, \frac{2^{1-\nu}}{\Gamma(\nu)} (\kappa d)^\nu K_\nu(\kappa d),
 </annotation></semantics></math></p>
@@ -200,7 +216,7 @@ reach of the field. Lindgren, Rue &amp; Lindstrom (2011) show this
 Matern field is the stationary solution of a stochastic partial
 differential equation, and that solving the SPDE on a triangular mesh
 gives a Gaussian Markov random field: a discrete approximation
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo stretchy="false" form="prefix">(</mo><mi mathvariant="bold-italic">𝒔</mi><mo stretchy="false" form="postfix">)</mo><mo>≈</mo><msub><mo>∑</mo><mi>k</mi></msub><msub><mi>A</mi><mrow><mi>i</mi><mi>k</mi></mrow></msub><msub><mi>u</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">u(\mathbf{s}) \approx
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo stretchy="false" form="prefix">(</mo><mi>𝐬</mi><mo stretchy="false" form="postfix">)</mo><mo>≈</mo><msub><mo>∑</mo><mi>k</mi></msub><msub><mi>A</mi><mrow><mi>i</mi><mi>k</mi></mrow></msub><msub><mi>u</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">u(\mathbf{s}) \approx
 \sum_k A_{ik} u_k</annotation></semantics></math> where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>u</mi><mi>k</mi></msub><annotation encoding="application/x-tex">u_k</annotation></semantics></math>
 are values at the mesh nodes and
@@ -263,7 +279,7 @@ intercept can fake. The amplitude matters. At 0.8 on the logit scale the
 field moves occupancy from roughly 0.3 to 0.7 across the square, enough
 signal for the model to separate from binomial noise, and small enough
 that detection still has teeth.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">n_sites</span> <span class="op">&lt;-</span> <span class="fl">400</span></span>
 <span><span class="va">J</span> <span class="op">&lt;-</span> <span class="fl">8</span></span>
 <span><span class="va">coords</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">n_sites</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">n_sites</span><span class="op">)</span><span class="op">)</span></span>
@@ -291,7 +307,9 @@ that detection still has teeth.</p>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>occ_cov <span class="op">=</span> <span class="va">x_cov</span>, det_cov <span class="op">=</span> <span class="va">det_cov</span>,</span>
 <span>                  lon <span class="op">=</span> <span class="va">coords</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, lat <span class="op">=</span> <span class="va">coords</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>true_occupancy_rate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">z</span><span class="op">)</span>,</span>
-<span>  naive_any_detection <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>  naive_any_detection <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; true_occupancy_rate naive_any_detection </span></span>
+<span><span class="co">#&gt;                0.35                0.34</span></span></code></pre></div>
 <p>The naive any-detection rate is biased low by <code>(1 - p)^J</code>
 at each occupied site; a proper occupancy fit should correct that bias,
 and a spatial fit should additionally recover the smooth field that
@@ -304,7 +322,7 @@ separate spatial-field simulator in the package;
 <code><a href="../reference/simulate_occu.html">simulate_occu()</a></code> draws covariate-only occupancy, so a known
 continuous field is set by hand as above. A map of the truth shows what
 the fit has to recover.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">truth_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>lon <span class="op">=</span> <span class="va">coords</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, lat <span class="op">=</span> <span class="va">coords</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>, u <span class="op">=</span> <span class="va">u_true</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">truth_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, colour <span class="op">=</span> <span class="va">u</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span></span>
@@ -312,6 +330,7 @@ the fit has to recover.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"True latent field u(s)"</span>, colour <span class="op">=</span> <span class="st">"u"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span>,</span>
 <span>        plot.background  <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy-spatial-spde_files/figure-html/truth-map-1.svg" class="r-plt" alt="Scatter of the 400 site coordinates coloured by the true latent spatial field, a smooth ripple across the unit square" width="576"></p>
 <p>The ripple is the part we want back: a smooth surface that the
 non-spatial fit has no place to put, so it will leak into the intercept
 and the residuals.</p>
@@ -340,14 +359,14 @@ first.</p>
 an <code><a href="../reference/tobs_terms.html">spde()</a></code> term, the way <code>mgcv</code> writes
 <code>s(lon, lat)</code>. <code><a href="../reference/tobs_terms.html">spde()</a></code> builds a triangular mesh
 over the observation coordinates (via tulpaMesh) and constructs the SPDE
-precision at the prior modes of <code>prior_range</code> and
-<code>prior_sigma</code>. The mesh covers the data extent plus a small
-buffer; <code>max_edge = c(inner, outer)</code> controls the spacing
+precision at the prior modes of <code>prior.range</code> and
+<code>prior.sigma</code>. The mesh covers the data extent plus a small
+buffer; <code>max.edge = c(inner, outer)</code> controls the spacing
 inside and outside the data. The coordinate columns (<code>lon</code>,
 <code>lat</code>) are taken from <code>data</code>. We fit a non-spatial
 model first as the baseline, then the SPDE model, so the two are
 directly comparable.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_ns</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  formula   <span class="op">=</span> <span class="op">~</span> <span class="va">occ_cov</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -357,22 +376,24 @@ directly comparable.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">$</span><span class="va">means</span>, <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">$</span><span class="va">means</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt; psi_(Intercept)     psi_occ_cov   p_(Intercept)       p_det_cov </span></span>
+<span><span class="co">#&gt;          -0.644           0.575          -0.237           0.389</span></span></code></pre></div>
 <p>The SPDE call adds one term to the occupancy formula and changes
-nothing else. The <code>prior_range = c(0.3, 0.5)</code> is a PC prior
+nothing else. The <code>prior.range = c(0.3, 0.5)</code> is a PC prior
 on the range: the first number is the median range guess (0.3 of the
 unit square), the second the probability the range is below it.
-<code>prior_sigma = c(0.7, 0.5)</code> is the matching prior on the
-marginal SD. <code>max_edge = c(0.3, 0.6)</code> sets the mesh spacing
+<code>prior.sigma = c(0.7, 0.5)</code> is the matching prior on the
+marginal SD. <code>max.edge = c(0.3, 0.6)</code> sets the mesh spacing
 inside and outside the data; <code>nu = 1</code> fixes the Matern
 smoothness.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  formula   <span class="op">=</span> <span class="op">~</span> <span class="va">occ_cov</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">spde</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>,</span>
-<span>                               max_edge    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.6</span><span class="op">)</span>,</span>
+<span>                               max.edge    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.6</span><span class="op">)</span>,</span>
 <span>                               nu          <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>                               prior_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.5</span><span class="op">)</span>,</span>
-<span>                               prior_sigma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                               prior.range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>                               prior.sigma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
 <span>  family    <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov</span>,</span>
@@ -380,15 +401,24 @@ smoothness.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">$</span><span class="va">means</span>, <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">$</span><span class="va">means</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt; psi_(Intercept)     psi_occ_cov   p_(Intercept)       p_det_cov </span></span>
+<span><span class="co">#&gt;          -0.751           0.599          -0.233           0.386</span></span></code></pre></div>
 <p>The fixed-effect coefficients come back through <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>,
 named by process: <code>psi</code> for occupancy, <code>p</code> for
 detection. The standard errors and credible intervals are in
 <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>, which reports the estimate, standard error, and
 the lower and upper credible bounds for every fixed effect.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; psi_(Intercept)     psi_occ_cov   p_(Intercept)       p_det_cov </span></span>
+<span><span class="co">#&gt;      -0.7512681       0.5991743      -0.2333621       0.3860616</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                 estimate std.error  2.5 % 97.5 %</span></span>
+<span><span class="co">#&gt; psi_(Intercept)   -0.751     0.118 -0.983 -0.519</span></span>
+<span><span class="co">#&gt; psi_occ_cov        0.599     0.124  0.356  0.842</span></span>
+<span><span class="co">#&gt; p_(Intercept)     -0.233     0.066 -0.363 -0.104</span></span>
+<span><span class="co">#&gt; p_det_cov          0.386     0.066  0.256  0.516</span></span></code></pre></div>
 <p>The fitted SPDE field itself is stored on the fit as
 <code>spatial_field</code>, a length-<code>n_mesh</code> numeric vector
 at the mesh nodes, the posterior mode of the node values
@@ -396,12 +426,14 @@ at the mesh nodes, the posterior mode of the node values
 The mesh that carries it lives under
 <code>fit_sp$spatial$tulpa_spec</code>, including the projection matrix
 <code>A</code> and the node count <code>n_mesh</code>.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">u_hat</span> <span class="op">&lt;-</span> <span class="va">fit_sp</span><span class="op">$</span><span class="va">spatial_field</span></span>
 <span><span class="va">mesh</span>  <span class="op">&lt;-</span> <span class="va">fit_sp</span><span class="op">$</span><span class="va">spatial</span><span class="op">$</span><span class="va">tulpa_spec</span><span class="op">$</span><span class="va">mesh</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>n_mesh_nodes  <span class="op">=</span> <span class="va">fit_sp</span><span class="op">$</span><span class="va">spatial</span><span class="op">$</span><span class="va">tulpa_spec</span><span class="op">$</span><span class="va">n_mesh</span>,</span>
 <span>  field_length  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">u_hat</span><span class="op">)</span>,</span>
-<span>  field_sd      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">u_hat</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>  field_sd      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">u_hat</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; n_mesh_nodes field_length     field_sd </span></span>
+<span><span class="co">#&gt;      420.000      420.000        0.667</span></span></code></pre></div>
 <p>The 400 sites expand to a few hundred mesh nodes, more nodes than
 sites because the mesh adds a buffer of nodes around the data so the
 field does not distort at the edges. The field SD around 0.4 is the
@@ -416,10 +448,11 @@ node values to the observation locations through the spec’s
 <code>A</code> matrix and line them up against the truth. A correlation
 well above zero says the field found the signal; the non-spatial fit has
 no field at all, so its only comparison is the flat population mean.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">field_at_sites</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">$</span><span class="va">spatial</span><span class="op">$</span><span class="va">tulpa_spec</span><span class="op">$</span><span class="va">A</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">u_hat</span><span class="op">)</span></span>
 <span><span class="va">corr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">field_at_sites</span>, <span class="va">u_true</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"Correlation field-at-sites vs truth: %.3f\n"</span>, <span class="va">corr</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Correlation field-at-sites vs truth: 0.652</span></span>
 <span></span>
 <span><span class="va">op</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>mfrow <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span><span class="op">)</span>, mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">4</span>, <span class="fl">2</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">u_true</span>, <span class="va">field_at_sites</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
@@ -428,8 +461,10 @@ no field at all, so its only comparison is the flat population mean.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="fl">2</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">coords</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, <span class="va">coords</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>, pch <span class="op">=</span> <span class="fl">16</span>, cex <span class="op">=</span> <span class="fl">0.6</span>,</span>
 <span>     col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">field_at_sites</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="st">"red"</span>, <span class="st">"blue"</span><span class="op">)</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"x"</span>, ylab <span class="op">=</span> <span class="st">"y"</span>, main <span class="op">=</span> <span class="st">"Fitted field sign"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span><span class="va">op</span><span class="op">)</span></span></code></pre></div>
+<span>     xlab <span class="op">=</span> <span class="st">"x"</span>, ylab <span class="op">=</span> <span class="st">"y"</span>, main <span class="op">=</span> <span class="st">"Fitted field sign"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy-spatial-spde_files/figure-html/field-recovery-1.svg" class="r-plt" alt="Two panels: fitted field at sites against the true field near the identity line, and the site coordinates coloured by fitted field sign" width="576"></p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span><span class="va">op</span><span class="op">)</span></span></code></pre></div>
 <p>The fitted field is regularized by the SPDE prior, so it is smoother
 than the truth and slightly attenuated in amplitude. The site-level
 correlation with the truth is well above what the non-spatial fit could
@@ -442,9 +477,39 @@ the field missed something or the range was set wrong.
 coordinates, computes Moran’s I on the occupancy residuals, the standard
 test for spatial autocorrelation. It also reports WAIC and a posterior
 predictive Bayesian p-value. Run it on both fits.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">chk_ns</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit_ns</span>, coords <span class="op">=</span> <span class="va">coords</span>, n.samples <span class="op">=</span> <span class="fl">200</span>, plot <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
-<span><span class="va">chk_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit_sp</span>, coords <span class="op">=</span> <span class="va">coords</span>, n.samples <span class="op">=</span> <span class="fl">200</span>, plot <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; === tobs Model Diagnostics ===</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; WAIC: 1951.5 (p_waic = 4.0)</span></span>
+<span><span class="co">#&gt; DIC:  1951.4 (p_DIC = 4.0)</span></span>
+<span><span class="co">#&gt; LPML: -975.8 (elpd_loo = -975.8)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; PPC: Bayesian p = 0.485</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Zero-inflation: obs=264, exp=263.7, p=0.535</span></span>
+<span><span class="co">#&gt; Dispersion:     ratio=1.06, p=0.205</span></span>
+<span><span class="co">#&gt; PIT uniformity: KS D=0.044, p=0.415</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Moran's I: -0.001 (p = 0.838)</span></span>
+<span><span class="va">chk_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit_sp</span>, coords <span class="op">=</span> <span class="va">coords</span>, n.samples <span class="op">=</span> <span class="fl">200</span>, plot <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; === tobs Model Diagnostics ===</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; WAIC: 1880.7 (p_waic = 3.7)</span></span>
+<span><span class="co">#&gt; DIC:  1880.9 (p_DIC = 3.8)</span></span>
+<span><span class="co">#&gt; LPML: -940.4 (elpd_loo = -940.4)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; PPC: Bayesian p = 0.470</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Zero-inflation: obs=264, exp=271.8, p=0.735</span></span>
+<span><span class="co">#&gt; Dispersion:     ratio=1.10, p=0.185</span></span>
+<span><span class="co">#&gt; PIT uniformity: KS D=0.030, p=0.853</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Moran's I: -0.013 (p = 0.095)</span></span></code></pre></div>
 <p>A significant Moran’s I on the non-spatial residuals (small p-value)
 is the signature of a spatial signal the covariates missed. After the
 field is added, the Moran’s I should move toward zero and its p-value
@@ -462,7 +527,7 @@ is the cleanest single-number summary of whether the field earned its
 place: the non-spatial residuals should carry autocorrelation the SPDE
 residuals do not. If the SPDE residuals still test significant, the
 field is under-fitting, usually because the prior range is too long for
-the signal, and shortening it (a smaller <code>prior_range</code>
+the signal, and shortening it (a smaller <code>prior.range</code>
 median) lets the field track finer variation. If neither fit shows
 autocorrelation, there was no spatial signal to capture and the field is
 not needed; the comparison section makes that call formal.</p>
@@ -486,7 +551,7 @@ residual variance. The SPDE absorbs those site-to-site logit deviations,
 which frees the intercept to sit at the true level and tightens the
 slope. Detection sits on its own predictor, so the detection
 coefficients barely move.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">compare</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"psi_(Intercept)"</span>, <span class="st">"psi_occ_cov"</span>,</span>
 <span>                <span class="st">"p_(Intercept)"</span>,   <span class="st">"p_det_cov"</span><span class="op">)</span>,</span>
@@ -494,7 +559,12 @@ coefficients barely move.</p>
 <span>  non_spat  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">$</span><span class="va">means</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  spde      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">$</span><span class="va">means</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">compare</span></span></code></pre></div>
+<span><span class="va">compare</span></span>
+<span><span class="co">#&gt;         parameter truth non_spat   spde</span></span>
+<span><span class="co">#&gt; 1 psi_(Intercept)  -0.5   -0.644 -0.751</span></span>
+<span><span class="co">#&gt; 2     psi_occ_cov   0.7    0.575  0.599</span></span>
+<span><span class="co">#&gt; 3   p_(Intercept)  -0.3   -0.237 -0.233</span></span>
+<span><span class="co">#&gt; 4       p_det_cov   0.4    0.389  0.386</span></span></code></pre></div>
 <p>The detection coefficients are essentially unchanged: detection
 covariates don’t carry spatial structure in this simulation, so the
 detection submodel sees the same data both times. Occupancy coefficients
@@ -507,17 +577,20 @@ interval beside the non-spatial one shows what the field does to the
 error: by accounting for the spatial signal, it gives the slope its
 honest standard error rather than the optimistic one a model that
 ignores correlation reports.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ci_ns</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">)</span><span class="op">[</span><span class="st">"psi_occ_cov"</span>, <span class="op">]</span></span>
 <span><span class="va">ci_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">)</span><span class="op">[</span><span class="st">"psi_occ_cov"</span>, <span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span>non_spatial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">ci_ns</span>, <span class="fl">3</span><span class="op">)</span>, spde <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">ci_sp</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span>non_spatial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">ci_ns</span>, <span class="fl">3</span><span class="op">)</span>, spde <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">ci_sp</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;             2.5 % 97.5 %</span></span>
+<span><span class="co">#&gt; non_spatial 0.342  0.809</span></span>
+<span><span class="co">#&gt; spde        0.356  0.842</span></span></code></pre></div>
 <p>A map of the fitted field with its sign and magnitude shows where
 occupancy runs high and low after the covariate is removed. Colour the
 sites by the projected field value: the gradient should trace the
 simulated ripple, high in the corners where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">cos</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mn>3</mn><mi>x</mi><mo stretchy="false" form="postfix">)</mo><mrow><mi mathvariant="normal">sin</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mn>3</mn><mi>y</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\cos(3x)\sin(3y)</annotation></semantics></math>
 peaks, low where it troughs.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fitted_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>lon <span class="op">=</span> <span class="va">coords</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, lat <span class="op">=</span> <span class="va">coords</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>,</span>
 <span>                        u_hat <span class="op">=</span> <span class="va">field_at_sites</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">fitted_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, colour <span class="op">=</span> <span class="va">u_hat</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
@@ -526,6 +599,7 @@ peaks, low where it troughs.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Fitted SPDE field at sites"</span>, colour <span class="op">=</span> <span class="st">"u_hat"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span>,</span>
 <span>        plot.background  <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy-spatial-spde_files/figure-html/field-map-1.svg" class="r-plt" alt="Site coordinates coloured by the fitted SPDE field, tracing the simulated ripple across the unit square" width="576"></p>
 <p>The fitted surface is a damped, smoothed version of the truth map
 from the simulation section: the SPDE prior pulls neighbouring sites
 together, so the recovered ripple has lower amplitude and softer edges
@@ -544,12 +618,13 @@ coordinates over the unit square, project the fitted node field onto it
 with a fresh projection matrix from
 <code><a href="https://rdrr.io/pkg/tulpaMesh/man/fem_matrices.html" class="external-link">tulpaMesh::fem_matrices()</a></code>, and add it to the fixed-effect
 predictor.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>lon <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.95</span>, length.out <span class="op">=</span> <span class="fl">30</span><span class="op">)</span>,</span>
 <span>                    lat <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.95</span>, length.out <span class="op">=</span> <span class="fl">30</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">A_new</span> <span class="op">&lt;-</span> <span class="fu">tulpaMesh</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/tulpaMesh/man/fem_matrices.html" class="external-link">fem_matrices</a></span><span class="op">(</span><span class="va">mesh</span>, obs_coords <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">A</span></span>
 <span><span class="va">field_new</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">A_new</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">u_hat</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">field_new</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">field_new</span><span class="op">)</span></span>
+<span><span class="co">#&gt;  num [1:900] -0.863 -1.036 -1.202 -1.327 -1.283 ...</span></span></code></pre></div>
 <p>The fixed-effect part of the prediction comes from
 <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> with a design matrix at the new locations.
 Setting <code>occ_cov</code> to its mean isolates the spatial surface:
@@ -558,18 +633,20 @@ through the field. <code><a href="https://rdrr.io/r/stats/predict.html" class="e
 SD, and quantiles of <code>psi</code> from the fixed-effect draws, so
 the SD column carries the fixed-effect uncertainty, and the field is
 added on the logit scale before the inverse-link.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">X0</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">occ_cov</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">pred_fixed</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit_sp</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span>
 <span><span class="va">eta_grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">qlogis</a></span><span class="op">(</span><span class="va">pred_fixed</span><span class="op">$</span><span class="va">mean</span><span class="op">)</span> <span class="op">+</span> <span class="va">field_new</span></span>
 <span><span class="va">psi_grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">plogis</a></span><span class="op">(</span><span class="va">eta_grid</span><span class="op">)</span></span>
 <span><span class="va">grid</span><span class="op">$</span><span class="va">psi</span> <span class="op">&lt;-</span> <span class="va">psi_grid</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">grid</span><span class="op">$</span><span class="va">psi</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">grid</span><span class="op">$</span><span class="va">psi</span><span class="op">)</span></span>
+<span><span class="co">#&gt;    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span></span>
+<span><span class="co">#&gt;  0.1073  0.2369  0.3110  0.3312  0.4046  0.6910</span></span></code></pre></div>
 <p>Mapping the predicted occupancy over the grid gives the continuous
 surface, filled in between the surveyed points. This is the deliverable
 a continuous field exists for: a smooth occupancy map at every
 coordinate, not just at the sites that happened to be visited.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">grid</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, fill <span class="op">=</span> <span class="va">psi</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_tile.html" class="external-link">geom_raster</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">dat</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span><span class="op">)</span>, inherit.aes <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -578,6 +655,7 @@ coordinate, not just at the sites that happened to be visited.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Predicted occupancy (mean covariate)"</span>, fill <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span>,</span>
 <span>        plot.background  <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy-spatial-spde_files/figure-html/predict-map-1.svg" class="r-plt" alt="Predicted occupancy probability over a 30 by 30 grid of new coordinates, a smooth filled surface with the surveyed sites overlaid" width="576"></p>
 <p>The fixed-effect SD in <code>pred_fixed$sd</code> propagates the
 coefficient uncertainty into the map, and a wider band appears where the
 data are sparse and the intercept is less pinned. The field’s own
@@ -603,7 +681,7 @@ fit it is conditional on the fixed effects. It still answers whether the
 covariate-and-detection structure predicts the histories, and it is the
 apples-to-apples comparison against the non-spatial fit, which has no
 field either.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">w_ns</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">)</span></span>
 <span><span class="va">w_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
@@ -611,7 +689,10 @@ field either.</p>
 <span>  waic   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">w_ns</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="va">w_sp</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  p_waic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">w_ns</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="va">w_sp</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  elpd   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">w_ns</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"elpd_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="va">w_sp</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"elpd_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;         model   waic p_waic   elpd</span></span>
+<span><span class="co">#&gt; 1 non_spatial 1951.5   4.04 -975.7</span></span>
+<span><span class="co">#&gt; 2        spde 1880.7   3.67 -940.4</span></span></code></pre></div>
 <p>The cleaner test for the field on these data is the residual
 diagnostic from the checking section: a non-spatial fit leaves spatial
 autocorrelation in its occupancy residuals, the SPDE fit removes it.
@@ -634,12 +715,15 @@ simulation affords. The SPDE recovers the smooth surface at a
 correlation of roughly 0.4 to 0.5 with the truth at this sample size and
 mesh, where the non-spatial model has no surface to recover. Put the two
 evidence lines in one table.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  metric      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"field cor (vs truth)"</span>, <span class="st">"WAIC (fixed-effect)"</span><span class="op">)</span>,</span>
 <span>  non_spatial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">NA_real_</span>,    <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">w_ns</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  spde        <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">corr</span>, <span class="fl">3</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">w_sp</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;                 metric non_spatial     spde</span></span>
+<span><span class="co">#&gt; 1 field cor (vs truth)          NA    0.652</span></span>
+<span><span class="co">#&gt; 2  WAIC (fixed-effect)      1951.5 1880.700</span></span></code></pre></div>
 <p>The field correlation is the simulation-only number, available only
 for the SPDE fit since the non-spatial model has no surface to recover,
 and the WAIC is conditional on the fixed effects. Read alongside the
@@ -654,7 +738,7 @@ model could not, which is exactly how the data were built.</p>
 numbers that make them usable.</p>
 <ul>
 <li><p><strong>Set the range prior to roughly a third of the study
-extent, then check.</strong> <code>prior_range = c(0.3, 0.5)</code> on a
+extent, then check.</strong> <code>prior.range = c(0.3, 0.5)</code> on a
 unit square says the median range is 0.3 of the domain, the distance
 over which sites stay correlated, with even odds it is smaller. A range
 much shorter than the typical inter-site spacing leaves the field unable
@@ -663,12 +747,12 @@ the full extent makes the field nearly flat and indistinguishable from
 the intercept. Start at a third of the extent, fit, and look at the
 recovered field SD: if it collapses toward zero the prior range is
 fighting the data.</p></li>
-<li><p><strong>Tie <code>max_edge</code> to the range, inner edge well
+<li><p><strong>Tie <code>max.edge</code> to the range, inner edge well
 below it.</strong> The mesh resolution has to be fine enough to
 represent the field’s wiggles. A useful default is an inner
-<code>max_edge</code> of one-fifth to one-third of the prior range, with
+<code>max.edge</code> of one-fifth to one-third of the prior range, with
 the outer edge two to three times the inner so the buffer stays cheap.
-Here <code>max_edge = c(0.3, 0.6)</code> against a range of 0.3 is at
+Here <code>max.edge = c(0.3, 0.6)</code> against a range of 0.3 is at
 the coarse end and gives a few hundred nodes; halving the inner edge to
 0.15 roughly doubles the node count and sharpens the field, at a
 proportional cost in fit time. The N = 1500 recovery tier in the

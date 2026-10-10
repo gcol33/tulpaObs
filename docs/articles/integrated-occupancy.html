@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,8 +91,24 @@
 
     
     
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
+<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
+<p>pak resolves the dependency tree, pulling <code>tulpa</code> and
+<code>tulpaMesh</code> from the r-universe repository DESCRIPTION
+declares in <code>Additional_repositories</code>, at or above the
+<code>Imports</code> floor. A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux);
+both <code>tulpa</code> and <code>tulpaObs</code> compile their backends
+on first install.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="two-surveys-one-species">Two surveys, one species<a class="anchor" aria-label="anchor" href="#two-surveys-one-species"></a>
 </h2>
@@ -188,7 +204,7 @@ is unobserved, so the model sums over its two values. With every
 source’s visits to that site collected into the histories
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mrow><mn>1</mn><mi>i</mi></mrow></msub><mo>,</mo><msub><mi>y</mi><mrow><mn>2</mn><mi>i</mi></mrow></msub><mo>,</mo><mi>…</mi></mrow><annotation encoding="application/x-tex">y_{1i}, y_{2i}, \dots</annotation></semantics></math>,
 the site’s contribution is</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ψ</mi><mi>i</mi></msub><munder><mo>∏</mo><mi>s</mi></munder><mrow><mi mathvariant="normal">Pr</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mrow><mi>s</mi><mi>i</mi></mrow></msub><mo>∣</mo><msub><mi>z</mi><mi>i</mi></msub><mo>=</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo><mspace width="0.278em"></mspace><mo>+</mo><mspace width="0.278em"></mspace><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><mn mathvariant="bold">𝟏</mn><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">[</mo><mtext mathvariant="normal">no detection in any source</mtext><mo stretchy="true" form="postfix">]</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ψ</mi><mi>i</mi></msub><munder><mo>∏</mo><mi>s</mi></munder><mrow><mi mathvariant="normal">Pr</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mrow><mi>s</mi><mi>i</mi></mrow></msub><mo>∣</mo><msub><mi>z</mi><mi>i</mi></msub><mo>=</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo><mspace width="0.278em"></mspace><mo>+</mo><mspace width="0.278em"></mspace><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><mn>𝟏</mn><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">[</mo><mtext mathvariant="normal">no detection in any source</mtext><mo stretchy="true" form="postfix">]</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \psi_i \prod_s \Pr(y_{si} \mid z_i = 1)
 \;+\; (1 - \psi_i)\, \mathbf{1}\!\left[\text{no detection in any source}\right].
 </annotation></semantics></math></p>
@@ -213,30 +229,40 @@ detection probabilities. Here source 1 is a shallow survey with two
 visits per site; source 2 is a deeper opportunistic stream with five
 visits. Both observe a block of shared sites, and each also covers sites
 the other does not.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">si</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_int_occu.html">simulate_int_occu</a></span><span class="op">(</span></span>
-<span>  N_total  <span class="op">=</span> <span class="fl">500</span>,                       <span class="co"># unique sites across both sources</span></span>
-<span>  n_data   <span class="op">=</span> <span class="fl">2</span>,                         <span class="co"># two sources</span></span>
+<span>  N.total  <span class="op">=</span> <span class="fl">500</span>,                       <span class="co"># unique sites across both sources</span></span>
+<span>  n.data   <span class="op">=</span> <span class="fl">2</span>,                         <span class="co"># two sources</span></span>
 <span>  J        <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>,                   <span class="co"># visits per source: shallow vs deep</span></span>
-<span>  n_shared <span class="op">=</span> <span class="fl">250</span>,                       <span class="co"># sites observed by both</span></span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.9</span><span class="op">)</span>,               <span class="co"># occupancy intercept + slope on x</span></span>
-<span>  beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span>,<span class="co"># per-source detection intercept</span></span>
+<span>  n.shared <span class="op">=</span> <span class="fl">250</span>,                       <span class="co"># sites observed by both</span></span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.9</span><span class="op">)</span>,               <span class="co"># occupancy intercept + slope on x</span></span>
+<span>  beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span>,<span class="co"># per-source detection intercept</span></span>
 <span>  seed     <span class="op">=</span> <span class="fl">11</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>The response <code>si$y</code> is a list with one detection-history
 matrix per source. They have different visit counts and, in general,
 different numbers of rows, because each source covers its own set of
 sites.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>survey_sites <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, casual_sites <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; List of 2</span></span>
+<span><span class="co">#&gt;  $ : int [1:375, 1:2] 1 0 0 1 1 0 0 0 0 1 ...</span></span>
+<span><span class="co">#&gt;   ..- attr(*, "dimnames")=List of 2</span></span>
+<span><span class="co">#&gt;  $ : int [1:375, 1:5] 0 0 0 1 1 1 0 0 1 1 ...</span></span>
+<span><span class="co">#&gt;   ..- attr(*, "dimnames")=List of 2</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>survey_sites <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, casual_sites <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; survey_sites casual_sites </span></span>
+<span><span class="co">#&gt;          375          375</span></span></code></pre></div>
 <p>The site covariates live in a single data frame with one row per
 unique site. <code>si$site_maps</code> records which rows of that frame
 each source observed, and <code>si$truth</code> carries the occupancy
 coefficients and the latent state for checking the fit.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">data</span><span class="op">)</span></span>
-<span><span class="va">si</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">beta_occ</span></span></code></pre></div>
+<span><span class="co">#&gt; 'data.frame':    500 obs. of  1 variable:</span></span>
+<span><span class="co">#&gt;  $ x: num  -0.591 0.0266 -1.5166 -1.3627 1.1785 ...</span></span>
+<span><span class="va">si</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">beta_occ</span></span>
+<span><span class="co">#&gt; [1] 0.3 0.9</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="fitting-the-integrated-model">Fitting the integrated model<a class="anchor" aria-label="anchor" href="#fitting-the-integrated-model"></a>
@@ -247,7 +273,7 @@ is the first argument and applies to the shared state.
 list of source matrices, and naming the list elements names the
 detection processes in the output. <code>family = int_occu()</code>
 selects the integrated likelihood.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">x</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">si</span><span class="op">$</span><span class="va">data</span>,</span>
@@ -260,8 +286,10 @@ selects the integrated likelihood.</p>
 <p><code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> returns the shared occupancy block plus one
 detection block per source, each prefixed by the name you gave that
 source in <code>y</code>.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt;    psi_(Intercept)              psi_x survey_(Intercept) casual_(Intercept) </span></span>
+<span><span class="co">#&gt;          0.1627076          0.7712881          0.4767786          0.7466297</span></span></code></pre></div>
 <p>The occupancy slope on <code>x</code> lands near the simulated 0.9.
 The two detection intercepts come back separately, one labelled
 <code>survey</code> and one <code>casual</code>, because each source
@@ -269,8 +297,13 @@ carries its own detection process. <code><a href="https://rdrr.io/r/base/summary
 posterior standard deviation and credible bounds; the <code>psi_</code>
 rows are the shared occupancy predictor, the <code>survey_</code> and
 <code>casual_</code> rows the two detection predictors.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                     estimate  std.error       2.5 %    97.5 %</span></span>
+<span><span class="co">#&gt; psi_(Intercept)    0.1627076 0.09963058 -0.03256475 0.3579799</span></span>
+<span><span class="co">#&gt; psi_x              0.7712881 0.10968767  0.55630421 0.9862720</span></span>
+<span><span class="co">#&gt; survey_(Intercept) 0.4767786 0.10954097  0.26208229 0.6914750</span></span>
+<span><span class="co">#&gt; casual_(Intercept) 0.7466297 0.06762573  0.61408567 0.8791737</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="why-integration-helps">Why integration helps<a class="anchor" aria-label="anchor" href="#why-integration-helps"></a>
@@ -279,7 +312,7 @@ rows are the shared occupancy predictor, the <code>survey_</code> and
 survey on its own and compare. Source 1 alone is a single-season
 occupancy model on the sites that source observed, pulled out through
 <code>site_maps</code>.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">rows1</span> <span class="op">&lt;-</span> <span class="va">si</span><span class="op">$</span><span class="va">site_maps</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="va">d1</span>    <span class="op">&lt;-</span> <span class="va">si</span><span class="op">$</span><span class="va">data</span><span class="op">[</span><span class="va">rows1</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
 <span></span>
@@ -288,7 +321,9 @@ occupancy model on the sites that source observed, pulled out through
 <span>  detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>,</span>
 <span>  method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_survey</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_survey</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; (Intercept)           x </span></span>
+<span><span class="co">#&gt;   0.3317445   0.7705236</span></span></code></pre></div>
 <p>The point estimates are in the same neighbourhood, so the comparison
 that matters is the uncertainty, and that needs an honest interval. The
 default Laplace approximation runs its occupancy intervals
@@ -296,7 +331,7 @@ optimistically narrow on the integrated fit, because the penalised EM
 weights the pooled data heavily at the mode. For comparing uncertainty
 across the two fits, run both under NUTS, which samples the full
 posterior and reports a calibrated spread.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_int_nuts</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">x</span>, data <span class="op">=</span> <span class="va">si</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/int_occu.html">int_occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>survey <span class="op">=</span> <span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, casual <span class="op">=</span> <span class="va">si</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,</span>
@@ -314,7 +349,7 @@ posterior and reports a calibrated spread.</p>
 borrows the deeper source’s visits and the extra sites it covers, so its
 slope sits closer to the truth of 0.9 and carries a smaller standard
 deviation and a narrower credible interval.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">row_x</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">f</span><span class="op">)</span><span class="op">[</span><span class="st">"psi_x"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"estimate"</span>, <span class="st">"std.error"</span>, <span class="st">"2.5 %"</span>, <span class="st">"97.5 %"</span><span class="op">)</span><span class="op">]</span></span>
 <span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
@@ -326,7 +361,10 @@ deviation and a narrower credible interval.</p>
 <span>  `survey only` <span class="op">=</span> <span class="fu">row_x</span><span class="op">(</span><span class="va">fit_survey_nuts</span><span class="op">)</span>,</span>
 <span>  integrated    <span class="op">=</span> <span class="fu">row_x</span><span class="op">(</span><span class="va">fit_int_nuts</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">comparison</span>, <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">comparison</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt;             estimate    sd lower upper width</span></span>
+<span><span class="co">#&gt; survey only    0.801 0.169 0.503 1.156 0.653</span></span>
+<span><span class="co">#&gt; integrated     0.777 0.110 0.574 1.004 0.430</span></span></code></pre></div>
 <p>The integrated credible interval is narrower than the survey-only
 one, and its centre is closer to the true slope. The shallow survey,
 with two visits per site, struggles to separate occupancy from detection
@@ -356,17 +394,17 @@ wandering, the fix is more casual visits, not more survey sites.</p>
 estimates those rates separately. Make the difference stark: a careful
 survey with high detection and a casual stream with low detection,
 observing the same occupancy surface.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sd2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_int_occu.html">simulate_int_occu</a></span><span class="op">(</span></span>
-<span>  N_total  <span class="op">=</span> <span class="fl">500</span>, n_data <span class="op">=</span> <span class="fl">2</span>, J <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">4</span><span class="op">)</span>, n_shared <span class="op">=</span> <span class="fl">200</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.9</span><span class="op">)</span>,</span>
-<span>  beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1.2</span>, <span class="fl">0</span><span class="op">)</span>,   <span class="co"># survey: logit p = 1.2, so p about 0.77</span></span>
+<span>  N.total  <span class="op">=</span> <span class="fl">500</span>, n.data <span class="op">=</span> <span class="fl">2</span>, J <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">4</span><span class="op">)</span>, n.shared <span class="op">=</span> <span class="fl">200</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">0.9</span><span class="op">)</span>,</span>
+<span>  beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1.2</span>, <span class="fl">0</span><span class="op">)</span>,   <span class="co"># survey: logit p = 1.2, so p about 0.77</span></span>
 <span>                  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.8</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span>, <span class="co"># casual: logit p = -0.8, so p about 0.31</span></span>
 <span>  seed <span class="op">=</span> <span class="fl">21</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Fit it and read the two detection intercepts back on the probability
 scale. NUTS keeps the detection blocks honest here.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">x</span>, data <span class="op">=</span> <span class="va">sd2</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/int_occu.html">int_occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>survey <span class="op">=</span> <span class="va">sd2</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, casual <span class="op">=</span> <span class="va">sd2</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,</span>
@@ -379,7 +417,10 @@ scale. NUTS keeps the detection blocks honest here.</p>
 <span>  true_p       <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">plogis</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1.2</span>, <span class="op">-</span><span class="fl">0.8</span><span class="op">)</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  fitted_p     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">plogis</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit2</span>, arm <span class="op">=</span> <span class="st">"survey"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit2</span>, arm <span class="op">=</span> <span class="st">"casual"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  row.names    <span class="op">=</span> <span class="cn">NULL</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;   source true_p fitted_p</span></span>
+<span><span class="co">#&gt; 1 survey   0.77     0.74</span></span>
+<span><span class="co">#&gt; 2 casual   0.31     0.34</span></span></code></pre></div>
 <p>The casual stream comes back near its true detection of 0.31 and the
 survey near its higher rate, exactly the contrast the data carry. This
 is the point of the separate detection blocks: a single pooled detection
@@ -393,7 +434,7 @@ source, to give a source its own detection covariates. A structured
 survey often records effort or observer, while opportunistic records
 carry no such fields, so the survey arm can take a covariate the casual
 arm omits.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sd2</span><span class="op">$</span><span class="va">data</span><span class="op">$</span><span class="va">effort</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">sd2</span><span class="op">$</span><span class="va">data</span><span class="op">)</span><span class="op">)</span>   <span class="co"># a survey-side detection covariate</span></span>
 <span></span>
 <span><span class="va">fit3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
@@ -402,7 +443,9 @@ arm omits.</p>
 <span>  y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>survey <span class="op">=</span> <span class="va">sd2</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, casual <span class="op">=</span> <span class="va">sd2</span><span class="op">$</span><span class="va">y</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,</span>
 <span>  method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit3</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] "psi_(Intercept)"    "psi_x"              "survey_(Intercept)"</span></span>
+<span><span class="co">#&gt; [4] "survey_effort"      "casual_(Intercept)"</span></span></code></pre></div>
 <p>The <code>survey</code> block now carries an <code>effort</code>
 slope alongside its intercept, while the <code>casual</code> block stays
 intercept-only. Detection covariates must be columns of the site data

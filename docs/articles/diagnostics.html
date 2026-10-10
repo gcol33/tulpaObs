@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,8 +91,24 @@
 
     
     
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
+<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
+<p>pak resolves the dependency tree, pulling <code>tulpa</code> and
+<code>tulpaMesh</code> from the r-universe repository DESCRIPTION
+declares in <code>Additional_repositories</code>, at or above the
+<code>Imports</code> floor. A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux);
+both <code>tulpa</code> and <code>tulpaObs</code> compile their backends
+on first install.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="a-fit-to-check">A fit to check<a class="anchor" aria-label="anchor" href="#a-fit-to-check"></a>
 </h2>
@@ -128,12 +144,12 @@ known truth: occupancy rises with <code>occ_cov1</code> (intercept 0.3,
 slope 1.0), detection depends on <code>det_cov1</code> (intercept 0.7,
 so detection near 0.67), and six visits per site keep the two processes
 apart.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">300</span>, J <span class="op">=</span> <span class="fl">6</span>,</span>
-<span>  n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>,</span>
-<span>  beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.6</span><span class="op">)</span>,</span>
+<span>  n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>,</span>
+<span>  beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.6</span><span class="op">)</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span></span>
@@ -141,7 +157,7 @@ apart.</p>
 <p>Fit the model the data were generated from. The Laplace engine is the
 default; <code>verbose = FALSE</code> keeps the EM from printing its
 iterations.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">occ_cov1</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -151,7 +167,9 @@ iterations.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 </span></span>
+<span><span class="co">#&gt;       0.3638670       1.0118715       0.6744931       0.5087683</span></span></code></pre></div>
 <p>The coefficients land near the truth. That is a good start and
 nothing more. A model can recover its parameters and still fit badly
 somewhere the point estimates do not reveal: it might miss a cluster of
@@ -171,8 +189,22 @@ prints a compact report. It is the fast first pass: fit the model, call
 whether anything needs a closer look. The detailed sections below are
 where you go once the panel flags something or once you want the plot
 behind a number.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; === tobs Model Diagnostics ===</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; WAIC: 1646.1 (p_waic = 3.8)</span></span>
+<span><span class="co">#&gt; DIC:  1646.3 (p_DIC = 4.0)</span></span>
+<span><span class="co">#&gt; LPML: -823.1 (elpd_loo = -823.1)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; PPC: Bayesian p = 0.488</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Zero-inflation: obs=126, exp=126.5, p=0.508</span></span>
+<span><span class="co">#&gt; Dispersion:     ratio=1.00, p=0.556</span></span>
+<span><span class="co">#&gt; PIT uniformity: KS D=0.028, p=0.974</span></span></code></pre></div>
+<p><img src="diagnostics_files/figure-html/check-panel-1.svg" class="r-plt" alt="Three diagnostic panels: a QQ plot of PIT residuals against the uniform, a histogram of replicate fit statistics with the observed value marked, and a histogram of simulated variances with the observed variance marked" width="576"></p>
 <p>The report has four blocks, each a condensed form of a section that
 follows, and the panel beneath it draws the three that have a plot
 behind them (<code>plot = FALSE</code> prints the report alone). The
@@ -190,9 +222,30 @@ The zero-inflation line reports the observed and expected counts of
 all-zero sites from <code><a href="https://gillescolling.com/tulpa/reference/test_zero_inflation.html" class="external-link">test_zero_inflation()</a></code>. Passing a
 <code>coords</code> matrix adds a Moran’s I line that warns when
 residual spatial autocorrelation is significant.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">out</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit</span>, coords <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">occ_cov1</span>, <span class="va">dat</span><span class="op">$</span><span class="va">det_cov1</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">out</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; === tobs Model Diagnostics ===</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; WAIC: 1646.1 (p_waic = 3.8)</span></span>
+<span><span class="co">#&gt; DIC:  1646.3 (p_DIC = 4.0)</span></span>
+<span><span class="co">#&gt; LPML: -823.1 (elpd_loo = -823.1)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; PPC: Bayesian p = 0.484</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Zero-inflation: obs=126, exp=126.9, p=0.552</span></span>
+<span><span class="co">#&gt; Dispersion:     ratio=1.00, p=0.540</span></span>
+<span><span class="co">#&gt; PIT uniformity: KS D=0.042, p=0.658</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Moran's I: 0.024 (p = 0.000)</span></span>
+<span><span class="co">#&gt;   WARNING: spatial autocorrelation</span></span></code></pre></div>
+<p><img src="diagnostics_files/figure-html/check-coords-1.svg" class="r-plt" alt="The same diagnostic panels with a fourth added: Moran's I of the occupancy residuals against the number of neighbours" width="576"></p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">out</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] "waic"           "dic"            "cpo"            "ppc"           </span></span>
+<span><span class="co">#&gt; [5] "zero_inflation" "dispersion"     "pit"            "uniformity"    </span></span>
+<span><span class="co">#&gt; [9] "moran"</span></span></code></pre></div>
 <p>The panel returns its components invisibly, so <code>out$waic</code>,
 <code>out$ppc</code>, and <code>out$zero_inflation</code> carry the same
 objects the individual functions return, ready to feed a table or a
@@ -210,9 +263,27 @@ open the matching section below rather than the end of the check.</p>
 <p><code><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic()</a></code> computes the widely applicable information
 criterion from the pointwise log-likelihood, marginalised over the
 latent occupancy state. It returns four numbers.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">w</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">w</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">w</span><span class="op">)</span></span>
+<span><span class="co">#&gt; List of 8</span></span>
+<span><span class="co">#&gt;  $ estimates   : num [1:3, 1:2] -823.04 3.81 1646.08 32.61 0.26 ...</span></span>
+<span><span class="co">#&gt;   ..- attr(*, "dimnames")=List of 2</span></span>
+<span><span class="co">#&gt;   .. ..$ : chr [1:3] "elpd_waic" "p_waic" "waic"</span></span>
+<span><span class="co">#&gt;   .. ..$ : chr [1:2] "Estimate" "SE"</span></span>
+<span><span class="co">#&gt;  $ pointwise   : num [1:300, 1:3] -0.573 -0.992 -3.686 -4.471 -1.107 ...</span></span>
+<span><span class="co">#&gt;   ..- attr(*, "dimnames")=List of 2</span></span>
+<span><span class="co">#&gt;   .. ..$ : NULL</span></span>
+<span><span class="co">#&gt;   .. ..$ : chr [1:3] "elpd_waic" "p_waic" "waic"</span></span>
+<span><span class="co">#&gt;  $ elpd_waic   : num -823</span></span>
+<span><span class="co">#&gt;  $ p_waic      : num 3.81</span></span>
+<span><span class="co">#&gt;  $ waic        : num 1646</span></span>
+<span><span class="co">#&gt;  $ se_elpd_waic: num 32.6</span></span>
+<span><span class="co">#&gt;  $ se_p_waic   : num 0.26</span></span>
+<span><span class="co">#&gt;  $ se_waic     : num 65.2</span></span>
+<span><span class="co">#&gt;  - attr(*, "dims")= int [1:2] 1000 300</span></span>
+<span><span class="co">#&gt;  - attr(*, "class")= chr [1:2] "waic" "loo"</span></span>
+<span><span class="co">#&gt;  - attr(*, "loo_unit")= chr "obs"</span></span></code></pre></div>
 <p><code>lppd</code> is the log pointwise predictive density, the
 in-sample fit summed over sites. For each site it averages the
 likelihood across posterior draws, takes the log, and sums; a model that
@@ -241,7 +312,7 @@ Build a small ladder of nested models and read the differences. Here the
 rungs are an intercept-only occupancy model, the true single-covariate
 model, and an over-specified model that adds a spurious quadratic term
 the data were not generated with.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">dat</span><span class="op">$</span><span class="va">occ_cov1_sq</span> <span class="op">&lt;-</span> <span class="va">dat</span><span class="op">$</span><span class="va">occ_cov1</span><span class="op">^</span><span class="fl">2</span></span>
 <span></span>
 <span><span class="va">fit0</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
@@ -256,8 +327,16 @@ the data were not generated with.</p>
 <span>  waic   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit0</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span>,</span>
 <span>  p_waic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit0</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning: </span></span>
+<span><span class="co">#&gt; 1 (0.3%) p_waic estimates greater than 0.4. We recommend trying loo instead.</span></span>
+<span><span class="co">#&gt; Warning: </span></span>
+<span><span class="co">#&gt; 1 (0.3%) p_waic estimates greater than 0.4. We recommend trying loo instead.</span></span>
 <span><span class="va">waic_tab</span><span class="op">$</span><span class="va">delta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">$</span><span class="va">waic</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">$</span><span class="va">waic</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span></span>
-<span><span class="va">waic_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">$</span><span class="va">waic</span><span class="op">)</span>, <span class="op">]</span></span></code></pre></div>
+<span><span class="va">waic_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">$</span><span class="va">waic</span><span class="op">)</span>, <span class="op">]</span></span>
+<span><span class="co">#&gt;       model     waic   p_waic delta</span></span>
+<span><span class="co">#&gt; 2    linear 1646.075 3.811516  0.00</span></span>
+<span><span class="co">#&gt; 3 quadratic 1648.368 4.883220  2.29</span></span>
+<span><span class="co">#&gt; 1 intercept 1695.249 2.672623 49.17</span></span></code></pre></div>
 <p>The linear model wins, which matches the recipe. Dropping the
 covariate costs many WAIC units: the intercept-only model cannot
 represent the occupancy slope, so it predicts the data worse at sites
@@ -316,28 +395,34 @@ is drawn from its full conditional given the detection history: a site
 with any detection is occupied, an all-zero site is occupied with
 probability
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><msub><mi>p</mi><mi>i</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mi>J</mi></msup><mi>/</mi><mo stretchy="false" form="prefix">[</mo><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><msub><mi>p</mi><mi>i</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mi>J</mi></msup><mo>+</mo><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><msub><mi>ψ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo stretchy="false" form="postfix">]</mo></mrow><annotation encoding="application/x-tex">\psi_i (1 - p_i)^J / [\psi_i (1 - p_i)^J + (1 - \psi_i)]</annotation></semantics></math>.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ppc.html">ppc</a></span><span class="op">(</span><span class="va">fit</span>, fit.stat <span class="op">=</span> <span class="st">"freeman-tukey"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">pp</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">pp</span><span class="op">)</span></span>
+<span><span class="co">#&gt; List of 3</span></span>
+<span><span class="co">#&gt;  $ fit.y     : num [1:500] 248 247 249 246 243 ...</span></span>
+<span><span class="co">#&gt;  $ fit.y.rep : num [1:500] 256 236 258 250 248 ...</span></span>
+<span><span class="co">#&gt;  $ bayesian.p: num 0.502</span></span></code></pre></div>
 <p><code>fit.y</code> is the statistic on the real data across draws,
 <code>fit.y.rep</code> the same on the replicated data, and
 <code>bayesian.p</code> the fraction of draws where the replicate
 statistic exceeds the observed one. Plotting the two distributions
 against each other shows where the data sit relative to a draw from the
 fit.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/density.html" class="external-link">density</a></span><span class="op">(</span><span class="va">pp</span><span class="op">$</span><span class="va">fit.y</span><span class="op">)</span>, col <span class="op">=</span> <span class="st">"firebrick"</span>, lwd <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>     xlim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">pp</span><span class="op">$</span><span class="va">fit.y</span>, <span class="va">pp</span><span class="op">$</span><span class="va">fit.y.rep</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"Freeman-Tukey statistic"</span>, main <span class="op">=</span> <span class="st">"Observed vs replicate"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/density.html" class="external-link">density</a></span><span class="op">(</span><span class="va">pp</span><span class="op">$</span><span class="va">fit.y.rep</span><span class="op">)</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/legend.html" class="external-link">legend</a></span><span class="op">(</span><span class="st">"topright"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"observed"</span>, <span class="st">"replicate"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>       col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"firebrick"</span>, <span class="st">"steelblue"</span><span class="op">)</span>, bty <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="diagnostics_files/figure-html/ppc-plot-1.svg" class="r-plt" alt="Distributions of the observed and replicate Freeman-Tukey fit statistics, with the observed values sitting above the replicate values" width="576"></p>
 <p>The observed and replicate clouds overlap here, and the Bayesian
 p-value sits near the middle of its range, which is what a correctly
 specified model produces. The chi-squared statistic reads the same
 way.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/ppc.html">ppc</a></span><span class="op">(</span><span class="va">fit</span>, fit.stat <span class="op">=</span> <span class="st">"chi-squared"</span><span class="op">)</span><span class="op">$</span><span class="va">bayesian.p</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/ppc.html">ppc</a></span><span class="op">(</span><span class="va">fit</span>, fit.stat <span class="op">=</span> <span class="st">"chi-squared"</span><span class="op">)</span><span class="op">$</span><span class="va">bayesian.p</span></span>
+<span><span class="co">#&gt; [1] 0.434</span></span></code></pre></div>
 <p>Conditioning the latent state on the detection history is what keeps
 the p-value calibrated. A site with at least one detection is occupied
 with probability 1; a site with an all-zero history is occupied with the
@@ -377,21 +462,31 @@ limits, per site, per posterior draw average – the usual construction
 for a discrete or mixed response, not an ad hoc jitter. If the model is
 correct, the resulting values are uniform on
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">[</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">]</mo></mrow><annotation encoding="application/x-tex">[0, 1]</annotation></semantics></math>.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/pit_residuals.html" class="external-link">pit_residuals</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 300</span></span>
+<span><span class="co">#&gt;     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. </span></span>
+<span><span class="co">#&gt; 0.007594 0.252631 0.516891 0.503076 0.749373 0.997724</span></span></code></pre></div>
 <p><code><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity()</a></code> runs a Kolmogorov-Smirnov test of the
 PIT values against the uniform. It returns the standard
 <code>htest</code> object.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;  Asymptotic one-sample Kolmogorov-Smirnov test</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; data:  r</span></span>
+<span><span class="co">#&gt; D = 0.029863, p-value = 0.9518</span></span>
+<span><span class="co">#&gt; alternative hypothesis: two-sided</span></span></code></pre></div>
 <p>A large p-value, as here, says the PIT values are consistent with
 uniformity, so the model’s predictive distribution matches the data
 across the range. The histogram makes the shape concrete.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html" class="external-link">hist</a></span><span class="op">(</span><span class="va">pit</span>, breaks <span class="op">=</span> <span class="fl">12</span>, col <span class="op">=</span> <span class="st">"grey80"</span>, border <span class="op">=</span> <span class="st">"white"</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"PIT residual"</span>, main <span class="op">=</span> <span class="st">"PIT residuals vs uniform"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span>h <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span> <span class="op">/</span> <span class="fl">12</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span>, lty <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="diagnostics_files/figure-html/pit-hist-1.svg" class="r-plt" alt="Histogram of PIT residuals lying roughly flat between zero and one, consistent with the uniform reference" width="576"></p>
 <p>The shape of a non-uniform PIT histogram tells you what went wrong,
 and the mapping is worth committing to memory because it generalises
 across families. A U-shape, with mass piling up at both ends, means the
@@ -436,7 +531,7 @@ prior was.</p>
 most for: occupancy and cover share one areal field, the cover arm sees
 it through a copy scale <code>alpha</code>, and both are estimated on an
 outer grid.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">N</span> <span class="op">&lt;-</span> <span class="fl">50L</span>; <span class="va">J</span> <span class="op">&lt;-</span> <span class="fl">6L</span></span>
 <span><span class="va">adj</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0L</span>, <span class="va">N</span>, <span class="va">N</span><span class="op">)</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">s</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">N</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -444,9 +539,9 @@ outer grid.</p>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="va">s</span> <span class="op">&lt;</span> <span class="va">N</span><span class="op">)</span>  <span class="va">adj</span><span class="op">[</span><span class="va">s</span>, <span class="va">s</span> <span class="op">+</span> <span class="fl">1L</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1L</span></span>
 <span><span class="op">}</span></span>
 <span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu_cover.html">simulate_occu_cover</a></span><span class="op">(</span>N <span class="op">=</span> <span class="va">N</span>, J <span class="op">=</span> <span class="va">J</span>, positive <span class="op">=</span> <span class="st">"lognormal"</span>, adj <span class="op">=</span> <span class="va">adj</span>,</span>
-<span>                           beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.6</span><span class="op">)</span>, beta_p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.4</span>, <span class="op">-</span><span class="fl">0.5</span><span class="op">)</span>,</span>
-<span>                           beta_pos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">0.25</span><span class="op">)</span>, <span class="fl">0.3</span><span class="op">)</span>,</span>
-<span>                           sigma <span class="op">=</span> <span class="fl">0.8</span>, alpha <span class="op">=</span> <span class="fl">1.0</span>, sigma_pos <span class="op">=</span> <span class="fl">0.4</span>,</span>
+<span>                           beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.6</span><span class="op">)</span>, beta.p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.4</span>, <span class="op">-</span><span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>                           beta.pos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">0.25</span><span class="op">)</span>, <span class="fl">0.3</span><span class="op">)</span>,</span>
+<span>                           sigma <span class="op">=</span> <span class="fl">0.8</span>, alpha <span class="op">=</span> <span class="fl">1.0</span>, sigma.pos <span class="op">=</span> <span class="fl">0.4</span>,</span>
 <span>                           seed <span class="op">=</span> <span class="fl">707L</span><span class="op">)</span></span>
 <span><span class="va">long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>site_id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">N</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">J</span><span class="op">)</span>,</span>
 <span>                   visit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">J</span><span class="op">)</span>, times <span class="op">=</span> <span class="va">N</span><span class="op">)</span>,</span>
@@ -465,7 +560,7 @@ outer grid.</p>
 <span>            family <span class="op">=</span> <span class="fu"><a href="../reference/occu_cover.html">occu_cover</a></span><span class="op">(</span><span class="st">"lognormal"</span><span class="op">)</span>,</span>
 <span>            detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>,</span>
 <span>            positive  <span class="op">=</span> <span class="op">~</span> <span class="va">pos_cov1</span> <span class="op">+</span> <span class="fu">share</span><span class="op">(</span><span class="fu"><a href="../reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>            y <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">y</span>, y_pos <span class="op">=</span> <span class="va">y_pos</span>, visits <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">det.covs</span>,</span>
+<span>            y <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">y</span>, y.pos <span class="op">=</span> <span class="va">y_pos</span>, visits <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">det.covs</span>,</span>
 <span>            method <span class="op">=</span> <span class="st">"nested_laplace"</span>, control <span class="op">=</span> <span class="va">ctl</span><span class="op">)</span></span></code></pre></div>
 <p>Two settings in that control are there for the calibration run rather
 than for the fit. The dispersion goes on the outer grid so it is
@@ -474,7 +569,7 @@ would generate the replicate at one value and score it under another.
 The field-SD grid is pinned because a defaulted axis is re-placed per
 fit, and a truth drawn from one support scored against a predictive on
 another measures grid placement instead of calibration.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/sbc.html" class="external-link">sbc</a></span><span class="op">(</span><span class="va">fit</span>, n.sim <span class="op">=</span> <span class="fl">100L</span>, n.draws <span class="op">=</span> <span class="fl">1000L</span>, n.ref <span class="op">=</span> <span class="fl">200L</span>,</span>
 <span>                controls <span class="op">=</span> <span class="st">"narrow"</span>, fit.control <span class="op">=</span> <span class="va">ctl</span><span class="op">)</span></span>
 <span><span class="va">res</span></span></code></pre></div>
@@ -528,8 +623,88 @@ single named feature, which makes the verdict easy to act on.</p>
 <p><code><a href="https://gillescolling.com/tulpa/reference/test_dispersion.html" class="external-link">test_dispersion()</a></code> compares the variance of the per-site
 detection totals against what the model predicts. The ratio is the
 observed variance over the expected.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_dispersion.html" class="external-link">test_dispersion</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_dispersion.html" class="external-link">test_dispersion</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; $observed</span></span>
+<span><span class="co">#&gt; [1] 4.721026</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $expected</span></span>
+<span><span class="co">#&gt; [1] 4.70513</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $ratio</span></span>
+<span><span class="co">#&gt; [1] 1.003378</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $p.value</span></span>
+<span><span class="co">#&gt; [1] 0.468</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $alternative</span></span>
+<span><span class="co">#&gt; [1] "greater"</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $sim</span></span>
+<span><span class="co">#&gt;    sim_1    sim_2    sim_3    sim_4    sim_5    sim_6    sim_7    sim_8 </span></span>
+<span><span class="co">#&gt; 4.808651 4.855507 4.738194 4.509465 4.769353 4.717949 4.518116 4.641906 </span></span>
+<span><span class="co">#&gt;    sim_9   sim_10   sim_11   sim_12   sim_13   sim_14   sim_15   sim_16 </span></span>
+<span><span class="co">#&gt; 4.759465 4.573233 4.368294 4.515619 4.277324 5.314337 4.841695 4.833846 </span></span>
+<span><span class="co">#&gt;   sim_17   sim_18   sim_19   sim_20   sim_21   sim_22   sim_23   sim_24 </span></span>
+<span><span class="co">#&gt; 4.819799 4.511427 5.019130 4.762308 4.685574 4.605340 4.989287 4.628082 </span></span>
+<span><span class="co">#&gt;   sim_25   sim_26   sim_27   sim_28   sim_29   sim_30   sim_31   sim_32 </span></span>
+<span><span class="co">#&gt; 4.568685 4.635452 4.726544 4.528194 4.750234 4.723567 4.824571 4.874682 </span></span>
+<span><span class="co">#&gt;   sim_33   sim_34   sim_35   sim_36   sim_37   sim_38   sim_39   sim_40 </span></span>
+<span><span class="co">#&gt; 4.484103 4.601327 4.656455 4.645920 4.571360 4.462196 4.695608 4.455418 </span></span>
+<span><span class="co">#&gt;   sim_41   sim_42   sim_43   sim_44   sim_45   sim_46   sim_47   sim_48 </span></span>
+<span><span class="co">#&gt; 5.011773 4.504738 4.791260 4.890468 4.614314 4.743133 4.968328 4.645440 </span></span>
+<span><span class="co">#&gt;   sim_49   sim_50   sim_51   sim_52   sim_53   sim_54   sim_55   sim_56 </span></span>
+<span><span class="co">#&gt; 4.566511 4.601070 5.191572 5.103445 4.814671 4.376042 4.863534 4.738417 </span></span>
+<span><span class="co">#&gt;   sim_57   sim_58   sim_59   sim_60   sim_61   sim_62   sim_63   sim_64 </span></span>
+<span><span class="co">#&gt; 4.391026 4.239064 4.892698 5.000792 5.140959 4.793802 5.012531 4.592464 </span></span>
+<span><span class="co">#&gt;   sim_65   sim_66   sim_67   sim_68   sim_69   sim_70   sim_71   sim_72 </span></span>
+<span><span class="co">#&gt; 5.263501 5.014983 4.557414 5.043601 5.077492 5.146878 4.851940 4.310758 </span></span>
+<span><span class="co">#&gt;   sim_73   sim_74   sim_75   sim_76   sim_77   sim_78   sim_79   sim_80 </span></span>
+<span><span class="co">#&gt; 4.665541 4.677581 4.725574 4.579833 4.759019 4.619889 4.530658 4.592598 </span></span>
+<span><span class="co">#&gt;   sim_81   sim_82   sim_83   sim_84   sim_85   sim_86   sim_87   sim_88 </span></span>
+<span><span class="co">#&gt; 4.822029 4.239588 4.863534 4.863534 4.812430 4.007848 4.407258 4.786745 </span></span>
+<span><span class="co">#&gt;   sim_89   sim_90   sim_91   sim_92   sim_93   sim_94   sim_95   sim_96 </span></span>
+<span><span class="co">#&gt; 4.315485 4.555452 4.904303 4.181761 4.690123 4.856187 4.646109 4.714604 </span></span>
+<span><span class="co">#&gt;   sim_97   sim_98   sim_99  sim_100  sim_101  sim_102  sim_103  sim_104 </span></span>
+<span><span class="co">#&gt; 4.848785 4.926143 4.322007 4.995541 4.378417 4.789788 4.754114 4.596923 </span></span>
+<span><span class="co">#&gt;  sim_105  sim_106  sim_107  sim_108  sim_109  sim_110  sim_111  sim_112 </span></span>
+<span><span class="co">#&gt; 4.591695 4.613200 5.270056 5.115541 4.674905 4.609353 4.704247 4.270903 </span></span>
+<span><span class="co">#&gt;  sim_113  sim_114  sim_115  sim_116  sim_117  sim_118  sim_119  sim_120 </span></span>
+<span><span class="co">#&gt; 4.864337 4.637681 4.792363 4.466042 5.011137 4.299889 4.842129 4.705139 </span></span>
+<span><span class="co">#&gt;  sim_121  sim_122  sim_123  sim_124  sim_125  sim_126  sim_127  sim_128 </span></span>
+<span><span class="co">#&gt; 4.450123 4.938685 4.826522 4.660992 4.993935 4.673032 4.655284 4.642140 </span></span>
+<span><span class="co">#&gt;  sim_129  sim_130  sim_131  sim_132  sim_133  sim_134  sim_135  sim_136 </span></span>
+<span><span class="co">#&gt; 4.858417 4.940959 4.939398 5.079420 4.488294 4.694437 4.793969 4.799287 </span></span>
+<span><span class="co">#&gt;  sim_137  sim_138  sim_139  sim_140  sim_141  sim_142  sim_143  sim_144 </span></span>
+<span><span class="co">#&gt; 4.700959 4.575017 4.547726 4.771505 4.760970 4.749822 4.227380 4.737748 </span></span>
+<span><span class="co">#&gt;  sim_145  sim_146  sim_147  sim_148  sim_149  sim_150  sim_151  sim_152 </span></span>
+<span><span class="co">#&gt; 4.901494 4.155139 4.698718 4.893768 4.460323 4.626745 4.598651 4.451505 </span></span>
+<span><span class="co">#&gt;  sim_153  sim_154  sim_155  sim_156  sim_157  sim_158  sim_159  sim_160 </span></span>
+<span><span class="co">#&gt; 4.709431 4.767659 4.702341 5.001962 5.122230 4.717547 4.863980 4.822062 </span></span>
+<span><span class="co">#&gt;  sim_161  sim_162  sim_163  sim_164  sim_165  sim_166  sim_167  sim_168 </span></span>
+<span><span class="co">#&gt; 4.454169 4.229420 4.658852 4.591973 4.546477 4.341795 5.227414 4.163880 </span></span>
+<span><span class="co">#&gt;  sim_169  sim_170  sim_171  sim_172  sim_173  sim_174  sim_175  sim_176 </span></span>
+<span><span class="co">#&gt; 4.549654 5.169186 4.955407 4.936410 4.949788 4.538361 4.574036 5.452163 </span></span>
+<span><span class="co">#&gt;  sim_177  sim_178  sim_179  sim_180  sim_181  sim_182  sim_183  sim_184 </span></span>
+<span><span class="co">#&gt; 4.883779 4.598384 5.281561 4.397715 4.786577 4.536276 4.541628 4.284270 </span></span>
+<span><span class="co">#&gt;  sim_185  sim_186  sim_187  sim_188  sim_189  sim_190  sim_191  sim_192 </span></span>
+<span><span class="co">#&gt; 5.109688 5.107815 4.687848 4.300736 4.616009 4.712999 5.050658 4.258763 </span></span>
+<span><span class="co">#&gt;  sim_193  sim_194  sim_195  sim_196  sim_197  sim_198  sim_199  sim_200 </span></span>
+<span><span class="co">#&gt; 4.676076 4.712375 4.615151 4.999721 4.734716 4.961828 4.281505 4.970736 </span></span>
+<span><span class="co">#&gt;  sim_201  sim_202  sim_203  sim_204  sim_205  sim_206  sim_207  sim_208 </span></span>
+<span><span class="co">#&gt; 5.193133 4.388618 4.582776 4.462609 5.270190 4.958963 5.353969 4.914649 </span></span>
+<span><span class="co">#&gt;  sim_209  sim_210  sim_211  sim_212  sim_213  sim_214  sim_215  sim_216 </span></span>
+<span><span class="co">#&gt; 4.618450 4.542430 4.331093 4.919454 4.592408 4.668216 4.749565 4.845039 </span></span>
+<span><span class="co">#&gt;  sim_217  sim_218  sim_219  sim_220  sim_221  sim_222  sim_223  sim_224 </span></span>
+<span><span class="co">#&gt; 4.445307 4.928651 4.747146 4.142297 4.903411 4.677547 4.719688 4.224705 </span></span>
+<span><span class="co">#&gt;  sim_225  sim_226  sim_227  sim_228  sim_229  sim_230  sim_231  sim_232 </span></span>
+<span><span class="co">#&gt; 4.274203 4.846154 4.290033 4.076020 4.500992 4.490290 4.606143 4.835273 </span></span>
+<span><span class="co">#&gt;  sim_233  sim_234  sim_235  sim_236  sim_237  sim_238  sim_239  sim_240 </span></span>
+<span><span class="co">#&gt; 5.188361 4.741405 4.803512 4.764537 4.638517 4.975909 4.990803 4.958428 </span></span>
+<span><span class="co">#&gt;  sim_241  sim_242  sim_243  sim_244  sim_245  sim_246  sim_247  sim_248 </span></span>
+<span><span class="co">#&gt; 4.469688 4.317179 4.879320 4.299889 4.603969 4.445975 4.604236 4.413501 </span></span>
+<span><span class="co">#&gt;  sim_249  sim_250 </span></span>
+<span><span class="co">#&gt; 4.903668 4.818016</span></span></code></pre></div>
 <p>A ratio near 1 and a p-value away from the extremes mean the spread
 of detections matches the fit. A ratio well above 1 is overdispersion:
 the detection totals vary more than the model allows, usually because
@@ -544,8 +719,19 @@ on a Poisson N-mixture fit is the standard reason to switch to the
 negative binomial, covered in the abundance vignette.</p>
 <p><code><a href="https://gillescolling.com/tulpa/reference/test_zero_inflation.html" class="external-link">test_zero_inflation()</a></code> counts sites with no detections at
 all and asks whether the model produces that many all-zero sites.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_zero_inflation.html" class="external-link">test_zero_inflation</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_zero_inflation.html" class="external-link">test_zero_inflation</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; $observed</span></span>
+<span><span class="co">#&gt; [1] 126</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $expected</span></span>
+<span><span class="co">#&gt; [1] 126.172</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $ratio</span></span>
+<span><span class="co">#&gt; [1] 0.9986368</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $p.value</span></span>
+<span><span class="co">#&gt; [1] 0.524</span></span></code></pre></div>
 <p>The observed count of empty sites matches the expected count, so
 there is no excess of zeros. This test matters for occupancy because the
 model already produces zeros two ways, through unoccupied sites and
@@ -562,8 +748,19 @@ ones.</p>
 <p><code><a href="https://gillescolling.com/tulpa/reference/test_outliers.html" class="external-link">test_outliers()</a></code> flags sites whose detection total falls
 outside the central 95% of the replicate distribution, then checks
 whether the number of such sites is itself surprising.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_outliers.html" class="external-link">test_outliers</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_outliers.html" class="external-link">test_outliers</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; $observed</span></span>
+<span><span class="co">#&gt; [1] 2</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $expected</span></span>
+<span><span class="co">#&gt; [1] 1.612</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $ratio</span></span>
+<span><span class="co">#&gt; [1] 1.240695</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $p.value</span></span>
+<span><span class="co">#&gt; [1] 0.456</span></span></code></pre></div>
 <p>A handful of outliers is expected by chance; 5% of sites sit outside
 a 95% interval by construction, so the raw count is not alarming on its
 own. The p-value does the calibration: it asks whether the count of
@@ -587,10 +784,12 @@ site, comparing the observed occupancy indicator (any detection) against
 the fitted occupancy probability. <code>$det</code> is a site-by-visit
 matrix of detection residuals, with <code>NA</code> where a visit was
 not made.</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">r</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"pearson"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">r</span><span class="op">$</span><span class="va">occ</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">r</span><span class="op">$</span><span class="va">det</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 300</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">r</span><span class="op">$</span><span class="va">det</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 300   6</span></span></code></pre></div>
 <p>The <code>type</code> argument follows the usual convention.
 <code>"response"</code> is the raw difference between observed and
 fitted, on the scale of the data. <code>"pearson"</code> divides that
@@ -615,19 +814,22 @@ separate is what lets you tell which.</p>
 <p>A residuals-against-fitted plot is the first thing to draw. Structure
 in the cloud, such as a trend or a fan, signals a misspecified mean or
 variance. Here the occupancy residuals scatter without pattern.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fv</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fv</span><span class="op">$</span><span class="va">psi</span>, <span class="va">r</span><span class="op">$</span><span class="va">occ</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.35</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"fitted occupancy probability"</span>, ylab <span class="op">=</span> <span class="st">"Pearson residual (occupancy)"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span>h <span class="op">=</span> <span class="fl">0</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="diagnostics_files/figure-html/resid-plot-1.svg" class="r-plt" alt="Pearson occupancy residuals plotted against fitted occupancy probability, scattered around zero with no trend" width="576"></p>
 <p>The detection residuals live in the matrix <code>r$det</code>, one
 row per site and one column per visit, with <code>NA</code> in the cells
 for visits that were not made. Collapsing them to a per-site mean gives
 a quick read on which sites contribute the most detection misfit, again
 with no structure expected under a good model.</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">det_site</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">r</span><span class="op">$</span><span class="va">det</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">det_site</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">det_site</span><span class="op">)</span></span>
+<span><span class="co">#&gt;     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. </span></span>
+<span><span class="co">#&gt; -0.95472 -0.11116 -0.02528 -0.01322  0.09521  0.86808</span></span></code></pre></div>
 <p>A per-site mean near zero across the board, as here, says the
 detection model is not systematically over- or under-predicting at any
 site. If you suspect a detection covariate is missing, plotting these
@@ -658,7 +860,7 @@ list rather than the whole list.</p>
 <p>To show the diagnostic working, simulate occupancy on a grid where
 the occupancy intercept follows a smooth spatial surface. A model with
 no spatial term will leave that surface in its residuals.</p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">side</span>   <span class="op">&lt;-</span> <span class="fl">12L</span></span>
 <span><span class="va">coords</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>lon <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">side</span><span class="op">)</span>, lat <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">side</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">N</span>      <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">coords</span><span class="op">)</span></span>
@@ -681,18 +883,21 @@ no spatial term will leave that surface in its residuals.</p>
 <p>Fit two models: a non-spatial Laplace fit that ignores the surface,
 and a nested-Laplace fit with an intrinsic CAR (<code><a href="../reference/tobs_terms.html">icar()</a></code>)
 field on the same adjacency graph.</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_ns</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span>, data <span class="op">=</span> <span class="va">datg</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>               detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">yg</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>               control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">fit_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">datg</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>               detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">yg</span>, method <span class="op">=</span> <span class="st">"nested_laplace"</span>,</span>
-<span>               control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>max.iter <span class="op">=</span> <span class="fl">10L</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>               control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>max.iter <span class="op">=</span> <span class="fl">10L</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning: occu(): the nested_laplace fit stopped after 10 iterations without</span></span>
+<span><span class="co">#&gt; meeting its convergence criterion, so the estimates are not at the mode. Raise</span></span>
+<span><span class="co">#&gt; control$max.iter (or loosen control$tol); convergence(fit) has the record.</span></span></code></pre></div>
 <p>Moran’s I on the occupancy residuals measures how strongly
 neighbouring sites share residual sign and size. The function returns an
 <code>htest</code> with the statistic and a p-value under the
 randomisation null.</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mi_ns</span> <span class="op">&lt;-</span> <span class="fu">tulpa</span><span class="fu">::</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/moran_i.html" class="external-link">moran_i</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, coords <span class="op">=</span> <span class="va">coords</span>,</span>
 <span>                        weights <span class="op">=</span> <span class="st">"knn"</span>, k <span class="op">=</span> <span class="fl">8</span><span class="op">)</span></span>
 <span><span class="va">mi_sp</span> <span class="op">&lt;-</span> <span class="fu">tulpa</span><span class="fu">::</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/moran_i.html" class="external-link">moran_i</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_sp</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, coords <span class="op">=</span> <span class="va">coords</span>,</span>
@@ -702,7 +907,10 @@ randomisation null.</p>
 <span>  model    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"non-spatial"</span>, <span class="st">"icar field"</span><span class="op">)</span>,</span>
 <span>  moran_I  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">mi_ns</span><span class="op">$</span><span class="va">statistic</span>, <span class="va">mi_sp</span><span class="op">$</span><span class="va">statistic</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
 <span>  p_value  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">mi_ns</span><span class="op">$</span><span class="va">p.value</span>, <span class="va">mi_sp</span><span class="op">$</span><span class="va">p.value</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;         model moran_I p_value</span></span>
+<span><span class="co">#&gt; 1 non-spatial   0.353 2.4e-19</span></span>
+<span><span class="co">#&gt; 2  icar field   0.057 1.1e-01</span></span></code></pre></div>
 <p>Moran’s I runs from roughly
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>−</mi><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math>
 to
@@ -730,9 +938,10 @@ independent, where the curve levels off. The distance at which it levels
 is the range of the residual structure, which tells you roughly how far
 a spatial field would need to reach. A flat curve across all distances
 means no structure is left.</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">vg</span> <span class="op">&lt;-</span> <span class="fu">tulpa</span><span class="fu">::</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/tulpa_variogram.html" class="external-link">tulpa_variogram</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_ns</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, coords <span class="op">=</span> <span class="va">coords</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">vg</span><span class="op">)</span></span></code></pre></div>
+<p><img src="diagnostics_files/figure-html/variogram-1.svg" class="r-plt" alt="Empirical semivariogram of non-spatial occupancy residuals rising with distance before levelling, indicating residual spatial structure" width="576"></p>
 <p>The rise in the non-spatial residual variogram confirms the Moran’s I
 verdict. If you compute the same curve on the spatial fit’s residuals,
 it flattens, which is the visual form of the autocorrelation shrinking.
@@ -754,8 +963,13 @@ unpenalised Laplace fit does not, and its detection coefficients can
 drift far with large standard errors. <code><a href="../reference/occu_priors.html">occu_priors()</a></code> builds
 the penalty that breaks the ridge, a Normal prior on each coefficient
 group.</p>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/occu_priors.html">occu_priors</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/occu_priors.html">occu_priors</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; occu_priors (weakly-informative for method='laplace'):</span></span>
+<span><span class="co">#&gt;   p_(Intercept) ~ Normal(0, 1.5)</span></span>
+<span><span class="co">#&gt;   p slopes       ~ Normal(0, 2.5)</span></span>
+<span><span class="co">#&gt;   psi_(Intercept) ~ Normal(0, 2)</span></span>
+<span><span class="co">#&gt;   psi slopes     ~ Normal(0, 5)</span></span></code></pre></div>
 <p>The four buckets cover the detection intercept
 (<code>sd = 1.5</code>), detection slopes (<code>sd = 2.5</code>),
 occupancy intercept (<code>sd = 2</code>), and occupancy slopes
@@ -765,9 +979,9 @@ identified more directly by which sites ever detect. To see the prior at
 work, build a low-information dataset with only three visits per site,
 where the ridge is sharp, and fit it both with the default prior and
 with <code>priors = FALSE</code> to recover the unpenalised MAP.</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sim3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">120</span>, J <span class="op">=</span> <span class="fl">3</span>, n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>                      beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>, beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.0</span>, <span class="fl">0.8</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">7</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sim3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">120</span>, J <span class="op">=</span> <span class="fl">3</span>, n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>                      beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>, beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.0</span>, <span class="fl">0.8</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">7</span><span class="op">)</span></span>
 <span><span class="va">fit_pen</span>   <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">sim3</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>                  detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">sim3</span><span class="op">$</span><span class="va">y</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>                  control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
@@ -779,14 +993,17 @@ the two fits against the truth of 0.0. The penalised fit holds the
 estimate near zero with a controlled standard error; the unpenalised
 fit, free to slide along the ridge, returns a larger magnitude and a
 wider interval.</p>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  fit  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"penalised"</span>, <span class="st">"unpenalised"</span><span class="op">)</span>,</span>
 <span>  p_int <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">fit_pen</span><span class="op">$</span><span class="va">means</span><span class="op">[</span><span class="st">"p_(Intercept)"</span><span class="op">]</span>,</span>
 <span>                  <span class="va">fit_unpen</span><span class="op">$</span><span class="va">means</span><span class="op">[</span><span class="st">"p_(Intercept)"</span><span class="op">]</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
 <span>  se    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">fit_pen</span><span class="op">$</span><span class="va">sds</span><span class="op">[[</span><span class="st">"p_(Intercept)"</span><span class="op">]</span><span class="op">]</span>,</span>
 <span>                  <span class="va">fit_unpen</span><span class="op">$</span><span class="va">sds</span><span class="op">[[</span><span class="st">"p_(Intercept)"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;           fit p_int    se</span></span>
+<span><span class="co">#&gt; 1   penalised 0.192 0.184</span></span>
+<span><span class="co">#&gt; 2 unpenalised 0.194 0.186</span></span></code></pre></div>
 <p>The prior is doing identification work, not imposing a result. At
 moderate information, more visits or a stronger detection signal, the
 two fits converge because the likelihood pins the coefficient and the

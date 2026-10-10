@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,8 +91,24 @@
 
     
     
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
+<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
+<p>pak resolves the dependency tree, pulling <code>tulpa</code> and
+<code>tulpaMesh</code> from the r-universe repository DESCRIPTION
+declares in <code>Additional_repositories</code>, at or above the
+<code>Imports</code> floor. A C++17 toolchain is needed (Rtools on
+Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux);
+both <code>tulpa</code> and <code>tulpaObs</code> compile their backends
+on first install.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="the-detection-problem">The detection problem<a class="anchor" aria-label="anchor" href="#the-detection-problem"></a>
 </h2>
@@ -264,24 +280,34 @@ Detection depends on <code>det_cov1</code> with intercept 0.7 (baseline
 detection near 0.67, a fairly conspicuous species) and slope 0.6. Six
 visits per site keep the two processes apart, for the reason the next
 paragraph makes precise.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">300</span>, J <span class="op">=</span> <span class="fl">6</span>,</span>
-<span>  n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>,    <span class="co"># occupancy intercept + slope on occ_cov1</span></span>
-<span>  beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.6</span><span class="op">)</span>,    <span class="co"># detection intercept + slope on det_cov1</span></span>
+<span>  n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>,    <span class="co"># occupancy intercept + slope on occ_cov1</span></span>
+<span>  beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.6</span><span class="op">)</span>,    <span class="co"># detection intercept + slope on det_cov1</span></span>
 <span>  seed <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>              <span class="co"># one row per site: occ_cov1, det_cov1</span></span>
 <span><span class="va">y</span>   <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>                 <span class="co"># 300 x 6 detection-history matrix (0/1)</span></span>
-<span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span></span></code></pre></div>
+<span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span></span>
+<span><span class="co">#&gt;      [,1] [,2] [,3] [,4] [,5] [,6]</span></span>
+<span><span class="co">#&gt; [1,]    0    0    0    0    0    0</span></span>
+<span><span class="co">#&gt; [2,]    0    0    0    0    0    0</span></span>
+<span><span class="co">#&gt; [3,]    1    0    1    1    1    1</span></span></code></pre></div>
 <p>The covariates are standard normal, so a site at
 <code>occ_cov1 = 1</code> sits one standard deviation above the mean and
 carries occupancy probability near <code>plogis(0.3 + 1.0)</code>, about
 0.79. The <code>sim$truth</code> slot holds the true parameters and the
 realised latent quantities.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">truth</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">truth</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="co">#&gt; List of 5</span></span>
+<span><span class="co">#&gt;  $ beta_occ: num [1:2] 0.3 1</span></span>
+<span><span class="co">#&gt;  $ beta_det: num [1:2] 0.7 0.6</span></span>
+<span><span class="co">#&gt;  $ psi     : num [1:300] 0.419 0.619 0.369 0.869 0.652 ...</span></span>
+<span><span class="co">#&gt;  $ p       : num [1:300] 0.775 0.518 0.868 0.615 0.845 ...</span></span>
+<span><span class="co">#&gt;  $ z       : int [1:300] 0 0 1 1 0 1 0 0 1 1 ...</span></span></code></pre></div>
 <p>The choice of six visits and detection near 0.67 is not arbitrary.
 Per-visit detection of 0.67 means an occupied site is missed on all six
 visits with probability
@@ -297,9 +323,11 @@ below true occupancy because some occupied sites went undetected on all
 six visits. The gap is the detection problem made numeric: the
 difference between the two numbers below is exactly the share of
 occupied sites the raw counts would throw away.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>naive_occupied <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  true_occupied  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">z</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>  true_occupied  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">z</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; naive_occupied  true_occupied </span></span>
+<span><span class="co">#&gt;      0.5800000      0.5833333</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="fitting">Fitting<a class="anchor" aria-label="anchor" href="#fitting"></a>
@@ -320,7 +348,7 @@ site, the M-step refits the occupancy and detection coefficients given
 those filled-in states, and the two alternate to convergence. The EM
 driver prints its iterations unless you silence it with
 <code>verbose = FALSE</code>, which every fit below does.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">occ_cov1</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -339,16 +367,23 @@ That the fit recovers all four from detection histories alone, never
 observing the latent state, is the payoff of the marginalisation: the
 information about occupancy that the silent sites carry has been used
 rather than discarded.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 </span></span>
+<span><span class="co">#&gt;       0.3638670       1.0118715       0.6744931       0.5087683</span></span></code></pre></div>
 <p><code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> adds the posterior standard deviation and the
 2.5% / 50% / 97.5% credible bounds for every coefficient. The
 <code>psi_</code> rows are the occupancy linear predictor, the
 <code>p_</code> rows the detection one, and keeping the two prefixes
 lets you read at a glance which process a coefficient belongs to even
 when the same covariate name appears in both formulas.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                  estimate  std.error     2.5 %    97.5 %</span></span>
+<span><span class="co">#&gt; psi_(Intercept) 0.3638670 0.12974646 0.1095686 0.6181653</span></span>
+<span><span class="co">#&gt; psi_occ_cov1    1.0118715 0.15488654 0.7082995 1.3154436</span></span>
+<span><span class="co">#&gt; p_(Intercept)   0.6744931 0.06861693 0.5400064 0.8089798</span></span>
+<span><span class="co">#&gt; p_det_cov1      0.5087683 0.06957512 0.3724036 0.6451330</span></span></code></pre></div>
 <p>Read the summary one row at a time. The estimate is the posterior
 mode for a Laplace fit, the standard deviation is the square root of the
 diagonal of the fixed-effect covariance, and the three quantile columns
@@ -365,8 +400,13 @@ one-line bridge.</p>
 <p><code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> returns the same bounds as a matrix. It reads
 the fixed-effect block of the Hessian the Laplace fit already computed,
 so there is no extra sampling step.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                     2.5 %    97.5 %</span></span>
+<span><span class="co">#&gt; psi_(Intercept) 0.1095686 0.6181653</span></span>
+<span><span class="co">#&gt; psi_occ_cov1    0.7082995 1.3154436</span></span>
+<span><span class="co">#&gt; p_(Intercept)   0.5400064 0.8089798</span></span>
+<span><span class="co">#&gt; p_det_cov1      0.3724036 0.6451330</span></span></code></pre></div>
 <p>The Laplace fit is exact when the posterior is Gaussian and a good
 approximation when it is close, which is the common case with enough
 visits. What it cannot capture is skew or a long tail in the posterior,
@@ -378,7 +418,7 @@ sample size next to the estimates. The dotted control names
 (<code>n.iter</code>, <code>n.warmup</code>, <code>seed</code>) are the
 sampler’s vocabulary; there is no <code>iter</code> or
 <code>warmup</code> shorthand.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_nuts</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="va">occ_cov1</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -388,7 +428,17 @@ sampler’s vocabulary; there is no <code>iter</code> or
 <span>  method    <span class="op">=</span> <span class="st">"nuts"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n.iter <span class="op">=</span> <span class="fl">800</span>, n.warmup <span class="op">=</span> <span class="fl">400</span>, seed <span class="op">=</span> <span class="fl">1</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit_nuts</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit_nuts</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                  estimate  std.error     2.5 %    97.5 %     rhat ess_bulk</span></span>
+<span><span class="co">#&gt; psi_(Intercept) 0.3726613 0.12659745 0.1356939 0.6362571 1.018267 463.9132</span></span>
+<span><span class="co">#&gt; psi_occ_cov1    1.0340742 0.16176800 0.7285672 1.3700560 1.008509 629.9656</span></span>
+<span><span class="co">#&gt; p_(Intercept)   0.6754331 0.06668084 0.5536290 0.8116605 1.012013 424.4801</span></span>
+<span><span class="co">#&gt; p_det_cov1      0.5146168 0.06223141 0.3899390 0.6464447 1.000245 375.8263</span></span>
+<span><span class="co">#&gt;                 ess_tail</span></span>
+<span><span class="co">#&gt; psi_(Intercept) 448.1412</span></span>
+<span><span class="co">#&gt; psi_occ_cov1    504.2690</span></span>
+<span><span class="co">#&gt; p_(Intercept)   404.8984</span></span>
+<span><span class="co">#&gt; p_det_cov1      302.2130</span></span></code></pre></div>
 <p>With six visits and detection near 0.67 the joint posterior is close
 to Gaussian at its mode, so the two backends agree on the coefficients
 to within their uncertainty. <code>Rhat</code> near 1 says the chains
@@ -406,13 +456,18 @@ represent because it reads only a mean and a curvature. For a
 well-identified occupancy model the two coincide and the cheap fit wins;
 for a marginal one they diverge, and the identifiability section below
 shows exactly where the line falls.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  term    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  laplace <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>,      <span class="fl">3</span><span class="op">)</span>,</span>
 <span>  nuts    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_nuts</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
 <span>  row.names <span class="op">=</span> <span class="cn">NULL</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;              term laplace  nuts</span></span>
+<span><span class="co">#&gt; 1 psi_(Intercept)   0.364 0.373</span></span>
+<span><span class="co">#&gt; 2    psi_occ_cov1   1.012 1.034</span></span>
+<span><span class="co">#&gt; 3   p_(Intercept)   0.674 0.675</span></span>
+<span><span class="co">#&gt; 4      p_det_cov1   0.509 0.515</span></span></code></pre></div>
 <p><code><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted()</a></code> returns three per-site quantities:
 <code>psi</code>, the modelled occupancy probability; <code>p</code>,
 the detection probability; and <code>z</code>, the posterior probability
@@ -436,9 +491,13 @@ believes it is probably occupied and probably hard to detect, while the
 same zeros at a site with low
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ψ</mi><annotation encoding="application/x-tex">\psi</annotation></semantics></math>
 pull <code>z</code> toward zero.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fv</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fv</span>, <span class="va">head</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fv</span>, <span class="va">head</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; List of 3</span></span>
+<span><span class="co">#&gt;  $ psi: num [1:4] 0.433 0.634 0.382 0.878</span></span>
+<span><span class="co">#&gt;  $ p  : num [1:4] 0.756 0.535 0.843 0.618</span></span>
+<span><span class="co">#&gt;  $ z  : num [1:4] 0.000162 0.017137 1 1</span></span></code></pre></div>
 <p>The conditional occupancy <code>z</code> at an all-zero site is
 Bayes’ rule applied to the two branches of the likelihood. The prior
 odds of occupancy are
@@ -466,10 +525,11 @@ and the cloud hugging the identity line means the per-site occupancy
 probabilities came back close to what generated the data. The population
 mean is easy to recover; the per-site spread is the harder test, and the
 plot shows it coming back faithfully.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">psi</span>, <span class="va">fv</span><span class="op">$</span><span class="va">psi</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.35</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"true psi"</span>, ylab <span class="op">=</span> <span class="st">"fitted psi"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy_files/figure-html/fitted-plot-1.svg" class="r-plt" alt="Fitted occupancy probability against the true simulated probability, scattered around the identity line" width="576"></p>
 <p>The same fitted object answers the standard accessors, and they
 behave the same way on a Laplace fit and a NUTS fit. The Laplace tier
 reports the Gaussian approximation at the mode; the sampler tier reports
@@ -545,9 +605,11 @@ model predicts the detection histories you actually saw rather than the
 unobservable presences. WAIC is an in-sample predictive score, and on
 its own one number means little; it earns its keep in the comparison
 below, against another model fit to the same data.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">w</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>waic <span class="op">=</span> <span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, elpd <span class="op">=</span> <span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"elpd_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, p_waic <span class="op">=</span> <span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>waic <span class="op">=</span> <span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, elpd <span class="op">=</span> <span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"elpd_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, p_waic <span class="op">=</span> <span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt;        waic        elpd      p_waic </span></span>
+<span><span class="co">#&gt; 1646.075327 -823.037664    3.811516</span></span></code></pre></div>
 <p>The three numbers are facets of one calculation. <code>elpd</code> is
 the expected log pointwise predictive density, the model’s estimated
 predictive accuracy on new data of the same shape; higher is better.
@@ -566,13 +628,15 @@ observed data, and reports a Bayesian
 the fraction of replicates whose statistic exceeds the observed one. A
 value near 0.5 means the observed data look like a typical draw from the
 fitted model; values near 0 or 1 flag a misfit.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">pp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ppc.html">ppc</a></span><span class="op">(</span><span class="va">fit</span>, fit.stat <span class="op">=</span> <span class="st">"freeman-tukey"</span><span class="op">)</span></span>
-<span><span class="va">pp</span><span class="op">$</span><span class="va">bayesian.p</span></span></code></pre></div>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ppc.html">ppc</a></span><span class="op">(</span><span class="va">fit</span>, fit.stat <span class="op">=</span> <span class="st">"freeman-tukey"</span><span class="op">)</span></span>
+<span><span class="va">pp</span><span class="op">$</span><span class="va">bayesian.p</span></span>
+<span><span class="co">#&gt; [1] 0.478</span></span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html" class="external-link">hist</a></span><span class="op">(</span><span class="va">pp</span><span class="op">$</span><span class="va">fit.y.rep</span>, breaks <span class="op">=</span> <span class="fl">30</span>, col <span class="op">=</span> <span class="st">"grey85"</span>, border <span class="op">=</span> <span class="st">"white"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">""</span>, xlab <span class="op">=</span> <span class="st">"Freeman-Tukey statistic (replicated)"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span>v <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">pp</span><span class="op">$</span><span class="va">fit.y</span><span class="op">)</span>, col <span class="op">=</span> <span class="st">"firebrick"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy_files/figure-html/ppc-plot-1.svg" class="r-plt" alt="Histogram of replicated Freeman-Tukey statistics with the observed value marked by a vertical line falling inside the bulk" width="576"></p>
 <p>The observed statistic sits inside the bulk of the replicated values,
 so the fit reproduces the spread of the detection histories. The
 probability integral transform offers a complementary view.
@@ -581,11 +645,14 @@ well-calibrated model they are uniform on
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">[</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">]</mo></mrow><annotation encoding="application/x-tex">[0, 1]</annotation></semantics></math>,
 and <code><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity()</a></code> runs the formal Kolmogorov-Smirnov
 test against that target.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/pit_residuals.html" class="external-link">pit_residuals</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html" class="external-link">hist</a></span><span class="op">(</span><span class="va">pit</span>, breaks <span class="op">=</span> <span class="fl">12</span>, col <span class="op">=</span> <span class="st">"grey85"</span>, border <span class="op">=</span> <span class="st">"white"</span>,</span>
-<span>     main <span class="op">=</span> <span class="st">""</span>, xlab <span class="op">=</span> <span class="st">"PIT residual"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span><span class="op">$</span><span class="va">p.value</span></span></code></pre></div>
+<span>     main <span class="op">=</span> <span class="st">""</span>, xlab <span class="op">=</span> <span class="st">"PIT residual"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy_files/figure-html/pit-1.svg" class="r-plt" alt="Histogram of PIT residuals across sites, roughly flat between zero and one" width="576"></p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity</a></span><span class="op">(</span><span class="va">pit</span><span class="op">)</span><span class="op">$</span><span class="va">p.value</span></span>
+<span><span class="co">#&gt; [1] 0.6501897</span></span></code></pre></div>
 <p>The histogram is roughly flat and the test does not reject
 uniformity, which is the calibration the model promised. The shape of a
 PIT histogram diagnoses the direction of any miscalibration. A hump in
@@ -601,11 +668,12 @@ residual per site comparing the observed detection indicator against the
 fitted <code>z</code>, and a detection component at the visit level.
 Deviance residuals are the default and the natural scale for binary
 data.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"deviance"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fv</span><span class="op">$</span><span class="va">psi</span>, <span class="va">res</span><span class="op">$</span><span class="va">occ</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.3</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"fitted psi"</span>, ylab <span class="op">=</span> <span class="st">"occupancy deviance residual"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span>h <span class="op">=</span> <span class="fl">0</span>, col <span class="op">=</span> <span class="st">"grey50"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy_files/figure-html/resid-1.svg" class="r-plt" alt="Occupancy deviance residuals against fitted occupancy probability, scattered with no trend" width="576"></p>
 <p>A residual plot with no trend against the fitted values, as here,
 says the mean structure is adequate; a funnel or a curve would point to
 a missing covariate or a wrong link. Read all four checks together. WAIC
@@ -632,9 +700,14 @@ confusing them is a common source of misread results.</p>
 uncertainty rather than as bare points. The occupancy slope on
 <code>occ_cov1</code> is positive and its credible interval clears zero,
 so the covariate is doing real work; the same holds for detection.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ci</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="va">ci</span></span></code></pre></div>
+<span><span class="va">ci</span></span>
+<span><span class="co">#&gt;                     2.5 %    97.5 %</span></span>
+<span><span class="co">#&gt; psi_(Intercept) 0.1095686 0.6181653</span></span>
+<span><span class="co">#&gt; psi_occ_cov1    0.7082995 1.3154436</span></span>
+<span><span class="co">#&gt; p_(Intercept)   0.5400064 0.8089798</span></span>
+<span><span class="co">#&gt; p_det_cov1      0.3724036 0.6451330</span></span></code></pre></div>
 <p>The intervals carry the inference. A coefficient whose interval spans
 zero is not pulling its weight regardless of where the point estimate
 falls, and the width of the interval tells you how firmly the data pin
@@ -652,9 +725,10 @@ and returns the predicted probability with a 95% credible band. The band
 is the posterior uncertainty in the curve, narrow where the data are
 dense and the covariate is near its centre, wider out at the edges. Here
 it traces how occupancy responds to <code>occ_cov1</code>.</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">me</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_marginal_effect.html">tobs_marginal_effect</a></span><span class="op">(</span><span class="va">fit</span>, <span class="st">"occ_cov1"</span>, process <span class="op">=</span> <span class="st">"occupancy"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">me</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy_files/figure-html/marginal-1.svg" class="r-plt" alt="Predicted occupancy probability rising with occ_cov1, with a shaded 95 percent credible band" width="576"></p>
 <p>The curve is the occupancy-covariate relationship on the scale a
 reader cares about. It rises with <code>occ_cov1</code>, steeply through
 the middle where the logit is near zero and the probability is most
@@ -668,9 +742,10 @@ the occupancy curve keeps the two processes distinct in interpretation
 as well as in the model. A covariate can drive occupancy without
 touching detection, or the reverse, and plotting each arm separately is
 how you tell which.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">me_det</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_marginal_effect.html">tobs_marginal_effect</a></span><span class="op">(</span><span class="va">fit</span>, <span class="st">"det_cov1"</span>, process <span class="op">=</span> <span class="st">"detection"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">me_det</span><span class="op">)</span></span></code></pre></div>
+<p><img src="occupancy_files/figure-html/marginal-det-1.svg" class="r-plt" alt="Predicted detection probability rising with det_cov1, with a shaded 95 percent credible band" width="576"></p>
 </div>
 <div class="section level2">
 <h2 id="prediction">Prediction<a class="anchor" aria-label="anchor" href="#prediction"></a>
@@ -691,9 +766,13 @@ deviation, and credible bounds of
 at each new row, with the uncertainty drawn from the same fixed-effect
 covariance the summary reports, so a prediction in a sparsely sampled
 corner of covariate space comes back with an honestly wide interval.</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">X0</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>`(Intercept)` <span class="op">=</span> <span class="fl">1</span>, occ_cov1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span>
+<span><span class="co">#&gt;        mean         sd      q2.5       q50     q97.5</span></span>
+<span><span class="co">#&gt; 1 0.3455812 0.04506214 0.2650332 0.3441281 0.4369669</span></span>
+<span><span class="co">#&gt; 2 0.5893301 0.03180065 0.5267301 0.5882291 0.6518637</span></span>
+<span><span class="co">#&gt; 3 0.7952724 0.03456338 0.7214816 0.7981468 0.8536645</span></span></code></pre></div>
 <p>The columns of <code>X.0</code> must line up with the occupancy
 coefficients in order, the intercept first, then each covariate, which
 is why the example names them. The three rows are a site one standard
@@ -708,8 +787,12 @@ the detection arm through
 <code>tobs_marginal_effect(..., process = "detection")</code>. The NUTS
 fit predicts from its draws rather than a Gaussian approximation, and
 the two land in the same place when the posterior is well behaved.</p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit_nuts</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit_nuts</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span>
+<span><span class="co">#&gt;        mean         sd      q2.5       q50     q97.5</span></span>
+<span><span class="co">#&gt; 1 0.3416830 0.04209410 0.2669885 0.3393469 0.4249586</span></span>
+<span><span class="co">#&gt; 2 0.5917456 0.03045209 0.5338715 0.5928335 0.6539069</span></span>
+<span><span class="co">#&gt; 3 0.8009468 0.03456605 0.7300807 0.8013661 0.8633308</span></span></code></pre></div>
 <p><code><a href="../reference/tobs_marginal_effect.html">tobs_marginal_effect()</a></code> is the right tool for a smooth
 response curve across one covariate; <code>predict(X.0 = )</code> is the
 right tool for the handful of specific designs you actually want a
@@ -719,17 +802,24 @@ covariance, which <code><a href="https://rdrr.io/r/stats/vcov.html" class="exter
 entries record how the estimates move together, and the occupancy
 intercept and slope are mildly correlated because both are read from the
 same all-zero sites.</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                 psi_(Intercept) psi_occ_cov1 p_(Intercept) p_det_cov1</span></span>
+<span><span class="co">#&gt; psi_(Intercept)           0.017        0.003         0.000      0.000</span></span>
+<span><span class="co">#&gt; psi_occ_cov1              0.003        0.024         0.000      0.000</span></span>
+<span><span class="co">#&gt; p_(Intercept)             0.000        0.000         0.005      0.001</span></span>
+<span><span class="co">#&gt; p_det_cov1                0.000        0.000         0.001      0.005</span></span></code></pre></div>
 <p><code><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate()</a></code> runs the generative process in reverse from a
 fitted model: it draws new latent states and new detection histories
 from the posterior, which is the engine behind the posterior predictive
 check and the dispersion tests above. Calling it directly is useful for
 a custom check the built-in diagnostics do not cover.</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ysim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate</a></span><span class="op">(</span><span class="va">fit</span>, nsim <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>observed_detections <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">y</span> <span class="op">==</span> <span class="fl">1</span><span class="op">)</span>,</span>
-<span>  simulated_detections <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">ysim</span> <span class="op">==</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>  simulated_detections <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">ysim</span> <span class="op">==</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;  observed_detections simulated_detections </span></span>
+<span><span class="co">#&gt;                  682                  712</span></span></code></pre></div>
 <p>The simulated detection count lands near the observed one, as it
 should when the model fits, since the same parameters generated both up
 to sampling noise.</p>
@@ -748,7 +838,7 @@ that overfits inflates <code>p_waic</code> and pays for it. Fit an
 intercept-only occupancy model against the covariate model and read the
 two scores side by side; the lower WAIC is the better predictor of the
 data you have.</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit0</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>             detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">y</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>             control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
@@ -759,7 +849,10 @@ data you have.</p>
 <span>  p_waic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit0</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">waic_tab</span><span class="op">$</span><span class="va">delta</span> <span class="op">&lt;-</span> <span class="va">waic_tab</span><span class="op">$</span><span class="va">waic</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">$</span><span class="va">waic</span><span class="op">)</span></span>
-<span><span class="va">waic_tab</span></span></code></pre></div>
+<span><span class="va">waic_tab</span></span>
+<span><span class="co">#&gt;            model     waic   p_waic    delta</span></span>
+<span><span class="co">#&gt; 1 intercept only 1695.349 2.723585 49.27383</span></span>
+<span><span class="co">#&gt; 2  with occ_cov1 1646.075 3.811516  0.00000</span></span></code></pre></div>
 <p>The covariate model carries the lower WAIC, matching how the data
 were generated: the occupancy slope was 1.0, an effect the
 intercept-only model has no parameter to represent. The
@@ -784,11 +877,13 @@ replicates, and <code><a href="https://gillescolling.com/tulpa/reference/test_ze
 count of all-zero sites. Both return a ratio near one and a
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>p</mi><annotation encoding="application/x-tex">p</annotation></semantics></math>-value
 near 0.5 when the model reproduces that feature of the data.</p>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">disp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_dispersion.html" class="external-link">test_dispersion</a></span><span class="op">(</span><span class="va">fit</span>, n.samples <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
 <span><span class="va">zi</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_zero_inflation.html" class="external-link">test_zero_inflation</a></span><span class="op">(</span><span class="va">fit</span>, n.samples <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>dispersion_ratio <span class="op">=</span> <span class="va">disp</span><span class="op">$</span><span class="va">ratio</span>, dispersion_p <span class="op">=</span> <span class="va">disp</span><span class="op">$</span><span class="va">p.value</span>,</span>
-<span>  zero_ratio <span class="op">=</span> <span class="va">zi</span><span class="op">$</span><span class="va">ratio</span>, zero_p <span class="op">=</span> <span class="va">zi</span><span class="op">$</span><span class="va">p.value</span><span class="op">)</span></span></code></pre></div>
+<span>  zero_ratio <span class="op">=</span> <span class="va">zi</span><span class="op">$</span><span class="va">ratio</span>, zero_p <span class="op">=</span> <span class="va">zi</span><span class="op">$</span><span class="va">p.value</span><span class="op">)</span></span>
+<span><span class="co">#&gt; dispersion_ratio     dispersion_p       zero_ratio           zero_p </span></span>
+<span><span class="co">#&gt;        0.9901005        0.5550000        1.0024664        0.4950000</span></span></code></pre></div>
 <p>A dispersion ratio above one with a small
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>p</mi><annotation encoding="application/x-tex">p</annotation></semantics></math>-value
 would say the detection totals vary more than the fitted model expects,
@@ -803,7 +898,7 @@ covariate, so it should lower WAIC when it sits in the
 <code>detection</code> formula and do little when forced onto the
 occupancy formula instead. Fit both misallocations against the correct
 model and compare.</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_det_only</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>                     detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">y</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>                     control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
@@ -813,7 +908,9 @@ model and compare.</p>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>correct        <span class="op">=</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>,</span>
 <span>  no_det_cov     <span class="op">=</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit_det_only</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>,</span>
-<span>  det_on_occ     <span class="op">=</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit_misplaced</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+<span>  det_on_occ     <span class="op">=</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit_misplaced</span><span class="op">)</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt;    correct no_det_cov det_on_occ </span></span>
+<span><span class="co">#&gt;   1646.075   1709.588   1711.050</span></span></code></pre></div>
 <p>The correct model, with <code>det_cov1</code> in the detection
 formula, carries the lowest WAIC. Dropping the detection covariate
 raises it, and moving that covariate onto the occupancy process raises
@@ -860,20 +957,22 @@ two when detection is marginal.</p>
 usual trouble: very low or very high naive occupancy, too few visits per
 site, and collinear occupancy covariates. It reads the
 <code>tobs_model</code> stored on the fitted object.</p>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">chk</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_check_id.html">tobs_check_id</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">model</span><span class="op">)</span></span>
-<span><span class="va">chk</span><span class="op">$</span><span class="va">identifiable</span></span></code></pre></div>
+<span><span class="co">#&gt; No identifiability issues detected.</span></span>
+<span><span class="va">chk</span><span class="op">$</span><span class="va">identifiable</span></span>
+<span><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
 <p>A short simulation shows the drift directly. Build a dataset with
 only two visits and low detection (intercept
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>−</mi><mn>1.5</mn></mrow><annotation encoding="application/x-tex">-1.5</annotation></semantics></math>,
 so baseline detection near 0.18), the regime where the two processes are
 weakly separated, and fit it both ways.</p>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_hard</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">200</span>, J <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>,</span>
-<span>  beta_det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.5</span>, <span class="fl">0.3</span><span class="op">)</span>,   <span class="co"># baseline detection near 0.18</span></span>
+<span>  n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.3</span>, <span class="fl">1.0</span><span class="op">)</span>,</span>
+<span>  beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.5</span>, <span class="fl">0.3</span><span class="op">)</span>,   <span class="co"># baseline detection near 0.18</span></span>
 <span>  seed <span class="op">=</span> <span class="fl">11</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -891,7 +990,12 @@ weakly separated, and fit it both ways.</p>
 <span>  laplace <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_lap</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  nuts    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_hmc</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  row.names <span class="op">=</span> <span class="cn">NULL</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt;              term truth laplace  nuts</span></span>
+<span><span class="co">#&gt; 1 psi_(Intercept)   0.3   -0.20  5.69</span></span>
+<span><span class="co">#&gt; 2    psi_occ_cov1   1.0    0.98  5.83</span></span>
+<span><span class="co">#&gt; 3   p_(Intercept)  -1.5   -1.13 -1.76</span></span>
+<span><span class="co">#&gt; 4      p_det_cov1   0.3    0.18  0.17</span></span></code></pre></div>
 <p>The Laplace and NUTS estimates separate here in a way they did not at
 six visits and detection near 0.67. With two visits and detection below
 0.2 an occupied site is missed on both visits with probability
