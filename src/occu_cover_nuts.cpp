@@ -115,6 +115,19 @@ inline OccuCoverNutsData occu_cover_nuts_build_data(const Rcpp::List& spec) {
     d.p_det_visit= d.X_det_visit.ncol();
     d.p_pos_site = d.X_pos_site.ncol();
     d.p_pos_visit= d.X_pos_visit.ncol();
+
+    namespace sh = tulpaObs::shape;
+    sh::check_dim_arg(d.n_sites, "n_sites");
+    sh::check_dim_arg(d.max_visits, "max_visits");
+    const R_xlen_t n_rows = (R_xlen_t) d.n_sites * d.max_visits;
+    sh::check_dim(d.y, d.n_sites, d.max_visits, "y");
+    sh::check_dim(d.y_pos, d.n_sites, d.max_visits, "y_pos");
+    sh::check_dim(d.valid, d.n_sites, d.max_visits, "valid");
+    sh::check_nrow(d.X_occ, d.n_sites, "X_occ");
+    sh::check_nrow(d.X_det_site, d.n_sites, "X_det_site");
+    sh::check_nrow(d.X_pos_site, d.n_sites, "X_pos_site");
+    if (d.p_det_visit > 0) sh::check_nrow(d.X_det_visit, n_rows, "X_det_visit");
+    if (d.p_pos_visit > 0) sh::check_nrow(d.X_pos_visit, n_rows, "X_pos_visit");
     d.p_p   = d.p_det_site + d.p_det_visit;
     d.p_pos = d.p_pos_site + d.p_pos_visit;
     int base = d.p_occ + d.p_p + d.p_pos + 1;   // +1 log_dispersion

@@ -403,7 +403,7 @@
         fit <- .tobs_fit_dyn_abun_nuts_spatial(
           fit_model, spatial = spatial, temporal = temporal,
           mixture = model$mixture %||% "poisson",
-          K_max = K.max, sigma.beta = sigma.beta,
+          K_max = K.max, sigma.beta = sigma.beta, sigma.logr = sigma.logr,
           n.iter = n.iter, n.warmup = n.warmup, n.chains = n.chains,
           n.thin = n.thin, n.threads = n.threads,
           max.treedepth = max.treedepth, adapt.delta = adapt.delta,

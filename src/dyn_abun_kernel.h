@@ -41,12 +41,16 @@
 #ifndef TULPAOBS_DYN_ABUN_KERNEL_H
 #define TULPAOBS_DYN_ABUN_KERNEL_H
 
+#include "tulpa/portable_math.h"   // tulpa::math::portable_lgamma / portable_digamma
 #include <Rcpp.h>
 #include <cmath>
 #include <limits>
 #include <vector>
 
 namespace tulpaObs {
+
+using tulpa::math::portable_lgamma;
+using tulpa::math::portable_digamma;
 
 struct DynAbunSiteResult {
     double log_lik;
@@ -81,8 +85,8 @@ inline void da_obs_season_pmf(const int* y, int t, int J, int S,
         for (int j = 0; j < J; ++j) {
             const int yy = y[t * J + j];
             if (yy < 0) continue;
-            lo += R::lgammafn((double)n + 1.0) - R::lgammafn((double)yy + 1.0)
-                - R::lgammafn((double)(n - yy) + 1.0)
+            lo += portable_lgamma((double)n + 1.0) - portable_lgamma((double)yy + 1.0)
+                - portable_lgamma((double)(n - yy) + 1.0)
                 + (double)yy * logp + (double)(n - yy) * log1mp;
         }
         obs[n] = std::exp(lo);
@@ -93,7 +97,7 @@ inline void da_obs_season_pmf(const int* y, int t, int J, int S,
 inline void da_recruit_pmf(int S, double gamma, double loggam,
                            std::vector<double>& pois) {
     for (int g = 0; g < S; ++g) {
-        const double lp = -gamma + (double)g * loggam - R::lgammafn((double)g + 1.0);
+        const double lp = -gamma + (double)g * loggam - portable_lgamma((double)g + 1.0);
         pois[g] = std::exp(lp);
     }
 }
@@ -102,8 +106,8 @@ inline void da_recruit_pmf(int S, double gamma, double loggam,
 inline void da_binom_pmf_row(int n, double logom, double log1mom,
                              std::vector<double>& binom) {
     for (int s = 0; s <= n; ++s) {
-        const double lb = R::lgammafn((double)n + 1.0) - R::lgammafn((double)s + 1.0)
-            - R::lgammafn((double)(n - s) + 1.0)
+        const double lb = portable_lgamma((double)n + 1.0) - portable_lgamma((double)s + 1.0)
+            - portable_lgamma((double)(n - s) + 1.0)
             + (double)s * logom + (double)(n - s) * log1mom;
         binom[s] = std::exp(lb);
     }
@@ -191,19 +195,19 @@ inline DynAbunSiteResult compute_dyn_abun_site(
             // NB(mean = lambda, size = rr): log pi = lgamma(n+r) - lgamma(r)
             //   - lgamma(n+1) + r log(r/(r+mu)) + n log(mu/(r+mu)).
             const double rpm = rr + lambda;
-            const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
-                - R::lgammafn((double)n + 1.0)
+            const double lpn = portable_lgamma((double)n + rr) - portable_lgamma(rr)
+                - portable_lgamma((double)n + 1.0)
                 + rr * std::log(rr / rpm) + (double)n * std::log(lambda / rpm);
             pi_n = std::exp(lpn);
             // d log pi / d eta_lambda = n - mu (n+r)/(r+mu).
             dpi_l = pi_n * ((double)n - lambda * ((double)n + rr) / rpm);
             // d log pi / d log r = r [psi(n+r) - psi(r) + log(r/(r+mu)) + 1
             //   - (r+n)/(r+mu)].
-            const double dlog_dlogr = rr * (R::digamma((double)n + rr) - R::digamma(rr)
+            const double dlog_dlogr = rr * (portable_digamma((double)n + rr) - portable_digamma(rr)
                 + std::log(rr / rpm) + 1.0 - (rr + (double)n) / rpm);
             dpi_r = pi_n * dlog_dlogr;
         } else {
-            const double lpn = -lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0);
+            const double lpn = -lambda + (double)n * eta_lambda - portable_lgamma((double)n + 1.0);
             pi_n = std::exp(lpn);
             dpi_l = pi_n * ((double)n - lambda);     // d/d eta_lambda
             dpi_r = 0.0;
@@ -359,7 +363,7 @@ inline DynAbunSiteResult compute_dyn_abun_site(
 // are interval-indexed (length T-1). Poisson or NB initial abundance.
 inline double da_pois_pmf_at(int k, double rate) {
     if (rate <= 0.0) return (k == 0) ? 1.0 : 0.0;
-    return std::exp(-rate + (double)k * std::log(rate) - R::lgammafn((double)k + 1.0));
+    return std::exp(-rate + (double)k * std::log(rate) - portable_lgamma((double)k + 1.0));
 }
 
 inline double compute_dyn_abun_site_dyn(
@@ -417,12 +421,12 @@ inline double compute_dyn_abun_site_dyn(
         double pi_n;
         if (use_nb) {
             const double rpm = rr + lambda;
-            const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
-                - R::lgammafn((double)n + 1.0)
+            const double lpn = portable_lgamma((double)n + rr) - portable_lgamma(rr)
+                - portable_lgamma((double)n + 1.0)
                 + rr * std::log(rr / rpm) + (double)n * std::log(lambda / rpm);
             pi_n = std::exp(lpn);
         } else {
-            pi_n = std::exp(-lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0));
+            pi_n = std::exp(-lambda + (double)n * eta_lambda - portable_lgamma((double)n + 1.0));
         }
         a[n] = pi_n * obs[n]; c1 += a[n];
     }
@@ -536,12 +540,12 @@ inline DynAbunPCurv compute_dyn_abun_p_curv(
         double pi_n;
         if (use_nb) {
             const double rpm = rr + lambda;
-            const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
-                - R::lgammafn((double)n + 1.0)
+            const double lpn = portable_lgamma((double)n + rr) - portable_lgamma(rr)
+                - portable_lgamma((double)n + 1.0)
                 + rr * std::log(rr / rpm) + (double)n * std::log(lambda / rpm);
             pi_n = std::exp(lpn);
         } else {
-            const double lpn = -lambda + (double)n * eta_lambda - R::lgammafn((double)n + 1.0);
+            const double lpn = -lambda + (double)n * eta_lambda - portable_lgamma((double)n + 1.0);
             pi_n = std::exp(lpn);
         }
         a[n] = pi_n * obs[n]; c += a[n];

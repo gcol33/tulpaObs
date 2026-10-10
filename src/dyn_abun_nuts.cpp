@@ -1,8 +1,10 @@
 // dyn_abun_nuts.cpp
 // NUTS target for the Dail-Madsen open N-mixture family (dyn_abun()). The flat
-// coefficient vector is theta = (beta_lambda, beta_p, beta_omega, beta_gamma) and
-// the joint log-posterior is the forward marginal (dyn_abun_kernel.h) plus weak
-// Gaussian priors. The shared engine (nuts_engine.h) drives tulpa's NUTS; the R
+// coefficient vector is theta = (beta_lambda, beta_p, beta_omega, beta_gamma
+// [, log_r under NB]) and the joint log-posterior is the forward marginal
+// (dyn_abun_kernel.h) plus weak Gaussian priors: N(0, sigma_beta^2) on every
+// coefficient and N(0, sigma_logr^2) on log_r, the same split the abun / removal
+// / distance targets make (marginal_count_nuts.h). The shared engine (nuts_engine.h) drives tulpa's NUTS; the R
 // reference .tobs_dyn_abun_nuts_logpost (R/dyn_abun_nuts.R) is the oracle that
 // cpp_dyn_abun_nuts_joint_logpost is cross-checked against.
 
@@ -10,6 +12,7 @@
 #include <vector>
 #include "tobs_shape.h"
 #include "dyn_abun_kernel.h"
+#include "tobs_math.h"        // clamp_log_r
 #include "nuts_engine.h"
 #include "nuts_field_hyper.h"   // HyperFieldBlock (shared areal field)
 #include "nuts_re_block.h"      // ReBlock (shared non-centered grouped RE)
@@ -22,6 +25,7 @@ struct DynNutsModel {
     bool use_nb = false;                          // NB initial abundance
     int o_logr = -1;                             // trailing log r coord (NB only)
     double sigma_beta = 10.0;
+    double sigma_logr = 1.5;
     std::vector<int> y;                          // site-major, season, visit; -1 = NA
     Rcpp::NumericMatrix X_lambda, X_p, X_omega, X_gamma;
     // omega / gamma designs are per-site ([n_sites x p]) for constant rates or
@@ -75,7 +79,7 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
     const int o_lam = 0, o_p = p_lam, o_om = p_lam + p_p, o_gm = p_lam + p_p + p_om;
     const int nIv = m.T - 1;
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
-    const double eta_logr = m.use_nb ? theta[m.o_logr] : 0.0;
+    const double eta_logr = m.use_nb ? clamp_log_r(theta[m.o_logr]) : 0.0;
     const double sigma_re = re_block_sigma(m.re, theta);
     double grad_logr = 0.0, grad_re_logsig = 0.0;
     const bool has_field = m.field.active();
@@ -126,9 +130,11 @@ inline double dyn_nuts_eval(const DynNutsModel& m, const double* theta, double* 
     }
     if (m.use_nb) grad[m.o_logr] += grad_logr;
     const double ib2 = 1.0 / (m.sigma_beta * m.sigma_beta);
-    for (int k = 0; k < m.n_pre_re; ++k) {     // beta (+ log r) prior only
-        lp -= 0.5 * ib2 * theta[k] * theta[k];
-        grad[k] -= ib2 * theta[k];
+    const double ilr2 = 1.0 / (m.sigma_logr * m.sigma_logr);
+    for (int k = 0; k < m.n_pre_re; ++k) {     // beta prior; log r its own scale
+        const double ip = (k == m.o_logr) ? ilr2 : ib2;
+        lp -= 0.5 * ip * theta[k] * theta[k];
+        grad[k] -= ip * theta[k];
     }
     lp += re_block_backward(m.re, theta, grad_re_logsig, grad);
     lp += hyper_field_backward(m.field, theta, fstate, grad_z,
@@ -152,9 +158,10 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector theta,
-                                           double sigma_beta) {
+                                           double sigma_beta, double sigma_logr) {
     tulpaObs::DynNutsModel m = tulpaObs::dyn_nuts_build(spec);
     m.sigma_beta = sigma_beta;
+    m.sigma_logr = sigma_logr;
     if ((int) theta.size() != m.total)
         Rcpp::stop("theta length %d != expected %d", (int) theta.size(), m.total);
     Rcpp::NumericVector grad(m.total);
@@ -164,12 +171,13 @@ Rcpp::List cpp_dyn_abun_nuts_joint_logpost(Rcpp::List spec, Rcpp::NumericVector 
 
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
-                             double sigma_beta,
+                             double sigma_beta, double sigma_logr,
                              Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                              int n_iter, int n_warmup, int max_treedepth,
                              double adapt_delta, int seed, bool verbose) {
     tulpaObs::DynNutsModel m = tulpaObs::dyn_nuts_build(spec);
     m.sigma_beta = sigma_beta;
+    m.sigma_logr = sigma_logr;
     return tulpaObs::run_tulpa_nuts(&tulpaObs::dyn_nuts_full_grad, &m, m.total,
                                     theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup,
                                     max_treedepth, adapt_delta, seed, verbose);

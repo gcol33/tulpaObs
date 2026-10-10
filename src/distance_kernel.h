@@ -59,15 +59,15 @@ namespace tulpaObs {
 // term `-lgamma((N - R_i) + 1)` depends only on the offset k = N - R_i, NEVER
 // on R_i itself -- it is the SAME table for every site. Building it once per
 // fit (size K_max + 1, covering the widest range any site can need) and
-// indexing into it replaces up to n_sites * K_max redundant R::lgammafn()
-// calls per sweep with array lookups; a caller that sweeps the same K_max
-// repeatedly (a Newton iteration, a NUTS leapfrog step, an AGHQ node) builds
-// this ONCE outside its loop and passes it to every compute_distance_site()
-// call. Byte-identical to the inline computation -- same R::lgammafn(), just
+// indexing into it replaces up to n_sites * K_max redundant lgamma calls per
+// sweep with array lookups; a caller that sweeps the same K_max repeatedly (a
+// Newton iteration, a NUTS leapfrog step, an AGHQ node) builds this ONCE
+// outside its loop and passes it to every compute_distance_site() call.
+// Byte-identical to the inline computation -- same portable_lgamma(), just
 // memoized.
 inline std::vector<double> dist_build_comb_table(int K_max) {
     std::vector<double> t((std::size_t) K_max + 1);
-    for (int k = 0; k <= K_max; ++k) t[k] = -R::lgammafn((double)k + 1.0);
+    for (int k = 0; k <= K_max; ++k) t[k] = -portable_lgamma((double)k + 1.0);
     return t;
 }
 
@@ -222,7 +222,7 @@ inline DistSiteResult compute_distance_site(
     double det_const = 0.0, sum_lgam_yfact = 0.0;
     for (int b = 0; b < n_bins; ++b) {
         if (y_bins[b] > 0) det_const += (double)y_bins[b] * std::log(pi[b]);
-        sum_lgam_yfact += R::lgammafn((double)y_bins[b] + 1.0);
+        sum_lgam_yfact += portable_lgamma((double)y_bins[b] + 1.0);
     }
 
     const double lambda = std::exp(eta_lambda);
@@ -255,7 +255,7 @@ inline DistSiteResult compute_distance_site(
     double max_a = -std::numeric_limits<double>::infinity();
     for (int k = 0; k < K_grid; ++k) {
         const int N = K_lo + k;
-        const double comb = comb_table ? (*comb_table)[k] : -R::lgammafn((double)k + 1.0);
+        const double comb = comb_table ? (*comb_table)[k] : -portable_lgamma((double)k + 1.0);
         a[k] = (double)N * slope + base_const + comb;
         if (is_nb) a[k] += std::lgamma((double)N + r);
         if (a[k] > max_a) max_a = a[k];

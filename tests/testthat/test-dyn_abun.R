@@ -77,7 +77,7 @@ test_that("C++ dyn_abun NUTS log-posterior matches the R oracle byte-for-byte", 
                X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
                X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]])
   r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10)
-  c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10)
+  c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10, 1.5)
   expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9)
   expect_equal(as.numeric(c_out$grad), r_out$grad, tolerance = 1e-9)
 })
@@ -199,10 +199,16 @@ test_that("C++ dyn_abun NB NUTS log-posterior matches the R oracle byte-for-byte
                X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
                X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
                use_nb = TRUE)
-  r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10)
-  c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10)
+  # log_r carries its own prior scale, distinct from the coefficient prior.
+  r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10,
+                                                  sigma.logr = 0.7)
+  c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10, 0.7)
   expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9)
   expect_equal(as.numeric(c_out$grad), r_out$grad, tolerance = 1e-9)
+  c_flat <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10, 10)
+  expect_equal(c_out$grad[6] - c_flat$grad[6], -(1 / 0.7^2 - 1 / 10^2) * theta[6],
+               tolerance = 1e-10)
+  expect_equal(c_out$grad[1:5], c_flat$grad[1:5])
 })
 
 test_that("dyn_abun negbin Laplace recovers truth (incl dispersion)", {
@@ -246,6 +252,27 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
   expect_lt(mean(fit$nuts$divergent), 0.2)
   w <- waic(fit)
   expect_true(is.finite(w$estimates["waic", "Estimate"]))
+})
+
+test_that("dyn_abun negbin NUTS recovers truth with log_r on the sigma.logr prior", {
+  skip_on_cran()
+  skip_if_fast()
+  beta_lambda <- c(log(6), 0.4); r_true <- 3
+  sim <- simulate_dyn_abun(N = 80, T = 3, J = 3, n.abund.covs = 1,
+                           beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
+                           gamma = 1.2, mixture = "negbin", r = r_true, seed = 2)
+  fit <- tobs(formula = ~ abund_cov1, data = sim$data,
+              family = dyn_abun(K.max = 40, mixture = "negbin"),
+              detection = ~ 1, y = sim$y, method = "nuts",
+              control = list(n.iter = 250L, n.warmup = 250L, seed = 1L,
+                             sigma.logr = 1.5, verbose = FALSE))
+  expect_identical(fit$method, "nuts")
+  expect_identical(fit$nuts$sigma_logr, 1.5)
+  truth <- c(beta_lambda, qlogis(0.5), qlogis(0.6), log(1.2), log(r_true))
+  est <- as.numeric(fit$means); se <- as.numeric(fit$sds)
+  expect_true(all(abs(est - truth) / se < 4))
+  expect_lt(abs(est[6] - log(r_true)), 0.8)
+  expect_lt(mean(fit$nuts$divergent), 0.2)
 })
 
 

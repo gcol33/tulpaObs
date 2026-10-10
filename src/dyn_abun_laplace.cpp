@@ -199,8 +199,9 @@ Rcpp::List cpp_dyn_abun_init_loglik(
         for (int n = 0; n < S; ++n) {
             double pi_n, g_l = 0.0, d2log = 0.0;
             if (use_nb) {
-                const double lpn = R::lgammafn((double)n + rr) - R::lgammafn(rr)
-                    - R::lgammafn((double)n + 1.0)
+                const double lpn = tulpa::math::portable_lgamma((double)n + rr)
+                    - tulpa::math::portable_lgamma(rr)
+                    - tulpa::math::portable_lgamma((double)n + 1.0)
                     + rr * std::log(rr / rpm) + (double)n * std::log(lam / rpm);
                 pi_n = std::exp(lpn);
                 if (deriv) {
@@ -208,7 +209,7 @@ Rcpp::List cpp_dyn_abun_init_loglik(
                     d2log = -lam * ((double)n + rr) * rr / (rpm * rpm);
                 }
             } else {
-                const double lpn = -lam + (double)n * el - R::lgammafn((double)n + 1.0);
+                const double lpn = -lam + (double)n * el - tulpa::math::portable_lgamma((double)n + 1.0);
                 pi_n = std::exp(lpn);
                 if (deriv) { g_l = (double)n - lam; d2log = -lam; }
             }

@@ -73,6 +73,10 @@ inline MsOcsData ms_ocs_build_data(const List& spec) {
     d.X_p   = as<NumericMatrix>(spec["X_p"]);
     d.X_pos = as<NumericMatrix>(spec["X_pos"]);
     List yl = spec["y"], ypl = spec["y_pos"], vl = spec["valid"];
+    tulpaObs::shape::check_dim_arg(d.S, "S");
+    tulpaObs::shape::check_len(yl, d.S, "y");
+    tulpaObs::shape::check_len(ypl, d.S, "y_pos");
+    tulpaObs::shape::check_len(vl, d.S, "valid");
     d.y.reserve(d.S); d.y_pos.reserve(d.S); d.valid.reserve(d.S);
     for (int s = 0; s < d.S; ++s) {
         d.y.push_back(as<NumericMatrix>(yl[s]));
@@ -99,6 +103,29 @@ inline MsOcsData ms_ocs_build_data(const List& spec) {
         d.s = as<std::vector<double>>(spec["s"]);
     } else {
         d.field_type = 0;
+    }
+
+    namespace sh = tulpaObs::shape;
+    const int N = d.n_sites;
+    sh::check_dim_arg(N, "n_sites");
+    sh::check_dim_arg(d.max_visits, "max_visits");
+    sh::check_dim(d.X_occ, N, d.P_occ, "X_occ");
+    sh::check_dim(d.X_p, N, d.P_p, "X_p");
+    sh::check_dim(d.X_pos, N, d.P_pos, "X_pos");
+    for (int s = 0; s < d.S; ++s) {
+        sh::check_dim(d.y[s], N, d.max_visits, "y[[s]]");
+        sh::check_dim(d.y_pos[s], N, d.max_visits, "y_pos[[s]]");
+        sh::check_dim(d.valid[s], N, d.max_visits, "valid[[s]]");
+    }
+    if (d.field_type == 1) {
+        sh::check_dim(d.A, N, N, "A");
+        sh::check_len(d.deg, N, "deg");
+        sh::check_len(d.gamma, N, "gamma");
+    } else if (d.field_type == 2) {
+        sh::check_dim(d.V, N, N, "V");
+        sh::check_len(d.s, N, "s");
+    } else {
+        sh::check_dim(d.Q, N, N, "Q");
     }
     return d;
 }

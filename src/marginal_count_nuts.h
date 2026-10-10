@@ -96,7 +96,7 @@ inline double count_nuts_eval(const CountNutsData& d, const double* theta,
                               double* grad, CountKernelFn kern) {
     const int p_lam = d.p_lam, p_p = d.p_p;
     const double r = d.is_nb
-        ? std::exp(theta[p_lam + p_p])
+        ? std::exp(clamp_log_r(theta[p_lam + p_p]))
         : std::numeric_limits<double>::infinity();
     for (int j = 0; j < d.total; ++j) grad[j] = 0.0;
 

@@ -210,8 +210,12 @@
     zl <- z_s[lay$lambda]; zp <- z_s[lay$p]
     bl   <- mu[lay$lambda] + as.numeric(C_lam %*% zl)
     bp   <- mu[lay$p]      + as.numeric(C_p   %*% zp)
-    if (is_nb) { zr <- z_s[lay$logr]; r <- exp(mu[lay$logr] + C_lr * zr) }
-    else        r <- Inf
+    if (is_nb) {
+      zr <- z_s[lay$logr]
+      r  <- exp(min(mu[lay$logr] + C_lr * zr, .TOBS_LOG_R_MAX))
+    } else {
+      r <- Inf
+    }
     ev   <- margs[[s]]$eval_beta(bl, bp, r = r)
     lp   <- lp + ev$log_lik
     if (grad) {

@@ -66,6 +66,10 @@ inline CoverNutsData cover_nuts_build_data(const Rcpp::List& spec) {
     d.p_pres = d.X_pres.ncol();
     d.p_pos  = d.X_pos.ncol();
     d.total  = d.p_pres + d.p_pos + 1;
+
+    namespace sh = tulpaObs::shape;
+    sh::check_len(d.present, d.n_obs, "present");
+    sh::check_len(d.y_pos, d.n_pos, "y_pos");
     return d;
 }
 

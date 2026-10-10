@@ -100,7 +100,7 @@ inline NMixSiteResult compute_removal_site(
         sum_log_1mp += l1mp;
         const int C_le = offset[k] + y[k];          // C_{<=k} = sum_{l<=k} y_l
         det_const += (double)y[k] * lp - (double)C_le * l1mp;
-        const_log_yfact -= R::lgammafn((double)y[k] + 1.0);
+        const_log_yfact -= portable_lgamma((double)y[k] + 1.0);
         if (eta_p[k] > 0.0) p_vec[k] = 1.0 / (1.0 + std::exp(-eta_p[k]));
         else { double e = std::exp(eta_p[k]); p_vec[k] = e / (1.0 + e); }
     }
@@ -126,10 +126,10 @@ inline NMixSiteResult compute_removal_site(
         const int N = K_lo + k;
         // Combinatorial term: sum_pass lgamma(N - off + 1) - lgamma(N+1)
         //                     - sum_pass lgamma(N - off - y + 1)   (eta-independent)
-        double term = -R::lgammafn((double)N + 1.0);
+        double term = -portable_lgamma((double)N + 1.0);
         for (int j = 0; j < n_pass; ++j) {
-            term += R::lgammafn((double)(N - offset[j]) + 1.0)
-                  - R::lgammafn((double)(N - offset[j] - y[j]) + 1.0);
+            term += portable_lgamma((double)(N - offset[j]) + 1.0)
+                  - portable_lgamma((double)(N - offset[j] - y[j]) + 1.0);
         }
         a[k] = (double)N * slope + base_const + term;
         if (is_nb) a[k] += std::lgamma((double)N + r);

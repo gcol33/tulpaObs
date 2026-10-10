@@ -7,6 +7,12 @@
 # guards log-mean linear predictors on the count arms before exp().
 .TOBS_ETA_BOUND <- 30
 
+# Upper bound on a sampled log negative-binomial size before exp(); the C++ twin
+# is `kLogRMax` in src/tobs_math.h. Past it the size is indistinguishable from
+# the Poisson limit, and exp() of an unbounded log size overflows to Inf, which
+# the N-mixture kernels read as the Poisson marginal.
+.TOBS_LOG_R_MAX <- 30
+
 # Clamp a linear predictor (logit or log-mean) to [-bound, bound] before it
 # reaches plogis()/exp(). Elementwise; preserves the dim/names of `e` (pmin/pmax
 # copy the attributes of their first argument), so it is safe on vectors and

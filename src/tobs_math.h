@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <tulpa/portable_math.h>
 
 namespace tulpaObs {
 
@@ -36,6 +37,30 @@ constexpr double kExpArgBound = 700.0;
 // 0 for very negative eta, and a zero mean makes the negative-binomial score
 // r (y - m) / (r + m) evaluate at a pole.
 constexpr double kMinCountMean = 1e-10;
+
+// Upper bound on a sampled log negative-binomial size before exp(). The
+// N-mixture kernels branch on isfinite(r) to select the Poisson marginal, so an
+// unbounded log r past ~709 would turn the NB target into a Poisson one with a
+// zero dispersion gradient mid-trajectory. r = exp(30) ~ 1e13 is already
+// indistinguishable from Poisson at any count a model sees. The R twin is
+// `.TOBS_LOG_R_MAX` in R/utils_numeric.R.
+constexpr double kLogRMax = 30.0;
+
+inline double clamp_log_r(double log_r) {
+    return log_r < kLogRMax ? log_r : kLogRMax;
+}
+
+// Negative-binomial log pmf in the (mean m, size r) parameterisation of R's
+// dnbinom(mu =), written in lgamma form with the OpenMP-safe lgamma so it may be
+// evaluated on a worker thread:
+//   lgamma(y + r) - lgamma(r) - lgamma(y + 1) - r log1p(m / r)
+//   + y (log m - log(r + m)).
+// The size term goes through log1p so it keeps its accuracy as r grows past m.
+inline double nb_log_pmf(double y, double r, double m) {
+    return tulpa::math::portable_lgamma(y + r) - tulpa::math::portable_lgamma(r)
+         - tulpa::math::portable_lgamma(y + 1.0) - r * std::log1p(m / r)
+         + y * (std::log(m) - std::log(r + m));
+}
 
 // Logistic function, branch-split on the sign of `x` so the exponential is
 // always taken of a non-positive argument. This is the form R's plogis() uses,

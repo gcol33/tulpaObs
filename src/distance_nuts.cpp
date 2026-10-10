@@ -87,7 +87,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
     const double eta_b = m.hazard ? theta[idx] : 0.0;
     const int b_idx = idx; if (m.hazard) ++idx;
     const int lr_idx = idx;
-    const double r = m.is_nb ? std::exp(theta[lr_idx])
+    const double r = m.is_nb ? std::exp(clamp_log_r(theta[lr_idx]))
                              : std::numeric_limits<double>::infinity();
     for (int j = 0; j < m.total; ++j) grad[j] = 0.0;
     const double sigma_re = re_block_sigma(m.re, theta);

@@ -491,3 +491,110 @@ test_that("cpp_nmix_community_oracle bounds its species / site codes", {
   expect_error(run(X_p = matrix(1, n_obs + 1L, 1L)),
                "X_p must have 12 rows; got 13.", fixed = TRUE)
 })
+
+# --- NUTS spec builders and count ploglik entries ---------------------------
+# The sampler targets take R-shaped inputs and read them through Rcpp's
+# operator() inside the gradient; the count ploglik entries read draw columns
+# at offsets packed in R. Each is checked at the export, before any pointer.
+
+test_that("cpp_fp_occu_ploglik_batch checks its arms and site_idx", {
+  S <- 3L; n_sites <- 4L; J <- 2L
+  E <- matrix(0, S, n_sites)
+  d <- list(y = rep(c(0L, 1L), n_sites), site_idx = rep(seq_len(n_sites), each = J),
+            eta_psi = E, eta_p11 = E, eta_p10 = E, eta_b = E, n_threads = 1L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_fp_occu_ploglik_batch, d, list(...))
+
+  expect_equal(dim(run()), c(S, n_sites))
+
+  expect_error(run(eta_p11 = E[, -1, drop = FALSE]),
+               "eta_p11 must be [3 x 4]; got [3 x 3].", fixed = TRUE)
+  expect_error(run(eta_b = E[-1, , drop = FALSE]),
+               "eta_b must be [3 x 4]; got [2 x 4].", fixed = TRUE)
+  expect_error(run(site_idx = d$site_idx[-1]),
+               "site_idx must have length 8; got 7.", fixed = TRUE)
+  bad <- d$site_idx; bad[8] <- 5L
+  expect_error(run(site_idx = bad), "site_idx[8] = 5 is outside [1, 4].",
+               fixed = TRUE)
+})
+
+test_that("cpp_ms_nmix_ploglik_batch checks its draw blocks, designs and codes", {
+  n_sites <- 3L; n_species <- 2L; J <- 2L; M <- 3L
+  n_obs <- n_sites * n_species * J
+  # P = 2 (p_lam = p_p = 1, Poisson): mu [0, 2), b [2, 6), chol_lam [6, 7),
+  # chol_p [7, 8).
+  d <- list(y = rep(1L, n_obs),
+            species_idx = rep(seq_len(n_species), each = n_sites * J),
+            site_idx = rep(rep(seq_len(n_sites), each = J), times = n_species),
+            X_p = matrix(1, n_obs, 1L), X_lambda = matrix(1, n_sites, 1L),
+            draws = matrix(0, M, 8L),
+            mu_off = 0L, b_off = 2L, chol_lam_off = 6L, chol_p_off = 7L,
+            chol_logr_off = 8L, p_lam = 1L, p_p = 1L,
+            n_species = n_species, n_sites = n_sites, is_nb = FALSE,
+            K_max = 20L, n_threads = 1L)
+  run <- function(...) .shape_call(tulpaObs:::cpp_ms_nmix_ploglik_batch, d, list(...))
+
+  expect_equal(dim(run()), c(M, n_species * n_sites))
+
+  expect_error(run(draws = d$draws[, 1:7, drop = FALSE]),
+               "chol_p block [7, 8) does not fit a draw row of 7 columns.",
+               fixed = TRUE)
+  expect_error(run(is_nb = TRUE),
+               "chol_logr block [8, 9) does not fit a draw row of 8 columns.",
+               fixed = TRUE)
+  expect_error(run(X_p = matrix(1, n_obs - 1L, 1L)),
+               "X_p must be [12 x 1]; got [11 x 1].", fixed = TRUE)
+  expect_error(run(X_lambda = matrix(1, n_sites, 2L)),
+               "X_lambda must be [3 x 1]; got [3 x 2].", fixed = TRUE)
+  bad_sp <- d$species_idx; bad_sp[1] <- 3L
+  expect_error(run(species_idx = bad_sp),
+               "species_idx[1] = 3 is outside [1, 2].", fixed = TRUE)
+  expect_error(run(site_idx = d$site_idx[-1]),
+               "site_idx must have length 12; got 11.", fixed = TRUE)
+})
+
+test_that("cpp_cover_nuts_logpost relates present / y_pos to the two designs", {
+  spec <- list(pos_code = 0L, present = c(1L, 0L, 1L, 0L, 0L), y_pos = c(0.2, 0.4),
+               X_pres = matrix(1, 5L, 1L), X_pos = matrix(1, 2L, 1L))
+  run <- function(...) {
+    s <- spec; ov <- list(...); if (length(ov)) s[names(ov)] <- ov
+    tulpaObs:::cpp_cover_nuts_logpost(s, c(0, 0, 0), 5, 5)
+  }
+
+  expect_true(is.finite(run()$lp))
+
+  expect_error(run(present = spec$present[-1]),
+               "present must have length 5; got 4.", fixed = TRUE)
+  expect_error(run(y_pos = 0.2), "y_pos must have length 2; got 1.", fixed = TRUE)
+})
+
+test_that("cpp_occu_cover_nuts_joint_logpost checks the visit grid and designs", {
+  n_sites <- 4L; J <- 2L
+  spec <- list(n_sites = n_sites, max_visits = J, pos_code = 0L,
+               y = matrix(c(1L, 0L), n_sites, J),
+               y_pos = matrix(c(0.3, 0), n_sites, J),
+               valid = matrix(1L, n_sites, J),
+               X_occ = matrix(1, n_sites, 1L), X_det_site = matrix(1, n_sites, 1L),
+               X_det_visit = matrix(0, n_sites * J, 0L),
+               X_pos_site = matrix(1, n_sites, 1L),
+               X_pos_visit = matrix(0, n_sites * J, 0L))
+  run <- function(..., theta = c(0, 0, 0, 0)) {
+    s <- spec; ov <- list(...); if (length(ov)) s[names(ov)] <- ov
+    tulpaObs:::cpp_occu_cover_nuts_joint_logpost(s, theta, 5, 5)
+  }
+
+  expect_true(is.finite(run()$lp))
+
+  expect_error(run(y = matrix(0L, n_sites - 1L, J)),
+               "y must be [4 x 2]; got [3 x 2].", fixed = TRUE)
+  expect_error(run(valid = matrix(1L, n_sites, J + 1L)),
+               "valid must be [4 x 2]; got [4 x 3].", fixed = TRUE)
+  expect_error(run(y_pos = matrix(0, n_sites, J - 1L)),
+               "y_pos must be [4 x 2]; got [4 x 1].", fixed = TRUE)
+  expect_error(run(X_occ = matrix(1, n_sites + 1L, 1L)),
+               "X_occ must have 4 rows; got 5.", fixed = TRUE)
+  expect_error(run(X_det_visit = matrix(0, n_sites * J - 1L, 1L),
+                   theta = c(0, 0, 0, 0, 0)),
+               "X_det_visit must have 8 rows; got 7.", fixed = TRUE)
+  expect_error(run(max_visits = J + 1L),
+               "y must be [4 x 3]; got [4 x 2].", fixed = TRUE)
+})

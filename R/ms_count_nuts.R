@@ -53,7 +53,7 @@
 # Y[i, s] is a missing site x species observation: that (species, site) is dropped
 # from the data term (matching the Laplace-EM per-species `valid` subsets), so a
 # species keeps only its observed sites. Mirrors the C++ ms_count_nuts_eval
-# (src/ms_count_nuts.cpp) exactly, including the NA skip.
+# (src/ms_count_nuts.cpp), including the NA skip.
 .tobs_ms_count_nuts_logpost <- function(theta, X, Y, lay, priors,
                                         sigma.beta = 10, sigma.logr = 1.5,
                                         grad = TRUE) {
@@ -80,7 +80,7 @@
     eta    <- as.numeric(Xs %*% b_beta)
     if (is_nb) {
       zr  <- z_s[lay$logr]
-      r   <- exp(min(mu[lay$logr] + C_lr * zr, 30))
+      r   <- exp(min(mu[lay$logr] + C_lr * zr, .TOBS_LOG_R_MAX))
       muv <- pmax(exp(pmin(eta, 700)), 1e-10)
       lp  <- lp + sum(stats::dnbinom(ys, size = r, mu = muv, log = TRUE))
       if (grad) {
@@ -214,6 +214,7 @@
   fit    <- em$fit
   P_beta <- em$P_beta; S <- model$n_species
   Y <- matrix(as.numeric(model$y), model$n_sites, S)
+  if (!is_gauss) Y <- round(Y)
   X <- model$X
 
   lay    <- .tobs_ms_count_nuts_layout(P_beta, S, response)

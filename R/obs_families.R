@@ -1595,7 +1595,8 @@ dyn_abun <- function(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb
     replicates     = "required",
     default.engine = "laplace",
     status         = "working",
-    params         = list(K_max = K.max, mixture = mixture)
+    params         = list(K_max = K.max, mixture = mixture),
+    control.groups = "nuts_logr"
   )
 }
 
@@ -1867,7 +1868,8 @@ fp_occu <- function() {
     observation    = "multistate_detection",
     replicates     = "required",
     default.engine = "laplace",
-    status         = "working"
+    status         = "working",
+    control.groups = "nuts_logr"
   )
 }
 

@@ -15,6 +15,7 @@
 #include <vector>
 #include <cmath>
 #include "tobs_math.h"
+#include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -50,6 +51,26 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
   const int off_Lpos = off_L + S * K;
   const int off_W  = off_Lpos + (cover_factor ? S * K : 0);
   const int off_ld = off_W + N * K;
+
+  namespace sh = tulpaObs::shape;
+  sh::check_dim_arg(N, "N");
+  sh::check_dim_arg(J, "J");
+  sh::check_dim_arg(S, "S");
+  sh::check_dim_arg(K, "K");
+  sh::check_dim_arg(P_p_visit, "P_p - P_p_site");
+  sh::check_dim_arg(P_pos_visit, "P_pos - P_pos_site");
+  sh::check_ncol_min(draws, (R_xlen_t) off_ld + 1, "draws");
+  sh::check_dim(X_occ, N, P_occ, "X_occ");
+  sh::check_dim(X_det_site, N, P_p_site, "X_det_site");
+  sh::check_dim(X_pos_site, N, P_pos_site, "X_pos_site");
+  if (P_p_visit > 0)
+    sh::check_dim(X_det_visit, (R_xlen_t) N * J, P_p_visit, "X_det_visit");
+  if (P_pos_visit > 0)
+    sh::check_dim(X_pos_visit, (R_xlen_t) N * J, P_pos_visit, "X_pos_visit");
+  const R_xlen_t n_flat = (R_xlen_t) N * J * S;
+  sh::check_len(y, n_flat, "y");
+  sh::check_len(y_pos, n_flat, "y_pos");
+  sh::check_len(valid, n_flat, "valid");
 
   Rcpp::NumericMatrix out(M, (std::size_t) N * S);
   const double* pd = draws.begin();

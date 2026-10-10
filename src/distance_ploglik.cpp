@@ -56,7 +56,7 @@ Rcpp::NumericMatrix cpp_distance_ploglik_batch(
   // Shared, read-only: the K_max-indexed combinatorial table is the SAME for every
   // (site, draw), so it is built once and reused across the whole S x n_sites
   // sweep instead of every one of those calls repeating its own O(K_max) run of
-  // R::lgammafn().
+  // lgamma calls.
   const std::vector<double> comb_table = tulpaObs::dist_build_comb_table(K_max);
 
 #ifdef _OPENMP

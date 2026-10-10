@@ -129,15 +129,32 @@ inline MsOccuCoverNutsData ms_occu_cover_nuts_build_data(const Rcpp::List& spec)
     d.p_pos_site  = d.X_pos_site.ncol();
     d.p_pos_visit = d.X_pos_visit.ncol();
 
+    namespace sh = tulpaObs::shape;
+    sh::check_dim_arg(d.n_sites, "n_sites");
+    sh::check_dim_arg(d.max_visits, "max_visits");
+    sh::check_dim_arg(d.n_species, "n_species");
+    const R_xlen_t n_rows = (R_xlen_t) d.n_sites * d.max_visits;
+    sh::check_nrow(d.X_occ, d.n_sites, "X_occ");
+    sh::check_nrow(d.X_det_site, d.n_sites, "X_det_site");
+    sh::check_nrow(d.X_pos_site, d.n_sites, "X_pos_site");
+    if (d.p_det_visit > 0) sh::check_nrow(d.X_det_visit, n_rows, "X_det_visit");
+    if (d.p_pos_visit > 0) sh::check_nrow(d.X_pos_visit, n_rows, "X_pos_visit");
+
     Rcpp::List Y  = Rcpp::as<Rcpp::List>(spec["y"]);      // list of n_species
     Rcpp::List YP = Rcpp::as<Rcpp::List>(spec["y_pos"]);
     Rcpp::List V  = Rcpp::as<Rcpp::List>(spec["valid"]);
+    sh::check_len(Y, d.n_species, "y");
+    sh::check_len(YP, d.n_species, "y_pos");
+    sh::check_len(V, d.n_species, "valid");
     d.sp.reserve(d.n_species);
     for (int s = 0; s < d.n_species; ++s) {
         MsocSpec ms;
         ms.y     = Rcpp::as<IntegerMatrix>(Y[s]);
         ms.y_pos = Rcpp::as<NumericMatrix>(YP[s]);
         ms.valid = Rcpp::as<IntegerMatrix>(V[s]);
+        sh::check_dim(ms.y, d.n_sites, d.max_visits, "y[[s]]");
+        sh::check_dim(ms.y_pos, d.n_sites, d.max_visits, "y_pos[[s]]");
+        sh::check_dim(ms.valid, d.n_sites, d.max_visits, "valid[[s]]");
         d.sp.push_back(ms);
     }
     if (spec.containsElementNamed("re_disp"))

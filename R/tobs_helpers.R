@@ -539,7 +539,8 @@
   nuts_grad_threads = "n.threads.grad",
   # Prior SD on the log-dispersion (community mean mu_log_r on ms_abun /
   # ms_count / jsdm; the log-dispersion and grouped-RE log-SD on the abun /
-  # removal / distance count targets).
+  # removal / distance / dyn_abun count targets; the grouped-RE log-SD on the
+  # fp_occu target).
   nuts_logr = "sigma.logr",
   # ms_occu_cover() NUTS per-species dispersion RE (#115 B7): opt into a
   # fourth 1-D community arm on the cover log-dispersion.

@@ -1,8 +1,9 @@
 # dyn_abun_nuts.R - NUTS target for the Dail-Madsen open N-mixture family.
 #
-# Flat coefficient vector theta = (beta_lambda, beta_p, beta_omega, beta_gamma);
-# the joint log-posterior is the forward marginal (cpp_dyn_abun_total_log_lik)
-# plus weak Gaussian priors. The C++ FullGradFn (src/dyn_abun_nuts.cpp) mirrors
+# Flat coefficient vector theta = (beta_lambda, beta_p, beta_omega, beta_gamma
+# [, log_r under NB]); the joint log-posterior is the forward marginal
+# (cpp_dyn_abun_total_log_lik) plus weak Gaussian priors, N(0, sigma.beta^2) on
+# the coefficients and N(0, sigma.logr^2) on log_r. The C++ FullGradFn (src/dyn_abun_nuts.cpp) mirrors
 # this R target and is cross-checked against it.
 
 # `use_nb` appends a single trailing log r coordinate (NB initial abundance);
@@ -48,9 +49,10 @@
        use_nb = use_nb, eval_beta = eval_beta)
 }
 
-.tobs_dyn_abun_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10) {
+.tobs_dyn_abun_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10,
+                                        sigma.logr = 1.5) {
   use_nb <- isTRUE(lay$use_nb)
-  eta_logr <- if (use_nb) theta[lay$logr] else 0
+  eta_logr <- if (use_nb) min(theta[lay$logr], .TOBS_LOG_R_MAX) else 0
   ev <- marg$eval_beta(theta[lay$lambda], theta[lay$p], theta[lay$omega],
                        theta[lay$gamma], eta_logr)
   arms <- list(
@@ -65,7 +67,10 @@
     arms <- c(arms, list(list(idx = lay$logr, X = matrix(1, 1, 1),
                               grad = "grad_eta_logr")))
   }
-  .tobs_nuts_logpost_k(theta, ev, arms, lay$total, sigma.beta)
+  # Per-coordinate prior SD: sigma.beta on the coefficients, sigma.logr on log_r.
+  prior_sd <- rep(sigma.beta, lay$total)
+  if (use_nb) prior_sd[lay$logr] <- sigma.logr
+  .tobs_nuts_logpost_k(theta, ev, arms, lay$total, prior_sd)
 }
 
 
@@ -73,9 +78,8 @@
 # Front-door NUTS fitter for the open N-mixture family
 # ---------------------------------------------------------------------------
 
-# `sigma.logr` is the prior SD on the RE log-SD (the shared count-NUTS RE
-# block); the NB log r coordinate rides the coefficient prior `sigma.beta`
-# (cpp_dyn_abun_nuts takes no separate log-r scale).
+# `sigma.logr` is the prior SD on the NB log r coordinate and on the RE log-SD
+# (the shared count-NUTS RE block), as on the abun / removal / distance targets.
 .tobs_fit_dyn_abun_nuts <- function(model, sigma.beta = NULL, sigma.logr = NULL,
                                     re = NULL,
                                     n.iter = NULL, n.warmup = NULL, n.chains = NULL, n.thin = NULL,
@@ -110,7 +114,7 @@
                 T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                 X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
                 use_nb = use_nb),
-    priors = list(sigma_beta = sigma.beta),
+    priors = list(sigma_beta = sigma.beta, sigma_logr = sigma.logr),
     theta0 = warm$means, V = warm$vcov,
     nms = c(paste0("lambda_", model$process_info[[1]]$coef_names),
             paste0("p_",      model$process_info[[2]]$coef_names),

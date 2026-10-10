@@ -48,7 +48,8 @@
 #ifndef TULPAOBS_NMIX_KERNEL_H
 #define TULPAOBS_NMIX_KERNEL_H
 
-#include "tulpa/portable_math.h"   // tulpa::math::portable_digamma / portable_trigamma
+#include "tulpa/portable_math.h"   // tulpa::math::portable_lgamma / digamma / trigamma
+#include "tobs_math.h"              // clamp_log_r
 #include <Rcpp.h>
 #include <algorithm>
 #include <cmath>
@@ -56,6 +57,9 @@
 #include <vector>
 
 namespace tulpaObs {
+
+using tulpa::math::portable_lgamma;
+using tulpa::math::portable_digamma;
 
 struct NMixSiteResult {
     double log_lik;
@@ -232,14 +236,14 @@ inline NMixSiteCache nmix_precompute_site(const int* y, int n_visits, int K_max,
     c.admissible = (c.K_hi >= y_max);
     c.const_log_yfact = 0.0;
     for (int j = 0; j < n_visits; ++j)
-        c.const_log_yfact -= R::lgammafn((double)y[j] + 1.0);
+        c.const_log_yfact -= portable_lgamma((double)y[j] + 1.0);
     const int K_grid = c.admissible ? (c.K_hi - c.K_lo + 1) : 0;
     c.term_lgam.assign(K_grid, 0.0);
     for (int k = 0; k < K_grid; ++k) {
         const int N = c.K_lo + k;
-        double t = (double)(n_visits - 1) * R::lgammafn((double)N + 1.0);
+        double t = (double)(n_visits - 1) * portable_lgamma((double)N + 1.0);
         for (int j = 0; j < n_visits; ++j)
-            t -= R::lgammafn((double)(N - y[j]) + 1.0);
+            t -= portable_lgamma((double)(N - y[j]) + 1.0);
         c.term_lgam[k] = t;
     }
     return c;

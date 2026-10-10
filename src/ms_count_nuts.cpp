@@ -20,7 +20,9 @@
 // are the shared community_chol.h. An NA entry in the response matrix is a missing
 // site x species observation: it is masked out of the (species, site) data sum
 // (matching the Laplace-EM per-species valid subsets), so a species contributes
-// only its observed sites. Byte-exact vs the R oracle .tobs_ms_count_nuts_logpost.
+// only its observed sites. Agrees with the R oracle .tobs_ms_count_nuts_logpost to
+// rounding: the densities go through the OpenMP-safe lgamma / digamma / normal
+// log-density, which round differently from R's dnbinom / dnorm / digamma.
 
 #include <Rcpp.h>
 #include <vector>
@@ -168,8 +170,10 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
             b_beta[i] = v;
         }
         const double log_r_s = nb ? mu[pb] + C_lr * zr : 0.0;
-        const double r   = nb    ? std::exp(log_r_s < 30.0 ? log_r_s : 30.0) : 0.0;
+        const double r   = nb    ? std::exp(clamp_log_r(log_r_s)) : 0.0;
         const double phi = gauss ? std::exp(logphi[s] < 30.0 ? logphi[s] : 30.0) : 0.0;
+        const double sd     = gauss ? std::sqrt(phi) : 0.0;
+        const double log_sd = gauss ? std::log(sd) : 0.0;
         const double* ys = &d.y[(std::size_t) s * N];
         const double* lg = (d.family == MSC_POIS) ? &d.lgy[(std::size_t) s * N] : nullptr;
         const unsigned char* vs = &d.valid[(std::size_t) s * N];
@@ -183,14 +187,15 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
             if (nb) {
                 double m = std::exp(eta < kExpArgBound ? eta : kExpArgBound);
                 if (m < kMinCountMean) m = kMinCountMean;
-                lp_loc += R::dnbinom_mu(ys[i], r, m, 1);
+                lp_loc += nb_log_pmf(ys[i], r, m);
                 ge = r * (ys[i] - m) / (r + m);
-                const double dLL_dr = R::digamma(ys[i] + r) - R::digamma(r)
+                const double dLL_dr = tulpa::math::portable_digamma(ys[i] + r)
+                                    - tulpa::math::portable_digamma(r)
                                     + std::log(r / (r + m)) + 1.0 - (ys[i] + r) / (r + m);
                 gblr += r * dLL_dr;            // chain rule log_r -> r
             } else if (gauss) {
                 const double resid = ys[i] - eta;
-                lp_loc += R::dnorm(ys[i], eta, std::sqrt(phi), 1);
+                lp_loc += tulpa::math::portable_dnorm_log(resid / sd) - log_sd;
                 ge  = resid / phi;
                 glp += -0.5 + resid * resid / (2.0 * phi);   // d log p / d log_phi
             } else if (bern) {                 // Bernoulli (logit), jsdm()

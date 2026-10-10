@@ -12,6 +12,7 @@
 #include "nmix_kernel.h"
 #include "removal_kernel.h"
 #include "fp_occu_kernel.h"
+#include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -19,15 +20,15 @@
 using namespace Rcpp;
 
 namespace {
-// Group observation rows by 1-based site index, input order preserved.
-std::vector<std::vector<int>> group_by_site(const int* site_idx, int n_obs,
-                                            int n_sites) {
+// Group observation rows by 1-based site index, input order preserved. The
+// index vector is checked against the observation count and the site count
+// before it is read.
+std::vector<std::vector<int>> group_by_site(const Rcpp::IntegerVector& site_idx,
+                                            int n_obs, int n_sites) {
+  tulpaObs::shape::check_len(site_idx, n_obs, "site_idx");
+  tulpaObs::shape::check_index1(site_idx, n_sites, "site_idx");
   std::vector<std::vector<int>> obs(n_sites);
-  for (int o = 0; o < n_obs; ++o) {
-    int s = site_idx[o] - 1;
-    if (s < 0 || s >= n_sites) Rcpp::stop("site_idx out of range.");
-    obs[s].push_back(o);
-  }
+  for (int o = 0; o < n_obs; ++o) obs[site_idx[o] - 1].push_back(o);
   return obs;
 }
 }  // namespace
@@ -51,7 +52,7 @@ Rcpp::NumericMatrix cpp_nmix_ploglik_batch(
 
   // Group observation rows by site once (input order preserved).
   std::vector<std::vector<int>> obs_by_site =
-    group_by_site(site_idx.begin(), n_obs, n_sites);
+    group_by_site(site_idx, n_obs, n_sites);
 
   Rcpp::NumericMatrix ll(S, n_sites);
   const double* pep = eta_p.begin();       // column-major [S x n_obs]
@@ -108,7 +109,7 @@ Rcpp::NumericMatrix cpp_removal_ploglik_batch(
     Rcpp::stop("eta_p must be [S x n_obs].");
   if (r_vec.size() != S) Rcpp::stop("r_vec must be length S.");
   std::vector<std::vector<int>> obs_by_site =
-    group_by_site(site_idx.begin(), n_obs, n_sites);
+    group_by_site(site_idx, n_obs, n_sites);
   Rcpp::NumericMatrix ll(S, n_sites);
   const double* pep = eta_p.begin(); const double* pel = eta_lambda.begin();
   const int* py = y.begin(); double* pll = ll.begin();
@@ -153,8 +154,11 @@ Rcpp::NumericMatrix cpp_fp_occu_ploglik_batch(
     Rcpp::NumericMatrix eta_p10, Rcpp::NumericMatrix eta_b, int n_threads
 ) {
   const int S = eta_psi.nrow(), n_sites = eta_psi.ncol(), n_obs = y.size();
+  tulpaObs::shape::check_dim(eta_p11, S, n_sites, "eta_p11");
+  tulpaObs::shape::check_dim(eta_p10, S, n_sites, "eta_p10");
+  tulpaObs::shape::check_dim(eta_b, S, n_sites, "eta_b");
   std::vector<std::vector<int>> obs_by_site =
-    group_by_site(site_idx.begin(), n_obs, n_sites);
+    group_by_site(site_idx, n_obs, n_sites);
   Rcpp::NumericMatrix ll(S, n_sites);
   const double* ppsi = eta_psi.begin(); const double* pp11 = eta_p11.begin();
   const double* pp10 = eta_p10.begin(); const double* pb = eta_b.begin();

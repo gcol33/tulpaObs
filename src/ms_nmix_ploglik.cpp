@@ -10,6 +10,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include "nmix_kernel.h"
+#include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -55,13 +56,30 @@ Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(
   const int n_obs = y.size();
   const int P = p_lam + p_p + (is_nb ? 1 : 0);
 
+  // Every offset below is packed in R against `draws`, and the long-form
+  // indices address the (species, site) grid; both are related here before any
+  // pointer is taken.
+  namespace sh = tulpaObs::shape;
+  sh::check_dim_arg(n_species, "n_species");
+  sh::check_dim_arg(n_sites, "n_sites");
+  const R_xlen_t total = draws.ncol();
+  sh::check_block(mu_off, P, total, "mu");
+  sh::check_block(b_off, n_species * P, total, "b");
+  sh::check_block(chol_lam_off, p_lam * (p_lam + 1) / 2, total, "chol_lam");
+  sh::check_block(chol_p_off, p_p * (p_p + 1) / 2, total, "chol_p");
+  if (is_nb) sh::check_block(chol_logr_off, 1, total, "chol_logr");
+  sh::check_dim(X_p, n_obs, p_p, "X_p");
+  sh::check_dim(X_lambda, n_sites, p_lam, "X_lambda");
+  sh::check_len(species_idx, n_obs, "species_idx");
+  sh::check_len(site_idx, n_obs, "site_idx");
+  sh::check_index1(species_idx, n_species, "species_idx");
+  sh::check_index1(site_idx, n_sites, "site_idx");
+
   // Group observation rows by (species, site): obs[(s)*n_sites + site].
   std::vector<std::vector<int>> obs_by(
       (std::size_t) n_species * n_sites);
   for (int o = 0; o < n_obs; ++o) {
-    int s = species_idx[o] - 1, si = site_idx[o] - 1;
-    if (s < 0 || s >= n_species) Rcpp::stop("species_idx out of range.");
-    if (si < 0 || si >= n_sites) Rcpp::stop("site_idx out of range.");
+    const int s = species_idx[o] - 1, si = site_idx[o] - 1;
     obs_by[(std::size_t) s * n_sites + si].push_back(o);
   }
 
@@ -103,7 +121,7 @@ Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(
         for (int k = 0; k < p_lam; ++k) coef_lam[k] = dr(mu_off + k) + b_lam[k];
         for (int k = 0; k < p_p; ++k)   coef_p[k]   = dr(mu_off + p_lam + k) + b_p[k];
         double r = is_nb
-          ? std::exp(dr(mu_off + P - 1) + C_lr * dr(zb + P - 1))
+          ? std::exp(tulpaObs::clamp_log_r(dr(mu_off + P - 1) + C_lr * dr(zb + P - 1)))
           : R_PosInf;
 
         // eta_lambda over all sites (shared design).

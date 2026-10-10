@@ -30,6 +30,7 @@ test_that("community count NUTS log-posterior + gradient match the R oracle", {
       spec$logphi_mean <- pri$logphi_mean; spec$logphi_sd <- pri$logphi_sd
     }
     set.seed(seed + 100L)
+    d_lp <- 0; d_grad <- 0
     for (rep in 1:4) {
       theta <- stats::rnorm(lay$total, 0, 0.4)
       theta[lay$chol_beta] <- theta[lay$chol_beta] * 0.3   # keep the covariance sane
@@ -39,7 +40,13 @@ test_that("community count NUTS log-posterior + gradient match the R oracle", {
       cpp <- cpp_ms_count_nuts_joint_logpost(spec, theta, pri, 10, 1.5)
       expect_equal(cpp$lp, r_ora$lp, tolerance = 1e-8)
       expect_lt(max(abs(cpp$grad - r_ora$grad)), 1e-7)
+      d_lp   <- max(d_lp, abs(cpp$lp - r_ora$lp))
+      d_grad <- max(d_grad, abs(cpp$grad - r_ora$grad))
     }
+    # The C++ densities use the OpenMP-safe lgamma / digamma / normal log-density,
+    # R's dnbinom / dnorm / digamma round differently: report the gap.
+    message(sprintf("ms_count %s oracle: max |dlp| = %.3g, max |dgrad| = %.3g",
+                    response, d_lp, d_grad))
   }
   check_family("poisson",  2)
   check_family("negbin",   3)

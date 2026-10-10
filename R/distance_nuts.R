@@ -69,7 +69,7 @@
   beta_lambda <- theta[lay$lambda]
   beta_sigma  <- theta[lay$sigma]
   eta_b <- if (lay$hazard) theta[lay$log_shape] else 0
-  r     <- if (lay$is_nb)  exp(theta[lay$log_r]) else Inf
+  r     <- if (lay$is_nb)  exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
   ev <- marg$eval_beta(beta_lambda, beta_sigma, eta_b = eta_b, r = r)
 
   lp   <- ev$log_lik

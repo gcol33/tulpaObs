@@ -19,11 +19,11 @@
 # kernel return carrying `$log_lik` plus one `grad_eta_*` field per arm; `arms`
 # lists, in flat-vector order, each arm's theta `idx`, design matrix `X`, and the
 # name of its `grad` field in `eval_out`. Weak Gaussian prior N(0, sigma.beta^2)
-# on every coefficient.
+# on every coefficient; `sigma.beta` is a scalar or one SD per coordinate.
 .tobs_nuts_logpost_k <- function(theta, eval_out, arms, total, sigma.beta = 10) {
   grad <- numeric(total)
   for (a in arms) grad[a$idx] <- as.numeric(crossprod(a$X, eval_out[[a$grad]]))
   ib2 <- 1 / sigma.beta^2
-  list(lp   = eval_out$log_lik - 0.5 * ib2 * sum(theta^2),
+  list(lp   = eval_out$log_lik - 0.5 * sum(ib2 * theta^2),
        grad = grad - ib2 * theta)
 }

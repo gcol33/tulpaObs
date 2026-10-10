@@ -126,7 +126,8 @@ inline Rcpp::List run_tulpa_nuts(
     Rcpp::NumericVector lp(n_samples), ap(n_samples);
     Rcpp::IntegerVector div(n_samples), td(n_samples);
     for (int s = 0; s < n_samples; ++s) {
-        for (int j = 0; j < np; ++j) draws(s, j) = result.samples[s * np + j];
+        for (int j = 0; j < np; ++j)
+            draws(s, j) = result.samples[(std::size_t) s * np + j];
         lp[s] = result.log_prob[s]; ap[s] = result.accept_prob[s];
         div[s] = result.divergent[s]; td[s] = result.treedepth[s];
     }

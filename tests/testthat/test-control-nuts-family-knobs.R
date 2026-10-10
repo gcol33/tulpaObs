@@ -9,6 +9,8 @@ nuts_group_fitters <- c(
   abun          = ".tobs_fit_abun_nuts",
   removal       = ".tobs_fit_removal_nuts",
   distance      = ".tobs_fit_distance_nuts",
+  dyn_abun      = ".tobs_fit_dyn_abun_nuts",
+  fp_occu       = ".tobs_fit_fp_occu_nuts",
   ms_count      = ".tobs_fit_ms_count_nuts",
   jsdm          = ".tobs_fit_ms_count_nuts",
   ms_abun       = ".tobs_fit_ms_abun_nuts",
@@ -60,6 +62,13 @@ test_that("an opting family accepts its keys under nuts and not under laplace", 
   expect_error(tulpaObs:::.tobs_validate_control(
     list(sigma.logr = 1), tulpaObs:::.tobs_resolve_method("laplace", fam), fam),
     "sigma.logr")
+  for (fam in list(dyn_abun(), fp_occu())) {
+    expect_silent(tulpaObs:::.tobs_validate_control(
+      list(sigma.logr = 1), tulpaObs:::.tobs_resolve_method("nuts", fam), fam))
+    expect_error(tulpaObs:::.tobs_validate_control(
+      list(sigma.logr = 1), tulpaObs:::.tobs_resolve_method("laplace", fam), fam),
+      "sigma.logr")
+  }
   fam_oc <- ms_occu_cover("beta")
   expect_silent(tulpaObs:::.tobs_validate_control(
     list(dispersion.re = TRUE, sigma.ld.init = 0.3),

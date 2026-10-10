@@ -169,12 +169,12 @@ cpp_dyn_abun_p_loglik <- function(y, n_sites, T, J, K, site, eta_lambda, eta_p, 
     .Call(`_tulpaObs_cpp_dyn_abun_p_loglik`, y, n_sites, T, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, deriv)
 }
 
-cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
-    .Call(`_tulpaObs_cpp_dyn_abun_nuts_joint_logpost`, spec, theta, sigma_beta)
+cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logr) {
+    .Call(`_tulpaObs_cpp_dyn_abun_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logr)
 }
 
-cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
+    .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
 cpp_dyn_abun_ploglik_batch <- function(y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads) {

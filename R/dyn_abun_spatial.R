@@ -120,6 +120,7 @@
 .tobs_fit_dyn_abun_nuts_spatial <- function(model, spatial = NULL, temporal = NULL,
                                             mixture = "poisson",
                                             K_max = NULL, sigma.beta = NULL,
+                                            sigma.logr = NULL,
                                             n.iter = NULL, n.warmup = NULL,
                                             n.chains = NULL, n.thin = NULL,
                                             n.threads = NULL, max.treedepth = NULL,
@@ -207,7 +208,7 @@
 
   run_chain <- function(ch)
     cpp_dyn_abun_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
-                      inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
+                      sigma_logr = sigma.logr, inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
                       n_warmup = as.integer(n.warmup),
                       max_treedepth = as.integer(max.treedepth),
                       adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),

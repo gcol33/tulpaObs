@@ -313,7 +313,7 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
             b_p[i] = v;
         }
         const double b_lr = nb ? C_lr * zr : 0.0;
-        const double r = nb ? std::exp(mu[p_lam + p_p] + b_lr)
+        const double r = nb ? std::exp(clamp_log_r(mu[p_lam + p_p] + b_lr))
                             : std::numeric_limits<double>::infinity();
         double* gmu_loc = &gmu_s[(std::size_t) s * P];
         double lp_loc = 0.0, gblr = 0.0;

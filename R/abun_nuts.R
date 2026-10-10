@@ -58,7 +58,7 @@
                                     sigma.beta = 10, sigma.logr = 1.5) {
   beta_lambda <- theta[lay$lambda]
   beta_p      <- theta[lay$p]
-  r <- if (lay$is_nb) exp(theta[lay$log_r]) else Inf
+  r <- if (lay$is_nb) exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
   ev <- marg$eval_beta(beta_lambda, beta_p, r = r)
 
   lp   <- ev$log_lik
