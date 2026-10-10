@@ -106,6 +106,12 @@ the rest of `control`. The old spellings are gone, not aliased (#406).
 * WAIC / LOO / CPO on a beta `occu_multiscale_cover()` fit score the cover
   density the fit uses. A different clamp in the scoring kernel put pointwise
   values up to 213 log units off the fitted density (#410).
+* WAIC / LOO / CPO on a `cover()` fit evaluate the positive-arm density
+  through tulpa's own per-observation kernel (`tulpa/family_density.h`), so
+  the lognormal, gaussian and beta arms score the function the fit maximised.
+  The beta arm now holds `mu` inside the fit's `[1e-15, 1 - 1e-15]`; values
+  move only where `|eta| > 34.5` on the positive arm (gcol33/tulpa#950).
+  Requires tulpa >= 0.7.2.
 * `dyn_abun()` pairs a field with its engine like `removal()`, `distance()`
   and `fp_occu()`: an areal or `temporal()` term under `method = "laplace"`
   errors, as does `method = "nested_laplace"` with no structured term. Both

@@ -61,7 +61,9 @@
       zu <- (bounds$upper[j] - eta_pos[, j]) / sd_disp
       dens <- log(pmax(stats::pnorm(zu) - stats::pnorm(zl), 1e-300))
     } else {
-      mu   <- stats::plogis(eta_pos[, j])
+      # mu is held inside [1e-15, 1 - 1e-15], the floor the engine's beta fit
+      # applies before evaluating the density.
+      mu   <- pmin(pmax(stats::plogis(eta_pos[, j]), 1e-15), 1 - 1e-15)
       dens <- stats::dbeta(y_pos[j], mu * sd_disp, (1 - mu) * sd_disp,
                            log = TRUE)
     }
@@ -296,7 +298,7 @@
 # Parallel C++ pointwise log-likelihood for the cover() hurdle, over draws
 # (cpp_cover_hurdle_ploglik). Mirrors .tobs_cover_hurdle_ll (the R oracle, kept
 # for the posterior-mean plug-in and the tests); every positive family routes
-# through the one kernel. The absent/present split and the four family densities
+# through the one kernel. The absent/present split and the five family densities
 # match the R kernel, so the two agree to libm rounding.
 .cover_hurdle_ploglik_core <- function(eta_occ, eta_pos, disp, occur, y_pos,
                                        idx_pos, positive, bounds = NULL,

@@ -1,23 +1,29 @@
 // cover_hurdle_ploglik.cpp
 // Parallel pointwise log-likelihood for the cover() hurdle fit (the standalone
 // two-part cover model), the WAIC / PSIS-LOO / stacking input. The R reference
-// is .tobs_cover_hurdle_ll (R/family_cover_hurdle.R); this port mirrors it draw
+// is .tobs_cover_hurdle_ll (R/cover_hurdle_diag.R); this port mirrors it draw
 // for draw and is cross-checked byte-close against it (test-cover-ploglik-cpp.R).
 //
 // Per observation the latent occurrence is a hurdle: absent sites (occur = 0)
 // score log(1 - p); present sites (occur = 1) score log p + the positive-arm
-// density of the observed cover at that draw's cover predictor. The four
-// positive families mirror the R kernel exactly:
+// density of the observed cover at that draw's cover predictor. The lognormal,
+// gaussian and beta arms evaluate the engine's own per-observation density
+// (tulpa/family_density.h), the function the positive-arm fit maximised:
 //   lognormal        dnorm(logy, eta, sigma) - logy         (log-cover + Jacobian)
 //   lognormal_trunc  the above - log Phi((u - eta)/sigma)   (upper-truncated)
 //   ordinal          log( Phi(zu) - Phi(zl) )               (interval class mass)
-//   beta             dbeta(y, mu phi, (1 - mu) phi)         (mu = plogis(eta))
+//   gaussian         dnorm(y, eta, sigma)                   (raw response)
+//   beta             dbeta(y, mu phi, (1 - mu) phi)         (mu = plogis(eta),
+//                                                            clamped to the fit's
+//                                                            [1e-15, 1 - 1e-15])
 // Each draw's [N] row is independent, so the draw loop parallelises with no
 // shared writes -- the axis WAIC scales on (n.draws x N).
+// Family codes: 0 lognormal, 1 lognormal_trunc, 2 ordinal, 3 beta, 4 gaussian.
 
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
+#include <tulpa/family_density.h>
 #include "cover_hurdle_shape.h"
 #include "tobs_math.h"
 #ifdef _OPENMP
@@ -27,17 +33,6 @@
 using namespace Rcpp;
 using tulpaObs::log_plogis;
 using tulpaObs::log_1m_plogis;
-
-namespace {
-
-// Gaussian log-density N(mean, sd^2) at x, off the engine's standard-normal
-// log-density.
-inline double dnorm_log(double x, double mean, double sd) {
-  return tulpa::math::portable_dnorm_log((x - mean) / sd) - std::log(sd);
-}
-
-// Family codes: 0 lognormal, 1 lognormal_trunc, 2 ordinal, 3 beta.
-}  // namespace
 
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
@@ -88,10 +83,10 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
       double dens;
       switch (positive) {
         case 0:  // lognormal (y is log-cover)
-          dens = dnorm_log(y, e, sd) - y;
+          dens = tulpa::log_lik_lognormal_logy(y, e, sd);
           break;
         case 1:  // lognormal_trunc
-          dens = dnorm_log(y, e, sd) - y
+          dens = tulpa::log_lik_lognormal_logy(y, e, sd)
                  - tulpa::math::portable_pnorm_log((ptu[j] - e) / sd);
           break;
         case 2: { // ordinal interval class mass
@@ -102,16 +97,11 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
           break;
         }
         case 4:  // identity-Gaussian (y is the raw response, no Jacobian)
-          dens = dnorm_log(y, e, sd);
+          dens = tulpa::log_lik_gaussian(y, e, sd);
           break;
-        default: { // beta
-          double mu = tulpa::math::inv_logit(e);
-          double a  = mu * sd;
-          double b  = (1.0 - mu) * sd;
-          dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
-                 (a - 1.0) * std::log(y) + (b - 1.0) * std::log(1.0 - y);
+        default:  // beta
+          dens = tulpa::log_lik_beta_logit(y, e, sd);
           break;
-        }
       }
       pll[(std::size_t) i * S + d] = log_plogis(eo) + dens;
     }
