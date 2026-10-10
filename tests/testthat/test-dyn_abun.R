@@ -641,3 +641,40 @@ test_that("dyn_abun() NUTS + temporal + areal errors (temporal-only under NUTS, 
     "temporal"
   )
 })
+
+test_that("dyn_abun() pairs a field with nested_laplace and zip rejects svc() (#412)", {
+  sim <- simulate_dyn_abun(N = 25, T = 2, J = 3, n.abund.covs = 1,
+                           beta.lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
+                           gamma = 1.2, seed = 14)
+  adj <- matrix(0L, 25, 25)
+  for (i in 1:25) for (j in 1:25) {
+    ri <- (i - 1) %/% 5; ci <- (i - 1) %% 5
+    rj <- (j - 1) %/% 5; cj <- (j - 1) %% 5
+    if (abs(ri - rj) + abs(ci - cj) == 1L) adj[i, j] <- 1L
+  }
+  ctl <- list(verbose = FALSE, progress = FALSE)
+  expect_error(
+    tobs(~ abund_cov1 + icar(graph = adj), data = sim$data, detection = ~ 1,
+         y = sim$y, family = dyn_abun(K.max = 12), method = "laplace",
+         control = ctl),
+    "needs method = \"nested_laplace\"")
+  expect_error(
+    tobs(~ abund_cov1, data = sim$data, detection = ~ 1, y = sim$y,
+         family = dyn_abun(K.max = 12), method = "nested_laplace",
+         control = ctl),
+    "needs a spatial() / temporal() / svc() term", fixed = TRUE)
+  expect_error(
+    tobs(~ abund_cov1, data = sim$data, detection = ~ 1, y = sim$y,
+         family = dyn_abun(mixture = "zip", K.max = 12),
+         method = "nested_laplace", control = ctl),
+    "needs a spatial() / temporal() / svc() term", fixed = TRUE)
+  dat <- sim$data
+  dat$lon <- stats::runif(nrow(dat)); dat$lat <- stats::runif(nrow(dat))
+  expect_error(
+    tobs(~ 1 + abund_cov1 + svc(lon, lat, indices = 1, nn = 8,
+                                prior.range = c(0.3, 0.5)),
+         data = dat, detection = ~ 1, y = sim$y,
+         family = dyn_abun(mixture = "zip", K.max = 12), method = "laplace",
+         control = ctl),
+    "an svc() surface", fixed = TRUE)
+})

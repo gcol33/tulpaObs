@@ -196,9 +196,11 @@
 .tobs_dyn_abun_route <- function(model, structs, method) {
   if (!model$mixture %in% c("zip", "zinb")) return(NULL)
   if (!is.null(structs$spatial) || !is.null(structs$temporal) ||
-      !is.null(structs$re) || identical(method, "nuts")) {
+      !is.null(structs$svc) || !is.null(structs$re) ||
+      identical(method, "nuts")) {
     stop("Zero-inflated open N-mixture (zip / zinb) does not yet compose ",
-         "with a spatial field, a temporal term, a random effect, or NUTS; ",
+         "with a spatial field, a temporal term, an svc() surface, a random ",
+         "effect, or NUTS; ",
          "use mixture = \"poisson\" / \"negbin\" for those, or drop the term.",
          call. = FALSE)
   }
@@ -236,9 +238,9 @@
 # ZI logit is named `zi_logit` (NOT `omega_*`, which is dyn_abun's SURVIVAL arm).
 #
 # Scope: non-spatial laplace only, intercept-only omega. An areal field, a
-# grouped RE, and a NUTS path stay Poisson / negbin (rejected by
-# .tobs_dyn_abun_route() with a pointer); the additive marginal + its gradient
-# are the layer those would share.
+# temporal or svc() term, a grouped RE, and a NUTS path stay Poisson / negbin
+# (rejected by .tobs_dyn_abun_route() with a pointer); the additive marginal +
+# its gradient are the layer those would share.
 .tobs_fit_dyn_abun_zip <- function(model, max_iter = 300L, tol = 1e-8,
                                    verbose = TRUE, ...) {
   is_nb <- identical(model$mixture, "zinb")

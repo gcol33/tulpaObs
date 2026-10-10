@@ -92,7 +92,7 @@
 
   dyn_abun = list(
     family = "dyn_abun", structured = c("spatial", "temporal", "svc"),
-    field_terms = NULL, temporal_arm = "initial-abundance",
+    field_terms = c("spatial", "temporal"), temporal_arm = "initial-abundance",
     select = ".tobs_dyn_abun_route",
     routes = list(
       plain = list(fit = ".tobs_fit_dyn_abun", max.iter = 300L, tol = 1e-8),
@@ -119,13 +119,12 @@
 
 
 # Pick the route of one count-family fit. The family hook runs first; then the
-# shared gates, each parameterised by the row; then the route follows from
+# shared gates, each parameterised by the row, which hold on a route the hook
+# chose as well; then the hook's route, else the route that follows from
 # whether a structured term is present, the engine, and a random effect.
 .tobs_count_route <- function(row, model, structs, method) {
-  if (!is.null(row$select)) {
-    route <- get(row$select, envir = topenv(), mode = "function")(
-      model, structs, method)
-    if (!is.null(route)) return(route)
+  hook_route <- if (!is.null(row$select)) {
+    get(row$select, envir = topenv(), mode = "function")(model, structs, method)
   }
   present <- function(slots) {
     any(!vapply(structs[slots], is.null, logical(1)))
@@ -141,6 +140,7 @@
                              family = row$family,
                              has_svc = !is.null(structs$svc))
   }
+  if (!is.null(hook_route)) return(hook_route)
   routes <- names(row$routes)
   nuts <- identical(method, "nuts")
   if (present(row$structured)) {
