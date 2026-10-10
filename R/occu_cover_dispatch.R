@@ -812,6 +812,17 @@
       }
       model$re_psi <- re_spec
     }
+    # A temporal() term on the occurrence formula: one psi-arm temporal block,
+    # its time codes one per occupancy unit (site), like the psi random
+    # intercept's grouping.
+    temporal_spec <- spatial_info$temporal
+    if (!is.null(temporal_spec) &&
+        length(temporal_spec$spec$time_idx) != model$n_sites) {
+      stop(sprintf(paste0(
+        "occu_cover(): the temporal() term has %d time codes but there are %d ",
+        "occupancy units (sites)."),
+        length(temporal_spec$spec$time_idx), model$n_sites), call. = FALSE)
+    }
 
     # The 3-arm nested-Laplace fit via tulpa's cell_coupling spec: outer-grid
     # integration over (sigma, alpha [, sigma_trend, alpha_trend]) with the
@@ -819,7 +830,8 @@
     # the coupling lives in the positive formula via share().
     correlated <- isTRUE(spatial_info$correlated)
     fit_args <- c(list(model = model, fields = fields, priors = priors,
-                       re_spec = re_spec, correlated = correlated,
+                       re_spec = re_spec, temporal_spec = temporal_spec,
+                       correlated = correlated,
                        pos_armspec = spatial_info$armspec[["pos"]],
                        det_armspec = spatial_info$armspec[["p"]]),
                   control)

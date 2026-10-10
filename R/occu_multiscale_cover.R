@@ -629,6 +629,11 @@
       "INDEPENDENT spelling `||` (or the two-term areal form) here."),
       call. = FALSE)
   }
+  if (!is.null(spatial_info$temporal)) {
+    stop("occu_multiscale_cover(): a temporal() term on the state formula is ",
+         "not carried by the multiscale route; it is fitted on psi by ",
+         "occu_cover(method = \"nested_laplace\").", call. = FALSE)
+  }
   gv <- spatial_info$group_var
   if (is.null(gv)) {
     stop("occu_multiscale_cover() requires group.var on the icar()/bym2() ",

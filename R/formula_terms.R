@@ -423,6 +423,7 @@
   tcodes <- .tobs_index_codes(time, "temporal", "time")
   spec <- list(
     type = type, time_idx = tcodes$idx, n_times = tcodes$n,
+    levels = tcodes$levels,
     cyclic = cyclic, tau_shape = tau.shape, tau_rate = tau.rate
   )
   if (!is.null(group)) {

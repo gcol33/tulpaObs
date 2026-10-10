@@ -148,7 +148,8 @@ test_that("cover() multi-block temporal blocks declare every defaulted axis", {
   ar1 <- tulpaObs:::.cover_temporal_block(.agp_temporal("ar1"), idx_pos, list())
   expect_true(tulpa::is_auto_grid(ar1$tau_grid))
   expect_true(tulpa::is_auto_grid(ar1$rho_grid))
-  expect_equal(ar1$tau_grid, c(1, 4, 16), ignore_attr = TRUE)
+  expect_equal(sort(unique(ar1$tau_grid)), c(1, 4, 16), ignore_attr = TRUE)
+  expect_equal(length(ar1$tau_grid), length(ar1$rho_grid))
 
   # Provenance is per axis: pinning the precision leaves the correlation ours.
   mixed <- tulpaObs:::.cover_temporal_block(

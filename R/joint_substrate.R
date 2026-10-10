@@ -1040,6 +1040,7 @@
         }
       }
       list(arm = r$arm, var = r$var, levels = r$levels,
+           kind = r$kind %||% "re", site_codes = r$site_codes,
            n_coefs = nc, n_groups = ng,
            coef_names = r$coef_names,
            covariate_names = r$covariate_names,

@@ -258,26 +258,31 @@
   rd[vapply(rd, function(r) r$arm %in% c("p", "pos"), logical(1))]
 }
 
-# Per-site offset [n_sites x S] of the occupancy-arm random effect, or NULL when
-# the fit carries none. The grouping is one code per occupancy unit
-# (`model$re_psi$group_idx`, the codes the fit ran on), so each site reads its
-# own group's deviation from the per-term draws; a 0 code carries no level and
-# contributes nothing. The term rides the occupancy arm alone -- no copy onto
-# the cover arm -- so the offset joins `field_occ`, which every kernel already
-# adds to the occupancy predictor.
+# Per-site offset [n_sites x S] of the occupancy-arm terms -- the random
+# intercept and the temporal() effect -- or NULL when the fit carries none. Each
+# term's codes are one per occupancy unit (its own `site_codes`, the codes the
+# fit ran on; a fit whose term predates them reads the random intercept's
+# `model$re_psi$group_idx`), so each site reads its own level's deviation from
+# the per-term draws; a 0 code carries no level and contributes nothing. The
+# terms ride the occupancy arm alone -- no copy onto the cover arm -- so the
+# offset joins `field_occ`, which every kernel already adds to the occupancy
+# predictor.
 .occu_cover_re_site_offset <- function(model, re_draws, n_sites, S) {
   terms <- Filter(function(r) identical(r$arm, "psi"), re_draws %||% list())
   if (!length(terms)) return(NULL)
-  codes <- as.integer(model$re_psi$group_idx %||% integer(0))
-  if (length(codes) != n_sites) {
-    stop("occu_cover diagnostics: the fit carries an occupancy-arm random ",
-         "effect but no per-site grouping to place it on (expected ", n_sites,
-         " group codes on the model, got ", length(codes), ").", call. = FALSE)
-  }
-  M  <- matrix(0, n_sites, S)
-  ok <- which(codes > 0L)
-  if (!length(ok)) return(M)
+  M <- matrix(0, n_sites, S)
   for (rd in terms) {
+    codes <- as.integer(rd$site_codes %||% model$re_psi$group_idx %||%
+                          integer(0))
+    if (length(codes) != n_sites) {
+      stop("occu_cover diagnostics: the fit carries an occupancy-arm ",
+           if (identical(rd$kind, "temporal")) "temporal effect" else
+             "random effect",
+           " but no per-site codes to place it on (expected ", n_sites,
+           " codes, got ", length(codes), ").", call. = FALSE)
+    }
+    ok <- which(codes > 0L)
+    if (!length(ok)) next
     M[ok, ] <- M[ok, ] + t(rd$draws[seq_len(S), codes[ok], drop = FALSE])
   }
   M

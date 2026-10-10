@@ -97,10 +97,20 @@
 # `newdata` without the grouping column shrinks that term to the population mean
 # (offset 0). The draws come from the grid-integrated posterior so the offset is
 # marginalised over the joint, not a plug-in of the BLUP mean.
+#
+# A temporal() term is the exception: its levels are the fitted time levels and
+# its effect is part of psi at every one of them, so a `newdata` that does not
+# state the level (no column, or a value off the fitted levels) is an error
+# rather than a shrink to 0.
 .occu_cover_re_offset <- function(bundle, arm, nd, n_rows, n_draws) {
   off   <- matrix(0, n_rows, n_draws)
   terms <- Filter(function(r) identical(r$arm, arm), bundle$re %||% list())
   for (re in terms) {
+    if (identical(re$kind, "temporal")) {
+      codes <- .occu_cover_temporal_codes(re, nd)
+      off <- off + t(re$draws[, codes, drop = FALSE])
+      next
+    }
     if (is.null(re$var) || !(re$var %in% names(nd))) next
     codes <- match(as.character(nd[[re$var]]), re$levels)
     seen  <- which(!is.na(codes))
@@ -126,6 +136,76 @@
     }
   }
   off
+}
+
+# The fitted time level of every `newdata` row for a temporal() term: the row's
+# value of the term's time variable matched against the fitted levels, numerically
+# (to a relative 1e-8) when both are numbers, so a time recomputed from the same
+# data matches the level the fit coded it as.
+.occu_cover_temporal_codes <- function(re, nd) {
+  var <- re$var
+  if (is.null(var) || !(var %in% names(nd))) {
+    stop("predict(): this fit carries a temporal() effect on psi over `",
+         var %||% "<time>", "`, so `newdata` needs that column, holding one of ",
+         "the fitted time levels on every row.", call. = FALSE)
+  }
+  v   <- nd[[var]]
+  lev <- re$levels
+  lev_num <- suppressWarnings(as.numeric(lev))
+  codes <- if (is.numeric(v) && !anyNA(lev_num)) {
+    vapply(as.numeric(v), function(x) {
+      hit <- which(abs(lev_num - x) <= 1e-8 * max(1, abs(x)))
+      if (length(hit)) hit[1L] else NA_integer_
+    }, integer(1))
+  } else {
+    match(as.character(v), lev)
+  }
+  if (anyNA(codes)) {
+    bad <- unique(v[is.na(codes)])
+    stop("predict(): `", var, "` = ", paste(utils::head(bad, 5L), collapse = ", "),
+         " is not a fitted level of the temporal() term (levels ",
+         paste(lev, collapse = ", "), "). The temporal effect is estimated at ",
+         "the fitted levels only.", call. = FALSE)
+  }
+  codes
+}
+
+# The prediction frames of a trajectory or change map move the time covariate
+# `time_col`. A fit whose temporal() term is indexed by a different column (a
+# trajectory over `time.sc` on a term over `yr.interval`) moves that column with
+# it, through the one-to-one pairing of the two columns in the fitted data, so
+# psi at each frame carries the temporal level of that frame's time. A time with
+# no fitted pair, or a pairing that is not one-to-one, is an error.
+.occu_cover_temporal_frames <- function(object, nds, times, time_col) {
+  tre <- Filter(function(r) identical(r$kind, "temporal"), object$re %||% list())
+  if (!length(tre)) return(nds)
+  tvar <- tre[[1L]]$var
+  if (is.null(tvar) || identical(tvar, time_col)) return(nds)
+  dat <- object$model$data
+  if (is.null(dat) || !all(c(tvar, time_col) %in% names(dat))) {
+    stop("predict(): the temporal() term is indexed by `", tvar, "` while the ",
+         "frames move `", time_col, "`, and the fitted data do not carry both ",
+         "columns to pair them. Pass time.col = \"", tvar, "\" with `times` ",
+         "on that column.", call. = FALSE)
+  }
+  pairs <- unique(data.frame(t = as.numeric(dat[[time_col]]),
+                             l = dat[[tvar]]))
+  if (anyDuplicated(pairs$t) || anyDuplicated(pairs$l)) {
+    stop("predict(): `", time_col, "` and the temporal() term's `", tvar,
+         "` are not one-to-one in the fitted data, so a frame's time does not ",
+         "name one temporal level. Pass time.col = \"", tvar, "\".",
+         call. = FALSE)
+  }
+  Map(function(nd, tk) {
+    hit <- which(abs(pairs$t - tk) <= 1e-8 * max(1, abs(tk)))
+    if (!length(hit)) {
+      stop("predict(): ", time_col, " = ", tk, " is not a fitted time, so it ",
+           "has no level of the temporal() term over `", tvar, "`. The temporal ",
+           "effect is estimated at the fitted times only.", call. = FALSE)
+    }
+    nd[[tvar]] <- rep(pairs$l[hit[1L]], nrow(nd))
+    nd
+  }, nds, times)
 }
 
 # Cover mean on the natural scale from the cover linear predictor `eta_pos`
@@ -398,7 +478,8 @@
     stop("predict(): `time.col = \"", time_col, "\"` is not a column of ",
          "`newdata`.", call. = FALSE)
   }
-  lapply(times, function(tk) { nd <- newdata; nd[[time_col]] <- tk; nd })
+  nds <- lapply(times, function(tk) { nd <- newdata; nd[[time_col]] <- tk; nd })
+  .occu_cover_temporal_frames(object, nds, times, time_col)
 }
 
 # Monte Carlo precision of draw-based quantiles. A sample quantile at

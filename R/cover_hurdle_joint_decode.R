@@ -424,19 +424,45 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
   # Index codes resolved when the temporal() term was constructed (against
   # the same NA-dropped observations these arms use).
   t_full <- as.integer(temporal$time_idx)
-  t_pos  <- t_full[idx_pos]
-  n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times) else max(t_full)
-  type <- temporal$type
+  .tobs_temporal_block(temporal, list(t_full, t_full[idx_pos]), control)
+}
 
+# One temporal prior block for tulpa's multi-block joint driver. `arm_idx` is the
+# per-arm list of 1-based time codes, one vector per response arm in the driver's
+# arm order; a 0 code is the engine's "this row does not reach the block"
+# sentinel, so an arm the term does not act on carries zeros. The time-index
+# field is `temporal_idx` for the structured types (RW1 / RW2 / AR1) and
+# `obs_idx` for the exchangeable `iid` type, whose block is an iid group effect
+# over the time levels. Each hyperparameter axis comes from its `control$*` key
+# or the package default, keeping the default's auto-grid mark.
+.tobs_temporal_block <- function(temporal, arm_idx, control) {
+  idx  <- lapply(arm_idx, as.integer)
+  n_t  <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+          else max(unlist(idx))
+  type <- temporal$type
+  tau_grid <- function() .tobs_num_auto(control$tau.temporal.grid %||%
+                                          .tobs_default_temporal_tau_grid())
   if (type == "ar1") {
+    # The block's precision and correlation are PAIRED cells on the engine side
+    # (the i-th entries form one cell), so two multi-node axes are laid out as
+    # their tensor, each column carrying its own axis's provenance.
+    tau <- tau_grid()
+    rho <- .tobs_num_auto(control$rho.temporal.grid %||%
+                            .tobs_default_temporal_rho_grid())
+    if (length(tau) > 1L && length(rho) > 1L) {
+      cells <- expand.grid(tau = as.numeric(tau), rho = as.numeric(rho),
+                           KEEP.OUT.ATTRS = FALSE)
+      tau <- .tobs_mark_auto(cells$tau, tulpa::is_auto_grid(tau),
+                             place = tulpa::auto_grid_place(tau))
+      rho <- .tobs_mark_auto(cells$rho, tulpa::is_auto_grid(rho),
+                             place = tulpa::auto_grid_place(rho))
+    }
     list(
       type         = "ar1",
       n_times      = as.integer(n_t),
-      tau_grid     = .tobs_num_auto(control$tau.temporal.grid %||%
-                                      .tobs_default_temporal_tau_grid()),
-      rho_grid     = .tobs_num_auto(control$rho.temporal.grid %||%
-                                      .tobs_default_temporal_rho_grid()),
-      temporal_idx = list(as.integer(t_full), as.integer(t_pos))
+      tau_grid     = tau,
+      rho_grid     = rho,
+      temporal_idx = idx
     )
   } else if (type == "iid") {
     list(
@@ -444,15 +470,15 @@ decode_cover_hurdle_joint <- function(fits, enc, family,
       n_units    = as.integer(n_t),
       sigma_grid = .tobs_num_auto(control$sigma.temporal.grid %||%
                                     .tobs_default_temporal_sigma_grid()),
-      obs_idx    = list(as.integer(t_full), as.integer(t_pos))
+      obs_idx    = idx
     )
   } else if (type %in% c("rw1", "rw2")) {
     list(
       type         = type,
       n_times      = as.integer(n_t),
-      tau_grid     = .tobs_num_auto(control$tau.temporal.grid %||%
-                                      .tobs_default_temporal_tau_grid()),
-      temporal_idx = list(as.integer(t_full), as.integer(t_pos))
+      cyclic       = isTRUE(temporal$cyclic),
+      tau_grid     = tau_grid(),
+      temporal_idx = idx
     )
   } else {
     stop(sprintf("Unsupported tobs_temporal$type: '%s'", type),

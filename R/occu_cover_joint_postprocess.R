@@ -32,9 +32,11 @@
 .occu_cover_re_sigma_names <- function(re_descs) {
   if (!length(re_descs)) return(character(0))
   base <- c(psi = "sigma_re", p = "sigma_re_p", pos = "sigma_re_pos")
+  temporal <- .occu_cover_desc_is_temporal(re_descs)
   arms <- vapply(re_descs, `[[`, character(1), "arm")
-  counts <- table(arms)
+  counts <- table(arms[!temporal])
   vapply(seq_along(re_descs), function(i) {
+    if (temporal[i]) return("sigma_temporal")
     arm <- re_descs[[i]]$arm
     nm  <- base[[arm]]
     if (counts[[arm]] > 1L) {
@@ -49,11 +51,20 @@
 # lone term on an arm is keyed by the arm ("psi" / "p" / "pos"), crossed / nested
 # terms sharing an arm by "<arm>:<var>". ranef() stacks the list and predict()
 # sums every term on the arm it predicts, so both read these keys.
-.occu_cover_re_keys <- function(arms, vars) {
-  counts <- table(arms)
+.occu_cover_re_keys <- function(arms, vars, temporal = logical(length(arms))) {
+  counts <- table(arms[!temporal])
   vapply(seq_along(arms), function(i)
-    if (counts[[arms[[i]]]] > 1L) paste0(arms[[i]], ":", vars[[i]])
+    if (temporal[i]) "temporal"
+    else if (counts[[arms[[i]]]] > 1L) paste0(arms[[i]], ":", vars[[i]])
     else arms[[i]], character(1))
+}
+
+# Which descriptors (RE terms and the psi temporal term share one list) are the
+# temporal() term. The temporal term is reported under its own names
+# (`sigma_temporal`, `rho_temporal`, the `fit$re$temporal` entry), apart from the
+# random-effect naming of its arm.
+.occu_cover_desc_is_temporal <- function(descs) {
+  vapply(descs, function(d) identical(d$kind, "temporal"), logical(1))
 }
 
 # The cover dispersion axis is the engine's phi, a residual variance for the
@@ -470,7 +481,20 @@
       tags <- vapply(cn, .re_coef_tag, character(1))
       sigma_vec <- stats::setNames(rep(NA_real_, nc), cn)
       cor_mat   <- NULL
-      if (!isTRUE(trm$correlated)) {
+      if (identical(trm$kind, "temporal")) {
+        # RW1 / RW2 / AR1 carry a precision axis (SD = 1 / sqrt(tau), read per
+        # grid cell and marginalized); AR1 adds its lag-one correlation; the
+        # exchangeable iid type carries its SD axis directly.
+        if (identical(trm$type, "iid")) {
+          pick2(base, sprintf("b%d.sigma", PP[1L]))
+        } else {
+          pick_precision_sd(base, sprintf("b%d.tau", PP[1L]))
+        }
+        if (identical(trm$type, "ar1")) {
+          pick2("rho_temporal", sprintf("b%d.rho", PP[1L]))
+        }
+        sigma_vec[1L] <- hyper_opt(base) %||% NA_real_
+      } else if (!isTRUE(trm$correlated)) {
         for (cc in seq_len(nc)) {
           nm <- if (nc == 1L) base else paste0(base, "_", tags[cc])
           pick2(nm, sprintf("b%d.sigma", PP[cc]))
@@ -759,7 +783,8 @@
                      keys <- .occu_cover_re_keys(
                        vapply(re_terms, `[[`, character(1), "arm"),
                        vapply(re_terms, function(t) as.character(t$var),
-                              character(1)))
+                              character(1)),
+                       .occu_cover_desc_is_temporal(re_terms))
                      stats::setNames(lapply(re_terms, function(t) {
                        # Intercept term -> per-group BLUP vector (back-compat);
                        # slope term -> [n_groups x n_coefs] matrix with coef-named
@@ -787,6 +812,9 @@
                             has_intercept   = isTRUE(t$has_intercept),
                             correlated = t$correlated,
                             levels     = t$levels,
+                            kind       = t$kind %||% "re",
+                            type       = t$type,
+                            site_codes = t$site_codes,
                             latent_idx = t$latent_idx)
                      }), keys)
                    } else NULL,

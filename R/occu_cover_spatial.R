@@ -62,28 +62,62 @@
 }
 
 
-# The grouping label and factor levels behind an occupancy-arm `re()` term. The
-# resolved spec keeps the integer group codes only, so the label comes from the
-# term call's own `group` argument (matched against the constructor's formals,
-# not the deparsed text) and the levels from evaluating that argument in the
-# term's own evaluation environment. `.tobs_index_codes()` codes a grouping
-# vector through `as.factor()`, so those levels are in code order; a level count
-# that disagrees with the recorded group count is left unlabelled rather than
-# mismatched. Both feed the RE summary the fit reports (`fit$re$psi`, `ranef()`)
-# on the same footing as the observation arms.
-.occu_cover_psi_re_labels <- function(spec, formula, data) {
+# The data label and levels behind an occupancy-arm `re()` or `temporal()` term.
+# The resolved spec keeps the integer codes only, so the label comes from the
+# term call's own argument (`group` for re(), `time` for temporal(), matched
+# against the constructor's formals, not the deparsed text) and the levels from
+# evaluating that argument in the term's own evaluation environment.
+# `.tobs_index_codes()` codes a variable through `as.factor()`, so those levels
+# are in code order; a level count that disagrees with the recorded count is
+# left unlabelled rather than mismatched. Both feed the summary the fit reports
+# (`fit$re`, `ranef()`) and the level match predict() makes against `newdata`.
+.occu_cover_term_labels <- function(spec, formula, data, ctor, arg, n) {
   out <- list(var = NULL, levels = NULL)
   cl <- tryCatch(str2lang(spec$term_call %||% ""), error = function(e) NULL)
   if (!is.call(cl)) return(out)
-  mc <- tryCatch(match.call(.tobs_term_re, cl), error = function(e) NULL)
-  if (is.null(mc) || is.null(mc$group)) return(out)
-  out$var <- paste(deparse(mc$group), collapse = "")
+  mc <- tryCatch(match.call(ctor, cl), error = function(e) NULL)
+  if (is.null(mc) || is.null(mc[[arg]])) return(out)
+  out$var <- paste(deparse(mc[[arg]]), collapse = "")
   lev <- tryCatch(
-    levels(as.factor(eval(mc$group,
+    levels(as.factor(eval(mc[[arg]],
                           .tobs_term_eval_env(data, environment(formula))))),
     error = function(e) NULL)
-  if (length(lev) == as.integer(spec$n_groups)) out$levels <- lev
+  if (length(lev) == as.integer(n)) out$levels <- lev
   out
+}
+
+.occu_cover_psi_re_labels <- function(spec, formula, data) {
+  .occu_cover_term_labels(spec, formula, data, .tobs_term_re, "group",
+                          spec$n_groups)
+}
+
+# The occupancy-arm temporal() term of the joint route: its spec checked against
+# what the joint route carries, and its data label and levels. The term enters
+# psi alone, as one temporal prior block whose latent effect is indexed by the
+# term's time codes on the site rows. A replicated term (`group =`) has no
+# single-block form here, and the term's `tau.shape` / `tau.rate` are not read
+# by the joint driver (the precision is an outer-grid axis under the engine's
+# own hyperprior), so either is refused rather than ignored.
+.occu_cover_psi_temporal <- function(terms, formula, data) {
+  if (length(terms) > 1L) {
+    stop("occu_cover(): the occurrence formula carries ", length(terms),
+         " temporal() terms; the joint route fits one.", call. = FALSE)
+  }
+  ts <- terms[[1L]]$spec
+  if (!is.null(ts$group_idx)) {
+    stop("occu_cover(): temporal(group = ) (one replicated temporal field per ",
+         "group) is not available on the occu_cover joint route; drop `group`.",
+         call. = FALSE)
+  }
+  if (!isTRUE(all.equal(c(ts$tau_shape, ts$tau_rate), c(1, 0.01)))) {
+    stop("occu_cover(): temporal(tau.shape = , tau.rate = ) sets a gamma prior ",
+         "the joint route does not read: the temporal precision is integrated on ",
+         "the outer grid (control$tau.temporal.grid) under the engine's default ",
+         "hyperprior. Drop the two arguments.", call. = FALSE)
+  }
+  lab <- .occu_cover_term_labels(ts, formula, data, .tobs_term_temporal, "time",
+                                 ts$n_times)
+  list(spec = ts, var = lab$var, levels = lab$levels %||% ts$levels)
 }
 
 
@@ -103,6 +137,23 @@
   if (length(bind$terms) == 0L && length(arm_fields) == 0L) return(NULL)
   # `.tobs_bind_formulas` returns terms wrapped in `list(spec = ..., process = ...)`.
   spatial <- Filter(function(t) inherits(t$spec, "tobs_spatial"), bind$terms)
+  # Every structured term on the occurrence formula has a consumer on this route
+  # (the shared / arm fields, the psi random intercept, the psi temporal block);
+  # anything else is refused by name rather than left out of the fit.
+  carried <- c("tobs_spatial", "tobs_re", "tobs_temporal")
+  other <- Filter(function(t) !inherits(t$spec, carried), bind$terms)
+  if (length(other)) {
+    stop(sprintf(paste0(
+      "occu_cover(): the occurrence formula term %s is not carried by the ",
+      "joint nested-Laplace route, which fits spatial(), re() / (1 | g) and ",
+      "temporal() terms on psi."),
+      other[[1L]]$spec$term_call %||% class(other[[1L]]$spec)[1L]),
+      call. = FALSE)
+  }
+  temporal_terms <- Filter(function(t) inherits(t$spec, "tobs_temporal"),
+                           bind$terms)
+  temporal_spec <- if (length(temporal_terms))
+    .occu_cover_psi_temporal(temporal_terms, formula, data)
   # Placed arm fields (detection / positive): evaluate each lifted field call and
   # tag its spec with the arm, in the occurrence formula's environment (where the
   # occurrence field's own graph symbol resolves), then route alongside the
@@ -293,6 +344,12 @@
         "per-group occupancy random effect; fit one or the other."),
         call. = FALSE)
     }
+    if (!is.null(temporal_spec)) {
+      stop(paste0(
+        "occu_cover(): a correlated spatial bar (`|`) does not compose with a ",
+        "temporal() term on the occurrence formula; use the independent `||` ",
+        "spelling, or drop one of the two."), call. = FALSE)
+    }
   }
 
   # Arm-specific fields (extended to the detection arm): each is a separate,
@@ -331,5 +388,6 @@
 
   list(fe = bind$fe$psi, fields = c(base, specs[weighted]),
        armspec = armspec, pos_armspec = armspec[["pos"]],
-       group_var = group_var, re = re_spec, correlated = correlated)
+       group_var = group_var, re = re_spec, temporal = temporal_spec,
+       correlated = correlated)
 }

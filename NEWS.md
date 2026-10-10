@@ -1,5 +1,25 @@
 # tulpaObs NEWS
 
+## Development version
+
+* `occu_cover()` on the joint nested-Laplace route fits a `temporal(time, type =
+  "rw1" | "rw2" | "ar1" | "iid")` term in the occurrence formula as one temporal
+  block on psi (detection and cover are not touched). Before, the term was
+  dropped without a word and the fit carried no time structure on psi. The
+  block's SD is reported as `sigma_temporal` (and `rho_temporal` for AR1), its
+  per-interval effects as `fit$re$temporal` and in `ranef()`, and predictions,
+  WAIC, LOO and CPO include it. `predict(type = "trajectory" | "change")` moves
+  the temporal level with `time.col`, also when the term is indexed by another
+  column that pairs one-to-one with it in the fitted data (a `time.sc`
+  trajectory over a `temporal(yr.interval)` term); a time or `newdata` row with
+  no fitted level is an error. A replicated term (`group =`), `tau.shape` /
+  `tau.rate`, two temporal terms, a correlated `|` spatial bar, the latent cover
+  aggregate, and every other occurrence-formula term the joint route does not
+  carry are refused by name (#414).
+* An AR1 temporal block lays its precision and correlation axes as their
+  tensor; the defaults (three precision nodes, two correlation nodes) were
+  handed to the engine as unequal paired columns, which it refused (#414).
+
 ## 0.6.0
 
 Every argument a user types is now dotted, matching `n.iter`, `max.iter` and

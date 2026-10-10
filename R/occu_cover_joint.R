@@ -13,6 +13,7 @@
 .tobs_fit_occu_cover_joint <- function(model, fields,
                                                 priors    = NULL,
                                                 re_spec   = NULL,
+                                                temporal_spec = NULL,
                                                 correlated = FALSE,
                                                 pos_armspec = NULL,
                                                 det_armspec = NULL,
@@ -78,6 +79,12 @@
   has_re_det <- !is.null(model$re_det)       # detection (p) arm
   has_re_pos <- !is.null(model$re_pos)       # positive-cover arm
   has_any_re <- has_re || has_re_det || has_re_pos
+  # A temporal() term on the occurrence formula: one temporal prior block whose
+  # latent effect rides the psi arm alone (detection and cover rows carry the
+  # 0-sentinel time code), so psi at each time level carries its own deviation.
+  # Like an RE block it is an extra prior block and forces the multi-block
+  # driver.
+  has_temporal <- !is.null(temporal_spec)
   # Arm-specific cover field: an independent, non-copied ICAR block on the cover
   # (pos) arm alone, composed with the shared occupancy field. Forces the
   # multi-block driver (like a trend field / RE block). Not composed with the
@@ -90,6 +97,12 @@
   if (has_any_re && is_latent) {
     stop("occu_cover(): a per-group RE and cover.aggregate = \"latent\" cannot ",
          "be combined (the latent path carries its own per-unit cover RE).",
+         call. = FALSE)
+  }
+  if (has_temporal && is_latent) {
+    stop("occu_cover(): a temporal() term on the occurrence formula does not ",
+         "compose with cover.aggregate = \"latent\" (the latent cover spec runs ",
+         "on the single-block driver); use cover.aggregate = \"none\".",
          call. = FALSE)
   }
   if (has_armspec && is_latent) {
@@ -224,7 +237,7 @@
     sigma_pos_init  = sigma_pos_init,
     alpha_axis      = alpha_axis,
     positive        = model$positive,
-    multi           = has_trend || has_any_re || has_armspec,
+    multi           = has_trend || has_any_re || has_armspec || has_temporal,
     n_cells         = n_cells,
     site_cell       = site_cell,
     cover_aggregate = cover_aggregate,
@@ -363,7 +376,7 @@
   # block(s), so the field copy indices stay valid.
   add_re_term <- function(arm, codes, grid, Z, n_groups, var, levels,
                           n_coefs, coef_names, correlated, logchol_grid = NULL,
-                          coef_scales = NULL) {
+                          coef_scales = NULL, site_codes = NULL) {
     obs_idx <- obs_for(arm, codes)
     b0 <- length(re_blocks)
     # `as.numeric()` drops the auto-grid marker the caller applied, so re-apply
@@ -395,12 +408,14 @@
       has_intercept = identical(coef_names[[1L]], "(Intercept)"),
       coef_scales = if (is.null(coef_scales)) rep(1, n_coefs)
                     else as.numeric(coef_scales),
+      site_codes = if (is.null(site_codes)) NULL else as.integer(site_codes),
       block_start = b0 + 1L, n_blocks = length(re_blocks) - b0)
   }
   if (has_re) {
     add_re_term("psi", re_spec$group_idx, re_auto(dots[["re.sigma.grid"]]),
                 NULL, re_spec$n_groups, re_spec$var %||% NA_character_,
-                re_spec$levels, 1L, "(Intercept)", FALSE)
+                re_spec$levels, 1L, "(Intercept)", FALSE,
+                site_codes = re_spec$group_idx)
   }
   if (has_re_det) {
     for (d in re_det_terms) {
@@ -417,6 +432,28 @@
                   d$correlated, logchol_grid = dots[["re.logchol.grid.pos"]],
                   coef_scales = d$coef_scales)
     }
+  }
+
+  # The psi temporal block trails the RE blocks and is described the same way
+  # (one descriptor over one block, its levels the term's time levels), so the
+  # postprocess reads its per-level effects as it reads a random intercept's
+  # BLUPs and the draw substrate samples them from the same joint posterior.
+  # `kind = "temporal"` names its hyperparameter axes (the precision, and the
+  # AR1 correlation) and makes predict() refuse a `newdata` that does not state
+  # the time level, rather than reading the effect as zero.
+  if (has_temporal) {
+    ts <- temporal_spec$spec
+    b0 <- length(re_blocks)
+    re_blocks[[b0 + 1L]] <- .tobs_temporal_block(
+      ts, list(as.integer(ts$time_idx), zero_p, zero_pos), dots)
+    re_descs[[length(re_descs) + 1L]] <- list(
+      arm = "psi", kind = "temporal", type = ts$type,
+      var = temporal_spec$var %||% NA_character_,
+      levels = temporal_spec$levels,
+      n_groups = as.integer(ts$n_times), n_coefs = 1L,
+      coef_names = "(Intercept)", correlated = FALSE, has_intercept = TRUE,
+      coef_scales = 1, site_codes = as.integer(ts$time_idx),
+      block_start = b0 + 1L, n_blocks = 1L)
   }
 
   # share(residual = r): the cover arm's deviation from the shared field, carried
@@ -726,7 +763,7 @@
     # field blocks, then the RE blocks; the copy indices above name occupancy
     # blocks only, so they stay valid.
     prior_arg <- c(prior_arg, pos_armspec_blocks, re_blocks, residual_blocks)
-  } else if (has_any_re || has_armspec || has_residual) {
+  } else if (has_any_re || has_armspec || has_residual || has_temporal) {
     # Single shared occupancy field + per-group REs and/or arm-specific cover
     # fields: the multi-block driver with the occupancy field as block 1 (alpha
     # copy onto cover), then the non-copied arm-specific cover block(s), then the
