@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstddef>
 #include <tulpa/portable_math.h>
+#include <tulpa/ad_scalar_math.h>
 
 namespace tulpaObs {
 
@@ -25,13 +26,6 @@ constexpr double kEtaClampBound = 30.0;
 inline double clamp_eta(double e, double bound = kEtaClampBound) {
     return e > bound ? bound : (e < -bound ? -bound : e);
 }
-
-// Largest argument passed to exp() before the result stops being representable
-// (exp overflows to Inf just above 709). Used where the predictor is NOT the
-// eta-clamped kind above -- a community count arm carries mu + b_s + a field
-// offset, any of which a sampler can push far out mid-trajectory, and an Inf
-// mean poisons the gradient rather than just saturating it.
-constexpr double kExpArgBound = 700.0;
 
 // Floor on a count mean before it enters a density. exp() underflows to exactly
 // 0 for very negative eta, and a zero mean makes the negative-binomial score
@@ -62,16 +56,48 @@ inline double nb_log_pmf(double y, double r, double m) {
          + y * (std::log(m) - std::log(r + m));
 }
 
-// Logistic function, branch-split on the sign of `x` so the exponential is
-// always taken of a non-positive argument. This is the form R's plogis() uses,
-// so a diagnostic / pointwise-likelihood kernel written against an R oracle
-// reproduces it to the bit. The fit kernels take the plain 1/(1+exp(-eta))
-// instead (occu_coupling_shared.h::sigmoid_): the two agree to within one ULP
-// and neither overflows, but they do not round identically for negative eta, so
-// the R-matching path keeps this one.
-inline double stable_plogis(double x) {
-    if (x >= 0.0) { const double z = std::exp(-x); return 1.0 / (1.0 + z); }
-    const double z = std::exp(x); return z / (1.0 + z);
+// The fit kernels' logistic, 1 / (1 + exp(-eta)). The diagnostic and
+// pointwise-likelihood kernels written against an R oracle take
+// tulpa::math::inv_logit instead, the sign-split form R's plogis() uses: the two
+// agree to within one ULP and neither overflows, but they do not round
+// identically for negative eta, so each path keeps its own.
+inline double sigmoid_(double eta) {
+    return 1.0 / (1.0 + std::exp(-eta));
+}
+
+// Probability clamp to [1e-12, 1 - 1e-12], so log(p) and log(1 - p) stay
+// finite at a saturated logistic.
+constexpr double kProbClampLo = 1e-12;
+constexpr double kProbClampHi = 1.0 - 1e-12;
+
+inline double clamp_prob(double p) {
+    return p < kProbClampLo ? kProbClampLo : (p > kProbClampHi ? kProbClampHi : p);
+}
+
+// log p and log(1 - p) for p = plogis(eta), sharing one softplus and taking the
+// exponential of a non-positive argument on both branches.
+inline void logit_log_probs(double eta, double& log_p, double& log_1mp) {
+    if (eta > 0.0) {
+        const double softplus_neg = std::log1p(std::exp(-eta));   // log(1 + e^{-eta})
+        log_p   = -softplus_neg;
+        log_1mp = -eta - softplus_neg;
+    } else {
+        const double softplus_pos = std::log1p(std::exp(eta));    // log(1 + e^{eta})
+        log_p   = eta - softplus_pos;
+        log_1mp = -softplus_pos;
+    }
+}
+
+inline double log_plogis(double x) {
+    double lp, l1mp;
+    logit_log_probs(x, lp, l1mp);
+    return lp;
+}
+
+inline double log_1m_plogis(double x) {
+    double lp, l1mp;
+    logit_log_probs(x, lp, l1mp);
+    return l1mp;
 }
 
 // log(x) guarded at x <= 0, returning -1e300 rather than -Inf / NaN, so a

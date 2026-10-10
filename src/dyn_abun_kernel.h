@@ -42,6 +42,7 @@
 #define TULPAOBS_DYN_ABUN_KERNEL_H
 
 #include "tulpa/portable_math.h"   // tulpa::math::portable_lgamma / portable_digamma
+#include "tobs_math.h"              // tulpa::math::inv_logit
 #include <Rcpp.h>
 #include <cmath>
 #include <limits>
@@ -61,12 +62,6 @@ struct DynAbunSiteResult {
     double grad_eta_logr;      // d log L / d log r (negbin initial; 0 under Poisson)
     double mean_N1;            // E[N_1 | y] (diagnostic / fitted)
 };
-
-inline double da_inv_logit(double e) {
-    if (e > 0.0) return 1.0 / (1.0 + std::exp(-e));
-    double ee = std::exp(e);
-    return ee / (1.0 + ee);
-}
 
 // Shared per-season observation pmf obs[n] = prod_j Binom(y_tj | n, p), with
 // obs[n] = 0 for n < max_j y_tj. Season t is laid out y[t*J + j], -1 = missing.
@@ -141,7 +136,7 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     const int S = K + 1;                       // number of abundance states
     const int nIv = T - 1;                      // number of transition intervals
     const double lambda = std::exp(eta_lambda);
-    const double p      = da_inv_logit(eta_p);
+    const double p      = tulpa::math::inv_logit(eta_p);
     const double logp = std::log(p), log1mp = std::log1p(-p);
     const double rr = use_nb ? std::exp(eta_logr) : 0.0;  // NB size
 
@@ -149,7 +144,7 @@ inline DynAbunSiteResult compute_dyn_abun_site(
     std::vector<double> omega(nIv), gamma(nIv), logom(nIv), log1mom(nIv), loggam(nIv);
     std::vector<std::vector<double> > pois(nIv), dpois_g(nIv);
     for (int iv = 0; iv < nIv; ++iv) {
-        omega[iv]  = da_inv_logit(eta_omega[iv]);
+        omega[iv]  = tulpa::math::inv_logit(eta_omega[iv]);
         gamma[iv]  = std::exp(eta_gamma[iv]);
         logom[iv]  = std::log(omega[iv]); log1mom[iv] = std::log1p(-omega[iv]);
         loggam[iv] = std::log(gamma[iv]);
@@ -375,7 +370,7 @@ inline double compute_dyn_abun_site_dyn(
     const int S = K + 1;
     const int nIv = T - 1;
     const double lambda = std::exp(eta_lambda);
-    const double p      = da_inv_logit(eta_p);
+    const double p      = tulpa::math::inv_logit(eta_p);
     const double logp = std::log(p), log1mp = std::log1p(-p);
     const double rr = use_nb ? std::exp(eta_logr) : 0.0;
     const bool has_survival = (dynamics == 2);   // autoreg keeps binomial survival
@@ -387,7 +382,7 @@ inline double compute_dyn_abun_site_dyn(
         Tr[iv].assign(S * S, 0.0);
         const double gam = (dynamics == 2 || dynamics == 3)
             ? std::exp(eta_gamma[iv]) : eta_gamma[iv];       // log for AR/trend, identity else
-        const double om  = da_inv_logit(eta_omega[iv]);      // survival (autoreg)
+        const double om  = tulpa::math::inv_logit(eta_omega[iv]);  // survival (autoreg)
         const double Kc  = std::exp(eta_omega[iv]);          // carrying capacity (ricker/gompertz)
         const double logom = std::log(om), log1mom = std::log1p(-om);
         for (int n1 = 0; n1 < S; ++n1) {
@@ -494,7 +489,7 @@ inline DynAbunPCurv compute_dyn_abun_p_curv(
     const int S = K + 1;
     const int nIv = T - 1;
     const double lambda = std::exp(eta_lambda);
-    const double p      = da_inv_logit(eta_p);
+    const double p      = tulpa::math::inv_logit(eta_p);
     const double logp = std::log(p), log1mp = std::log1p(-p);
     const double pq = p * (1.0 - p);
     const double rr = use_nb ? std::exp(eta_logr) : 0.0;
@@ -503,7 +498,7 @@ inline DynAbunPCurv compute_dyn_abun_p_curv(
     std::vector<double> logom(nIv), log1mom(nIv);
     std::vector<std::vector<double> > pois(nIv);
     for (int iv = 0; iv < nIv; ++iv) {
-        const double omega = da_inv_logit(eta_omega[iv]);
+        const double omega = tulpa::math::inv_logit(eta_omega[iv]);
         const double gamma = std::exp(eta_gamma[iv]);
         logom[iv] = std::log(omega); log1mom[iv] = std::log1p(-omega);
         pois[iv].resize(S);
@@ -667,13 +662,13 @@ inline void compute_dyn_abun_init_weights(
 ) {
     const int S = K + 1;
     const int nIv = T - 1;
-    const double p     = da_inv_logit(eta_p);
+    const double p     = tulpa::math::inv_logit(eta_p);
     const double logp = std::log(p), log1mp = std::log1p(-p);
 
     std::vector<std::vector<double> > pois(nIv);
     std::vector<double> logom(nIv), log1mom(nIv);
     for (int iv = 0; iv < nIv; ++iv) {
-        const double omega = da_inv_logit(eta_omega[iv]);
+        const double omega = tulpa::math::inv_logit(eta_omega[iv]);
         const double gamma = std::exp(eta_gamma[iv]);
         logom[iv] = std::log(omega); log1mom[iv] = std::log1p(-omega);
         pois[iv].resize(S);

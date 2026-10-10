@@ -11,7 +11,6 @@
 #include "tobs_math.h"
 #include "simulate_helpers.h"
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 using tulpaObs::clamp_eta;
 using tulpaObs::draw_latent_N;
 
@@ -127,7 +126,7 @@ Rcpp::List cpp_simulate_ms_occu_cover(
           std::size_t off = (std::size_t) sp * sp_stride + (std::size_t) j * n_sites + i;
           double eta = pe[off];
           byp[off] = (positive == 3)
-                       ? (R::rbeta(stable_plogis(clamp_eta(eta)) * d, (1.0 - stable_plogis(clamp_eta(eta))) * d))
+                       ? (R::rbeta(tulpa::math::inv_logit(clamp_eta(eta)) * d, (1.0 - tulpa::math::inv_logit(clamp_eta(eta))) * d))
                        : (positive == 4)
                          ? R::rnorm(eta, d)
                          : std::exp(R::rnorm(eta, d));

@@ -50,18 +50,12 @@
 #endif
 #include "tobs_shape.h"
 #include "community_chol.h"
+#include "tobs_math.h"
 
 #include "nuts_engine.h"
 using namespace Rcpp;
 
 namespace tulpaObs {
-
-static const double MDO_CLAMP_LO = 1e-12;
-static const double MDO_CLAMP_HI = 1.0 - 1e-12;
-inline double mdo_clamp(double x) {
-    return x < MDO_CLAMP_LO ? MDO_CLAMP_LO : (x > MDO_CLAMP_HI ? MDO_CLAMP_HI : x);
-}
-inline double mdo_plogis(double e) { return 1.0 / (1.0 + std::exp(-e)); }
 
 // Marshalled per-fit data. X_* are site-level designs (n_sites rows, shared
 // across species). Per species the (n_valid, n_det) [n_sites x n_seasons]
@@ -181,10 +175,10 @@ inline double ms_dyn_occu_fb(const MsDynOccuNutsData& d, int s,
     std::vector<double>& wsm     = sc.wsm;
     double ll = 0.0;
     for (int i = 0; i < Ns; ++i) {
-        const double ps1c = mdo_clamp(psi1[i]);
-        const double pc   = mdo_clamp(p[i]);
-        const double gc   = mdo_clamp(gamma[i]);
-        const double ec   = mdo_clamp(eps[i]);
+        const double ps1c = clamp_prob(psi1[i]);
+        const double pc   = clamp_prob(p[i]);
+        const double gc   = clamp_prob(gamma[i]);
+        const double ec   = clamp_prob(eps[i]);
         const double lpc  = std::log(pc), l1pc = std::log(1.0 - pc);
         // emissions per season
         for (int t = 0; t < T; ++t) {
@@ -269,8 +263,8 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
         double eg = 0.0, ee = 0.0;
         for (int k = 0; k < p_gam; ++k) eg += d.X_gamma(i, k) * global[k];
         for (int k = 0; k < p_eps; ++k) ee += d.X_eps(i, k)   * global[p_gam + k];
-        gamma[i] = mdo_plogis(eg);
-        eps[i]   = mdo_plogis(ee);
+        gamma[i] = sigmoid_(eg);
+        eps[i]   = sigmoid_(ee);
     }
 
     std::vector<double> C_psi1, C_p;
@@ -309,25 +303,16 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
         const double* zp    = z_s + p_psi1;
         std::fill(gbpsi1.begin(), gbpsi1.end(), 0.0);
         std::fill(gbp.begin(), gbp.end(), 0.0);
-        for (int i = 0; i < p_psi1; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j)
-                v += C_psi1[(std::size_t) i * p_psi1 + j] * zpsi1[j];
-            b_psi1[i] = v;
-        }
-        for (int i = 0; i < p_p; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j) v += C_p[(std::size_t) i * p_p + j] * zp[j];
-            b_p[i] = v;
-        }
+        chol_noncentered_recon(C_psi1.data(), zpsi1, p_psi1, b_psi1.data());
+        chol_noncentered_recon(C_p.data(), zp, p_p, b_p.data());
         for (int i = 0; i < n_sites; ++i) {
             double e_psi1 = 0.0, e_p = 0.0;
             for (int k = 0; k < p_psi1; ++k)
                 e_psi1 += d.X_psi1(i, k) * (mu[k] + b_psi1[k]);
             for (int k = 0; k < p_p; ++k)
                 e_p += d.X_p(i, k) * (mu[p_psi1 + k] + b_p[k]);
-            psi1[i] = mdo_plogis(e_psi1);
-            pp[i]   = mdo_plogis(e_p);
+            psi1[i] = sigmoid_(e_psi1);
+            pp[i]   = sigmoid_(e_p);
         }
         double* ggam = &ggam_s[(std::size_t) s * n_sites];
         double* geps = &geps_s[(std::size_t) s * n_sites];
@@ -351,29 +336,13 @@ inline double ms_dyn_occu_nuts_eval(const MsDynOccuNutsData& d, const double* th
                 gbp[k]              += gx;
             }
         }
-        // z gradient (data part) = C' grad_b (disjoint per-species write).
+        // z gradient (data part) = C' grad_b (disjoint per-species write) and
+        // the per-species chol accumulators A_arm = grad_b z'.
         double* gz_s = g_z + s * P;
-        for (int v = 0; v < p_psi1; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_psi1; ++i)
-                sg += C_psi1[(std::size_t) i * p_psi1 + v] * gbpsi1[i];
-            gz_s[v] += sg;
-        }
-        for (int v = 0; v < p_p; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_p; ++i)
-                sg += C_p[(std::size_t) i * p_p + v] * gbp[i];
-            gz_s[p_psi1 + v] += sg;
-        }
-        // per-species chol accumulators A_arm = grad_b z'.
-        double* Apsi = &Apsi_s[(std::size_t) s * p_psi1 * p_psi1];
-        for (int i = 0; i < p_psi1; ++i)
-            for (int j = 0; j <= i; ++j)
-                Apsi[(std::size_t) i * p_psi1 + j] = gbpsi1[i] * zpsi1[j];
-        double* Ap = &Ap_s[(std::size_t) s * p_p * p_p];
-        for (int i = 0; i < p_p; ++i)
-            for (int j = 0; j <= i; ++j)
-                Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
+        chol_noncentered_push(C_psi1.data(), gbpsi1.data(), zpsi1, p_psi1, gz_s,
+                              &Apsi_s[(std::size_t) s * p_psi1 * p_psi1]);
+        chol_noncentered_push(C_p.data(), gbp.data(), zp, p_p, gz_s + p_psi1,
+                              &Ap_s[(std::size_t) s * p_p * p_p]);
     }
     }  // omp parallel
 

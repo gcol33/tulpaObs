@@ -211,6 +211,7 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
         re_sig[b] = re_block_sigma(d.re[b], theta);
 
     std::vector<double> eta_p(J), g_eta_p(J), g_eta_pos(J), eta_p_compact(J), g_p_compact(J);
+    const PosCodeAccess pos(d.pos_code);
 
     for (int i = 0; i < N; ++i) {
         // Field offsets this site carries on the two coupled arms.
@@ -221,14 +222,11 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
         for (int k = 0; k < p_occ; ++k) eta_psi += d.X_occ(i, k) * bo[k];
         const double psi = sigmoid_(eta_psi);
 
-        // Per-visit detection linear predictor (site block broadcast + visit block).
+        // Per-visit detection linear predictor (site block broadcast + visit
+        // block + the detection-arm RE offsets).
         double eta_p_site = 0.0;
         for (int k = 0; k < p_det_site; ++k) eta_p_site += d.X_det_site(i, k) * bp_site[k];
-        bool any_det = false;
-        int n_valid = 0;
-        for (int v = 0; v < J; ++v) {
-            g_eta_p[v] = 0.0; g_eta_pos[v] = 0.0;
-            if (d.valid(i, v) == 0) { eta_p[v] = 0.0; continue; }
+        auto eta_p_of = [&](int v) {
             double e = eta_p_site;
             if (p_det_visit > 0) {
                 const int row = i * J + v;
@@ -238,74 +236,39 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
                 const int b = d.re_det[t];
                 e += re_block_offset(d.re[b], re_sig[b], theta, i * J + v);
             }
-            eta_p[v] = e;
-            ++n_valid;
-            if (d.y(i, v) == 1) any_det = true;
-        }
+            return e;
+        };
+        // Cover linear predictor at a detected visit (+ the shared field scaled
+        // by alpha + the cover-arm RE offsets).
+        auto eta_pos_of = [&](int v) {
+            double e = f_pos;
+            for (int k = 0; k < p_pos_site; ++k) e += d.X_pos_site(i, k) * bpos_site[k];
+            if (p_pos_visit > 0) {
+                const int row = i * J + v;
+                for (int k = 0; k < p_pos_visit; ++k) e += d.X_pos_visit(row, k) * bpos_visit[k];
+            }
+            for (std::size_t t = 0; t < d.re_pos.size(); ++t) {
+                const int b = d.re_pos[t];
+                e += re_block_offset(d.re[b], re_sig[b], theta, i * J + v);
+            }
+            return e;
+        };
 
         double g_eta_psi = 0.0;
-        if (any_det) {
-            lp += log_safe(psi);
-            g_eta_psi = 1.0 - psi;
-            for (int v = 0; v < J; ++v) {
-                if (d.valid(i, v) == 0) continue;
-                const double pv = sigmoid_(eta_p[v]);
-                if (d.y(i, v) == 1) { lp += log_safe(pv);       g_eta_p[v] = 1.0 - pv; }
-                else                { lp += log_safe(1.0 - pv); g_eta_p[v] = -pv; }
-            }
-            // Cover arm at detected visits (+ the shared field scaled by alpha).
-            for (int v = 0; v < J; ++v) {
-                if (d.valid(i, v) == 0 || d.y(i, v) != 1) continue;
-                const double yp = d.y_pos(i, v);
-                // Missing-at-random cover: a detected visit with no cover value
-                // (NA -> non-finite) drops out of the cover factor; its cover-arm
-                // score stays 0.
-                if (!std::isfinite(yp)) continue;
-                double eta_pos = f_pos;
-                for (int k = 0; k < p_pos_site; ++k) eta_pos += d.X_pos_site(i, k) * bpos_site[k];
-                if (p_pos_visit > 0) {
-                    const int row = i * J + v;
-                    for (int k = 0; k < p_pos_visit; ++k) eta_pos += d.X_pos_visit(row, k) * bpos_visit[k];
-                }
-                for (std::size_t t = 0; t < d.re_pos.size(); ++t) {
-                    const int b = d.re_pos[t];
-                    eta_pos += re_block_offset(d.re[b], re_sig[b], theta, i * J + v);
-                }
-                lp += pos_log_density(d.pos_code, yp, eta_pos, disp);
-                g_eta_pos[v] = pos_grad_eta(d.pos_code, yp, eta_pos, disp);
-                g_logdisp   += pos_grad_logdisp(d.pos_code, yp, eta_pos, disp);
-            }
-        } else {
-            // No-detection mixture L = psi * prod_v(1-p_v) + (1-psi). Reuse the
-            // canonical block over the cell's valid visits (compact buffers), then
-            // scatter the per-visit scores back to the J-wide slots.
-            int nv = 0;
-            for (int v = 0; v < J; ++v) {
-                if (d.valid(i, v) == 0) continue;
-                eta_p_compact[nv] = eta_p[v];
-                ++nv;
-            }
-            double g_w = 0.0, nh_w = 0.0;
-            const double cell_ll = nodet_mixture_block(
-                psi, eta_p_compact.data(), nv, /*want_hess=*/false, /*expected=*/false,
-                g_w, nh_w, g_p_compact.data(), nullptr, nullptr, nullptr);
-            lp += cell_ll;
-            g_eta_psi = g_w;
-            int j = 0;
-            for (int v = 0; v < J; ++v) {
-                if (d.valid(i, v) == 0) continue;
-                g_eta_p[v] = g_p_compact[j];
-                ++j;
-            }
-        }
+        occu_cover_cell_sweep(
+            pos, psi, J,
+            [&](int v) { return d.valid(i, v) != 0; },
+            [&](int v) { return d.y(i, v) == 1; },
+            [&](int v) { return d.y_pos(i, v); },
+            eta_p_of, eta_pos_of, disp,
+            eta_p.data(), eta_p_compact.data(), g_p_compact.data(),
+            lp, g_eta_psi, g_eta_p.data(), g_eta_pos.data(), g_logdisp);
 
-        // Design-sandwich the eta-gradients onto the coefficient blocks.
-        for (int k = 0; k < p_occ; ++k) grad[g_bo + k] += g_eta_psi * d.X_occ(i, k);
-
-        double g_eta_p_sum = 0.0, g_eta_pos_sum = 0.0;
-        for (int v = 0; v < J; ++v) { g_eta_p_sum += g_eta_p[v]; g_eta_pos_sum += g_eta_pos[v]; }
-        for (int k = 0; k < p_det_site; ++k) grad[g_bp_site + k] += g_eta_p_sum * d.X_det_site(i, k);
-        for (int k = 0; k < p_pos_site; ++k) grad[g_bpos_site + k] += g_eta_pos_sum * d.X_pos_site(i, k);
+        const double g_eta_pos_sum = occu_cover_cell_sandwich(
+            i, J, g_eta_psi, g_eta_p.data(), g_eta_pos.data(),
+            d.X_occ, d.X_det_site, d.X_det_visit, d.X_pos_site, d.X_pos_visit,
+            grad + g_bo, grad + g_bp_site, grad + g_bp_visit,
+            grad + g_bpos_site, grad + g_bpos_visit);
 
         // Field score for this cell: the psi-arm eta-score plus alpha times the
         // cover-arm eta-score sum (the cover arm sees alpha * f), both weighted
@@ -314,22 +277,6 @@ inline double occu_cover_nuts_eval(const OccuCoverNutsData& d, const double* the
         if (has_field)
             hyper_field_site_score(d.fb, fs, i, g_eta_psi, g_eta_pos_sum,
                                    g_f, g_alpha_data);
-        if (p_det_visit > 0) {
-            for (int v = 0; v < J; ++v) {
-                if (g_eta_p[v] == 0.0) continue;
-                const int row = i * J + v;
-                for (int k = 0; k < p_det_visit; ++k)
-                    grad[g_bp_visit + k] += g_eta_p[v] * d.X_det_visit(row, k);
-            }
-        }
-        if (p_pos_visit > 0) {
-            for (int v = 0; v < J; ++v) {
-                if (g_eta_pos[v] == 0.0) continue;
-                const int row = i * J + v;
-                for (int k = 0; k < p_pos_visit; ++k)
-                    grad[g_bpos_visit + k] += g_eta_pos[v] * d.X_pos_visit(row, k);
-            }
-        }
 
         // Chain the per-visit arm scores into each RE block's whitened z and its
         // log_sigma_re; an invalid visit carries a zero eta-score anyway.

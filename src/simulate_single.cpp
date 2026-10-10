@@ -13,7 +13,6 @@
 #include <cmath>
 #include "tobs_math.h"
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 
 // [[Rcpp::export]]
 Rcpp::List cpp_simulate_single(
@@ -37,7 +36,7 @@ Rcpp::List cpp_simulate_single(
       double eo = 0.0, ed = 0.0;
       for (int k = 0; k < p_occ; ++k) eo += pXo[(std::size_t) k * n_sites + i] * pd[(std::size_t) k * ndr + idx];
       for (int k = 0; k < p_det; ++k) ed += pXd[(std::size_t) k * n_sites + i] * pd[(std::size_t) (p_occ + k) * ndr + idx];
-      psi[i] = stable_plogis(eo); p[i] = stable_plogis(ed);
+      psi[i] = tulpa::math::inv_logit(eo); p[i] = tulpa::math::inv_logit(ed);
     }
     std::vector<int> z(n_sites);
     for (int i = 0; i < n_sites; ++i) z[i] = (int) R::rbinom(1.0, psi[i]);

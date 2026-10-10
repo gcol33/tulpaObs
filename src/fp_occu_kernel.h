@@ -34,6 +34,7 @@
 
 #include <cmath>
 #include <limits>
+#include "tobs_math.h"   // logit_log_probs; tulpa::math::inv_logit
 
 namespace tulpaObs {
 
@@ -42,24 +43,6 @@ struct FpOccuSiteResult {
     double grad_eta_psi, grad_eta_p11, grad_eta_p10, grad_eta_b;
     double w1;                 // posterior occupancy P(z = 1 | y_i)
 };
-
-// Stable inverse logit.
-inline double fp_inv_logit(double e) {
-    if (e > 0.0) return 1.0 / (1.0 + std::exp(-e));
-    double ee = std::exp(e);
-    return ee / (1.0 + ee);
-}
-
-// log p and log(1-p) under the logit link (numerically stable).
-inline void fp_logit_log_probs(double eta, double& lp, double& l1mp) {
-    if (eta > 0.0) {
-        double sp = std::log1p(std::exp(-eta));
-        lp = -sp; l1mp = -eta - sp;
-    } else {
-        double sp = std::log1p(std::exp(eta));
-        lp = eta - sp; l1mp = -sp;
-    }
-}
 
 // Per-site false-positive occupancy marginal. `y` are the J_i valid detection
 // states (NA visits dropped upstream); the four eta are the site-level logit
@@ -70,15 +53,15 @@ inline FpOccuSiteResult compute_fp_occu_site(
     double eta_psi, double eta_p11, double eta_p10, double eta_b
 ) {
     FpOccuSiteResult res;
-    const double psi = fp_inv_logit(eta_psi);
-    const double p11 = fp_inv_logit(eta_p11);
-    const double p10 = fp_inv_logit(eta_p10);
-    const double b   = fp_inv_logit(eta_b);
+    const double psi = tulpa::math::inv_logit(eta_psi);
+    const double p11 = tulpa::math::inv_logit(eta_p11);
+    const double p10 = tulpa::math::inv_logit(eta_p10);
+    const double b   = tulpa::math::inv_logit(eta_b);
 
     double lp11, l1mp11, lp10, l1mp10, lb, l1mb;
-    fp_logit_log_probs(eta_p11, lp11, l1mp11);
-    fp_logit_log_probs(eta_p10, lp10, l1mp10);
-    fp_logit_log_probs(eta_b,   lb,   l1mb);
+    logit_log_probs(eta_p11, lp11, l1mp11);
+    logit_log_probs(eta_p10, lp10, l1mp10);
+    logit_log_probs(eta_b,   lb,   l1mb);
 
     double logA = 0.0, logB = 0.0;
     bool   B_zero = false;
@@ -106,7 +89,7 @@ inline FpOccuSiteResult compute_fp_occu_site(
     }
 
     double lpsi, l1mpsi;
-    fp_logit_log_probs(eta_psi, lpsi, l1mpsi);  // stable log(psi), log(1-psi)
+    logit_log_probs(eta_psi, lpsi, l1mpsi);  // stable log(psi), log(1-psi)
     const double t1 = lpsi + logA;          // log(psi * A)
     double log_lik, w1;
     if (B_zero) {

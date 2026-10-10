@@ -36,16 +36,12 @@
 #include <tulpa/nuts_api.h>
 #include "tobs_shape.h"
 #include "community_chol.h"
+#include "tobs_math.h"
 
 #include "nuts_engine.h"
 using namespace Rcpp;
 
 namespace tulpaObs {
-
-static inline double mio_sigmoid_(double x) { return 1.0 / (1.0 + std::exp(-x)); }
-static inline double mio_clamp_(double p) {
-    return std::min(std::max(p, 1e-12), 1.0 - 1e-12);
-}
 
 // Per-(species, source) site summary: n_valid_{d,i} visits, n_det_{d,i} detections
 // (each length n_sites). `any_det` is per-site pooled over sources.
@@ -170,12 +166,7 @@ inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th
 
         // reconstruct b_psi = C_psi z_psi and eta_psi.
         std::vector<double> b_psi(p_psi, 0.0);
-        for (int i = 0; i < p_psi; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j)
-                v += C_psi[(std::size_t) i * p_psi + j] * z_s[j];
-            b_psi[i] = v;
-        }
+        chol_noncentered_recon(C_psi.data(), z_s, p_psi, b_psi.data());
         std::vector<double> eta_psi(n_sites, 0.0);
         for (int i = 0; i < n_sites; ++i) {
             double e = 0.0;
@@ -189,12 +180,7 @@ inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th
             const int ppd = d.p_p[dd];
             const double* z_pd = z_s + d.p_off[dd];
             b_p[dd].assign(ppd, 0.0);
-            for (int i = 0; i < ppd; ++i) {
-                double v = 0.0;
-                for (int j = 0; j <= i; ++j)
-                    v += C_p[dd][(std::size_t) i * ppd + j] * z_pd[j];
-                b_p[dd][i] = v;
-            }
+            chol_noncentered_recon(C_p[dd].data(), z_pd, ppd, b_p[dd].data());
             eta_p[dd].assign(n_sites, 0.0);
             for (int i = 0; i < n_sites; ++i) {
                 double e = 0.0;
@@ -208,12 +194,12 @@ inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th
         std::vector<double> g_eta_psi(n_sites, 0.0);
         std::vector<std::vector<double> > g_eta_pd(D, std::vector<double>(n_sites, 0.0));
         for (int i = 0; i < n_sites; ++i) {
-            const double psi = mio_clamp_(mio_sigmoid_(eta_psi[i]));
+            const double psi = clamp_prob(sigmoid_(eta_psi[i]));
             // per-source p_d + log(1-p_d) accumulation.
             double log_undet = 0.0, log_det_term = 0.0;
             std::vector<double> pd(D);
             for (int dd = 0; dd < D; ++dd) {
-                const double p = mio_clamp_(mio_sigmoid_(eta_p[dd][i]));
+                const double p = clamp_prob(sigmoid_(eta_p[dd][i]));
                 pd[dd] = p;
                 const int nvd = su.n_valid[dd][i];
                 const int ndd = su.n_det[dd][i];
@@ -251,15 +237,8 @@ inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th
                 gbpsi[k]  += gx;
             }
         }
-        for (int v = 0; v < p_psi; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_psi; ++i)
-                sg += C_psi[(std::size_t) i * p_psi + v] * gbpsi[i];
-            gz_s[v] += sg;
-        }
-        for (int i = 0; i < p_psi; ++i)
-            for (int j = 0; j <= i; ++j)
-                A_psi[(std::size_t) i * p_psi + j] += gbpsi[i] * z_s[j];
+        chol_noncentered_push(C_psi.data(), gbpsi.data(), z_s, p_psi, gz_s,
+                              A_psi.data());
         // detection arms.
         for (int dd = 0; dd < D; ++dd) {
             const int ppd = d.p_p[dd];
@@ -274,16 +253,8 @@ inline double ms_int_occu_nuts_eval(const MsIntOccuNutsData& d, const double* th
                     gbpd[k]       += gx;
                 }
             }
-            double* gz_pd = gz_s + poff;
-            for (int v = 0; v < ppd; ++v) {
-                double sg = 0.0;
-                for (int i = v; i < ppd; ++i)
-                    sg += C_p[dd][(std::size_t) i * ppd + v] * gbpd[i];
-                gz_pd[v] += sg;
-            }
-            for (int i = 0; i < ppd; ++i)
-                for (int j = 0; j <= i; ++j)
-                    A_p[dd][(std::size_t) i * ppd + j] += gbpd[i] * z_pd[j];
+            chol_noncentered_push(C_p[dd].data(), gbpd.data(), z_pd, ppd,
+                                  gz_s + poff, A_p[dd].data());
         }
     }
 

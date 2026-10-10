@@ -164,11 +164,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
         const double* zb  = z_s;               // length pb
         const double  zr  = nb ? z_s[pb] : 0.0;
         std::fill(gbb.begin(), gbb.end(), 0.0);
-        for (int i = 0; i < pb; ++i) {         // b_beta = C_beta z (lower-tri C)
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j) v += C_beta[(std::size_t) i * pb + j] * zb[j];
-            b_beta[i] = v;
-        }
+        chol_noncentered_recon(C_beta.data(), zb, pb, b_beta.data());
         const double log_r_s = nb ? mu[pb] + C_lr * zr : 0.0;
         const double r   = nb    ? std::exp(clamp_log_r(log_r_s)) : 0.0;
         const double phi = gauss ? std::exp(logphi[s] < 30.0 ? logphi[s] : 30.0) : 0.0;
@@ -185,7 +181,7 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
             for (int k = 0; k < pb; ++k) eta += d.X(i, k) * (mu[k] + b_beta[k]);
             double ge;                         // d log p / d eta
             if (nb) {
-                double m = std::exp(eta < kExpArgBound ? eta : kExpArgBound);
+                double m = std::exp(eta < tulpa::math::EXP_ARG_MAX ? eta : tulpa::math::EXP_ARG_MAX);
                 if (m < kMinCountMean) m = kMinCountMean;
                 lp_loc += nb_log_pmf(ys[i], r, m);
                 ge = r * (ys[i] - m) / (r + m);
@@ -204,9 +200,9 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
                 const double lse = (eta > 0.0) ? eta + std::log1p(std::exp(-eta))
                                                : std::log1p(std::exp(eta));
                 lp_loc += ys[i] * eta - lse;
-                ge = ys[i] - 1.0 / (1.0 + std::exp(-eta));
+                ge = ys[i] - sigmoid_(eta);
             } else {                           // Poisson
-                const double lam = std::exp(eta < kExpArgBound ? eta : kExpArgBound);
+                const double lam = std::exp(eta < tulpa::math::EXP_ARG_MAX ? eta : tulpa::math::EXP_ARG_MAX);
                 lp_loc += ys[i] * eta - lam - lg[i];
                 ge = ys[i] - lam;
             }
@@ -217,14 +213,8 @@ inline double ms_count_nuts_eval(const MsCountNutsData& d, const double* th,
         }
         lp_s[s] = lp_loc;
         double* gz_s = g_z + s * P;            // z grad (beta, data) = C_beta' gbb
-        for (int v = 0; v < pb; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < pb; ++i) sg += C_beta[(std::size_t) i * pb + v] * gbb[i];
-            gz_s[v] += sg;
-        }
-        double* Ab = &Abeta_s[(std::size_t) s * pb * pb];   // A_beta = gbb z'
-        for (int i = 0; i < pb; ++i)
-            for (int j = 0; j <= i; ++j) Ab[(std::size_t) i * pb + j] = gbb[i] * zb[j];
+        chol_noncentered_push(C_beta.data(), gbb.data(), zb, pb, gz_s,
+                              &Abeta_s[(std::size_t) s * pb * pb]);
         if (nb) {
             gmu_loc[pb] += gblr;               // d/d mu_log_r
             gz_s[pb]    += C_lr * gblr;         // z grad (logr, data) = C_lr gblr

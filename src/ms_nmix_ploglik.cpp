@@ -3,42 +3,21 @@
 // Per draw it reconstructs each species' deviation b = C z from the
 // non-centered NUTS draw (log-Cholesky factor C per arm) and evaluates the
 // per-(species, site) Royle marginal, parallel over draws, reusing the SAME
-// per-site kernel compute_nmix_site (nmix_kernel.h). The log-Cholesky unpack
-// mirrors .ms_ocs_chol_unpack; the result is byte-identical to the R oracle.
+// per-site kernel compute_nmix_site (nmix_kernel.h). The log-Cholesky unpack and
+// b = C z are the community NUTS targets' own (community_chol.h), so a draw is
+// scored with the factor the sampler built.
 // Output is [M x (n_species * n_sites)] with the per-species blocks contiguous.
 
 #include <Rcpp.h>
 #include <vector>
 #include "nmix_kernel.h"
+#include "community_chol.h"
 #include "tobs_shape.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
-
-namespace {
-// Unpack a log-Cholesky coordinate vector to the lower-triangular factor C
-// (column-major storage), matching .ms_ocs_chol_unpack: per column j the
-// log-diagonal exp() then the sub-diagonal entries.
-inline void chol_unpack(const double* vec, int P, std::vector<double>& C) {
-  C.assign((std::size_t) P * P, 0.0);
-  int pos = 0;
-  for (int j = 0; j < P; ++j) {
-    C[(std::size_t) j * P + j] = std::exp(vec[pos++]);
-    for (int i = j + 1; i < P; ++i) C[(std::size_t) j * P + i] = vec[pos++];
-  }
-}
-// b = C z for a lower-triangular C (column-major [P x P]).
-inline void chol_apply(const std::vector<double>& C, int P, const double* z,
-                       double* b) {
-  for (int i = 0; i < P; ++i) {
-    double acc = 0.0;
-    for (int j = 0; j <= i; ++j) acc += C[(std::size_t) j * P + i] * z[j];
-    b[i] = acc;
-  }
-}
-}  // namespace
 
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(
@@ -105,9 +84,9 @@ Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(
                           cp_coord(p_p * (p_p + 1) / 2);
       for (std::size_t k = 0; k < cl_coord.size(); ++k) cl_coord[k] = dr(chol_lam_off + (int) k);
       for (std::size_t k = 0; k < cp_coord.size(); ++k) cp_coord[k] = dr(chol_p_off + (int) k);
-      chol_unpack(cl_coord.data(), p_lam, C_lam);
-      chol_unpack(cp_coord.data(), p_p, C_p);
-      double C_lr = is_nb ? std::exp(dr(chol_logr_off)) : 0.0;
+      tulpaObs::chol_unpack_cpp(cl_coord.data(), p_lam, C_lam);
+      tulpaObs::chol_unpack_cpp(cp_coord.data(), p_p, C_p);
+      double C_lr = is_nb ? tulpaObs::chol_diag_exp(dr(chol_logr_off)) : 0.0;
 
       for (int s = 0; s < n_species; ++s) {
         // Reconstruct b_s = C z_s per arm; add community mean mu.
@@ -116,8 +95,8 @@ Rcpp::NumericMatrix cpp_ms_nmix_ploglik_batch(
         for (int k = 0; k < p_lam; ++k) z_lam[k] = dr(zb + k);
         for (int k = 0; k < p_p; ++k)   z_p[k]   = dr(zb + p_lam + k);
         std::vector<double> b_lam(p_lam), b_p(p_p);
-        chol_apply(C_lam, p_lam, z_lam.data(), b_lam.data());
-        chol_apply(C_p, p_p, z_p.data(), b_p.data());
+        tulpaObs::chol_noncentered_recon(C_lam.data(), z_lam.data(), p_lam, b_lam.data());
+        tulpaObs::chol_noncentered_recon(C_p.data(), z_p.data(), p_p, b_p.data());
         for (int k = 0; k < p_lam; ++k) coef_lam[k] = dr(mu_off + k) + b_lam[k];
         for (int k = 0; k < p_p; ++k)   coef_p[k]   = dr(mu_off + p_lam + k) + b_p[k];
         double r = is_nb

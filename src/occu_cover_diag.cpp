@@ -30,7 +30,6 @@
 #endif
 
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 using tulpaObs::clamp_eta;
 using tulpaObs::ppc_stat;
 using tulpaObs::occu_cover_ragged::Arms;
@@ -40,12 +39,12 @@ namespace {
 // Positive-arm response-scale mean / replicate draw. `positive` follows the
 // shared cover scheme (lognormal 0, beta 3, gaussian 4).
 inline double mean_pos(double eta, double d, int positive) {
-  if (positive == 3) return stable_plogis(clamp_eta(eta));                 // beta mean
+  if (positive == 3) return tulpa::math::inv_logit(clamp_eta(eta));                 // beta mean
   if (positive == 4) return eta;                              // gaussian: mu = eta
   return std::exp(clamp_eta(eta) + d * d / 2.0);                 // lognormal mean
 }
 inline double draw_pos(double eta, double d, int positive) {
-  if (positive == 3) { double mu = stable_plogis(clamp_eta(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
+  if (positive == 3) { double mu = tulpa::math::inv_logit(clamp_eta(eta)); return R::rbeta(mu * d, (1.0 - mu) * d); }
   if (positive == 4) return R::rnorm(eta, d);                 // gaussian draw
   return std::exp(R::rnorm(eta, d));                          // lognormal draw
 }
@@ -98,7 +97,7 @@ Rcpp::List cpp_occu_cover_cdf_limits(
       // compact layout keeps ascending, matching the dense per-site sweep.
       for (int v = 0; v < V; ++v) {
         int s = arms.site(v);
-        double p = stable_plogis(clamp_eta(p_site[s] + arms.eta_p_visit(v, d),
+        double p = tulpa::math::inv_logit(clamp_eta(p_site[s] + arms.eta_p_visit(v, d),
                                            eta_bound));
         sum_l1mp[s] += std::log(1.0 - p);
       }
@@ -187,7 +186,7 @@ Rcpp::List cpp_occu_cover_ppc(
     }
     for (int v = 0; v < V; ++v) {
       int i = arms.site(v);
-      double p = stable_plogis(clamp_eta(p_site[i] + arms.eta_p_visit(v, s),
+      double p = tulpa::math::inv_logit(clamp_eta(p_site[i] + arms.eta_p_visit(v, s),
                                          eta_bound));
       p_vis[v]  = p;
       ep_vis[v] = ep_site[i] + arms.eta_pos_visit(v, s);

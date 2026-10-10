@@ -3,8 +3,6 @@
 // `OccuCoverCoupling` in cell_coupling_occu_cover.h and the 3-level
 // `OccuMultiscaleCoverCoupling` in cell_coupling_occu_multiscale_cover.h):
 //
-//   * sigmoid_                                 -- the fit kernel's logistic
-//                                                 (log_safe lives in tobs_math.h)
 //   * LognormalPositive / BetaPositive         -- positive-arm policies
 //                                                 (log-density + eta grad/hess)
 //   * nodet_mixture_block                       -- closed-form score + curvature
@@ -23,7 +21,7 @@
 #ifndef TULPAOBS_OCCU_COUPLING_SHARED_H
 #define TULPAOBS_OCCU_COUPLING_SHARED_H
 
-#include "tobs_math.h"             // log_safe / clamp_eta / kEtaClampBound
+#include "tobs_math.h"             // sigmoid_ / log_safe / clamp_eta
 #include <tulpa/portable_math.h>   // portable_digamma / portable_trigamma
 #include <tulpa/cell_coupling.h>   // CellEtas / CellResponse / CellDerivs / CurvatureMode
 #include <Rcpp.h>                  // M_PI
@@ -32,10 +30,6 @@
 #include <vector>
 
 namespace tulpaObs {
-
-inline double sigmoid_(double eta) {
-    return 1.0 / (1.0 + std::exp(-eta));
-}
 
 // Per-row detection multiplicity (n_trials) for the detection arm (index 1),
 // with a safe fallback of 1 when the arm carries no trial-count buffer (e.g. the
@@ -573,6 +567,128 @@ inline double occu_nodet_block(double                     psi,
     out.arm_grad[0][base0] = g_psi;
     if (want_hess) out.arm_neg_hess_diag[0][base0] = nh_psi;
     return cell_ll;
+}
+
+// ---------------------------------------------------------------------------
+// Two-level occu_cover cell on a padded [n_cells x J] visit grid, the per-cell
+// body of the occu_cover NUTS targets (single-species and community). Adds the
+// cell's marginal log-likelihood
+//
+//   any detection : log psi + sum_v [ y log p + (1-y) log(1-p) ]
+//                            + sum_{v: y=1, cover finite} log f_pos(y_pos; eta_pos, disp)
+//   no detection  : log( psi * prod_v (1 - p_v) + (1 - psi) )
+//
+// over the valid visits to the running total `lp`, term by term, and writes the
+// eta-scores: g_eta_psi, g_eta_p[v] and g_eta_pos[v] (J-wide, 0 at invalid
+// visits and at visits without a cover term), plus the per-visit
+// log-dispersion score accumulated into g_logdisp.
+// A detected visit with a non-finite cover keeps its detection term and drops
+// only the cover factor (cover missing at random).
+//
+// `eta_p_of(v)` / `eta_pos_of(v)` return the full linear predictor of valid
+// visit v (site block, visit block and any offsets), so each caller keeps its
+// own design layout and offset terms; eta_pos_of is called only where a cover
+// term is scored. `eta_p` / `eta_pc` / `g_pc` are caller-owned scratch of
+// length J.
+template <class Pos, class Valid, class YDet, class YPos, class EtaP, class EtaPos>
+inline void occu_cover_cell_sweep(const Pos& pos, double psi, int J,
+                                  Valid valid, YDet y_det, YPos y_pos,
+                                  EtaP eta_p_of, EtaPos eta_pos_of, double disp,
+                                  double* eta_p, double* eta_pc, double* g_pc,
+                                  double& lp, double& g_eta_psi, double* g_eta_p,
+                                  double* g_eta_pos, double& g_logdisp)
+{
+    bool any_det = false;
+    for (int v = 0; v < J; ++v) {
+        g_eta_p[v] = 0.0; g_eta_pos[v] = 0.0;
+        if (!valid(v)) { eta_p[v] = 0.0; continue; }
+        eta_p[v] = eta_p_of(v);
+        if (y_det(v)) any_det = true;
+    }
+
+    if (any_det) {
+        lp += log_safe(psi);
+        g_eta_psi = 1.0 - psi;
+        for (int v = 0; v < J; ++v) {
+            if (!valid(v)) continue;
+            const double pv = sigmoid_(eta_p[v]);
+            if (y_det(v)) { lp += log_safe(pv);       g_eta_p[v] = 1.0 - pv; }
+            else          { lp += log_safe(1.0 - pv); g_eta_p[v] = -pv; }
+        }
+        for (int v = 0; v < J; ++v) {
+            if (!valid(v) || !y_det(v)) continue;
+            const double yp = y_pos(v);
+            if (!std::isfinite(yp)) continue;
+            const double eta_pos = eta_pos_of(v);
+            double g_pos = 0.0, nh_pos = 0.0;
+            lp += pos.log_density(yp, eta_pos, disp);
+            pos.grad_hess_eta(yp, eta_pos, disp, false, g_pos, nh_pos);
+            g_eta_pos[v] = g_pos;
+            g_logdisp   += pos.grad_logdisp(yp, eta_pos, disp);
+        }
+    } else {
+        int nv = 0;
+        for (int v = 0; v < J; ++v) {
+            if (!valid(v)) continue;
+            eta_pc[nv] = eta_p[v];
+            ++nv;
+        }
+        double g_w = 0.0, nh_w = 0.0;
+        lp += nodet_mixture_block(psi, eta_pc, nv, /*want_hess=*/false,
+                                  /*expected=*/false, g_w, nh_w, g_pc,
+                                  nullptr, nullptr, nullptr);
+        g_eta_psi = g_w;
+        int j = 0;
+        for (int v = 0; v < J; ++v) {
+            if (!valid(v)) continue;
+            g_eta_p[v] = g_pc[j];
+            ++j;
+        }
+    }
+}
+
+// Design sandwich of one occu_cover cell's eta-scores onto the coefficient
+// gradient blocks: the occupancy design row, the site-level detection / cover
+// rows (broadcast across visits, so they take the visit-summed score) and the
+// visit-level rows (site-major, row = i * J + v). Returns the visit-summed
+// cover score, which a coupled field also reads.
+template <class Mat>
+inline double occu_cover_cell_sandwich(int i, int J, double g_eta_psi,
+                                       const double* g_eta_p,
+                                       const double* g_eta_pos,
+                                       const Mat& X_occ, const Mat& X_det_site,
+                                       const Mat& X_det_visit,
+                                       const Mat& X_pos_site,
+                                       const Mat& X_pos_visit,
+                                       double* g_occ, double* g_det_site,
+                                       double* g_det_visit, double* g_pos_site,
+                                       double* g_pos_visit)
+{
+    const int p_occ = X_occ.ncol();
+    const int p_det_site = X_det_site.ncol(), p_det_visit = X_det_visit.ncol();
+    const int p_pos_site = X_pos_site.ncol(), p_pos_visit = X_pos_visit.ncol();
+    for (int k = 0; k < p_occ; ++k) g_occ[k] += g_eta_psi * X_occ(i, k);
+    double g_eta_p_sum = 0.0, g_eta_pos_sum = 0.0;
+    for (int v = 0; v < J; ++v) { g_eta_p_sum += g_eta_p[v]; g_eta_pos_sum += g_eta_pos[v]; }
+    for (int k = 0; k < p_det_site; ++k) g_det_site[k] += g_eta_p_sum * X_det_site(i, k);
+    for (int k = 0; k < p_pos_site; ++k) g_pos_site[k] += g_eta_pos_sum * X_pos_site(i, k);
+    if (p_det_visit > 0) {
+        for (int v = 0; v < J; ++v) {
+            if (g_eta_p[v] == 0.0) continue;
+            const int row = i * J + v;
+            for (int k = 0; k < p_det_visit; ++k)
+                g_det_visit[k] += g_eta_p[v] * X_det_visit(row, k);
+        }
+    }
+    if (p_pos_visit > 0) {
+        for (int v = 0; v < J; ++v) {
+            if (g_eta_pos[v] == 0.0) continue;
+            const int row = i * J + v;
+            for (int k = 0; k < p_pos_visit; ++k)
+                g_pos_visit[k] += g_eta_pos[v] * X_pos_visit(row, k);
+        }
+    }
+    return g_eta_pos_sum;
 }
 
 // ---------------------------------------------------------------------------

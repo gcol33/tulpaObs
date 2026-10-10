@@ -1,7 +1,7 @@
 // community_chol.h
 // Dense linear algebra on a community-covariance Cholesky factor, shared by the
-// community NUTS targets (the spatial-factor occu_cover model,
-// ms_occu_cover_spatial_nuts.cpp, and the community N-mixture, ms_abun_nuts.cpp).
+// community NUTS targets (ms_*_nuts.cpp) and the community N-mixture pointwise
+// log-likelihood (ms_nmix_ploglik.cpp).
 //
 // A P x P community covariance Sigma = C C' is carried by its lower-triangular
 // Cholesky factor C, packed column-major over the lower triangle with the
@@ -66,6 +66,34 @@ inline void chol_unpack_cpp(const double* vec, int P, std::vector<double>& C) {
         C[(std::size_t) j * P + j] = chol_diag_exp(vec[pos++]);
         for (int i = j + 1; i < P; ++i) C[(std::size_t) i * P + j] = vec[pos++];
     }
+}
+
+// Non-centered reconstruction of one arm: b = C z, or b = mu + C z when `mu` is
+// non-null (C lower-triangular P x P, row-major).
+inline void chol_noncentered_recon(const double* C, const double* z, int P,
+                                   double* b, const double* mu = nullptr) {
+    for (int i = 0; i < P; ++i) {
+        double v = 0.0;
+        for (int j = 0; j <= i; ++j) v += C[(std::size_t) i * P + j] * z[j];
+        b[i] = mu ? mu[i] + v : v;
+    }
+}
+
+// Non-centered push-back of one arm's b-space gradient gb: g_z += C' gb and
+// A += gb z' over the lower triangle (A row-major P x P, the accumulator
+// chol_data_grad_noncentered reads), plus g_mu += gb when `g_mu` is non-null.
+inline void chol_noncentered_push(const double* C, const double* gb,
+                                  const double* z, int P, double* g_z, double* A,
+                                  double* g_mu = nullptr) {
+    if (g_mu)
+        for (int k = 0; k < P; ++k) g_mu[k] += gb[k];
+    for (int vc = 0; vc < P; ++vc) {
+        double sg = 0.0;
+        for (int i = vc; i < P; ++i) sg += C[(std::size_t) i * P + vc] * gb[i];
+        g_z[vc] += sg;
+    }
+    for (int i = 0; i < P; ++i)
+        for (int j = 0; j <= i; ++j) A[(std::size_t) i * P + j] += gb[i] * z[j];
 }
 
 // Inverse of a lower-triangular matrix (row-major), by forward substitution.

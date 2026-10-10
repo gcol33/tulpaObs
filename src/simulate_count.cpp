@@ -12,7 +12,6 @@
 #include "tobs_math.h"
 #include "simulate_helpers.h"
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 using tulpaObs::row_draw_dot;
 using tulpaObs::draw_latent_N;
 
@@ -44,7 +43,7 @@ Rcpp::List cpp_simulate_nmix(
     Rcpp::IntegerMatrix ys(n_sites, max_visits);
     std::fill(ys.begin(), ys.end(), NA_INTEGER);
     for (int k = 0; k < n_obs; ++k) {
-      double po = stable_plogis(row_draw_dot(pXp, n_obs, k, pd, ndr, idx, p_lam, p_p));
+      double po = tulpa::math::inv_logit(row_draw_dot(pXp, n_obs, k, pd, ndr, idx, p_lam, p_p));
       ys(site_idx[k] - 1, visit_idx[k] - 1) = (int) R::rbinom((double) N[site_idx[k] - 1], po);
     }
     out[s] = ys;
@@ -74,7 +73,7 @@ Rcpp::List cpp_simulate_removal(
     std::vector<double> pmat((std::size_t) n_sites * n_pass, NA_REAL);
     for (int k = 0; k < n_obs; ++k)
       pmat[(std::size_t) (visit_idx[k] - 1) * n_sites + (site_idx[k] - 1)] =
-        stable_plogis(row_draw_dot(pXp, n_obs, k, pd, ndr, idx, p_lam, p_p));
+        tulpa::math::inv_logit(row_draw_dot(pXp, n_obs, k, pd, ndr, idx, p_lam, p_p));
     Rcpp::IntegerMatrix ys(n_sites, n_pass);
     for (int i = 0; i < n_sites; ++i) {
       int rem = N[i];
@@ -137,12 +136,12 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
     int* base = out.begin() + (std::size_t) s * sim_stride;
     for (int i = 0; i < n_sites; ++i) {
       double lambda = std::exp(row_draw_dot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam));
-      double pdet = stable_plogis(row_draw_dot(pXp, n_sites, i, pd, ndr, idx, o_p, p_p));
+      double pdet = tulpa::math::inv_logit(row_draw_dot(pXp, n_sites, i, pd, ndr, idx, o_p, p_p));
       int N = draw_latent_N(lambda, is_nb ? r_disp : R_PosInf);
       for (int t = 0; t < T; ++t) {
         if (t > 0) {
           const int iv = t - 1;
-          double omega = stable_plogis(row_draw_dot(
+          double omega = tulpa::math::inv_logit(row_draw_dot(
               pXo, nrow_om, om_iv ? i * nIv + iv : i, pd, ndr, idx, o_om, p_om));
           double gamma = std::exp(row_draw_dot(
               pXg, nrow_gm, gm_iv ? i * nIv + iv : i, pd, ndr, idx, o_gm, p_gm));
@@ -174,10 +173,10 @@ Rcpp::List cpp_simulate_fp_occu(
     int idx = (int) R_unif_index((double) ndr);
     std::vector<double> psi(n_sites), p11(n_sites), p10(n_sites), b(n_sites);
     for (int i = 0; i < n_sites; ++i) {
-      psi[i] = stable_plogis(row_draw_dot(X_psi.begin(), n_sites, i, pd, ndr, idx, 0, p_psi));
-      p11[i] = stable_plogis(row_draw_dot(X_p11.begin(), n_sites, i, pd, ndr, idx, o_p11, p_p11));
-      p10[i] = stable_plogis(row_draw_dot(X_p10.begin(), n_sites, i, pd, ndr, idx, o_p10, p_p10));
-      b[i]   = stable_plogis(row_draw_dot(X_b.begin(),   n_sites, i, pd, ndr, idx, o_b,   p_b));
+      psi[i] = tulpa::math::inv_logit(row_draw_dot(X_psi.begin(), n_sites, i, pd, ndr, idx, 0, p_psi));
+      p11[i] = tulpa::math::inv_logit(row_draw_dot(X_p11.begin(), n_sites, i, pd, ndr, idx, o_p11, p_p11));
+      p10[i] = tulpa::math::inv_logit(row_draw_dot(X_p10.begin(), n_sites, i, pd, ndr, idx, o_p10, p_p10));
+      b[i]   = tulpa::math::inv_logit(row_draw_dot(X_b.begin(),   n_sites, i, pd, ndr, idx, o_b,   p_b));
     }
     std::vector<int> z(n_sites);
     for (int i = 0; i < n_sites; ++i) z[i] = (int) R::rbinom(1.0, psi[i]);

@@ -6,27 +6,23 @@
 // The marginal is cell (occupancy z) over plot (availability a) over visit
 // (detection), plus the per-detected-visit cover density. Designs arrive as
 // matrices; the visit blocks are site-major [n_plots x J] (X_*_visit has one row
-// per (plot, visit)). Byte-close to the R marginal (~1e-13).
+// per (plot, visit)). Byte-close to the R marginal (~1e-13). The positive-arm
+// density is the fit kernels' pos_log_density (occu_coupling_shared.h), so WAIC
+// / LOO score the cover arm with the density the model was fit with.
 
 #include <Rcpp.h>
 #include <vector>
 #include <cmath>
 #include "tobs_math.h"
 #include "tobs_shape.h"
+#include "occu_coupling_shared.h"   // pos_log_density
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 
-namespace {
-inline double clp(double x) {
-  if (x < 1e-12) return 1e-12;
-  if (x > 1.0 - 1e-12) return 1.0 - 1e-12;
-  return x;
-}
-}  // namespace
+using tulpaObs::clamp_prob;
 
 // idx_* are 0-based coefficient offsets into each draw row; p_* the block widths.
 // [[Rcpp::export]]
@@ -115,7 +111,7 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
         double eta_theta = 0.0;
         for (int k = 0; k < p_theta; ++k)
           eta_theta += X_theta((std::size_t) i, k) * coef(idx_theta, k);
-        double theta = clp(stable_plogis(eta_theta));
+        double theta = clamp_prob(tulpa::math::inv_logit(eta_theta));
 
         // Site-level detection / cover predictors (broadcast across visits).
         double eta_p_site = 0.0, eta_pos_site = 0.0;
@@ -134,7 +130,7 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
             for (int k = 0; k < p_p_visit; ++k)
               eta_p += X_p_visit((std::size_t) vrow, k) * coef(idx_p_visit, k);
           }
-          double p = clp(stable_plogis(eta_p));
+          double p = clamp_prob(tulpa::math::inv_logit(eta_p));
           double lp = std::log(p), l1mp = std::log(1.0 - p);
           sum_1mp += l1mp;
           int yij = y((std::size_t) i, j);
@@ -156,22 +152,7 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
                   add += X_pos_visit((std::size_t) vrow, k) * coef(idx_pos_visit, k);
                 eta_pos += add;
               }
-              double dens;
-              if (positive == 3) {
-                double mu = clp(stable_plogis(eta_pos));
-                double cvc = cv < 1e-9 ? 1e-9 : (cv > 1.0 - 1e-9 ? 1.0 - 1e-9 : cv);
-                double a = mu * disp, b = (1.0 - mu) * disp;
-                dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
-                       (a - 1.0) * std::log(cvc) + (b - 1.0) * std::log(1.0 - cvc);
-              } else if (positive == 4) {
-                // identity-Gaussian: mu = eta, residual on the raw response.
-                double r = (cv - eta_pos) / disp;
-                dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r;
-              } else {
-                double ly = std::log(cv), r = (ly - eta_pos) / disp;
-                dens = -0.5 * std::log(2.0 * M_PI) - std::log(disp) - 0.5 * r * r - ly;
-              }
-              sum_cover += dens;
+              sum_cover += tulpaObs::pos_log_density(positive, cv, eta_pos, disp);
             }
           } else {
             sum_hdet += l1mp;
@@ -195,7 +176,7 @@ Rcpp::NumericMatrix cpp_occu_mscale_cover_ploglik(
         double eta_psi = 0.0;
         for (int k = 0; k < p_psi; ++k)
           eta_psi += X_psi((std::size_t) c, k) * coef(idx_psi, k);
-        double psi = clp(stable_plogis(eta_psi));
+        double psi = clamp_prob(tulpa::math::inv_logit(eta_psi));
         double log_psi = std::log(psi), log_1mpsi = std::log(1.0 - psi);
         double val;
         if (det_cell[c]) {

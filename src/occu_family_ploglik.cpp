@@ -21,15 +21,8 @@ using namespace Rcpp;
 using tulpaObs::logsumexp2;
 namespace shape = tulpaObs::shape;
 
-namespace {
-
-inline double log_plogis(double x) {              // log(plogis(x))
-  if (x >= 0.0) return -std::log1p(std::exp(-x));
-  return x - std::log1p(std::exp(x));
-}
-inline double log_1m_plogis(double x) { return log_plogis(-x); }
-
-}  // namespace
+using tulpaObs::log_plogis;
+using tulpaObs::log_1m_plogis;
 
 // Single-season occupancy (.tobs_ploglik_replicated): per replicate row i,
 // latent z marginalised. eta_psi / eta_p are [S x N]; y is [N x max_visits]

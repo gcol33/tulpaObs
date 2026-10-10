@@ -22,6 +22,7 @@
 #define TULPAOBS_MARGINAL_COUNT_LAPLACE_H
 
 #include "nmix_kernel.h"   // NMixSiteResult
+#include "tobs_math.h"     // tulpa::math::inv_logit
 #include "nmix_progress.h" // make_grid_progress_from_option
 #include "newton_step.h"   // newton_backtrack / solve_with_fisher_fallback
 #include <Rcpp.h>
@@ -58,12 +59,7 @@ struct SweepState {
     }
 };
 
-// p_ij from a logit linear predictor, stable for either sign.
-inline double inv_logit(double e) {
-    if (e > 0.0) return 1.0 / (1.0 + std::exp(-e));
-    double ee = std::exp(e);
-    return ee / (1.0 + ee);
-}
+using tulpa::math::inv_logit;
 
 // One per-site kernel pass at the current (eta_lambda, eta_p, r). Fills `st`
 // and returns the total log-lik. Templated on the family's per-site kernel.

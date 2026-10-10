@@ -69,7 +69,7 @@ struct Arms {
            field_occ[(std::size_t) d * n_sites + i];
   }
   double psi(int i, int d) const {
-    return stable_plogis(clamp_eta(eta_psi(i, d), eta_bound));
+    return tulpa::math::inv_logit(clamp_eta(eta_psi(i, d), eta_bound));
   }
 
   // Site-level detection / cover blocks; the visit-level block is added per

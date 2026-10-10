@@ -25,30 +25,15 @@
 #endif
 
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
+using tulpaObs::log_plogis;
+using tulpaObs::log_1m_plogis;
 
 namespace {
 
-// log(plogis(x)) = log(1/(1+exp(-x))), the stable two-branch form R's
-// plogis(x, log.p = TRUE) uses.
-inline double log_plogis(double x) {
-  if (x >= 0.0) return -std::log1p(std::exp(-x));
-  return x - std::log1p(std::exp(x));
-}
-inline double log_1m_plogis(double x) { return log_plogis(-x); }
-
+// Gaussian log-density N(mean, sd^2) at x, off the engine's standard-normal
+// log-density.
 inline double dnorm_log(double x, double mean, double sd) {
-  double r = (x - mean) / sd;
-  return -0.5 * std::log(2.0 * M_PI) - std::log(sd) - 0.5 * r * r;
-}
-
-inline double std_pnorm(double z) { return 0.5 * std::erfc(-z * M_SQRT1_2); }
-
-// log Phi(z); deep left tail via the asymptotic expansion so it never logs 0.
-inline double log_pnorm(double z) {
-  double p = std_pnorm(z);
-  if (p > 0.0) return std::log(p);
-  return -0.5 * z * z - std::log(-z) - 0.5 * std::log(2.0 * M_PI);
+  return tulpa::math::portable_dnorm_log((x - mean) / sd) - std::log(sd);
 }
 
 // Family codes: 0 lognormal, 1 lognormal_trunc, 2 ordinal, 3 beta.
@@ -106,12 +91,13 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
           dens = dnorm_log(y, e, sd) - y;
           break;
         case 1:  // lognormal_trunc
-          dens = dnorm_log(y, e, sd) - y - log_pnorm((ptu[j] - e) / sd);
+          dens = dnorm_log(y, e, sd) - y
+                 - tulpa::math::portable_pnorm_log((ptu[j] - e) / sd);
           break;
         case 2: { // ordinal interval class mass
           double zl = (plo[j] - e) / sd;
           double zu = (pup[j] - e) / sd;
-          double m  = std_pnorm(zu) - std_pnorm(zl);
+          double m  = tulpa::math::portable_pnorm(zu) - tulpa::math::portable_pnorm(zl);
           dens = std::log(m > 1e-300 ? m : 1e-300);
           break;
         }
@@ -119,7 +105,7 @@ Rcpp::NumericMatrix cpp_cover_hurdle_ploglik(
           dens = dnorm_log(y, e, sd);
           break;
         default: { // beta
-          double mu = stable_plogis(e);
+          double mu = tulpa::math::inv_logit(e);
           double a  = mu * sd;
           double b  = (1.0 - mu) * sd;
           dens = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +

@@ -22,17 +22,9 @@
 #include <vector>
 #include <cmath>
 #include <cstddef>
+#include "tobs_math.h"   // clamp_prob / sigmoid_
 
 namespace tulpaObs {
-
-// Clamp a probability away from the {0, 1} boundary, matching the R kernel's
-// pmin(pmax(x, 1e-12), 1 - 1e-12).
-inline double msocc_clamp_(double x) {
-    const double lo = 1e-12, hi = 1.0 - 1e-12;
-    return x < lo ? lo : (x > hi ? hi : x);
-}
-
-inline double msocc_sigmoid_(double eta) { return 1.0 / (1.0 + std::exp(-eta)); }
 
 // Per-(species) site-level summaries: n_valid_i visits, n_det_i detections.
 struct MsOccuSiteSummary {
@@ -72,8 +64,8 @@ inline MsOccuSiteCell ms_occu_site_cell(double eta_psi, double eta_p,
                                         bool observed) {
     MsOccuSiteCell out;
     if (n_valid <= 0) return out;
-    const double psi = msocc_clamp_(msocc_sigmoid_(eta_psi));
-    const double p   = msocc_clamp_(msocc_sigmoid_(eta_p));
+    const double psi = clamp_prob(sigmoid_(eta_psi));
+    const double p   = clamp_prob(sigmoid_(eta_p));
     const double w1mw = psi * (1.0 - psi);
     const double p1mp = p * (1.0 - p);
     if (any_det) {
@@ -140,8 +132,8 @@ inline void compute_ms_occu_site(const double* eta_psi, const double* eta_p,
         res.grad_eta_p.assign((std::size_t) n_sites, 0.0);
     }
     for (int i = 0; i < n_sites; ++i) {
-        const double psi = msocc_clamp_(msocc_sigmoid_(eta_psi[i]));
-        const double p   = msocc_clamp_(msocc_sigmoid_(eta_p[i]));
+        const double psi = clamp_prob(sigmoid_(eta_psi[i]));
+        const double p   = clamp_prob(sigmoid_(eta_p[i]));
         const int nv = summ.n_valid[i];
         const int nd = summ.n_det[i];
         if (summ.any_det[i]) {

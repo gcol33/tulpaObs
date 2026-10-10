@@ -28,6 +28,7 @@
 #include <tulpa/nested_likelihood.h>
 #include <tulpa/model_data.h>
 #include <tulpa/param_layout.h>
+#include "tobs_math.h"   // tulpa::math::inv_logit
 
 namespace {
 
@@ -41,12 +42,6 @@ struct OccupancyResponse {
     std::vector<double> y;  // [N] detection indicator in {0, 1}
     std::vector<double> q;  // [N] per-site P(>=1 detection | occupied), in [0, 1]
 };
-
-inline double occ_sigma(double eta) {
-    if (eta > 0) return 1.0 / (1.0 + std::exp(-eta));
-    double e = std::exp(eta);
-    return e / (1.0 + e);
-}
 
 // mu = q * sigma(eta) is held inside (eps, 1 - eps) so log(mu) and log(1 - mu)
 // stay finite; the (1 - mu) denominator of the score and the information is
@@ -68,7 +63,7 @@ struct OccSiteTerms {
 
 inline OccSiteTerms occ_site_terms(double y, double q, double eta) {
     if (q <= 0.0) return {0.0, 0.0, 0.0};
-    const double s     = occ_sigma(eta);
+    const double s     = tulpa::math::inv_logit(eta);
     const double mu    = q * s;
     const double mu_c  = std::max(std::min(mu, 1.0 - OCC_MU_EPS), OCC_MU_EPS);
     const double denom = std::max(1.0 - mu, OCC_DENOM_FLOOR);

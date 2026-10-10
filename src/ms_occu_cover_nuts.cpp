@@ -194,6 +194,7 @@ inline double msoc_cell_sweep(const MsOccuCoverNutsData& d, const MsocSpec& ms,
     for (int k = 0; k < P_pos; ++k) gbpos[k] = 0.0;
     double lp = 0.0;
     g_ld_s = 0.0;
+    const PosCodeAccess pos(d.pos_code);
 
     for (int i = 0; i < N; ++i) {
         double eta_psi = 0.0;
@@ -202,106 +203,40 @@ inline double msoc_cell_sweep(const MsOccuCoverNutsData& d, const MsocSpec& ms,
 
         double eta_p_site = 0.0;
         for (int k = 0; k < pds; ++k) eta_p_site += d.X_det_site(i, k) * bp_site[k];
-        bool any_det = false;
-        for (int v = 0; v < J; ++v) {
-            g_eta_p[v] = 0.0; g_eta_pos[v] = 0.0;
-            if (ms.valid(i, v) == 0) { eta_p[v] = 0.0; continue; }
+        auto eta_p_of = [&](int v) {
             double e = eta_p_site;
             if (pdv > 0) {
                 const int row = i * J + v;
                 for (int k = 0; k < pdv; ++k) e += d.X_det_visit(row, k) * bp_visit[k];
             }
-            eta_p[v] = e;
-            if (ms.y(i, v) == 1) any_det = true;
-        }
+            return e;
+        };
+        auto eta_pos_of = [&](int v) {
+            double e = 0.0;
+            for (int k = 0; k < pps; ++k) e += d.X_pos_site(i, k) * bpos_site[k];
+            if (ppv > 0) {
+                const int row = i * J + v;
+                for (int k = 0; k < ppv; ++k) e += d.X_pos_visit(row, k) * bpos_visit[k];
+            }
+            return e;
+        };
 
         double g_eta_psi = 0.0;
-        if (any_det) {
-            lp += log_safe(psi);
-            g_eta_psi = 1.0 - psi;
-            for (int v = 0; v < J; ++v) {
-                if (ms.valid(i, v) == 0) continue;
-                const double pv = sigmoid_(eta_p[v]);
-                if (ms.y(i, v) == 1) { lp += log_safe(pv);       g_eta_p[v] = 1.0 - pv; }
-                else                 { lp += log_safe(1.0 - pv); g_eta_p[v] = -pv; }
-            }
-            for (int v = 0; v < J; ++v) {
-                if (ms.valid(i, v) == 0 || ms.y(i, v) != 1) continue;
-                const double yp = ms.y_pos(i, v);
-                if (!std::isfinite(yp)) continue;
-                double eta_pos = 0.0;
-                for (int k = 0; k < pps; ++k) eta_pos += d.X_pos_site(i, k) * bpos_site[k];
-                if (ppv > 0) {
-                    const int row = i * J + v;
-                    for (int k = 0; k < ppv; ++k) eta_pos += d.X_pos_visit(row, k) * bpos_visit[k];
-                }
-                lp += pos_log_density(d.pos_code, yp, eta_pos, disp);
-                g_eta_pos[v] = pos_grad_eta(d.pos_code, yp, eta_pos, disp);
-                g_ld_s      += pos_grad_logdisp(d.pos_code, yp, eta_pos, disp);
-            }
-        } else {
-            int nv = 0;
-            for (int v = 0; v < J; ++v) {
-                if (ms.valid(i, v) == 0) continue;
-                eta_pc[nv] = eta_p[v]; ++nv;
-            }
-            double g_w = 0.0, nh_w = 0.0;
-            const double cell_ll = nodet_mixture_block(
-                psi, eta_pc.data(), nv, false, false,
-                g_w, nh_w, g_pc.data(), nullptr, nullptr, nullptr);
-            lp += cell_ll;
-            g_eta_psi = g_w;
-            int j = 0;
-            for (int v = 0; v < J; ++v) {
-                if (ms.valid(i, v) == 0) continue;
-                g_eta_p[v] = g_pc[j]; ++j;
-            }
-        }
+        occu_cover_cell_sweep(
+            pos, psi, J,
+            [&](int v) { return ms.valid(i, v) != 0; },
+            [&](int v) { return ms.y(i, v) == 1; },
+            [&](int v) { return ms.y_pos(i, v); },
+            eta_p_of, eta_pos_of, disp,
+            eta_p.data(), eta_pc.data(), g_pc.data(),
+            lp, g_eta_psi, g_eta_p.data(), g_eta_pos.data(), g_ld_s);
 
-        for (int k = 0; k < P_occ; ++k) gbo[k] += g_eta_psi * d.X_occ(i, k);
-        double g_eta_p_sum = 0.0, g_eta_pos_sum = 0.0;
-        for (int v = 0; v < J; ++v) { g_eta_p_sum += g_eta_p[v]; g_eta_pos_sum += g_eta_pos[v]; }
-        for (int k = 0; k < pds; ++k) gbp[k]   += g_eta_p_sum   * d.X_det_site(i, k);
-        for (int k = 0; k < pps; ++k) gbpos[k] += g_eta_pos_sum * d.X_pos_site(i, k);
-        if (pdv > 0) {
-            for (int v = 0; v < J; ++v) {
-                if (g_eta_p[v] == 0.0) continue;
-                const int row = i * J + v;
-                for (int k = 0; k < pdv; ++k) gbp[pds + k] += g_eta_p[v] * d.X_det_visit(row, k);
-            }
-        }
-        if (ppv > 0) {
-            for (int v = 0; v < J; ++v) {
-                if (g_eta_pos[v] == 0.0) continue;
-                const int row = i * J + v;
-                for (int k = 0; k < ppv; ++k) gbpos[pps + k] += g_eta_pos[v] * d.X_pos_visit(row, k);
-            }
-        }
+        occu_cover_cell_sandwich(
+            i, J, g_eta_psi, g_eta_p.data(), g_eta_pos.data(),
+            d.X_occ, d.X_det_site, d.X_det_visit, d.X_pos_site, d.X_pos_visit,
+            gbo, gbp, gbp + pds, gbpos, gbpos + pps);
     }
     return lp;
-}
-
-// Reconstruct one arm's b = mu + C z (lower-triangular C, row-major).
-inline void msoc_recon_arm(const double* mu_arm, const double* C, const double* z,
-                           int Pa, double* b) {
-    for (int i = 0; i < Pa; ++i) {
-        double v = 0.0;
-        for (int j = 0; j <= i; ++j) v += C[(std::size_t) i * Pa + j] * z[j];
-        b[i] = mu_arm[i] + v;
-    }
-}
-
-// Non-centered arm push-back: g_mu_arm += gb; g_z_arm += C' gb; A += gb z'.
-inline void msoc_push_arm(const double* C, const double* gb, const double* z,
-                          int Pa, double* g_mu_arm, double* g_z_arm, double* A) {
-    for (int k = 0; k < Pa; ++k) g_mu_arm[k] += gb[k];
-    for (int vc = 0; vc < Pa; ++vc) {
-        double sg = 0.0;
-        for (int i = vc; i < Pa; ++i) sg += C[(std::size_t) i * Pa + vc] * gb[i];
-        g_z_arm[vc] += sg;
-    }
-    for (int i = 0; i < Pa; ++i)
-        for (int j = 0; j <= i; ++j) A[(std::size_t) i * Pa + j] += gb[i] * z[j];
 }
 
 // Joint log-posterior + gradient over theta = (mu, {z_s}, chol_occ, chol_p,
@@ -310,10 +245,8 @@ inline void msoc_push_arm(const double* C, const double* gb, const double* z,
 inline double ms_occu_cover_nuts_eval(const MsOccuCoverNutsData& d, const double* th,
                                       double sigma_beta, const MsOccuCoverPri& pr,
                                       double* g) {
-    const int N = d.n_sites, J = d.max_visits, S = d.n_species, P = d.P_tot;
+    const int J = d.max_visits, S = d.n_species, P = d.P_tot;
     const int P_occ = d.P_occ, P_p = d.P_p, P_pos = d.P_pos;
-    const int pds = d.p_det_site, pdv = d.p_det_visit;
-    const int pps = d.p_pos_site, ppv = d.p_pos_visit;
     for (int j = 0; j < d.total; ++j) g[j] = 0.0;
 
     const double* mu = th;                        // length P
@@ -342,9 +275,9 @@ inline double ms_occu_cover_nuts_eval(const MsOccuCoverNutsData& d, const double
         const double* z_pos = z_s + d.off_pos;
 
         std::vector<double> b_occ(P_occ), b_p(P_p), b_pos(P_pos);
-        msoc_recon_arm(mu + d.off_occ, C_occ.data(), z_occ, P_occ, b_occ.data());
-        msoc_recon_arm(mu + d.off_p,   C_p.data(),   z_p,   P_p,   b_p.data());
-        msoc_recon_arm(mu + d.off_pos, C_pos.data(), z_pos, P_pos, b_pos.data());
+        chol_noncentered_recon(C_occ.data(), z_occ, P_occ, b_occ.data(), mu + d.off_occ);
+        chol_noncentered_recon(C_p.data(), z_p, P_p, b_p.data(), mu + d.off_p);
+        chol_noncentered_recon(C_pos.data(), z_pos, P_pos, b_pos.data(), mu + d.off_pos);
 
         std::vector<double> gbo(P_occ), gbp(P_p), gbpos(P_pos);
         double g_ld_s = 0.0;
@@ -354,12 +287,12 @@ inline double ms_occu_cover_nuts_eval(const MsOccuCoverNutsData& d, const double
         g_logdisp += g_ld_s;
 
         double* gz_s = g_z + s * P;
-        msoc_push_arm(C_occ.data(), gbo.data(), z_occ, P_occ,
-                      g_mu + d.off_occ, gz_s + d.off_occ, A_occ.data());
-        msoc_push_arm(C_p.data(), gbp.data(), z_p, P_p,
-                      g_mu + d.off_p, gz_s + d.off_p, A_p.data());
-        msoc_push_arm(C_pos.data(), gbpos.data(), z_pos, P_pos,
-                      g_mu + d.off_pos, gz_s + d.off_pos, A_pos.data());
+        chol_noncentered_push(C_occ.data(), gbo.data(), z_occ, P_occ,
+                              gz_s + d.off_occ, A_occ.data(), g_mu + d.off_occ);
+        chol_noncentered_push(C_p.data(), gbp.data(), z_p, P_p,
+                              gz_s + d.off_p, A_p.data(), g_mu + d.off_p);
+        chol_noncentered_push(C_pos.data(), gbpos.data(), z_pos, P_pos,
+                              gz_s + d.off_pos, A_pos.data(), g_mu + d.off_pos);
     }
 
     // ---- z prior: standard normal over the whole per-species block ----
@@ -398,7 +331,8 @@ inline double ms_occu_cover_nuts_eval(const MsOccuCoverNutsData& d, const double
 
 // Dispersion-RE variant: the shared log-dispersion becomes a fourth 1-D community
 // arm log_disp_s = mu_ld + sigma_ld * z_ld_s. Reuses msoc_cell_sweep (per-species
-// disp), msoc_recon_arm / msoc_push_arm; adds the 1-D ld arm push-back + priors.
+// disp), chol_noncentered_recon / chol_noncentered_push; adds the 1-D ld arm
+// push-back + priors.
 // Mirrors .tobs_ms_occu_cover_re_disp_logpost.
 inline double ms_occu_cover_re_disp_nuts_eval(const MsOccuCoverNutsData& d,
                                               const double* th, double sigma_beta,
@@ -433,9 +367,9 @@ inline double ms_occu_cover_re_disp_nuts_eval(const MsOccuCoverNutsData& d,
         const double* z_pos = z_s + d.off_pos;
         const double  z_ld  = z_s[P_coef];         // z_ld at the end of the block
         std::vector<double> b_occ(P_occ), b_p(P_p), b_pos(P_pos);
-        msoc_recon_arm(mu + d.off_occ, C_occ.data(), z_occ, P_occ, b_occ.data());
-        msoc_recon_arm(mu + d.off_p,   C_p.data(),   z_p,   P_p,   b_p.data());
-        msoc_recon_arm(mu + d.off_pos, C_pos.data(), z_pos, P_pos, b_pos.data());
+        chol_noncentered_recon(C_occ.data(), z_occ, P_occ, b_occ.data(), mu + d.off_occ);
+        chol_noncentered_recon(C_p.data(), z_p, P_p, b_p.data(), mu + d.off_p);
+        chol_noncentered_recon(C_pos.data(), z_pos, P_pos, b_pos.data(), mu + d.off_pos);
         const double disp_s = std::exp(mu_ld + sigma_ld * z_ld);
 
         std::vector<double> gbo(P_occ), gbp(P_p), gbpos(P_pos);
@@ -445,12 +379,12 @@ inline double ms_occu_cover_re_disp_nuts_eval(const MsOccuCoverNutsData& d,
                               eta_p, g_eta_p, g_eta_pos, eta_pc, g_pc);
 
         double* gz_s = g_z + s * Pz;
-        msoc_push_arm(C_occ.data(), gbo.data(), z_occ, P_occ,
-                      g_mu + d.off_occ, gz_s + d.off_occ, A_occ.data());
-        msoc_push_arm(C_p.data(), gbp.data(), z_p, P_p,
-                      g_mu + d.off_p, gz_s + d.off_p, A_p.data());
-        msoc_push_arm(C_pos.data(), gbpos.data(), z_pos, P_pos,
-                      g_mu + d.off_pos, gz_s + d.off_pos, A_pos.data());
+        chol_noncentered_push(C_occ.data(), gbo.data(), z_occ, P_occ,
+                              gz_s + d.off_occ, A_occ.data(), g_mu + d.off_occ);
+        chol_noncentered_push(C_p.data(), gbp.data(), z_p, P_p,
+                              gz_s + d.off_p, A_p.data(), g_mu + d.off_p);
+        chol_noncentered_push(C_pos.data(), gbpos.data(), z_pos, P_pos,
+                              gz_s + d.off_pos, A_pos.data(), g_mu + d.off_pos);
         // 1-D dispersion arm: log_disp_s = mu_ld + sigma_ld * z_ld.
         g_mld        += g_ld_s;
         gz_s[P_coef] += sigma_ld * g_ld_s;

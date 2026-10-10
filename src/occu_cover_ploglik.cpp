@@ -31,7 +31,6 @@
 #endif
 
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 using tulpaObs::clamp_eta;
 using tulpaObs::logsumexp2;
 using tulpaObs::occu_cover_ragged::Arms;
@@ -123,7 +122,7 @@ Rcpp::NumericMatrix cpp_occu_cover_ploglik_ragged(
       for (int v = 0; v < V; ++v) {
         int s = arms.site(v);
         double eta_p = p_site[s] + arms.eta_p_visit(v, d);
-        double p    = stable_plogis(clamp_eta(eta_p, eta_bound));
+        double p    = tulpa::math::inv_logit(clamp_eta(eta_p, eta_bound));
         double l1mp = std::log(1.0 - p);
         int    y    = ydet[v];
         slh[s]   += (y == 1) ? std::log(p) : l1mp;

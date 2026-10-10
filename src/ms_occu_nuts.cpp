@@ -179,19 +179,8 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
         const double* zp   = z_s + p_psi;     // length p_p
         std::fill(gbpsi.begin(), gbpsi.end(), 0.0);
         std::fill(gbp.begin(), gbp.end(), 0.0);
-        // reconstruct b = C z (lower-triangular C)
-        for (int i = 0; i < p_psi; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j)
-                v += C_psi[(std::size_t) i * p_psi + j] * zpsi[j];
-            b_psi[i] = v;
-        }
-        for (int i = 0; i < p_p; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j)
-                v += C_p[(std::size_t) i * p_p + j] * zp[j];
-            b_p[i] = v;
-        }
+        chol_noncentered_recon(C_psi.data(), zpsi, p_psi, b_psi.data());
+        chol_noncentered_recon(C_p.data(), zp, p_p, b_p.data());
         // per-site eta over the shared site-level designs
         for (int i = 0; i < n_sites; ++i) {
             double e_psi = 0.0, e_p = 0.0;
@@ -222,29 +211,13 @@ inline double ms_occu_nuts_eval(const MsOccuNutsData& d, const double* th,
                 gbp[k]             += gx;
             }
         }
-        // z gradient (data part) = C' grad_b -- disjoint per-species write.
+        // z gradient (data part) = C' grad_b -- disjoint per-species write --
+        // and the per-species chol accumulators A_arm = grad_b z' (reduced below).
         double* gz_s = g_z + s * P;
-        for (int v = 0; v < p_psi; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_psi; ++i)
-                sg += C_psi[(std::size_t) i * p_psi + v] * gbpsi[i];
-            gz_s[v] += sg;
-        }
-        for (int v = 0; v < p_p; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_p; ++i)
-                sg += C_p[(std::size_t) i * p_p + v] * gbp[i];
-            gz_s[p_psi + v] += sg;
-        }
-        // per-species chol accumulators A_arm = grad_b z' (reduced below).
-        double* Apsi = &Apsi_s[(std::size_t) s * p_psi * p_psi];
-        for (int i = 0; i < p_psi; ++i)
-            for (int j = 0; j <= i; ++j)
-                Apsi[(std::size_t) i * p_psi + j] = gbpsi[i] * zpsi[j];
-        double* Ap = &Ap_s[(std::size_t) s * p_p * p_p];
-        for (int i = 0; i < p_p; ++i)
-            for (int j = 0; j <= i; ++j)
-                Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
+        chol_noncentered_push(C_psi.data(), gbpsi.data(), zpsi, p_psi, gz_s,
+                              &Apsi_s[(std::size_t) s * p_psi * p_psi]);
+        chol_noncentered_push(C_p.data(), gbp.data(), zp, p_p, gz_s + p_psi,
+                              &Ap_s[(std::size_t) s * p_p * p_p]);
     }
     }  // omp parallel
 

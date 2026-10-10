@@ -301,17 +301,8 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
         const double  zr  = nb ? z_s[p_lam + p_p] : 0.0;
         std::fill(gbl.begin(), gbl.end(), 0.0);
         std::fill(gbp.begin(), gbp.end(), 0.0);
-        // reconstruct b = C z (lower-triangular C)
-        for (int i = 0; i < p_lam; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j) v += C_lam[(std::size_t) i * p_lam + j] * zl[j];
-            b_lam[i] = v;
-        }
-        for (int i = 0; i < p_p; ++i) {
-            double v = 0.0;
-            for (int j = 0; j <= i; ++j) v += C_p[(std::size_t) i * p_p + j] * zp[j];
-            b_p[i] = v;
-        }
+        chol_noncentered_recon(C_lam.data(), zl, p_lam, b_lam.data());
+        chol_noncentered_recon(C_p.data(), zp, p_p, b_p.data());
         const double b_lr = nb ? C_lr * zr : 0.0;
         const double r = nb ? std::exp(clamp_log_r(mu[p_lam + p_p] + b_lr))
                             : std::numeric_limits<double>::infinity();
@@ -362,26 +353,15 @@ inline double ms_abun_nuts_eval(const MsNmixNutsData& d, const double* th,
             }
         }
         lp_s[s] = lp_loc;
-        // z gradient (data part) = C' grad_b -- disjoint per-species write.
+        // z gradient (data part) = C' grad_b -- disjoint per-species write -- and
+        // the per-species chol accumulators A_arm = grad_b z' (reduced in order
+        // below).
         double* gz_s = g_z + s * P;
-        for (int v = 0; v < p_lam; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_lam; ++i) sg += C_lam[(std::size_t) i * p_lam + v] * gbl[i];
-            gz_s[v] += sg;
-        }
-        for (int v = 0; v < p_p; ++v) {
-            double sg = 0.0;
-            for (int i = v; i < p_p; ++i) sg += C_p[(std::size_t) i * p_p + v] * gbp[i];
-            gz_s[p_lam + v] += sg;
-        }
+        chol_noncentered_push(C_lam.data(), gbl.data(), zl, p_lam, gz_s,
+                              &Alam_s[(std::size_t) s * p_lam * p_lam]);
+        chol_noncentered_push(C_p.data(), gbp.data(), zp, p_p, gz_s + p_lam,
+                              &Ap_s[(std::size_t) s * p_p * p_p]);
         if (nb) gz_s[p_lam + p_p] += C_lr * gblr;
-        // per-species chol accumulators A_arm = grad_b z' (reduced in order below).
-        double* Al = &Alam_s[(std::size_t) s * p_lam * p_lam];
-        for (int i = 0; i < p_lam; ++i)
-            for (int j = 0; j <= i; ++j) Al[(std::size_t) i * p_lam + j] = gbl[i] * zl[j];
-        double* Ap = &Ap_s[(std::size_t) s * p_p * p_p];
-        for (int i = 0; i < p_p; ++i)
-            for (int j = 0; j <= i; ++j) Ap[(std::size_t) i * p_p + j] = gbp[i] * zp[j];
         if (nb) Alr_s[s] = gblr * zr;
     }
     }  // omp parallel

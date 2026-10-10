@@ -6,8 +6,10 @@
 // log-dispersion), assembles each species' occ / detection / cover predictors
 // -- with the shared-factor offset W L[s,] on psi (and W Lpos[s,] on cover) --
 // and evaluates the dense occu_cover per-cell marginal (.occu_cover_site_ll),
-// parallel over draws; the per-cell z-marginal + cover density mirror the dense
-// occu_cover kernel, so the result is byte-close (~1e-13) to the R oracle.
+// parallel over draws; the per-cell z-marginal mirrors the dense occu_cover
+// kernel and the cover density is the fit kernels' pos_log_density
+// (occu_coupling_shared.h), the density the model was fit with, so the result
+// is byte-close (~1e-13) to the R oracle.
 // Output is [M x (N * S)] with
 // species blocks contiguous (column s*N + c), matching as.numeric(LL).
 
@@ -16,12 +18,12 @@
 #include <cmath>
 #include "tobs_math.h"
 #include "tobs_shape.h"
+#include "occu_coupling_shared.h"   // pos_log_density
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 using tulpaObs::clamp_eta;
 using tulpaObs::logsumexp2;
 
@@ -44,6 +46,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
   const int P = P_occ + P_p + P_pos;
   const int P_p_visit = P_p - P_p_site;
   const int P_pos_visit = P_pos - P_pos_site;
+  const int pos_code = is_beta ? 3 : 0;      // beta / lognormal (pos_log_density)
   // Packed-parameter offsets (0-based), matching .ms_ocs_unpack.
   const int off_mu = 0;
   const int off_b  = P;
@@ -111,7 +114,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
           for (int k = 0; k < P_occ; ++k) eta_psi += X_occ((std::size_t) c, k) * thocc[k];
           for (int f = 0; f < K; ++f)
             eta_psi += dr(off_W + f * N + c) * dr(off_L + f * S + s);
-          double psi = stable_plogis(clamp_eta(eta_psi));
+          double psi = tulpa::math::inv_logit(clamp_eta(eta_psi));
           double lpsi = std::log(psi), l1mpsi = std::log(1.0 - psi);
 
           // Site-level detection / cover predictors (broadcast across visits).
@@ -132,7 +135,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
             double eta_p = ep_site;
             for (int k = 0; k < P_p_visit; ++k)
               eta_p += X_det_visit((std::size_t) vrow, k) * thp[P_p_site + k];
-            double p = stable_plogis(clamp_eta(eta_p));
+            double p = tulpa::math::inv_logit(clamp_eta(eta_p));
             double lp = std::log(p), l1mp = std::log(1.0 - p);
             sum_1mp += l1mp;
             int yij = y_s[cj];
@@ -142,18 +145,7 @@ Rcpp::NumericMatrix cpp_ms_ocs_ploglik(
               double ep = pos_site + field_pos;
               for (int k = 0; k < P_pos_visit; ++k)
                 ep += X_pos_visit((std::size_t) vrow, k) * thpos[P_pos_site + k];
-              double cv = yp_s[cj];
-              double dens;
-              if (is_beta) {
-                double mu = stable_plogis(clamp_eta(ep));
-                double a = mu * disp, b = (1.0 - mu) * disp;
-                dens = std::lgamma(disp) - std::lgamma(a) - std::lgamma(b) +
-                       (a - 1.0) * std::log(cv) + (b - 1.0) * std::log(1.0 - cv);
-              } else {
-                double ly = std::log(cv), r = (ly - ep) / disp;
-                dens = -ly - std::log(disp) - 0.5 * std::log(2.0 * M_PI) - 0.5 * r * r;
-              }
-              cover += dens;
+              cover += tulpaObs::pos_log_density(pos_code, yp_s[cj], ep, disp);
             } else {
               sum_hdet += l1mp;
             }

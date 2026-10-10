@@ -17,7 +17,6 @@
 #include "tobs_math.h"
 #include "tobs_shape.h"
 using namespace Rcpp;
-using tulpaObs::stable_plogis;
 using tulpaObs::row_draw_dot;
 using tulpaObs::ppc_stat;
 namespace shape = tulpaObs::shape;
@@ -56,8 +55,8 @@ Rcpp::List cpp_single_ppc(
   for (int s = 0; s < nsamp; ++s) {
     int idx = draw_idx[s] - 1;
     for (int i = 0; i < n_sites; ++i) {
-      psi[i] = stable_plogis(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
-      p[i]   = stable_plogis(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
+      psi[i] = tulpa::math::inv_logit(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
+      p[i]   = tulpa::math::inv_logit(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
     }
     // z_prob (deterministic), then z ~ Bernoulli in site order.
     for (int i = 0; i < n_sites; ++i) {
@@ -127,8 +126,8 @@ Rcpp::List cpp_single_pit_cdf(
     double acc = 0.0;
     for (int s = 0; s < n_draws; ++s) {
       int idx = draw_idx[s] - 1;
-      double psi = stable_plogis(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
-      double p   = stable_plogis(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
+      double psi = tulpa::math::inv_logit(row_draw_dot(pXo, n_sites, i, pdr, ndr, idx, 0, p_occ));
+      double p   = tulpa::math::inv_logit(row_draw_dot(pXd, n_sites, i, pdr, ndr, idx, p_occ, p_det));
       acc += psi * std::pow(1.0 - p, (double) n_valid) + (1.0 - psi);
     }
     double q = acc / n_draws;  // posterior-mean P(all-zero) at this site

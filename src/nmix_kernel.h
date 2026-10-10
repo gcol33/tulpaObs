@@ -49,7 +49,7 @@
 #define TULPAOBS_NMIX_KERNEL_H
 
 #include "tulpa/portable_math.h"   // tulpa::math::portable_lgamma / digamma / trigamma
-#include "tobs_math.h"              // clamp_log_r
+#include "tobs_math.h"              // clamp_log_r / logit_log_probs
 #include <Rcpp.h>
 #include <algorithm>
 #include <cmath>
@@ -80,19 +80,6 @@ struct NMixSiteResult {
     double var_stheta;                     // Var(s_theta | y_i)     (Vth)
     double score_wt_lambda;                // N-coefficient of s_lambda (1-q); Poisson: 1
 };
-
-// Numerically stable log p and log(1-p) under the logit link.
-inline void logit_log_probs(double eta, double& log_p, double& log_1mp) {
-    if (eta > 0.0) {
-        double softplus_neg = std::log1p(std::exp(-eta));   // log(1 + e^{-eta})
-        log_p   = -softplus_neg;
-        log_1mp = -eta - softplus_neg;
-    } else {
-        double softplus_pos = std::log1p(std::exp(eta));    // log(1 + e^{eta})
-        log_p   = eta - softplus_pos;
-        log_1mp = -softplus_pos;
-    }
-}
 
 // --- Shared marginal-count math ------------------------------------------
 // The log-sum-exp moment accumulation and the negative-binomial dispersion

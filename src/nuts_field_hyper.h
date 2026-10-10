@@ -78,6 +78,7 @@
 #include <vector>
 #include <cmath>
 #include <cstddef>
+#include "tobs_math.h"
 
 namespace tulpaObs {
 
@@ -126,10 +127,10 @@ inline HyperValue hyper_coord_value(const HyperCoord& h, const double* theta) {
     HyperValue hv;
     if (!h.sampled()) { hv.value = h.fixed; return hv; }
     const double u = theta[h.coord];
-    const double e = 1.0 / (1.0 + std::exp(-u));
+    const double e = sigmoid_(u);
     const double t = h.t_lo + (h.t_hi - h.t_lo) * e;
     if (h.link == 1) {                       // logit
-        const double v = 1.0 / (1.0 + std::exp(-t));
+        const double v = sigmoid_(t);
         hv.value = v; hv.dvalue_dt = v * (1.0 - v);
     } else {                                 // log
         const double v = std::exp(t);

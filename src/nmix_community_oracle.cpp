@@ -91,7 +91,7 @@ NMixCommunityOracle::eval_species(int g, const double* b,
     // every site directly (design = identity), so its row of the score / curvature
     // is the per-site dispersion outputs summed over the species' sites, with the
     // lambda<->log_r cross sandwiched only through the abundance design.
-    const double r_s = is_nb ? std::exp(coef(idx_logr))
+    const double r_s = is_nb ? std::exp(clamp_log_r(coef(idx_logr)))
                              : std::numeric_limits<double>::infinity();
 
     // Per-species structural-zero probability omega_s = plogis(logit_omega_s)
@@ -190,9 +190,7 @@ NMixCommunityOracle::eval_species(int g, const double* b,
             Eigen::VectorXd vv(dd);
             vv(0) = -res.score_wt_lambda;
             for (int j = 0; j < J; ++j) {
-                const double pj = (eta_p[j] > 0.0)
-                    ? 1.0 / (1.0 + std::exp(-eta_p[j]))
-                    : std::exp(eta_p[j]) / (1.0 + std::exp(eta_p[j]));
+                const double pj = tulpa::math::inv_logit(eta_p[j]);
                 vv(1 + j) = pj;
             }
             if (is_nb) {
@@ -284,7 +282,7 @@ void NMixCommunityOracle::node_ll(int g, const double* B, int n_nodes,
     for (int k = 0; k < n_nodes; ++k) {
         const double* bk = B + (std::size_t)k * d;
         for (int i = 0; i < d; ++i) coef(i) = mu(i) + bk[i];
-        const double r_s = is_nb ? std::exp(coef(idx_logr))
+        const double r_s = is_nb ? std::exp(clamp_log_r(coef(idx_logr)))
                                  : std::numeric_limits<double>::infinity();
         double log_om = 0.0, log1m_om = 0.0;
         if (is_zi) logit_log_probs(coef(idx_omega), log_om, log1m_om);
