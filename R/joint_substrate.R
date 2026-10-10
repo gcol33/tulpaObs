@@ -1029,6 +1029,15 @@
       # (a random intercept is the n_coefs = 1 case, [n_draws x n_groups]).
       nc <- r$n_coefs %||% 1L; ng <- r$n_groups
       d  <- take(length(r$latent_idx))
+      # A non-centred `iid` block enters the predictor as its cell's SD node
+      # times the latent, so each coefficient's run is scaled by the axis
+      # `scale_axes` names, at the cell each draw came from.
+      sa <- r$scale_axes %||% rep(NA_character_, nc)
+      for (cc in seq_len(nc)) {
+        if (is.na(sa[cc]) || !sa[cc] %in% colnames(tg)) next
+        cols <- (cc - 1L) * ng + seq_len(ng)
+        d[, cols] <- d[, cols] * as.numeric(tg[cells, sa[cc]])
+      }
       # Back-transform a slope coefficient's draws from the standardized covariate
       # the fit ran on to its natural units (divide coefficient block c by its
       # scale), so predict() weights by the raw covariate column in `newdata`.

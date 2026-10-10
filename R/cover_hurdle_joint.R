@@ -753,7 +753,9 @@
 # (`.cover_multi_prior()`), so term k sits at layout position
 # n_blocks - n_re + k and its latent is that block's contiguous run of the joint
 # modes. The BLUP is the grid-weighted posterior mean over the converged cells,
-# centred (the intercept carries the level), with the grid-weighted SD; the
+# centred (the intercept carries the level), with its mixture SD; the latent
+# is non-centred, so the effect is the block's SD node times it
+# (`.tobs_joint_re_moments()`). The
 # term's SD is that block's `sigma` axis averaged under the same weights. The
 # table has the shape `ranef()` stacks from `re_effects`: `group` is the
 # grouping variable, and the term sits on the occurrence arm (process 1). A
@@ -769,18 +771,21 @@
   effects <- list(); sigma <- numeric(0)
   for (k in seq_along(re)) {
     pos  <- first + k
+    prior_k <- length(fit$prior) - length(re) + k
     cols <- lay$block_start[pos] + seq_len(lay$block_size[pos])
-    mom  <- .tobs_joint_latent_moments(modes, bm$w, cols)
+    mom  <- .tobs_joint_re_moments(
+      fit, modes, bm$w, bm$ok_cells, cols, length(cols),
+      scale = .tobs_joint_re_block_scale(fit, prior_k, bm$ok_cells))
     lev  <- re[[k]]$levels %||% as.character(seq_along(cols))
     tab <- data.frame(
       group = .tobs_re_group_name(.tobs_re_group_expr(re[[k]]), keys[k]),
       level = lev, term = "(Intercept)",
-      estimate  = mom$mean - mean(mom$mean),
-      std.error = sqrt(pmax(mom$var, 0)),
+      estimate  = mom$mean,
+      std.error = mom$sd,
       stringsAsFactors = FALSE)
     attr(tab, "process") <- 1L
     effects[[keys[k]]] <- tab
-    ax <- sprintf("b%d.sigma", pos)
+    ax <- sprintf("b%d.sigma", prior_k)
     sigma[[paste0("sigma_", keys[k])]] <-
       if (ax %in% colnames(tg)) sum(bm$w * tg[, ax]) else NA_real_
   }

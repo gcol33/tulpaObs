@@ -174,21 +174,28 @@
       lay <- n_fields + d$block_start + seq_len(d$n_blocks) - 1L
       if (is.null(bstart) || length(bstart) < max(lay)) next
       B_mean <- matrix(0, ng, nc); B_sd <- matrix(0, ng, nc); lat <- integer(0)
-      grid_moments <- function(cols) .tobs_joint_latent_moments(modes, w, cols)
+      # An uncorrelated term's blocks are non-centred `iid` blocks whose effect
+      # is the cell's SD node times the latent; `scale_axes` names that axis
+      # per coefficient so the predict draws apply the same scale.
+      scale_axes <- rep(NA_character_, nc)
+      re_moments <- function(cols, scale) .tobs_joint_re_moments(
+        fit, modes, w, ok_cells, cols, ng, scale = scale,
+        n_threads = ctx$n_threads)
       if (!isTRUE(d$correlated)) {
         for (cc in seq_len(nc)) {
           cols <- bstart[lay[cc]] + seq_len(bsize[lay[cc]])   # length n_groups
-          mom  <- grid_moments(cols)
-          B_mean[, cc] <- mom$mean - mean(mom$mean)
-          B_sd[, cc]   <- sqrt(pmax(mom$var, 0))
+          sc_k <- .tobs_joint_re_block_scale(fit, lay[cc], ok_cells)
+          if (!is.null(sc_k)) scale_axes[cc] <- sprintf("b%d.sigma", lay[cc])
+          mom  <- re_moments(cols, sc_k)
+          B_mean[, cc] <- mom$mean
+          B_sd[, cc]   <- mom$sd
           lat <- c(lat, cols)
         }
       } else {
         cols <- bstart[lay[1L]] + seq_len(bsize[lay[1L]])     # n_coefs*n_groups
-        mom  <- grid_moments(cols)
-        Hm <- matrix(mom$mean, ng, nc); Hs <- matrix(sqrt(pmax(mom$var, 0)), ng, nc)
-        for (cc in seq_len(nc)) B_mean[, cc] <- Hm[, cc] - mean(Hm[, cc])
-        B_sd[] <- Hs
+        mom  <- re_moments(cols, NULL)
+        B_mean[] <- mom$mean
+        B_sd[]   <- mom$sd
         lat <- cols
       }
       # Back-transform a slope coefficient's BLUP from the standardized covariate
@@ -201,7 +208,8 @@
         B_sd   <- sweep(B_sd,   2L, sc, "/")
       }
       re_terms[[i]] <- c(d, list(blup_mat = B_mean, blup_sd_mat = B_sd,
-                                 prior_pos = lay, latent_idx = as.integer(lat)))
+                                 prior_pos = lay, latent_idx = as.integer(lat),
+                                 scale_axes = scale_axes))
     }
     re_terms <- Filter(Negate(is.null), re_terms)
   }
@@ -815,7 +823,8 @@
                             kind       = t$kind %||% "re",
                             type       = t$type,
                             site_codes = t$site_codes,
-                            latent_idx = t$latent_idx)
+                            latent_idx = t$latent_idx,
+                            scale_axes = t$scale_axes)
                      }), keys)
                    } else NULL,
     joint_fit    = fit,

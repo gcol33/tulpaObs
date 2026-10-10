@@ -86,15 +86,6 @@
 # `label` names the route in the error / warning text. `n_bad` counts the
 # solved cells whose inner Newton failed, so a screened cell never reads as a
 # convergence failure.
-# Grid-weighted posterior mean and variance of latent columns `cols` of the
-# joint modes: `modes` holds the converged cells' rows, `w` their weights. The
-# variance is the between-cell spread of the modes.
-.tobs_joint_latent_moments <- function(modes, w, cols) {
-  u_mod <- modes[, cols, drop = FALSE]
-  u_hat <- as.numeric(crossprod(w, u_mod))
-  list(mean = u_hat, var = as.numeric(crossprod(w, u_mod^2)) - u_hat^2)
-}
-
 .tobs_joint_ok_cells <- function(fit, label) {
   ok_cells <- which(is.finite(fit$log_marginal))
   if (length(ok_cells) == 0L) {
@@ -134,6 +125,52 @@
     fit$weights <- w_full
   }
   list(ok_cells = ok_cells, w = w, fit = fit, n_bad = n_bad)
+}
+
+# Posterior mean and SD of a random-effect block's per-group effects, centred
+# per coefficient, over the outer-grid mixture. `cols` are the block's latent
+# columns, coefficient-major (`n_groups` per coefficient); `modes` holds the
+# rows of `ok_cells`, `w` their weights. `scale` is the per-cell multiplier the
+# latent enters the predictor with: tulpa's non-copy `iid` block is
+# non-centred (`eta += sigma_k * u`, `u ~ N(0, I)`), so its effect is the
+# cell's `b<k>.sigma` node times the latent; NULL for a block whose latent is
+# the effect itself (a `miid` block, a temporal RW / AR1 block).
+#
+# Per cell the centred effect is `s_k C u` with `C` the per-coefficient
+# centring matrix, so with the cell's inner mode `m_k` and covariance `V_k`
+#   E_k[b]   = s_k C m_k
+#   E_k[b^2] = s_k^2 (diag(C V_k C) + (C m_k)^2)
+# and the mixture moments follow by the law of total variance. `V_k` comes from
+# the cell's stored precision (`.joint_inner_vcov_block()`); a cell without one
+# contributes its between-cell term only.
+.tobs_joint_re_moments <- function(fit, modes, w, ok_cells, cols, n_groups,
+                                   scale = NULL, n_threads = 1L) {
+  p  <- length(cols)
+  nc <- p %/% n_groups
+  C  <- kronecker(diag(nc), diag(n_groups) - 1 / n_groups)
+  s  <- if (is.null(scale)) rep(1, length(ok_cells)) else as.numeric(scale)
+  V  <- .joint_inner_vcov_block(fit, cols, n_threads = n_threads)
+  V  <- if (is.null(V)) vector("list", length(ok_cells)) else V[ok_cells]
+  m1 <- numeric(p); m2 <- numeric(p)
+  for (k in seq_along(ok_cells)) {
+    cm <- as.numeric(C %*% modes[k, cols])
+    mu <- s[k] * cm
+    vk <- if (is.matrix(V[[k]]) && all(dim(V[[k]]) == p))
+      s[k]^2 * diag(C %*% V[[k]] %*% C) else numeric(p)
+    m1 <- m1 + w[k] * mu
+    m2 <- m2 + w[k] * (pmax(vk, 0) + mu^2)
+  }
+  list(mean = m1, sd = sqrt(pmax(m2 - m1^2, 0)))
+}
+
+# The per-cell multiplier of a random-effect prior block's latent, NULL when
+# the latent is the effect itself. `b` is the block's position in the fit's
+# prior list.
+.tobs_joint_re_block_scale <- function(fit, b, ok_cells) {
+  type <- tolower(fit$prior[[b]]$type %||% "")
+  ax <- sprintf("b%d.sigma", b)
+  if (!identical(type, "iid") || !ax %in% colnames(fit$theta_grid)) return(NULL)
+  as.numeric(fit$theta_grid[ok_cells, ax])
 }
 
 
