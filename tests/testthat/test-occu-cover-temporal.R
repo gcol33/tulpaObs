@@ -80,6 +80,10 @@ test_that("rw2, ar1 and iid temporal() terms carry their own axes", {
                 info = ty)
     expect_true("sigma_temporal" %in% names(fit$means), info = ty)
     if (ty == "ar1") expect_true("rho_temporal" %in% names(fit$means))
+    # The iid type rides tulpa's non-centred iid block, whose effect is the
+    # cell's SD node times the latent; the RW / AR1 latent is the effect.
+    expect_identical(fit$re$temporal$scale_axes,
+                     if (ty == "iid") "b2.sigma" else NA_character_, info = ty)
   }
 })
 
