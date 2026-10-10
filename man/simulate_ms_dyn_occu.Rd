@@ -7,10 +7,10 @@
 simulate_ms_dyn_occu(
   N = 50,
   J = 3,
-  n_species = 5,
-  n_seasons = 4,
-  beta_comm_mean = c(0),
-  beta_comm_sd = c(0.5),
+  n.species = 5,
+  n.seasons = 4,
+  beta.comm.mean = c(0),
+  beta.comm.sd = c(0.5),
   gamma = 0.15,
   epsilon = 0.1,
   field = NULL,
@@ -23,13 +23,13 @@ simulate_ms_dyn_occu(
 
 \item{J}{Visits per season (default 3).}
 
-\item{n_species}{Number of species (default 5).}
+\item{n.species}{Number of species (default 5).}
 
-\item{n_seasons}{Number of seasons (default 4).}
+\item{n.seasons}{Number of seasons (default 4).}
 
-\item{beta_comm_mean}{Community mean for occupancy (default c(0)).}
+\item{beta.comm.mean}{Community mean for occupancy (default c(0)).}
 
-\item{beta_comm_sd}{Community SD for occupancy (default c(0.5)).}
+\item{beta.comm.sd}{Community SD for occupancy (default c(0.5)).}
 
 \item{gamma}{Colonization probability (default 0.15).}
 
@@ -53,7 +53,7 @@ A list with \code{y} (4D array), \code{data}, and \code{truth}.
 Simulate temporal multi-species occupancy data
 }
 \examples{
-sim <- simulate_ms_dyn_occu(N = 30, J = 2, n_species = 3, n_seasons = 3,
+sim <- simulate_ms_dyn_occu(N = 30, J = 2, n.species = 3, n.seasons = 3,
                             seed = 1)
 dim(sim$y)
 }

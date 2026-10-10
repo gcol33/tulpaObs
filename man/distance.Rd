@@ -8,7 +8,7 @@ distance(
   key = c("halfnorm", "hazard"),
   transect = c("line", "point"),
   cutpoints = NULL,
-  K_max = NULL,
+  K.max = NULL,
   mixture = c("poisson", "negbin")
 )
 }
@@ -23,8 +23,8 @@ distance(
 \item{cutpoints}{numeric distance-bin edges, length \code{n_bins + 1}
 (\verb{0 = c_0 < c_1 < ... < c_B}). Required.}
 
-\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
-integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+\item{K.max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K.max}). \code{NULL} (default) lets the
 engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
 fit warns that the posterior over \code{N} puts mass on the boundary.}
 
@@ -49,7 +49,7 @@ distance bins. With \code{B} bins the detected counts are multinomial over
 \verb{pi_b = integral_bin g(x; sigma) f(x) dx} and \verb{1 - sum_b pi_b}, where \code{f(x)} is
 the distance density (uniform for a line transect, proportional to distance for
 a point transect). The latent \code{N} is summed out in closed form (truncation
-\code{K_max}), so the fit is a direct Laplace approximation (no EM), with a NUTS
+\code{K.max}), so the fit is a direct Laplace approximation (no EM), with a NUTS
 path over the same marginal; the per-bin detection integrals are evaluated by
 Gauss-Legendre quadrature.
 }
@@ -78,7 +78,7 @@ of the two, not both); the hazard-rate log-shape rides alongside.
 \examples{
 \donttest{
 sim <- simulate_distance(N = 200, key = "halfnorm", transect = "line",
-                         n_abund_covs = 1, n_sigma_covs = 1, seed = 1)
+                         n.abund.covs = 1, n.sigma.covs = 1, seed = 1)
 fit <- tobs(~ abund_cov1, data = sim$data,
             family = distance(key = "halfnorm", transect = "line",
                               cutpoints = sim$cutpoints),

@@ -7,32 +7,32 @@
 simulate_occu_cover(
   N = 200L,
   J = 4L,
-  n_occ_covs = 1L,
-  n_det_covs = 1L,
-  n_pos_covs = 1L,
-  beta_occ = NULL,
-  beta_p = NULL,
-  beta_pos = NULL,
+  n.occ.covs = 1L,
+  n.det.covs = 1L,
+  n.pos.covs = 1L,
+  beta.occ = NULL,
+  beta.p = NULL,
+  beta.pos = NULL,
   positive = c("lognormal", "beta", "gaussian"),
   phi = 30,
-  sigma_pos = 0.4,
+  sigma.pos = 0.4,
   adj = NULL,
   sigma = 0.6,
   alpha = 1,
   trend = FALSE,
-  sigma_trend = 0.6,
-  alpha_trend = 1,
-  pos_field = FALSE,
-  sigma_pos_int = 0.5,
-  sigma_pos_trend = 0.6,
-  det_field = FALSE,
-  sigma_p_int = 0.5,
-  sigma_p_trend = 0.6,
-  re_det_groups = NULL,
-  sigma_re_p = 0.7,
-  re_pos_groups = NULL,
-  sigma_re_pos = 0.7,
-  re_det = NULL,
+  sigma.trend = 0.6,
+  alpha.trend = 1,
+  pos.field = FALSE,
+  sigma.pos.int = 0.5,
+  sigma.pos.trend = 0.6,
+  det.field = FALSE,
+  sigma.p.int = 0.5,
+  sigma.p.trend = 0.6,
+  re.det.groups = NULL,
+  sigma.re.p = 0.7,
+  re.pos.groups = NULL,
+  sigma.re.pos = 0.7,
+  re.det = NULL,
   seed = NULL
 )
 }
@@ -41,10 +41,10 @@ simulate_occu_cover(
 
 \item{J}{Number of visits per site.}
 
-\item{n_occ_covs, n_det_covs, n_pos_covs}{Number of covariates on each arm
+\item{n.occ.covs, n.det.covs, n.pos.covs}{Number of covariates on each arm
 (drawn IID standard normal).}
 
-\item{beta_occ, beta_p, beta_pos}{Coefficient vectors c(intercept, slopes).
+\item{beta.occ, beta.p, beta.pos}{Coefficient vectors c(intercept, slopes).
 Defaults pick weakly-informative values: psi intercept at logit(0.4),
 p intercept at logit(0.5), cover intercept on the appropriate link.}
 
@@ -52,7 +52,7 @@ p intercept at logit(0.5), cover intercept on the appropriate link.}
 
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
-\item{sigma_pos}{Lognormal residual SD when \code{positive = "lognormal"}
+\item{sigma.pos}{Lognormal residual SD when \code{positive = "lognormal"}
 (default 0.4).}
 
 \item{adj}{Optional N x N adjacency matrix. When supplied, generates the
@@ -75,17 +75,17 @@ negative = opposite.}
 ICAR field \code{f2} (a spatially-varying temporal trend) is generated on the
 same graph, weighted by a per-cell covariate \code{time} drawn IID standard
 normal. The trend enters the occupancy and cover predictors as
-\code{sigma_trend * time_i * f2[i]} (occupancy) and
-\code{alpha_trend * sigma_trend * time_i * f2[i]} (cover); the detection
+\code{sigma.trend * time_i * f2[i]} (occupancy) and
+\code{alpha.trend * sigma.trend * time_i * f2[i]} (cover); the detection
 predictor is unaffected. The \code{time} covariate is per-cell and broadcast
 to every visit of that cell.}
 
-\item{sigma_trend}{Trend-field amplitude (used only when \code{trend = TRUE}).}
+\item{sigma.trend}{Trend-field amplitude (used only when \code{trend = TRUE}).}
 
-\item{alpha_trend}{Cover-arm scaling on the trend field (used only when
+\item{alpha.trend}{Cover-arm scaling on the trend field (used only when
 \code{trend = TRUE}).}
 
-\item{pos_field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
+\item{pos.field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
 INDEPENDENT areal field on the cover (positive) arm only -- an intercept
 field plus a time-weighted trend field, each unrelated to the occupancy
 field and with no alpha copy. Adds a \code{time} column to
@@ -93,43 +93,43 @@ the returned \code{data} and reports \code{g0} / \code{g1} (the two fields) and 
 \code{truth}. Fit by placing \code{spatial(~ 1 + time || cell, graph = adj)} in the
 \code{positive} formula.}
 
-\item{sigma_pos_int}{Cover-arm intercept-field SD (used only when
-\code{pos_field = TRUE}).}
+\item{sigma.pos.int}{Cover-arm intercept-field SD (used only when
+\code{pos.field = TRUE}).}
 
-\item{sigma_pos_trend}{Cover-arm trend-field SD (used only when
-\code{pos_field = TRUE}).}
+\item{sigma.pos.trend}{Cover-arm trend-field SD (used only when
+\code{pos.field = TRUE}).}
 
-\item{det_field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
+\item{det.field}{Logical; when \code{TRUE} (and \code{adj} is supplied) draw an
 INDEPENDENT areal field on the detection arm only -- an intercept field
 plus a time-weighted trend field, unrelated to the occupancy and cover
 fields and with no alpha copy, so detection varies spatially on its own.
 Fit by placing \code{spatial(~ 0 + time || cell, graph = adj, to = "detection")}
 in the \code{detection} formula.}
 
-\item{sigma_p_int}{Detection-arm intercept-field SD (used only when
-\code{det_field = TRUE}).}
+\item{sigma.p.int}{Detection-arm intercept-field SD (used only when
+\code{det.field = TRUE}).}
 
-\item{sigma_p_trend}{Detection-arm trend-field SD (used only when
-\code{det_field = TRUE}).}
+\item{sigma.p.trend}{Detection-arm trend-field SD (used only when
+\code{det.field = TRUE}).}
 
-\item{re_det_groups}{Optional integer \verb{>= 2}: the number of levels of a
+\item{re.det.groups}{Optional integer \verb{>= 2}: the number of levels of a
 per-visit detection random intercept (a \code{habitat} factor on \code{visit_data},
-levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_p^2)} and centred. \code{NULL}
+levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma.re.p^2)} and centred. \code{NULL}
 (default) adds no detection RE. Recover it with
 \code{detection = ~ ... + (1 | habitat)}.}
 
-\item{sigma_re_p}{SD of the \code{re_det_groups} random intercept (default 0.7).}
+\item{sigma.re.p}{SD of the \code{re.det.groups} random intercept (default 0.7).}
 
-\item{re_pos_groups}{Optional integer \verb{>= 2}: the number of levels of a
+\item{re.pos.groups}{Optional integer \verb{>= 2}: the number of levels of a
 per-visit COVER-arm random intercept (a \code{habitat} factor on \code{visit_data},
-levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma_re_pos^2)} and centred, added to
+levels \code{hab1..K}), drawn \code{b_g ~ N(0, sigma.re.pos^2)} and centred, added to
 the positive-cover linear predictor. \code{NULL} (default) adds no cover RE.
 Recover it with \code{positive = ~ ... + (1 | habitat)} under
-\code{cover_aggregate = "none"}. Truth in \code{truth$b_pos_re} / \code{truth$sigma_re_pos}.}
+\code{cover.aggregate = "none"}. Truth in \code{truth$b_pos_re} / \code{truth$sigma_re_pos}.}
 
-\item{sigma_re_pos}{SD of the \code{re_pos_groups} random intercept (default 0.7).}
+\item{sigma.re.pos}{SD of the \code{re.pos.groups} random intercept (default 0.7).}
 
-\item{re_det}{Optional named list of FURTHER per-visit detection random
+\item{re.det}{Optional named list of FURTHER per-visit detection random
 effects, for crossed / nested / slope designs. Each element
 \code{list(K =, sigma =, prefix =, nested_in =, slope_cov =, sigma_slope =, rho =)}
 adds a factor column (levels \verb{<prefix>1..K}). Without \code{slope_cov} it is a
@@ -170,7 +170,8 @@ and the linear predictors become
 eta_pos_ij = X_pos[i, ] \%*\% beta_pos + alpha * sigma * f[i]
 }\if{html}{\out{</div>}}
 
-matching the v2 nested-Laplace fit's parameterisation.
+This is the shared-field parameterisation (field SD \code{sigma}, cover-arm copy
+amplitude \code{alpha}) that the nested-Laplace \code{\link[=occu_cover]{occu_cover()}} fit estimates.
 }
 \examples{
 sim <- simulate_occu_cover(N = 50, J = 3, seed = 1)

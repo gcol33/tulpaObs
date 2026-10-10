@@ -68,7 +68,7 @@ non-spatial.
 
 \examples{
 \donttest{
-sim <- simulate_ms_count(N = 120, n_species = 8, seed = 1)
+sim <- simulate_ms_count(N = 120, n.species = 8, seed = 1)
 fit <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
             species = colnames(sim$y), method = "laplace")
 summary(fit)

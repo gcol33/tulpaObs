@@ -7,10 +7,10 @@
 simulate_abun(
   N = 100,
   J = 4,
-  n_abund_covs = 2,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_p = NULL,
+  n.abund.covs = 2,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.p = NULL,
   mixture = c("poisson", "negbin", "zip", "zinb"),
   size = 2,
   omega = 0.3,
@@ -22,15 +22,15 @@ simulate_abun(
 
 \item{J}{Number of replicate visits (default 4).}
 
-\item{n_abund_covs}{Number of abundance covariates (default 2).}
+\item{n.abund.covs}{Number of abundance covariates (default 2).}
 
-\item{n_det_covs}{Number of detection covariates (default 1).}
+\item{n.det.covs}{Number of detection covariates (default 1).}
 
-\item{beta_lambda}{Abundance coefficients \code{c(intercept, slopes...)} on the
-log scale. Default \code{c(log(3), runif(n_abund_covs, -0.5, 0.5))}.}
+\item{beta.lambda}{Abundance coefficients \code{c(intercept, slopes...)} on the
+log scale. Default \code{c(log(3), runif(n.abund.covs, -0.5, 0.5))}.}
 
-\item{beta_p}{Detection coefficients \code{c(intercept, slopes...)} on the logit
-scale. Default \code{c(0, runif(n_det_covs, -0.5, 0.5))} (intercept 0 = p 0.5).}
+\item{beta.p}{Detection coefficients \code{c(intercept, slopes...)} on the logit
+scale. Default \code{c(0, runif(n.det.covs, -0.5, 0.5))} (intercept 0 = p 0.5).}
 
 \item{mixture}{Abundance mixing distribution: \code{"poisson"} (default),
 \code{"negbin"} (negative binomial, overdispersed), or their zero-inflated

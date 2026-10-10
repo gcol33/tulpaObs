@@ -5,27 +5,27 @@
 \title{Simulate community (multispecies) binned distance-sampling data}
 \usage{
 simulate_ms_distance(
-  n_species = 10,
+  n.species = 10,
   N = 100,
   cutpoints = c(0, 25, 50, 75, 100),
   transect = c("line", "point"),
   key = c("halfnorm", "hazard"),
   shape = 0,
-  n_abund_covs = 1,
-  n_det_covs = 0,
-  mu_lambda = NULL,
-  mu_sigma = NULL,
-  sd_lambda = 0.4,
-  sd_sigma = 0.2,
-  n_factors = 0,
-  load_sd = 0.5,
+  n.abund.covs = 1,
+  n.det.covs = 0,
+  mu.lambda = NULL,
+  mu.sigma = NULL,
+  sd.lambda = 0.4,
+  sd.sigma = 0.2,
+  n.factors = 0,
+  load.sd = 0.5,
   field = NULL,
-  quad_order = 64L,
+  quad.order = 64L,
   seed = NULL
 )
 }
 \arguments{
-\item{n_species}{Number of species (default 10).}
+\item{n.species}{Number of species (default 10).}
 
 \item{N}{Number of sites (default 100).}
 
@@ -38,30 +38,30 @@ simulate_ms_distance(
 \item{shape}{Hazard-rate log-shape, shared across species (ignored under the
 half-normal key). Default 0.}
 
-\item{n_abund_covs, n_det_covs}{Number of abundance / detection-scale
+\item{n.abund.covs, n.det.covs}{Number of abundance / detection-scale
 covariates (default 1 and 0).}
 
-\item{mu_lambda}{Community-mean abundance coefficients on the log scale.
-Default \code{c(log(30), rep(0.4, n_abund_covs))}.}
+\item{mu.lambda}{Community-mean abundance coefficients on the log scale.
+Default \code{c(log(30), rep(0.4, n.abund.covs))}.}
 
-\item{mu_sigma}{Community-mean detection-scale coefficients on the log scale.
-Default \code{c(log(40), rep(0, n_det_covs))}.}
+\item{mu.sigma}{Community-mean detection-scale coefficients on the log scale.
+Default \code{c(log(40), rep(0, n.det.covs))}.}
 
-\item{sd_lambda, sd_sigma}{Per-coefficient community SDs. Default 0.4 and 0.2.}
+\item{sd.lambda, sd.sigma}{Per-coefficient community SDs. Default 0.4 and 0.2.}
 
-\item{n_factors}{If \verb{> 0}, add \code{n_factors} per-site latent factors with
+\item{n.factors}{If \verb{> 0}, add \code{n.factors} per-site latent factors with
 per-species loadings to \verb{log lambda} (the lfMsDS truth). Default 0.}
 
-\item{load_sd}{SD of the factor loadings (default 0.5).}
+\item{load.sd}{SD of the factor loadings (default 0.5).}
 
 \item{field}{Optional length-\code{N} shared spatial field added to every species'
-\verb{log lambda}. When given alongside \code{n_factors > 0} the loadings are centred
+\verb{log lambda}. When given alongside \code{n.factors > 0} the loadings are centred
 across species, so the field owns the shared spatial mean.}
 
-\item{quad_order}{Gauss-Legendre nodes per bin used to integrate the per-bin
+\item{quad.order}{Gauss-Legendre nodes per bin used to integrate the per-bin
 detection probabilities (default 64, matching \code{\link[=ms_distance]{ms_distance()}}). Set it to
-the \code{quad_order} the model will be fit at: the rule is
-\verb{(cutpoints, transect, quad_order)}, so a different order integrates a
+the \code{quad.order} the model will be fit at: the rule is
+\verb{(cutpoints, transect, quad.order)}, so a different order integrates a
 different pi and the data would come from a model the fit does not use.}
 
 \item{seed}{Optional random seed.}
@@ -83,6 +83,6 @@ array \verb{[n_sites x n_bins x n_species]} suitable for \code{\link[=tobs]{tobs
 \code{\link[=ms_distance]{ms_distance()}}.
 }
 \examples{
-sim <- simulate_ms_distance(n_species = 4, N = 30, seed = 1)
+sim <- simulate_ms_distance(n.species = 4, N = 30, seed = 1)
 dim(sim$y)
 }

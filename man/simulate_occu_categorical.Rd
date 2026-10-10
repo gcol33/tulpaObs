@@ -6,17 +6,17 @@
 \usage{
 simulate_occu_categorical(
   N = 500L,
-  beta_occ = c(0.2, 0.8),
-  beta_class = NULL,
+  beta.occ = c(0.2, 0.8),
+  beta.class = NULL,
   seed = NULL
 )
 }
 \arguments{
 \item{N}{number of units.}
 
-\item{beta_occ}{length-2 presence coefficients (intercept, slope on \code{x}).}
+\item{beta.occ}{length-2 presence coefficients (intercept, slope on \code{x}).}
 
-\item{beta_class}{a \verb{2 x (K-1)} matrix of class coefficients (rows
+\item{beta.class}{a \verb{2 x (K-1)} matrix of class coefficients (rows
 intercept / slope on \code{x}; columns the non-baseline classes), or \code{NULL}
 for a built-in 3-class default.}
 

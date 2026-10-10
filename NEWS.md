@@ -66,10 +66,6 @@ the rest of `control`. The old spellings are gone, not aliased (#406).
 * The abundance vignette's ceiling check now refits with
   `abun(K.max = 200)`; it previously passed the ceiling to `tobs()`, which
   ignored it.
-
-## 0.5.1
-
-* Requires tulpa (>= 0.7.1).
 * `ranef()` returns one layout on every family and engine: `arm`, `group`,
   `level`, `term`, `estimate`, `std.error`. It used to return four: the
   documented one from the single-species Laplace / NUTS paths, `species, arm,
@@ -79,6 +75,52 @@ the rest of `control`. The old spellings are gone, not aliased (#406).
   the formula (`observer`, not the positional `p1`), `level` its level (the
   species on a community fit, under `group = "species"`), and `std.error` is
   `NA` where the fitter reports no posterior SD.
+* The `occu_cover()` escape hatches `control$engine = "v3_nested"` (pure-R
+  outer-BFGS nested Laplace, lognormal only) and `"v2_joint"` (joint Laplace
+  MAP over the field) are removed (#402). The spatial `nested_laplace` path has
+  one fitter, the `joint` engine; `control$engine` accepts `"joint"` only and
+  any other value errors at dispatch.
+* An ordinal `cover()` fit with a `|` bar or a single-arm (`to`) field now
+  reports the latent SD as `sigma_pos`; it was `NA` on those two routes (#395).
+* `control` knobs splatted into the joint fitters are read by exact key. A
+  shorter key no longer picks up a longer one when it is unset:
+  `n.threads.outer` no longer sets the inner `n.threads`, `sigma.grid.pos.field`
+  no longer sets `sigma.grid`, and the same for `re.sigma.grid`, `phi.grid`,
+  `n.quad`, `re.aghq` and `omega` (#397).
+* The `occu_cover()` joint fitter's cover-dispersion pre-fit reads the same
+  values on a compact (`tobs_data(compact = TRUE)`) and a dense fit; on a
+  compact fit it used to find no rows and take its fallback start (#397).
+* `abun()` and `removal()` with a grouped random effect under
+  `method = "nuts"` warm-start the coefficient block on the Laplace metric; it
+  silently fell back to a unit metric (#401).
+* `dyn_abun()` and `fp_occu()` accept `control = list(sigma.logr = )`, the
+  prior scale of the random-effect log-SD. Under `method = "nuts"` the
+  `dyn_abun()` negative-binomial `log_r` takes this prior (default 1.5) instead
+  of `sigma.beta` (default 10), so its draws change (#401, #408).
+* Negative-binomial dispersion is clamped at `|log r| <= 30` before `exp()` in
+  every NUTS target and pointwise log-likelihood, and the NUTS targets check
+  their input shapes before sampling (#408).
+* The compiled count kernels compute `lgamma` / `digamma` through tulpa's
+  portable math, which is safe inside OpenMP regions. Values move at the
+  1e-11 level against R's `lgammafn` (#408).
+* WAIC / LOO / CPO on a beta `occu_multiscale_cover()` fit score the cover
+  density the fit uses. A different clamp in the scoring kernel put pointwise
+  values up to 213 log units off the fitted density (#410).
+* `dyn_abun()` pairs a field with its engine like `removal()`, `distance()`
+  and `fp_occu()`: an areal or `temporal()` term under `method = "laplace"`
+  errors, as does `method = "nested_laplace"` with no structured term. Both
+  used to fit, the first on the nested-Laplace field fitter and the second as a
+  plain Laplace fit. `dyn_abun(mixture = "zip" / "zinb")` rejects an `svc()`
+  term instead of fitting without the surface (#412).
+* `distance()` with a field under `method = "nuts"` honours a user-set
+  `control$sigma.logr`; it was ignored (#411).
+* The README, API.md and the community and random-effects vignettes list the
+  engines each family accepts as `tobs()` enforces them, and every family
+  constructor's help page has an "Engines" section (#394, #396).
+
+## 0.5.1
+
+* Requires tulpa (>= 0.7.1).
 * The joint posterior covariance of an `occu_cover` or `occu_multiscale_cover`
   fit with a field is accumulated in the engine
   (`tulpa::tulpa_joint_inner_vcov_mixture()`, gcol33/tulpa#947) instead of
@@ -88,11 +130,6 @@ the rest of `control`. The old spellings are gone, not aliased (#406).
   with `std::bad_alloc`. The covariance and the per-cell fixed-effect blocks
   are the same numbers (relative difference 7e-16 on an ICAR fit), and a cell
   of zero weight is no longer extracted.
-* The `occu_cover()` escape hatches `control$engine = "v3_nested"` (pure-R
-  outer-BFGS nested Laplace, lognormal only) and `"v2_joint"` (joint Laplace
-  MAP over the field) are removed (#402). The spatial `nested_laplace` path has
-  one fitter, the `joint` engine; `control$engine` accepts `"joint"` only and
-  any other value errors at dispatch.
 
 ## 0.5.0
 

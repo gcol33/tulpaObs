@@ -4,11 +4,11 @@
 \alias{abun}
 \title{N-mixture abundance family}
 \usage{
-abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+abun(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 }
 \arguments{
-\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
-integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+\item{K.max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K.max}). \code{NULL} (default) lets the
 engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
 fit warns that the posterior over \code{N} puts mass on the boundary.}
 
@@ -56,7 +56,7 @@ arm (\code{icar()} / \code{car_proper()} / \code{bym2()}); \code{"zip"} / \code{
 
 \examples{
 \donttest{
-sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
+sim <- simulate_abun(N = 120, J = 4, n.abund.covs = 1, n.det.covs = 1, seed = 1)
 fit <- tobs(~ abund_cov1, data = sim$data, family = abun(),
             detection = ~ det_cov1, y = sim$y, method = "laplace")
 summary(fit)

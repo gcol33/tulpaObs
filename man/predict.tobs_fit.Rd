@@ -10,14 +10,14 @@
   type = c("occupancy", "detection", "both", "state"),
   quantiles = c(0.025, 0.5, 0.975),
   terms = NULL,
-  n_points = 50L,
+  n.points = 50L,
   newdata = NULL,
   times = NULL,
   level = 0.95,
   nsim = 1000L,
   draws = TRUE,
-  time_col = NULL,
-  X_det.0 = NULL,
+  time.col = NULL,
+  X.det.0 = NULL,
   weights = NULL,
   aggregate = FALSE,
   mc.tol = 0.05,
@@ -35,7 +35,7 @@
 (nested-Laplace marginalised per-site psi, incl. held-out sites). For an
 \code{occu_cover} fit: \code{"occurrence"}, \code{"cover_cond"}, \code{"cover_exp"},
 \code{"change"} or \code{"trajectory"}. \code{"detection"} / \code{"both"} on a \code{single}/\code{int_occu()} fit needs
-\code{X_det.0}.}
+\code{X.det.0}.}
 
 \item{quantiles}{Quantile levels for credible intervals: a strictly
 increasing length-3 vector (lower, middle, upper), each in (0, 1). The
@@ -49,7 +49,7 @@ vector of more than one term is an error, since a second term would be
 held at its mean rather than grouped over its levels. For a grid over
 more than one covariate, build the design matrix and pass it as \code{X.0}.}
 
-\item{n_points}{Number of prediction points per continuous term.}
+\item{n.points}{Number of prediction points per continuous term.}
 
 \item{newdata}{data.frame of prediction units. For \code{occu_cover}: one row per
 field cell (or carrying a \code{cell} column mapping rows to field cells),
@@ -57,14 +57,14 @@ defaulting to the training data. For the families predicting from a design
 matrix (\code{occu()}, \code{dyn_occu()}, \code{int_occu()}, \code{abun()}, \code{removal()},
 \code{distance()}, \code{fp_occu()}, \code{dyn_abun()}): the covariates of the arm \code{type}
 selects, expanded through that arm's fitted formula (factor levels and
-transforms as fitted) in place of \code{X.0} / \code{X_det.0}; an \code{int_occu()}
+transforms as fitted) in place of \code{X.0} / \code{X.det.0}; an \code{int_occu()}
 detection prediction expands it once per source. A random-effect term
 on the predicted arm whose grouping variable is a column of \code{newdata}
 adds each row's fitted group effect (its BLUP / posterior mean, times the
 slope covariate for a random slope); a level the fit did not see adds 0,
 the population mean. Without that column, and always through \code{X.0} /
-\code{X_det.0}, the prediction is population-level. Give \code{newdata} or
-\code{X.0} / \code{X_det.0} / \code{terms}, not both.}
+\code{X.det.0}, the prediction is population-level. Give \code{newdata} or
+\code{X.0} / \code{X.det.0} / \code{terms}, not both.}
 
 \item{times}{\code{occu_cover} \code{type = "change"} / \code{"trajectory"}: numeric values
 of the time covariate. For \code{"change"}, at least two: \code{c(t1, t2)}
@@ -89,11 +89,11 @@ quantities share one draw set.}
 \item{draws}{\code{occu_cover} only: if \code{TRUE} (default), carry the per-unit
 \verb{[cell x nsim]} draw matrices in \code{attr(, "draws")}.}
 
-\item{time_col}{\code{occu_cover} only: name of the time covariate weighting the
+\item{time.col}{\code{occu_cover} only: name of the time covariate weighting the
 trend field / driving the change map; auto-resolved from the fit's stored
 trend weight when omitted.}
 
-\item{X_det.0}{Optional detection design for out-of-sample \code{"detection"} /
+\item{X.det.0}{Optional detection design for out-of-sample \code{"detection"} /
 \code{"both"} prediction on a \code{single}-season or \code{\link[=int_occu]{int_occu()}} fit: a plain
 design matrix for a single-season fit, or
 a list of one design matrix per source (named by source, or in source

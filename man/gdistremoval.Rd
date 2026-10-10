@@ -41,7 +41,7 @@ distance scale \code{sigma} (\code{detection}), and logit per-period removal cap
 \section{Inputs}{
 
 \code{y} is an \verb{n_sites x n_bins} integer matrix of per-distance-band counts;
-\code{y_rem} an \verb{n_sites x n_periods} integer matrix of per-removal-period counts.
+\code{y.rem} an \verb{n_sites x n_periods} integer matrix of per-removal-period counts.
 The per-site row totals must match (the same detected birds cross-classified).
 }
 

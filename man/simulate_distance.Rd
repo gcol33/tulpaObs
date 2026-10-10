@@ -9,10 +9,10 @@ simulate_distance(
   cutpoints = seq(0, 1, length.out = 6),
   key = c("halfnorm", "hazard"),
   transect = c("line", "point"),
-  n_abund_covs = 1,
-  n_sigma_covs = 1,
-  beta_lambda = NULL,
-  beta_sigma = NULL,
+  n.abund.covs = 1,
+  n.sigma.covs = 1,
+  beta.lambda = NULL,
+  beta.sigma = NULL,
   shape = 3,
   mixture = c("poisson", "negbin"),
   size = 5,
@@ -29,13 +29,13 @@ simulate_distance(
 
 \item{transect}{\code{"line"} (default) or \code{"point"}.}
 
-\item{n_abund_covs, n_sigma_covs}{Number of abundance / detection covariates.}
+\item{n.abund.covs, n.sigma.covs}{Number of abundance / detection covariates.}
 
-\item{beta_lambda}{Abundance coefficients (log scale). Default
-\code{c(log(40), runif(n_abund_covs, -0.4, 0.4))}.}
+\item{beta.lambda}{Abundance coefficients (log scale). Default
+\code{c(log(40), runif(n.abund.covs, -0.4, 0.4))}.}
 
-\item{beta_sigma}{Detection-scale coefficients (log scale). Default
-\code{c(log(0.4), runif(n_sigma_covs, -0.3, 0.3))}.}
+\item{beta.sigma}{Detection-scale coefficients (log scale). Default
+\code{c(log(0.4), runif(n.sigma.covs, -0.3, 0.3))}.}
 
 \item{shape}{Hazard-rate shape \code{b} (\code{key = "hazard"} only, default 3).}
 

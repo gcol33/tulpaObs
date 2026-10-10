@@ -7,12 +7,12 @@
 simulate_distsamp_open(
   N = 200,
   cutpoints = c(0, 10, 20, 30, 40),
-  n_seasons = 4L,
+  n.seasons = 4L,
   transect = "line",
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_sigma = NULL,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.sigma = NULL,
   omega = 0.7,
   gamma = 2.5,
   mixture = c("poisson", "negbin", "zip", "zinb"),
@@ -29,13 +29,13 @@ simulate_distsamp_open(
 
 \item{cutpoints}{Distance-bin edges \verb{0 = c_0 < ... < c_B}.}
 
-\item{n_seasons}{Number of primary periods (default 4).}
+\item{n.seasons}{Number of primary periods (default 4).}
 
 \item{transect}{\code{"line"} (default) or \code{"point"}.}
 
-\item{n_abund_covs, n_det_covs}{Number of abundance / distance covariates.}
+\item{n.abund.covs, n.det.covs}{Number of abundance / distance covariates.}
 
-\item{beta_lambda, beta_sigma}{Coefficients on the log-abundance and log-scale
+\item{beta.lambda, beta.sigma}{Coefficients on the log-abundance and log-scale
 arms. Defaults give moderate abundance / detection.}
 
 \item{omega, gamma}{Apparent survival probability and recruitment rate
@@ -74,6 +74,6 @@ Draws from the \code{\link[=distsamp_open]{distsamp_open()}} model: an open meta
 \code{sigma}) at each primary period.
 }
 \examples{
-sim <- simulate_distsamp_open(N = 40, n_seasons = 3, seed = 1)
+sim <- simulate_distsamp_open(N = 40, n.seasons = 3, seed = 1)
 dim(sim$y)
 }

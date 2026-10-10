@@ -4,10 +4,10 @@
 \alias{royle_nichols}
 \title{Royle-Nichols occupancy family}
 \usage{
-royle_nichols(K_max = NULL)
+royle_nichols(K.max = NULL)
 }
 \arguments{
-\item{K_max}{Upper summation bound for the latent abundance (default: a
+\item{K.max}{Upper summation bound for the latent abundance (default: a
 data-driven Poisson-tail guess).}
 }
 \value{
@@ -21,7 +21,7 @@ drives the per-visit detection probability \code{1 - (1 - r_ij)^{N_i}}, where
 \verb{log lambda} (abundance); \code{detection} models \verb{logit r}. Detection is site-level
 by default; passing \code{visits} makes it visit-varying (\verb{logit r_ij} gains the
 visit-level covariates), exactly as for the occupancy / N-mixture front doors.
-The latent \code{N} marginalises in closed form (a Poisson sum to \code{K_max}), so the
+The latent \code{N} marginalises in closed form (a Poisson sum to \code{K.max}), so the
 fit maximises the exact marginal with an observed-information vcov.
 }
 \section{Engines}{
@@ -40,7 +40,7 @@ fit <- tobs(~ x, data = sim$data, family = royle_nichols(),
 coef(fit)
 
 # Visit-varying detection via `visits`:
-sv <- simulate_royle_nichols(N = 150, J = 5, beta_r_visit = 0.8, seed = 1)
+sv <- simulate_royle_nichols(N = 150, J = 5, beta.r.visit = 0.8, seed = 1)
 fv <- tobs(~ x, data = sv$data, family = royle_nichols(),
            detection = ~ w, y = sv$y, visits = sv$visits,
            control = list(verbose = FALSE))

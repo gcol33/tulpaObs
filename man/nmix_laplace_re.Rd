@@ -203,7 +203,8 @@ When both this and \code{omega_sigma_prior} are set they must be equal: the engi
 applies one Penalized-Complexity prior across every block it regularizes.
 Ignored for Poisson / ZIP.}
 
-\item{verbose}{Unused (kept for backward compatibility); the engine is silent.}
+\item{verbose}{Print the per-iteration community-covariance change of the
+\code{optimizer = "em"} solver; the joint AGHQ optimizers are silent.}
 }
 \value{
 A list of class \code{nmix_re_fit}: \code{mu_lambda}, \code{mu_p} (community

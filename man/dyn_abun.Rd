@@ -4,12 +4,12 @@
 \alias{dyn_abun}
 \title{Open-population (Dail-Madsen) N-mixture family}
 \usage{
-dyn_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+dyn_abun(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 }
 \arguments{
-\item{K_max}{abundance-state truncation for the forward recursion (states
+\item{K.max}{abundance-state truncation for the forward recursion (states
 \verb{0..K_max}). \code{NULL} (default) uses \code{max(count) + 40}; raise it if abundance
-may exceed that (the forward cost is roughly cubic in \code{K_max}).}
+may exceed that (the forward cost is roughly cubic in \code{K.max}).}
 
 \item{mixture}{initial-abundance distribution: \code{"poisson"} (default),
 \code{"negbin"} (negative-binomial \code{N_1 ~ NB(mean = lambda, size = r)}), or their

@@ -20,7 +20,7 @@ dynamic community family this is the first-season richness (from \code{psi1}).
 }
 \examples{
 \donttest{
-sim <- simulate_ms_occu(N = 40, J = 3, n_species = 5, seed = 1)
+sim <- simulate_ms_occu(N = 40, J = 3, n.species = 5, seed = 1)
 fit <- tobs(~ x, data = sim$data, family = ms_occu(), detection = ~ 1,
             y = sim$y, species = paste0("sp", 1:5),
             control = list(verbose = FALSE))

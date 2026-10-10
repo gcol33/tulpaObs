@@ -5,27 +5,27 @@
 \title{Simulate integrated (multi-source) occupancy data}
 \usage{
 simulate_int_occu(
-  N_total = 150,
-  n_data = 2,
+  N.total = 150,
+  n.data = 2,
   J = c(4, 3),
-  n_shared = 20,
-  beta_occ = c(0.5, 0.3),
-  beta_det = list(c(0.2, -0.4), c(-0.1, 0.3)),
+  n.shared = 20,
+  beta.occ = c(0.5, 0.3),
+  beta.det = list(c(0.2, -0.4), c(-0.1, 0.3)),
   seed = NULL
 )
 }
 \arguments{
-\item{N_total}{Total number of unique sites (default 150).}
+\item{N.total}{Total number of unique sites (default 150).}
 
-\item{n_data}{Number of data sources (default 2).}
+\item{n.data}{Number of data sources (default 2).}
 
 \item{J}{Vector of visits per source (default c(4, 3)).}
 
-\item{n_shared}{Number of sites shared across sources (default 20).}
+\item{n.shared}{Number of sites shared across sources (default 20).}
 
-\item{beta_occ}{Occupancy coefficients (default c(0.5, 0.3)).}
+\item{beta.occ}{Occupancy coefficients (default c(0.5, 0.3)).}
 
-\item{beta_det}{List of detection coefficient vectors per source.}
+\item{beta.det}{List of detection coefficient vectors per source.}
 
 \item{seed}{Random seed.}
 }
@@ -37,6 +37,6 @@ A list with \code{y} (list of matrices, each row named by the site of
 Simulate integrated (multi-source) occupancy data
 }
 \examples{
-sim <- simulate_int_occu(N_total = 60, n_shared = 10, seed = 1)
+sim <- simulate_int_occu(N.total = 60, n.shared = 10, seed = 1)
 lapply(sim$y, dim)
 }

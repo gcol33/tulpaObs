@@ -7,8 +7,8 @@
 simulate_fp_occu(
   N = 300,
   J = 5,
-  n_occ_covs = 1,
-  beta_psi = NULL,
+  n.occ.covs = 1,
+  beta.psi = NULL,
   p11 = 0.6,
   p10 = 0.05,
   b = 0.5,
@@ -20,10 +20,10 @@ simulate_fp_occu(
 
 \item{J}{Number of visits (default 5).}
 
-\item{n_occ_covs}{Number of occupancy covariates (default 1).}
+\item{n.occ.covs}{Number of occupancy covariates (default 1).}
 
-\item{beta_psi}{Occupancy coefficients (logit). Default
-\code{c(qlogis(0.5), runif(n_occ_covs, -0.6, 0.6))}.}
+\item{beta.psi}{Occupancy coefficients (logit). Default
+\code{c(qlogis(0.5), runif(n.occ.covs, -0.6, 0.6))}.}
 
 \item{p11, p10, b}{True detection, false-positive, and certain-classification
 probabilities (scalars; defaults 0.6, 0.05, 0.5).}

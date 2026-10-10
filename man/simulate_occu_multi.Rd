@@ -8,10 +8,10 @@ simulate_occu_multi(
   S = 2,
   N = 300,
   J = 4,
-  n_state_covs = 1,
-  beta_first = NULL,
-  beta_second = NULL,
-  beta_p = NULL,
+  n.state.covs = 1,
+  beta.first = NULL,
+  beta.second = NULL,
+  beta.p = NULL,
   seed = NULL
 )
 }
@@ -22,16 +22,16 @@ simulate_occu_multi(
 
 \item{J}{Number of replicate visits (default 4).}
 
-\item{n_state_covs}{Number of shared occupancy covariates (default 1).}
+\item{n.state.covs}{Number of shared occupancy covariates (default 1).}
 
-\item{beta_first}{Length-\code{S} list of first-order natural-parameter
+\item{beta.first}{Length-\code{S} list of first-order natural-parameter
 coefficients \code{c(intercept, slopes...)}. Default moderate occupancy.}
 
-\item{beta_second}{Length-\code{choose(S, 2)} list of second-order (interaction)
+\item{beta.second}{Length-\code{choose(S, 2)} list of second-order (interaction)
 coefficients (in \code{combn(S, 2)} order). Default a single positive
 interaction for \code{S = 2}, else 0.}
 
-\item{beta_p}{Length-\code{S} list of detection coefficients (logit). Default
+\item{beta.p}{Length-\code{S} list of detection coefficients (logit). Default
 \code{c(qlogis(0.5), ...)}.}
 
 \item{seed}{Optional random seed.}

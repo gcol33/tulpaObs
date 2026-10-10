@@ -5,46 +5,46 @@
 \title{Simulate community (multispecies) joint occupancy-cover data}
 \usage{
 simulate_ms_occu_cover(
-  n_species = 12,
+  n.species = 12,
   N = 120,
   J = 5,
-  n_occ_covs = 1,
-  n_det_covs = 1,
-  n_pos_covs = 1,
-  mu_occ = NULL,
-  mu_p = NULL,
-  mu_pos = NULL,
-  sd_occ = 0.5,
-  sd_p = 0.4,
-  sd_pos = 0.4,
+  n.occ.covs = 1,
+  n.det.covs = 1,
+  n.pos.covs = 1,
+  mu.occ = NULL,
+  mu.p = NULL,
+  mu.pos = NULL,
+  sd.occ = 0.5,
+  sd.p = 0.4,
+  sd.pos = 0.4,
   positive = c("lognormal", "beta", "gaussian"),
   phi = 30,
-  sigma_pos = 0.4,
+  sigma.pos = 0.4,
   seed = NULL
 )
 }
 \arguments{
-\item{n_species}{Number of species (default 12).}
+\item{n.species}{Number of species (default 12).}
 
 \item{N}{Number of sites / cells (default 120).}
 
 \item{J}{Number of replicate visits (default 5).}
 
-\item{n_occ_covs, n_det_covs, n_pos_covs}{Number of covariates on each arm
+\item{n.occ.covs, n.det.covs, n.pos.covs}{Number of covariates on each arm
 (drawn IID standard normal, shared across species).}
 
-\item{mu_occ, mu_p, mu_pos}{Community-mean coefficient vectors
+\item{mu.occ, mu.p, mu.pos}{Community-mean coefficient vectors
 \code{c(intercept, slopes...)} on each arm's link scale. Defaults pick
 weakly-informative values.}
 
-\item{sd_occ, sd_p, sd_pos}{Per-coefficient community SD on each arm (length 1,
+\item{sd.occ, sd.p, sd.pos}{Per-coefficient community SD on each arm (length 1,
 recycled, or one per coefficient). Default 0.5 / 0.4 / 0.4.}
 
 \item{positive}{\code{"lognormal"} (default) or \code{"beta"}.}
 
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
-\item{sigma_pos}{Lognormal residual SD when \code{positive = "lognormal"}
+\item{sigma.pos}{Lognormal residual SD when \code{positive = "lognormal"}
 (default 0.4).}
 
 \item{seed}{Optional integer seed.}
@@ -70,6 +70,6 @@ shared across species (community covariates). The returned \code{y} / \code{y_po
 \code{\link[=ms_occu_cover]{ms_occu_cover()}} (\code{y_pos} is \code{NA} where not detected).
 }
 \examples{
-sim <- simulate_ms_occu_cover(n_species = 4, N = 30, J = 3, seed = 1)
+sim <- simulate_ms_occu_cover(n.species = 4, N = 30, J = 3, seed = 1)
 dim(sim$y)
 }

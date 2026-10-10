@@ -5,23 +5,23 @@
 \title{Weakly-informative priors for cover-hurdle Laplace fits}
 \usage{
 cover_priors(
-  occ_intercept = list(mean = 0, sd = 2),
-  occ_slope = list(mean = 0, sd = 2.5),
-  pos_intercept = list(mean = 0, sd = 3),
-  pos_slope = list(mean = 0, sd = 2.5)
+  occ.intercept = list(mean = 0, sd = 2),
+  occ.slope = list(mean = 0, sd = 2.5),
+  pos.intercept = list(mean = 0, sd = 3),
+  pos.slope = list(mean = 0, sd = 2.5)
 )
 }
 \arguments{
-\item{occ_intercept}{Prior on the occurrence (presence) intercept, logit
+\item{occ.intercept}{Prior on the occurrence (presence) intercept, logit
 scale. \code{list(mean, sd)}. Default \code{list(mean = 0, sd = 2)}.}
 
-\item{occ_slope}{Prior on occurrence slopes. Default
+\item{occ.slope}{Prior on occurrence slopes. Default
 \code{list(mean = 0, sd = 2.5)}.}
 
-\item{pos_intercept}{Prior on the positive-cover intercept (logit scale for
+\item{pos.intercept}{Prior on the positive-cover intercept (logit scale for
 \code{"beta"}, log scale for \code{"lognormal"}). Default \code{list(mean = 0, sd = 3)}.}
 
-\item{pos_slope}{Prior on positive-cover slopes. Default
+\item{pos.slope}{Prior on positive-cover slopes. Default
 \code{list(mean = 0, sd = 2.5)}.}
 }
 \value{
@@ -56,8 +56,8 @@ nested-Laplace path to combine the two.
 
 \examples{
 # regularise the occurrence arm, leave the positive arm unpenalised
-priors <- cover_priors(pos_intercept = list(mean = 0, sd = Inf),
-                       pos_slope     = list(mean = 0, sd = Inf))
+priors <- cover_priors(pos.intercept = list(mean = 0, sd = Inf),
+                       pos.slope     = list(mean = 0, sd = Inf))
 priors
 
 \donttest{

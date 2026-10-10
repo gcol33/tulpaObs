@@ -42,7 +42,7 @@ is the only structured term accepted and is required on this route.
 
 \examples{
 \donttest{
-sim <- simulate_dyn_int_occu(N = 200, T_seasons = 4, S = 2, seed = 1)
+sim <- simulate_dyn_int_occu(N = 200, T.seasons = 4, S = 2, seed = 1)
 fit <- tobs(~ 1, data = sim$data, family = dyn_int_occu(),
             detection = ~ 1, colonization = ~ 1, extinction = ~ 1,
             y = sim$y, sources = sim$sources, control = list(verbose = FALSE))

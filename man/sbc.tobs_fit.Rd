@@ -209,7 +209,7 @@ fit <- tobs(~ occ_cov1 + icar(graph = adj),
             family = occu_cover("lognormal"),
             detection = ~ det_cov1,
             positive = ~ pos_cov1 + share(spatial()),
-            y = od$y, y_pos = y_pos, visits = od$det.covs,
+            y = od$y, y.pos = y_pos, visits = od$det.covs,
             method = "nested_laplace", control = ctl)
 sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)
 }

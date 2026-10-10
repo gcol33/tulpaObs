@@ -28,7 +28,7 @@ of health. The post-fit sampler checks apply to any NUTS fit.
 }
 \examples{
 \donttest{
-sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
                      seed = 1)
 fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
             detection = ~ det_cov1, y = sim$y, method = "laplace",

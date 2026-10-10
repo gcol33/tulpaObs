@@ -118,8 +118,8 @@ formula as a SECOND, weighted areal term on the same graph as the intercept
 field, not through \code{control}:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{~ time.sc +
-  icar(graph = adj, group_var = "cell_idx") +
-  icar(graph = adj, weight = time.sc, group_var = "cell_idx")
+  icar(graph = adj, group.var = "cell_idx") +
+  icar(graph = adj, weight = time.sc, group.var = "cell_idx")
 }\if{html}{\out{</div>}}
 
 The unweighted term is the shared intercept field; the weighted term
@@ -171,7 +171,7 @@ The intercept field plus its weighted trend field can also be written as one
 The bar left-hand side spells the coefficient fields: the intercept column
 (\code{1}) is the unweighted field; each covariate column (\code{time.sc}) is a
 weight-scaled coefficient field (\code{weight_i * z[cell_i]}). The bar right-hand
-side (\code{cell_idx}) is the graph node index (the areal \code{group_var}); \code{||}
+side (\code{cell_idx}) is the graph node index (the areal \code{group.var}); \code{||}
 requests independent intercept and slope fields, a single \code{|} makes them
 correlated. This desugars to exactly the two-term weighted-areal form above,
 so the two spellings give the same fit.
@@ -267,9 +267,9 @@ field, but the same spelling inside a \code{cover()} formula is parsed as an IID
 random effect on \code{cell}. For a spatial field on the cells write either the
 compact \code{spatial()} bar of the section above,
 \code{spatial(~ 1 + x || cell, graph = adj)}, or the two-term weighted-areal form,
-\verb{icar(graph = adj, group_var = "cell") +}
-\code{icar(graph = adj, weight = x, group_var = "cell")}. When a formula carries a
-bar whose grouping factor is also an areal term's \code{group_var}, \code{cover()} emits
+\verb{icar(graph = adj, group.var = "cell") +}
+\code{icar(graph = adj, weight = x, group.var = "cell")}. When a formula carries a
+bar whose grouping factor is also an areal term's \code{group.var}, \code{cover()} emits
 a one-time message noting the bar is fitted as a random effect; suppress it
 with \code{\link[base:suppressMessages]{base::suppressMessages()}}.
 }

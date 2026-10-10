@@ -7,10 +7,10 @@
 simulate_occu_ttd(
   N = 200,
   J = 4,
-  n_psi_covs = 1,
-  n_rate_covs = 1,
-  beta_psi = NULL,
-  beta_rate = NULL,
+  n.psi.covs = 1,
+  n.rate.covs = 1,
+  beta.psi = NULL,
+  beta.rate = NULL,
   Tmax = 3,
   seed = NULL
 )
@@ -20,13 +20,13 @@ simulate_occu_ttd(
 
 \item{J}{Number of replicate surveys per site (default 4).}
 
-\item{n_psi_covs, n_rate_covs}{Number of occupancy / rate covariates.}
+\item{n.psi.covs, n.rate.covs}{Number of occupancy / rate covariates.}
 
-\item{beta_psi}{Occupancy coefficients \code{c(intercept, slopes...)} (logit).
-Default \code{c(qlogis(0.6), runif(n_psi_covs, -0.5, 0.5))}.}
+\item{beta.psi}{Occupancy coefficients \code{c(intercept, slopes...)} (logit).
+Default \code{c(qlogis(0.6), runif(n.psi.covs, -0.5, 0.5))}.}
 
-\item{beta_rate}{Log detection-rate coefficients \code{c(intercept, slopes...)}.
-Default \code{c(log(0.6), runif(n_rate_covs, -0.4, 0.4))}.}
+\item{beta.rate}{Log detection-rate coefficients \code{c(intercept, slopes...)}.
+Default \code{c(log(0.6), runif(n.rate.covs, -0.4, 0.4))}.}
 
 \item{Tmax}{Survey length (scalar). Default 3.}
 

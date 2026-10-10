@@ -37,9 +37,9 @@ response via \verb{y =}; a two-sided formula for those errors.
 
 Structured effects are written as terms inside the formula, the way
 \code{lme4}, \code{mgcv}, and \code{INLA} do: spatial fields \code{icar(graph = adj)},
-\code{bym2(graph = adj)}, \code{gp(lon, lat, prior_range = c(r0, alpha))},
+\code{bym2(graph = adj)}, \code{gp(lon, lat, prior.range = c(r0, alpha))},
 \code{spde(lon, lat)}; random effects \code{re(group)}; temporal fields
-\code{temporal(time)}; spatially varying coefficients \code{spatial(~ 1 + w || cell, graph = adj)} over a graph or \code{spatial(lon, lat, model = "svc", coefficients = ..., prior_range = c(r0, alpha))} over coordinates;
+\code{temporal(time)}; spatially varying coefficients \code{spatial(~ 1 + w || cell, graph = adj)} over a graph or \code{spatial(lon, lat, model = "svc", coefficients = ..., prior.range = c(r0, alpha))} over coordinates;
 community latent factors
 \code{latent(k)}. A term enters whichever linear predictor it is written in
 (occupancy \code{formula} or \code{detection}). To share one realization across
@@ -57,11 +57,11 @@ umbrella also reads a varying-coefficient bar
 spatially-varying coefficient -- areal over a graph, continuous over
 coordinates (\code{model = "svc"}) -- are written through the same verb.
 
-The continuous fields (\code{gp()}, \code{svc()}, \code{spde()}) require \code{prior_range = c(r0, alpha)}, a penalized-complexity prior on the spatial range encoding
+The continuous fields (\code{gp()}, \code{svc()}, \code{spde()}) require \code{prior.range = c(r0, alpha)}, a penalized-complexity prior on the spatial range encoding
 \code{P(range < r0) = alpha} (Fuglstad et al. 2019). The range is in the units
 of the coordinates -- the kernel is \code{exp(-d / range)} -- so choose \code{r0} as
 a distance below which the field's correlation would be surprisingly short:
-on unit-square coordinates \code{prior_range = c(0.1, 0.05)} reads as "a 5\%
+on unit-square coordinates \code{prior.range = c(0.1, 0.05)} reads as "a 5\%
 chance the range is under 0.1". There is no default, deliberately. The
 range is weakly identified by the likelihood alone, so a default would be
 an invented prior doing real work on the posterior rather than a
@@ -155,30 +155,44 @@ detection logit on the visits it made. It is fitted with
 \code{method = "laplace"} or \code{"nuts"}, and other families refuse it.}
 
 \item{method}{inference route, naming a fully-specified path rather than a
-pair of orthogonal knobs:
+pair of orthogonal knobs. Each family accepts a subset of the routes below
+(listed per route, from the package's support table); an unsupported
+method errors with the list of methods that family supports, and the
+structured terms a route carries for a given family are on that family's
+help page.
 \itemize{
 \item \code{"auto"} -- the family's default route (see \code{default_engine}).
 \item \code{"laplace"} -- EM + Laplace with Gaussian marginals (fast default).
+Every family except \code{\link[=t_occu]{t_occu()}}.
 \item \code{"laplace_sla"} -- Laplace with skew-corrected (simplified-Laplace)
-marginals.
+marginals. \code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}, \code{\link[=cover]{cover()}}.
 \item \code{"laplace_gibbs"} / \code{"laplace_mi"} -- Laplace with a post-EM Gibbs /
 multiple-imputation correction. The fixed-effect prior threads into the
 correction refits, so these use the same
 weakly-informative default prior as \code{"laplace"}; pass \code{priors = FALSE}
-for the unpenalised correction.
-\item \code{"pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact single-season
-occupancy posterior (the spOccupancy \code{PGOcc} engine). A real MCMC chain
+for the unpenalised correction. \code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}.
+\item \code{"pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact occupancy
+posterior (the spOccupancy \code{PGOcc} engines). A real MCMC chain
 (with \code{Rhat} / \code{ESS} diagnostics), distinct from \code{"laplace_gibbs"} (a
 stochastic-EM variance correction). Sampler controls (\code{n.iter},
-\code{n.warmup}, \code{n.chains}, \code{n.thin}, \code{seed}, \code{sigma.beta}). v1: single-season
-\code{occu()}, site-level detection, no structured terms.
-\item \code{"nested_laplace"} -- multi-block nested Laplace (single-season
-occupancy and cover-hurdle joint).
+\code{n.warmup}, \code{n.chains}, \code{n.thin}, \code{seed}, \code{sigma.beta}). \code{\link[=occu]{occu()}}
+(site-level detection; an \code{icar()} field on occupancy), \code{\link[=ms_occu]{ms_occu()}},
+\code{\link[=ms_dyn_occu]{ms_dyn_occu()}}, \code{\link[=ms_int_occu]{ms_int_occu()}}, \code{\link[=jsdm]{jsdm()}}, \code{\link[=ms_count]{ms_count()}}, and
+\code{\link[=t_occu]{t_occu()}}, whose only route it is.
+\item \code{"nested_laplace"} -- multi-block nested Laplace: the structured terms
+(areal fields, shared cover-hurdle fields, latent factors) are
+integrated over a grid of their hyperparameters. \code{\link[=occu]{occu()}},
+\code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}, \code{\link[=dyn_int_occu]{dyn_int_occu()}}, \code{\link[=ms_occu]{ms_occu()}},
+\code{\link[=ms_dyn_occu]{ms_dyn_occu()}}, \code{\link[=jsdm]{jsdm()}}, \code{\link[=count]{count()}}, \code{\link[=ms_count]{ms_count()}}, \code{\link[=abun]{abun()}},
+\code{\link[=ms_abun]{ms_abun()}}, \code{\link[=dyn_abun]{dyn_abun()}}, \code{\link[=removal]{removal()}}, \code{\link[=distance]{distance()}}, \code{\link[=ms_distance]{ms_distance()}},
+\code{\link[=fp_occu]{fp_occu()}}, \code{\link[=cover]{cover()}}, \code{\link[=occu_cover]{occu_cover()}}, \code{\link[=occu_multiscale_cover]{occu_multiscale_cover()}}.
 \item \code{"nested_laplace_sla"} -- nested Laplace with skew-corrected marginals.
-\item \code{"nuts"} -- HMC / NUTS sampler (every structure; reports Rhat / ESS).
-Not every method is available for every family (e.g. the cover hurdle has
-no \code{"nuts"} path; \code{"nested_laplace"} is occupancy- and cover-only). An
-unsupported method errors with the list of methods that family supports.
+\code{\link[=occu]{occu()}}, \code{\link[=cover]{cover()}}.
+\item \code{"nuts"} -- HMC / NUTS sampler (reports Rhat / ESS). \code{\link[=occu]{occu()}},
+\code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}, \code{\link[=ms_occu]{ms_occu()}}, \code{\link[=ms_dyn_occu]{ms_dyn_occu()}},
+\code{\link[=ms_int_occu]{ms_int_occu()}}, \code{\link[=jsdm]{jsdm()}}, \code{\link[=ms_count]{ms_count()}}, \code{\link[=abun]{abun()}}, \code{\link[=ms_abun]{ms_abun()}},
+\code{\link[=dyn_abun]{dyn_abun()}}, \code{\link[=removal]{removal()}}, \code{\link[=distance]{distance()}}, \code{\link[=fp_occu]{fp_occu()}}, \code{\link[=cover]{cover()}},
+\code{\link[=occu_cover]{occu_cover()}}, \code{\link[=ms_occu_cover]{ms_occu_cover()}}, \code{\link[=occu_multiscale_cover]{occu_multiscale_cover()}}.
 }}
 
 \item{priors}{optional prior specification. For occupancy families fit
@@ -305,7 +319,7 @@ coordinate, integrated separately.
 Community joint occupancy-cover (\code{ms_occu_cover()}): 5. Tensor AGHQ over
 the joint per-species RE vector, so the node count is raised to a power
 of the RE dimension and stays small.
-Latent cover-per-unit (\code{cover_aggregate = "latent"}): 15 for a beta cover
+Latent cover-per-unit (\code{cover.aggregate = "latent"}): 15 for a beta cover
 arm, 1 for lognormal, whose per-unit marginal is closed form and needs no
 quadrature at all.
 Community \code{latent()} factors: 5, the Gauss-Hermite nodes the joint site
@@ -433,14 +447,14 @@ call; for a community model that borrows strength across species use
 \code{\link[=ms_occu_cover]{ms_occu_cover()}}. The long -> response pivot needs the column names: pass
 \verb{site = } and \verb{response = } (the detection 0/1 column for \code{occu_cover()},
 the cover column for \code{cover()}), plus, for \code{occu_cover()}, \verb{visit = } (the
-replicate column) and \verb{y_pos = } (the cover column) and any visit-level
+replicate column) and \verb{y.pos = } (the cover column) and any visit-level
 \verb{det.covs = }. Site-level covariates (those the \code{formula} / \code{detection}
 reference at the cell level) are read as the first row per site, the way
 \code{\link[=tobs_data]{tobs_data()}}\verb{(occ.covs = )} does.
 
 The same long-frame contract drives a SINGLE \code{occu_cover()} fit when \code{by}
 is omitted: pass \verb{site = }, \verb{visit = }, \verb{response = } (the 0/1 detection
-column) and \verb{y_pos = } (the cover column), plus any visit-level
+column) and \verb{y.pos = } (the cover column), plus any visit-level
 \verb{det.covs = }, with a long, plot-level \code{data}, and \code{tobs()} builds the
 paired occurrence / cover arms and the site-level design for you -- the
 by= batch reduced to one species, so you no longer hand-build the two
@@ -474,7 +488,7 @@ template. The specific model is chosen via the \code{family} argument; the engin
 \examples{
 \donttest{
 # Single-season occupancy
-sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
                      seed = 1)
 fit <- tobs(
   formula   = ~ occ_cov1,

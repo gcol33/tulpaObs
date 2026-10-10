@@ -6,22 +6,22 @@
 \usage{
 obs_family(
   name,
-  class_long,
+  class.long,
   latent,
   observation,
   replicates = c("required", "optional", "single"),
-  default_engine = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
+  default.engine = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
   status = c("working", "planned", "experimental"),
   params = list(),
-  control_keys = character(0),
-  control_groups = character(0),
+  control.keys = character(0),
+  control.groups = character(0),
   response = c("matrix", "vector")
 )
 }
 \arguments{
 \item{name}{short slug, e.g. \code{"occu"}.}
 
-\item{class_long}{human-readable name, e.g. \code{"single-season occupancy"}.}
+\item{class.long}{human-readable name, e.g. \code{"single-season occupancy"}.}
 
 \item{latent}{latent-state distribution, e.g. \code{"bernoulli"}, \code{"poisson"},
 \code{"lognormal"}, \code{"hurdle"}.}
@@ -31,7 +31,7 @@ obs_family(
 
 \item{replicates}{one of \code{"required"}, \code{"optional"}, \code{"single"}.}
 
-\item{default_engine}{\code{"laplace"}, \code{"nested_laplace"}, \code{"nuts"}, or
+\item{default.engine}{\code{"laplace"}, \code{"nested_laplace"}, \code{"nuts"}, or
 \code{"pg_gibbs"}. This is the route \code{method = "auto"} resolves to.}
 
 \item{status}{\code{"working"}, \code{"planned"}, or \code{"experimental"}.}
@@ -39,15 +39,15 @@ obs_family(
 \item{params}{named list of family-specific parameters carried with the
 object (K_max, positive-part link, etc.).}
 
-\item{control_keys}{character vector of extra \code{control} names this family's
+\item{control.keys}{character vector of extra \code{control} names this family's
 dispatcher accepts beyond the engine/route controls. These are added to
 the allowlist \code{tobs()} validates \code{control} against, so a family with a
 bespoke dispatcher (e.g. the cover hurdle's grid controls) is not rejected.
 Admitted on every route the family supports.}
 
-\item{control_groups}{character vector of capability groups (names of
+\item{control.groups}{character vector of capability groups (names of
 \code{.tobs_control_groups}) this family participates in beyond the ones its
-route admits unconditionally. Unlike \code{control_keys} these stay route-gated,
+route admits unconditionally. Unlike \code{control.keys} these stay route-gated,
 so a group tied to the Laplace engines is still rejected under \code{"nuts"}.
 \code{"block_coordinate"} is the case this exists for: \code{max.outer} /
 \code{factor.starts} mean something only to a family whose latent structure is fit

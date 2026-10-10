@@ -6,30 +6,30 @@
 \usage{
 simulate_cover(
   N = 200L,
-  beta_occ = c(-0.5, 0.8),
-  beta_pos = c(-1, 0.3),
-  sigma_pos = 0.4,
+  beta.occ = c(-0.5, 0.8),
+  beta.pos = c(-1, 0.3),
+  sigma.pos = 0.4,
   response = c("lognormal", "gaussian"),
-  spatial_range = NULL,
-  spatial_var = 1,
+  spatial.range = NULL,
+  spatial.var = 1,
   seed = NULL
 )
 }
 \arguments{
 \item{N}{Number of sites (default 200).}
 
-\item{beta_occ}{Length-2 occurrence coefficients (intercept, slope on x).}
+\item{beta.occ}{Length-2 occurrence coefficients (intercept, slope on x).}
 
-\item{beta_pos}{Length-2 log-cover coefficients (intercept, slope on x).}
+\item{beta.pos}{Length-2 log-cover coefficients (intercept, slope on x).}
 
-\item{sigma_pos}{Lognormal residual standard deviation (default 0.4).}
+\item{sigma.pos}{Lognormal residual standard deviation (default 0.4).}
 
 \item{response}{Positive-arm likelihood: \code{"lognormal"} (default) or \code{"gaussian"}.}
 
-\item{spatial_range}{Length scale of the exponential spatial field
+\item{spatial.range}{Length scale of the exponential spatial field
 (in unit-square distance). \code{NULL} disables the spatial layer.}
 
-\item{spatial_var}{Marginal variance of the spatial field (default 1).}
+\item{spatial.var}{Marginal variance of the spatial field (default 1).}
 
 \item{seed}{Optional integer seed.}
 }
@@ -58,7 +58,7 @@ generative model:
 }
 
 Both layers share the same design matrix by default (one continuous
-covariate plus an intercept). When \code{spatial_range} is supplied, a simple
+covariate plus an intercept). When \code{spatial.range} is supplied, a simple
 exponential-kernel Gaussian field on a random unit-square coordinate set
 is added to both linear predictors; the two layers see independently
 simulated draws of that field, which matches the two-independent-arm fit.

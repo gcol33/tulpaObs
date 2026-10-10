@@ -43,7 +43,7 @@ positive-arm dispersion is a shared community parameter.
 }
 \section{Inputs}{
 
-\code{y} and \code{y_pos} are 3D arrays \verb{[n_sites x max_visits x n_species]} (or named
+\code{y} and \code{y.pos} are 3D arrays \verb{[n_sites x max_visits x n_species]} (or named
 lists of \verb{n_sites x max_visits} matrices, one per species); \verb{species =} is
 required. The occupancy \code{formula}, the \code{detection} formula, and the cover
 \code{positive} formula carry community covariates shared across species. \code{coef()}

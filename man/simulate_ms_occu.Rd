@@ -7,11 +7,11 @@
 simulate_ms_occu(
   N = 100,
   J = 4,
-  n_species = 10,
-  beta_comm_mean = c(0, 0.5),
-  beta_comm_sd = c(0.5, 0.3),
-  alpha_comm_mean = c(0),
-  alpha_comm_sd = c(0.5),
+  n.species = 10,
+  beta.comm.mean = c(0, 0.5),
+  beta.comm.sd = c(0.5, 0.3),
+  alpha.comm.mean = c(0),
+  alpha.comm.sd = c(0.5),
   seed = NULL
 )
 }
@@ -20,15 +20,15 @@ simulate_ms_occu(
 
 \item{J}{Number of visits (default 4).}
 
-\item{n_species}{Number of species (default 10).}
+\item{n.species}{Number of species (default 10).}
 
-\item{beta_comm_mean}{Community mean for occupancy (default c(0, 0.5)).}
+\item{beta.comm.mean}{Community mean for occupancy (default c(0, 0.5)).}
 
-\item{beta_comm_sd}{Community SD for occupancy (default c(0.5, 0.3)).}
+\item{beta.comm.sd}{Community SD for occupancy (default c(0.5, 0.3)).}
 
-\item{alpha_comm_mean}{Community mean for detection (default c(0)).}
+\item{alpha.comm.mean}{Community mean for detection (default c(0)).}
 
-\item{alpha_comm_sd}{Community SD for detection (default c(0.5)).}
+\item{alpha.comm.sd}{Community SD for detection (default c(0.5)).}
 
 \item{seed}{Random seed.}
 }
@@ -39,6 +39,6 @@ A list with \code{y} (3D array), \code{data}, and \code{truth}.
 Simulate multi-species occupancy data
 }
 \examples{
-sim <- simulate_ms_occu(N = 40, J = 3, n_species = 4, seed = 1)
+sim <- simulate_ms_occu(N = 40, J = 3, n.species = 4, seed = 1)
 dim(sim$y)
 }

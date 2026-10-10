@@ -7,10 +7,10 @@
 simulate_removal(
   N = 100,
   K = 4,
-  n_abund_covs = 2,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_p = NULL,
+  n.abund.covs = 2,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.p = NULL,
   mixture = c("poisson", "negbin"),
   size = 3,
   seed = NULL
@@ -21,15 +21,15 @@ simulate_removal(
 
 \item{K}{Number of removal passes (default 4).}
 
-\item{n_abund_covs}{Number of abundance covariates (default 2).}
+\item{n.abund.covs}{Number of abundance covariates (default 2).}
 
-\item{n_det_covs}{Number of detection covariates (default 1).}
+\item{n.det.covs}{Number of detection covariates (default 1).}
 
-\item{beta_lambda}{Abundance coefficients on the log scale. Default
-\code{c(log(6), runif(n_abund_covs, -0.5, 0.5))}.}
+\item{beta.lambda}{Abundance coefficients on the log scale. Default
+\code{c(log(6), runif(n.abund.covs, -0.5, 0.5))}.}
 
-\item{beta_p}{Detection coefficients on the logit scale. Default
-\code{c(0.4, runif(n_det_covs, -0.5, 0.5))}.}
+\item{beta.p}{Detection coefficients on the logit scale. Default
+\code{c(0.4, runif(n.det.covs, -0.5, 0.5))}.}
 
 \item{mixture}{\code{"poisson"} (default) or \code{"negbin"}.}
 

@@ -4,10 +4,10 @@
 \alias{occu_ttd}
 \title{Time-to-detection occupancy family}
 \usage{
-occu_ttd(surveyLength = 1)
+occu_ttd(survey.length = 1)
 }
 \arguments{
-\item{surveyLength}{Survey length \code{Tmax} (the censoring time): a scalar, a
+\item{survey.length}{Survey length \code{Tmax} (the censoring time): a scalar, a
 length-\code{N} vector, or an \verb{N x J} matrix. Default 1.}
 }
 \value{
@@ -17,7 +17,7 @@ A \code{tobs_family} object for \code{\link[=tobs]{tobs()}}.
 Occupancy where a survey records the TIME to first detection rather than a
 0/1 outcome (Garrard et al. 2008; \pkg{unmarked} \code{occuTTD}). At an occupied
 site the time-to-detection is exponential with rate \code{lambda} (constant
-hazard); a survey of length \code{surveyLength} that reaches its end without a
+hazard); a survey of length \code{survey.length} that reaches its end without a
 detection is censored. An unoccupied site never detects. The state \code{formula}
 models \verb{logit psi} (occupancy); \code{detection} models \verb{log lambda} (the
 site-level detection rate). The latent occupancy state integrates out in
@@ -25,8 +25,8 @@ closed form (two states), so the fit maximises the exact marginal with an
 observed-information vcov.
 }
 \details{
-\code{y} is an \verb{N x J} matrix of detection times: a value in \verb{(0, surveyLength)}
-is a detection; a value \verb{>= surveyLength} is a non-detection (censored);
+\code{y} is an \verb{N x J} matrix of detection times: a value in \verb{(0, survey.length)}
+is a detection; a value \verb{>= survey.length} is a non-detection (censored);
 \code{NA} is a survey not conducted.
 }
 \section{Engines}{
@@ -40,7 +40,7 @@ observed-information covariance; the only route (no field, no sampler).
 \examples{
 \donttest{
 sim <- simulate_occu_ttd(N = 200, J = 4, Tmax = 3, seed = 1)
-fit <- tobs(~ psi_cov1, data = sim$data, family = occu_ttd(surveyLength = 3),
+fit <- tobs(~ psi_cov1, data = sim$data, family = occu_ttd(survey.length = 3),
             detection = ~ rate_cov1, y = sim$y, control = list(verbose = FALSE))
 coef(fit)
 }

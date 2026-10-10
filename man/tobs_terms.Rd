@@ -30,13 +30,13 @@ shapes and their arguments.
 \section{Areal spatial fields}{
 
 
-\code{icar(graph)}, \code{bym2(graph, scale_factor)}, \code{car(graph)} and
+\code{icar(graph)}, \code{bym2(graph, scale.factor)}, \code{car(graph)} and
 \code{car_proper(graph)} put a field over the nodes of a symmetric adjacency
-matrix \code{graph}. \code{bym2()} computes its Riebler \code{scale_factor} from the
+matrix \code{graph}. \code{bym2()} computes its Riebler \code{scale.factor} from the
 graph when it is not supplied. All four accept:
 
 \describe{
-\item{\code{group_var}}{Column naming each observation's graph node, when
+\item{\code{group.var}}{Column naming each observation's graph node, when
 the graph is over regions rather than rows.}
 \item{\code{weight}}{Per-node numeric column turning the field into a
 spatially varying coefficient (\code{weight_i * z[node_i]}) instead of an
@@ -81,12 +81,12 @@ triangular mesh. Coordinates come either from bare column names or from
 \item{\code{nu}}{Matern smoothness.}
 \item{\code{nn}}{Number of nearest neighbours in the Vecchia
 approximation, capped at \code{n - 1}. \code{multiscale_gp()} splits this
-into \code{nn_local} and \code{nn_regional}.}
-\item{\code{prior_range}}{Length-2 \code{c(r0, alpha)} PC prior on the
+into \code{nn.local} and \code{nn.regional}.}
+\item{\code{prior.range}}{Length-2 \code{c(r0, alpha)} PC prior on the
 range, read as \code{P(range < r0) = alpha}. Required by \code{gp()} and
 \code{svc()}, which ship no default; \code{spde()} defaults to
-\code{c(0.5, 0.5)} alongside \code{prior_sigma}.}
-\item{\code{mesh}, \code{max_edge}, \code{cutoff}}{\code{spde()} mesh
+\code{c(0.5, 0.5)} alongside \code{prior.sigma}.}
+\item{\code{mesh}, \code{max.edge}, \code{cutoff}}{\code{spde()} mesh
 controls, passed to \code{tulpa::spatial_spde()}.}
 }
 }
@@ -114,7 +114,7 @@ selects the areal structure (\code{"icar"} by default, or \code{"bym2"} /
 \strong{Continuous}, over coordinates, as NNGP surfaces:
 
 \preformatted{~ elevation + spatial(lon, lat, model = "svc",
-                      coefficients = "elevation", prior_range = c(50, 0.05))}
+                      coefficients = "elevation", prior.range = c(50, 0.05))}
 
 There is no node index to group on, so the coefficients are named directly
 instead of through a bar.
@@ -132,9 +132,9 @@ bare \code{lon, lat} column names. One coordinate pair per site.}
 \code{"gaussian"}.}
 \item{\code{nn}}{Nearest neighbours in the Vecchia approximation, default
 15, capped at \code{n - 1}.}
-\item{\code{prior_range}}{Required, no default: \code{c(r0, alpha)} with
+\item{\code{prior.range}}{Required, no default: \code{c(r0, alpha)} with
 \code{P(range < r0) = alpha}.}
-\item{\code{sigma2_prior_scale}}{Scale of the prior on the surface's
+\item{\code{sigma2.prior.scale}}{Scale of the prior on the surface's
 marginal variance.}
 }
 
@@ -187,7 +187,7 @@ giving a slope-only block.}
 \code{"iid"}.}
 \item{\code{group}}{Optional grouping, for one series per group.}
 \item{\code{cyclic}}{Wraps the last level onto the first.}
-\item{\code{tau_shape}, \code{tau_rate}}{Gamma prior on the field
+\item{\code{tau.shape}, \code{tau.rate}}{Gamma prior on the field
 precision.}
 }
 }
@@ -195,9 +195,9 @@ precision.}
 \section{Latent factors and sharing}{
 
 
-\code{latent(n_factors)} adds per-site latent factors with per-species
+\code{latent(n.factors)} adds per-site latent factors with per-species
 loadings to a community model, giving residual co-occurrence.
-\code{constraint} and \code{sigma_prior_rate} control the identification
+\code{constraint} and \code{sigma.prior.rate} control the identification
 anchor and the loading prior.
 
 \code{share("id")} shares one realization of the term named \code{id} across
@@ -277,13 +277,13 @@ adj[cbind(2:30, 1:29)] <- 1L
 ctrl <- list(verbose = FALSE, progress = FALSE)
 
 # Areal field on occupancy
-fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+fit <- tobs(~ occ_cov1 + icar(graph = adj, group.var = "cell"),
             data = d, family = occu(), detection = ~ 1, y = sim$y,
             method = "nested_laplace", control = ctrl)
 fit$spatial_field[1:5]
 
 # Detection random effect by observer, who changes between visits
-obs <- simulate_occu(N = 60, J = 3, n_visit_groups = 4, seed = 1)
+obs <- simulate_occu(N = 60, J = 3, n.visit.groups = 4, seed = 1)
 fit_re <- tobs(~ occ_cov1, data = obs$data, family = occu(),
                detection = ~ (1 | visit_group), y = obs$y,
                visits = obs$visits, method = "laplace", control = ctrl)
@@ -298,7 +298,7 @@ coef(fit_svc)
 # Continuous NNGP varying coefficient on the `occ_cov2` slope
 fit_nngp <- tobs(~ occ_cov2 + spatial(lon, lat, model = "svc",
                                       coefficients = "occ_cov2",
-                                      prior_range = c(0.5, 0.05)),
+                                      prior.range = c(0.5, 0.05)),
                  data = d, family = occu(), detection = ~ 1, y = sim$y,
                  method = "laplace", control = ctrl)
 coef(fit_nngp)

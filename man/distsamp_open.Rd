@@ -7,7 +7,7 @@
 distsamp_open(
   transect = c("line", "point"),
   cutpoints = NULL,
-  K_max = NULL,
+  K.max = NULL,
   mixture = c("poisson", "negbin", "zip", "zinb"),
   dynamics = c("constant", "notrend", "trend", "autoreg", "ricker", "gompertz")
 )
@@ -18,7 +18,7 @@ distsamp_open(
 \item{cutpoints}{Distance-bin edges, length \code{dim(y)[2] + 1}, strictly
 increasing and starting at \verb{>= 0}.}
 
-\item{K_max}{Truncation for the latent abundance HMM. Defaults to
+\item{K.max}{Truncation for the latent abundance HMM. Defaults to
 \verb{3 * max(period total) + 40}.}
 
 \item{mixture}{Initial-abundance mixing distribution. \code{"poisson"} (default),

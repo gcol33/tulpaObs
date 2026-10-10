@@ -4,11 +4,11 @@
 \alias{removal}
 \title{Removal-sampling family}
 \usage{
-removal(K_max = NULL, mixture = c("poisson", "negbin"))
+removal(K.max = NULL, mixture = c("poisson", "negbin"))
 }
 \arguments{
-\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
-integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+\item{K.max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K.max}). \code{NULL} (default) lets the
 engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
 fit warns that the posterior over \code{N} puts mass on the boundary.}
 
@@ -31,7 +31,7 @@ Sequential-depletion removal sampling: latent abundance
 removal passes, where pass \code{k} removes
 \verb{Binomial(N_i - sum_\{l<k\} y_\{il\}, p_\{ik\})} of the individuals still present.
 The declining catch sequence identifies detection \code{p} and abundance \code{N}; the
-latent \code{N} is summed out in closed form (truncation \code{K_max}), so the fit is a
+latent \code{N} is summed out in closed form (truncation \code{K.max}), so the fit is a
 direct Laplace approximation (no EM), with a NUTS path over the same marginal.
 }
 \details{
@@ -56,7 +56,7 @@ of the two, not both).
 }
 
 \examples{
-f <- removal(K_max = 100)
+f <- removal(K.max = 100)
 f
 }
 \references{

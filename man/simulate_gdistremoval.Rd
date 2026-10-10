@@ -7,14 +7,14 @@
 simulate_gdistremoval(
   N = 200,
   cutpoints = c(0, 10, 20, 30, 40),
-  n_periods = 4L,
+  n.periods = 4L,
   transect = "line",
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  n_rem_covs = 1,
-  beta_lambda = NULL,
-  beta_sigma = NULL,
-  beta_r = NULL,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  n.rem.covs = 1,
+  beta.lambda = NULL,
+  beta.sigma = NULL,
+  beta.r = NULL,
   seed = NULL
 )
 }
@@ -23,14 +23,14 @@ simulate_gdistremoval(
 
 \item{cutpoints}{Distance-bin edges \verb{0 = c_0 < ... < c_B}.}
 
-\item{n_periods}{Number of removal periods.}
+\item{n.periods}{Number of removal periods.}
 
 \item{transect}{\code{"line"} (default) or \code{"point"}.}
 
-\item{n_abund_covs, n_det_covs, n_rem_covs}{Number of abundance / distance /
+\item{n.abund.covs, n.det.covs, n.rem.covs}{Number of abundance / distance /
 removal covariates.}
 
-\item{beta_lambda, beta_sigma, beta_r}{Coefficients on the log-abundance,
+\item{beta.lambda, beta.sigma, beta.r}{Coefficients on the log-abundance,
 log-scale, and logit-removal arms (\code{c(intercept, slopes...)}). Defaults give
 moderate abundance / detection.}
 

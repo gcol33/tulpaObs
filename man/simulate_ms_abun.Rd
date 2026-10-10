@@ -5,46 +5,46 @@
 \title{Simulate community (multispecies) N-mixture abundance data}
 \usage{
 simulate_ms_abun(
-  n_species = 12,
+  n.species = 12,
   N = 80,
   J = 4,
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  mu_lambda = NULL,
-  mu_p = NULL,
-  sd_lambda = 0.5,
-  sd_p = 0.4,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  mu.lambda = NULL,
+  mu.p = NULL,
+  sd.lambda = 0.5,
+  sd.p = 0.4,
   mixture = c("poisson", "negbin", "zip", "zinb"),
   size = 3,
-  sigma_logr = 0.4,
+  sigma.logr = 0.4,
   omega = 0.3,
-  sigma_omega = 0.4,
+  sigma.omega = 0.4,
   graph = NULL,
   sigma.field = 0.6,
   seed = NULL
 )
 }
 \arguments{
-\item{n_species}{Number of species (default 12).}
+\item{n.species}{Number of species (default 12).}
 
 \item{N}{Number of sites (default 80).}
 
 \item{J}{Number of replicate visits (default 4).}
 
-\item{n_abund_covs}{Number of abundance covariates (default 1).}
+\item{n.abund.covs}{Number of abundance covariates (default 1).}
 
-\item{n_det_covs}{Number of detection covariates (default 1).}
+\item{n.det.covs}{Number of detection covariates (default 1).}
 
-\item{mu_lambda}{Community-mean abundance coefficients \code{c(intercept, slopes...)} on the log scale. Default \code{c(log(3), rep(0.4, n_abund_covs))}.}
+\item{mu.lambda}{Community-mean abundance coefficients \code{c(intercept, slopes...)} on the log scale. Default \code{c(log(3), rep(0.4, n.abund.covs))}.}
 
-\item{mu_p}{Community-mean detection coefficients on the logit scale.
-Default \code{c(0.3, rep(-0.3, n_det_covs))}.}
+\item{mu.p}{Community-mean detection coefficients on the logit scale.
+Default \code{c(0.3, rep(-0.3, n.det.covs))}.}
 
-\item{sd_lambda}{Per-coefficient community SD for the abundance arm (the
-sqrt-diagonal of \code{Sigma_lambda}). Length 1 (recycled) or \code{1 + n_abund_covs}.
+\item{sd.lambda}{Per-coefficient community SD for the abundance arm (the
+sqrt-diagonal of \code{Sigma_lambda}). Length 1 (recycled) or \code{1 + n.abund.covs}.
 Default 0.5.}
 
-\item{sd_p}{Per-coefficient community SD for the detection arm. Default 0.4.}
+\item{sd.p}{Per-coefficient community SD for the detection arm. Default 0.4.}
 
 \item{mixture}{Abundance mixing distribution: \code{"poisson"} (default),
 \code{"negbin"}, or their zero-inflated counterparts \code{"zip"} / \code{"zinb"} (a
@@ -55,7 +55,7 @@ per-species structural-zero share).}
 sizes are \eqn{r_s = \exp(\mu_{\log r} + b^{\log r}_s)} with
 \eqn{b^{\log r}_s \sim N(0, \sigma_{\log r}^2)}.}
 
-\item{sigma_logr}{Standard deviation of the per-species log-dispersion random
+\item{sigma.logr}{Standard deviation of the per-species log-dispersion random
 effect \code{log_r_s} (used only under \code{mixture = "negbin"} / \code{"zinb"}). Default
 0.4. Set to 0 for a shared (single-\code{r}) community.}
 
@@ -65,7 +65,7 @@ effect \code{log_r_s} (used only under \code{mixture = "negbin"} / \code{"zinb"}
 \eqn{\omega_s = \mathrm{plogis}(\mu_\omega + b^\omega_s)} with
 \eqn{b^\omega_s \sim N(0, \sigma_\omega^2)}.}
 
-\item{sigma_omega}{Standard deviation of the per-species structural-zero-logit
+\item{sigma.omega}{Standard deviation of the per-species structural-zero-logit
 random effect \code{logit_omega_s} (used only under zero-inflation). Default 0.4.
 Set to 0 for a shared (single-\code{omega}) community.}
 
@@ -119,6 +119,6 @@ Per-species Royle (2004) N-mixture with Gaussian community hyperpriors:
 \verb{[n_sites x J x n_species]} suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=ms_abun]{ms_abun()}}.
 }
 \examples{
-sim <- simulate_ms_abun(n_species = 4, N = 30, J = 3, seed = 1)
+sim <- simulate_ms_abun(n.species = 4, N = 30, J = 3, seed = 1)
 dim(sim$y)
 }

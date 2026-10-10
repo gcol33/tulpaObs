@@ -10,8 +10,8 @@ occu_aggregation_scan(
   coords,
   year,
   plot = NULL,
-  cell_sizes = NULL,
-  block_lengths = NULL,
+  cell.sizes = NULL,
+  block.lengths = NULL,
   score = c("info", "count"),
   family = c("occupancy"),
   control = list()
@@ -29,11 +29,11 @@ occu_aggregation_scan(
 \item{plot}{Optional name of the plot-id column; enables the within-cell
 homogeneity proxy.}
 
-\item{cell_sizes}{Numeric vector of candidate cell edge lengths. \code{NULL}
+\item{cell.sizes}{Numeric vector of candidate cell edge lengths. \code{NULL}
 auto-proposes a geometric ladder from the nearest-neighbour spacing to half
 the extent.}
 
-\item{block_lengths}{Integer vector of candidate contiguous block lengths (in
+\item{block.lengths}{Integer vector of candidate contiguous block lengths (in
 years). \code{NULL} runs mean-shift changepoint segmentation of the per-year
 naive occupancy series and uses the resulting blocks as the single temporal
 candidate.}
@@ -88,7 +88,7 @@ d <- data.frame(east = runif(200), north = runif(200),
                 detected = rbinom(200, 1, 0.3))
 scan <- occu_aggregation_scan(d, response = "detected",
                               coords = c("east", "north"), year = "year",
-                              cell_sizes = c(0.2, 0.4),
-                              block_lengths = c(2, 3))
+                              cell.sizes = c(0.2, 0.4),
+                              block.lengths = c(2, 3))
 scan
 }

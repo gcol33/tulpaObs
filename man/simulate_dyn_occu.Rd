@@ -7,14 +7,14 @@
 simulate_dyn_occu(
   N = 100,
   J = 4,
-  n_seasons = 5,
-  beta_occ = c(0.5),
-  beta_det = c(0),
+  n.seasons = 5,
+  beta.occ = c(0.5),
+  beta.det = c(0),
   gamma = 0.2,
   epsilon = 0.1,
-  beta_gamma = NULL,
-  beta_epsilon = NULL,
-  beta_det_season = NULL,
+  beta.gamma = NULL,
+  beta.epsilon = NULL,
+  beta.det.season = NULL,
   seed = NULL
 )
 }
@@ -23,25 +23,25 @@ simulate_dyn_occu(
 
 \item{J}{Number of visits per season (default 4).}
 
-\item{n_seasons}{Number of seasons (default 5).}
+\item{n.seasons}{Number of seasons (default 5).}
 
-\item{beta_occ}{Initial occupancy coefficients.}
+\item{beta.occ}{Initial occupancy coefficients.}
 
-\item{beta_det}{Detection coefficients.}
+\item{beta.det}{Detection coefficients.}
 
 \item{gamma}{Colonization probability (default 0.2); ignored when
-\code{beta_gamma} is given.}
+\code{beta.gamma} is given.}
 
 \item{epsilon}{Extinction probability (default 0.1); ignored when
-\code{beta_epsilon} is given.}
+\code{beta.epsilon} is given.}
 
-\item{beta_gamma}{Optional \code{c(intercept, slope)} for a season-varying
+\item{beta.gamma}{Optional \code{c(intercept, slope)} for a season-varying
 colonization logit driven by a drawn per-\verb{(site, interval)} covariate.}
 
-\item{beta_epsilon}{Optional \code{c(intercept, slope)} for a season-varying
+\item{beta.epsilon}{Optional \code{c(intercept, slope)} for a season-varying
 extinction logit driven by a drawn per-\verb{(site, interval)} covariate.}
 
-\item{beta_det_season}{Optional \code{c(intercept, slope)} for a season-varying
+\item{beta.det.season}{Optional \code{c(intercept, slope)} for a season-varying
 detection logit driven by a drawn per-\verb{(site, season)} covariate \code{det_cov}
 (a \verb{[N x T]} matrix column of \code{data}); fit with \code{detection = ~ det_cov}.}
 
@@ -52,7 +52,7 @@ A list with \code{y} (3D array), \code{data}, and \code{truth}.
 }
 \description{
 Colonization and extinction are constant across the \code{n_seasons - 1} transition
-intervals by default. Supplying \code{beta_gamma} and/or \code{beta_epsilon} makes the
+intervals by default. Supplying \code{beta.gamma} and/or \code{beta.epsilon} makes the
 corresponding rate SEASON-VARYING: a per-\verb{(site, interval)} covariate is drawn
 into an \verb{[N x (n_seasons - 1)]} matrix column (\code{gamma_cov} / \code{eps_cov}) of the
 returned \code{data}, and the rate is \code{plogis(beta[1] + beta[2] * cov)}. Fit these
@@ -60,6 +60,6 @@ with \code{colonization = ~ gamma_cov} / \code{extinction = ~ eps_cov} (the matr
 column drives the interval-indexed rate).
 }
 \examples{
-sim <- simulate_dyn_occu(N = 40, J = 3, n_seasons = 4, seed = 1)
+sim <- simulate_dyn_occu(N = 40, J = 3, n.seasons = 4, seed = 1)
 dim(sim$y)
 }

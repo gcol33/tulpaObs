@@ -6,7 +6,7 @@
 \usage{
 occu_cover(
   response = c("beta", "lognormal", "gaussian"),
-  cover_aggregate = NULL
+  cover.aggregate = NULL
 )
 }
 \arguments{
@@ -15,7 +15,7 @@ in (0, 1)), \code{"lognormal"} (log-cover Gaussian), or \code{"gaussian"} (an
 identity-Gaussian magnitude on a real, unbounded scale -- the delta-normal
 hurdle; not for cover fractions, which stay on \code{"beta"}/\code{"lognormal"}).}
 
-\item{cover_aggregate}{how the cover arm collapses per occupancy unit on the
+\item{cover.aggregate}{how the cover arm collapses per occupancy unit on the
 shared-field spatial path: \code{"mean"}, \code{"median"}, \code{"latent"} (a per-unit
 cover random effect integrated out), or \code{"none"} (per-visit). \code{NULL}
 (default) is \code{"mean"} on the spatial path and \code{"none"} on the non-spatial
@@ -223,20 +223,18 @@ covariate in the cell \code{data}; this is the equivalent of one weighted formul
 term. Specify the trend field one way or the other, not both.
 }
 
-\section{Sites larger than cells (\code{group_var})}{
+\section{Sites larger than cells (\code{group.var})}{
 
 By default each site (one row of \code{y} / \code{data}, one latent occupancy state) is
 its own field node, so the graph must have one node per site. Passing
-\code{group_var = "<col>"} to the \code{icar()} / \code{bym2()} term maps each site to a
+\code{group.var = "<col>"} to the \code{icar()} / \code{bym2()} term maps each site to a
 field node named by that integer column, so several sites can share one node.
 The field then stays length \code{n_cells} (the graph) while occupancy, detection,
 and cover run over \code{n_sites}. The motivating layout is a site = cell x
 time-period: plots in a cell-period are the detection replicates, occupancy is
 per cell-period, and a per-site time weight on a coupled trend field
-(\code{icar(graph, weight = time, group_var = "cell")}) gives a detection-corrected
-occupancy trend on a shared cell field. Supported on the default
-\code{joint} engine; the \code{v2_joint} / \code{v3_nested} escape hatches bind the
-field 1:1 to sites and reject \code{group_var}.
+(\code{icar(graph, weight = time, group.var = "cell")}) gives a detection-corrected
+occupancy trend on a shared cell field.
 }
 
 \section{Per-group random intercept on the shared-field path (\code{re()} / \code{(1 | g)})}{
@@ -261,10 +259,10 @@ grouping factor names the areal graph nodes. The engine's inline-MCAR call
 \code{tulpa::spatial(graph, ~ 1 + x | cell)} reads \verb{| cell} as a separable spatial
 field, but the same spelling in an \code{occu_cover()} formula is an IID random
 effect on \code{cell}. For a spatial field on the cells use an areal term --
-\code{icar(graph = adj, group_var = "cell")} (plus
-\code{icar(graph = adj, weight = x, group_var = "cell")} for a spatially-varying
+\code{icar(graph = adj, group.var = "cell")} (plus
+\code{icar(graph = adj, weight = x, group.var = "cell")} for a spatially-varying
 trend) -- not a bar. When a formula carries a bar whose grouping factor is also
-an areal term's \code{group_var}, \code{occu_cover()} emits a one-time message noting the
+an areal term's \code{group.var}, \code{occu_cover()} emits a one-time message noting the
 bar is fitted as a random effect; suppress it with \code{\link[base:suppressMessages]{base::suppressMessages()}}.
 }
 
@@ -280,10 +278,10 @@ time, \code{delta_cover_cond}) comes out flat. A \code{spatial()} bar placed in 
 \code{positive} formula adds an INDEPENDENT, non-copied areal field on the cover arm
 alone:
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tobs(occurrence = ~ x + icar(graph = adj, group.var = "cell"),
      detection  = ~ 1,
      positive   = ~ time + spatial(~ 1 + time || cell, graph = adj),
-     data = cell_dat, y = y, y_pos = y_pos,
+     data = cell_dat, y = y, y.pos = y_pos,
      family = occu_cover("lognormal"), method = "nested_laplace")
 }\if{html}{\out{</div>}}
 
@@ -297,7 +295,7 @@ column). The field SD grid defaults to \code{control$sigma.grid}; set
 grid, which keeps the added axis from multiplying the outer-grid cost.
 The per-cell field posterior is in \code{fit$pos_field} / \code{fit$pos_field_table}
 (and \code{fit$pos_field_tables} per column). Scope: it composes with the shared
-occupancy field but uses per-visit cover (\code{cover_aggregate = "none"}) and does
+occupancy field but uses per-visit cover (\code{cover.aggregate = "none"}) and does
 not combine with the correlated \code{|} MCAR field, the latent cover RE, or the
 batched fused path; like the shared field it is fitted as ICAR (bym2/car read as
 ICAR). A static intercept cover field is only weakly identified against the
@@ -324,13 +322,13 @@ re-solved, and a checkpoint written for different data or settings is rejected
 rather than resumed onto. Forwarded to \code{\link[tulpa:tulpa_nested_laplace_joint]{tulpa::tulpa_nested_laplace_joint()}}.
 }
 
-\section{Cell-aggregated cover (\code{cover_aggregate})}{
+\section{Cell-aggregated cover (\code{cover.aggregate})}{
 
 On the shared-field spatial path the cover arm has one observation per
 detected visit, so a cell with many detected plots informs the shared field
 far more than the single occupancy observation for that cell; the field is
 then driven almost entirely by the cover arm and the detection-corrected
-occupancy surface flattens. \code{cover_aggregate} collapses the cover arm to a
+occupancy surface flattens. \code{cover.aggregate} collapses the cover arm to a
 single response per occupancy unit (cell-period) so the two arms inform the
 field with comparable weight:
 \itemize{
@@ -397,7 +395,7 @@ the outer grid, so its free-Sigma grid uses a compact principled default
 (symmetric correlation nodes including 0); widen it with
 \code{control$re.logchol.grid.p} / \code{re.logchol.grid.pos}.
 
-The positive-cover RE needs per-visit cover (\code{cover_aggregate = "none"}). As
+The positive-cover RE needs per-visit cover (\code{cover.aggregate = "none"}). As
 with the occupancy-arm RE, each grid-integrated variance carries the binary /
 small-cluster inner-Laplace attenuation and is a lower bound on the truth; the
 BLUPs recover the per-group structure.
@@ -423,8 +421,8 @@ same limitation the sampled coupled field has.
 \examples{
 \donttest{
 N <- 120; J <- 4
-sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                           n_pos_covs = 1, positive = "beta", seed = 1)
+sim <- simulate_occu_cover(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                           n.pos.covs = 1, positive = "beta", seed = 1)
 long <- data.frame(site_id = rep(seq_len(N), each = J),
                    visit    = rep(seq_len(J), times = N),
                    y        = as.vector(t(sim$y)),
@@ -436,7 +434,7 @@ cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
 y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
 fit <- tobs(~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
             detection = ~ det_cov1, positive = ~ pos_cov1,
-            y = od$y, y_pos = y_pos, visits = od$det.covs, method = "laplace")
+            y = od$y, y.pos = y_pos, visits = od$det.covs, method = "laplace")
 summary(fit)
 }
 }

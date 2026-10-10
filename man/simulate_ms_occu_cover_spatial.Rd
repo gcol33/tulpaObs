@@ -6,27 +6,27 @@
 \usage{
 simulate_ms_occu_cover_spatial(
   adj,
-  n_species = 8L,
+  n.species = 8L,
   J = 4L,
   K = 1L,
-  n_occ_covs = 1L,
-  n_det_covs = 1L,
-  n_pos_covs = 1L,
-  mu_occ = NULL,
-  mu_p = NULL,
-  mu_pos = NULL,
-  sd_occ = 0.4,
-  sd_p = 0.4,
-  sd_pos = 0.3,
-  mean_load = 0,
-  sd_load = 1,
-  cover_factor = FALSE,
-  mean_load_pos = 0,
-  sd_load_pos = 1,
+  n.occ.covs = 1L,
+  n.det.covs = 1L,
+  n.pos.covs = 1L,
+  mu.occ = NULL,
+  mu.p = NULL,
+  mu.pos = NULL,
+  sd.occ = 0.4,
+  sd.p = 0.4,
+  sd.pos = 0.3,
+  mean.load = 0,
+  sd.load = 1,
+  cover.factor = FALSE,
+  mean.load.pos = 0,
+  sd.load.pos = 1,
   field = c("icar", "car_proper", "bym2"),
   rho = 0.9,
   phi = 0.7,
-  sigma_pos = 0.4,
+  sigma.pos = 0.4,
   positive = c("lognormal", "beta"),
   seed = NULL
 )
@@ -34,34 +34,34 @@ simulate_ms_occu_cover_spatial(
 \arguments{
 \item{adj}{N x N 0/1 adjacency matrix of the cell graph (required); \code{N} cells.}
 
-\item{n_species}{Number of species.}
+\item{n.species}{Number of species.}
 
 \item{J}{Number of detection visits per cell.}
 
-\item{K}{Number of shared latent spatial factors (\verb{1 <= K <= n_species}).
+\item{K}{Number of shared latent spatial factors (\verb{1 <= K <= n.species}).
 \code{K = 1} is the Stage-1 single-field case (loading vector, field vector);
 \code{K > 1} draws \code{K} ICAR fields with lower-triangular, positive-diagonal
 loadings and returns the \verb{S x K} loading matrix / \verb{N x K} field matrix.}
 
-\item{n_occ_covs, n_det_covs, n_pos_covs}{Number of (Gaussian) covariates on the
+\item{n.occ.covs, n.det.covs, n.pos.covs}{Number of (Gaussian) covariates on the
 occupancy, detection, and cover arms; each arm also has an intercept.}
 
-\item{mu_occ, mu_p, mu_pos}{Community mean coefficient vectors (intercept first).
+\item{mu.occ, mu.p, mu.pos}{Community mean coefficient vectors (intercept first).
 \code{NULL} picks sensible defaults of the right length.}
 
-\item{sd_occ, sd_p, sd_pos}{Community RE SDs (diagonal \code{Sigma_.}); scalar
+\item{sd.occ, sd.p, sd.pos}{Community RE SDs (diagonal \code{Sigma_.}); scalar
 (recycled) or per-coefficient.}
 
-\item{mean_load, sd_load}{Mean and SD of the per-species loadings \code{L_s}.}
+\item{mean.load, sd.load}{Mean and SD of the per-species loadings \code{L_s}.}
 
-\item{cover_factor}{Logical; when \code{TRUE} the same shared fields \code{W} also load
+\item{cover.factor}{Logical; when \code{TRUE} the same shared fields \code{W} also load
 on the cover (positive) predictor through a free \verb{S x K} loading matrix
 \code{L_pos} (the cover-arm factor). The cover-factor
 draws are gated, so \code{FALSE} (the default) reproduces the no-factor RNG stream
 exactly. \code{truth$L_pos} carries the generating cover loadings.}
 
-\item{mean_load_pos, sd_load_pos}{Mean and SD of the cover-arm loadings \code{L_pos}
-(used only when \code{cover_factor = TRUE}).}
+\item{mean.load.pos, sd.load.pos}{Mean and SD of the cover-arm loadings \code{L_pos}
+(used only when \code{cover.factor = TRUE}).}
 
 \item{field}{Areal structure of the shared latent factors: \code{"icar"} (improper
 intrinsic CAR, the default), \code{"car_proper"} (proper CAR with a correlation
@@ -76,7 +76,7 @@ reproduces the Stage 1-2 RNG stream byte for byte; \code{truth$field} / \code{tr
 \item{phi}{BYM2 spatial-variance fraction in \verb{[0, 1]}, used only when
 \code{field = "bym2"} (\code{phi = 1} is the pure ICAR field, \code{phi = 0} pure iid).}
 
-\item{sigma_pos}{Lognormal cover residual SD (on the log scale).}
+\item{sigma.pos}{Lognormal cover residual SD (on the log scale).}
 
 \item{positive}{Cover family; only \code{"lognormal"} in Stage 1.}
 
@@ -90,7 +90,7 @@ parameters: \verb{mu_*}, \verb{sd_*}, per-species \verb{b_*}, loadings \code{L},
 \code{psi}, \code{z}).
 }
 \description{
-Generates occupancy / detection / cover data for \code{n_species} species sharing
+Generates occupancy / detection / cover data for \code{n.species} species sharing
 one latent ICAR spatial factor \code{w} on the cell graph, with per-species
 loadings \code{L_s} on the occupancy state predictor and Gaussian community priors
 on the per-species arm coefficients. This is the ground-truth generator for
@@ -100,6 +100,6 @@ the Stage-1 reduced-rank spatial JSDM.
 adj <- matrix(0, 10, 10)
 adj[cbind(1:9, 2:10)] <- 1
 adj <- adj + t(adj)
-sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4, J = 3, seed = 1)
+sim <- simulate_ms_occu_cover_spatial(adj, n.species = 4, J = 3, seed = 1)
 dim(sim$y)
 }

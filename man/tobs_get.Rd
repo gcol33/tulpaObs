@@ -35,7 +35,7 @@ long$occ_cov1 <- rep(rep(sim_a$data$occ_cov1, each = 3), 2)
 fit <- tobs(~ occ_cov1, data = long, family = occu_cover("lognormal"),
             detection = ~ det_cov1, positive = ~ 1, method = "laplace",
             by = "sp", site = "site", visit = "visit", response = "occur",
-            y_pos = "cover", det.covs = "det_cov1",
+            y.pos = "cover", det.covs = "det_cov1",
             control = list(verbose = FALSE))
 fit_a <- tobs_get(fit, "a")
 coef(fit_a)

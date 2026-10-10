@@ -6,22 +6,22 @@
 \usage{
 simulate_jsdm(
   N = 100,
-  n_species = 10,
-  beta_comm_mean = c(0, 0.5),
-  beta_comm_sd = c(0.5, 0.3),
+  n.species = 10,
+  beta.comm.mean = c(0, 0.5),
+  beta.comm.sd = c(0.5, 0.3),
   seed = NULL
 )
 }
 \arguments{
 \item{N}{Number of sites (default 100).}
 
-\item{n_species}{Number of species (default 10).}
+\item{n.species}{Number of species (default 10).}
 
-\item{beta_comm_mean}{Community-mean occupancy coefficients, length
+\item{beta.comm.mean}{Community-mean occupancy coefficients, length
 \code{1 + n_occ_covs} (intercept first).}
 
-\item{beta_comm_sd}{Between-species SD of each occupancy coefficient (same
-length as \code{beta_comm_mean}).}
+\item{beta.comm.sd}{Between-species SD of each occupancy coefficient (same
+length as \code{beta.comm.mean}).}
 
 \item{seed}{Random seed.}
 }
@@ -36,6 +36,6 @@ Matches the \code{\link[=jsdm]{jsdm()}} family, which observes presence directly
 process), so the response is an \verb{N x n_species} presence matrix.
 }
 \examples{
-sim <- simulate_jsdm(N = 60, n_species = 5, seed = 1)
+sim <- simulate_jsdm(N = 60, n.species = 5, seed = 1)
 dim(sim$y)   # 60 sites x 5 species presence matrix
 }

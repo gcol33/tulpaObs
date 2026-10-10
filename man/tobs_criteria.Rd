@@ -46,7 +46,7 @@ ratio inverts the whole cell's likelihood. A whole cell is a larger
 perturbation of the posterior than a single row, so the Pareto k values are
 correspondingly higher and are the diagnostic to read before trusting the
 cell-level number. Implemented for \code{cover()} (the areal field node, when
-sites are grouped via \code{group_var}) and \code{occu_cover()} (the \code{site_cell} map);
+sites are grouped via \code{group.var}) and \code{occu_cover()} (the \code{site_cell} map);
 a non-spatial fit has no cells, so \code{"cell"} errors there. Equivalent to
 passing \verb{group =} the cell map directly, without hand-building it. \code{dic()}
 has no cross-validation unit -- it is a plug-in deviance over all

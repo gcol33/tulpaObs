@@ -6,9 +6,9 @@
 \usage{
 simulate_t_occu(
   N = 150,
-  T_seasons = 8,
+  T.seasons = 8,
   J = 3,
-  beta_occ = c(0.2),
+  beta.occ = c(0.2),
   p = 0.4,
   rho = 0.6,
   sigma = 0.7,
@@ -18,11 +18,11 @@ simulate_t_occu(
 \arguments{
 \item{N}{Number of sites (default 150).}
 
-\item{T_seasons}{Number of seasons / years (default 8).}
+\item{T.seasons}{Number of seasons / years (default 8).}
 
 \item{J}{Visits per season (default 3).}
 
-\item{beta_occ}{Occupancy coefficients (intercept first; default \code{c(0.2)}).}
+\item{beta.occ}{Occupancy coefficients (intercept first; default \code{c(0.2)}).}
 
 \item{p}{Detection probability (default 0.4).}
 
@@ -39,7 +39,7 @@ A list with \code{y} (3D array \verb{[N x T x J]}), \code{data}, and \code{truth
 Simulate multi-season occupancy with an AR1 year effect (tPGOcc)
 }
 \examples{
-sim <- simulate_t_occu(N = 30, T_seasons = 4, J = 2, seed = 1)
+sim <- simulate_t_occu(N = 30, T.seasons = 4, J = 2, seed = 1)
 dim(sim$y)
 }
 \seealso{

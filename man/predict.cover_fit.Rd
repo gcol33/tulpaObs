@@ -8,9 +8,9 @@
   object,
   newdata = NULL,
   type = NULL,
-  include_RE = FALSE,
+  include.RE = FALSE,
   times = NULL,
-  time_col = NULL,
+  time.col = NULL,
   level = 0.95,
   nsim = 1000L,
   draws = TRUE,
@@ -30,12 +30,14 @@ the nested-Laplace fit, one row per spatial unit (or a \code{cell} column).}
 
 \item{type}{Separate-Laplace fit: one of \code{"expected"}, \code{"occupancy"},
 \code{"conditional"}. Nested-Laplace fit: \code{"occurrence"}, \code{"cover_cond"},
-\code{"cover_exp"}, or \code{"change"} (the legacy aliases are accepted and mapped).}
+\code{"cover_exp"}, or \code{"change"}; the separate-Laplace names \code{"expected"},
+\code{"occupancy"} and \code{"conditional"} map to \code{"cover_exp"}, \code{"occurrence"} and
+\code{"cover_cond"}.}
 
-\item{include_RE}{Ignored for the separate-Laplace fit (no spatial
+\item{include.RE}{Ignored for the separate-Laplace fit (no spatial
 projection); the nested-Laplace fit always projects the shared field.}
 
-\item{times, time_col, level, nsim, draws}{Nested-Laplace fit only: \code{times = c(t1, t2)} and \code{time_col} drive the \code{"change"} map; \code{level} is the credible
+\item{times, time.col, level, nsim, draws}{Nested-Laplace fit only: \code{times = c(t1, t2)} and \code{time.col} drive the \code{"change"} map; \code{level} is the credible
 level, \code{nsim} the draw count (or \code{"auto"} for a trajectory, as in
 \code{\link[=predict.tobs_fit]{predict.tobs_fit()}}), \code{draws} whether to attach the draw matrices.}
 
@@ -76,7 +78,7 @@ numeric vector. The nested-Laplace shared-field fit
 (\code{method = "nested_laplace"}) instead projects the shared occupancy-cover
 field and returns a \code{tobs_prediction} of posterior draws -- the same tidy /
 \code{change} contract as \code{\link[=predict.tobs_fit]{predict.tobs_fit()}} for \code{occu_cover()}: pass
-\code{type = "change"} with \code{times = c(t1, t2)} and \code{time_col} for a per-cell
+\code{type = "change"} with \code{times = c(t1, t2)} and \code{time.col} for a per-cell
 delta map. Each prediction unit is a row of \code{newdata} (or a \code{cell} column
 indexing the field cells), and every quantity is marginalized per draw over
 the grid-integrated joint posterior.

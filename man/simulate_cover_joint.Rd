@@ -7,14 +7,14 @@
 simulate_cover_joint(
   N = 300L,
   adj,
-  beta_occ = c(-0.3, 0.7),
-  beta_pos = c(0.4, -0.5),
+  beta.occ = c(-0.3, 0.7),
+  beta.pos = c(0.4, -0.5),
   sigma = 0.6,
   rho = 0.7,
   alpha = 1,
   positive = c("beta", "lognormal", "gaussian"),
   phi = 30,
-  sigma_pos_resid = 0.4,
+  sigma.pos.resid = 0.4,
   seed = NULL
 )
 }
@@ -23,9 +23,9 @@ simulate_cover_joint(
 
 \item{adj}{\verb{n_s x n_s} integer adjacency matrix for the BYM2 field.}
 
-\item{beta_occ}{Length-2 occurrence coefficients (intercept + slope).}
+\item{beta.occ}{Length-2 occurrence coefficients (intercept + slope).}
 
-\item{beta_pos}{Length-2 cover-arm coefficients (intercept + slope).}
+\item{beta.pos}{Length-2 cover-arm coefficients (intercept + slope).}
 
 \item{sigma}{Marginal spatial-field amplitude (default 0.6); the
 occurrence-arm linear predictor adds \code{sigma * z[region]}.}
@@ -41,7 +41,7 @@ occurrence-arm linear predictor adds \code{sigma * z[region]}.}
 
 \item{phi}{Beta precision when \code{positive = "beta"} (default 30).}
 
-\item{sigma_pos_resid}{Lognormal residual SD when \code{positive = "lognormal"} (default 0.4); independent of the spatial \code{sigma}.}
+\item{sigma.pos.resid}{Lognormal residual SD when \code{positive = "lognormal"} (default 0.4); independent of the spatial \code{sigma}.}
 
 \item{seed}{Optional integer seed.}
 }

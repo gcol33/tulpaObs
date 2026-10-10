@@ -8,7 +8,7 @@ ms_distance(
   key = c("halfnorm", "hazard"),
   transect = c("line", "point"),
   cutpoints = NULL,
-  K_max = NULL,
+  K.max = NULL,
   mixture = c("poisson", "negbin")
 )
 }
@@ -21,7 +21,7 @@ hazard-rate key the scalar log-shape is shared across species.}
 \item{cutpoints}{Distance-bin edges, length \code{dim(y)[2] + 1}, strictly
 increasing and starting at \verb{>= 0}.}
 
-\item{K_max}{Truncation for the latent abundance sum. Defaults to
+\item{K.max}{Truncation for the latent abundance sum. Defaults to
 \code{3 * max(rowSums(y)) + 100}.}
 
 \item{mixture}{Abundance mixing distribution. \code{"poisson"} only; the

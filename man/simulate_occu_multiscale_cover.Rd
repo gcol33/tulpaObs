@@ -5,39 +5,39 @@
 \title{Simulate a three-level occupancy + cover hurdle data set}
 \usage{
 simulate_occu_multiscale_cover(
-  n_cells = 60L,
-  plots_per_cell = 4L,
-  visits_per_plot = 2L,
-  beta_psi = c(0.4, 0.6),
-  beta_theta = c(0.2, 0.5),
-  beta_p = c(0, 0.5),
-  beta_pos = c(log(0.1), -0.4),
+  n.cells = 60L,
+  plots.per.cell = 4L,
+  visits.per.plot = 2L,
+  beta.psi = c(0.4, 0.6),
+  beta.theta = c(0.2, 0.5),
+  beta.p = c(0, 0.5),
+  beta.pos = c(log(0.1), -0.4),
   positive = c("lognormal", "beta", "gaussian"),
   phi = 0.35,
   adj = NULL,
   sigma = 0.7,
   alpha = 1,
   trend = FALSE,
-  sigma_trend = 0.7,
-  alpha_trend = 1,
+  sigma.trend = 0.7,
+  alpha.trend = 1,
   seed = NULL
 )
 }
 \arguments{
-\item{n_cells}{number of areal cells (graph nodes).}
+\item{n.cells}{number of areal cells (graph nodes).}
 
-\item{plots_per_cell}{plots (the availability units) per cell.}
+\item{plots.per.cell}{plots (the availability units) per cell.}
 
-\item{visits_per_plot}{detection replicate visits per plot.}
+\item{visits.per.plot}{detection replicate visits per plot.}
 
-\item{beta_psi, beta_theta, beta_p, beta_pos}{length-2 \code{c(intercept, slope)}
+\item{beta.psi, beta.theta, beta.p, beta.pos}{length-2 \code{c(intercept, slope)}
 coefficients for the four arms (one covariate each).}
 
 \item{positive}{\code{"lognormal"} or \code{"beta"} cover arm.}
 
 \item{phi}{cover dispersion (lognormal log-scale SD, or beta precision).}
 
-\item{adj}{\verb{n_cells x n_cells} adjacency; default a 1-D chain.}
+\item{adj}{\verb{n.cells x n.cells} adjacency; default a 1-D chain.}
 
 \item{sigma}{areal-field marginal SD on the occupancy arm.}
 
@@ -45,10 +45,10 @@ coefficients for the four arms (one covariate each).}
 
 \item{trend}{add a second, spatially-varying-coefficient (SVC) areal field
 weighted per cell by a cell-level covariate \code{tcov} (added to \code{data}):
-\code{tcov_c * sigma_trend * f_trend[c]} on occupancy and
-\code{tcov_c * alpha_trend * sigma_trend * f_trend[c]} on cover. Default \code{FALSE}.}
+\code{tcov_c * sigma.trend * f_trend[c]} on occupancy and
+\code{tcov_c * alpha.trend * sigma.trend * f_trend[c]} on cover. Default \code{FALSE}.}
 
-\item{sigma_trend, alpha_trend}{trend-field marginal SD and its cover-arm
+\item{sigma.trend, alpha.trend}{trend-field marginal SD and its cover-arm
 scaling (used only when \code{trend = TRUE}).}
 
 \item{seed}{optional RNG seed.}
@@ -66,7 +66,7 @@ occupancy (\code{sigma}) and cover (\code{alpha * sigma}) arms. The data-generat
 process for \code{\link[=occu_multiscale_cover]{occu_multiscale_cover()}} recovery tests.
 }
 \examples{
-sim <- simulate_occu_multiscale_cover(n_cells = 10, plots_per_cell = 2,
-                                      visits_per_plot = 2, seed = 1)
+sim <- simulate_occu_multiscale_cover(n.cells = 10, plots.per.cell = 2,
+                                      visits.per.plot = 2, seed = 1)
 dim(sim$y)
 }

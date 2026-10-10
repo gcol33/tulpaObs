@@ -4,11 +4,11 @@
 \alias{ms_abun}
 \title{Multispecies N-mixture family}
 \usage{
-ms_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+ms_abun(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 }
 \arguments{
-\item{K_max}{upper bound for the latent-abundance marginal sum (the exact
-integration over \code{N} is truncated at \code{K_max}). \code{NULL} (default) lets the
+\item{K.max}{upper bound for the latent-abundance marginal sum (the exact
+integration over \code{N} is truncated at \code{K.max}). \code{NULL} (default) lets the
 engine pick \code{max(y) + 100} (matching \code{unmarked::pcount()}); raise it if a
 fit warns that the posterior over \code{N} puts mass on the boundary.}
 
@@ -59,7 +59,7 @@ at few species it can settle near its lower boundary, which shifts
 \code{mu_log_r} and narrows its SE at the same time.
 
 Measured on simulated data (39 \code{laplace} fits at 8 and 36 species,
-\code{sigma_logr = 0.5}): where \code{sigma_log_r} came back at
+\code{sigma.logr = 0.5}): where \code{sigma_log_r} came back at
 least 0.30, the nominal 95\% interval covered 33 of 34 with a
 \code{sqrt(mean(z^2))} of 0.88; where it came back below, it covered 2 of 5, the
 point estimate was 2.2x further from the truth and the SE 28\% narrower. So
@@ -75,7 +75,7 @@ group count measured. Over 97 fits at 8 / 18 / 36 species the scale
 is the seed block rather than the estimator: \code{mu_log_r} is a POPULATION mean,
 each seed draws \code{S} log-dispersions around it, and that draw supplies about
 two thirds of the across-seed spread. The 18-species blocks drew theirs
-18-21\% wider than \code{sigma_logr / sqrt(S)}. Put the draw at its expectation and
+18-21\% wider than \code{sigma.logr / sqrt(S)}. Put the draw at its expectation and
 the scale is 1.077 / 1.101 / 0.977; rebuild the SE at the simulated sigma as
 well and it is 0.990 / 1.035 / 0.963 (NOTES_measurements.md). The residual
 there is the attenuation of

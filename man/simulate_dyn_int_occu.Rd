@@ -6,7 +6,7 @@
 \usage{
 simulate_dyn_int_occu(
   N = 200,
-  T_seasons = 4,
+  T.seasons = 4,
   S = 2,
   J = 3,
   psi1 = 0.5,
@@ -15,14 +15,14 @@ simulate_dyn_int_occu(
   p = c(0.4, 0.6),
   field = NULL,
   trend = NULL,
-  source_seasons = NULL,
+  source.seasons = NULL,
   seed = NULL
 )
 }
 \arguments{
 \item{N}{Number of sites (default 200).}
 
-\item{T_seasons}{Number of seasons (default 4).}
+\item{T.seasons}{Number of seasons (default 4).}
 
 \item{S}{Number of detection sources (default 2).}
 
@@ -43,7 +43,7 @@ gains \code{w * trend} on top of \code{field} -- the svcTIntPGOcc surface. Defau
 \code{NULL}. When set, \code{data} carries a \code{cell} node index (\verb{1..N}) and the
 covariate \code{w} for the bar \code{spatial(~ 1 + w || cell, graph)}.}
 
-\item{source_seasons}{Optional length-\code{S} list; \code{source_seasons[[s]]} is the
+\item{source.seasons}{Optional length-\code{S} list; \code{source.seasons[[s]]} is the
 integer vector of seasons source \code{s} observes (partial season overlap). The
 seasons a source does not cover are set to \code{NA} in its array -- the staggered
 survey where sources rarely share the full season grid. Default \code{NULL} (every
@@ -61,6 +61,6 @@ process (\code{psi1}, colonization \code{gamma}, extinction \code{eps}) observed
 detection sources with per-source detection probability.
 }
 \examples{
-sim <- simulate_dyn_int_occu(N = 40, T_seasons = 3, seed = 1)
+sim <- simulate_dyn_int_occu(N = 40, T.seasons = 3, seed = 1)
 lapply(sim$y, dim)
 }

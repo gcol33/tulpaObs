@@ -9,7 +9,7 @@ occu_cover_inputs(
   site,
   visit,
   response,
-  y_pos,
+  y.pos,
   occ.covs = NULL,
   det.covs = NULL,
   coords = NULL,
@@ -20,9 +20,9 @@ occu_cover_inputs(
 \arguments{
 \item{data}{A long / plot-level data frame: one row per site-visit.}
 
-\item{site, visit, response, y_pos}{Column names: the site identifier, the
+\item{site, visit, response, y.pos}{Column names: the site identifier, the
 visit / replicate, the 0/1 detection response, and the continuous cover
-response (used only where \code{response == 1}). The accepted range of \code{y_pos}
+response (used only where \code{response == 1}). The accepted range of \code{y.pos}
 follows \code{positive}.}
 
 \item{occ.covs}{Optional character vector of site-level covariate columns.
@@ -38,7 +38,7 @@ joint nested-Laplace \code{occu_cover()} engine consumes (no per-site visit
 cap), or the dense \verb{[n_sites x max_visits]} grid.}
 
 \item{positive}{The cover-arm distribution, matching \code{\link[=occu_cover]{occu_cover()}}: \code{"beta"}
-(default) stores \code{y_pos} as a proportion in \verb{[0, 1]} (\code{tobs_data()} type
+(default) stores \code{y.pos} as a proportion in \verb{[0, 1]} (\code{tobs_data()} type
 \code{"cover"}); \code{"lognormal"} / \code{"gamma"} store it as a positive real \verb{(0, Inf)}
 (type \code{"positive"}, validated non-negative with no upper bound). Pick the
 value you pass to \code{occu_cover(response = )}.}
@@ -53,7 +53,7 @@ covariate grid, and the site-level design frame that an \code{\link[=occu_cover]
 consumes, from one long (one row per site-visit / plot) data frame. This is
 the same construction \code{\link[=tobs]{tobs()}} runs internally when a single \code{occu_cover()}
 fit is handed a long frame; call it directly when you want to inspect the
-arms before fitting, or pass them on as \verb{y = }, \verb{y_pos = }, \verb{visits = },
+arms before fitting, or pass them on as \verb{y = }, \verb{y.pos = }, \verb{visits = },
 \verb{data = } to \code{\link[=tobs]{tobs()}}.
 
 The occurrence and cover arms are pivoted onto one shared \verb{(sites, visits)}
@@ -72,7 +72,7 @@ long <- data.frame(site = rep(1:20, each = 3), visit = rep(1:3, 20),
                    det_cov1 = sim$visit_data$det_cov1,
                    occ_cov1 = rep(sim$data$occ_cov1, each = 3))
 inp <- occu_cover_inputs(long, site = "site", visit = "visit",
-                         response = "occur", y_pos = "cover",
+                         response = "occur", y.pos = "cover",
                          det.covs = "det_cov1", compact = FALSE,
                          positive = "lognormal")
 dim(inp$y)

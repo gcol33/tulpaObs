@@ -7,12 +7,12 @@
 simulate_occu(
   N = 100,
   J = 4,
-  n_occ_covs = 2,
-  n_det_covs = 1,
-  beta_occ = NULL,
-  beta_det = NULL,
-  n_visit_groups = 0L,
-  sigma_visit = 1,
+  n.occ.covs = 2,
+  n.det.covs = 1,
+  beta.occ = NULL,
+  beta.det = NULL,
+  n.visit.groups = 0L,
+  sigma.visit = 1,
   seed = NULL
 )
 }
@@ -21,21 +21,21 @@ simulate_occu(
 
 \item{J}{Number of visits (default 4).}
 
-\item{n_occ_covs}{Number of occupancy covariates (default 2).}
+\item{n.occ.covs}{Number of occupancy covariates (default 2).}
 
-\item{n_det_covs}{Number of detection covariates (default 1).}
+\item{n.det.covs}{Number of detection covariates (default 1).}
 
-\item{beta_occ}{Occupancy coefficients (auto-generated if NULL).}
+\item{beta.occ}{Occupancy coefficients (auto-generated if NULL).}
 
-\item{beta_det}{Detection coefficients (auto-generated if NULL).}
+\item{beta.det}{Detection coefficients (auto-generated if NULL).}
 
-\item{n_visit_groups}{Number of groups a visit can belong to (an observer,
+\item{n.visit.groups}{Number of groups a visit can belong to (an observer,
 say), each adding an effect to the detection logit of the visits it made.
 Visits are assigned to groups uniformly at random. \code{0} (default) simulates
 no such effect.}
 
-\item{sigma_visit}{Standard deviation of the per-group detection effects,
-drawn from \code{N(0, sigma_visit^2)}.}
+\item{sigma.visit}{Standard deviation of the per-group detection effects,
+drawn from \code{N(0, sigma.visit^2)}.}
 
 \item{seed}{Random seed.}
 }
@@ -52,6 +52,6 @@ Simulate single-species occupancy data
 sim <- simulate_occu(N = 50, J = 3, seed = 1)
 dim(sim$y)
 
-obs <- simulate_occu(N = 50, J = 3, n_visit_groups = 5, seed = 1)
+obs <- simulate_occu(N = 50, J = 3, n.visit.groups = 5, seed = 1)
 table(obs$visits$visit_group)
 }

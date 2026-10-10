@@ -6,9 +6,9 @@
 \usage{
 simulate_ms_count(
   N = 120,
-  n_species = 10,
-  beta_comm_mean = c(1, 0.5),
-  beta_comm_sd = c(0.4, 0.3),
+  n.species = 10,
+  beta.comm.mean = c(1, 0.5),
+  beta.comm.sd = c(0.4, 0.3),
   response = c("poisson", "negbin", "gaussian", "binomial"),
   size = 2,
   size.log.sd = 0.3,
@@ -20,9 +20,9 @@ simulate_ms_count(
 \arguments{
 \item{N}{Number of sites.}
 
-\item{n_species}{Number of species.}
+\item{n.species}{Number of species.}
 
-\item{beta_comm_mean, beta_comm_sd}{Community mean and SD of the per-species
+\item{beta.comm.mean, beta.comm.sd}{Community mean and SD of the per-species
 coefficients (intercept first). Length sets the number of covariates.}
 
 \item{response}{One of \code{"poisson"}, \code{"negbin"}, \code{"gaussian"}, \code{"binomial"}.}
@@ -50,6 +50,6 @@ Per-species GLMM with Gaussian community hyperpriors on the coefficients (the
 negative-binomial (log link) or Gaussian (identity). No detection.
 }
 \examples{
-sim <- simulate_ms_count(N = 50, n_species = 4, seed = 1)
+sim <- simulate_ms_count(N = 50, n.species = 4, seed = 1)
 head(sim$y)
 }

@@ -69,12 +69,12 @@ prediction at covariate values the caller did not choose.
 }
 \examples{
 \donttest{
-sim <- simulate_occu(N = 30, J = 3, n_occ_covs = 1, seed = 1)
+sim <- simulate_occu(N = 30, J = 3, n.occ.covs = 1, seed = 1)
 d   <- transform(sim$data, cell = seq_len(30))
 adj <- matrix(0L, 30, 30)
 adj[cbind(1:29, 2:30)] <- 1L
 adj[cbind(2:30, 1:29)] <- 1L
-fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+fit <- tobs(~ occ_cov1 + icar(graph = adj, group.var = "cell"),
             data = d, family = occu(), detection = ~ 1, y = sim$y,
             method = "nested_laplace",
             control = list(verbose = FALSE, progress = FALSE))

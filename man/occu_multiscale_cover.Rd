@@ -38,12 +38,12 @@ same nested-Laplace cell-coupling machinery as \code{\link[=occu_cover]{occu_cov
 }
 \section{Inputs}{
 
-\code{y} / \code{y_pos} are \verb{[n_plots x max_visits]} matrices (plots are the rows, the
+\code{y} / \code{y.pos} are \verb{[n_plots x max_visits]} matrices (plots are the rows, the
 availability units; visits the columns). The state-process \code{formula} is the
 cell-level occupancy predictor and MUST carry an areal field naming the
-per-plot cell column, \code{icar(graph = adj, group_var = "cell")}. \code{availability = ~ ...} is the plot-level theta predictor (default \code{~ 1}); \code{detection} the
+per-plot cell column, \code{icar(graph = adj, group.var = "cell")}. \code{availability = ~ ...} is the plot-level theta predictor (default \code{~ 1}); \code{detection} the
 per-visit p predictor; \code{positive = ~ ...} the cover predictor (default the
-detection formula). \code{y_pos} is read only where \code{y == 1}.
+detection formula). \code{y.pos} is read only where \code{y == 1}.
 
 A detected visit (\code{y_cjv = 1}) with a missing cover (\code{y_pos_cjv = NA}) keeps
 its detection term but drops the \code{f_pos} factor: cover is taken
@@ -72,11 +72,11 @@ exact three-level marginal (z over cells, a over plots both summed in closed
 form) optimised directly (\code{"laplace"}, a Gaussian observed-Fisher posterior)
 or sampled (\code{"nuts"}, the exact coefficient posterior with calibrated
 intervals and WAIC / LOO). Cells are declared the same way on every path, via
-an \code{icar(graph = adj, group_var = "<cell>")} term (the graph drives the field
+an \code{icar(graph = adj, group.var = "<cell>")} term (the graph drives the field
 under \code{"nested_laplace"} and supplies only the plot -> cell map under
 \code{"laplace"} / \code{"nuts"}). On the \code{"nested_laplace"} path additional weighted
 areal terms in the psi formula
-(\verb{icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)}) add
+(\verb{icar(graph = adj, group.var = "<cell>", weight = <cell covariate>)}) add
 spatially-varying-coefficient trend fields, each coupled onto the cover arm
 with its own \code{alpha_trend}; the fitted fields are in \code{fit$trend_field} /
 \code{fit$trend_fields}. The coupled / trend field is not sampled, so
