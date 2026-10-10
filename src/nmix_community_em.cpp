@@ -170,6 +170,9 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
     I_mu.diagonal().array() += tau_beta;
     double loglik_marg = 0.0;
     MatrixXd blup_l(S, p_lam), blup_p(S, p_p);
+    // Per-species posterior covariance Cov(b_s | y) = (A_s + P)^{-1} at the
+    // mode, conditional on mu: the same inverse the Schur complement folds.
+    Rcpp::List blup_cov(S);
     orc.rebind(mu.data());
     for (int s = 0; s < S; ++s) {
         const tulpaObs::NMixCommunityOracle::SpeciesEval e =
@@ -177,6 +180,7 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
         const MatrixXd& A = e.negH;            // observed-info coefficient curvature
         const MatrixXd Bb = A + P;
         const MatrixXd Bbinv = safe_inverse(Bb);
+        blup_cov[s] = Rcpp::wrap(Bbinv);
         // Schur complement A - A Bbinv A, via explicit intermediates (a fused
         // triple-product expression template instantiates pathologically under
         // -O2 on MinGW g++).
@@ -214,6 +218,7 @@ List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init,
         _["Sigma_p"]      = Sp_out,
         _["b_lambda"]     = bl_out,
         _["b_p"]          = bp_out,
+        _["blup_cov_g"]   = blup_cov,
         _["log_lik"]      = loglik_marg,
         _["converged"]    = converged,
         _["n_iter"]       = n_iter);

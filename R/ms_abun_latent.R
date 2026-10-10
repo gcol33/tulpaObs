@@ -273,6 +273,8 @@
     Sigma_lambda = em$Sigma$lambda, Sigma_p = em$Sigma$p,
     b_lambda = do.call(rbind, lapply(em$b_list, function(b) b[lam_idx])),
     b_p      = do.call(rbind, lapply(em$b_list, function(b) b[p_idx])),
+    blup_cov_g = lapply(em$Cinv, function(C) C[c(lam_idx, p_idx), c(lam_idx, p_idx),
+                                                 drop = FALSE]),
     log_lik = em$logML, converged = isTRUE(em$converged), n_iter = em$n_iter,
     optimizer = "block_coordinate", n_quad = 1L, lkj_eta = 1)
   fit <- build_ms_nmix_fit(raw, model, mixture = "poisson", spatial = NULL)

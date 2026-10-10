@@ -75,6 +75,16 @@ the rest of `control`. The old spellings are gone, not aliased (#406).
   the formula (`observer`, not the positional `p1`), `level` its level (the
   species on a community fit, under `group = "species"`), and `std.error` is
   `NA` where the fitter reports no posterior SD.
+* `ranef()` on a community fit reports `std.error`, the per-species posterior
+  SD of each deviation, from the species' posterior covariance
+  `fit$ms_community$Cinv[[s]]` through an index map the builder records
+  (`fit$ms_community$blup_idx`). Every route fills it: the community
+  Laplace-EM families, `ms_abun()` on its default EM (which now returns the
+  per-species covariance) and joint AGHQ routes (the `log_r` / `logit_omega`
+  deviations included), the spatial routes by the law of total covariance
+  over the outer grid, and the NUTS and Polya-Gamma Gibbs routes from the
+  sampled deviations. A spatial-factor `ms_occu_cover()` fit now reports its
+  per-species deviations at all (#413).
 * The `occu_cover()` escape hatches `control$engine = "v3_nested"` (pure-R
   outer-BFGS nested Laplace, lognormal only) and `"v2_joint"` (joint Laplace
   MAP over the field) are removed (#402). The spatial `nested_laplace` path has

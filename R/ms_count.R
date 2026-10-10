@@ -390,7 +390,8 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
     # the mu-b_s cross-Hessian block from the same Newton solve: mu and b_s
     # are NOT independent in the posterior, and Bf is what lets a consumer
     # draw them jointly instead.
-    Cinv = fit$Cinv, Bf = fit$Bf
+    Cinv = fit$Cinv, Bf = fit$Bf,
+    blup_idx = list(blup_mu = beta_idx)
   )
 
   .tobs_cem_finalize_fit(

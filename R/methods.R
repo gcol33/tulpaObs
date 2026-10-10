@@ -486,8 +486,22 @@ converged.tobs_fit <- function(object, ...) isTRUE(convergence(object)$converged
 #'   for the per-species deviations of a community fit), `level` (the group
 #'   level, or the species), `term` (the coefficient the effect shifts,
 #'   `"(Intercept)"` for a random intercept), `estimate` and `std.error`
-#'   (`NA` where the fitter reports no posterior SD, as for the community
-#'   deviations). Zero rows when the fit carries no random effects.
+#'   (`NA` where the fitter reports no posterior SD). Zero rows when the fit
+#'   carries no random effects.
+#'
+#'   On a community fit, `std.error` is the per-species posterior SD of the
+#'   deviation, the square root of the matching diagonal entry of the
+#'   species' posterior covariance `fit$ms_community$Cinv[[s]]` (the analogue
+#'   of lme4's conditional variance). On the Laplace routes that covariance
+#'   is conditional on the community means; on a spatial fit integrated over
+#'   an outer hyperparameter grid it combines the per-node covariances and
+#'   the spread of the per-node BLUPs (law of total covariance); on the NUTS
+#'   and Polya-Gamma Gibbs routes it is the covariance of the sampled
+#'   deviations. The `ms_abun()` `log_r` (negative binomial) and
+#'   `logit_omega` (zero-inflated) deviations carry an SD as well: every route
+#'   that fits them (joint AGHQ, and NUTS for `log_r`) keeps them in the
+#'   covariance. `std.error` is `NA` for a species whose per-species
+#'   posterior solve failed.
 #' @export
 ranef.tobs_fit <- function(object, ...) {
   fn <- .tobs_s3_handler("ranef", object$model$model_type)

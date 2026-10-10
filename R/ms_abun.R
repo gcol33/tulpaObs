@@ -426,6 +426,7 @@
          z = node$z, theta = node$comm$theta,
          Sigma_l = node$comm$Sigma_list[[1L]], Sigma_p = node$comm$Sigma_list[[2L]],
          blup_l = node$comm$blup[[1L]], blup_p = node$comm$blup[[2L]],
+         blup_cov = node$comm$blup_cov_g,
          vcov = node$comm$theta_cov, boundary = node$field$boundary_max,
          tau = tau, rho = rho)
   }
@@ -438,20 +439,22 @@
     z_modes  <- matrix(0, ng, n_sites); theta_mat <- matrix(0, ng, d)
     Sigma_l_list <- vector("list", ng); Sigma_p_list <- vector("list", ng)
     blup_l_list  <- vector("list", ng); blup_p_list  <- vector("list", ng)
-    vcov_list    <- vector("list", ng)
+    blup_cov_list <- vector("list", ng); vcov_list <- vector("list", ng)
     tau_vec <- numeric(ng); rho_vec <- numeric(ng); boundary <- numeric(ng)
     for (k in seq_len(ng)) {
       r <- records[[k]]; if (is.null(r)) next
       z_modes[k, ] <- r$z; theta_mat[k, ] <- r$theta
       Sigma_l_list[[k]] <- r$Sigma_l; Sigma_p_list[[k]] <- r$Sigma_p
       blup_l_list[[k]]  <- r$blup_l;  blup_p_list[[k]]  <- r$blup_p
+      blup_cov_list[[k]] <- r$blup_cov
       vcov_list[[k]]    <- r$vcov
       tau_vec[k] <- r$tau; rho_vec[k] <- r$rho; boundary[k] <- r$boundary
     }
     list(log_marg = log_marg, weights = weights, z_modes = z_modes,
          theta_mat = theta_mat, Sigma_l_list = Sigma_l_list,
          Sigma_p_list = Sigma_p_list, blup_l_list = blup_l_list,
-         blup_p_list = blup_p_list, vcov_list = vcov_list,
+         blup_p_list = blup_p_list, blup_cov_list = blup_cov_list,
+         vcov_list = vcov_list,
          tau_vec = tau_vec, rho_vec = rho_vec, boundary = boundary)
   }
 
@@ -517,6 +520,12 @@
   Sigma_p      <- Reduce(`+`, Map(function(w, S) w * S, weights[ok], Sigma_p_list[ok]))
   blup_lambda  <- Reduce(`+`, Map(function(w, B) w * B, weights[ok], blup_l_list[ok]))
   blup_p       <- Reduce(`+`, Map(function(w, B) w * B, weights[ok], blup_p_list[ok]))
+  # Per-species Cov(b_s | y) of the stacked [lambda | p] BLUP vector: law of
+  # total covariance over the grid.
+  blup_cov <- .tobs_grid_blup_cov(
+    weights, Map(function(a, b) if (is.null(a)) NULL else
+                   cbind(as.matrix(a), as.matrix(b)), blup_l_list, blup_p_list),
+    packed$blup_cov_list, cbind(blup_lambda, blup_p))
   # Coefficient covariance: law of total covariance over the grid.
   vcov <- .tobs_grid_vcov(theta_mat, weights, vcov_list,
                           center = theta_mean, on_missing = "zero")
@@ -540,7 +549,7 @@
     mu_lambda = theta_mean[seq_len(p_lam)],
     mu_p      = theta_mean[p_lam + seq_len(p_p)],
     vcov = vcov, Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
-    b_lambda = blup_lambda, b_p = blup_p,
+    b_lambda = blup_lambda, b_p = blup_p, blup_cov_g = blup_cov,
     spatial_field = z_mean, hyper = hyper, prior_type = spatial$type,
     weights = weights, boundary_max = max(boundary, na.rm = TRUE),
     grid_mixture = .tobs_grid_mixture(weights, theta_mat, vcov_list, "zero"),
@@ -694,19 +703,22 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
       blup_omega = if (is_zi)
         matrix(as.numeric(raw$b_omega), ncol = 1L,
                dimnames = list(model$species_names, "logit_omega")) else NULL,
-      # Per-species FULL joint (lambda, p) posterior covariance / mode-theta
-      # cross-Hessian (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g pt.
-      # 2) -- present only on the joint_fd/joint_grad (n_quad > 1) path;
-      # NULL under the default n_quad = 1 Laplace-EM
-      # (cpp_nmix_community_em(), which does not expose this). Same
-      # convention as every .tobs_community_em()-based family's
-      # `Cinv[[s]]`/`Bf[[s]]` (R/community_em.R): `Cinv[[s]]` is
-      # `(p_lambda+p_p) x (p_lambda+p_p)`, `Bf[[s]]` is `n_theta x
-      # (p_lambda+p_p)`, indexed species-order-matching
-      # `model$species_names` (same order `blup_lambda`/`blup_p` use, since
-      # nmix_laplace_re()'s re_terms lists lambda before p).
+      # Per-species posterior covariance Cov(b_s | y) of the stacked RE vector
+      # [lambda | p | log_r? | omega?], every route: the joint AGHQ engine's
+      # blup_cov_g (tulpa::tulpa_re_aghq(), every RE term of the species
+      # combined), the n_quad = 1 Laplace-EM's (A_s + Sigma^-1)^-1
+      # (cpp_nmix_community_em()), the law of total covariance over the outer
+      # grid on the spatial routes, the draws' covariance under NUTS. Same
+      # convention as every .tobs_community_em()-based family's `Cinv[[s]]`
+      # (R/community_em.R), indexed species-order-matching
+      # `model$species_names`. `Bf[[s]]` (`n_theta x d`, the mode-theta
+      # cross-Hessian) is present only on the joint AGHQ path.
       Cinv = raw$blup_cov_g %||% NULL,
       Bf   = raw$blup_cross_g %||% NULL,
+      blup_idx = c(
+        list(blup_lambda = seq_len(p_lam), blup_p = p_lam + seq_len(p_p)),
+        if (is_nb) list(blup_logr = p_lam + p_p + 1L),
+        if (is_zi) list(blup_omega = p_lam + p_p + is_nb + 1L)),
       optimizer = raw$optimizer %||% "em",
       # `n_quad` is the COEFFICIENT-block order; the scalar nuisance blocks
       # (log_r, logit_omega) run at their own floored order, so a reader who has

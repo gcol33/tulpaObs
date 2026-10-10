@@ -212,7 +212,10 @@ means), \code{vcov} (their joint covariance from the AGHQ marginal Hessian,
 \code{(p_lambda + p_p)} square; marginalizes the community-covariance
 uncertainty rather than plugging in \code{Sigma}), \code{Sigma_lambda}, \code{Sigma_p}
 (community covariances), \code{b_lambda}, \code{b_p} (per-species BLUP deviations,
-\code{n_species} rows), \code{log_lik} (AGHQ marginal), \code{converged}, \code{K_max},
+\code{n_species} rows), \code{blup_cov_g} (per-species list of the posterior
+covariance of the species' stacked RE vector, lambda then p, then the
+\code{log_r} / \code{logit_omega} deviation when present), \code{log_lik} (AGHQ
+marginal), \code{converged}, \code{K_max},
 \code{n_quad}, \code{lkj_eta}, and (when \code{mixture = "NB"}) the dispersion summaries:
 \code{mu_log_r} (community-mean log-dispersion; its SE is the trailing \code{vcov}
 diagonal), \code{sigma_log_r} (the per-species log-dispersion SD), \code{b_logr}

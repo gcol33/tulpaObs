@@ -432,7 +432,7 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   # Per-species community structure (mu + BLUP deviations) per arm.
   B <- do.call(rbind, fit$b_list)          # S x P
   Sigma_list <- list(); sd_list <- list()
-  coef_list  <- list(); blup_list <- list()
+  coef_list  <- list(); blup_list <- list(); blup_idx <- list()
   for (k in seq_along(arm_names)) {
     arm <- arm_names[k]
     idx <- arm_idx[[arm]]
@@ -447,6 +447,7 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
     sd_list[[paste0("sd_", arm)]]       <- sqrt(pmax(diag(Sig), 0))
     coef_list[[paste0("coef_", arm)]]   <- coef
     blup_list[[paste0("blup_", arm)]]   <- blup
+    blup_idx[[paste0("blup_", arm)]]    <- idx
   }
   # Per-species posterior covariance Cov(b_s|y) (Louis 1982, from the
   # community EM's own Newton solve, conditional on the converged community
@@ -458,7 +459,7 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   # from the same Newton solve: mu and b_s are NOT independent in the
   # posterior, and Bf is what lets a consumer draw them jointly instead.
   ms_community <- c(Sigma_list, sd_list, coef_list, blup_list,
-                    list(Cinv = fit$Cinv, Bf = fit$Bf))
+                    list(Cinv = fit$Cinv, Bf = fit$Bf, blup_idx = blup_idx))
 
   .tobs_cem_finalize_fit(
     means = fit$mu, V = fit$Vf, par_names = par_names,

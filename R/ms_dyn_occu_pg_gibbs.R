@@ -86,6 +86,7 @@
     out <- matrix(NA_real_, n_keep, p_p1 + p_pd + p_g + p_e)
     tau_out <- matrix(NA_real_, n_keep, p_p1 + p_pd)
     b_p1_sum <- matrix(0, S, p_p1); b_pd_sum <- matrix(0, S, p_pd); nsum <- 0L
+    mom <- .tobs_cem_moments_new(S, p_p1 + p_pd)
     ki <- 0L
     for (it in seq_len(n.iter)) {
       gamma <- stats::plogis(as.vector(Xg %*% b_g))
@@ -141,9 +142,12 @@
         out[ki, ]     <- c(mu_p1, mu_pd, b_g, b_e)
         tau_out[ki, ] <- sqrt(c(tau2_p1, tau2_pd))
         b_p1_sum <- b_p1_sum + b_p1; b_pd_sum <- b_pd_sum + b_pd; nsum <- nsum + 1L
+        mom <- .tobs_cem_moments_add(mom, cbind(sweep(b_p1, 2L, mu_p1),
+                                                sweep(b_pd, 2L, mu_pd)))
       }
     }
-    list(mu = out, tau = tau_out, b_p1 = b_p1_sum / nsum, b_pd = b_pd_sum / nsum)
+    list(mu = out, tau = tau_out, b_p1 = b_p1_sum / nsum, b_pd = b_pd_sum / nsum,
+         mom = mom)
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
@@ -169,5 +173,8 @@
       Sigma_psi1 = diag(sd_psi1^2, p_p1), Sigma_p = diag(sd_p^2, p_pd),
       sd_psi1 = sd_psi1, sd_p = sd_p, coef_psi1 = coef_psi1, coef_p = coef_p,
       blup_psi1 = sweep(coef_psi1, 2L, means[seq_len(p_p1)], "-"),
-      blup_p    = sweep(coef_p,    2L, means[p_p1 + seq_len(p_pd)], "-"))))
+      blup_p    = sweep(coef_p,    2L, means[p_p1 + seq_len(p_pd)], "-"),
+      Cinv = .tobs_cem_moments_cov(
+        .tobs_cem_moments_merge(lapply(chains, `[[`, "mom"))),
+      blup_idx = list(blup_psi1 = seq_len(p_p1), blup_p = p_p1 + seq_len(p_pd)))))
 }

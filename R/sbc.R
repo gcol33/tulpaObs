@@ -2646,7 +2646,7 @@
 # deliberately collinear RE terms). Only reachable when the fit ran the
 # AGHQ/joint path (`control = list(optimizer = "joint_fd", n.quad > 1)`) --
 # the DEFAULT `n.quad = 1` route (`cpp_nmix_community_em()`, a different,
-# faster engine entirely) does not expose Cinv/Bf at all, so
+# faster engine entirely) exposes Cinv but no cross-Hessian Bf, so
 # `.tobs_sbc_reject_ms_abun_scope()` requires it explicitly rather than
 # silently falling back to an independent (mu, b_s) draw (#226's exact bug).
 # Poisson only (negbin/zip/zinb add a further per-species RE arm
@@ -2666,8 +2666,8 @@
          "Hessian (fit$ms_community$Cinv/Bf), only available when the fit ",
          "ran control = list(optimizer = \"joint_fd\", n.quad > 1). ",
          "The default n.quad = 1 Laplace-EM ",
-         "(cpp_nmix_community_em()) does not expose the abundance/detection ",
-         "cross-covariance a joint (mu, b_s) draw needs -- refit with a ",
+         "(cpp_nmix_community_em()) does not expose the mu-b_s ",
+         "cross-Hessian a joint (mu, b_s) draw needs -- refit with a ",
          "higher n.quad rather than drawing mu and b_s independently.",
          call. = FALSE)
   }
@@ -2681,7 +2681,7 @@
   m <- fit$model
   cm <- fit$ms_community
   # Preserve the ORIGINAL fit's engine choice on refit -- the default
-  # optimizer = "em" (n.quad = 1) does not expose Cinv/Bf at all, so a refit
+  # optimizer = "em" (n.quad = 1) does not expose Bf, so a refit
   # that silently dropped back to it would break every downstream draw.
   ctl <- .tobs_sbc_control(fit, fit.control)
   ctl$optimizer <- cm$optimizer

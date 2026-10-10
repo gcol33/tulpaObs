@@ -57,6 +57,25 @@
 }
 
 
+# Per-species posterior covariance of a community fit's stacked BLUP vector
+# over the outer grid, by the law of total covariance (`.tobs_grid_vcov()` per
+# species): the weighted within-node Cov(b_s | y, node) plus the spread of the
+# node BLUPs around their weighted mean. `blup_nodes[[k]]` is the S x d stacked
+# BLUP matrix at node k, `cov_nodes[[k]][[s]]` species s's d x d covariance
+# there, `center` the S x d grid-weighted BLUP matrix the fit reports.
+.tobs_grid_blup_cov <- function(weights, blup_nodes, cov_nodes, center) {
+  center <- as.matrix(center)
+  d <- ncol(center)
+  lapply(seq_len(nrow(center)), function(s) {
+    modes <- do.call(rbind, lapply(blup_nodes, function(B)
+      if (is.null(B)) rep(NA_real_, d) else as.matrix(B)[s, ]))
+    blocks <- lapply(cov_nodes, function(C) if (is.null(C)) NULL else C[[s]])
+    .tobs_grid_vcov(modes, weights, blocks, center = center[s, ],
+                    on_missing = "zero", symmetrize = TRUE)
+  })
+}
+
+
 # The grid as the mixture `.tobs_grid_mixture_draws()` samples, with the same
 # cell handling `.tobs_grid_vcov()` applied to the covariance it reports: under
 # `on_missing = "skip"` a cell with no usable within covariance carries no

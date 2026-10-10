@@ -277,12 +277,12 @@
 
   # Posterior-mean per-species deviations, community covariance, dispersion.
   nd <- nrow(draws_all)
-  B_acc <- matrix(0, S, P_beta); Sig_acc <- matrix(0, P_beta, P_beta)
+  mom <- .tobs_cem_moments_new(S, P_beta); Sig_acc <- matrix(0, P_beta, P_beta)
   logr_acc <- numeric(S); sigma_logr_acc <- 0; phi_acc <- numeric(S)
   for (r in seq_len(nd)) {
     th <- draws_all[r, ]
     Bd <- .ms_ocs_b_from_z(th, lay)
-    B_acc <- B_acc + Bd[, lay$beta, drop = FALSE]
+    mom <- .tobs_cem_moments_add(mom, Bd[, lay$beta, drop = FALSE])
     C <- .ms_ocs_chol_unpack(th[lay$chol_beta], P_beta); Sig_acc <- Sig_acc + tcrossprod(C)
     if (is_nb) {
       logr_acc <- logr_acc + Bd[, lay$logr]
@@ -290,7 +290,7 @@
     }
     if (is_gauss) phi_acc <- phi_acc + exp(th[lay$logphi])
   }
-  blup <- B_acc / nd; coef <- sweep(blup, 2L, means, "+")
+  blup <- .tobs_cem_moments_mean(mom); coef <- sweep(blup, 2L, means, "+")
   rownames(blup) <- rownames(coef) <- model$species_names
   colnames(blup) <- colnames(coef) <- cn
   Sigma_mu <- Sig_acc / nd; dimnames(Sigma_mu) <- list(cn, cn)
@@ -317,7 +317,9 @@
     model = model, spatial = NULL, method = "nuts",
     ms_community = list(Sigma_mu = Sigma_mu,
                         sd_mu = sqrt(pmax(diag(Sigma_mu), 0)),
-                        coef_mu = coef, blup_mu = blup),
+                        coef_mu = coef, blup_mu = blup,
+                        Cinv = .tobs_cem_moments_cov(mom),
+                        blup_idx = list(blup_mu = seq_len(P_beta))),
     ms_dispersion = disp,
     convergence = list(converged = NA, n_iter = as.integer(n.iter))
   )), class = c("tobs_fit", "tulpa_fit"))

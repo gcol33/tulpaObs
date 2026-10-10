@@ -479,7 +479,8 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
       # mu/global and b_s are NOT independent in the posterior, and Bf is
       # what lets a consumer draw them jointly instead -- see
       # .tobs_sbc_community_b_draws (R/sbc.R).
-      Cinv = em$Cinv, Bf = em$Bf),
+      Cinv = em$Cinv, Bf = em$Bf,
+      blup_idx = list(blup_lambda = lam_idx, blup_sigma = sig_idx)),
     convergence = list(converged = isTRUE(em$converged),
                        n_iter = em$n_iter %||% NA_integer_)
   ), class = c("tobs_fit", "tulpa_fit"))

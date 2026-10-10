@@ -473,9 +473,12 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
       # = the (mu,log_disp)-b_s cross-Hessian block from the same Newton
       # solve: mu/log_disp and b_s are NOT independent in the posterior, and
       # Bf is what lets a consumer draw them jointly instead -- see
-      # .tobs_sbc_community_b_draws (R/sbc.R). NULL on a NUTS fit (no Newton
-      # solve to read it from).
+      # .tobs_sbc_community_b_draws (R/sbc.R). On a NUTS fit Bf is NULL (no
+      # Newton solve to read it from) and Cinv is the covariance of the
+      # sampled deviations. `blup_idx` maps each blup_* block into b_s.
       Cinv = Cinv_list, Bf = Bf_list,
+      blup_idx = list(blup_occ = arm_idx$occ, blup_p = arm_idx$p,
+                      blup_pos = arm_idx$pos),
       # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
       # community VARIANCE components (Sigma_occ/Sigma_p/Sigma_pos and their
       # sd_*) carry Laplace small-cluster attenuation at small per-species n.
@@ -520,9 +523,14 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
 # ---------------------------------------------------------------------------
 
 # Per-species BLUP deviations, long form: one row per (species, arm, term).
+# The spatial-factor fit (model_type "ms_occu_cover_spatial") carries the same
+# ms_community blocks, so it routes here too.
 .tobs_ranef_ms_occu_cover <- function(object) {
   .tobs_ranef_ms_long(object$ms_community,
                       c(psi = "blup_occ", p = "blup_p", pos = "blup_pos"))
+}
+.tobs_ranef_ms_occu_cover_spatial <- function(object) {
+  .tobs_ranef_ms_occu_cover(object)
 }
 
 # Per-species posterior-mean linear predictors: site-level occupancy psi

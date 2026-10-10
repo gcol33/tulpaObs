@@ -195,7 +195,10 @@
 #'   `(p_lambda + p_p)` square; marginalizes the community-covariance
 #'   uncertainty rather than plugging in `Sigma`), `Sigma_lambda`, `Sigma_p`
 #'   (community covariances), `b_lambda`, `b_p` (per-species BLUP deviations,
-#'   `n_species` rows), `log_lik` (AGHQ marginal), `converged`, `K_max`,
+#'   `n_species` rows), `blup_cov_g` (per-species list of the posterior
+#'   covariance of the species' stacked RE vector, lambda then p, then the
+#'   `log_r` / `logit_omega` deviation when present), `log_lik` (AGHQ
+#'   marginal), `converged`, `K_max`,
 #'   `n_quad`, `lkj_eta`, and (when `mixture = "NB"`) the dispersion summaries:
 #'   `mu_log_r` (community-mean log-dispersion; its SE is the trailing `vcov`
 #'   diagonal), `sigma_log_r` (the per-species log-dispersion SD), `b_logr`
@@ -391,7 +394,8 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     out <- list(
       mu_lambda = as.numeric(em$mu_lambda), mu_p = as.numeric(em$mu_p),
       vcov = em$vcov, Sigma_lambda = em$Sigma_lambda, Sigma_p = em$Sigma_p,
-      b_lambda = em$b_lambda, b_p = em$b_p, log_lik = em$log_lik,
+      b_lambda = em$b_lambda, b_p = em$b_p, blup_cov_g = em$blup_cov_g,
+      log_lik = em$log_lik,
       converged = isTRUE(em$converged), n_iter = as.integer(em$n_iter),
       K_max = K_max,
       n_quad = 1L, lkj_eta = lkj_eta, optimizer = "em", mixture = "P")
@@ -555,15 +559,14 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     Sigma_p      = fit$Sigma_list[[2L]],
     b_lambda     = fit$blup[[1L]],
     b_p          = fit$blup[[2L]],
-    # Per-species FULL joint posterior covariance/cross-Hessian across the
-    # lambda + p RE terms (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g
-    # pt. 2) -- needed by sbc()'s posterior tier to draw a species'
-    # (b_lambda_s, b_p_s) jointly with the community mean instead of
-    # independently ( one level deeper: the lambda/p identifiability ridge
-    # means a species' abundance and detection deviations are themselves
-    # correlated). NULL when the community fit ran via the n_quad = 1
-    # Laplace-EM path (cpp_nmix_community_em(), a different engine that does
-    # not expose this) rather than tulpa_re_aghq().
+    # Per-species FULL joint posterior covariance/cross-Hessian across every
+    # RE term of the species, [lambda | p | log_r? | omega?]
+    # (tulpa::tulpa_re_aghq()'s blup_cov_g/blup_cross_g) -- needed by sbc()'s
+    # posterior tier to draw a species' (b_lambda_s, b_p_s) jointly with the
+    # community mean instead of independently (the lambda/p identifiability
+    # ridge means a species' abundance and detection deviations are
+    # themselves correlated). The n_quad = 1 Laplace-EM path above returns
+    # blup_cov_g only (cpp_nmix_community_em() has no cross-Hessian).
     blup_cov_g   = fit$blup_cov_g,
     blup_cross_g = fit$blup_cross_g,
     log_lik      = fit$log_marginal,

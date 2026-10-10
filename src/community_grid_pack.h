@@ -5,8 +5,9 @@
 //
 // Every driver produces the same per-point record: the marginal and data
 // log-likelihood, the mode (community means followed by the field), the
-// iteration record, the community-mean covariance, and per-arm community
-// covariances and BLUPs. Two things differ. What the state arm is called
+// iteration record, the community-mean covariance, per-arm community
+// covariances and BLUPs, and the per-species BLUP covariance. Two things
+// differ. What the state arm is called
 // ("psi" for occupancy, "lambda" for abundance), which is a naming choice on
 // the returned list, so the members are reached through pointers-to-member and
 // the names are passed in. And whether the family carries a per-point boundary
@@ -40,7 +41,7 @@ Rcpp::List community_pack_grid(int d, int field_len, int n_grid,
     Rcpp::LogicalVector convergeds(n_grid);
     Rcpp::NumericMatrix modes(n_grid, d + field_len);   // (mu, field) per grid point
     Rcpp::List vcov_mu(n_grid), Sigma_st(n_grid), Sigma_p(n_grid);
-    Rcpp::List blup_st(n_grid), blup_p(n_grid);
+    Rcpp::List blup_st(n_grid), blup_p(n_grid), b_cov(n_grid);
     for (int k = 0; k < n_grid; ++k) {
         const Result& rr = results[k];
         log_marginals[k] = rr.log_marginal;
@@ -55,6 +56,9 @@ Rcpp::List community_pack_grid(int d, int field_len, int n_grid,
         Sigma_p[k]  = Rcpp::wrap(rr.Sigma_p);
         blup_st[k]  = Rcpp::wrap(rr.*blup_state);
         blup_p[k]   = Rcpp::wrap(rr.blup_p);
+        Rcpp::List bc(rr.b_cov.size());
+        for (std::size_t s = 0; s < rr.b_cov.size(); ++s) bc[s] = Rcpp::wrap(rr.b_cov[s]);
+        b_cov[k]    = bc;
     }
     Rcpp::List out = Rcpp::List::create(
         Rcpp::Named("theta_grid")     = theta_grid_out,
@@ -66,6 +70,7 @@ Rcpp::List community_pack_grid(int d, int field_len, int n_grid,
         Rcpp::Named("Sigma_p")        = Sigma_p,
         Rcpp::Named(blup_state_name)  = blup_st,
         Rcpp::Named("b_p")            = blup_p,
+        Rcpp::Named("b_cov")          = b_cov,
         Rcpp::Named("n_iter")         = n_iters,
         Rcpp::Named("converged")      = convergeds);
     if (boundary) out["boundary_max"] = boundaries;

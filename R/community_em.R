@@ -34,21 +34,99 @@
 # term), `group = "species"`, `level` the species name. `arms` is a named
 # character vector mapping the arm label (name) to the `ms_community` blup
 # field (value); fields absent from `cm` are skipped (e.g. the optional
-# per-species log_r RE of an NB N-mixture). The per-species deviation carries no
-# posterior SD, so `std.error` is NA. Shared ranef() body for every community
-# family (ms_occu / ms_dyn_occu / ms_int_occu / ms_occu_cover / ms_nmix / ...).
+# per-species log_r RE of an NB N-mixture). `std.error` is the per-species
+# posterior SD from `.tobs_cem_blup_sd()`, NA for a block the fit carries no
+# covariance for. Shared ranef() body for every community family (ms_occu /
+# ms_dyn_occu / ms_int_occu / ms_occu_cover / ms_nmix / ...).
 .tobs_ranef_ms_long <- function(cm, arms) {
   blocks <- Map(function(field, arm) {
     B <- cm[[field]]
     if (is.null(B)) return(NULL)
     sp <- rownames(B) %||% as.character(seq_len(nrow(B)))
     tm <- colnames(B) %||% paste0("coef", seq_len(ncol(B)))
+    SD <- .tobs_cem_blup_sd(cm, field)
+    if (!is.null(SD) && !identical(dim(SD), dim(as.matrix(B)))) {
+      stop(sprintf(paste0(
+        "ms_community$%s is %d x %d but its posterior SD block is %d x %d; ",
+        "the index map `blup_idx` does not match the BLUP layout."),
+        field, nrow(B), ncol(B), nrow(SD), ncol(SD)), call. = FALSE)
+    }
     .tobs_ranef_table(estimate = as.numeric(B),
                       level = rep(sp, times = ncol(B)),
                       term  = rep(tm, each = nrow(B)),
-                      arm = arm, group = "species")
+                      arm = arm, group = "species",
+                      std.error = if (is.null(SD)) NA_real_ else as.numeric(SD))
   }, arms, names(arms))
   .tobs_ranef_stack(blocks)
+}
+
+# Per-species posterior SD of one community BLUP block. `cm$Cinv[[s]]` is
+# Cov(b_s | y), the posterior covariance of species s's stacked RE vector, and
+# `cm$blup_idx[[field]]` the positions of the `field` block's columns
+# (`blup_psi`, `blup_p`, ...) in that vector, recorded by the builder from the
+# same index map it slices `b_s` with. The SD of row s, column j of
+# `cm[[field]]` is sqrt(Cinv[[s]][idx[j], idx[j]]). The covariance is
+# conditional on the community means on the Laplace routes and marginal over
+# them on the sampler routes. Returns an S x length(idx) matrix, or NULL when
+# the fit records no covariance; a covariance without an index map for the
+# block is an error, so a route that has the SD cannot report NA. A species
+# with no covariance (a failed per-species solve) gets NA.
+.tobs_cem_blup_sd <- function(cm, field) {
+  idx <- cm$blup_idx[[field]]
+  C   <- cm$Cinv
+  if (!length(C)) return(NULL)
+  if (is.null(idx)) {
+    stop(sprintf(paste0(
+      "ms_community carries a per-species covariance but no index map for ",
+      "`%s` (ms_community$blup_idx$%s)."), field, field), call. = FALSE)
+  }
+  rows <- lapply(C, function(Cs) {
+    if (is.null(Cs)) return(rep(NA_real_, length(idx)))
+    Cs <- as.matrix(Cs)
+    if (max(idx) > nrow(Cs)) {
+      stop(sprintf(paste0(
+        "ms_community$blup_idx$%s addresses position %d of a %d x %d ",
+        "per-species covariance."), field, max(idx), nrow(Cs), ncol(Cs)),
+        call. = FALSE)
+    }
+    sqrt(pmax(diag(Cs)[idx], 0))
+  })
+  matrix(unlist(rows, use.names = FALSE), nrow = length(C), byrow = TRUE)
+}
+
+# Running first and second moments of the per-species deviation matrix over
+# sampler draws, for the sampler routes' per-species posterior covariance.
+# `add` folds one draw's S x P deviation matrix in, `merge` pools the
+# accumulators of several chains, `mean` is the posterior-mean deviation and
+# `cov` the per-species sample covariance of the stacked deviation vector
+# (n - 1 denominator, as stats::cov), NULL below two draws.
+.tobs_cem_moments_new <- function(S, P) {
+  list(n = 0L, sum = matrix(0, S, P), sq = rep(list(matrix(0, P, P)), S))
+}
+
+.tobs_cem_moments_add <- function(acc, B) {
+  acc$n   <- acc$n + 1L
+  acc$sum <- acc$sum + B
+  for (s in seq_len(nrow(B))) acc$sq[[s]] <- acc$sq[[s]] + tcrossprod(B[s, ])
+  acc
+}
+
+.tobs_cem_moments_merge <- function(accs) {
+  Reduce(function(a, b) {
+    a$n <- a$n + b$n; a$sum <- a$sum + b$sum; a$sq <- Map(`+`, a$sq, b$sq); a
+  }, accs)
+}
+
+.tobs_cem_moments_mean <- function(acc) acc$sum / acc$n
+
+.tobs_cem_moments_cov <- function(acc) {
+  n <- acc$n
+  if (n < 2L) return(NULL)
+  M <- acc$sum / n
+  lapply(seq_len(nrow(M)), function(s) {
+    C <- (acc$sq[[s]] - n * tcrossprod(M[s, ])) / (n - 1)
+    (C + t(C)) / 2
+  })
 }
 
 

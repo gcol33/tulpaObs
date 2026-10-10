@@ -221,6 +221,7 @@ struct CommSpatialResult {
     MatrixXd Sigma_state, Sigma_p;
     MatrixXd blup_state, blup_p;   // S x p_state, S x p_p
     MatrixXd vcov_mu;              // d x d community-mean covariance (b- and field-folded)
+    std::vector<MatrixXd> b_cov;   // S of d x d: Cov(b_s | y, mu, field) at the mode
     double log_marginal = R_NegInf;
     double log_lik = R_NegInf;
     bool   converged = false;
@@ -470,7 +471,8 @@ CommSpatialResult community_spatial_em(
     // Assemble observed-info blocks; fall back to complete-data Fisher if the
     // observed-info determinant is not finite (indefinite away from the mode).
     auto final_assemble = [&](bool want_obs, double& loglik_marg,
-                              MatrixXd& vcov_mu, double& boundary_max) -> bool {
+                              MatrixXd& vcov_mu, double& boundary_max,
+                              std::vector<MatrixXd>& b_cov) -> bool {
         VectorXd gtop(m); MatrixXd Tt(m, m);
         std::vector<VectorXd> gb(S, VectorXd::Zero(d));
         std::vector<MatrixXd> Dd(S, MatrixXd::Zero(d, d)), Cc(S, MatrixXd::Zero(m, d));
@@ -485,6 +487,7 @@ CommSpatialResult community_spatial_em(
             sum_logdet_D += ldD;
             const MatrixXd Dinv_s = nmix_safe_inverse(Dd[s]);
             M.noalias() -= Cc[s] * Dinv_s * Cc[s].transpose();
+            b_cov[s] = Dinv_s;
         }
         // log|M| (rank-deficient field null pinned by a tiny ridge, as in the
         // single-species path).
@@ -516,9 +519,12 @@ CommSpatialResult community_spatial_em(
 
     double loglik_marg = R_NegInf, boundary_max = 0.0;
     MatrixXd vcov_mu;
-    bool ok = final_assemble(/*want_obs=*/true, loglik_marg, vcov_mu, boundary_max);
+    std::vector<MatrixXd> b_cov(S, MatrixXd::Zero(d, d));
+    bool ok = final_assemble(/*want_obs=*/true, loglik_marg, vcov_mu, boundary_max,
+                             b_cov);
     if (!ok)
-        ok = final_assemble(/*want_obs=*/false, loglik_marg, vcov_mu, boundary_max);
+        ok = final_assemble(/*want_obs=*/false, loglik_marg, vcov_mu, boundary_max,
+                            b_cov);
 
     out.mu = mu;
     out.field = field;
@@ -531,6 +537,8 @@ CommSpatialResult community_spatial_em(
         out.blup_p.row(s) = bvec[s].tail(p_p).transpose();
     }
     out.vcov_mu = ok ? vcov_mu : MatrixXd::Constant(d, d, R_NaN);
+    out.b_cov.assign(S, MatrixXd::Constant(d, d, R_NaN));
+    if (ok) out.b_cov = b_cov;
     out.log_marginal = ok ? loglik_marg : R_NegInf;
     out.log_lik = data_loglik(mu, field, bvec);
     out.boundary_max = boundary_max;

@@ -69,6 +69,11 @@
     bl <- bl + w[k] * as.matrix(fit$b_lambda[[k]])
     bp <- bp + w[k] * as.matrix(fit$b_p[[k]])
   }
+  # Per-species Cov(b_s | y) of the stacked [lambda | p] BLUP vector: law of
+  # total covariance over the grid.
+  blup_cov <- .tobs_grid_blup_cov(
+    w, Map(function(a, b) cbind(as.matrix(a), as.matrix(b)), fit$b_lambda, fit$b_p),
+    fit$b_cov, cbind(bl, bp))
 
   # Field posterior mean. ICAR / CAR: f (n_spatial). BYM2: phi = a v + b w.
   field_cols <- modes[, d + seq_len(ncol(modes) - d), drop = FALSE]
@@ -103,6 +108,7 @@
     Sigma_p      = Sp,
     b_lambda     = bl,
     b_p          = bp,
+    blup_cov_g   = blup_cov,
     log_lik      = sum(w * fit$log_lik),
     converged    = any(as.logical(fit$converged)),
     n_iter       = max(as.integer(fit$n_iter)),

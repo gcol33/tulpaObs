@@ -268,12 +268,12 @@
       occ = .ms_ocs_sig_mean(draws, lay$chol_occ, P_occ),
       p   = .ms_ocs_sig_mean(draws, lay$chol_p,   P_p),
       pos = .ms_ocs_sig_mean(draws, lay$chol_pos, P_pos))
-    B_bar <- matrix(0, S, lay$P_coef); ld_bar <- numeric(S)
+    mom <- .tobs_cem_moments_new(S, lay$P_coef); ld_bar <- numeric(S)
     for (i in seq_len(nrow(draws))) {
       rec <- .tobs_ms_occu_cover_re_disp_b_from_z(draws[i, ], lay)
-      B_bar <- B_bar + rec$B; ld_bar <- ld_bar + rec$log_disp
+      mom <- .tobs_cem_moments_add(mom, rec$B); ld_bar <- ld_bar + rec$log_disp
     }
-    B_bar <- B_bar / nrow(draws); ld_bar <- ld_bar / nrow(draws)
+    B_bar <- .tobs_cem_moments_mean(mom); ld_bar <- ld_bar / nrow(draws)
     b_list_hat <- lapply(seq_len(S), function(s) B_bar[s, ])
     views <- lapply(seq_len(S), function(s) .ms_occu_cover_species_view(model, s))
     ll_mean <- 0
@@ -283,7 +283,8 @@
                                              bs[lay$pos], ld_bar[s])
     }
     fit <- build_ms_occu_cover_fit(model, unname(mu_hat), unname(mu_ld_hat),
-                                   b_list_hat, Sigma_hat, Cinv_list = NULL,
+                                   b_list_hat, Sigma_hat,
+                                   Cinv_list = .tobs_cem_moments_cov(mom),
                                    Bf_list = NULL, Vf = Vf,
                                    arm_idx = arm_idx, F_val = ll_mean, converged = TRUE,
                                    n_iter = warm$convergence$n_iter %||% NA_integer_,
@@ -330,10 +331,10 @@
     p   = .ms_ocs_sig_mean(draws, lay$chol_p,   P_p),
     pos = .ms_ocs_sig_mean(draws, lay$chol_pos, P_pos))
 
-  B_bar <- matrix(0, S, lay$P)
+  mom <- .tobs_cem_moments_new(S, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
-  B_bar <- B_bar / nrow(draws)
+    mom <- .tobs_cem_moments_add(mom, .ms_ocs_b_from_z(draws[i, ], lay))
+  B_bar <- .tobs_cem_moments_mean(mom)
   b_list_hat <- lapply(seq_len(S), function(s) B_bar[s, ])
 
   # Data-only marginal log-lik at the posterior mean over reconstructed b_s.
@@ -346,8 +347,8 @@
   }
 
   fit <- build_ms_occu_cover_fit(model, unname(mu_hat), unname(ld_hat), b_list_hat,
-                                 Sigma_hat, Cinv_list = NULL, Bf_list = NULL,
-                                 Vf = Vf, arm_idx = arm_idx,
+                                 Sigma_hat, Cinv_list = .tobs_cem_moments_cov(mom),
+                                 Bf_list = NULL, Vf = Vf, arm_idx = arm_idx,
                                  F_val = ll_mean, converged = TRUE,
                                  n_iter = warm$convergence$n_iter %||% NA_integer_,
                                  debias_method = "none")

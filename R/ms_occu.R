@@ -235,6 +235,7 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
     # are NOT independent in the posterior, and Bf is what lets a consumer
     # draw them jointly instead.
     Cinv = fit$Cinv, Bf = fit$Bf,
+    blup_idx = list(blup_psi = arm_idx$psi, blup_p = arm_idx$p),
     # The community-MEAN estimates (coef / vcov / confint) are unbiased. The
     # community VARIANCE components (Sigma_psi/Sigma_p and their sd_*) carry
     # Laplace small-cluster attenuation at small per-species n. When

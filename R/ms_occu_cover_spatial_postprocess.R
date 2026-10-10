@@ -133,7 +133,16 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
     sd_p   = sqrt(pmax(diag(Sigma_p),   0)),
     sd_pos = sqrt(pmax(diag(Sigma_pos), 0)),
     coef_occ = occ_b$coef, coef_p = p_b$coef, coef_pos = pos_b$coef,
-    blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup
+    blup_occ = occ_b$blup, blup_p = p_b$blup, blup_pos = pos_b$blup,
+    # Per-species posterior covariance Cov(b_s | y): species s's P x P block
+    # of the joint posterior covariance over the packed par, whose b block is
+    # species-major (b_s at P + (s - 1) P + 1:P, .ms_ocs_unpack()).
+    Cinv = lapply(seq_len(d$S), function(s) {
+      bi <- P + (s - 1L) * P + seq_len(P)
+      Cov[bi, bi, drop = FALSE]
+    }),
+    blup_idx = list(blup_occ = arm_idx$occ, blup_p = arm_idx$p,
+                    blup_pos = arm_idx$pos)
   )
 
   .tobs_cem_finalize_fit(

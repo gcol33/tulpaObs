@@ -19,8 +19,22 @@ does not distinguish arms), \code{group} (the grouping variable; \code{"species"
 for the per-species deviations of a community fit), \code{level} (the group
 level, or the species), \code{term} (the coefficient the effect shifts,
 \code{"(Intercept)"} for a random intercept), \code{estimate} and \code{std.error}
-(\code{NA} where the fitter reports no posterior SD, as for the community
-deviations). Zero rows when the fit carries no random effects.
+(\code{NA} where the fitter reports no posterior SD). Zero rows when the fit
+carries no random effects.
+
+On a community fit, \code{std.error} is the per-species posterior SD of the
+deviation, the square root of the matching diagonal entry of the
+species' posterior covariance \code{fit$ms_community$Cinv[[s]]} (the analogue
+of lme4's conditional variance). On the Laplace routes that covariance
+is conditional on the community means; on a spatial fit integrated over
+an outer hyperparameter grid it combines the per-node covariances and
+the spread of the per-node BLUPs (law of total covariance); on the NUTS
+and Polya-Gamma Gibbs routes it is the covariance of the sampled
+deviations. The \code{ms_abun()} \code{log_r} (negative binomial) and
+\code{logit_omega} (zero-inflated) deviations carry an SD as well: every route
+that fits them (joint AGHQ, and NUTS for \code{log_r}) keeps them in the
+covariance. \code{std.error} is \code{NA} for a species whose per-species
+posterior solve failed.
 }
 \description{
 Returns the per-group random-effect posterior summaries. Under NUTS the

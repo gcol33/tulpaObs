@@ -52,6 +52,7 @@
     mu <- rep(0, p); tau2 <- rep(1, p)
     mu_draws <- matrix(NA_real_, n_keep, p); tau_draws <- matrix(NA_real_, n_keep, p)
     b_sum <- matrix(0, S, p); nsum <- 0L; ki <- 0L
+    mom <- .tobs_cem_moments_new(S, p)
     for (it in seq_len(n.iter)) {
       for (s in seq_len(S)) {
         if (!length(vi[[s]])) next
@@ -64,9 +65,10 @@
       if (it > n.warmup && ((it - n.warmup - 1L) %% n.thin == 0L)) {
         ki <- ki + 1L; mu_draws[ki, ] <- mu; tau_draws[ki, ] <- sqrt(tau2)
         b_sum <- b_sum + b; nsum <- nsum + 1L
+        mom <- .tobs_cem_moments_add(mom, sweep(b, 2L, mu))
       }
     }
-    list(mu = mu_draws, tau = tau_draws, b = b_sum / nsum)
+    list(mu = mu_draws, tau = tau_draws, b = b_sum / nsum, mom = mom)
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
@@ -85,5 +87,8 @@
     n.iter = n.iter, n.chains = n.chains,
     extra = list(ms_community = list(
       Sigma_mu = Sigma_mu, sd_mu = sd_mu,
-      coef_mu = coef_mu, blup_mu = blup_mu)))
+      coef_mu = coef_mu, blup_mu = blup_mu,
+      Cinv = .tobs_cem_moments_cov(
+        .tobs_cem_moments_merge(lapply(chains, `[[`, "mom"))),
+      blup_idx = list(blup_mu = seq_len(p)))))
 }

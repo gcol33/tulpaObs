@@ -55,6 +55,11 @@
     bpsi <- bpsi + w[k] * as.matrix(fit$b_psi[[k]])
     bp   <- bp   + w[k] * as.matrix(fit$b_p[[k]])
   }
+  # Per-species Cov(b_s | y) of the stacked [psi | p] BLUP vector: law of total
+  # covariance over the grid.
+  blup_cov <- .tobs_grid_blup_cov(
+    w, Map(function(a, b) cbind(as.matrix(a), as.matrix(b)), fit$b_psi, fit$b_p),
+    fit$b_cov, cbind(bpsi, bp))
 
   # Field posterior mean. ICAR / CAR: f (n_spatial). BYM2: phi = a v + b w.
   field_cols <- modes[, d + seq_len(ncol(modes) - d), drop = FALSE]
@@ -80,7 +85,7 @@
   list(
     mu_psi = mu[seq_len(p_psi)], mu_p = mu[p_psi + seq_len(p_p)],
     vcov = V, Sigma_psi = Sps, Sigma_p = Sp,
-    b_psi = bpsi, b_p = bp,
+    b_psi = bpsi, b_p = bp, blup_cov = blup_cov,
     log_lik = sum(w * fit$log_lik),
     converged = any(as.logical(fit$converged)),
     n_iter = max(as.integer(fit$n_iter)),
@@ -325,6 +330,7 @@
     c(fit$b_psi[s, ], fit$b_p[s, ]))
   fit_em <- list(
     mu = c(fit$mu_psi, fit$mu_p), global = numeric(0), b_list = b_list,
+    Cinv = fit$blup_cov,
     Sigma = list(psi = fit$Sigma_psi, p = fit$Sigma_p),
     Vf = fit$vcov, grid_mixture = fit$grid_mixture, logML = fit$log_lik,
     converged = isTRUE(fit$converged), n_iter = fit$n_iter)

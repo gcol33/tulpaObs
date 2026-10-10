@@ -314,7 +314,8 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
     # mu/global and b_s are NOT independent in the posterior, and Bf is
     # what lets a consumer draw them jointly instead -- see
     # .tobs_sbc_community_b_draws (R/sbc.R).
-    Cinv = res$Cinv, Bf = res$Bf
+    Cinv = res$Cinv, Bf = res$Bf,
+    blup_idx = list(blup_psi1 = arm_idx$psi1, blup_p = arm_idx$p)
   )
 
   .tobs_cem_finalize_fit(

@@ -55,6 +55,7 @@
     tau_draws <- matrix(NA_real_, n_keep, p_tot)
     b_psi_sum <- matrix(0, S, p_psi)
     b_p_sum   <- lapply(p_pd, function(pd) matrix(0, S, pd))
+    mom <- .tobs_cem_moments_new(S, p_tot)
     nsum <- 0L; ki <- 0L
     for (it in seq_len(n.iter)) {
       for (s in seq_len(S)) {
@@ -99,10 +100,13 @@
         b_psi_sum <- b_psi_sum + b_psi
         for (d in seq_len(D)) b_p_sum[[d]] <- b_p_sum[[d]] + b_p[[d]]
         nsum <- nsum + 1L
+        mom <- .tobs_cem_moments_add(mom, do.call(cbind, c(
+          list(sweep(b_psi, 2L, mu_psi)),
+          lapply(seq_len(D), function(d) sweep(b_p[[d]], 2L, mu_p[[d]])))))
       }
     }
     list(mu = mu_draws, tau = tau_draws, b_psi = b_psi_sum / nsum,
-         b_p = lapply(b_p_sum, function(m) m / nsum))
+         b_p = lapply(b_p_sum, function(m) m / nsum), mom = mom)
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
@@ -120,6 +124,7 @@
                    lapply(seq_len(D), function(d)
                      Reduce(`+`, lapply(chains, function(c) c$b_p[[d]])) / n.chains))
   Sigma_list <- list(); sd_list <- list(); coef_list <- list(); blup_list <- list()
+  blup_idx <- list()
   for (k in seq_along(arm_names)) {
     arm <- arm_names[k]; cn <- proc[[k]]$coef_names
     idx <- off[k] + seq_along(cn)
@@ -132,8 +137,12 @@
     sd_list[[paste0("sd_", arm)]]       <- sdk
     coef_list[[paste0("coef_", arm)]]   <- coef
     blup_list[[paste0("blup_", arm)]]   <- blup
+    blup_idx[[paste0("blup_", arm)]]    <- idx
   }
-  ms_community <- c(Sigma_list, sd_list, coef_list, blup_list)
+  ms_community <- c(Sigma_list, sd_list, coef_list, blup_list, list(
+    Cinv = .tobs_cem_moments_cov(
+      .tobs_cem_moments_merge(lapply(chains, `[[`, "mom"))),
+    blup_idx = blup_idx))
 
   .tobs_pg_finalize_fit(
     summ, par_names, model, proc,

@@ -67,6 +67,16 @@
 # Hyperprior specification
 # ---------------------------------------------------------------------------
 
+# Per-species posterior covariance of the sampled deviations, reordered from the
+# sampler layout to the [lambda | p | log_r?] order build_ms_nmix_fit()'s
+# `blup_idx` addresses.
+.tobs_ms_abun_nuts_blup_cov <- function(mom, lay, is_nb) {
+  ord <- c(lay$lambda, lay$p, if (is_nb) lay$logr)
+  covs <- .tobs_cem_moments_cov(mom)
+  if (is.null(covs)) return(NULL)
+  lapply(covs, function(C) C[ord, ord, drop = FALSE])
+}
+
 # ---------------------------------------------------------------------------
 # Per-species marginal kernels
 # ---------------------------------------------------------------------------
@@ -464,18 +474,18 @@
   # The same sweep records the per-cell MAXIMUM sampled abundance predictor, so
   # the ceiling's excursion margin is read off the chain that ran rather than
   # assumed to have held (.tobs_ms_nmix_kmax_check below).
-  B_bar   <- matrix(0, n_species, lay$P)
+  mom     <- .tobs_cem_moments_new(n_species, lay$P)
   eta_max <- matrix(-Inf, n_species, model$n_sites)
   for (i in seq_len(nrow(draws))) {
     Bi    <- .ms_ocs_b_from_z(draws[i, ], lay)
-    B_bar <- B_bar + Bi
+    mom   <- .tobs_cem_moments_add(mom, Bi)
     mu_i  <- draws[i, lay$mu][lay$lambda]
     for (s in seq_len(n_species)) {
       e <- as.numeric(X_lambda %*% (mu_i + Bi[s, lay$lambda]))
       eta_max[s, ] <- pmax(eta_max[s, ], e)
     }
   }
-  B_bar <- B_bar / nrow(draws)
+  B_bar <- .tobs_cem_moments_mean(mom)
   b_lambda <- B_bar[, lay$lambda, drop = FALSE]
   b_p      <- B_bar[, lay$p,      drop = FALSE]
   k_check  <- if (is.null(K_site)) NULL
@@ -489,6 +499,7 @@
     mu_lambda = mu_hat[lay$lambda], mu_p = mu_hat[lay$p],
     vcov = vcov_mu, Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
     b_lambda = b_lambda, b_p = b_p,
+    blup_cov_g = .tobs_ms_abun_nuts_blup_cov(mom, lay, is_nb),
     log_lik = ll_mean, converged = TRUE, n_iter = NA_integer_,
     optimizer = "nuts", n_quad = if (is_nb) as.integer(n.quad) else 1L,
     lkj_eta = lkj_eta)
@@ -660,11 +671,11 @@
   # The same sweep records the per-cell MAXIMUM sampled abundance predictor
   # (community mean + species deviation + sampled field), so the ceiling's
   # excursion margin is read off the chain that ran.
-  B_bar   <- matrix(0, n_species, lay$P)
+  mom     <- .tobs_cem_moments_new(n_species, lay$P)
   eta_max <- matrix(-Inf, n_species, n_sites)
   for (i in seq_len(nrow(draws))) {
     Bi    <- .ms_ocs_b_from_z(draws[i, ], lay)
-    B_bar <- B_bar + Bi
+    mom   <- .tobs_cem_moments_add(mom, Bi)
     mu_i  <- draws[i, lay$mu][lay$lambda]
     f_i   <- as.numeric(field_load %*% draws[i, raw_idx])
     for (s in seq_len(n_species)) {
@@ -672,7 +683,7 @@
       eta_max[s, ] <- pmax(eta_max[s, ], e)
     }
   }
-  B_bar <- B_bar / nrow(draws)
+  B_bar <- .tobs_cem_moments_mean(mom)
   k_check <- if (is.null(K_site)) NULL
              else .tobs_ms_nmix_kmax_check(eta_max, eta_warm)
 
@@ -688,6 +699,7 @@
     vcov = vcov_mu, Sigma_lambda = Sigma_lambda, Sigma_p = Sigma_p,
     b_lambda = B_bar[, lay$lambda, drop = FALSE],
     b_p = B_bar[, lay$p, drop = FALSE],
+    blup_cov_g = .tobs_ms_abun_nuts_blup_cov(mom, lay, is_nb = FALSE),
     log_lik = ll_mean, converged = TRUE, n_iter = NA_integer_,
     optimizer = "nuts", n_quad = 1L, lkj_eta = 1.5)
 

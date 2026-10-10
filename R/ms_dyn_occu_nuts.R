@@ -347,10 +347,10 @@
   Sigma_psi1 <- .ms_ocs_sig_mean(draws, lay$chol_psi1, lay$p_psi1)
   Sigma_p    <- .ms_ocs_sig_mean(draws, lay$chol_p,    lay$p_p)
 
-  B_bar <- matrix(0, pieces$S, lay$P)
+  mom <- .tobs_cem_moments_new(pieces$S, lay$P)
   for (i in seq_len(nrow(draws)))
-    B_bar <- B_bar + .ms_ocs_b_from_z(draws[i, ], lay)
-  B_bar <- B_bar / nrow(draws)
+    mom <- .tobs_cem_moments_add(mom, .ms_ocs_b_from_z(draws[i, ], lay))
+  B_bar <- .tobs_cem_moments_mean(mom)
   b_list <- lapply(seq_len(pieces$S), function(s) B_bar[s, ])
 
   # Data-only marginal log-lik at the posterior mean (over reconstructed b_s).
@@ -368,6 +368,7 @@
 
   res_em <- list(
     mu = unname(mu_hat), global = unname(glob_hat), b_list = b_list,
+    Cinv = .tobs_cem_moments_cov(mom),
     Sigma = list(psi1 = Sigma_psi1, p = Sigma_p),
     Vf = Vf, logML = ll_mean, converged = TRUE, n_iter = em$n_iter)
 

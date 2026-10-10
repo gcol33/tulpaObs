@@ -56,6 +56,7 @@
     mu_draws  <- matrix(NA_real_, n_keep, p_psi + p_p)
     tau_draws <- matrix(NA_real_, n_keep, p_psi + p_p)
     b_psi_sum <- matrix(0, S, p_psi); b_p_sum <- matrix(0, S, p_p); nsum <- 0L
+    mom <- .tobs_cem_moments_new(S, p_psi + p_p)
     ki <- 0L
     for (it in seq_len(n.iter)) {
       for (s in seq_len(S)) {
@@ -86,10 +87,12 @@
         mu_draws[ki, ]  <- c(mu_psi, mu_p)
         tau_draws[ki, ] <- sqrt(c(tau2_psi, tau2_p))
         b_psi_sum <- b_psi_sum + b_psi; b_p_sum <- b_p_sum + b_p; nsum <- nsum + 1L
+        mom <- .tobs_cem_moments_add(mom, cbind(sweep(b_psi, 2L, mu_psi),
+                                                sweep(b_p,   2L, mu_p)))
       }
     }
     list(mu = mu_draws, tau = tau_draws,
-         b_psi = b_psi_sum / nsum, b_p = b_p_sum / nsum)
+         b_psi = b_psi_sum / nsum, b_p = b_p_sum / nsum, mom = mom)
   }
 
   chains <- lapply(seq_len(n.chains), run_chain)
@@ -122,5 +125,8 @@
       Sigma_psi = diag(sd_psi^2, p_psi), Sigma_p = diag(sd_p^2, p_p),
       sd_psi = sd_psi, sd_p = sd_p,
       coef_psi = coef_psi, coef_p = coef_p,
-      blup_psi = blup_psi, blup_p = blup_p)))
+      blup_psi = blup_psi, blup_p = blup_p,
+      Cinv = .tobs_cem_moments_cov(
+        .tobs_cem_moments_merge(lapply(chains, `[[`, "mom"))),
+      blup_idx = list(blup_psi = seq_len(p_psi), blup_p = p_psi + seq_len(p_p)))))
 }
