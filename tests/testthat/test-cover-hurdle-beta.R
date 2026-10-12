@@ -112,7 +112,7 @@ test_that("Laplace cover_fit S3 surface: vcov/confint/logLik/tidy/summary (#276)
                     "conf.low", "conf.high") %in% names(td)))
   expect_setequal(unique(td$arm), c("presence", "positive"))
 
-  expect_identical(rownames(summary(fit)), names(coef(fit)))
+  expect_identical(rownames(coef(summary(fit))), names(coef(fit)))
 })
 
 test_that("print.cover_fit() reports the fitted arms (#276)", {

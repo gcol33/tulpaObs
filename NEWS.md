@@ -2,6 +2,11 @@
 
 ## 0.6.1
 
+* `summary()` on a `tobs_fit` returns tulpa's `summary.tulpa_fit` object
+  (tulpa >= 0.7.3) with the `skew` and `rhat` / `ess_bulk` / `ess_tail`
+  columns added to its coefficient table; `coef(summary(fit))` is that table,
+  the data frame `summary()` returned before.
+
 * A random intercept or uncorrelated random slope on the joint
   nested-Laplace route is read as the effect it is, `sigma * u`: tulpa's iid
   block is non-centred, and the BLUPs, `ranef()` SDs, and the draws behind

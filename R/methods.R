@@ -108,32 +108,40 @@ confint.tobs_fit <- function(object, parm = NULL, level = 0.95, ...) {
 #'
 #' @param object A `tobs_fit` object.
 #' @param ... Forwarded to `summary.tulpa_fit`.
-#' @return Data frame as for `summary.tulpa_fit`, one row per coefficient named
-#'   `<arm>_<term>` as [coef.tobs_fit()] names it, with columns `estimate`, `std.error`
-#'   and the two interval bounds, plus a `skew` column when `$skew` is present
-#'   and `rhat`, `ess_bulk`, `ess_tail` on a sampled fit. Every family, and
-#'   every method within a family, returns this layout.
+#' @return A `summary.tulpa_fit` object as [tulpa::summary.tulpa_fit()] returns
+#'   it. Its coefficient table, `coef(summary(fit))`, has one row per
+#'   coefficient named `<arm>_<term>` as [coef.tobs_fit()] names it, with
+#'   columns `estimate`, `std.error` and the two interval bounds, plus a `skew`
+#'   column when `$skew` is present and `rhat`, `ess_bulk`, `ess_tail` on a
+#'   sampled fit. Every family, and every method within a family, returns this
+#'   layout.
 #' @export
 summary.tobs_fit <- function(object, ...) {
   fp <- .tobs_fixed_posterior(object)
   s <- if (is.null(fp)) NextMethod() else summary(fp, ...)
+  s$coefficients <- .tobs_summary_columns(s$coefficients, object)
+  s
+}
+
+# The tobs columns of a summary's coefficient table: the simplified-Laplace
+# skewness and, on a sampled fit, the cross-chain convergence diagnostics,
+# each matched to the table's rows by parameter name.
+.tobs_summary_columns <- function(tab, object) {
   if (!is.null(object$skew)) {
-    sk <- rep(NA_real_, nrow(s))
-    nm <- rownames(s)
+    sk <- rep(NA_real_, nrow(tab))
+    nm <- rownames(tab)
     matched <- intersect(nm, names(object$skew))
     sk[match(matched, nm)] <- object$skew[matched]
-    s$skew <- sk
+    tab$skew <- sk
   }
-  # Surface cross-chain convergence diagnostics (NUTS) alongside the
-  # posterior summary, matched by parameter name.
   if (!is.null(object$convergence)) {
     cv  <- object$convergence
-    idx <- match(rownames(s), cv$parameter)
-    s$rhat     <- cv$rhat[idx]
-    s$ess_bulk <- cv$ess_bulk[idx]
-    s$ess_tail <- cv$ess_tail[idx]
+    idx <- match(rownames(tab), cv$parameter)
+    tab$rhat     <- cv$rhat[idx]
+    tab$ess_bulk <- cv$ess_bulk[idx]
+    tab$ess_tail <- cv$ess_tail[idx]
   }
-  s
+  tab
 }
 
 # Per-family S3 handlers follow one naming rule: `.tobs_<generic>_<model_type>`.

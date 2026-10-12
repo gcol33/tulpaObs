@@ -143,5 +143,5 @@ test_that("occu_categorical_fit S3 surface: coef/vcov/confint/logLik/glance/tidy
   expect_setequal(unique(td$arm), c("presence", "class"))
 
   expect_output(print(fit), "occu_categorical")
-  expect_identical(rownames(summary(fit)), names(coef(fit)))
+  expect_identical(rownames(coef(summary(fit))), names(coef(fit)))
 })

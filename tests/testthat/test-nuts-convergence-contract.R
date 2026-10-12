@@ -226,7 +226,7 @@ test_that("every NUTS family reports per-parameter Rhat / ESS", {
 
     # The record has to be readable: summary() matches its rows against
     # cv$parameter, so every printed row must resolve an Rhat.
-    s <- summary(fit)
+    s <- coef(summary(fit))
     expect_true(all(c("rhat", "ess_bulk", "ess_tail") %in% names(s)), info = nm)
     expect_true(all(is.finite(s$rhat)), info = nm)
 

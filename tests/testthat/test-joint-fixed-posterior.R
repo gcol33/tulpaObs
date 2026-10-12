@@ -51,7 +51,7 @@ test_that("joint occu_cover accessors read the engine's mixture posterior", {
   expect_equal(coef(fit), fit$means[seq_len(p)], tolerance = 1e-10)
   expect_equal(sqrt(diag(vcov(fit))), fit$sds[seq_len(p)], tolerance = 1e-10)
 
-  s <- summary(fit)
+  s <- coef(summary(fit))
   expect_identical(attr(s, "interval_source"), "mixture_cdf")
   expect_equal(unname(as.matrix(s[, 3:4])), unname(ci[, 1:2]))
   td <- tidy(fit)

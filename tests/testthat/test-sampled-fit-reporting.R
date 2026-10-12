@@ -36,7 +36,7 @@ test_that("a pg_gibbs fit carries the chain convergence record", {
   g <- .sfr_fits()$pg_gibbs
   expect_true(all(c("parameter", "rhat", "ess_bulk", "ess_tail") %in%
                     names(g$convergence)))
-  expect_true(all(c("rhat", "ess_bulk", "ess_tail") %in% colnames(summary(g))))
+  expect_true(all(c("rhat", "ess_bulk", "ess_tail") %in% colnames(coef(summary(g)))))
   expect_true(is.finite(g$max_rhat))
   expect_true(is.finite(g$min_ess))
   expect_identical(g$convergence$converged, all(g$convergence$rhat < 1.01))

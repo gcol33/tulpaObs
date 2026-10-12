@@ -40,7 +40,7 @@ test_that("occu() (w | g) on NUTS reports sigma / cor like Laplace", {
                               control = c(ctl, list(n.iter = 150L,
                                                     n.warmup = 150L))))
   expect_identical(names(fn$means), names(fl$means))
-  expect_identical(rownames(summary(fn)), rownames(summary(fl)))
+  expect_identical(rownames(coef(summary(fn))), rownames(coef(summary(fl))))
   expect_identical(names(coef(fn)), names(coef(fl)))
   expect_gt(fn$means[["sigma_g1_w"]], 0)
   expect_lte(abs(fn$means[["cor_g1_(Intercept)_w"]]), 1)

@@ -214,7 +214,7 @@ test_that("occu_cover NUTS RE: the fit reports the block and ranef() reads it", 
   expect_identical(colnames(fit$draws), names(fit$means))
   expect_equal(ncol(fit$re_draws), 6L)              # 5 whitened z + log sigma
   expect_true(is.finite(as.numeric(logLik(fit))))
-  sm <- summary(fit)
+  sm <- coef(summary(fit))
   expect_equal(nrow(sm), fit$n_params)
 
   rf <- ranef(fit)

@@ -125,7 +125,8 @@
 #'   `vcov()` the block-diagonal covariance and `confint()` a two-column matrix,
 #'   both named as `coef()`; `logLik()` a `logLik` object; `tidy()` the
 #'   `arm` / `term` / `estimate` / `std.error` / `conf.low` / `conf.high` table;
-#'   `summary()` the estimate / std.error / interval data frame;
+#'   `summary()` a `summary.tulpa_fit` object whose `coef()` is the estimate /
+#'   std.error / interval table, rows named as `coef()`;
 #'   `glance()` the one-row column set of [glance.tobs_fit()]; `plot()` one
 #'   Gaussian-density panel per coefficient (up to 4), invisibly.
 #' @name tobs_multiarm_methods
@@ -255,7 +256,7 @@ summary.tobs_multiarm_fit <- function(object, level = 0.95, ...) {
                     lower     = unname(ci[, 1L]), upper = unname(ci[, 2L]),
                     row.names = names(est))
   names(out)[3:4] <- colnames(ci)
-  out
+  tulpa::tulpa_fit_summary(object, out, level = level)
 }
 
 # --- coefficient plot --------------------------------------------------------

@@ -29,7 +29,7 @@ test_that("coef() is flat and coef(arm =) reads one arm", {
   expect_type(cf, "double")
   expect_identical(names(cf), rownames(vcov(fit)))
   expect_identical(names(cf), rownames(confint(fit)))
-  expect_identical(names(cf), rownames(summary(fit)))
+  expect_identical(names(cf), rownames(coef(summary(fit))))
   expect_identical(coef(fit, arm = "psi"),
                    stats::setNames(unname(cf[c("psi_(Intercept)", "psi_occ_cov1")]),
                                    c("(Intercept)", "occ_cov1")))
@@ -79,8 +79,8 @@ test_that("every family reports the one layout", {
     cf <- coef(fit)
     expect_type(cf, "double")
     expect_identical(names(cf), rownames(vcov(fit)), info = nm)
-    expect_identical(names(cf), rownames(summary(fit)), info = nm)
-    expect_identical(names(summary(fit))[1:4],
+    expect_identical(names(cf), rownames(coef(summary(fit))), info = nm)
+    expect_identical(names(coef(summary(fit)))[1:4],
                      c("estimate", "std.error", colnames(confint(fit))), info = nm)
 
     td <- tidy(fit)

@@ -58,7 +58,8 @@ named vector (\code{presence_(Intercept)}, \code{positive_x}, \code{class_2:x}, 
 \code{vcov()} the block-diagonal covariance and \code{confint()} a two-column matrix,
 both named as \code{coef()}; \code{logLik()} a \code{logLik} object; \code{tidy()} the
 \code{arm} / \code{term} / \code{estimate} / \code{std.error} / \code{conf.low} / \code{conf.high} table;
-\code{summary()} the estimate / std.error / interval data frame;
+\code{summary()} a \code{summary.tulpa_fit} object whose \code{coef()} is the estimate /
+std.error / interval table, rows named as \code{coef()};
 \code{glance()} the one-row column set of \code{\link[=glance.tobs_fit]{glance.tobs_fit()}}; \code{plot()} one
 Gaussian-density panel per coefficient (up to 4), invisibly.
 }

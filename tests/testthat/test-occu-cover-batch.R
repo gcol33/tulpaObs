@@ -477,8 +477,8 @@ test_that("a fused species fit is the fit, draws, prediction and summary of its 
     set.seed(14L); f_b <- fitted(fb)
     set.seed(14L); f_i <- fitted(fi)
     expect_equal(f_b, f_i, tolerance = 1e-9, info = paste(sp, "fitted"))
-    set.seed(15L); s_b <- .batch_drop_timing(summary(fb))
-    set.seed(15L); s_i <- .batch_drop_timing(summary(fi))
+    set.seed(15L); s_b <- .batch_drop_timing(coef(summary(fb)))
+    set.seed(15L); s_i <- .batch_drop_timing(coef(summary(fi)))
     expect_identical(.batch_structure(s_b), .batch_structure(s_i))
     expect_equal(s_b, s_i, tolerance = 1e-9, ignore_formula_env = TRUE,
                  info = paste(sp, "summary"))

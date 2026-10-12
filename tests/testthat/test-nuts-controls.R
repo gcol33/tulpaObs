@@ -54,7 +54,7 @@ test_that("summary() carries Rhat / ESS columns for a NUTS fit", {
               family = occu(), method = "nuts",
               control = list(n.chains = 2L, n.iter = 300L, n.warmup = 150L,
                              seed = 11L, verbose = FALSE))
-  s <- summary(fit)
+  s <- coef(summary(fit))
   expect_true(all(c("rhat", "ess_bulk", "ess_tail") %in% names(s)))
   expect_true(any(is.finite(s$rhat)))
 })

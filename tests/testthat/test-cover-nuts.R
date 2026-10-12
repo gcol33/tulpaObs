@@ -280,7 +280,7 @@ test_that("cover NUTS fit supports the S3 method surface", {
   expect_true(is.finite(as.numeric(logLik(nut))))
 
   # summary surfaces the per-parameter Rhat / ESS the convergence list carries.
-  sm <- summary(nut)
+  sm <- coef(summary(nut))
   expect_true("rhat" %in% colnames(sm))
   expect_true(all(nut$convergence$rhat[!is.na(nut$convergence$rhat)] > 0.9))
 
