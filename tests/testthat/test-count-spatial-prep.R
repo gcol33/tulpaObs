@@ -199,7 +199,44 @@ test_that("the K.max boundary warning is one wording at every door", {
     expect_true(grepl(".count_spatial_warn_boundary", src(f), fixed = TRUE))
     expect_false(grepl("Max posterior weight on N = K.max", src(f), fixed = TRUE))
   }
-  expect_warning(.count_spatial_warn_boundary(list(boundary_max = c(1e-3, 0))),
-                 "raise K.max")
-  expect_silent(.count_spatial_warn_boundary(list(boundary_max = c(1e-9, NA))))
+  expect_warning(.count_spatial_warn_boundary(
+    list(boundary_max = c(1e-3, 0), weights = c(0.5, 0.5))),
+    "raise K.max")
+  expect_silent(.count_spatial_warn_boundary(
+    list(boundary_max = c(1e-9, NA), weights = c(0.5, 0.5))))
+  expect_error(.count_spatial_warn_boundary(list(boundary_max = c(1e-3, 0))),
+               "one grid weight")
+})
+
+test_that("the K.max boundary warning weights each grid node (#416)", {
+  # Boundary mass sits only on nodes the posterior gives no weight: the
+  # grid-integrated fit carries no truncation error, so it must not warn.
+  b <- c(1e-106, 1e-80, 4.9e-3, 7.1e-3)
+  expect_silent(.count_spatial_warn_boundary(
+    list(boundary_max = b, weights = c(0.7, 0.3 - 2e-9, 1.96e-9, 1e-15))))
+  # The same nodes carrying real weight do warn, and the message names the
+  # node that contributes most.
+  expect_warning(.count_spatial_warn_boundary(
+    list(boundary_max = b, weights = c(0.4, 0.3, 0.2, 0.1))),
+    "grid point 3, weight 2.00e-01")
+})
+
+test_that("the BYM2 N-mixture repro from #416 fits without a K.max warning", {
+  skip_if_fast()
+  skip_on_cran()
+  xy <- expand.grid(x = 1:6, y = 1:6)
+  A <- 1 * (as.matrix(dist(xy)) == 1)
+  nb <- lapply(seq_len(36), function(i) which(A[i, ] > 0) - 1L)
+  sim <- simulate_ms_abun(n.species = 1, N = 36, J = 3, sd.lambda = 0,
+                          sd.p = 0, graph = A, seed = 1)
+  site <- rep(seq_len(36), each = 3)
+  X_lambda <- model.matrix(~ abund_cov1, sim$data)
+  X_p <- model.matrix(~ det_cov1, sim$data)[site, ]
+  expect_no_warning(fit <- nmix_laplace_bym2(
+    as.vector(t(sim$y[, , 1])), site, seq_len(36), X_lambda, X_p,
+    adj_row_ptr = c(0L, cumsum(lengths(nb))), adj_col_idx = unlist(nb),
+    n_neighbors = lengths(nb), n_spatial = 36))
+  expect_lt(sum(fit$weights * fit$boundary_max), 1e-4)
+  # The per-node diagnostic still reports the empty nodes' tail mass.
+  expect_gt(max(fit$boundary_max), 1e-4)
 })

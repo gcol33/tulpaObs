@@ -49,8 +49,9 @@
 #' @param beta_p_init Optional warm start; default `rep(0, p_p)`.
 #' @param z_init Optional warm start for the spatial field; default zeros.
 #' @param K_max Truncation for the per-site marginal sum over N. Defaults to
-#'   `max(y) + 100`. Returned `boundary_max` flags any grid point whose worst
-#'   site puts non-trivial mass on `K_max` -- raise `K_max` if it exceeds 1e-4.
+#'   `max(y) + 100`. Returned `boundary_max` holds, per grid point, the worst
+#'   site's posterior mass on `K_max`; the fit warns when the grid-weighted
+#'   mass `sum(weights * boundary_max)` exceeds 1e-4 -- raise `K_max` then.
 #' @param max_iter,tol Inner Newton iteration budget and gradient-norm tol.
 #' @param verbose Print per-iteration and per-grid-point progress.
 #'
@@ -590,14 +591,28 @@ print.nmix_spatial_fit <- function(x, ...) {
 }
 
 # The boundary diagnostic every count-marginal spatial fitter reports: posterior
-# mass sitting on N = K_max at any outer-grid point means the truncation clipped
-# the latent-N sum there, so the fit is answering a question the window could
-# not hold. One wording, one threshold, one call.
+# mass sitting on N = K_max means the truncation clipped the latent-N sum, so the
+# fit is answering a question the window could not hold. Every reported summary
+# is a grid-weighted mixture over the outer nodes, so the truncation error it
+# carries is each node's boundary mass weighted by that node's posterior grid
+# weight; a node the posterior gives no weight contributes nothing however far
+# its field reaches into the latent-N tail. One wording, one threshold, one call.
 .count_spatial_warn_boundary <- function(out) {
-  if (any(out$boundary_max > 1e-4, na.rm = TRUE)) {
-    warning(sprintf(paste0("Max posterior weight on N = K.max is %.2e at one or ",
-                           "more grid points; raise K.max."),
-                    max(out$boundary_max, na.rm = TRUE)), call. = FALSE)
+  b <- out$boundary_max
+  w <- out$weights
+  if (length(w) != length(b)) {
+    stop("boundary check needs one grid weight per boundary_max entry.",
+         call. = FALSE)
+  }
+  ok <- is.finite(b) & is.finite(w)
+  contrib <- w[ok] * b[ok]
+  mass <- sum(contrib)
+  if (mass > 1e-4) {
+    k <- which(ok)[which.max(contrib)]
+    warning(sprintf(paste0("Posterior-weighted mass on N = K.max is %.2e ",
+                           "(largest contribution: grid point %d, weight %.2e, ",
+                           "boundary mass %.2e); raise K.max."),
+                    mass, k, w[k], b[k]), call. = FALSE)
   }
   invisible(out)
 }

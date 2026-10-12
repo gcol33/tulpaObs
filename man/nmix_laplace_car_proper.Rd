@@ -69,8 +69,9 @@ pass an explicit grid in that interval.}
 \item{z_init}{Optional warm start for the spatial field; default zeros.}
 
 \item{K_max}{Truncation for the per-site marginal sum over N. Defaults to
-\code{max(y) + 100}. Returned \code{boundary_max} flags any grid point whose worst
-site puts non-trivial mass on \code{K_max} -- raise \code{K_max} if it exceeds 1e-4.}
+\code{max(y) + 100}. Returned \code{boundary_max} holds, per grid point, the worst
+site's posterior mass on \code{K_max}; the fit warns when the grid-weighted
+mass \code{sum(weights * boundary_max)} exceeds 1e-4 -- raise \code{K_max} then.}
 
 \item{max_iter, tol}{Inner Newton iteration budget and gradient-norm tol.}
 
