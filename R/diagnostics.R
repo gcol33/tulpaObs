@@ -75,6 +75,17 @@
 #'   `waic(fit)$estimates["waic", "Estimate"]`). Both carry the
 #'   cross-validation unit they scored in their `"loo_unit"` attribute.
 #' @seealso [tulpa::tulpa_criteria()], [loo::loo_compare()]
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' waic(fit)
+#' loo(fit)
+#' dic(fit)
+#' }
 #' @name tobs_criteria
 NULL
 
@@ -953,6 +964,16 @@ ppc.tobs_fit <- function(object, fit.stat = c("freeman-tukey", "chi-squared"),
 #' @param ... Must be empty; an unrecognised argument is an error.
 #' @return Numeric vector of PIT residuals.
 #' @seealso [tulpa::test_uniformity()] for the uniformity test on the result.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' pit <- pit_residuals(fit, seed = 1)
+#' hist(pit, breaks = 10)
+#' }
 #' @export
 pit_residuals.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
                                    seed = NULL, observed = NULL, ...) {
@@ -1054,6 +1075,16 @@ pit_residuals.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
 #'   and a tail p-value (`p.value`). The names are the same on every
 #'   family, so a caller can read the statistic without branching on the
 #'   model type.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' test_dispersion(fit, seed = 1)
+#' test_zero_inflation(fit, seed = 1)
+#' }
 #' @name tobs_gof_tests
 NULL
 
@@ -1194,6 +1225,15 @@ test_outliers.tobs_fit <- function(object, n.samples = 250, nsim = NULL,
 #' @return Invisibly, the diagnostic results: `waic`, `dic`, `cpo`, `ppc`,
 #'   `zero_inflation`, `dispersion`, `pit`, `uniformity`, and `moran` when
 #'   `coords` is supplied.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' check_model(fit, seed = 1, plot = FALSE)
+#' }
 #' @importFrom graphics abline hist par
 #' @importFrom grDevices adjustcolor
 #' @export

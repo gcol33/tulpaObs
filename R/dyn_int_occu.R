@@ -262,7 +262,7 @@
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
   means <- opt$par; names(means) <- par_names
-  V <- tryCatch(solve(opt$hessian),
+  V <- tryCatch(.tobs_spd_inv(opt$hessian),
                 error = function(e) diag(NA_real_, length(means)))
   V <- (V + t(V)) / 2
   dimnames(V) <- list(par_names, par_names)

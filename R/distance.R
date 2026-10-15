@@ -254,6 +254,8 @@
 #' Buckland, S. T., et al. (2001). Introduction to Distance Sampling. Oxford.
 #' Royle, J. A., Dawson, D. K., Bates, S. (2004). Modeling abundance effects in
 #'   distance sampling. *Ecology* 85, 1591-1597.
+#'
+#' @keywords internal
 distance_laplace <- function(y, X_lambda, X_sigma, cutpoints,
                              key = c("halfnorm", "hazard"),
                              transect = c("line", "point"),

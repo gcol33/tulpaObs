@@ -537,7 +537,7 @@
       pen <- 1e6 * mean(abs(diag(H))); idx <- n_fixed + cc
       Hc[idx, idx] <- Hc[idx, idx] + pen
     }
-    cov_full <- tryCatch(solve(Hc), error = function(e) NULL)
+    cov_full <- tryCatch(.tobs_spd_inv(Hc), error = function(e) NULL)
     if (is.null(cov_full)) return(NULL)
     phi_b   <- lapply(seq_len(n_blk),
                       function(b) blocks[[b]]$to_phi(th[blk_fi[[b]]], cells_b[[b]]))

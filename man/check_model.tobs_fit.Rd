@@ -51,3 +51,13 @@ process, so the response cannot be resolved. This method reads the same
 quantities through the family's own doors instead: \code{\link[=pit_residuals]{pit_residuals()}},
 \code{\link[=ppc]{ppc()}}, \code{\link[=test_dispersion]{test_dispersion()}} and \code{\link[tulpa:moran_i]{tulpa::moran_i()}}.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+check_model(fit, seed = 1, plot = FALSE)
+}
+}

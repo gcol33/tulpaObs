@@ -1136,12 +1136,12 @@ decode_cover_hurdle <- function(fits, enc, family,
   beta_pos_sc <- fits$m_pos$mode[seq_len(p_pos_n)]
 
   V_occ_sc <- if (!is.null(fits$m_occ$H_beta)) {
-    tryCatch(solve(fits$m_occ$H_beta), error = function(e) NULL)
+    tryCatch(.tobs_spd_inv(fits$m_occ$H_beta), error = function(e) NULL)
   } else NULL
   pos_vcov_scale <- if (fits$positive %in% c("lognormal", "gaussian"))
                       fits$sigma_pos^2 else 1
   V_pos_sc <- if (!is.null(fits$m_pos$H_beta)) {
-    tryCatch(pos_vcov_scale * solve(fits$m_pos$H_beta), error = function(e) NULL)
+    tryCatch(pos_vcov_scale * .tobs_spd_inv(fits$m_pos$H_beta), error = function(e) NULL)
   } else NULL
 
   beta_occ <- .unscale_beta_vec(beta_occ_sc, enc$scale_occ)

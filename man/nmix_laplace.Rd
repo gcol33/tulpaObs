@@ -121,3 +121,4 @@ spatially replicated counts. \emph{Biometrics} 60, 108-115.
 Dennis, E. B., Morgan, B. J. T., Ridout, M. S. (2015). Computational aspects
 of N-mixture models. \emph{Biometrics} 71, 237-246.
 }
+\keyword{internal}

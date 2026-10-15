@@ -117,3 +117,4 @@ EM algorithm. \emph{JRSS-B} 44, 226-233.
 \code{\link[=nmix_laplace]{nmix_laplace()}} for the fixed-effects fit, \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}}
 for the grouped random-effect integrator this feeds.
 }
+\keyword{internal}

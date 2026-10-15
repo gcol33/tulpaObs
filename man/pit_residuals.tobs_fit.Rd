@@ -39,6 +39,17 @@ Numeric vector of PIT residuals.
 The \code{\link[tulpa:pit_residuals]{tulpa::pit_residuals()}} method for \code{tobs_fit}: the family's own
 predictive CDF, with the randomisation step a discrete response needs.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+pit <- pit_residuals(fit, seed = 1)
+hist(pit, breaks = 10)
+}
+}
 \seealso{
 \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}} for the uniformity test on the result.
 }

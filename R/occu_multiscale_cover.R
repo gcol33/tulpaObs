@@ -528,7 +528,7 @@
   .prog$finish()
   par <- opt$par
   H   <- stats::optimHess(par, neg_pen)
-  V   <- tryCatch(solve(H), error = function(e)
+  V   <- tryCatch(.tobs_spd_inv(H), error = function(e)
                   matrix(NA_real_, n_par, n_par))
   dimnames(V) <- list(par_names, par_names)
   means <- par; names(means) <- par_names

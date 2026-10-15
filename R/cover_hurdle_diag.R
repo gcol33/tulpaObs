@@ -205,8 +205,8 @@
   mode_pos   <- object$pos$mode[seq_len(p_pos)]
   pos_vscale <- if (positive %in% c("lognormal", "gaussian"))
                   (object$sigma_pos %||% 1)^2 else 1
-  V_occ <- tryCatch(solve(object$occ$H_beta), error = function(e) NULL)
-  V_pos <- tryCatch(pos_vscale * solve(object$pos$H_beta), error = function(e) NULL)
+  V_occ <- tryCatch(.tobs_spd_inv(object$occ$H_beta), error = function(e) NULL)
+  V_pos <- tryCatch(pos_vscale * .tobs_spd_inv(object$pos$H_beta), error = function(e) NULL)
   S <- as.integer(n.draws)
   B_occ <- .tobs_mvn_draws(mode_occ, V_occ, S)   # [S x p_occ]
   B_pos <- .tobs_mvn_draws(mode_pos, V_pos, S)   # [S x p_pos]
@@ -469,6 +469,15 @@
 #' @param ... Unused.
 #' @return Separate-Laplace fit: a numeric vector. Nested-Laplace fit: a
 #'   `tobs_prediction`.
+#' @examples
+#' \donttest{
+#' fit <- tobs(cover ~ moisture, data = meadow_cover,
+#'             family = cover(response = "beta"))
+#' nd <- data.frame(moisture = c(-1, 0, 1))
+#' predict(fit, newdata = nd, type = "occupancy")
+#' predict(fit, newdata = nd, type = "conditional")
+#' predict(fit, newdata = nd, type = "expected")
+#' }
 #' @export
 predict.cover_fit <- function(object, newdata = NULL,
                                      type = NULL, include.RE = FALSE,

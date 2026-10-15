@@ -214,6 +214,8 @@
 #' @seealso [nmix_laplace()] (single species), [nmix_site_marginal()]
 #'   (the per-species marginal primitive), [tulpa_re_aghq()] (the shared
 #'   random-effect integrator).
+#'
+#' @keywords internal
 nmix_laplace_re <- function(y, site_idx, species_idx,
                                   X_lambda, X_p, n_sites, n_species,
                                   mu_lambda_init = NULL, mu_p_init = NULL,

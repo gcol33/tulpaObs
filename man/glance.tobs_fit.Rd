@@ -49,3 +49,13 @@ requested, the outer Pareto-k diagnostic. The joint-coupled families
 (\code{occu_cover()}, \code{cover()}, \code{occu()} spatial, \code{occu_multiscale_cover()})
 carry both at the fit top level.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+glance(fit)
+}
+}

@@ -25,3 +25,14 @@ The fixed-effect estimates as one named numeric vector, named
 (\verb{p_visit_<cov>}) belong to the detection arm. A coordinate that enters no
 single arm, such as the \code{log_r} overdispersion, keeps its own name.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+coef(fit)
+coef(fit, arm = "psi")
+}
+}

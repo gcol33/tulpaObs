@@ -152,7 +152,7 @@
 
 # Invert a precision matrix, returning NULL when it is singular, so a computer
 # can bail with its own reason string instead of erroring.
-.sla_solve <- function(H) tryCatch(solve(H), error = function(e) NULL)
+.sla_solve <- function(H) tryCatch(.tobs_spd_inv(H), error = function(e) NULL)
 
 # Why every computer declines a spatial Sigma. The third-cumulant correction is
 # valid for hyperparameter-free fixed-effect marginals; under a spatial field

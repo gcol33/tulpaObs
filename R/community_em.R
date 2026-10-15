@@ -269,7 +269,7 @@
     out <- matrix(0, P, P)
     for (arm in arm_names) {
       idx <- arm_idx[[arm]]
-      out[idx, idx] <- solve(Sig[[arm]])
+      out[idx, idx] <- .tobs_spd_inv(Sig[[arm]])
     }
     out
   }
@@ -389,6 +389,9 @@
         Hgg <- info[P + glob_seq, P + glob_seq, drop = FALSE]    # G x G
         g_theta <- g[seq_len(P)]
         g_glob  <- g[P + glob_seq]                               # length G
+        # Htt is the observed information of species s at the current iterate,
+        # which need not be positive definite away from the mode, so C_s is
+        # inverted by LU rather than through a Cholesky factor.
         C_s  <- Htt + Sinv
         Cinv <- tryCatch(solve(C_s), error = function(e) .tobs_cem_ginv(C_s))
         Cinv_list[[s]] <- Cinv

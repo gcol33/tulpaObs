@@ -53,3 +53,4 @@ predictors.
 Miller, D. A. W., et al. (2011). Improving occupancy estimation when two types
 of observational error occur. \emph{Ecology} 92, 1422-1428.
 }
+\keyword{internal}

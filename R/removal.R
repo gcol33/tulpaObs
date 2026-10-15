@@ -205,6 +205,8 @@
 #'   spatially replicated counts. *Biometrics* 60, 108-115.
 #' Dorazio, R. M., Jelks, H. L., Jordan, F. (2005). Improving removal-based
 #'   estimates of abundance. *Biometrics* 61, 1093-1101.
+#'
+#' @keywords internal
 removal_laplace <- function(y, site_idx, X_lambda, X_p,
                             mixture = c("P", "NB"),
                             beta_lambda_init = NULL, beta_p_init = NULL,

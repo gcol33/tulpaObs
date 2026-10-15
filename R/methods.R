@@ -71,6 +71,16 @@
 #'   `retained_mass` and `skew_applied` attributes [tulpa::confint.tulpa_fit()]
 #'   documents.
 #' @name tobs_fit_intervals
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' vcov(fit)
+#' confint(fit, level = 0.9)
+#' }
 #' @export
 vcov.tobs_fit <- function(object, ...) {
   fp <- .tobs_fixed_posterior(object)
@@ -115,6 +125,15 @@ confint.tobs_fit <- function(object, parm = NULL, level = 0.95, ...) {
 #'   column when `$skew` is present and `rhat`, `ess_bulk`, `ess_tail` on a
 #'   sampled fit. Every family, and every method within a family, returns this
 #'   layout.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' summary(fit)
+#' }
 #' @export
 summary.tobs_fit <- function(object, ...) {
   fp <- .tobs_fixed_posterior(object)
@@ -214,6 +233,15 @@ summary.tobs_fit <- function(object, ...) {
 #' @param ... Ignored.
 #' @return Integer count of the fit's observed response entries. A model type
 #'   with no registered count is an error naming that type.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' nobs(fit)
+#' }
 #' @export
 nobs.tobs_fit <- function(object, ...) {
   mt <- object$model$model_type %||% NA_character_
@@ -237,6 +265,15 @@ nobs.tobs_fit <- function(object, ...) {
 #' @param object A `tobs_fit` object.
 #' @param ... Passed on to the next method.
 #' @return A `logLik` object.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' logLik(fit)
+#' }
 #' @export
 logLik.tobs_fit <- function(object, ...) {
   ll <- NextMethod()
@@ -319,6 +356,15 @@ tulpa::glance
 #'   predictor it enters, `NA` for a coordinate that enters none), `term` (its
 #'   design column, without the arm prefix), `estimate`, `std.error`,
 #'   `conf.low` and `conf.high`. Every family returns this layout.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' tidy(fit)
+#' }
 #' @export
 tidy.tobs_fit <- function(x, conf.level = 0.95, ...) {
   fp <- .tobs_fixed_posterior(x)
@@ -400,6 +446,15 @@ tidy.tobs_fit <- function(x, conf.level = 0.95, ...) {
 #'       `"grid_mixture"`, the local-bump-per-cell mixture matching what the engine
 #'       samples on a spread grid.}
 #'   }
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' glance(fit)
+#' }
 #' @export
 glance.tobs_fit <- function(x, ...) {
   # A sampled fit keeps its verdict at `x$convergence$converged`, not at the
@@ -510,6 +565,16 @@ converged.tobs_fit <- function(object, ...) isTRUE(convergence(object)$converged
 #'   that fits them (joint AGHQ, and NUTS for `log_r`) keeps them in the
 #'   covariance. `std.error` is `NA` for a species whose per-species
 #'   posterior solve failed.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 150, J = 4, n.occ.covs = 1, n.det.covs = 1,
+#'                      n.visit.groups = 8, sigma.visit = 1, seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ (1 | visit_group), visits = sim$visits,
+#'             y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' ranef(fit)
+#' }
 #' @export
 ranef.tobs_fit <- function(object, ...) {
   fn <- .tobs_s3_handler("ranef", object$model$model_type)
@@ -605,6 +670,16 @@ ranef.tobs_fit <- function(object, ...) {
 #'   column without the arm prefix.
 #' @param ... Ignored.
 #' @return A named numeric vector.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' coef(fit)
+#' coef(fit, arm = "psi")
+#' }
 #' @export
 coef.tobs_fit <- function(object, arm = NULL, ...) {
   fp <- .tobs_fixed_posterior(object)
@@ -631,6 +706,15 @@ coef.tobs_fit <- function(object, arm = NULL, ...) {
 #'   pools every source's non-detection evidence); for dynamic models `z` is
 #'   the forward-backward (HMM smoothing) state posterior `P(z_t=1 | y_{1:T})`
 #'   as an `[n_sites x n_seasons]` matrix.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' str(fitted(fit))
+#' }
 #' @export
 fitted.tobs_fit <- function(object, ...) {
   model <- object$model
@@ -878,6 +962,16 @@ fitted.tobs_fit <- function(object, ...) {
 #' @return A list with `occ` (state-level) and `det` (observation-level)
 #'   residuals, either of which may be `NULL` for a family that has no such
 #'   level. A model type with no registered handler is an error naming it.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' res <- residuals(fit, type = "pearson")
+#' str(res)
+#' }
 #' @export
 residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response"), ...) {
   type <- match.arg(type)
@@ -997,6 +1091,16 @@ residuals.tobs_fit <- function(object, type = c("deviance", "pearson", "response
 #'   [stats::simulate()] specifies: the `.Random.seed` in force when `seed` is
 #'   `NULL`, otherwise `seed` with its `RNGkind()` as the `"kind"` attribute.
 #'   Every family returns this layout, whatever `nsim` is.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' y_rep <- simulate(fit, nsim = 2, seed = 1)
+#' lapply(y_rep, colMeans)
+#' }
 #' @export
 simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   if (length(list(...))) {
@@ -1345,6 +1449,16 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
 #'   `attr(, "mc_binding")` names the bound that sets `mc_se_max`: a one-row
 #'   data frame with its `cell` (`NA` with `aggregate = TRUE`), `time`,
 #'   `quantity`, `bound` (`"median"`, `"lwr"` or `"upr"`) and `mc_se`.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' pr <- predict(fit, type = "occupancy")
+#' summary(pr$psi)
+#' }
 #' @export
 predict.tobs_fit <- function(object, X.0 = NULL,
                                  type = c("occupancy", "detection", "both",
@@ -1888,6 +2002,16 @@ tobs_richness <- function(object) {
 #'   unevaluated `tobs()` call.
 #' @return Updated `tobs_fit` object (or an unevaluated call if `evaluate =
 #'   FALSE`).
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' fit0 <- update(fit, formula = ~ 1)
+#' coef(fit0)
+#' }
 #' @export
 update.tobs_fit <- function(object, ..., evaluate = TRUE) {
   call_args <- object$tobs_call
@@ -2045,6 +2169,16 @@ tobs_check_id <- function(model, fit = NULL) {
 #' @param x A `tobs_fit` object.
 #' @param name Field name to access.
 #' @return The requested field value.
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+#'                      seed = 1)
+#' fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+#'             detection = ~ det_cov1, y = sim$y, method = "laplace",
+#'             control = list(verbose = FALSE, progress = FALSE))
+#' dim(fit$beta.samples)
+#' dim(fit$alpha.samples)
+#' }
 #' @export
 `$.tobs_fit` <- function(x, name) {
   # First check native fields

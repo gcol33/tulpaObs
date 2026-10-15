@@ -873,7 +873,7 @@
                        control = list(maxit = max.iter, reltol = tol,
                                       trace = if (isTRUE(verbose)) 1L else 0L))
 
-  V <- tryCatch(solve(opt$hessian), error = function(e) NULL)
+  V <- tryCatch(.tobs_spd_inv(opt$hessian), error = function(e) NULL)
   if (is.null(V)) {
     warning("occu_cover: observed-Fisher Hessian not invertible; SEs unreliable.",
             call. = FALSE)

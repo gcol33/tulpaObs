@@ -108,3 +108,4 @@ precomputed once via a dense Cholesky on the \eqn{n_{\mathrm{spatial}}
 Cressie, N. (1993). Statistics for Spatial Data. Wiley.
 Rue, H., Held, L. (2005). Gaussian Markov Random Fields. CRC.
 }
+\keyword{internal}

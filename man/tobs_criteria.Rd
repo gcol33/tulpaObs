@@ -89,6 +89,18 @@ objects through \code{\link[loo:waic]{loo::waic()}} and \code{\link[loo:loo]{loo
 \code{\link[loo:loo_compare]{loo::loo_compare()}} and the rest of that ecosystem read them directly.
 \code{dic()} and \code{cpo()} are \pkg{tulpa}'s, and return a \code{tulpa_criteria} object.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+waic(fit)
+loo(fit)
+dic(fit)
+}
+}
 \seealso{
 \code{\link[tulpa:tulpa_criteria]{tulpa::tulpa_criteria()}}, \code{\link[loo:loo_compare]{loo::loo_compare()}}
 }

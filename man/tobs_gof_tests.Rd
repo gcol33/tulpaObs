@@ -69,3 +69,14 @@ simulated replicates. For the Kolmogorov-Smirnov uniformity test, hand
 \code{\link[=pit_residuals]{pit_residuals()}} to \code{\link[tulpa:test_uniformity]{tulpa::test_uniformity()}}, which takes a PIT vector
 directly.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+test_dispersion(fit, seed = 1)
+test_zero_inflation(fit, seed = 1)
+}
+}

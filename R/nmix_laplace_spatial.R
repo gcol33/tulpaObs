@@ -76,6 +76,7 @@
 #'   latent Gaussian models by using integrated nested Laplace approximations.
 #'   *JRSS-B* 71, 319-392.
 #'
+#' @keywords internal
 nmix_laplace_icar <- function(y,
                                     site_idx,
                                     map_site_to_unit,
@@ -181,6 +182,7 @@ nmix_laplace_icar <- function(y,
 #' Cressie, N. (1993). Statistics for Spatial Data. Wiley.
 #' Rue, H., Held, L. (2005). Gaussian Markov Random Fields. CRC.
 #'
+#' @keywords internal
 nmix_laplace_car_proper <- function(y,
                                           site_idx,
                                           map_site_to_unit,
@@ -313,6 +315,7 @@ nmix_laplace_car_proper <- function(y,
 #'   DiMaggio, C. (2019). Bayesian hierarchical spatial models: Implementing
 #'   the BYM2 model in Stan. *Spatial and Spatio-temporal Epidemiology* 31.
 #'
+#' @keywords internal
 nmix_laplace_bym2 <- function(y,
                                     site_idx,
                                     map_site_to_unit,

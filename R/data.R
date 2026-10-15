@@ -419,6 +419,16 @@ print.tobs_data <- function(x, ...) {
 #' @param object An `tobs_data` object.
 #' @param ... Ignored.
 #' @return An `tobs_data_summary` object (printed automatically).
+#' @examples
+#' sim <- simulate_occu(N = 30, J = 3, seed = 1)
+#' long <- data.frame(site = rep(seq_len(30), times = 3),
+#'                    visit = rep(1:3, each = 30),
+#'                    det = as.vector(sim$y),
+#'                    occ_cov1 = sim$data$occ_cov1,
+#'                    effort = runif(90))
+#' dat <- tobs_data(long, y = "det", site = "site", visit = "visit",
+#'                  occ.covs = "occ_cov1", det.covs = "effort")
+#' summary(dat)
 #' @export
 summary.tobs_data <- function(object, ...) {
   y <- if (is.matrix(object$y)) object$y else object$y[, , 1]
@@ -489,6 +499,16 @@ print.tobs_data_summary <- function(x, ...) {
 #' @param x An `tobs_data` object.
 #' @param ... Ignored.
 #' @return Invisible `NULL`.
+#' @examples
+#' sim <- simulate_occu(N = 30, J = 3, seed = 1)
+#' long <- data.frame(site = rep(seq_len(30), times = 3),
+#'                    visit = rep(1:3, each = 30),
+#'                    det = as.vector(sim$y),
+#'                    occ_cov1 = sim$data$occ_cov1,
+#'                    effort = runif(90))
+#' dat <- tobs_data(long, y = "det", site = "site", visit = "visit",
+#'                  occ.covs = "occ_cov1", det.covs = "effort")
+#' plot(dat)
 #' @importFrom graphics hist barplot par polygon legend
 #' @importFrom grDevices rgb
 #' @export

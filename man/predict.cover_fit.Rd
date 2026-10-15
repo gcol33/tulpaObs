@@ -83,3 +83,13 @@ delta map. Each prediction unit is a row of \code{newdata} (or a \code{cell} col
 indexing the field cells), and every quantity is marginalized per draw over
 the grid-integrated joint posterior.
 }
+\examples{
+\donttest{
+fit <- tobs(cover ~ moisture, data = meadow_cover,
+            family = cover(response = "beta"))
+nd <- data.frame(moisture = c(-1, 0, 1))
+predict(fit, newdata = nd, type = "occupancy")
+predict(fit, newdata = nd, type = "conditional")
+predict(fit, newdata = nd, type = "expected")
+}
+}

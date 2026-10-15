@@ -130,6 +130,8 @@
 #' @references
 #' Miller, D. A. W., et al. (2011). Improving occupancy estimation when two types
 #'   of observational error occur. *Ecology* 92, 1422-1428.
+#'
+#' @keywords internal
 fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
                             sigma_beta = NULL, max_iter = 200L, tol = 1e-8,
                             verbose = FALSE) {
@@ -189,7 +191,7 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
 
   out  <- eval_cpp(theta)
   Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th), th), theta)
-  vcov <- tryCatch(solve(Hobs), error = function(e) matrix(NA_real_, length(theta), length(theta)))
+  vcov <- tryCatch(.tobs_spd_inv(Hobs), error = function(e) matrix(NA_real_, length(theta), length(theta)))
 
   nm <- c(paste0("psi_", colnames(X_psi)), paste0("p11_", colnames(X_p11)),
           paste0("p10_", colnames(X_p10)), paste0("b_", colnames(X_b)))

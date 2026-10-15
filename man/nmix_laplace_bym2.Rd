@@ -125,3 +125,4 @@ Morris, M., Wheeler-Martin, K., Simpson, D., Mooney, S. J., Gelman, A.,
 DiMaggio, C. (2019). Bayesian hierarchical spatial models: Implementing
 the BYM2 model in Stan. \emph{Spatial and Spatio-temporal Epidemiology} 31.
 }
+\keyword{internal}

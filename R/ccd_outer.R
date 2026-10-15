@@ -111,7 +111,7 @@
                  error = function(e) NA_real_)
   if (any(!is.finite(ev)) || max(abs(ev)) <= 0 || min(ev) <= 1e-6 * max(abs(ev)))
     return(decline("ill-conditioned outer curvature"))
-  Sigma <- tryCatch(solve(H), error = function(e) NULL)
+  Sigma <- tryCatch(.tobs_spd_inv(H), error = function(e) NULL)
   if (is.null(Sigma)) return(decline("outer Hessian not invertible"))
   L <- tryCatch(t(chol(Sigma)), error = function(e) NULL)   # Sigma = L L'
   if (is.null(L)) return(decline("outer covariance not positive-definite"))

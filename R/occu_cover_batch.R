@@ -685,6 +685,16 @@ occu_cover_inputs <- function(data, site, visit, response, y.pos,
 #' @param x A `tobs_batch` returned by [tobs()] on multi-response `y`.
 #' @param ... Ignored.
 #' @return `x`, invisibly.
+#' @examples
+#' \donttest{
+#' sims <- lapply(1:2, function(s) simulate_occu_cover(N = 40, J = 3, seed = s))
+#' y <- lapply(sims, function(s) s$y)
+#' y_pos <- lapply(sims, function(s) { p <- s$y_pos; p[is.na(p)] <- 0; p })
+#' fit <- tobs(~ occ_cov1, data = sims[[1]]$data,
+#'             family = occu_cover("lognormal"), detection = ~ 1,
+#'             y = y, y.pos = y_pos, species = c("a", "b"), method = "laplace")
+#' print(fit)
+#' }
 #' @export
 print.tobs_batch <- function(x, ...) {
   cat(sprintf("<tobs_batch> %d species, family = %s\n",
@@ -700,6 +710,16 @@ print.tobs_batch <- function(x, ...) {
 #' @param object A `tobs_batch` returned by [tobs()] on multi-response `y`.
 #' @param ... Passed to each per-species `coef()`.
 #' @return A named list of per-species coefficient vectors.
+#' @examples
+#' \donttest{
+#' sims <- lapply(1:2, function(s) simulate_occu_cover(N = 40, J = 3, seed = s))
+#' y <- lapply(sims, function(s) s$y)
+#' y_pos <- lapply(sims, function(s) { p <- s$y_pos; p[is.na(p)] <- 0; p })
+#' fit <- tobs(~ occ_cov1, data = sims[[1]]$data,
+#'             family = occu_cover("lognormal"), detection = ~ 1,
+#'             y = y, y.pos = y_pos, species = c("a", "b"), method = "laplace")
+#' coef(fit)
+#' }
 #' @export
 coef.tobs_batch <- function(object, ...) {
   lapply(object$fits, stats::coef, ...)

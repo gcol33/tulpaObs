@@ -37,3 +37,14 @@ the fit also carries; \code{\link[=coef]{coef()}}, \code{\link[=summary]{summary
 mixture. Every other fit reads as
 \code{\link[tulpa:vcov.tulpa_fit]{tulpa::vcov.tulpa_fit()}} / \code{\link[tulpa:confint.tulpa_fit]{tulpa::confint.tulpa_fit()}} describe.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+vcov(fit)
+confint(fit, level = 0.9)
+}
+}

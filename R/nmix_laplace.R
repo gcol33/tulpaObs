@@ -83,6 +83,7 @@
 #' Dennis, E. B., Morgan, B. J. T., Ridout, M. S. (2015). Computational aspects
 #'   of N-mixture models. *Biometrics* 71, 237-246.
 #'
+#' @keywords internal
 nmix_laplace <- function(y,
                                site_idx,
                                X_lambda,

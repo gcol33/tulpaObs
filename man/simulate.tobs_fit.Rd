@@ -31,3 +31,14 @@ Each replicate draws a parameter vector from the fit's posterior draws and
 simulates the latent state and the response from it, so the replicates carry
 parameter uncertainty.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+y_rep <- simulate(fit, nsim = 2, seed = 1)
+lapply(y_rep, colMeans)
+}
+}

@@ -89,3 +89,4 @@ Buckland, S. T., et al. (2001). Introduction to Distance Sampling. Oxford.
 Royle, J. A., Dawson, D. K., Bates, S. (2004). Modeling abundance effects in
 distance sampling. \emph{Ecology} 85, 1591-1597.
 }
+\keyword{internal}

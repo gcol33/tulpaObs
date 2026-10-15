@@ -17,3 +17,7 @@
 \description{
 Print method for tobs_family
 }
+\examples{
+occu()
+abun(mixture = "negbin")
+}

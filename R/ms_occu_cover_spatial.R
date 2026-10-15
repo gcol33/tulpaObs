@@ -180,8 +180,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
   if (identical(field, "car_proper")) {
     spec    <- .ms_ocs_field_spec(adj, "car_proper")
     R       <- .ms_ocs_field_R(spec, rho)
-    scale_c <- exp(mean(log(diag(solve(R)))))    # geo-mean marginal variance
     Rchol   <- chol(R)                           # R = U'U
+    scale_c <- exp(mean(log(diag(chol2inv(Rchol)))))  # geo-mean marginal variance
     for (k in seq_len(K)) {
       wk <- backsolve(Rchol, stats::rnorm(N))    # ~ N(0, R^{-1})
       W[, k] <- wk / sqrt(scale_c)
@@ -741,9 +741,9 @@ simulate_ms_occu_cover_spatial <- function(adj,
                                constrain = FALSE) {
   d <- .ms_ocs_dims(model); K <- d$K
   Sinv <- matrix(0, d$P, d$P)
-  Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
-  Sinv[d$p_idx,   d$p_idx]   <- solve(Sigma$p)
-  Sinv[d$pos_idx, d$pos_idx] <- solve(Sigma$pos)
+  Sinv[d$occ_idx, d$occ_idx] <- .tobs_spd_inv(Sigma$occ)
+  Sinv[d$p_idx,   d$p_idx]   <- .tobs_spd_inv(Sigma$p)
+  Sinv[d$pos_idx, d$pos_idx] <- .tobs_spd_inv(Sigma$pos)
   Pmu      <- diag(1 / sigma.beta^2, d$P)
   inv_sdL2 <- 1 / sd_L^2
   objective <- if (constrain) .ms_ocs_penll_grad_c else .ms_ocs_penll_grad

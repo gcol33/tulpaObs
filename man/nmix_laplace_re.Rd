@@ -275,3 +275,4 @@ Doser, J. et al. (2023). spAbundance. \code{msNMix()}.
 (the per-species marginal primitive), \code{\link[tulpa:tulpa_re_aghq]{tulpa_re_aghq()}} (the shared
 random-effect integrator).
 }
+\keyword{internal}

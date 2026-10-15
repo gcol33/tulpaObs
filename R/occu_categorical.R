@@ -60,7 +60,7 @@
   eta <- X %*% Beta; E <- exp(pmin(eta, 700)); denom <- 1 + rowSums(E)
   pmat <- cbind(E / denom, 1 / denom)                   # n x K (baseline last)
   ll <- sum(log(pmat[cbind(seq_len(n), cls)]))
-  V  <- tryCatch(solve(H), error = function(e) NULL)
+  V  <- tryCatch(.tobs_spd_inv(H), error = function(e) NULL)
   list(Beta = Beta, vcov = V, loglik = ll, converged = converged, K = K,
        n_iter = it)
 }
@@ -166,7 +166,7 @@ fit_occu_categorical <- function(enc, class_labels, priors, control, family) {
     beta_prior = occ_bp)
   p_occ    <- ncol(enc$X_occ)
   beta_occ <- m_occ$mode[seq_len(p_occ)]
-  V_occ    <- tryCatch(solve(m_occ$H_beta), error = function(e) NULL)
+  V_occ    <- tryCatch(.tobs_spd_inv(m_occ$H_beta), error = function(e) NULL)
   se_occ   <- if (is.null(V_occ)) rep(NA_real_, p_occ) else
     sqrt(pmax(diag(as.matrix(V_occ)), 0))
   names(beta_occ) <- names(se_occ) <- colnames(enc$X_occ)
@@ -258,6 +258,13 @@ print.occu_categorical_fit <- function(x, ...) {
 #' @param ... ignored.
 #' @return A list with `psi` (length n), `cond` (n x K conditional class
 #'   probabilities), and `joint` (n x (K+1): absent, then class 1..K).
+#' @examples
+#' \donttest{
+#' sim <- simulate_occu_categorical(N = 300, seed = 1)
+#' fit <- tobs(~ x, data = sim$data, family = occu_categorical(), y = sim$y)
+#' pr <- predict(fit, newdata = data.frame(x = c(-1, 0, 1)))
+#' round(pr$joint, 3)
+#' }
 #' @export
 predict.occu_categorical_fit <- function(object, newdata, ...) {
   if (missing(newdata) || is.null(newdata)) {

@@ -71,3 +71,13 @@ covariance is block-diagonal. When a full posterior is present (the NUTS
 cover path) the inference methods defer to the draw-based \code{tulpa_fit}
 methods.
 }
+\examples{
+\donttest{
+fit <- tobs(cover ~ moisture, data = meadow_cover,
+            family = cover(response = "beta"))
+coef(fit, arm = "positive")
+confint(fit)
+tidy(fit)
+summary(fit)
+}
+}

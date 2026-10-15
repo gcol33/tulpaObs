@@ -44,3 +44,14 @@ path returns the variance-component EM modes and their Schur-complement
 standard errors. A community fit reports its per-species deviations from
 the community mean. Every family and engine returns the same columns.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 150, J = 4, n.occ.covs = 1, n.det.covs = 1,
+                     n.visit.groups = 8, sigma.visit = 1, seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ (1 | visit_group), visits = sim$visits,
+            y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+ranef(fit)
+}
+}

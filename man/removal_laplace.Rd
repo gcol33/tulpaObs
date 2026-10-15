@@ -66,3 +66,4 @@ spatially replicated counts. \emph{Biometrics} 60, 108-115.
 Dorazio, R. M., Jelks, H. L., Jordan, F. (2005). Improving removal-based
 estimates of abundance. \emph{Biometrics} 61, 1093-1101.
 }
+\keyword{internal}

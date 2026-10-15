@@ -62,3 +62,4 @@ finite-difference Jacobian of the analytic gradient at the mode. All four arms
 Dail, D., Madsen, L. (2011). Models for estimating abundance from
 repeated counts of an open metapopulation. \emph{Biometrics} 67, 577-587.
 }
+\keyword{internal}

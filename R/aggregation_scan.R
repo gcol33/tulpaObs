@@ -180,7 +180,7 @@
   out$min_eig <- min(ev)
   out$cond <- if (min(ev) > 0) max(ev) / min(ev) else Inf
 
-  V <- tryCatch(solve(H), error = function(e) NULL)
+  V <- tryCatch(.tobs_spd_inv(H), error = function(e) NULL)
   if (!is.null(V) && all(diag(V) > 0)) {
     se_logit <- sqrt(diag(V))
     out$se_psi <- se_logit[1L] * psi * (1 - psi)
@@ -476,6 +476,16 @@ print.tobs_aggregation_scan <- function(x, ...) {
 #' @param x A `tobs_aggregation_scan` object.
 #' @param ... Ignored.
 #' @return Invisible `NULL`.
+#' @examples
+#' set.seed(1)
+#' d <- data.frame(east = runif(200), north = runif(200),
+#'                 year = sample(2001:2006, 200, replace = TRUE),
+#'                 detected = rbinom(200, 1, 0.3))
+#' scan <- occu_aggregation_scan(d, response = "detected",
+#'                               coords = c("east", "north"), year = "year",
+#'                               cell.sizes = c(0.2, 0.4),
+#'                               block.lengths = c(2, 3))
+#' plot(scan)
 #' @importFrom graphics image axis box rect
 #' @export
 plot.tobs_aggregation_scan <- function(x, ...) {

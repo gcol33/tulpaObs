@@ -20,3 +20,13 @@ method); the \code{"nobs"} attribute is \code{\link[=nobs.tobs_fit]{nobs.tobs_fi
 \code{stats::BIC()} and anything else reading the attribute counts the
 observations \code{nobs()} reports.
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+logLik(fit)
+}
+}

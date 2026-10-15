@@ -2442,6 +2442,9 @@ cover <- function(response = c("beta", "beta_oi", "lognormal", "lognormal_trunc"
 #' @param x a `tobs_family` object.
 #' @param ... ignored.
 #' @return `x`, invisibly.
+#' @examples
+#' occu()
+#' abun(mixture = "negbin")
 #' @export
 print.tobs_family <- function(x, ...) {
   cat(sprintf("<tobs_family: %s>\n", x$class_long))

@@ -85,7 +85,7 @@
                       hessian = TRUE)
 
   p_tot <- length(theta0)
-  vcov  <- tryCatch(solve(opt$hessian), error = function(e) {
+  vcov  <- tryCatch(.tobs_spd_inv(opt$hessian), error = function(e) {
     d <- diag(opt$hessian); d[d <= 0] <- NA_real_
     diag(1 / d, p_tot)
   })

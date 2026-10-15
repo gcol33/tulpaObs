@@ -274,7 +274,7 @@
   means <- opt$par; names(means) <- par_names
   info <- if (is.null(gr)) opt$hessian
           else tryCatch(.tobs_fd_jacobian(gr, opt$par), error = function(e) NULL)
-  V <- tryCatch(solve(info), error = function(e) diag(NA_real_, length(means)))
+  V <- tryCatch(.tobs_spd_inv(info), error = function(e) diag(NA_real_, length(means)))
   V <- (V + t(V)) / 2
   dimnames(V) <- list(par_names, par_names)
   sds <- .tobs_sds_from_vcov(V, par_names)
@@ -338,7 +338,7 @@ extract_beta <- function(sub, p) {
   }
   H <- fi$H_beta
   if (is.null(H)) return(rep(NA_real_, p))
-  cov <- tryCatch(solve(H), error = function(e) NULL)
+  cov <- tryCatch(.tobs_spd_inv(H), error = function(e) NULL)
   if (is.null(cov)) return(rep(NA_real_, p))
   d <- .tobs_sds_from_vcov(cov)
   if (length(d) >= p) return(d[seq_len(p)])
@@ -527,10 +527,24 @@ extract_beta <- function(sub, p) {
   s
 }
 
+# Inverse of a symmetric positive-definite matrix (an observed information, a
+# precision, a covariance) through its Cholesky factor. The input is symmetrised
+# first so the rounding asymmetry of a finite-difference Hessian does not reach
+# the factor; `chol()` reads one triangle only. Errors when the matrix is not
+# positive definite: such a matrix has no Gaussian covariance, and every caller
+# catches the error into its own fallback.
+.tobs_spd_inv <- function(A) {
+  A <- as.matrix(A)
+  A <- (A + t(A)) / 2
+  V <- chol2inv(chol(A))
+  dimnames(V) <- dimnames(A)
+  V
+}
+
 # SE vector from an observed-info matrix; returns NA of length p on failure.
 .se_from_info <- function(I, p) {
   if (is.null(I)) return(rep(NA_real_, p))
-  cov <- tryCatch(solve(I), error = function(e) NULL)
+  cov <- tryCatch(.tobs_spd_inv(I), error = function(e) NULL)
   if (is.null(cov)) return(rep(NA_real_, p))
   d <- .tobs_sds_from_vcov(cov)
   if (length(d) >= p) d[seq_len(p)] else c(d, rep(NA_real_, p - length(d)))
@@ -548,7 +562,7 @@ extract_beta <- function(sub, p) {
   p <- length(sds)
   s <- ifelse(is.finite(sds), sds, 0)
   if (is.null(prec)) return(diag(s^2, nrow = p))
-  cov <- tryCatch(solve(prec), error = function(e) NULL)
+  cov <- tryCatch(.tobs_spd_inv(prec), error = function(e) NULL)
   if (is.null(cov)) return(diag(s^2, nrow = p))
   cov <- as.matrix(cov)[seq_len(p), seq_len(p), drop = FALSE]
   d <- sqrt(pmax(diag(cov), 0))
@@ -679,7 +693,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
       det_coef_names = pi_list[[2]]$coef_names,
       spatial        = spatial_occ,
       spatial_fit    = em_result$fits[["occ"]])
-    V_joint <- if (is.null(J)) NULL else tryCatch(solve(J), error = function(e) NULL)
+    V_joint <- if (is.null(J)) NULL else tryCatch(.tobs_spd_inv(J), error = function(e) NULL)
     if (!is.null(V_joint)) {
       V_joint <- (V_joint + t(V_joint)) / 2
       d_j <- diag(V_joint)

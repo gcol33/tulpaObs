@@ -590,9 +590,9 @@ tobs_associations <- function(object,
   model$field_R <- .ms_ocs_build_field_R(model, hyper_w)
 
   Sinv <- matrix(0, P, P)
-  Sinv[d$occ_idx, d$occ_idx] <- solve(Sigma$occ)
-  Sinv[d$p_idx,   d$p_idx]   <- solve(Sigma$p)
-  Sinv[d$pos_idx, d$pos_idx] <- solve(Sigma$pos)
+  Sinv[d$occ_idx, d$occ_idx] <- .tobs_spd_inv(Sigma$occ)
+  Sinv[d$p_idx,   d$p_idx]   <- .tobs_spd_inv(Sigma$p)
+  Sinv[d$pos_idx, d$pos_idx] <- .tobs_spd_inv(Sigma$pos)
   Pmu      <- diag(1 / sigma.beta^2, P)
   inv_sdL2 <- 1 / sd_L^2
 

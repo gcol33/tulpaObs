@@ -179,6 +179,8 @@
 #'
 #' @seealso [nmix_laplace()] for the fixed-effects fit, [tulpa_re_aghq()]
 #'   for the grouped random-effect integrator this feeds.
+#'
+#' @keywords internal
 nmix_site_marginal <- function(y,
                                      site_idx,
                                      X_lambda,

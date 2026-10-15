@@ -178,7 +178,7 @@
   modes <- gm$modes[, idx, drop = FALSE]
   hess <- lapply(gm$covs, function(C) {
     if (is.null(C) || !all(is.finite(C))) return(NULL)
-    tryCatch(solve(as.matrix(C)[idx, idx, drop = FALSE]),
+    tryCatch(.tobs_spd_inv(as.matrix(C)[idx, idx, drop = FALSE]),
              error = function(e) NULL)
   })
   structure(list(modes = modes, weights = gm$weights,

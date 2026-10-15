@@ -23,3 +23,11 @@ conditional class probabilities \code{p_1..p_K} (given present), and the
 unconditional class probabilities \code{psi * p_k} plus the absent probability
 \code{1 - psi}.
 }
+\examples{
+\donttest{
+sim <- simulate_occu_categorical(N = 300, seed = 1)
+fit <- tobs(~ x, data = sim$data, family = occu_categorical(), y = sim$y)
+pr <- predict(fit, newdata = data.frame(x = c(-1, 0, 1)))
+round(pr$joint, 3)
+}
+}

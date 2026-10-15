@@ -82,7 +82,7 @@
     # occu() already reached under the looser default.
     opt <- optim(start, nlp, method = "BFGS", hessian = TRUE,
                 control = list(reltol = 1e-12, maxit = 500L))
-    V <- tryCatch(solve(opt$hessian), error = function(e) NULL)
+    V <- tryCatch(.tobs_spd_inv(opt$hessian), error = function(e) NULL)
     if (is.null(V)) return(fit)
     se <- sqrt(pmax(diag(V), 0))
     if (any(!is.finite(c(opt$par, se)))) return(fit)

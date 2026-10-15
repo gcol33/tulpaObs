@@ -72,7 +72,7 @@
   # out).
   cov_k <- lapply(hess, function(H) {
     if (is.null(H)) return(NULL)
-    tryCatch(solve(as.matrix(H)), error = function(e) NULL)
+    tryCatch(.tobs_spd_inv(as.matrix(H)), error = function(e) NULL)
   })
   V <- .tobs_grid_vcov(mode_mat, w, cov_k, center = beta, symmetrize = TRUE)
   list(beta = beta, vcov = V, weights = w,

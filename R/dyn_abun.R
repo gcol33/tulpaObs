@@ -328,7 +328,7 @@
   # at the mode (O(p) marginal evals, not the O(p^2) numeric Hessian).
   Hobs <- tryCatch(-.tobs_fd_jacobian(function(th) -neg_grad(th), est),
                    error = function(e) NULL)
-  vcov <- tryCatch(solve(Hobs), error = function(e) {
+  vcov <- tryCatch(.tobs_spd_inv(Hobs), error = function(e) {
     d <- if (!is.null(Hobs)) diag(Hobs) else rep(NA_real_, length(est))
     d[d <= 0] <- NA_real_; diag(1 / d, length(est)) })
   nm <- c(paste0("lambda_", colnames(X_lambda)), paste0("p_", colnames(X_p)),
@@ -668,6 +668,8 @@
 #'
 #' @references Dail, D., Madsen, L. (2011). Models for estimating abundance from
 #'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.
+#'
+#' @keywords internal
 dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
                              X_lambda, X_p, X_omega, X_gamma,
                              mixture = "poisson", log_r_init = NULL,
@@ -733,7 +735,7 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
   converged <- opt$convergence == 0L
   out <- eval_cpp(theta)
   Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th)), theta)
-  vcov <- tryCatch(solve(Hobs), error = function(e)
+  vcov <- tryCatch(.tobs_spd_inv(Hobs), error = function(e)
     matrix(NA_real_, length(theta), length(theta)))
 
   nm <- c(paste0("lambda_", colnames(X_lambda)), paste0("p_", colnames(X_p)),

@@ -192,9 +192,9 @@
                 else log(warm$sigma_pos)
   theta0 <- c(beta_pres0, beta_pos0, log_disp0)
 
-  V_pres <- tryCatch(solve(warm$m_occ$H_beta), error = function(e) NULL)
+  V_pres <- tryCatch(.tobs_spd_inv(warm$m_occ$H_beta), error = function(e) NULL)
   pos_vscale <- if (identical(positive, "lognormal")) warm$sigma_pos^2 else 1
-  V_pos  <- tryCatch(pos_vscale * solve(warm$m_pos$H_beta), error = function(e) NULL)
+  V_pos  <- tryCatch(pos_vscale * .tobs_spd_inv(warm$m_pos$H_beta), error = function(e) NULL)
   diag_pres <- if (!is.null(V_pres)) pmax(diag(as.matrix(V_pres)), 1e-6)
                else rep(1, p_pres)
   diag_pos  <- if (!is.null(V_pos))  pmax(diag(as.matrix(V_pos)), 1e-6)

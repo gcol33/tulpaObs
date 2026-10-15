@@ -222,3 +222,14 @@ factors for a calibrated map. The latent fields are tied to the cell graph,
 so \code{X.0} / \code{newdata} prediction is not supported.
 }
 }
+\examples{
+\donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+pr <- predict(fit, type = "occupancy")
+summary(pr$psi)
+}
+}

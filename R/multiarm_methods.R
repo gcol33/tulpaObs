@@ -50,9 +50,9 @@
 .tobs_arm_blocks_cover <- function(object) {
   b_occ <- object[["beta_occ"]]; s_occ <- object[["se_occ"]]
   b_pos <- object[["beta_pos"]]; s_pos <- object[["se_pos"]]
-  V_occ <- tryCatch(solve(as.matrix(object[["occ"]][["H_beta"]])),
+  V_occ <- tryCatch(.tobs_spd_inv(as.matrix(object[["occ"]][["H_beta"]])),
                     error = function(e) NULL)
-  V_pos <- tryCatch(solve(as.matrix(object[["pos"]][["H_beta"]])),
+  V_pos <- tryCatch(.tobs_spd_inv(as.matrix(object[["pos"]][["H_beta"]])),
                     error = function(e) NULL)
   list(
     presence = list(estimate = b_occ, se = s_occ,
@@ -129,6 +129,15 @@
 #'   std.error / interval table, rows named as `coef()`;
 #'   `glance()` the one-row column set of [glance.tobs_fit()]; `plot()` one
 #'   Gaussian-density panel per coefficient (up to 4), invisibly.
+#' @examples
+#' \donttest{
+#' fit <- tobs(cover ~ moisture, data = meadow_cover,
+#'             family = cover(response = "beta"))
+#' coef(fit, arm = "positive")
+#' confint(fit)
+#' tidy(fit)
+#' summary(fit)
+#' }
 #' @name tobs_multiarm_methods
 #' @export
 nobs.tobs_multiarm_fit <- function(object, ...) {
