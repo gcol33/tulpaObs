@@ -281,7 +281,7 @@ the lower and upper credible bounds for every fixed effect.
 
 ```{r coef-summary}
 coef(fit_sp)
-round(summary(fit_sp), 3)
+round(coef(summary(fit_sp)), 3)
 ```
 
 The fitted SPDE field itself is stored on the fit as `spatial_field`, a
