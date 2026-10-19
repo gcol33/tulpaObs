@@ -3,15 +3,24 @@
 <g class='svglite'>
 <defs>
   <style type='text/css'><![CDATA[
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite rect, .svglite circle {
+    /* theme-aware-processed */
+    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
       fill: none;
-      stroke: #000000;
+      stroke: #3E3F3A;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-miterlimit: 10.00;
+    }
+    .svglite > g > rect {
+      fill: none;
+      stroke: #3E3F3A;
       stroke-linecap: round;
       stroke-linejoin: round;
       stroke-miterlimit: 10.00;
     }
     .svglite text {
       white-space: pre;
+      fill: #3E3F3A;
     }
     .svglite g.glyphgroup path {
       fill: inherit;
@@ -42,24 +51,24 @@
 <line x1='230.40' y1='178.56' x2='230.40' y2='185.76' style='stroke-width: 0.75;' />
 <line x1='309.73' y1='178.56' x2='309.73' y2='185.76' style='stroke-width: 0.75;' />
 <line x1='389.07' y1='178.56' x2='389.07' y2='185.76' style='stroke-width: 0.75;' />
-<text x='71.73' y='204.48' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='10.67px' lengthAdjust='spacingAndGlyphs'>-2</text>
-<text x='151.07' y='204.48' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='10.67px' lengthAdjust='spacingAndGlyphs'>-1</text>
-<text x='230.40' y='204.48' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='6.67px' lengthAdjust='spacingAndGlyphs'>0</text>
-<text x='309.73' y='204.48' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='6.67px' lengthAdjust='spacingAndGlyphs'>1</text>
-<text x='389.07' y='204.48' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='6.67px' lengthAdjust='spacingAndGlyphs'>2</text>
+<text x='71.73' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-2</text>
+<text x='151.07' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1</text>
+<text x='230.40' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
+<text x='309.73' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
+<text x='389.07' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
 <line x1='59.04' y1='158.98' x2='59.04' y2='73.52' style='stroke-width: 0.75;' />
 <line x1='59.04' y1='158.98' x2='51.84' y2='158.98' style='stroke-width: 0.75;' />
 <line x1='59.04' y1='137.62' x2='51.84' y2='137.62' style='stroke-width: 0.75;' />
 <line x1='59.04' y1='116.25' x2='51.84' y2='116.25' style='stroke-width: 0.75;' />
 <line x1='59.04' y1='94.89' x2='51.84' y2='94.89' style='stroke-width: 0.75;' />
 <line x1='59.04' y1='73.52' x2='51.84' y2='73.52' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,158.98) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='16.67px' lengthAdjust='spacingAndGlyphs'>0.1</text>
-<text transform='translate(41.76,116.25) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='16.67px' lengthAdjust='spacingAndGlyphs'>0.3</text>
-<text transform='translate(41.76,73.52) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='16.67px' lengthAdjust='spacingAndGlyphs'>0.5</text>
+<text transform='translate(41.76,158.98) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.1</text>
+<text transform='translate(41.76,116.25) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
+<text transform='translate(41.76,73.52) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
 <polygon points='59.04,178.56 401.76,178.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='34.67' text-anchor='middle' style='font-size: 14.40px; font-weight: bold; font-family: "Arial";' textLength='320.97px' lengthAdjust='spacingAndGlyphs'>Expected cover: tulpaObs (black) vs INLA (red)</text>
-<text x='230.40' y='233.28' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='6.00px' lengthAdjust='spacingAndGlyphs'>x</text>
-<text transform='translate(12.96,118.80) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: "Arial";' textLength='44.00px' lengthAdjust='spacingAndGlyphs'>E[cover]</text>
+<text x='230.40' y='34.67' text-anchor='middle' style='font-size: 1.44em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Expected cover: tulpaObs (black) vs INLA (red)</text>
+<text x='230.40' y='233.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>x</text>
+<text transform='translate(12.96,118.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>E[cover]</text>
 </g>
 <g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDE3OC41Ng==)'>
 <polyline points='71.73,174.23 78.21,173.74 84.69,173.21 91.16,172.64 97.64,172.04 104.11,171.38 110.59,170.69 117.07,169.94 123.54,169.15 130.02,168.30 136.50,167.39 142.97,166.43 149.45,165.40 155.92,164.31 162.40,163.15 168.88,161.92 175.35,160.61 181.83,159.23 188.30,157.77 194.78,156.23 201.26,154.60 207.73,152.88 214.21,151.08 220.69,149.18 227.16,147.19 233.64,145.10 240.11,142.92 246.59,140.63 253.07,138.24 259.54,135.75 266.02,133.16 272.50,130.45 278.97,127.65 285.45,124.73 291.92,121.71 298.40,118.57 304.88,115.33 311.35,111.98 317.83,108.52 324.30,104.95 330.78,101.27 337.26,97.48 343.73,93.58 350.21,89.57 356.69,85.46 363.16,81.23 369.64,76.89 376.11,72.45 382.59,67.89 389.07,63.23 ' style='stroke-width: 1.50; stroke: #DF536B; stroke-dasharray: 8.00,8.00;' />
