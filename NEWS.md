@@ -1,5 +1,18 @@
 # tulpaObs NEWS
 
+## 0.6.2
+
+* The `K.max` boundary warning on the areal count fits (ICAR / proper-CAR /
+  BYM2 / SPDE N-mixture, areal removal) weights each outer-grid node's
+  boundary mass by its grid weight, so a node the posterior gives ~zero
+  weight no longer triggers it; the warning names the node contributing
+  most (#416).
+
+* Help pages for the S3 methods and diagnostics carry runnable examples.
+
+* Articles: figures are inlined so dark mode themes them; the SPDE
+  article's coefficient table is rounded.
+
 ## 0.6.1
 
 * `summary()` on a `tobs_fit` returns tulpa's `summary.tulpa_fit` object
