@@ -84,17 +84,17 @@
     s2 <- cs2[j + 1L] - cs2[i]
     s2 - s * s / m
   }
-  F  <- rep(Inf, n + 1L)
+  cost  <- rep(Inf, n + 1L)
   bk <- integer(n + 1L)
-  F[1L] <- -penalty
+  cost[1L] <- -penalty
   for (t in seq_len(n)) {
     lo <- 1L
     hi <- t - min_seg + 1L
     if (hi < lo) next
     for (s in lo:hi) {
-      cand <- F[s] + seg_cost(s, t) + penalty
-      if (cand < F[t + 1L]) {
-        F[t + 1L] <- cand
+      cand <- cost[s] + seg_cost(s, t) + penalty
+      if (cand < cost[t + 1L]) {
+        cost[t + 1L] <- cand
         bk[t + 1L] <- s - 1L
       }
     }

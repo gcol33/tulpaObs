@@ -139,7 +139,7 @@
   dyn_abun = function() {
     # The forward recursion is cubic in K_max, so the truncation (not the site
     # count) sets this fixture's cost.
-    sim <- simulate_dyn_abun(N = 25, T = 2, J = 3, n.abund.covs = 1,
+    sim <- simulate_dyn_abun(N = 25, n.seasons = 2, J = 3, n.abund.covs = 1,
                              beta.lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 14)
     tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 12),

@@ -39,7 +39,7 @@
   X_om  <- model$X_processes[[3]]; X_gm <- model$X_processes[[4]]
   p_lam <- ncol(X_lam); p_p <- ncol(X_p); p_om <- ncol(X_om); p_gm <- ncol(X_gm)
   y_flat <- as.integer(model$y_flat); N <- model$n_sites
-  T <- model$n_seasons; J <- model$max_visits; K <- model$K_max
+  n_seas <- model$n_seasons; J <- model$max_visits; K <- model$K_max
   is_nb <- mixture %in% c("negbin", "NB")
 
   off <- cumsum(c(0L, p_lam, p_p, p_om, p_gm))
@@ -55,7 +55,7 @@
     eta_lam <- as.numeric(X_lam %*% theta_fix[i_lam]) + (if (det_arm) 0 else offset)
     eta_p   <- as.numeric(X_p %*% theta_fix[i_p]) + (if (det_arm) offset else 0)
     out <- cpp_dyn_abun_total_log_lik(
-      y_flat, N, T, J, K, eta_lam, eta_p,
+      y_flat, N, n_seas, J, K, eta_lam, eta_p,
       as.numeric(X_om %*% theta_fix[i_om]),
       as.numeric(X_gm %*% theta_fix[i_gm]),
       use_nb = is_nb, eta_logr = if (is_nb) theta_fix[i_logr] else 0.0)
@@ -70,7 +70,7 @@
   }
 
   warm <- tryCatch(dyn_abun_laplace(
-    y_flat = y_flat, n_sites = N, T = T, J = J, K_max = K,
+    y_flat = y_flat, n_sites = N, n_seasons = n_seas, J = J, K_max = K,
     X_lambda = X_lam, X_p = X_p, X_omega = X_om, X_gamma = X_gm,
     mixture = if (is_nb) "negbin" else "poisson", verbose = FALSE),
     error = function(e) NULL)
@@ -201,7 +201,7 @@
   inv_metric <- c(rep(0.2, n_base), rep(1, n_raw))
 
   spec <- list(y = as.integer(model$y_flat), n_sites = n_sites,
-               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+               n_seasons = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                X_lambda = X_lam, X_p = X_p, X_omega = X_om, X_gamma = X_gm,
                use_nb = use_nb, n_field_units = n_field_units,
                field_map = field_map, field_load = field_load)

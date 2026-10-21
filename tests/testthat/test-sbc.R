@@ -330,10 +330,10 @@ test_that("the field enters the replicate at the scale the engine's block carrie
 
   # The field as GENERATED carries the engine's marginal width.
   set.seed(9L)
-  F <- spec$field_scale * tulpaObs:::.occu_cover_draw_icar_field(fx$adj, 400L)
-  expect_equal(exp(mean(log(apply(F, 1L, stats::var)))), scale_q,
+  fld <- spec$field_scale * tulpaObs:::.occu_cover_draw_icar_field(fx$adj, 400L)
+  expect_equal(exp(mean(log(apply(fld, 1L, stats::var)))), scale_q,
                tolerance = 0.2)
-  expect_equal(mean(colMeans(F)), 0, tolerance = 1e-8)
+  expect_equal(mean(colMeans(fld)), 0, tolerance = 1e-8)
 })
 
 

@@ -44,7 +44,7 @@
   theta0 <- tulpaObs:::.tobs_ms_dyn_occu_nuts_pack_init(em, lay, pieces)
   spec <- list(X_psi1 = pieces$X_psi1, X_p = pieces$X_p,
                X_gamma = pieces$X_gamma, X_eps = pieces$X_eps,
-               n_sites = pieces$Ns, n_seasons = pieces$T, n_species = pieces$S,
+               n_sites = pieces$Ns, n_seasons = pieces$n_seas, n_species = pieces$S,
                n_valid = pieces$nv_list, n_det = pieces$nd_list)
   list(sim = sim, model = model, pieces = pieces, lay = lay, pri = pri,
        theta0 = theta0, spec = spec)
@@ -69,11 +69,11 @@ test_that("ms_dyn_occu NUTS R oracle gradient matches finite differences", {
   f_lp <- function(th)
     tulpaObs:::.tobs_ms_dyn_occu_nuts_logpost(
       th, P$pieces$X_psi1, P$pieces$X_p, P$pieces$X_gamma, P$pieces$X_eps,
-      P$pieces$em_stats, P$pieces$Ns, P$pieces$T, P$lay, P$pri,
+      P$pieces$em_stats, P$pieces$Ns, P$pieces$n_seas, P$lay, P$pri,
       grad = FALSE)$lp
   ana <- tulpaObs:::.tobs_ms_dyn_occu_nuts_logpost(
     theta, P$pieces$X_psi1, P$pieces$X_p, P$pieces$X_gamma, P$pieces$X_eps,
-    P$pieces$em_stats, P$pieces$Ns, P$pieces$T, P$lay, P$pri, grad = TRUE)$grad
+    P$pieces$em_stats, P$pieces$Ns, P$pieces$n_seas, P$lay, P$pri, grad = TRUE)$grad
   num <- .msdyn_fd_grad(f_lp, theta)
   expect_lt(max(abs(ana - num)), 1e-5)
 })
@@ -89,7 +89,7 @@ test_that("ms_dyn_occu NUTS C++ FullGradFn matches the R oracle", {
   cpp <- cpp_ms_dyn_occu_nuts_joint_logpost(P$spec, theta, P$pri, sigma_beta = 5)
   r   <- tulpaObs:::.tobs_ms_dyn_occu_nuts_logpost(
     theta, P$pieces$X_psi1, P$pieces$X_p, P$pieces$X_gamma, P$pieces$X_eps,
-    P$pieces$em_stats, P$pieces$Ns, P$pieces$T, P$lay, P$pri,
+    P$pieces$em_stats, P$pieces$Ns, P$pieces$n_seas, P$lay, P$pri,
     sigma.beta = 5, grad = TRUE)
   expect_lt(abs(cpp$lp - r$lp), 1e-9)
   expect_lt(max(abs(cpp$grad - r$grad)), 1e-9)

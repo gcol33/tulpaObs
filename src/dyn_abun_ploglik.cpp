@@ -5,7 +5,7 @@
 // SAME per-site kernel compute_dyn_abun_site (dyn_abun_kernel.h) the fit and the
 // single-draw cpp_dyn_abun_total_log_lik use. The four arms (lambda, p, omega,
 // gamma) are site-level [S x n_sites] predictors from BLAS in R; each site's
-// count block is y_flat + i * T * J. eta_logr = 0 (eval_beta without the log r
+// count block is y_flat + i * n_seasons * J. eta_logr = 0 (eval_beta without the log r
 // argument).
 
 #include <Rcpp.h>
@@ -19,8 +19,8 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_dyn_abun_ploglik_batch(
-    Rcpp::IntegerVector y_flat,     // [n_sites * T * J], site-major
-    int n_sites, int T, int J, int K,
+    Rcpp::IntegerVector y_flat,     // [n_sites * n_seasons * J], site-major
+    int n_sites, int n_seasons, int J, int K,
     Rcpp::NumericMatrix eta_lambda, // [S x n_sites]
     Rcpp::NumericMatrix eta_p,
     Rcpp::NumericMatrix eta_omega,
@@ -32,7 +32,7 @@ Rcpp::NumericMatrix cpp_dyn_abun_ploglik_batch(
   const int S = eta_lambda.nrow();
   if (eta_lambda.ncol() != n_sites) Rcpp::stop("eta_lambda must be [S x n_sites].");
   if (eta_logr.size() != S) Rcpp::stop("eta_logr must be length S.");
-  const std::size_t site_stride = (std::size_t) T * J;
+  const std::size_t site_stride = (std::size_t) n_seasons * J;
 
   Rcpp::NumericMatrix ll(S, n_sites);
   const int* py = y_flat.begin();
@@ -51,7 +51,7 @@ Rcpp::NumericMatrix cpp_dyn_abun_ploglik_batch(
     for (int i = 0; i < n_sites; ++i) {
       std::size_t off = (std::size_t) i * S + d;
       tulpaObs::DynAbunSiteResult r = tulpaObs::compute_dyn_abun_site(
-        py + (std::size_t) i * site_stride, T, J, K,
+        py + (std::size_t) i * site_stride, n_seasons, J, K,
         pel[off], pep[off], peo[off], peg[off], use_nb, elogr);
       pll[off] = r.log_lik;
     }

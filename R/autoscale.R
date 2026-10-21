@@ -91,17 +91,17 @@
 # Non-scaled non-intercept columns get T[k, k] = 1.
 .scale_transform <- function(scale) {
   p <- as.integer(scale$ncol)
-  T <- diag(1, p)
-  if (length(scale$cols) == 0L) return(T)
+  tmat <- diag(1, p)
+  if (length(scale$cols) == 0L) return(tmat)
   i0 <- scale$intercept_col
   for (k in seq_along(scale$cols)) {
     j <- scale$cols[k]
-    T[j, j] <- 1 / scale$sds[k]
+    tmat[j, j] <- 1 / scale$sds[k]
     if (!is.na(i0)) {
-      T[i0, j] <- -scale$means[k] / scale$sds[k]
+      tmat[i0, j] <- -scale$means[k] / scale$sds[k]
     }
   }
-  T
+  tmat
 }
 
 # Transform a vector of betas from scaled space to natural space.
@@ -139,8 +139,8 @@
 # single-block helper is what the cover-hurdle decode applies per arm.)
 .unscale_vcov_block <- function(V_sc, scale) {
   if (is.null(V_sc) || length(scale$cols) == 0L) return(V_sc)
-  T <- .scale_transform(scale)
-  T %*% V_sc %*% t(T)
+  tmat <- .scale_transform(scale)
+  tmat %*% V_sc %*% t(tmat)
 }
 
 # Transform per-coefficient SEs from scaled space to natural space, under
@@ -182,8 +182,8 @@
 # samples, columns = coefficients) from scaled space to natural space.
 .unscale_draws_mat <- function(draws_sc, scale) {
   if (is.null(draws_sc) || length(scale$cols) == 0L) return(draws_sc)
-  T <- .scale_transform(scale)
-  out <- draws_sc %*% t(T)
+  tmat <- .scale_transform(scale)
+  out <- draws_sc %*% t(tmat)
   colnames(out) <- colnames(draws_sc)
   out
 }

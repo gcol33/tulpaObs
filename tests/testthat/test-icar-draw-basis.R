@@ -120,9 +120,9 @@ test_that("the ICAR draw carries unit geometric-mean marginal SD", {
   Q <- tulpaObs:::.occu_cover_icar_Q(adj)
   scale_q <- tulpaObs:::.occu_cover_icar_scale(adj)
   set.seed(3)
-  F <- tulpaObs:::.tobs_draw_icar_unit(Q, scale_q, 20000L)
+  fld <- tulpaObs:::.tobs_draw_icar_unit(Q, scale_q, 20000L)
   # Sorbye-Rue: the geometric mean of the marginal variances is 1.
-  gm <- exp(mean(log(apply(F, 1L, stats::var))))
+  gm <- exp(mean(log(apply(fld, 1L, stats::var))))
   expect_lt(abs(gm - 1), 0.05)
-  expect_lt(max(abs(colMeans(F))), 1e-8)   # every draw sums to zero
+  expect_lt(max(abs(colMeans(fld))), 1e-8)   # every draw sums to zero
 })

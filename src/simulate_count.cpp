@@ -91,7 +91,7 @@ Rcpp::List cpp_simulate_removal(
 // recruitment HMM across seasons, observed by binomial detection. The lambda
 // and p arms are site-level; omega and gamma are INTERVAL-level -- the
 // transition into season t uses interval (t-1)'s rate -- so their designs carry
-// either n_sites rows (constant rates) or n_sites * (T-1) rows in the
+// either n_sites rows (constant rates) or n_sites * (n_seasons-1) rows in the
 // site-major layout .tobs_period_arm_design() builds. Both shapes and the row
 // index are read exactly as the likelihood reads them
 // (src/dyn_abun_laplace.cpp: `eta_omega[i * nIv + iv]` against `eta_omega[i]`),
@@ -103,7 +103,7 @@ Rcpp::List cpp_simulate_removal(
 Rcpp::IntegerVector cpp_simulate_dyn_abun(
     Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p,
     Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma,
-    Rcpp::NumericMatrix draws, int n_sites, int T, int J,
+    Rcpp::NumericMatrix draws, int n_sites, int n_seasons, int J,
     int p_lam, int p_p, int p_om, int p_gm,
     bool is_nb, double r_disp, int nsim
 ) {
@@ -114,23 +114,23 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
   // read at the per-site stride, a season-varying design's non-intercept
   // columns land in the wrong memory region and the interval variation is
   // silently dropped.
-  const int nIv = T - 1;
+  const int nIv = n_seasons - 1;
   const int nrow_om = X_omega.nrow(), nrow_gm = X_gamma.nrow();
   const bool om_iv = (nIv > 0 && nrow_om == n_sites * nIv);
   const bool gm_iv = (nIv > 0 && nrow_gm == n_sites * nIv);
   if (!om_iv && nrow_om != n_sites)
-    Rcpp::stop("X_omega must have n_sites or n_sites*(T-1) rows.");
+    Rcpp::stop("X_omega must have n_sites or n_sites*(n_seasons-1) rows.");
   if (!gm_iv && nrow_gm != n_sites)
-    Rcpp::stop("X_gamma must have n_sites or n_sites*(T-1) rows.");
+    Rcpp::stop("X_gamma must have n_sites or n_sites*(n_seasons-1) rows.");
   Rcpp::RNGScope scope;
-  // Output: nsim arrays [n_sites x J x T]; return one flat vector when nsim == 1
+  // Output: nsim arrays [n_sites x J x n_seasons]; return one flat vector when nsim == 1
   // (dim set by R), else the caller reshapes. Here we always return nsim == 1's
   // array (R wraps multi-sim in a list via repeated calls upstream).
-  Rcpp::IntegerVector out((std::size_t) n_sites * J * T * (nsim < 1 ? 1 : nsim));
+  Rcpp::IntegerVector out((std::size_t) n_sites * J * n_seasons * (nsim < 1 ? 1 : nsim));
   const double* pXl = X_lambda.begin(); const double* pXp = X_p.begin();
   const double* pXo = X_omega.begin(); const double* pXg = X_gamma.begin();
   const double* pd = draws.begin();
-  const std::size_t sim_stride = (std::size_t) n_sites * J * T;
+  const std::size_t sim_stride = (std::size_t) n_sites * J * n_seasons;
   for (int s = 0; s < nsim; ++s) {
     int idx = (int) R_unif_index((double) ndr);
     int* base = out.begin() + (std::size_t) s * sim_stride;
@@ -138,7 +138,7 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
       double lambda = std::exp(row_draw_dot(pXl, n_sites, i, pd, ndr, idx, 0, p_lam));
       double pdet = tulpa::math::inv_logit(row_draw_dot(pXp, n_sites, i, pd, ndr, idx, o_p, p_p));
       int N = draw_latent_N(lambda, is_nb ? r_disp : R_PosInf);
-      for (int t = 0; t < T; ++t) {
+      for (int t = 0; t < n_seasons; ++t) {
         if (t > 0) {
           const int iv = t - 1;
           double omega = tulpa::math::inv_logit(row_draw_dot(
@@ -153,7 +153,7 @@ Rcpp::IntegerVector cpp_simulate_dyn_abun(
       }
     }
   }
-  if (nsim >= 1) out.attr("dim") = Rcpp::IntegerVector::create(n_sites, J, T,
+  if (nsim >= 1) out.attr("dim") = Rcpp::IntegerVector::create(n_sites, J, n_seasons,
                                                               nsim == 1 ? 1 : nsim);
   return out;
 }

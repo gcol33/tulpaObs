@@ -611,14 +611,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_dyn_abun_total_log_lik
-Rcpp::List cpp_dyn_abun_total_log_lik(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, bool use_nb, double eta_logr);
-RcppExport SEXP _tulpaObs_cpp_dyn_abun_total_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP) {
+Rcpp::List cpp_dyn_abun_total_log_lik(Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, bool use_nb, double eta_logr);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_total_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
-    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type K(KSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_lambda(eta_lambdaSEXP);
@@ -627,19 +627,19 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_gamma(eta_gammaSEXP);
     Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
     Rcpp::traits::input_parameter< double >::type eta_logr(eta_logrSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_total_log_lik(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr));
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_total_log_lik(y, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_dyn_abun_dynamics_log_lik
-Rcpp::List cpp_dyn_abun_dynamics_log_lik(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, int dynamics, bool use_nb, double eta_logr);
-RcppExport SEXP _tulpaObs_cpp_dyn_abun_dynamics_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP dynamicsSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP) {
+Rcpp::List cpp_dyn_abun_dynamics_log_lik(Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, int dynamics, bool use_nb, double eta_logr);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_dynamics_log_lik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP dynamicsSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
-    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type K(KSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_lambda(eta_lambdaSEXP);
@@ -649,26 +649,26 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type dynamics(dynamicsSEXP);
     Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
     Rcpp::traits::input_parameter< double >::type eta_logr(eta_logrSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_dynamics_log_lik(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb, eta_logr));
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_dynamics_log_lik(y, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb, eta_logr));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_dyn_abun_init_weights_mat
-Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::IntegerVector site, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma);
-RcppExport SEXP _tulpaObs_cpp_dyn_abun_init_weights_mat(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP siteSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP) {
+Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K, Rcpp::IntegerVector site, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_init_weights_mat(SEXP ySEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP KSEXP, SEXP siteSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
-    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type K(KSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site(siteSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_p(eta_pSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_omega(eta_omegaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_gamma(eta_gammaSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_init_weights_mat(y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma));
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_init_weights_mat(y, n_sites, n_seasons, J, K, site, eta_p, eta_omega, eta_gamma));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -688,14 +688,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_dyn_abun_p_loglik
-Rcpp::List cpp_dyn_abun_p_loglik(Rcpp::IntegerVector y, int n_sites, int T, int J, int K, Rcpp::IntegerVector site, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, bool use_nb, double eta_logr, bool deriv);
-RcppExport SEXP _tulpaObs_cpp_dyn_abun_p_loglik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP siteSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP, SEXP derivSEXP) {
+Rcpp::List cpp_dyn_abun_p_loglik(Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K, Rcpp::IntegerVector site, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p, Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma, bool use_nb, double eta_logr, bool deriv);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_p_loglik(SEXP ySEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP KSEXP, SEXP siteSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP, SEXP derivSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y(ySEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
-    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type K(KSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site(siteSEXP);
@@ -706,7 +706,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
     Rcpp::traits::input_parameter< double >::type eta_logr(eta_logrSEXP);
     Rcpp::traits::input_parameter< bool >::type deriv(derivSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_p_loglik(y, n_sites, T, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, deriv));
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_p_loglik(y, n_sites, n_seasons, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, deriv));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -746,14 +746,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_dyn_abun_ploglik_batch
-Rcpp::NumericMatrix cpp_dyn_abun_ploglik_batch(Rcpp::IntegerVector y_flat, int n_sites, int T, int J, int K, Rcpp::NumericMatrix eta_lambda, Rcpp::NumericMatrix eta_p, Rcpp::NumericMatrix eta_omega, Rcpp::NumericMatrix eta_gamma, bool use_nb, Rcpp::NumericVector eta_logr, int n_threads);
-RcppExport SEXP _tulpaObs_cpp_dyn_abun_ploglik_batch(SEXP y_flatSEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP, SEXP n_threadsSEXP) {
+Rcpp::NumericMatrix cpp_dyn_abun_ploglik_batch(Rcpp::IntegerVector y_flat, int n_sites, int n_seasons, int J, int K, Rcpp::NumericMatrix eta_lambda, Rcpp::NumericMatrix eta_p, Rcpp::NumericMatrix eta_omega, Rcpp::NumericMatrix eta_gamma, bool use_nb, Rcpp::NumericVector eta_logr, int n_threads);
+RcppExport SEXP _tulpaObs_cpp_dyn_abun_ploglik_batch(SEXP y_flatSEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP KSEXP, SEXP eta_lambdaSEXP, SEXP eta_pSEXP, SEXP eta_omegaSEXP, SEXP eta_gammaSEXP, SEXP use_nbSEXP, SEXP eta_logrSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type y_flat(y_flatSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
-    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type K(KSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type eta_lambda(eta_lambdaSEXP);
@@ -763,7 +763,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type use_nb(use_nbSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type eta_logr(eta_logrSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_ploglik_batch(y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads));
+    rcpp_result_gen = Rcpp::wrap(cpp_dyn_abun_ploglik_batch(y_flat, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2297,8 +2297,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_simulate_dyn_abun
-Rcpp::IntegerVector cpp_simulate_dyn_abun(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma, Rcpp::NumericMatrix draws, int n_sites, int T, int J, int p_lam, int p_p, int p_om, int p_gm, bool is_nb, double r_disp, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_dyn_abun(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP X_omegaSEXP, SEXP X_gammaSEXP, SEXP drawsSEXP, SEXP n_sitesSEXP, SEXP TSEXP, SEXP JSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP p_omSEXP, SEXP p_gmSEXP, SEXP is_nbSEXP, SEXP r_dispSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerVector cpp_simulate_dyn_abun(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma, Rcpp::NumericMatrix draws, int n_sites, int n_seasons, int J, int p_lam, int p_p, int p_om, int p_gm, bool is_nb, double r_disp, int nsim);
+RcppExport SEXP _tulpaObs_cpp_simulate_dyn_abun(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP X_omegaSEXP, SEXP X_gammaSEXP, SEXP drawsSEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP p_omSEXP, SEXP p_gmSEXP, SEXP is_nbSEXP, SEXP r_dispSEXP, SEXP nsimSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2308,7 +2308,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_gamma(X_gammaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
-    Rcpp::traits::input_parameter< int >::type T(TSEXP);
+    Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type p_lam(p_lamSEXP);
     Rcpp::traits::input_parameter< int >::type p_p(p_pSEXP);
@@ -2317,7 +2317,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
     Rcpp::traits::input_parameter< double >::type r_disp(r_dispSEXP);
     Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_dyn_abun(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, T, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_dyn_abun(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim));
     return rcpp_result_gen;
 END_RCPP
 }

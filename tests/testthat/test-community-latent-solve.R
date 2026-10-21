@@ -39,7 +39,7 @@ test_that("the field Newton holds a non-finite step", {
   # The guard reads on the step, before it reaches F, and breaks the loop.
   src <- paste(deparse(.tobs_latent_field_solve), collapse = " ")
   i_guard <- regexpr("all(is.finite(step))", src, fixed = TRUE)
-  i_apply <- regexpr("F + matrix(step", src, fixed = TRUE)
+  i_apply <- regexpr("Fm + matrix(step", src, fixed = TRUE)
   expect_gt(i_guard, 0)
   expect_gt(i_apply, i_guard)
 })

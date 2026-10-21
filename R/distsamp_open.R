@@ -476,7 +476,7 @@
   Xo <- model$X_processes[[3L]]; Xg <- model$X_processes[[4L]]
   pl <- ncol(Xl); ps <- ncol(Xs); po <- ncol(Xo); pg <- ncol(Xg)
   cutpoints <- model$cutpoints; transect <- model$transect
-  N <- model$n_sites; T <- model$n_seasons; K <- model$K_max
+  N <- model$n_sites; n_seas <- model$n_seasons; K <- model$K_max
 
   idx <- list(lambda = seq_len(pl), sigma = pl + seq_len(ps),
               omega = pl + ps + seq_len(po), gamma = pl + ps + po + seq_len(pg))
@@ -498,7 +498,7 @@
       return(NULL)
     pd  <- pmin(pmax(pdist, 1e-10), 1 - 1e-10)
     ev  <- tryCatch(cpp_dyn_abun_total_log_lik(
-      model$y_flat, N, T, 1L, K,
+      model$y_flat, N, n_seas, 1L, K,
       as.vector(Xl %*% theta[idx$lambda]), stats::qlogis(pd),
       as.vector(Xo %*% theta[idx$omega]),  as.vector(Xg %*% theta[idx$gamma]),
       use_nb = is_nb, eta_logr = if (is_nb) theta[ir] else 0),
@@ -507,7 +507,7 @@
     # Per-period band multinomials (a function of sigma only), per site.
     pid  <- cpd / pdist
     band <- numeric(N)
-    for (t in seq_len(T)) {
+    for (t in seq_len(n_seas)) {
       yb   <- model$y[, , t]
       band <- band + lgamma(rowSums(yb) + 1) - rowSums(lgamma(yb + 1)) +
               rowSums(yb * log(pmax(pid, 1e-300)))
@@ -784,14 +784,14 @@
 # requested transition (unmarked tp2..tp5), then the per-period distance obs. `fv`
 # is the per-site parameter list from .tobs_fitted_distsamp_open (lambda, sigma,
 # pdist via cpd, plus omega / K / gamma / r as the dynamics uses).
-.dso_draw_dyn <- function(fv, dynamics, cutpoints, transect, T) {
+.dso_draw_dyn <- function(fv, dynamics, cutpoints, transect, n_seas) {
   lambda <- fv$lambda; sigma <- fv$sigma
   n   <- length(lambda)
   cpd <- .gdr_dist_cp(sigma, cutpoints, transect); pdist <- rowSums(cpd)
   Jb  <- ncol(cpd)
   om  <- fv$omega; gam <- fv$gamma; Kc <- fv$K; rr <- fv$r
-  N <- matrix(0L, n, T); N[, 1L] <- stats::rpois(n, lambda)
-  for (t in 2:T) {
+  N <- matrix(0L, n, n_seas); N[, 1L] <- stats::rpois(n, lambda)
+  for (t in 2:n_seas) {
     prev <- N[, t - 1L]
     N[, t] <- switch(dynamics,
       notrend  = stats::rbinom(n, prev, om) + stats::rpois(n, (1 - om) * lambda),
@@ -800,8 +800,8 @@
       ricker   = stats::rpois(n, prev * exp(rr * (1 - prev / Kc))),
       gompertz = stats::rpois(n, prev * exp(rr * (1 - log(prev + 1) / log(Kc + 1)))))
   }
-  y <- array(0L, c(n, Jb, T))
-  for (i in seq_len(n)) for (t in seq_len(T)) {
+  y <- array(0L, c(n, Jb, n_seas))
+  for (i in seq_len(n)) for (t in seq_len(n_seas)) {
     det <- stats::rbinom(1L, N[i, t], pdist[i])
     if (det > 0L)
       y[i, , t] <- as.integer(stats::rmultinom(1L, det, cpd[i, ] / pdist[i]))
@@ -812,7 +812,7 @@
 # Core draw: per site the (Dail-Madsen) N sequence + per-period distance obs. The
 # initial abundance N_1 is Poisson (r = NULL) or negative-binomial (size r); a
 # structural-zero fraction `zi` sets N_. = 0 for the whole site (never occupied).
-.dso_draw <- function(lambda, sigma, omega, gamma, cutpoints, transect, T,
+.dso_draw <- function(lambda, sigma, omega, gamma, cutpoints, transect, n_seas,
                       r = NULL, zi = 0) {
   n   <- length(lambda)
   cpd <- .gdr_dist_cp(sigma, cutpoints, transect); pdist <- rowSums(cpd)
@@ -820,13 +820,13 @@
   N1  <- if (is.null(r)) stats::rpois(n, lambda)
          else stats::rnbinom(n, size = r, mu = lambda)
   if (zi > 0) N1[stats::runif(n) < zi] <- 0L        # structural zeros
-  N   <- matrix(0L, n, T); N[, 1L] <- N1
-  for (t in 2:T)
+  N   <- matrix(0L, n, n_seas); N[, 1L] <- N1
+  for (t in 2:n_seas)
     N[, t] <- stats::rbinom(n, N[, t - 1L], omega) + stats::rpois(n, gamma)
   # A structural-zero site stays empty across all periods (the ZI model's meaning).
   if (zi > 0) N[N1 == 0L, ] <- 0L
-  y <- array(0L, c(n, Jb, T))
-  for (i in seq_len(n)) for (t in seq_len(T)) {
+  y <- array(0L, c(n, Jb, n_seas))
+  for (i in seq_len(n)) for (t in seq_len(n_seas)) {
     det <- stats::rbinom(1L, N[i, t], pdist[i])
     if (det > 0L)
       y[i, , t] <- as.integer(stats::rmultinom(1L, det, cpd[i, ] / pdist[i]))

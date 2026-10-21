@@ -6,7 +6,7 @@
 \usage{
 simulate_dyn_abun(
   N = 150,
-  T = 4,
+  n.seasons = 4,
   J = 3,
   n.abund.covs = 1,
   beta.lambda = NULL,
@@ -24,7 +24,7 @@ simulate_dyn_abun(
 \arguments{
 \item{N}{Number of sites (default 150).}
 
-\item{T}{Number of primary seasons (default 4).}
+\item{n.seasons}{Number of primary seasons (default 4).}
 
 \item{J}{Number of secondary visits per season (default 3).}
 
@@ -55,24 +55,24 @@ all its counts are zero; fit such data with \code{dyn_abun(mixture = "zip")} /
 \item{seed}{Optional random seed.}
 }
 \value{
-A list with \code{y} (N x J x T count array), \code{data} (covariates, including
-the \verb{[N x (T-1)]} \code{season_cov} matrix column when a season-varying rate is
+A list with \code{y} (N x J x n.seasons count array), \code{data} (covariates, including
+the \verb{[N x (n.seasons-1)]} \code{season_cov} matrix column when a season-varying rate is
 used), and \code{truth} (coefficients, per-site \code{lambda}, the realised
 \code{omega} / \code{gamma} rates, and \code{r} under \code{"negbin"}).
 }
 \description{
 Latent \code{N_1 ~ Poisson(lambda)}; for \code{t >= 2}, \verb{N_t = Binomial(N_(t-1), omega_\{t-1\}) + Poisson(gamma_\{t-1\})}; observed via \code{Binomial(N_t, p)} over \code{J}
-secondary visits in each of \code{T} primary seasons. Returns a 3D array \verb{N x J x T}
+secondary visits in each of \code{n.seasons} primary seasons. Returns a 3D array \verb{N x J x n.seasons}
 suitable for \code{\link[=tobs]{tobs()}} with \code{\link[=dyn_abun]{dyn_abun()}}.
 }
 \details{
 Survival and recruitment are constant across seasons by default. Supplying
 \code{beta.omega} (logit-scale) or \code{beta.gamma} (log-scale) instead makes the rate
 depend on a per-(site, interval) season covariate \code{z}: \verb{omega_\{i,t\} = plogis(beta_omega[1] + beta_omega[2] * z_\{i,t\})}, \verb{gamma_\{i,t\} = exp(beta_gamma[1] + beta_gamma[2] * z_\{i,t\})}. The covariate is returned as a
-\verb{[N x (T-1)]} matrix column \code{season_cov} of \code{data}, ready for
+\verb{[N x (n.seasons-1)]} matrix column \code{season_cov} of \code{data}, ready for
 \code{omega = ~ season_cov}.
 }
 \examples{
-sim <- simulate_dyn_abun(N = 40, T = 3, J = 3, seed = 1)
+sim <- simulate_dyn_abun(N = 40, n.seasons = 3, J = 3, seed = 1)
 dim(sim$y)
 }

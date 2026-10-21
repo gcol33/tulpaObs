@@ -5,7 +5,7 @@
 // log-likelihood read. The four arms are site-level, so the eta inputs are one
 // value per site and the returned gradients are per-site eta-gradients the caller
 // sandwiches with each arm's design matrix. `y` is laid out site-major then
-// season then visit (index ((i*T)+t)*J + j), with -1 marking a missing visit.
+// season then visit (index ((i*n_seasons)+t)*J + j), with -1 marking a missing visit.
 
 #include <Rcpp.h>
 #include <vector>
@@ -17,28 +17,28 @@
 //
 // eta_omega / eta_gamma are interval-indexed: each is length n_sites when survival
 // / recruitment are constant across a site's seasons (one rate per site), or
-// length n_sites*(T-1) in site-major interval-minor order (row (i*(T-1)+iv)) when
+// length n_sites*(n_seasons-1) in site-major interval-minor order (row (i*(n_seasons-1)+iv)) when
 // they vary by transition interval. grad_eta_omega / grad_eta_gamma are returned
 // with the same length / layout, so the caller's design sandwich (per-site or
 // per-(site, interval)) folds the score back to coefficients.
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_total_log_lik(
-    Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
+    Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K,
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p,
     Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma,
     bool use_nb = false, double eta_logr = 0.0
 ) {
-    if ((int)y.size() != n_sites * T * J)
-        Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
+    if ((int)y.size() != n_sites * n_seasons * J)
+        Rcpp::stop("y length %d != n_sites*n_seasons*J = %d.", (int)y.size(), n_sites * n_seasons * J);
     if (eta_lambda.size() != n_sites || eta_p.size() != n_sites)
         Rcpp::stop("eta_lambda / eta_p must have length n_sites.");
-    const int nIv = T - 1;
+    const int nIv = n_seasons - 1;
     const bool om_iv = (eta_omega.size() == n_sites * nIv);
     const bool gm_iv = (eta_gamma.size() == n_sites * nIv);
     if (!om_iv && eta_omega.size() != n_sites)
-        Rcpp::stop("eta_omega must have length n_sites or n_sites*(T-1).");
+        Rcpp::stop("eta_omega must have length n_sites or n_sites*(n_seasons-1).");
     if (!gm_iv && eta_gamma.size() != n_sites)
-        Rcpp::stop("eta_gamma must have length n_sites or n_sites*(T-1).");
+        Rcpp::stop("eta_gamma must have length n_sites or n_sites*(n_seasons-1).");
 
     double total = 0.0, grad_eta_logr = 0.0;
     Rcpp::NumericVector log_lik_site(n_sites), grad_eta_lambda(n_sites),
@@ -54,7 +54,7 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
             eg[iv] = gm_iv ? eta_gamma[i * nIv + iv] : eta_gamma[i];
         }
         tulpaObs::DynAbunSiteResult r = tulpaObs::compute_dyn_abun_site(
-            yp + (std::size_t)i * T * J, T, J, K,
+            yp + (std::size_t)i * n_seasons * J, n_seasons, J, K,
             eta_lambda[i], eta_p[i], eo.data(), eg.data(), use_nb, eta_logr);
         if (!R_finite(r.log_lik)) ++n_inadmissible;
         total += r.log_lik;
@@ -89,22 +89,22 @@ Rcpp::List cpp_dyn_abun_total_log_lik(
 // are per-site or per-(site, interval) exactly as cpp_dyn_abun_total_log_lik.
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_dynamics_log_lik(
-    Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
+    Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K,
     Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p,
     Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma,
     int dynamics, bool use_nb = false, double eta_logr = 0.0
 ) {
-    if ((int)y.size() != n_sites * T * J)
-        Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
+    if ((int)y.size() != n_sites * n_seasons * J)
+        Rcpp::stop("y length %d != n_sites*n_seasons*J = %d.", (int)y.size(), n_sites * n_seasons * J);
     if (eta_lambda.size() != n_sites || eta_p.size() != n_sites)
         Rcpp::stop("eta_lambda / eta_p must have length n_sites.");
-    const int nIv = T - 1;
+    const int nIv = n_seasons - 1;
     const bool om_iv = (eta_omega.size() == n_sites * nIv);
     const bool gm_iv = (eta_gamma.size() == n_sites * nIv);
     if (!om_iv && eta_omega.size() != n_sites)
-        Rcpp::stop("eta_omega must have length n_sites or n_sites*(T-1).");
+        Rcpp::stop("eta_omega must have length n_sites or n_sites*(n_seasons-1).");
     if (!gm_iv && eta_gamma.size() != n_sites)
-        Rcpp::stop("eta_gamma must have length n_sites or n_sites*(T-1).");
+        Rcpp::stop("eta_gamma must have length n_sites or n_sites*(n_seasons-1).");
 
     double total = 0.0;
     Rcpp::NumericVector log_lik_site(n_sites);
@@ -117,7 +117,7 @@ Rcpp::List cpp_dyn_abun_dynamics_log_lik(
             eg[iv] = gm_iv ? eta_gamma[i * nIv + iv] : eta_gamma[i];
         }
         double ll = tulpaObs::compute_dyn_abun_site_dyn(
-            yp + (std::size_t)i * T * J, T, J, K,
+            yp + (std::size_t)i * n_seasons * J, n_seasons, J, K,
             eta_lambda[i], eta_p[i], eo.data(), eg.data(), dynamics, use_nb, eta_logr);
         if (!R_finite(ll)) ++n_inadmissible;
         total += ll; log_lik_site[i] = ll;
@@ -132,28 +132,28 @@ Rcpp::List cpp_dyn_abun_dynamics_log_lik(
 // grouped random-effect AGHQ path on the initial-abundance arm. `site` are
 // 0-based site indices into `y`; eta_p is the (RE-fixed) detection predictor
 // aligned with `site` (length m). eta_omega / eta_gamma are the survival /
-// recruitment predictors: length m (constant rate per site) or length m*(T-1) in
+// recruitment predictors: length m (constant rate per site) or length m*(n_seasons-1) in
 // row-major (site k, interval iv) order for season-varying rates. Returns an m x
 // (K+1) matrix of c-weights, one row per requested site. The engine precomputes
 // this ONCE per make_site call; the O(K) per-node log marginal then comes from
 // cpp_dyn_abun_init_loglik below.
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(
-    Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
+    Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K,
     Rcpp::IntegerVector site, Rcpp::NumericVector eta_p,
     Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma
 ) {
-    if ((int)y.size() != n_sites * T * J)
-        Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
+    if ((int)y.size() != n_sites * n_seasons * J)
+        Rcpp::stop("y length %d != n_sites*n_seasons*J = %d.", (int)y.size(), n_sites * n_seasons * J);
     const int m = site.size();
-    const int nIv = T - 1;
+    const int nIv = n_seasons - 1;
     if (eta_p.size() != m) Rcpp::stop("eta_p must be aligned with `site` (length %d).", m);
     const bool om_iv = (eta_omega.size() == m * nIv);
     const bool gm_iv = (eta_gamma.size() == m * nIv);
     if (!om_iv && eta_omega.size() != m)
-        Rcpp::stop("eta_omega must have length m or m*(T-1).");
+        Rcpp::stop("eta_omega must have length m or m*(n_seasons-1).");
     if (!gm_iv && eta_gamma.size() != m)
-        Rcpp::stop("eta_gamma must have length m or m*(T-1).");
+        Rcpp::stop("eta_gamma must have length m or m*(n_seasons-1).");
 
     const int S = K + 1;
     Rcpp::NumericMatrix C(m, S);
@@ -167,7 +167,7 @@ Rcpp::NumericMatrix cpp_dyn_abun_init_weights_mat(
             eg[iv] = gm_iv ? eta_gamma[k * nIv + iv] : eta_gamma[k];
         }
         tulpaObs::compute_dyn_abun_init_weights(
-            yp + (std::size_t)i * T * J, T, J, K,
+            yp + (std::size_t)i * n_seasons * J, n_seasons, J, K,
             eta_p[k], eo.data(), eg.data(), c_row.data());
         for (int n = 0; n < S; ++n) C(k, n) = c_row[n];
     }
@@ -236,31 +236,31 @@ Rcpp::List cpp_dyn_abun_init_loglik(
 // holding the initial-abundance / survival / recruitment predictors and the
 // dispersion fixed. Unlike the initial-abundance arm (cpp_dyn_abun_init_- loglik,
 // an O(K) dot over precomputed c-weights), the detection predictor enters every
-// season's observation pmf, so the full O(K^2 T) forward marginal is re-evaluated
+// season's observation pmf, so the full O(K^2 n_seasons) forward marginal is re-evaluated
 // per call (no across-node precompute) -- the make_site closes over the fixed arms
 // and supplies the varying eta_p per quadrature node / Newton step. `site` are
 // 0-based indices into `y`; eta_lambda / eta_p are aligned with `site` (length m);
-// eta_omega / eta_gamma are length m (constant rate per site) or m*(T-1) in
+// eta_omega / eta_gamma are length m (constant rate per site) or m*(n_seasons-1) in
 // row-major (site k, interval iv) order for season-varying rates.
 // [[Rcpp::export]]
 Rcpp::List cpp_dyn_abun_p_loglik(
-    Rcpp::IntegerVector y, int n_sites, int T, int J, int K,
+    Rcpp::IntegerVector y, int n_sites, int n_seasons, int J, int K,
     Rcpp::IntegerVector site, Rcpp::NumericVector eta_lambda, Rcpp::NumericVector eta_p,
     Rcpp::NumericVector eta_omega, Rcpp::NumericVector eta_gamma,
     bool use_nb = false, double eta_logr = 0.0, bool deriv = true
 ) {
-    if ((int)y.size() != n_sites * T * J)
-        Rcpp::stop("y length %d != n_sites*T*J = %d.", (int)y.size(), n_sites * T * J);
+    if ((int)y.size() != n_sites * n_seasons * J)
+        Rcpp::stop("y length %d != n_sites*n_seasons*J = %d.", (int)y.size(), n_sites * n_seasons * J);
     const int m = site.size();
-    const int nIv = T - 1;
+    const int nIv = n_seasons - 1;
     if (eta_lambda.size() != m || eta_p.size() != m)
         Rcpp::stop("eta_lambda / eta_p must be aligned with `site` (length %d).", m);
     const bool om_iv = (eta_omega.size() == m * nIv);
     const bool gm_iv = (eta_gamma.size() == m * nIv);
     if (!om_iv && eta_omega.size() != m)
-        Rcpp::stop("eta_omega must have length m or m*(T-1).");
+        Rcpp::stop("eta_omega must have length m or m*(n_seasons-1).");
     if (!gm_iv && eta_gamma.size() != m)
-        Rcpp::stop("eta_gamma must have length m or m*(T-1).");
+        Rcpp::stop("eta_gamma must have length m or m*(n_seasons-1).");
 
     Rcpp::NumericVector logL(m), d1(m), d2(m);
     std::vector<double> eo(nIv), eg(nIv);
@@ -273,7 +273,7 @@ Rcpp::List cpp_dyn_abun_p_loglik(
             eg[iv] = gm_iv ? eta_gamma[k * nIv + iv] : eta_gamma[k];
         }
         tulpaObs::DynAbunPCurv r = tulpaObs::compute_dyn_abun_p_curv(
-            yp + (std::size_t)i * T * J, T, J, K,
+            yp + (std::size_t)i * n_seasons * J, n_seasons, J, K,
             eta_lambda[k], eta_p[k], eo.data(), eg.data(), use_nb, eta_logr, deriv);
         logL[k] = r.log_lik;
         if (deriv) { d1[k] = r.d1; d2[k] = r.d2; }

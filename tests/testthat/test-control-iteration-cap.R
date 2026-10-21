@@ -3,7 +3,7 @@
 # budget when the caller sets none, and take the caller's when one is set.
 
 cap_fit_dyn_abun <- function(ctrl) {
-  sim <- simulate_dyn_abun(N = 80L, T = 4L, J = 3L,
+  sim <- simulate_dyn_abun(N = 80L, n.seasons = 4L, J = 3L,
                            beta.lambda = c(log(5), 0.3), p = 0.5,
                            omega = 0.6, gamma = 1, seed = 23L)
   suppressWarnings(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(),

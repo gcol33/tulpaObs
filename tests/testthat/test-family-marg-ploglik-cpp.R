@@ -109,10 +109,10 @@ test_that("distance batched ploglik == R loop", {
 
 test_that("open N-mixture (dyn_abun) batched ploglik == R loop", {
   set.seed(75)
-  n_sites <- 20L; T <- 3L; J <- 2L; S <- 15L; K <- 20L
+  n_sites <- 20L; n_seas <- 3L; J <- 2L; S <- 15L; K <- 20L
   Xs <- replicate(4, cbind(1, rnorm(n_sites)), simplify = FALSE)
-  model <- list(model_type = "dyn_abun", y_flat = as.integer(rpois(n_sites * T * J, 1)),
-                n_sites = n_sites, n_seasons = T, max_visits = J, K_max = K,
+  model <- list(model_type = "dyn_abun", y_flat = as.integer(rpois(n_sites * n_seas * J, 1)),
+                n_sites = n_sites, n_seasons = n_seas, max_visits = J, K_max = K,
                 mixture = "poisson", X_processes = Xs,
                 process_info = lapply(Xs, function(X) list(p = ncol(X))))
   draws <- matrix(rnorm(S * 8, 0, .3), S, 8)

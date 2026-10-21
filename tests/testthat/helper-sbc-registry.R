@@ -100,7 +100,7 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   dyn_abun = function(N = 80L) {
-    sim <- simulate_dyn_abun(N = N, T = 4L, J = 3L,
+    sim <- simulate_dyn_abun(N = N, n.seasons = 4L, J = 3L,
                              beta.lambda = c(log(5), 0.3), p = 0.5,
                              omega = 0.6, gamma = 1.0, seed = 23L)
     suppressWarnings(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(),

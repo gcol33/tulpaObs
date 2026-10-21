@@ -104,19 +104,19 @@ test_that("dyn_occu marginal recursion matches unmarked::colext at its MLE", {
   skip_if_not_installed("unmarked")
   set.seed(101)
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
-  n_sites <- 120L; T <- 4L; J <- 3L
-  z <- matrix(NA_integer_, n_sites, T); z[, 1] <- rbinom(n_sites, 1, psi1)
-  for (t in 2:T)
+  n_sites <- 120L; n_seas <- 4L; J <- 3L
+  z <- matrix(NA_integer_, n_sites, n_seas); z[, 1] <- rbinom(n_sites, 1, psi1)
+  for (t in 2:n_seas)
     z[, t] <- ifelse(z[, t - 1] == 1, rbinom(n_sites, 1, 1 - eps),
                      rbinom(n_sites, 1, gam))
-  y <- array(0L, c(n_sites, J, T))
-  for (i in seq_len(n_sites)) for (t in seq_len(T))
+  y <- array(0L, c(n_sites, J, n_seas))
+  for (i in seq_len(n_sites)) for (t in seq_len(n_seas))
     y[i, , t] <- if (z[i, t]) rbinom(J, 1, p_true) else 0L
 
-  Y <- matrix(0L, n_sites, J * T)            # unmarked layout: sites x (J*T), season-major
-  for (t in seq_len(T)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
+  Y <- matrix(0L, n_sites, J * n_seas)            # unmarked layout: sites x (J*T), season-major
+  for (t in seq_len(n_seas)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
   fm <- unmarked::colext(~ 1, ~ 1, ~ 1, ~ 1,
-                         data = unmarked::unmarkedMultFrame(y = Y, numPrimary = T),
+                         data = unmarked::unmarkedMultFrame(y = Y, numPrimary = n_seas),
                          se = FALSE)
   uc <- unmarked::coef(fm)                    # logit psi, col(gamma), ext(epsilon), p
   ps <- plogis(uc[1]); gm <- plogis(uc[2]); ep <- plogis(uc[3]); pp <- plogis(uc[4])
@@ -139,22 +139,22 @@ test_that("dyn_occu coefficients match unmarked::colext", {
   skip_if_not_installed("unmarked")
   set.seed(101)
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
-  n_sites <- 120L; T <- 4L; J <- 3L
-  z <- matrix(NA_integer_, n_sites, T); z[, 1] <- rbinom(n_sites, 1, psi1)
-  for (t in 2:T)
+  n_sites <- 120L; n_seas <- 4L; J <- 3L
+  z <- matrix(NA_integer_, n_sites, n_seas); z[, 1] <- rbinom(n_sites, 1, psi1)
+  for (t in 2:n_seas)
     z[, t] <- ifelse(z[, t - 1] == 1, rbinom(n_sites, 1, 1 - eps),
                      rbinom(n_sites, 1, gam))
-  y <- array(0L, c(n_sites, J, T))
-  for (i in seq_len(n_sites)) for (t in seq_len(T))
+  y <- array(0L, c(n_sites, J, n_seas))
+  for (i in seq_len(n_sites)) for (t in seq_len(n_seas))
     y[i, , t] <- if (z[i, t]) rbinom(J, 1, p_true) else 0L
 
   fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
               detection = ~ 1, y = y, colonization = ~ 1, extinction = ~ 1,
               priors = FALSE, control = list(verbose = FALSE))
-  Y <- matrix(0L, n_sites, J * T)
-  for (t in seq_len(T)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
+  Y <- matrix(0L, n_sites, J * n_seas)
+  for (t in seq_len(n_seas)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
   fm <- unmarked::colext(~ 1, ~ 1, ~ 1, ~ 1,
-                         data = unmarked::unmarkedMultFrame(y = Y, numPrimary = T),
+                         data = unmarked::unmarkedMultFrame(y = Y, numPrimary = n_seas),
                          se = FALSE)
   uc <- unmarked::coef(fm)   # logit psi1, colonisation (gamma), extinction (eps), p
   expect_lt(abs(fit$means[["psi1_(Intercept)"]]    - uc[1]), 0.02)
@@ -175,24 +175,24 @@ test_that("dyn_occu exact-marginal refine reaches colext MLE and calibrated SEs"
   skip_if_fast()
   skip_if_not_installed("unmarked")
   psi1 <- 0.5; gam <- 0.3; eps <- 0.2; p_true <- 0.5
-  n_sites <- 120L; T <- 4L; J <- 3L
+  n_sites <- 120L; n_seas <- 4L; J <- 3L
   for (seed in c(101L, 7L, 22L)) {
     set.seed(seed)
-    z <- matrix(NA_integer_, n_sites, T); z[, 1] <- rbinom(n_sites, 1, psi1)
-    for (t in 2:T)
+    z <- matrix(NA_integer_, n_sites, n_seas); z[, 1] <- rbinom(n_sites, 1, psi1)
+    for (t in 2:n_seas)
       z[, t] <- ifelse(z[, t - 1] == 1, rbinom(n_sites, 1, 1 - eps),
                        rbinom(n_sites, 1, gam))
-    y <- array(0L, c(n_sites, J, T))
-    for (i in seq_len(n_sites)) for (t in seq_len(T))
+    y <- array(0L, c(n_sites, J, n_seas))
+    for (i in seq_len(n_sites)) for (t in seq_len(n_seas))
       y[i, , t] <- if (z[i, t]) rbinom(J, 1, p_true) else 0L
 
     fit <- tobs(~ 1, data = data.frame(idx = seq_len(n_sites)), family = dyn_occu(),
                 detection = ~ 1, y = y, colonization = ~ 1, extinction = ~ 1,
                 priors = FALSE, control = list(verbose = FALSE))
-    Y <- matrix(0L, n_sites, J * T)
-    for (t in seq_len(T)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
+    Y <- matrix(0L, n_sites, J * n_seas)
+    for (t in seq_len(n_seas)) Y[, (t - 1) * J + seq_len(J)] <- y[, , t]
     fm <- unmarked::colext(~ 1, ~ 1, ~ 1, ~ 1,
-                           data = unmarked::unmarkedMultFrame(y = Y, numPrimary = T),
+                           data = unmarked::unmarkedMultFrame(y = Y, numPrimary = n_seas),
                            se = TRUE)
     uc  <- unmarked::coef(fm)        # logit psi1, gamma, epsilon, p
     use <- unmarked::SE(fm)

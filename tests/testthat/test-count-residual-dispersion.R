@@ -131,7 +131,7 @@ test_that("removal() residuals: Poisson unchanged, negbin at its own variance", 
 
 test_that("dyn_abun() residuals: Poisson unchanged, negbin at the recursion", {
   skip_on_cran()
-  args <- list(N = 50, T = 3, J = 3, n.abund.covs = 1,
+  args <- list(N = 50, n.seasons = 3, J = 3, n.abund.covs = 1,
                beta.lambda = c(log(8), 0), p = 0.6, omega = 0.7, gamma = 1.2,
                seed = 4)
   exact_var <- function(fit) {

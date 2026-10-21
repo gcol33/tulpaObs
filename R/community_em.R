@@ -452,7 +452,7 @@
       if (delta < 1e-7) break
     }
     list(mu = mu, global = global, b_list = b_list, Cinv = Cinv_list,
-         Bf = Bf_list, Sf = Sf, F = F_cur, stuck = stuck)
+         Bf = Bf_list, Sf = Sf, Fm = F_cur, stuck = stuck)
   }
 
   # ---- initialization ----

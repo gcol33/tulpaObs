@@ -149,24 +149,24 @@ cpp_distance_grouped_oracle <- function(arm, y_bins, X_lambda, X_sigma, Z_site, 
     .Call(`_tulpaObs_cpp_distance_grouped_oracle`, arm, y_bins, X_lambda, X_sigma, Z_site, site_group, n_sites, n_groups, quad_xptr, K_max, nb, key, eta_b, headroom)
 }
 
-cpp_dyn_abun_total_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0) {
-    .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr)
+cpp_dyn_abun_total_log_lik <- function(y, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0) {
+    .Call(`_tulpaObs_cpp_dyn_abun_total_log_lik`, y, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr)
 }
 
-cpp_dyn_abun_dynamics_log_lik <- function(y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb = FALSE, eta_logr = 0.0) {
-    .Call(`_tulpaObs_cpp_dyn_abun_dynamics_log_lik`, y, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb, eta_logr)
+cpp_dyn_abun_dynamics_log_lik <- function(y, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb = FALSE, eta_logr = 0.0) {
+    .Call(`_tulpaObs_cpp_dyn_abun_dynamics_log_lik`, y, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, dynamics, use_nb, eta_logr)
 }
 
-cpp_dyn_abun_init_weights_mat <- function(y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma) {
-    .Call(`_tulpaObs_cpp_dyn_abun_init_weights_mat`, y, n_sites, T, J, K, site, eta_p, eta_omega, eta_gamma)
+cpp_dyn_abun_init_weights_mat <- function(y, n_sites, n_seasons, J, K, site, eta_p, eta_omega, eta_gamma) {
+    .Call(`_tulpaObs_cpp_dyn_abun_init_weights_mat`, y, n_sites, n_seasons, J, K, site, eta_p, eta_omega, eta_gamma)
 }
 
 cpp_dyn_abun_init_loglik <- function(C, eta_lambda, use_nb = FALSE, eta_logr = 0.0, deriv = TRUE) {
     .Call(`_tulpaObs_cpp_dyn_abun_init_loglik`, C, eta_lambda, use_nb, eta_logr, deriv)
 }
 
-cpp_dyn_abun_p_loglik <- function(y, n_sites, T, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0, deriv = TRUE) {
-    .Call(`_tulpaObs_cpp_dyn_abun_p_loglik`, y, n_sites, T, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, deriv)
+cpp_dyn_abun_p_loglik <- function(y, n_sites, n_seasons, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb = FALSE, eta_logr = 0.0, deriv = TRUE) {
+    .Call(`_tulpaObs_cpp_dyn_abun_p_loglik`, y, n_sites, n_seasons, J, K, site, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, deriv)
 }
 
 cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logr) {
@@ -177,8 +177,8 @@ cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, 
     .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
 }
 
-cpp_dyn_abun_ploglik_batch <- function(y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads) {
-    .Call(`_tulpaObs_cpp_dyn_abun_ploglik_batch`, y_flat, n_sites, T, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads)
+cpp_dyn_abun_ploglik_batch <- function(y_flat, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads) {
+    .Call(`_tulpaObs_cpp_dyn_abun_ploglik_batch`, y_flat, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads)
 }
 
 cpp_fp_occu_total_log_lik <- function(y, site_idx, eta_psi, eta_p11, eta_p10, eta_b) {
@@ -465,8 +465,8 @@ cpp_simulate_removal <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_si
     .Call(`_tulpaObs_cpp_simulate_removal`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim)
 }
 
-cpp_simulate_dyn_abun <- function(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, T, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_dyn_abun`, X_lambda, X_p, X_omega, X_gamma, draws, n_sites, T, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim)
+cpp_simulate_dyn_abun <- function(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim) {
+    .Call(`_tulpaObs_cpp_simulate_dyn_abun`, X_lambda, X_p, X_omega, X_gamma, draws, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim)
 }
 
 cpp_simulate_fp_occu <- function(X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim) {

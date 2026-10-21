@@ -13,11 +13,11 @@
 
 test_that("per-interval omega/gamma analytic gradient matches finite differences", {
   set.seed(7)
-  T <- 4L; J <- 3L; K <- 18L; nIv <- T - 1L
+  n_seas <- 4L; J <- 3L; K <- 18L; nIv <- n_seas - 1L
   lambda <- 6; p <- 0.5
   omega_iv <- c(0.45, 0.65, 0.55); gamma_iv <- c(0.8, 1.4, 0.6)
-  Ni <- rpois(1, lambda); ymat <- matrix(0L, T, J)
-  for (t in seq_len(T)) {
+  Ni <- rpois(1, lambda); ymat <- matrix(0L, n_seas, J)
+  for (t in seq_len(n_seas)) {
     if (t > 1L) Ni <- rbinom(1, Ni, omega_iv[t - 1L]) + rpois(1, gamma_iv[t - 1L])
     ymat[t, ] <- rbinom(J, Ni, p)
   }
@@ -25,8 +25,8 @@ test_that("per-interval omega/gamma analytic gradient matches finite differences
   eta_l <- log(lambda); eta_p <- qlogis(p)
   eo <- qlogis(omega_iv); eg <- log(gamma_iv)
   ll <- function(o, g) tulpaObs:::cpp_dyn_abun_total_log_lik(
-    yflat, 1L, T, J, K, eta_l, eta_p, as.numeric(o), as.numeric(g))$log_lik
-  an <- tulpaObs:::cpp_dyn_abun_total_log_lik(yflat, 1L, T, J, K, eta_l, eta_p, eo, eg)
+    yflat, 1L, n_seas, J, K, eta_l, eta_p, as.numeric(o), as.numeric(g))$log_lik
+  an <- tulpaObs:::cpp_dyn_abun_total_log_lik(yflat, 1L, n_seas, J, K, eta_l, eta_p, eo, eg)
   h <- 1e-6
   g_om_fd <- numeric(nIv); g_gm_fd <- numeric(nIv)
   for (iv in seq_len(nIv)) {
@@ -45,18 +45,18 @@ test_that("scalar (constant-rate) kernel is bit-identical to the broadcast path"
   # give the identical log-likelihood and (summed) score -- the no-regression
   # guard that the season-varying kernel did not perturb the constant-rate fit.
   set.seed(3)
-  T <- 4L; J <- 3L; K <- 25L; nIv <- T - 1L
+  n_seas <- 4L; J <- 3L; K <- 25L; nIv <- n_seas - 1L
   lambda <- 7; p <- 0.5; om_c <- 0.55; gm_c <- 1.1
-  Ni <- rpois(1, lambda); ymat <- matrix(0L, T, J)
-  for (t in seq_len(T)) {
+  Ni <- rpois(1, lambda); ymat <- matrix(0L, n_seas, J)
+  for (t in seq_len(n_seas)) {
     if (t > 1L) Ni <- rbinom(1, Ni, om_c) + rpois(1, gm_c)
     ymat[t, ] <- rbinom(J, Ni, p)
   }
   yflat <- as.integer(t(ymat))
   sc <- tulpaObs:::cpp_dyn_abun_total_log_lik(
-    yflat, 1L, T, J, K, log(lambda), qlogis(p), qlogis(om_c), log(gm_c))
+    yflat, 1L, n_seas, J, K, log(lambda), qlogis(p), qlogis(om_c), log(gm_c))
   vc <- tulpaObs:::cpp_dyn_abun_total_log_lik(
-    yflat, 1L, T, J, K, log(lambda), qlogis(p),
+    yflat, 1L, n_seas, J, K, log(lambda), qlogis(p),
     rep(qlogis(om_c), nIv), rep(log(gm_c), nIv))
   # The kernel's constant-rate score adds the per-interval scores left to right
   # in double precision, starting from 0. R's sum() accumulates in long double,
@@ -69,7 +69,7 @@ test_that("scalar (constant-rate) kernel is bit-identical to the broadcast path"
 
 
 test_that("binder builds long-form omega design only when season-varying", {
-  sim_sv <- simulate_dyn_abun(N = 20, T = 4, J = 2, n.abund.covs = 1,
+  sim_sv <- simulate_dyn_abun(N = 20, n.seasons = 4, J = 2, n.abund.covs = 1,
                               beta.lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
                               beta.omega = c(qlogis(0.6), 0.5), seed = 9)
   m_sv <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim_sv$data, sim_sv$y,
@@ -93,7 +93,7 @@ test_that("dyn_abun recovers a season-varying survival slope", {
   beta_omega <- c(qlogis(0.6), 0.8)         # logit intercept + season slope
   est <- numeric(3); se <- numeric(3); int <- numeric(3)
   for (k in seq_len(3)) {
-    sim <- simulate_dyn_abun(N = 300, T = 5, J = 3, n.abund.covs = 1,
+    sim <- simulate_dyn_abun(N = 300, n.seasons = 5, J = 3, n.abund.covs = 1,
                              beta.lambda = c(log(7), 0.3), p = 0.55, gamma = 1.2,
                              beta.omega = beta_omega, seed = 200 + k)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data,
@@ -122,7 +122,7 @@ test_that("dyn_abun recovers a season-varying recruitment slope", {
   beta_gamma <- c(log(1.0), 0.6)            # log intercept + season slope
   est <- numeric(3); se <- numeric(3); int <- numeric(3)
   for (k in seq_len(3)) {
-    sim <- simulate_dyn_abun(N = 300, T = 5, J = 3, n.abund.covs = 1,
+    sim <- simulate_dyn_abun(N = 300, n.seasons = 5, J = 3, n.abund.covs = 1,
                              beta.lambda = c(log(7), 0.3), p = 0.55, omega = 0.6,
                              beta.gamma = beta_gamma, seed = 300 + k)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data,
@@ -149,7 +149,7 @@ test_that("constant-rate dyn_abun fit is unchanged (no-regression at fit level)"
   # A constant-rate (intercept-only omega/gamma) fit must recover truth exactly as
   # the pre-season-varying kernel did; the simulator's constant-rate RNG stream is
   # preserved, so this anchors the whole constant-rate path end to end.
-  sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 250, n.seasons = 4, J = 3, n.abund.covs = 1,
                            beta.lambda = c(log(6), 0.4), p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 11)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 35),
@@ -182,17 +182,17 @@ test_that("simulator: a constant-rate long design equals the per-site one", {
   # array under one seed -- which pins the long-form row index at every
   # (site, interval), not just on average. The interval lookup draws nothing,
   # so the RNG stream is the constant-rate one either way.
-  n <- 6L; T <- 4L; J <- 2L; nIv <- T - 1L
+  n <- 6L; n_seas <- 4L; J <- 2L; nIv <- n_seas - 1L
   bl <- log(8); bp <- qlogis(0.6); bo <- qlogis(0.55); bg <- log(1.1)
   X1 <- matrix(1, n, 1L)                       # per-site intercept
   Xlong <- matrix(1, n * nIv, 1L)              # site-major (site, interval) rows
   dr <- .sim_dyn_draws(bl, bp, bo, bg)
 
   set.seed(42)
-  a <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, X1, dr, n, T, J,
+  a <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, X1, dr, n, n_seas, J,
                                         1L, 1L, 1L, 1L, FALSE, NA_real_, 1L)
   set.seed(42)
-  b <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, Xlong, Xlong, dr, n, T, J,
+  b <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, Xlong, Xlong, dr, n, n_seas, J,
                                         1L, 1L, 1L, 1L, FALSE, NA_real_, 1L)
   expect_identical(as.integer(a), as.integer(b))
 })
@@ -202,16 +202,16 @@ test_that("simulator: a season-varying omega drives the dynamics", {
   # recruitment off and detection at ~1, so the counts must repeat season 1 into
   # season 2 and then be zero. Read at the per-site stride the rate is the same
   # in every interval, which cannot produce that pattern for any coefficient.
-  n <- 8L; T <- 4L; J <- 2L; nIv <- T - 1L
+  n <- 8L; n_seas <- 4L; J <- 2L; nIv <- n_seas - 1L
   iv_index <- rep(seq_len(nIv), times = n)     # site-major: row (i-1)*nIv + iv
   X_om <- cbind(1, as.numeric(iv_index == 1L))
   X1 <- matrix(1, n, 1L)
   dr <- .sim_dyn_draws(log(20), qlogis(1 - 1e-12), c(-25, 50), log(1e-10))
 
   set.seed(11)
-  y <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X_om, X1, dr, n, T, J,
+  y <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X_om, X1, dr, n, n_seas, J,
                                         1L, 1L, 2L, 1L, FALSE, NA_real_, 1L)
-  dim(y) <- c(n, J, T)
+  dim(y) <- c(n, J, n_seas)
   expect_identical(y[, , 1L], y[, , 2L])       # interval 1: every individual survives
   expect_true(all(y[, , 3L] == 0L))            # interval 2: none does
   expect_true(all(y[, , 4L] == 0L))
@@ -219,16 +219,16 @@ test_that("simulator: a season-varying omega drives the dynamics", {
 })
 
 test_that("simulator: an arm design of neither shape is refused", {
-  n <- 5L; T <- 4L; J <- 2L
+  n <- 5L; n_seas <- 4L; J <- 2L
   X1 <- matrix(1, n, 1L)
   dr <- .sim_dyn_draws(log(5), qlogis(0.5), qlogis(0.5), log(1))
   bad <- matrix(1, n * 2L, 1L)                 # neither n_sites nor n_sites*(T-1)
   expect_error(
-    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, bad, X1, dr, n, T, J,
+    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, bad, X1, dr, n, n_seas, J,
                                      1L, 1L, 1L, 1L, FALSE, NA_real_, 1L),
     "X_omega")
   expect_error(
-    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, bad, dr, n, T, J,
+    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, bad, dr, n, n_seas, J,
                                      1L, 1L, 1L, 1L, FALSE, NA_real_, 1L),
     "X_gamma")
 })
@@ -236,7 +236,7 @@ test_that("simulator: an arm design of neither shape is refused", {
 test_that("simulate() hands the long-form arm designs to the simulator", {
   # The R side passes model$X_processes[[3]] / [[4]] straight through, so what
   # reaches the kernel is whatever shape the binder built.
-  sim <- simulate_dyn_abun(N = 20, T = 4, J = 2, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 20, n.seasons = 4, J = 2, n.abund.covs = 1,
                            beta.lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
                            beta.omega = c(qlogis(0.6), 0.5), seed = 9)
   m <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,

@@ -108,10 +108,10 @@
 # - 1 / T - 2) exactly like the intrinsic-icar areal case. Uniform across all four
 # types, so the C++ field block (which only sees an n_field_units x n_raw loading
 # + a per-site field_map) needs no temporal-specific branch.
-.tobs_nuts_temporal_loading <- function(type, T, tau = NA_real_, rho = NA_real_,
+.tobs_nuts_temporal_loading <- function(type, n_time, tau = NA_real_, rho = NA_real_,
                                         tol = 1e-8) {
   tau <- max(tau, 1e-3)
-  Q  <- .tobs_temporal_Q(type, T, rho = if (identical(type, "ar1")) rho else NULL)
+  Q  <- .tobs_temporal_Q(type, n_time, rho = if (identical(type, "ar1")) rho else NULL)
   ev <- eigen(tau * Q, symmetric = TRUE)
   keep <- ev$values > tol * max(ev$values)              # non-null eigenpairs
   U <- ev$vectors[, keep, drop = FALSE]
@@ -272,35 +272,35 @@
 # block over T points: ar1(rho) tridiagonal full-rank; rw1 tridiagonal (rank T-1);
 # rw2 pentadiagonal (rank T-2); iid identity. Single source of truth for the
 # temporal-block prior used alongside the areal field on the count families (#78).
-.tobs_temporal_Q <- function(type, T, rho = NULL, cyclic = FALSE) {
-  if (type == "iid") return(diag(1, T))
+.tobs_temporal_Q <- function(type, n_time, rho = NULL, cyclic = FALSE) {
+  if (type == "iid") return(diag(1, n_time))
   if (type == "ar1") {
     if (is.null(rho) || abs(rho) >= 1) stop("ar1 rho must be in (-1, 1).", call. = FALSE)
-    Q <- matrix(0, T, T)
-    Q[1, 1] <- 1; Q[T, T] <- 1
-    if (T > 2) for (t in 2:(T - 1)) Q[t, t] <- 1 + rho^2
-    for (t in seq_len(T - 1)) { Q[t, t + 1] <- -rho; Q[t + 1, t] <- -rho }
+    Q <- matrix(0, n_time, n_time)
+    Q[1, 1] <- 1; Q[n_time, n_time] <- 1
+    if (n_time > 2) for (t in 2:(n_time - 1)) Q[t, t] <- 1 + rho^2
+    for (t in seq_len(n_time - 1)) { Q[t, t + 1] <- -rho; Q[t + 1, t] <- -rho }
     return(Q / (1 - rho^2))
   }
   if (type == "rw1") {
-    Q <- matrix(0, T, T)
+    Q <- matrix(0, n_time, n_time)
     if (cyclic) {
-      for (t in seq_len(T)) {
+      for (t in seq_len(n_time)) {
         Q[t, t] <- 2
-        nt <- if (t == T) 1L else t + 1L; pt <- if (t == 1L) T else t - 1L
+        nt <- if (t == n_time) 1L else t + 1L; pt <- if (t == 1L) n_time else t - 1L
         Q[t, nt] <- Q[t, nt] - 1; Q[t, pt] <- Q[t, pt] - 1
       }
     } else {
-      Q[1, 1] <- 1; Q[1, 2] <- -1; Q[T, T] <- 1; Q[T, T - 1] <- -1
-      if (T > 2) for (t in 2:(T - 1)) { Q[t, t] <- 2; Q[t, t - 1] <- -1; Q[t, t + 1] <- -1 }
+      Q[1, 1] <- 1; Q[1, 2] <- -1; Q[n_time, n_time] <- 1; Q[n_time, n_time - 1] <- -1
+      if (n_time > 2) for (t in 2:(n_time - 1)) { Q[t, t] <- 2; Q[t, t - 1] <- -1; Q[t, t + 1] <- -1 }
     }
     return(Q)
   }
   if (type == "rw2") {
-    if (T < 4) stop("rw2 needs at least 4 time points.", call. = FALSE)
+    if (n_time < 4) stop("rw2 needs at least 4 time points.", call. = FALSE)
     # Second-difference operator D (T-2 x T); Q = D' D, rank T - 2.
-    D <- matrix(0, T - 2L, T)
-    for (t in seq_len(T - 2L)) { D[t, t] <- 1; D[t, t + 1L] <- -2; D[t, t + 2L] <- 1 }
+    D <- matrix(0, n_time - 2L, n_time)
+    for (t in seq_len(n_time - 2L)) { D[t, t] <- 1; D[t, t + 1L] <- -2; D[t, t + 2L] <- 1 }
     return(crossprod(D))
   }
   stop(sprintf("Unsupported temporal type '%s'.", type), call. = FALSE)

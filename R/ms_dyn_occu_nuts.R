@@ -202,7 +202,7 @@
   P_psi1 <- pi_list[[1L]]$p; P_p <- pi_list[[2L]]$p
   P_gam  <- pi_list[[3L]]$p; P_eps <- pi_list[[4L]]$p
   P <- P_psi1 + P_p; G <- P_gam + P_eps
-  S <- model$n_species; Ns <- model$n_sites; T <- model$n_seasons
+  S <- model$n_species; Ns <- model$n_sites; n_seas <- model$n_seasons
 
   psi1_idx <- seq_len(P_psi1); p_idx <- P_psi1 + seq_len(P_p)
   gam_idx  <- seq_len(P_gam);  eps_idx <- P_gam + seq_len(P_eps)
@@ -213,9 +213,9 @@
   ys_list <- lapply(seq_len(S), function(s) model$y[, , , s])
   vs_list <- lapply(seq_len(S), function(s) model$valid[, , , s])
   em_stats <- lapply(seq_len(S), function(s)
-    .ms_dyn_occu_emit_stats(ys_list[[s]], vs_list[[s]], Ns, T))
-  nv_list <- lapply(em_stats, function(e) matrix(as.integer(e$nvalid), Ns, T))
-  nd_list <- lapply(em_stats, function(e) matrix(as.integer(e$ndet),   Ns, T))
+    .ms_dyn_occu_emit_stats(ys_list[[s]], vs_list[[s]], Ns, n_seas))
+  nv_list <- lapply(em_stats, function(e) matrix(as.integer(e$nvalid), Ns, n_seas))
+  nd_list <- lapply(em_stats, function(e) matrix(as.integer(e$ndet),   Ns, n_seas))
 
   eta_of <- function(theta, global) {
     list(psi1 = stats::plogis(as.numeric(X_psi1 %*% theta[psi1_idx])),
@@ -226,13 +226,13 @@
   sp_ll <- function(s, theta, global) {
     e  <- eta_of(theta, global)
     em <- .ms_dyn_occu_emissions(e$p, em_stats[[s]]$nvalid, em_stats[[s]]$ndet)
-    .ms_dyn_occu_fwd_ll_vec(e$psi1, e$gam, e$eps, em, Ns, T)
+    .ms_dyn_occu_fwd_ll_vec(e$psi1, e$gam, e$eps, em, Ns, n_seas)
   }
   sp_grad <- function(s, theta, global) {
     e  <- eta_of(theta, global)
     em <- .ms_dyn_occu_emissions(e$p, em_stats[[s]]$nvalid, em_stats[[s]]$ndet)
     fb <- .ms_dyn_occu_fb_vec(e$psi1, e$p, e$gam, e$eps, em,
-                              em_stats[[s]]$nvalid, em_stats[[s]]$ndet, Ns, T)
+                              em_stats[[s]]$nvalid, em_stats[[s]]$ndet, Ns, n_seas)
     c(as.numeric(crossprod(X_psi1, fb$w1 - e$psi1)),
       as.numeric(crossprod(X_p,    fb$p_score)),
       as.numeric(crossprod(X_gamma, fb$col_y - e$gam * fb$col_n)),
@@ -242,7 +242,7 @@
   init <- .ms_dyn_occu_warm_init(ys_list, vs_list, Ns, arm_idx, gam_idx, eps_idx)
 
   list(P_psi1 = P_psi1, P_p = P_p, P = P, P_gam = P_gam, P_eps = P_eps, G = G,
-       S = S, Ns = Ns, T = T, arm_idx = arm_idx, gam_idx = gam_idx,
+       S = S, Ns = Ns, n_seas = n_seas, arm_idx = arm_idx, gam_idx = gam_idx,
        eps_idx = eps_idx, X_psi1 = X_psi1, X_p = X_p, X_gamma = X_gamma,
        X_eps = X_eps, em_stats = em_stats, nv_list = nv_list, nd_list = nd_list,
        sp_ll = sp_ll, sp_grad = sp_grad, init_mu = init$init_mu,
@@ -315,7 +315,7 @@
   theta0 <- .tobs_ms_dyn_occu_nuts_pack_init(em, lay, pieces)
   spec <- list(X_psi1 = pieces$X_psi1, X_p = pieces$X_p,
                X_gamma = pieces$X_gamma, X_eps = pieces$X_eps,
-               n_sites = pieces$Ns, n_seasons = pieces$T, n_species = pieces$S,
+               n_sites = pieces$Ns, n_seasons = pieces$n_seas, n_species = pieces$S,
                n_valid = pieces$nv_list, n_det = pieces$nd_list,
                n_threads = as.integer(n.threads.grad))
   inv_metric <- .ms_ocs_fd_metric(
@@ -363,7 +363,7 @@
     em <- .ms_dyn_occu_emissions(p, pieces$em_stats[[s]]$nvalid,
                                  pieces$em_stats[[s]]$ndet)
     ll_mean <- ll_mean + .ms_dyn_occu_fwd_ll_vec(psi1, gam, eps, em,
-                                                 pieces$Ns, pieces$T)
+                                                 pieces$Ns, pieces$n_seas)
   }
 
   res_em <- list(

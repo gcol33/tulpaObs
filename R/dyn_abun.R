@@ -209,7 +209,7 @@
 
 .tobs_fit_dyn_abun <- function(model, max_iter = 300L, tol = 1e-8, verbose = TRUE) {
   raw <- dyn_abun_laplace(
-    y_flat = model$y_flat, n_sites = model$n_sites, T = model$n_seasons,
+    y_flat = model$y_flat, n_sites = model$n_sites, n_seasons = model$n_seasons,
     J = model$max_visits, K_max = model$K_max,
     X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
     X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
@@ -244,7 +244,7 @@
 .tobs_fit_dyn_abun_zip <- function(model, max_iter = 300L, tol = 1e-8,
                                    verbose = TRUE, ...) {
   is_nb <- identical(model$mixture, "zinb")
-  N <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
+  N <- model$n_sites; n_seas <- model$n_seasons; J <- model$max_visits
   K <- model$K_max
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
@@ -273,7 +273,7 @@
   # gradient / numeric Hessian over the expensive forward-HMM marginal.
   eval_dm <- function(theta) {
     ev <- tryCatch(cpp_dyn_abun_total_log_lik(
-      y_flat, N, T, J, K,
+      y_flat, N, n_seas, J, K,
       as.numeric(X_lambda %*% theta[idx$lambda]),
       as.numeric(X_p      %*% theta[idx$p]),
       as.numeric(X_omega  %*% theta[idx$omega]),
@@ -403,14 +403,14 @@
     return(NULL)
   }
 
-  T <- model$n_seasons; J <- model$max_visits; K <- model$K_max
+  n_seas <- model$n_seasons; J <- model$max_visits; K <- model$K_max
   y_flat <- as.integer(model$y_flat)
   use_nb <- identical(model$mixture %||% "poisson", "negbin")
   off <- cumsum(c(0L, p_lam, p_p, p_om, p_gm))
   i_lam <- off[1] + seq_len(p_lam); i_p  <- off[2] + seq_len(p_p)
   i_om  <- off[3] + seq_len(p_om);  i_gm <- off[4] + seq_len(p_gm)
   i_logr <- if (use_nb) off[5] + 1L else NA_integer_
-  nIv <- T - 1L
+  nIv <- n_seas - 1L
   cl <- .tobs_clamp_eta
   keep <- seq_len(N)
 
@@ -430,7 +430,7 @@
       e_gm <- cl(as.numeric(X_gamma %*% theta[i_gm]))
       elr  <- if (use_nb) as.numeric(theta[i_logr]) else 0
       Cmat <- cpp_dyn_abun_init_weights_mat(
-        y_flat, N, T, J, K, site = as.integer(seq_len(N) - 1L),
+        y_flat, N, n_seas, J, K, site = as.integer(seq_len(N) - 1L),
         eta_p = e_p, eta_omega = e_om, eta_gamma = e_gm)
       list(
         eta_re = as.numeric(X_lambda %*% theta[i_lam]),
@@ -464,7 +464,7 @@
         eta_re = as.numeric(X_p %*% theta[i_p]),
         deriv = function(rows, eta) {
           r <- cpp_dyn_abun_p_loglik(
-            y_flat, N, T, J, K, site = as.integer(rows - 1L),
+            y_flat, N, n_seas, J, K, site = as.integer(rows - 1L),
             eta_lambda = e_lam[rows], eta_p = as.numeric(eta),
             eta_omega = sub_arm(e_om, rows), eta_gamma = sub_arm(e_gm, rows),
             use_nb = use_nb, eta_logr = elr, deriv = TRUE)
@@ -476,7 +476,7 @@
           out <- matrix(0, length(rows), ncol(ETA))
           for (cc in seq_len(ncol(ETA))) {
             out[, cc] <- cpp_dyn_abun_p_loglik(
-              y_flat, N, T, J, K, site = si, eta_lambda = el,
+              y_flat, N, n_seas, J, K, site = si, eta_lambda = el,
               eta_p = as.numeric(ETA[, cc]), eta_omega = eo, eta_gamma = eg,
               use_nb = use_nb, eta_logr = elr, deriv = FALSE)$logL
           }
@@ -529,7 +529,7 @@
                      if (identical(arm, "lambda")) off_re else 0)
   eta_p_vec  <- as.numeric(X_p %*% bp) + if (identical(arm, "p")) off_re else 0
   ev <- cpp_dyn_abun_total_log_lik(
-    y_flat, N, T, J, K, eta_lambda, eta_p_vec,
+    y_flat, N, n_seas, J, K, eta_lambda, eta_p_vec,
     as.numeric(X_omega %*% bo), as.numeric(X_gamma %*% bg),
     use_nb = use_nb, eta_logr = if (use_nb) log_r_ref else 0)
 
@@ -578,7 +578,7 @@
 
   warm <- tryCatch(
     dyn_abun_laplace(
-      y_flat = model$y_flat, n_sites = model$n_sites, T = model$n_seasons,
+      y_flat = model$y_flat, n_sites = model$n_sites, n_seasons = model$n_seasons,
       J = model$max_visits, K_max = model$K_max,
       X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
       X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
@@ -650,7 +650,7 @@
 #'
 #' @param y_flat Integer vector, flattened detection counts (site-major, then
 #'   season, then visit; `-1` marks a missing visit).
-#' @param n_sites,T,J Sites, primary seasons, secondary visits per season.
+#' @param n_sites,n_seasons,J Sites, primary seasons, secondary visits per season.
 #' @param K_max Abundance-state truncation (states `0..K_max`).
 #' @param X_lambda,X_p,X_omega,X_gamma Numeric `[n_sites x p_arm]` design matrices.
 #' @param mixture Initial-abundance distribution: `"poisson"` (default) or
@@ -670,7 +670,7 @@
 #'   repeated counts of an open metapopulation. *Biometrics* 67, 577-587.
 #'
 #' @keywords internal
-dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
+dyn_abun_laplace <- function(y_flat, n_sites, n_seasons, J, K_max,
                              X_lambda, X_p, X_omega, X_gamma,
                              mixture = "poisson", log_r_init = NULL,
                              max_iter = 300L, tol = 1e-8, verbose = FALSE) {
@@ -688,7 +688,7 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
 
   eval_cpp <- function(theta) {
     cpp_dyn_abun_total_log_lik(
-      y_flat, n_sites, T, J, K_max,
+      y_flat, n_sites, n_seasons, J, K_max,
       as.numeric(X_lambda %*% theta[idx$lambda]),
       as.numeric(X_p      %*% theta[idx$p]),
       as.numeric(X_omega  %*% theta[idx$omega]),
@@ -712,7 +712,7 @@ dyn_abun_laplace <- function(y_flat, n_sites, T, J, K_max,
   # overdispersion) unless overridden.
   J0 <- J; first_counts <- numeric(n_sites)
   for (i in seq_len(n_sites)) {
-    seg <- y_flat[((i - 1L) * T * J0) + seq_len(J0)]      # season 1 visits
+    seg <- y_flat[((i - 1L) * n_seasons * J0) + seq_len(J0)]      # season 1 visits
     seg <- seg[seg >= 0]
     first_counts[i] <- if (length(seg)) max(seg) else 0
   }
@@ -857,7 +857,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   model <- object$model; means <- object$means
   p <- vapply(model$process_info, function(pp) pp$p, integer(1))
   off <- cumsum(c(0L, p))
-  T <- model$n_seasons; n_sites <- model$n_sites; nIv <- T - 1L
+  n_seas <- model$n_seasons; n_sites <- model$n_sites; nIv <- n_seas - 1L
   lambda <- exp(as.vector(model$X_processes[[1]] %*% means[off[1] + seq_len(p[1])]) +
                 (.tobs_eta_offset(model, 1L) %||% 0))
   pdet   <- stats::plogis(as.vector(model$X_processes[[2]] %*% means[off[2] + seq_len(p[2])]) +
@@ -868,7 +868,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   gamma  <- .tobs_dyn_abun_arm_matrix(
     exp(as.vector(model$X_processes[[4]] %*% means[off[4] + seq_len(p[4])])),
     n_sites, nIv)
-  EN <- matrix(0, n_sites, T)
+  EN <- matrix(0, n_sites, n_seas)
   EN[, 1] <- lambda
   for (t in seq_len(nIv)) EN[, t + 1L] <- omega[, t] * EN[, t] + gamma[, t]
   list(lambda = lambda, p = pdet, omega = omega, gamma = gamma, EN = EN)
@@ -877,7 +877,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 # simulate() for dyn_abun: draw the abundance trajectory and emit counts.
 .tobs_simulate_dyn_abun <- function(object, nsim = 1) {
   model <- object$model; draws <- object$draws; n_draws <- nrow(draws)
-  n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
+  n_sites <- model$n_sites; n_seas <- model$n_seasons; J <- model$max_visits
   is_nb <- identical(object$mixture %||% "poisson", "negbin")
   r_disp <- object$dispersion$r %||% NA_real_
   # lambda / p are site-level arms; omega / gamma are interval-level, and their
@@ -891,11 +891,11 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   ab <- .tobs_sim_arm_block(model, draws, 4L)
   p <- ab$p
   res <- cpp_simulate_dyn_abun(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],
-    ab$draws, n_sites, T, J,
+    ab$draws, n_sites, n_seas, J,
     p[1], p[2], p[3], p[4], is_nb,
     if (is_nb && is.finite(r_disp)) as.numeric(r_disp) else NA_real_,
     as.integer(nsim))
-  lapply(seq_len(nsim), function(s) array(res[, , , s], dim = c(n_sites, J, T)))
+  lapply(seq_len(nsim), function(s) array(res[, , , s], dim = c(n_sites, J, n_seas)))
 }
 
 # residuals() for dyn_abun, on the marginal expected count mu_itj = E[N_t] * p.
@@ -904,7 +904,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   type  <- match.arg(type)
   fitv  <- .tobs_fitted_dyn_abun(object)
   model <- object$model
-  T <- model$n_seasons; J <- model$max_visits
+  n_seas <- model$n_seasons; J <- model$max_visits
   mu_t <- fitv$EN * fitv$p                       # [n_sites x T]
   y <- model$y                                   # [n_sites x J x T]
 
@@ -931,9 +931,9 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
     mu_t
   } else {
     lam <- fitv$lambda
-    VN  <- matrix(0, model$n_sites, T)
+    VN  <- matrix(0, model$n_sites, n_seas)
     VN[, 1] <- lam + lam^2 / r_size
-    for (t in seq_len(T - 1L)) {
+    for (t in seq_len(n_seas - 1L)) {
       om <- fitv$omega[, t]
       VN[, t + 1L] <- om^2 * VN[, t] + om * (1 - om) * fitv$EN[, t] +
                       fitv$gamma[, t]
@@ -942,7 +942,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   }
 
   out <- array(NA_real_, dim = dim(y))
-  for (t in seq_len(T)) {
+  for (t in seq_len(n_seas)) {
     mu <- pmax(matrix(mu_t[, t], model$n_sites, J), 1e-10)
     yt <- y[, , t]
     out[, , t] <- switch(type,
@@ -982,7 +982,7 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #'
 #' Latent `N_1 ~ Poisson(lambda)`; for `t >= 2`, `N_t = Binomial(N_(t-1),
 #' omega_{t-1}) + Poisson(gamma_{t-1})`; observed via `Binomial(N_t, p)` over `J`
-#' secondary visits in each of `T` primary seasons. Returns a 3D array `N x J x T`
+#' secondary visits in each of `n.seasons` primary seasons. Returns a 3D array `N x J x n.seasons`
 #' suitable for [tobs()] with [dyn_abun()].
 #'
 #' Survival and recruitment are constant across seasons by default. Supplying
@@ -990,11 +990,11 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #' depend on a per-(site, interval) season covariate `z`: `omega_{i,t} =
 #' plogis(beta_omega[1] + beta_omega[2] * z_{i,t})`, `gamma_{i,t} =
 #' exp(beta_gamma[1] + beta_gamma[2] * z_{i,t})`. The covariate is returned as a
-#' `[N x (T-1)]` matrix column `season_cov` of `data`, ready for
+#' `[N x (n.seasons-1)]` matrix column `season_cov` of `data`, ready for
 #' `omega = ~ season_cov`.
 #'
 #' @param N Number of sites (default 150).
-#' @param T Number of primary seasons (default 4).
+#' @param n.seasons Number of primary seasons (default 4).
 #' @param J Number of secondary visits per season (default 3).
 #' @param n.abund.covs Number of initial-abundance covariates (default 1).
 #' @param beta.lambda Initial-abundance coefficients (log). Default
@@ -1014,15 +1014,15 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
 #'   all its counts are zero; fit such data with `dyn_abun(mixture = "zip")` /
 #'   `"zinb"`.
 #' @param seed Optional random seed.
-#' @return A list with `y` (N x J x T count array), `data` (covariates, including
-#'   the `[N x (T-1)]` `season_cov` matrix column when a season-varying rate is
+#' @return A list with `y` (N x J x n.seasons count array), `data` (covariates, including
+#'   the `[N x (n.seasons-1)]` `season_cov` matrix column when a season-varying rate is
 #'   used), and `truth` (coefficients, per-site `lambda`, the realised
 #'   `omega` / `gamma` rates, and `r` under `"negbin"`).
 #' @examples
-#' sim <- simulate_dyn_abun(N = 40, T = 3, J = 3, seed = 1)
+#' sim <- simulate_dyn_abun(N = 40, n.seasons = 3, J = 3, seed = 1)
 #' dim(sim$y)
 #' @export
-simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n.abund.covs = 1,
+simulate_dyn_abun <- function(N = 150, n.seasons = 4, J = 3, n.abund.covs = 1,
                               beta.lambda = NULL, p = 0.5, omega = 0.6,
                               gamma = 1.0, beta.omega = NULL, beta.gamma = NULL,
                               mixture = c("poisson", "negbin"),
@@ -1035,11 +1035,11 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n.abund.covs = 1,
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   lambda <- exp(as.vector(X_lambda %*% beta.lambda))
   is_nb <- identical(mixture, "negbin")
-  nIv <- T - 1L
+  nIv <- n.seasons - 1L
 
   # Per-(site, interval) survival / recruitment. Constant rates broadcast the
   # scalar; a supplied beta_omega / beta_gamma drives the rate off a shared
-  # season covariate carried as a [N x (T-1)] matrix column of `data`.
+  # season covariate carried as a [N x (n.seasons-1)] matrix column of `data`.
   season_cov <- NULL
   if (!is.null(beta.omega) || !is.null(beta.gamma)) {
     season_cov <- matrix(stats::rnorm(N * nIv), N, nIv)
@@ -1056,13 +1056,13 @@ simulate_dyn_abun <- function(N = 150, T = 4, J = 3, n.abund.covs = 1,
   # follow the ordinary Dail-Madsen trajectory.
   struct_zero <- if (zi > 0) stats::rbinom(N, 1L, zi) == 1L else rep(FALSE, N)
 
-  y <- array(0L, dim = c(N, J, T))
-  Nmat <- matrix(0L, N, T)
+  y <- array(0L, dim = c(N, J, n.seasons))
+  Nmat <- matrix(0L, N, n.seasons)
   for (i in seq_len(N)) {
     if (struct_zero[i]) next               # all counts stay 0
     Ni <- if (is_nb) stats::rnbinom(1L, mu = lambda[i], size = r)
           else stats::rpois(1L, lambda[i])
-    for (t in seq_len(T)) {
+    for (t in seq_len(n.seasons)) {
       if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega_mat[i, t - 1L]) +
                         stats::rpois(1L, gamma_mat[i, t - 1L])
       Nmat[i, t] <- Ni

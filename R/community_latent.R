@@ -743,10 +743,10 @@
   if (is.null(g)) NULL else rep(NA_real_, length(g))
 }
 
-.tobs_latent_field_solve <- function(oracle, eta_base, Q, F, tau, W, M = NULL,
+.tobs_latent_field_solve <- function(oracle, eta_base, Q, Fm, tau, W, M = NULL,
                                      max_iter = 50L, tol = 1e-8,
                                      constrain_mean = TRUE, rankdef = 1L) {
-  Ns <- nrow(eta_base); K <- ncol(W); Nn <- nrow(F)
+  Ns <- nrow(eta_base); K <- ncol(W); Nn <- nrow(Fm)
   if (is.null(M)) M <- Matrix::Diagonal(Ns)
   Mt <- Matrix::t(M)
   build_H <- function(cw) {
@@ -767,19 +767,19 @@
   # BYM2 solve uses for its intrinsic null direction).
   safe_solve <- function(H, g) .tobs_ridge_solve(H, g)
   for (it in seq_len(max_iter)) {
-    wk <- oracle$working(eta_base + field_off_of(F))
+    wk <- oracle$working(eta_base + field_off_of(Fm))
     sc <- rowSums(wk$score); cw <- rowSums(wk$curv)
     g  <- unlist(lapply(seq_len(K), function(k)
-      as.numeric(M %*% (W[, k] * sc)) - tau[k] * as.numeric(Q %*% F[, k])))
+      as.numeric(M %*% (W[, k] * sc)) - tau[k] * as.numeric(Q %*% Fm[, k])))
     step <- safe_solve(build_H(cw), g)
     # A non-finite step is held rather than applied: adding it would poison F,
     # make `max(abs(step)) < tol` NA so the loop never breaks early, and reach
     # the tau M-step with no error and no flag. The factor Newton below guards
     # the same way.
     if (!all(is.finite(step))) break
-    F <- F + matrix(step, Nn, K)
+    Fm <- Fm + matrix(step, Nn, K)
     if (isTRUE(constrain_mean)) {
-      for (k in seq_len(K)) F[, k] <- F[, k] - mean(F[, k])
+      for (k in seq_len(K)) Fm[, k] <- Fm[, k] - mean(Fm[, k])
     }
     if (max(abs(step)) < tol) break
   }
@@ -787,7 +787,7 @@
   # tau M-step. The Laplace covariance of the field uses cov_curv when the family
   # stabilises it away from the Newton curvature (an occupancy marginal can drive
   # the curvature to ~0 at undetected sites, which would blow the covariance up).
-  eta_full <- eta_base + field_off_of(F)
+  eta_full <- eta_base + field_off_of(Fm)
   cw  <- rowSums(if (is.null(oracle$cov_curv)) oracle$working(eta_full)$curv
                  else oracle$cov_curv(eta_full))
   Hc  <- build_H(cw)
@@ -796,14 +796,14 @@
   df <- Nn - as.integer(rankdef)
   for (k in seq_len(K)) {
     idx  <- (k - 1L) * Nn + seq_len(Nn)
-    quad <- as.numeric(t(F[, k]) %*% (Q %*% F[, k])) +
+    quad <- as.numeric(t(Fm[, k]) %*% (Q %*% Fm[, k])) +
             sum(Matrix::diag(Q %*% Cov[idx, idx, drop = FALSE]))
     # Floor tau away from zero: with more field nodes than sites the data term
     # alone is rank-deficient, so a collapsing tau would leave the next Newton's
     # H singular.
     tau_new[k] <- max(df / max(quad, 1e-8), 1e-6)
   }
-  list(F = F, tau = tau_new)
+  list(Fm = Fm, tau = tau_new)
 }
 
 
@@ -811,12 +811,12 @@
 # pick the proper-CAR rho over a small grid: the family data log-likelihood plus
 # the field GMRF prior (0.5 (df log tau + log|Q|) - 0.5 tau f'Q f) minus the
 # Laplace normaliser 0.5 log|H|. `logdetQ` is log|Q(rho)| (per unit tau).
-.tobs_latent_field_marginal <- function(oracle, eta_base, Q, F, tau, W, logdetQ,
+.tobs_latent_field_marginal <- function(oracle, eta_base, Q, Fm, tau, W, logdetQ,
                                         rankdef = 0L, M = NULL) {
-  Ns <- nrow(eta_base); K <- ncol(W); Nn <- nrow(F)
+  Ns <- nrow(eta_base); K <- ncol(W); Nn <- nrow(Fm)
   if (is.null(M)) M <- Matrix::Diagonal(Ns)
   Mt <- Matrix::t(M)
-  field_off <- rowSums(W * as.matrix(Mt %*% F))
+  field_off <- rowSums(W * as.matrix(Mt %*% Fm))
   eta_full  <- eta_base + field_off
   ll  <- oracle$data_ll(eta_full)
   cw  <- rowSums(oracle$working(eta_full)$curv)
@@ -831,7 +831,7 @@
   prior <- 0
   for (k in seq_len(K)) {
     prior <- prior + 0.5 * (df * log(tau[k]) + logdetQ) -
-             0.5 * tau[k] * as.numeric(t(F[, k]) %*% (Q %*% F[, k]))
+             0.5 * tau[k] * as.numeric(t(Fm[, k]) %*% (Q %*% Fm[, k]))
   }
   ll + prior - 0.5 * as.numeric(Matrix::determinant(H, logarithm = TRUE)$modulus)
 }
@@ -1297,7 +1297,7 @@
                                      geom$W, M = geom$M,
                                      constrain_mean = constrain_mean,
                                      rankdef = rankdef)
-      delta <- max(delta, max(abs(fu$F - Ffield))); Ffield <- fu$F; tau <- fu$tau
+      delta <- max(delta, max(abs(fu$Fm - Ffield))); Ffield <- fu$Fm; tau <- fu$tau
     }
     # (c) factor update (its base holds the coefficients + the field part).
     if (has_factor) {
@@ -1420,13 +1420,13 @@
         fr <- .tobs_latent_field_solve(oracle, base_f, Qr, Ffield, tau, geom$W,
                                        M = geom$M, constrain_mean = TRUE,
                                        rankdef = 1L)
-        mm <- .tobs_latent_field_marginal(oracle, base_f, Qr, fr$F, fr$tau,
+        mm <- .tobs_latent_field_marginal(oracle, base_f, Qr, fr$Fm, fr$tau,
                                           geom$W, ld, rankdef = 1L, M = geom$M)
         if (is.finite(mm) && mm > best$m) {
-          best <- list(m = mm, rho = rr, F = fr$F, tau = fr$tau)
+          best <- list(m = mm, rho = rr, Fm = fr$Fm, tau = fr$tau)
         }
       }
-      if (is.finite(best$m)) { rho <- best$rho; Ffield <- best$F; tau <- best$tau }
+      if (is.finite(best$m)) { rho <- best$rho; Ffield <- best$Fm; tau <- best$tau }
     }
     if (is_spde) {
       # Pick the Matern range (kappa) on the grid by the field marginal. Q(kappa)
@@ -1442,14 +1442,14 @@
                                    rankdef = 0L),
           error = function(e) NULL)
         if (is.null(fr)) next
-        mm <- .tobs_latent_field_marginal(oracle, base_f, Qk, fr$F, fr$tau,
+        mm <- .tobs_latent_field_marginal(oracle, base_f, Qk, fr$Fm, fr$tau,
                                           geom$W, ld, rankdef = 0L, M = geom$M)
         if (is.finite(mm) && mm > best$m) {
-          best <- list(m = mm, kappa = kk, F = fr$F, tau = fr$tau)
+          best <- list(m = mm, kappa = kk, Fm = fr$Fm, tau = fr$tau)
         }
       }
       if (is.finite(best$m)) {
-        kappa <- best$kappa; Ffield <- best$F; tau <- best$tau; Q <- Qk
+        kappa <- best$kappa; Ffield <- best$Fm; tau <- best$tau; Q <- Qk
       }
     }
     if (is_bym2) {
@@ -1487,7 +1487,7 @@
          factor.starts = if (has_factor) factor.starts else NA_integer_,
          n.quad        = if (has_factor) n.quad else NA_integer_),
        field = if (!has_field) NULL else list(
-         F = Ffield, tau = tau, type = geom$type, rho = rho, kappa = kappa,
+         Fm = Ffield, tau = tau, type = geom$type, rho = rho, kappa = kappa,
          site_off = cur_site_off(),
          bym2 = if (is_bym2) list(sigma = bym_sigma, rho = bym_rho,
                                   scale = bym_scale, phi = bym_phi) else NULL),
@@ -1547,7 +1547,7 @@
   labels <- res$geom$field_labels
   # spatial_field is the per-node intercept field; the offset slot is the
   # per-site eta contribution (the node field mapped through the site -> cell map).
-  fit$spatial_field <- as.numeric(fd$F[, 1L])
+  fit$spatial_field <- as.numeric(fd$Fm[, 1L])
   fit$model[[offset_slot]] <- fd$site_off
   sigma_field <- 1 / sqrt(fd$tau)
   fit$spatial_hyper <- list(type = fd$type, tau = fd$tau, sigma = sigma_field,
@@ -1564,7 +1564,7 @@
   fit$means <- c(fit$means,
                  stats::setNames(sigma_field, paste0("sigma_field_", labels)))
   if (res$geom$K > 1L) {
-    fit$trend_fields <- lapply(2:res$geom$K, function(k) as.numeric(fd$F[, k]))
+    fit$trend_fields <- lapply(2:res$geom$K, function(k) as.numeric(fd$Fm[, k]))
     names(fit$trend_fields) <- labels[-1L]
     fit$trend_field <- fit$trend_fields[[1L]]
   }

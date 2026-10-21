@@ -113,7 +113,7 @@ test_that("dyn_abun NUTS coefficient 95% CIs cover at the nominal rate", {
   truth <- c(beta_lambda, qlogis(0.5), qlogis(0.6), log(1.2))
   covered <- logical(0)
   for (s in seq_len(20L)) {
-    sim <- simulate_dyn_abun(N = 70, T = 3, J = 3, n.abund.covs = 1,
+    sim <- simulate_dyn_abun(N = 70, n.seasons = 3, J = 3, n.abund.covs = 1,
                              beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 600 + s)
     fit <- tryCatch(tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 26),

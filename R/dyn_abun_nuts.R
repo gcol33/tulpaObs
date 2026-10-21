@@ -34,13 +34,13 @@
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   X_omega  <- model$X_processes[[3]]; X_gamma <- model$X_processes[[4]]
   y_flat <- as.integer(model$y_flat)
-  n_sites <- model$n_sites; T <- model$n_seasons; J <- model$max_visits
+  n_sites <- model$n_sites; n_seas <- model$n_seasons; J <- model$max_visits
   K <- model$K_max
   use_nb <- identical(model$mixture %||% "poisson", "negbin")
   # eta_logr defaults to 0; the caller passes the current log r under NB.
   eval_beta <- function(beta_lambda, beta_p, beta_omega, beta_gamma, eta_logr = 0) {
     cpp_dyn_abun_total_log_lik(
-      y_flat, n_sites, T, J, K,
+      y_flat, n_sites, n_seas, J, K,
       as.numeric(X_lambda %*% beta_lambda), as.numeric(X_p %*% beta_p),
       as.numeric(X_omega %*% beta_omega), as.numeric(X_gamma %*% beta_gamma),
       use_nb = use_nb, eta_logr = as.numeric(eta_logr))
@@ -104,14 +104,14 @@
                                     re_groups = n_re_groups)
 
   warm <- dyn_abun_laplace(
-    y_flat = model$y_flat, n_sites = model$n_sites, T = model$n_seasons,
+    y_flat = model$y_flat, n_sites = model$n_sites, n_seasons = model$n_seasons,
     J = model$max_visits, K_max = model$K_max,
     X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
     mixture = model$mixture %||% "poisson", verbose = FALSE)
   run <- .tobs_count_nuts_front_door(
     cpp_dyn_abun_nuts,
     spec = list(y = as.integer(model$y_flat), n_sites = model$n_sites,
-                T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+                n_seasons = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                 X_lambda = X_lambda, X_p = X_p, X_omega = X_omega, X_gamma = X_gamma,
                 use_nb = use_nb),
     priors = list(sigma_beta = sigma.beta, sigma_logr = sigma.logr),

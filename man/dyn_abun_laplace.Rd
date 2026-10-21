@@ -7,7 +7,7 @@
 dyn_abun_laplace(
   y_flat,
   n_sites,
-  T,
+  n_seasons,
   J,
   K_max,
   X_lambda,
@@ -25,7 +25,7 @@ dyn_abun_laplace(
 \item{y_flat}{Integer vector, flattened detection counts (site-major, then
 season, then visit; \code{-1} marks a missing visit).}
 
-\item{n_sites, T, J}{Sites, primary seasons, secondary visits per season.}
+\item{n_sites, n_seasons, J}{Sites, primary seasons, secondary visits per season.}
 
 \item{K_max}{Abundance-state truncation (states \verb{0..K_max}).}
 

@@ -2,6 +2,9 @@
 
 ## 0.6.2
 
+* `simulate_dyn_abun()`: the number of primary seasons is `n.seasons`
+  (was `T`), matching `simulate_dyn_occu()`.
+
 * The `K.max` boundary warning on the areal count fits (ICAR / proper-CAR /
   BYM2 / SPDE N-mixture, areal removal) weights each outer-grid node's
   boundary mass by its grid weight, so a node the posterior gives ~zero

@@ -54,7 +54,7 @@ inline DynNutsModel dyn_nuts_build(const Rcpp::List& spec) {
     m.X_omega  = Rcpp::as<Rcpp::NumericMatrix>(spec["X_omega"]);
     m.X_gamma  = Rcpp::as<Rcpp::NumericMatrix>(spec["X_gamma"]);
     m.n_sites = Rcpp::as<int>(spec["n_sites"]);
-    m.T = Rcpp::as<int>(spec["T"]);
+    m.T = Rcpp::as<int>(spec["n_seasons"]);
     m.J = Rcpp::as<int>(spec["J"]);
     m.K = Rcpp::as<int>(spec["K_max"]);
     if (spec.containsElementNamed("use_nb")) m.use_nb = Rcpp::as<bool>(spec["use_nb"]);

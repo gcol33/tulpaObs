@@ -10,7 +10,7 @@
 
 # Independent R forward recursion for one site (the correctness anchor).
 dm_fwd_R <- function(y_mat, lambda, p, omega, gamma, K) {
-  S <- K + 1; n <- 0:K; T <- nrow(y_mat)
+  S <- K + 1; n <- 0:K; n_seas <- nrow(y_mat)
   obs <- function(t) {
     yt <- y_mat[t, ]; yt <- yt[!is.na(yt)]
     vapply(n, function(nn) if (!length(yt)) 1 else prod(dbinom(yt, nn, p)), numeric(1))
@@ -21,7 +21,7 @@ dm_fwd_R <- function(y_mat, lambda, p, omega, gamma, K) {
     tr[nn + 1, s + g + 1] <- tr[nn + 1, s + g + 1] + dbinom(s, nn, omega) * dpois(g, gamma)
   }
   a <- dpois(n, lambda) * obs(1); ll <- log(sum(a)); a <- a / sum(a)
-  for (t in 2:T) { pre <- as.vector(t(tr) %*% a); a <- pre * obs(t); ll <- ll + log(sum(a)); a <- a / sum(a) }
+  for (t in 2:n_seas) { pre <- as.vector(t(tr) %*% a); a <- pre * obs(t); ll <- ll + log(sum(a)); a <- a / sum(a) }
   ll
 }
 
@@ -37,20 +37,20 @@ test_that("the C++ forward marginal matches an independent R forward recursion",
   set.seed(1)
   K <- 40
   for (rep in 1:6) {
-    T <- sample(2:4, 1); J <- sample(2:3, 1)
+    n_seas <- sample(2:4, 1); J <- sample(2:3, 1)
     lambda <- runif(1, 2, 8); p <- runif(1, 0.3, 0.7)
     omega <- runif(1, 0.4, 0.8); gamma <- runif(1, 0.3, 2)
-    ymat <- matrix(rpois(T * J, lambda * p), T, J)
+    ymat <- matrix(rpois(n_seas * J, lambda * p), n_seas, J)
     yflat <- as.integer(t(ymat))                  # j + J*t layout
     out <- tulpaObs:::cpp_dyn_abun_total_log_lik(
-      yflat, 1L, T, J, K, log(lambda), qlogis(p), qlogis(omega), log(gamma))
+      yflat, 1L, n_seas, J, K, log(lambda), qlogis(p), qlogis(omega), log(gamma))
     expect_equal(out$log_lik, dm_fwd_R(ymat, lambda, p, omega, gamma, K),
                  tolerance = 1e-9, info = paste("rep", rep))
   }
 })
 
 test_that("analytic gradient matches finite differences (forward-mode diff)", {
-  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 50, n.seasons = 3, J = 3, n.abund.covs = 1,
                            beta.lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
                            gamma = 1, seed = 2)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y, K_max = 30)
@@ -67,13 +67,13 @@ test_that("analytic gradient matches finite differences (forward-mode diff)", {
 })
 
 test_that("C++ dyn_abun NUTS log-posterior matches the R oracle byte-for-byte", {
-  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n.abund.covs = 1, seed = 12)
+  sim <- simulate_dyn_abun(N = 40, n.seasons = 3, J = 2, n.abund.covs = 1, seed = 12)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y, K_max = 25)
   lay  <- tulpaObs:::.tobs_dyn_abun_nuts_layout(2L, 1L, 1L, 1L)
   marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
   theta <- c(log(5), 0.2, 0.1, qlogis(0.6), log(0.8))
   spec <- list(y = as.integer(model$y_flat), n_sites = model$n_sites,
-               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+               n_seasons = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
                X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]])
   r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10)
@@ -86,7 +86,7 @@ test_that("dyn_abun Laplace recovers truth", {
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(6), 0.4)
-  sim <- simulate_dyn_abun(N = 250, T = 4, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 250, n.seasons = 4, J = 3, n.abund.covs = 1,
                            beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 11)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 35),
@@ -112,7 +112,7 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
   n_seed <- 20L
   covered <- matrix(NA, n_seed, length(truth))
   for (s in seq_len(n_seed)) {
-    sim <- simulate_dyn_abun(N = 150, T = 3, J = 3, n.abund.covs = 1,
+    sim <- simulate_dyn_abun(N = 150, n.seasons = 3, J = 3, n.abund.covs = 1,
                              beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 500 + s)
     fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 30),
@@ -129,7 +129,7 @@ test_that("95% CIs cover the truth at nominal rate across seeds", {
 test_that("S3 surface works for dyn_abun fits", {
   skip_on_cran()
   skip_if_fast()
-  sim <- simulate_dyn_abun(N = 120, T = 3, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 120, n.seasons = 3, J = 3, n.abund.covs = 1,
                            beta.lambda = c(log(6), 0.4), seed = 3)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 28),
               detection = ~ 1, y = sim$y, method = "laplace",
@@ -159,7 +159,7 @@ test_that("S3 surface works for dyn_abun fits", {
 })
 
 test_that("dyn_abun rejects single-season data", {
-  sim <- simulate_dyn_abun(N = 20, T = 4, J = 3, seed = 5)
+  sim <- simulate_dyn_abun(N = 20, n.seasons = 4, J = 3, seed = 5)
   y1 <- sim$y[, , 1, drop = FALSE]
   expect_error(
     tobs(formula = ~ 1, data = sim$data, family = dyn_abun(), detection = ~ 1,
@@ -168,7 +168,7 @@ test_that("dyn_abun rejects single-season data", {
 })
 
 test_that("dyn_abun NB analytic gradient (incl log_r) matches finite differences", {
-  sim <- simulate_dyn_abun(N = 50, T = 3, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 50, n.seasons = 3, J = 3, n.abund.covs = 1,
                            beta.lambda = c(log(5), 0.3), p = 0.5, omega = 0.6,
                            gamma = 1, mixture = "negbin", r = 2, seed = 2)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
@@ -187,7 +187,7 @@ test_that("dyn_abun NB analytic gradient (incl log_r) matches finite differences
 })
 
 test_that("C++ dyn_abun NB NUTS log-posterior matches the R oracle byte-for-byte", {
-  sim <- simulate_dyn_abun(N = 40, T = 3, J = 2, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 40, n.seasons = 3, J = 2, n.abund.covs = 1,
                            mixture = "negbin", r = 2.5, seed = 12)
   model <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
                                            mixture = "negbin", K_max = 25)
@@ -195,7 +195,7 @@ test_that("C++ dyn_abun NB NUTS log-posterior matches the R oracle byte-for-byte
   marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
   theta <- c(log(5), 0.2, 0.1, qlogis(0.6), log(0.8), log(2.5))
   spec <- list(y = as.integer(model$y_flat), n_sites = model$n_sites,
-               T = model$n_seasons, J = model$max_visits, K_max = model$K_max,
+               n_seasons = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
                X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
                use_nb = TRUE)
@@ -215,7 +215,7 @@ test_that("dyn_abun negbin Laplace recovers truth (incl dispersion)", {
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(7), 0.4)
-  sim <- simulate_dyn_abun(N = 300, T = 4, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 300, n.seasons = 4, J = 3, n.abund.covs = 1,
                            beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, mixture = "negbin", r = 3, seed = 21)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
@@ -237,7 +237,7 @@ test_that("dyn_abun NUTS recovers truth and scores WAIC", {
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(6), 0.4)
-  sim <- simulate_dyn_abun(N = 70, T = 3, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 70, n.seasons = 3, J = 3, n.abund.covs = 1,
                            beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 31)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 26),
@@ -258,7 +258,7 @@ test_that("dyn_abun negbin NUTS recovers truth with log_r on the sigma.logr prio
   skip_on_cran()
   skip_if_fast()
   beta_lambda <- c(log(6), 0.4); r_true <- 3
-  sim <- simulate_dyn_abun(N = 80, T = 3, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 80, n.seasons = 3, J = 3, n.abund.covs = 1,
                            beta.lambda = beta_lambda, p = 0.5, omega = 0.6,
                            gamma = 1.2, mixture = "negbin", r = r_true, seed = 2)
   fit <- tobs(formula = ~ abund_cov1, data = sim$data,
@@ -279,17 +279,17 @@ test_that("dyn_abun negbin NUTS recovers truth with log_r on the sigma.logr prio
 # --- NUTS + random effect ------------------------------------
 
 # Dail-Madsen data with a per-site intercept RE on the initial-abundance arm.
-sim_dyn_abun_lambda_re <- function(N, T, J, ngrp, beta_lambda, p, omega, gamma,
+sim_dyn_abun_lambda_re <- function(N, n_seas, J, ngrp, beta_lambda, p, omega, gamma,
                                    sigma_b, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   grp <- rep(seq_len(ngrp), length.out = N)
   b   <- stats::rnorm(ngrp, sd = sigma_b)
   data <- data.frame(x1 = stats::rnorm(N), g = factor(grp))
   lambda <- exp(as.numeric(model.matrix(~ x1, data) %*% beta_lambda) + b[grp])
-  y <- array(0L, dim = c(N, J, T))
+  y <- array(0L, dim = c(N, J, n_seas))
   for (i in seq_len(N)) {
     Ni <- stats::rpois(1L, lambda[i])
-    for (t in seq_len(T)) {
+    for (t in seq_len(n_seas)) {
       if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega) + stats::rpois(1L, gamma)
       y[i, , t] <- stats::rbinom(J, Ni, p)
     }
@@ -300,7 +300,7 @@ sim_dyn_abun_lambda_re <- function(N, T, J, ngrp, beta_lambda, p, omega, gamma,
 test_that("dyn_abun() NUTS samples a single initial-abundance RE and recovers it", {
   skip_on_cran()
   skip_if_fast()
-  s <- sim_dyn_abun_lambda_re(N = 60, T = 3, J = 3, ngrp = 6,
+  s <- sim_dyn_abun_lambda_re(N = 60, n_seas = 3, J = 3, ngrp = 6,
                               beta_lambda = c(log(6), 0.3), p = 0.5, omega = 0.6,
                               gamma = 1, sigma_b = 0.5, seed = 9)
   fit <- tobs(formula = ~ x1 + (1 | g), data = s$data,
@@ -328,7 +328,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE"
   # at small per-group n; the tolerance reflects that.
   est_sigma <- numeric(3); est_b0 <- numeric(3); est_b1 <- numeric(3)
   for (k in seq_len(3)) {
-    s <- sim_dyn_abun_lambda_re(N = 120, T = 3, J = 3, ngrp = 15,
+    s <- sim_dyn_abun_lambda_re(N = 120, n_seas = 3, J = 3, ngrp = 15,
                                 beta_lambda = c(log(4), 0.4), p = 0.5, omega = 0.5,
                                 gamma = 0.5, sigma_b = 0.6, seed = 20 + k)
     fit <- tobs(formula = ~ x1 + (1 | g), data = s$data,
@@ -356,7 +356,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped initial-abundance RE"
 # --- detection-arm random effect ----------------------------
 
 # Dail-Madsen data with a per-site intercept RE on the detection (p) arm.
-sim_dyn_abun_p_re <- function(N, T, J, ngrp, beta_lambda, beta_p, omega, gamma,
+sim_dyn_abun_p_re <- function(N, n_seas, J, ngrp, beta_lambda, beta_p, omega, gamma,
                               sigma_b, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
   grp <- rep(seq_len(ngrp), length.out = N)
@@ -364,10 +364,10 @@ sim_dyn_abun_p_re <- function(N, T, J, ngrp, beta_lambda, beta_p, omega, gamma,
   data <- data.frame(x1 = stats::rnorm(N), g = factor(grp))
   lambda <- exp(as.numeric(model.matrix(~ x1, data) %*% beta_lambda))
   pdet   <- stats::plogis(beta_p + b[grp])
-  y <- array(0L, dim = c(N, J, T))
+  y <- array(0L, dim = c(N, J, n_seas))
   for (i in seq_len(N)) {
     Ni <- stats::rpois(1L, lambda[i])
-    for (t in seq_len(T)) {
+    for (t in seq_len(n_seas)) {
       if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega) + stats::rpois(1L, gamma)
       y[i, , t] <- stats::rbinom(J, Ni, pdet[i])
     }
@@ -386,7 +386,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped detection RE", {
   # recovers sigma_p with little attenuation.
   est_sigma <- numeric(3); est_p0 <- numeric(3)
   for (k in seq_len(3)) {
-    s <- sim_dyn_abun_p_re(N = 100, T = 3, J = 4, ngrp = 12,
+    s <- sim_dyn_abun_p_re(N = 100, n_seas = 3, J = 4, ngrp = 12,
                            beta_lambda = c(log(8), 0.3), beta_p = stats::qlogis(0.5),
                            omega = 0.6, gamma = 1, sigma_b = 0.6, seed = 40 + k)
     fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K.max = 45),
@@ -411,7 +411,7 @@ test_that("dyn_abun() Laplace AGHQ recovers a site-grouped detection RE", {
 test_that("dyn_abun() NUTS samples a single detection RE and recovers it", {
   skip_on_cran()
   skip_if_fast()
-  s <- sim_dyn_abun_p_re(N = 60, T = 3, J = 3, ngrp = 6,
+  s <- sim_dyn_abun_p_re(N = 60, n_seas = 3, J = 3, ngrp = 6,
                          beta_lambda = c(log(6), 0.3), beta_p = stats::qlogis(0.5),
                          omega = 0.6, gamma = 1, sigma_b = 0.5, seed = 14)
   fit <- tobs(formula = ~ x1, data = s$data, family = dyn_abun(K.max = 28),
@@ -428,7 +428,7 @@ test_that("dyn_abun() NUTS samples a single detection RE and recovers it", {
 })
 
 test_that("dyn_abun() RE is one arm at a time (lambda OR p, not both)", {
-  s <- sim_dyn_abun_p_re(N = 25, T = 3, J = 2, ngrp = 4,
+  s <- sim_dyn_abun_p_re(N = 25, n_seas = 3, J = 2, ngrp = 4,
                          beta_lambda = c(log(5), 0.2), beta_p = stats::qlogis(0.5),
                          omega = 0.6, gamma = 1, sigma_b = 0.4, seed = 2)
   # A random effect on BOTH the initial-abundance and detection arms in one fit is
@@ -643,7 +643,7 @@ test_that("dyn_abun() NUTS + temporal + areal errors (temporal-only under NUTS, 
 })
 
 test_that("dyn_abun() pairs a field with nested_laplace and zip rejects svc() (#412)", {
-  sim <- simulate_dyn_abun(N = 25, T = 2, J = 3, n.abund.covs = 1,
+  sim <- simulate_dyn_abun(N = 25, n.seasons = 2, J = 3, n.abund.covs = 1,
                            beta.lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
                            gamma = 1.2, seed = 14)
   adj <- matrix(0L, 25, 25)

@@ -45,7 +45,7 @@ test_that("count GOF tests run on removal / distance / dyn_abun", {
   expect_gof(test_dispersion(fitd, n.samples = 80))
   expect_gof(test_outliers(fitd, n.samples = 80))
 
-  simda <- simulate_dyn_abun(N = 100, T = 4, J = 3, n.abund.covs = 1, seed = 9)
+  simda <- simulate_dyn_abun(N = 100, n.seasons = 4, J = 3, n.abund.covs = 1, seed = 9)
   fitda <- tobs(~ abund_cov1, data = simda$data, family = dyn_abun(K.max = 35),
                 detection = ~ 1, y = simda$y, method = "laplace",
                 control = list(verbose = FALSE))
