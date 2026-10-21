@@ -10,9 +10,11 @@
 #   Sys.setenv(TULPAOBS_FAST = "1"); devtools::test()   # fast: structure only
 #   Sys.unsetenv("TULPAOBS_FAST");   devtools::test()   # full: + recovery loops
 #
-# The default (variable unset) runs everything, so CRAN and CI always see the
-# full recovery suite. Place skip_if_fast() as the first line of any test_that()
-# block whose cost is a multi-seed fitting loop or a NUTS sample.
+# The default (variable unset) runs everything. Place skip_if_fast() as the
+# first line of any test_that() block whose cost is a multi-seed fitting loop or
+# a NUTS sample. CRAN (NOT_CRAN unset) runs only the files in
+# tests/cran-files.txt, chosen by .github/scripts/cran-test-subset.R;
+# TULPAOBS_CRAN_ALL=1 runs every file under the CRAN gating.
 #
 # RELEASE GATE. A release verifies what it changed; the schedule verifies
 # everything. Green before tagging:

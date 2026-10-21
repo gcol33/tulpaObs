@@ -88,6 +88,9 @@ jobs:
       # was still inside `checking tests` at the 120 minute cap, against 331s
       # for the same tier on r-universe.
       NOT_CRAN: 'false'
+      # CRAN itself runs only the files in tests/cran-files.txt; this job runs
+      # every file under the same skip_on_cran() gating.
+      TULPAOBS_CRAN_ALL: '1'
       TULPAOBS_PROGRESS: '0'
       # Deterministic, for the same reason R-CMD-check.yaml pins it off on
       # push: the callr worker pool is where #289 lands.
