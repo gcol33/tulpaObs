@@ -32,7 +32,6 @@ the first submission was under review; NEWS.md lists the changes.
 
 ## Test environments
 
-* local: Windows 11, R 4.6.1, `R CMD check --as-cran`
 * win-builder: R-devel
 * GitHub Actions: ubuntu-latest (R-release) on every push; a CRAN-like job
   without `NOT_CRAN` on x86_64 and aarch64

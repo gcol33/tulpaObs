@@ -3,7 +3,7 @@
 # the INSTALLED package, and files are taken cheapest first until the budget is
 # spent, so the check's test step stays inside CRAN's time limit.
 #
-#   Rscript .github/scripts/cran-test-subset.R [--budget=40] [--timings=file.csv]
+#   Rscript .github/scripts/cran-test-subset.R [--budget=15] [--timings=file.csv]
 #
 # --timings reuses a CSV with columns file,elapsed instead of measuring.
 # The budget is local seconds; win-builder r-devel ran this suite 1.4x slower.
@@ -13,7 +13,7 @@ opt <- function(name, default) {
   hit <- grep(paste0("^--", name, "="), args, value = TRUE)
   if (length(hit)) sub(paste0("^--", name, "="), "", hit[1]) else default
 }
-budget <- as.numeric(opt("budget", "40"))
+budget <- as.numeric(opt("budget", "15"))
 timings <- opt("timings", NA_character_)
 
 if (is.na(timings)) {
