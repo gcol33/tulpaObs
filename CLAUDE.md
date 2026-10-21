@@ -266,7 +266,8 @@ killed/partial build needs `pkgbuild::clean_dll()`.
   set (#313), x86_64 + aarch64 (#314). Sets `TULPAOBS_CRAN_ALL=1`: without it
   `tests/testthat.R` runs only `tests/cran-files.txt` whenever `NOT_CRAN` is
   unset (CRAN's 600 s check limit; 0.6.2 hit 735 s). Regenerate the list with
-  `.github/scripts/cran-test-subset.R` (cheapest files first, 15 s local
+  `.github/scripts/cran-test-subset.R` (most assertions per second first,
+  files asserting nothing on CRAN dropped, 15 s local
   budget) when the suite changes.
 - `release-gate.yaml` -- `v*` tag push + dispatch; every DESCRIPTION engine floor
   served (#180).
