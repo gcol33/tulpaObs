@@ -98,18 +98,6 @@ One fitter; the model is chosen by the family object.
   : Laplace fit of the removal-sampling abundance model
 - [`double_observer()`](https://gillescolling.com/tulpaObs/reference/double_observer.md)
   : Double-observer abundance family
-- [`nmix_laplace()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace.md)
-  : Laplace fit of the Royle (2004) N-mixture model
-- [`nmix_laplace_bym2()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_bym2.md)
-  : BYM2 Royle (2004) N-mixture model via nested Laplace
-- [`nmix_laplace_car_proper()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_car_proper.md)
-  : Proper CAR Royle (2004) N-mixture model via nested Laplace
-- [`nmix_laplace_icar()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_icar.md)
-  : Spatial Royle (2004) N-mixture model via nested Laplace
-- [`nmix_laplace_re()`](https://gillescolling.com/tulpaObs/reference/nmix_laplace_re.md)
-  : Community / multispecies N-mixture by Laplace
-- [`nmix_site_marginal()`](https://gillescolling.com/tulpaObs/reference/nmix_site_marginal.md)
-  : Per-site N-mixture marginal as a composable random-effect callback
 
 ## Cover families
 
@@ -146,6 +134,9 @@ S3 methods on `tobs_fit`.
   : Per-species coefficients from a batched occu_cover fit.
 - [`print(`*`<tobs_batch>`*`)`](https://gillescolling.com/tulpaObs/reference/print.tobs_batch.md)
   : Print a batched multi-response occu_cover fit.
+- [`vcov(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_fit_intervals.md)
+  [`confint(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tobs_fit_intervals.md)
+  : Fixed-effect covariance and credible intervals for tobs_fit
 - [`tidy(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/tidy.tobs_fit.md)
   : Coefficient table for a tobs_fit
 - [`glance(`*`<tobs_fit>`*`)`](https://gillescolling.com/tulpaObs/reference/glance.tobs_fit.md)

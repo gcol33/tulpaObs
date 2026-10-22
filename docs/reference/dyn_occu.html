@@ -36,7 +36,7 @@ calibrates the coefficients); they are gated under &quot;nuts&quot; with a point
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,6 +96,21 @@ calibrates the coefficients); they are gated under <code>"nuts"</code> with a po
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>tobs_family</code> object.</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – EM + Laplace over the exact HMM-forward marginal,
+the default and the route every season-varying path runs on.</p></li>
+<li><p><code>method = "laplace_sla"</code> – the Laplace fit with simplified-Laplace
+skew-corrected marginals.</p></li>
+<li><p><code>method = "laplace_gibbs"</code> / <code>method = "laplace_mi"</code> – the Laplace fit
+with a post-EM Gibbs / multiple-imputation variance correction.</p></li>
+<li><p><code>method = "nested_laplace"</code> – an areal field on the occupancy arm through
+the nested-Laplace EM, its hyperparameters integrated on an outer grid.</p></li>
+<li><p><code>method = "nuts"</code> – the unified C++ NUTS sampler over the HMM marginal;
+season-varying colonisation / extinction / detection error with a pointer.</p></li>
+</ul></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

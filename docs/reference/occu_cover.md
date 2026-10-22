@@ -14,7 +14,7 @@ marginal log-likelihood is exact.
 ``` r
 occu_cover(
   response = c("beta", "lognormal", "gaussian"),
-  cover_aggregate = NULL
+  cover.aggregate = NULL
 )
 ```
 
@@ -28,7 +28,7 @@ occu_cover(
   delta-normal hurdle; not for cover fractions, which stay on
   `"beta"`/`"lognormal"`).
 
-- cover_aggregate:
+- cover.aggregate:
 
   how the cover arm collapses per occupancy unit on the shared-field
   spatial path: `"mean"`, `"median"`, `"latent"` (a per-unit cover
@@ -251,11 +251,11 @@ per-cell covariate in the cell `data`; this is the equivalent of one
 weighted formula term. Specify the trend field one way or the other, not
 both.
 
-## Sites larger than cells (`group_var`)
+## Sites larger than cells (`group.var`)
 
 By default each site (one row of `y` / `data`, one latent occupancy
 state) is its own field node, so the graph must have one node per site.
-Passing `group_var = "<col>"` to the
+Passing `group.var = "<col>"` to the
 [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) /
 [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 term maps each site to a field node named by that integer column, so
@@ -264,10 +264,8 @@ several sites can share one node. The field then stays length `n_cells`
 The motivating layout is a site = cell x time-period: plots in a
 cell-period are the detection replicates, occupancy is per cell-period,
 and a per-site time weight on a coupled trend field
-(`icar(graph, weight = time, group_var = "cell")`) gives a
-detection-corrected occupancy trend on a shared cell field. Supported on
-the default `joint` engine; the `v2_joint` / `v3_nested` escape hatches
-bind the field 1:1 to sites and reject `group_var`.
+(`icar(graph, weight = time, group.var = "cell")`) gives a
+detection-corrected occupancy trend on a shared cell field.
 
 ## Per-group random intercept on the shared-field path ([`re()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) / `(1 | g)`)
 
@@ -296,10 +294,10 @@ when the grouping factor names the areal graph nodes. The engine's
 inline-MCAR call `tulpa::spatial(graph, ~ 1 + x | cell)` reads `| cell`
 as a separable spatial field, but the same spelling in an `occu_cover()`
 formula is an IID random effect on `cell`. For a spatial field on the
-cells use an areal term – `icar(graph = adj, group_var = "cell")` (plus
-`icar(graph = adj, weight = x, group_var = "cell")` for a
+cells use an areal term – `icar(graph = adj, group.var = "cell")` (plus
+`icar(graph = adj, weight = x, group.var = "cell")` for a
 spatially-varying trend) – not a bar. When a formula carries a bar whose
-grouping factor is also an areal term's `group_var`, `occu_cover()`
+grouping factor is also an areal term's `group.var`, `occu_cover()`
 emits a one-time message noting the bar is fitted as a random effect;
 suppress it with
 [`base::suppressMessages()`](https://rdrr.io/r/base/message.html).
@@ -317,10 +315,10 @@ no field, so per-cell conditional cover (and its change over time,
 bar placed in the `positive` formula adds an INDEPENDENT, non-copied
 areal field on the cover arm alone:
 
-    tobs(occurrence = ~ x + icar(graph = adj, group_var = "cell"),
+    tobs(occurrence = ~ x + icar(graph = adj, group.var = "cell"),
          detection  = ~ 1,
          positive   = ~ time + spatial(~ 1 + time || cell, graph = adj),
-         data = cell_dat, y = y, y_pos = y_pos,
+         data = cell_dat, y = y, y.pos = y_pos,
          family = occu_cover("lognormal"), method = "nested_laplace")
 
 The occupancy field still drives psi and, via the alpha copy,
@@ -335,7 +333,7 @@ coarser) grid, which keeps the added axis from multiplying the
 outer-grid cost. The per-cell field posterior is in `fit$pos_field` /
 `fit$pos_field_table` (and `fit$pos_field_tables` per column). Scope: it
 composes with the shared occupancy field but uses per-visit cover
-(`cover_aggregate = "none"`) and does not combine with the correlated
+(`cover.aggregate = "none"`) and does not combine with the correlated
 `|` MCAR field, the latent cover RE, or the batched fused path; like the
 shared field it is fitted as ICAR (bym2/car read as ICAR). A static
 intercept cover field is only weakly identified against the occupancy
@@ -365,13 +363,13 @@ checkpoint written for different data or settings is rejected rather
 than resumed onto. Forwarded to
 [`tulpa::tulpa_nested_laplace_joint()`](https://gillescolling.com/tulpa/reference/tulpa_nested_laplace_joint.html).
 
-## Cell-aggregated cover (`cover_aggregate`)
+## Cell-aggregated cover (`cover.aggregate`)
 
 On the shared-field spatial path the cover arm has one observation per
 detected visit, so a cell with many detected plots informs the shared
 field far more than the single occupancy observation for that cell; the
 field is then driven almost entirely by the cover arm and the
-detection-corrected occupancy surface flattens. `cover_aggregate`
+detection-corrected occupancy surface flattens. `cover.aggregate`
 collapses the cover arm to a single response per occupancy unit
 (cell-period) so the two arms inform the field with comparable weight:
 
@@ -449,7 +447,7 @@ compact principled default (symmetric correlation nodes including 0);
 widen it with `control$re.logchol.grid.p` / `re.logchol.grid.pos`.
 
 The positive-cover RE needs per-visit cover
-(`cover_aggregate = "none"`). As with the occupancy-arm RE, each
+(`cover.aggregate = "none"`). As with the occupancy-arm RE, each
 grid-integrated variance carries the binary / small-cluster
 inner-Laplace attenuation and is a lower bound on the truth; the BLUPs
 recover the per-group structure.
@@ -491,8 +489,8 @@ not cover).
 ``` r
 # \donttest{
 N <- 120; J <- 4
-sim <- simulate_occu_cover(N = N, J = J, n_occ_covs = 1, n_det_covs = 1,
-                           n_pos_covs = 1, positive = "beta", seed = 1)
+sim <- simulate_occu_cover(N = N, J = J, n.occ.covs = 1, n.det.covs = 1,
+                           n.pos.covs = 1, positive = "beta", seed = 1)
 long <- data.frame(site_id = rep(seq_len(N), each = J),
                    visit    = rep(seq_len(J), times = N),
                    y        = as.vector(t(sim$y)),
@@ -504,7 +502,7 @@ cell_dat <- cbind(data.frame(site_id = seq_len(N)), sim$data)
 y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
 fit <- tobs(~ occ_cov1, data = cell_dat, family = occu_cover("beta"),
             detection = ~ det_cov1, positive = ~ pos_cov1,
-            y = od$y, y_pos = y_pos, visits = od$det.covs, method = "laplace")
+            y = od$y, y.pos = y_pos, visits = od$det.covs, method = "laplace")
 summary(fit)
 # }
 ```

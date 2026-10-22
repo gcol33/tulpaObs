@@ -1,5 +1,24 @@
 # Getting started with tulpaObs
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -76,9 +95,9 @@ Six visits per site keep the two processes identifiable.
 
 sim <- simulate_occu(
   N = 300, J = 6,
-  n_occ_covs = 1, n_det_covs = 1,
-  beta_occ = c(0.3, 1.0),    # occupancy intercept + slope on occ_cov1
-  beta_det = c(0.7, 0.6),    # detection intercept + slope on det_cov1
+  n.occ.covs = 1, n.det.covs = 1,
+  beta.occ = c(0.3, 1.0),    # occupancy intercept + slope on occ_cov1
+  beta.det = c(0.7, 0.6),    # detection intercept + slope on det_cov1
   seed = 1
 )
 dat <- sim$data              # site covariates, one row per site
@@ -571,8 +590,8 @@ counts across visits to separate abundance from detection.
 
 ``` r
 
-sa <- simulate_abun(N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
-                    beta_lambda = c(log(3), 0.5), beta_p = c(0.4, 0.3),
+sa <- simulate_abun(N = 200, J = 5, n.abund.covs = 1, n.det.covs = 1,
+                    beta.lambda = c(log(3), 0.5), beta.p = c(0.4, 0.3),
                     seed = 2)
 fa <- tobs(~ abund_cov1, data = sa$data, family = abun(),
            detection = ~ det_cov1, y = sa$y, method = "laplace",
@@ -627,7 +646,7 @@ names the third dimension. The community mean is the fixed effect
 
 ``` r
 
-sm <- simulate_ms_occu(N = 120, J = 5, n_species = 8, seed = 3)
+sm <- simulate_ms_occu(N = 120, J = 5, n.species = 8, seed = 3)
 fm <- tobs(~ x, data = sm$data, family = ms_occu(), detection = ~ 1,
            y = sm$y, species = paste0("sp", 1:8), method = "laplace",
            control = list(verbose = FALSE))
@@ -686,8 +705,8 @@ expected cover at new covariate values.
 
 ``` r
 
-sc <- simulate_cover(N = 400, beta_occ = c(-0.4, 0.7),
-                     beta_pos = c(-1.0, 0.3), sigma_pos = 0.4, seed = 7)
+sc <- simulate_cover(N = 400, beta.occ = c(-0.4, 0.7),
+                     beta.pos = c(-1.0, 0.3), sigma.pos = 0.4, seed = 7)
 fc <- tobs(~ x, data = sc$data, family = cover(response = "lognormal"),
            y = sc$y)
 nd <- data.frame(x = seq(-2, 2, length.out = 50))
@@ -808,8 +827,8 @@ Markov chain out with the forward algorithm.
 
 ``` r
 
-sd_dyn <- simulate_dyn_occu(N = 200, J = 4, n_seasons = 6,
-                            beta_occ = c(0), beta_det = c(0),
+sd_dyn <- simulate_dyn_occu(N = 200, J = 4, n.seasons = 6,
+                            beta.occ = c(0), beta.det = c(0),
                             gamma = 0.3, epsilon = 0.2, seed = 2026)
 fit_dyn <- tobs(~ 1, data = sd_dyn$data, family = dyn_occu(),
                 detection = ~ 1, y = sd_dyn$y,
@@ -863,9 +882,9 @@ of detection-history matrices, one per source.
 
 ``` r
 
-si <- simulate_int_occu(N_total = 500, n_data = 2, J = c(2, 5),
-                        n_shared = 250, beta_occ = c(0.3, 0.9),
-                        beta_det = list(c(0.5, 0), c(0.7, 0)), seed = 11)
+si <- simulate_int_occu(N.total = 500, n.data = 2, J = c(2, 5),
+                        n.shared = 250, beta.occ = c(0.3, 0.9),
+                        beta.det = list(c(0.5, 0), c(0.7, 0)), seed = 11)
 fit_int <- tobs(~ x, data = si$data, family = int_occu(), detection = ~ 1,
                 y = list(survey = si$y[[1]], casual = si$y[[2]]),
                 method = "laplace", control = list(verbose = FALSE))

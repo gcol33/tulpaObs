@@ -6,15 +6,15 @@ Latent Poisson (or NB) abundance with binomial detection per visit
 ## Usage
 
 ``` r
-abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+abun(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 ```
 
 ## Arguments
 
-- K_max:
+- K.max:
 
   upper bound for the latent-abundance marginal sum (the exact
-  integration over `N` is truncated at `K_max`). `NULL` (default) lets
+  integration over `N` is truncated at `K.max`). `NULL` (default) lets
   the engine pick `max(y) + 100` (matching
   [`unmarked::pcount()`](https://ecoverseR.github.io/unmarked/reference/pcount.html));
   raise it if a fit warns that the posterior over `N` puts mass on the
@@ -46,18 +46,41 @@ and counts `y_ij | N_i ~ Binomial(N_i, p_ij)` with
 `logit p_ij = X_p beta_p`. The abundance formula is the
 [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md)
 `formula`; the per-visit detection formula is `detection`. The marginal
-likelihood integrates `N` out exactly, so the fit is a direct Laplace
-approximation (no EM): `method = "laplace"` (fixed effects) or
-`method = "nested_laplace"` (an areal
-[`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) /
-[`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) /
-`car()` offset on the abundance arm).
+likelihood integrates `N` out exactly, so no route runs an EM over `N`.
+
+## Engines
+
+- `method = "laplace"` – a direct Laplace approximation over the
+  closed-form marginal with an observed-Fisher covariance; a grouped
+  random effect on one arm is integrated by adaptive Gauss-Hermite
+  quadrature.
+
+- `method = "nested_laplace"` – an areal
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field on the abundance arm, its hyperparameters integrated on an outer
+  grid (grid-integrated coefficient covariance).
+
+- `method = "nuts"` – the in-tree C++ NUTS sampler over the same
+  marginal, Poisson or negative binomial (`log_r` sampled), warm-started
+  at the Laplace mode; with an areal term a fixed-hyper non-centered
+  field on the abundance arm
+  ([`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md));
+  `"zip"` / `"zinb"` are `"laplace"`-only, and a field does not combine
+  with a random effect here.
 
 ## Examples
 
 ``` r
 # \donttest{
-sim <- simulate_abun(N = 120, J = 4, n_abund_covs = 1, n_det_covs = 1, seed = 1)
+sim <- simulate_abun(N = 120, J = 4, n.abund.covs = 1, n.det.covs = 1, seed = 1)
 fit <- tobs(~ abund_cov1, data = sim$data, family = abun(),
             detection = ~ det_cov1, y = sim$y, method = "laplace")
 summary(fit)

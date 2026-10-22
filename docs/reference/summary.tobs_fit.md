@@ -26,10 +26,25 @@ summary(object, ...)
 
 ## Value
 
-Data frame as for `summary.tulpa_fit`, one row per coefficient named
-`<arm>_<term>` as
+A `summary.tulpa_fit` object as
+[`tulpa::summary.tulpa_fit()`](https://gillescolling.com/tulpa/reference/summary.tulpa_fit.html)
+returns it. Its coefficient table, `coef(summary(fit))`, has one row per
+coefficient named `<arm>_<term>` as
 [`coef.tobs_fit()`](https://gillescolling.com/tulpaObs/reference/coef.tobs_fit.md)
 names it, with columns `estimate`, `std.error` and the two interval
 bounds, plus a `skew` column when `$skew` is present and `rhat`,
 `ess_bulk`, `ess_tail` on a sampled fit. Every family, and every method
 within a family, returns this layout.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+summary(fit)
+# }
+```

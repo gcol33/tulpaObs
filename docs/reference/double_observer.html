@@ -32,7 +32,7 @@ is closed form with no latent-abundance summation."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -120,6 +120,14 @@ four cell means that recover <code>(lambda, p1, p2)</code>. With <code>p1 = p2</
 interchangeable pair) the dependent protocol reduces to a two-pass <code><a href="removal.html">removal()</a></code>
 model.</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – the closed-form Poisson-multinomial marginal
+maximised (BFGS) with an observed-information covariance; the only route
+(no field, no sampler).</p></li>
+</ul></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

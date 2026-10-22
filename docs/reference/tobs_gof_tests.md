@@ -83,3 +83,17 @@ A list with the observed statistic (`observed`), its
 posterior-predictive expectation (`expected`), their ratio (`ratio`) and
 a tail p-value (`p.value`). The names are the same on every family, so a
 caller can read the statistic without branching on the model type.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+test_dispersion(fit, seed = 1)
+test_zero_inflation(fit, seed = 1)
+# }
+```

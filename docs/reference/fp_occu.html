@@ -38,7 +38,7 @@ the same marginal."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -108,6 +108,20 @@ intercept-only and are set with the <code>p10 = ~ ...</code> and <code>certainty
 arguments to <code><a href="tobs.html">tobs()</a></code> (<code>certainty</code> is the <code>b</code> arm). The response <code>y</code> is an
 <code>n_sites x J</code> integer matrix in <code>{0, 1, 2}</code> (NA visits dropped).</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – analytic-gradient BFGS over the exact marginal with
+an observed-information covariance; a grouped random effect on the <code>psi</code>
+or <code>p11</code> arm is integrated by adaptive Gauss-Hermite quadrature.</p></li>
+<li><p><code>method = "nested_laplace"</code> – an areal <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">car_proper()</a></code> field on
+the occupancy arm (BFGS over the marginal plus the CAR prior), optionally
+composed with a <code><a href="tobs_terms.html">temporal()</a></code> field, through the shared areal-BFGS driver.</p></li>
+<li><p><code>method = "nuts"</code> – the in-tree C++ NUTS sampler over the same marginal,
+with a fixed-hyper areal or temporal field block on the occupancy arm (one
+of the two, not both).</p></li>
+</ul></div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Miller, D. A. W., Nichols, J. D., McClintock, B. T., Grant, E. H. C., Bailey,

@@ -1,5 +1,24 @@
 # Areal spatial occupancy with ICAR, BYM2, and CAR
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)

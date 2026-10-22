@@ -32,7 +32,7 @@ ms_distance()."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -84,22 +84,22 @@ array <code>[n_sites x n_bins x n_species]</code> suitable for <code><a href="to
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_ms_distance</span><span class="op">(</span></span>
-<span>  n_species <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  n.species <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  N <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  cutpoints <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">25</span>, <span class="fl">50</span>, <span class="fl">75</span>, <span class="fl">100</span><span class="op">)</span>,</span>
 <span>  transect <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"line"</span>, <span class="st">"point"</span><span class="op">)</span>,</span>
 <span>  key <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"halfnorm"</span>, <span class="st">"hazard"</span><span class="op">)</span>,</span>
 <span>  shape <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  n_abund_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_det_covs <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  mu_lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  mu_sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  sd_lambda <span class="op">=</span> <span class="fl">0.4</span>,</span>
-<span>  sd_sigma <span class="op">=</span> <span class="fl">0.2</span>,</span>
-<span>  n_factors <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  load_sd <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span>  n.abund.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.det.covs <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  mu.lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mu.sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  sd.lambda <span class="op">=</span> <span class="fl">0.4</span>,</span>
+<span>  sd.sigma <span class="op">=</span> <span class="fl">0.2</span>,</span>
+<span>  n.factors <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  load.sd <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  field <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  quad_order <span class="op">=</span> <span class="fl">64L</span>,</span>
+<span>  quad.order <span class="op">=</span> <span class="fl">64L</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -108,7 +108,7 @@ array <code>[n_sites x n_bins x n_species]</code> suitable for <code><a href="to
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-n-species">n_species<a class="anchor" aria-label="anchor" href="#arg-n-species"></a></dt>
+<dl><dt id="arg-n-species">n.species<a class="anchor" aria-label="anchor" href="#arg-n-species"></a></dt>
 <dd><p>Number of species (default 10).</p></dd>
 
 
@@ -133,45 +133,45 @@ array <code>[n_sites x n_bins x n_species]</code> suitable for <code><a href="to
 half-normal key). Default 0.</p></dd>
 
 
-<dt id="arg-n-abund-covs-n-det-covs">n_abund_covs, n_det_covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs-n-det-covs"></a></dt>
+<dt id="arg-n-abund-covs-n-det-covs">n.abund.covs, n.det.covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs-n-det-covs"></a></dt>
 <dd><p>Number of abundance / detection-scale
 covariates (default 1 and 0).</p></dd>
 
 
-<dt id="arg-mu-lambda">mu_lambda<a class="anchor" aria-label="anchor" href="#arg-mu-lambda"></a></dt>
+<dt id="arg-mu-lambda">mu.lambda<a class="anchor" aria-label="anchor" href="#arg-mu-lambda"></a></dt>
 <dd><p>Community-mean abundance coefficients on the log scale.
-Default <code>c(log(30), rep(0.4, n_abund_covs))</code>.</p></dd>
+Default <code>c(log(30), rep(0.4, n.abund.covs))</code>.</p></dd>
 
 
-<dt id="arg-mu-sigma">mu_sigma<a class="anchor" aria-label="anchor" href="#arg-mu-sigma"></a></dt>
+<dt id="arg-mu-sigma">mu.sigma<a class="anchor" aria-label="anchor" href="#arg-mu-sigma"></a></dt>
 <dd><p>Community-mean detection-scale coefficients on the log scale.
-Default <code>c(log(40), rep(0, n_det_covs))</code>.</p></dd>
+Default <code>c(log(40), rep(0, n.det.covs))</code>.</p></dd>
 
 
-<dt id="arg-sd-lambda-sd-sigma">sd_lambda, sd_sigma<a class="anchor" aria-label="anchor" href="#arg-sd-lambda-sd-sigma"></a></dt>
+<dt id="arg-sd-lambda-sd-sigma">sd.lambda, sd.sigma<a class="anchor" aria-label="anchor" href="#arg-sd-lambda-sd-sigma"></a></dt>
 <dd><p>Per-coefficient community SDs. Default 0.4 and 0.2.</p></dd>
 
 
-<dt id="arg-n-factors">n_factors<a class="anchor" aria-label="anchor" href="#arg-n-factors"></a></dt>
-<dd><p>If <code>&gt; 0</code>, add <code>n_factors</code> per-site latent factors with
+<dt id="arg-n-factors">n.factors<a class="anchor" aria-label="anchor" href="#arg-n-factors"></a></dt>
+<dd><p>If <code>&gt; 0</code>, add <code>n.factors</code> per-site latent factors with
 per-species loadings to <code>log lambda</code> (the lfMsDS truth). Default 0.</p></dd>
 
 
-<dt id="arg-load-sd">load_sd<a class="anchor" aria-label="anchor" href="#arg-load-sd"></a></dt>
+<dt id="arg-load-sd">load.sd<a class="anchor" aria-label="anchor" href="#arg-load-sd"></a></dt>
 <dd><p>SD of the factor loadings (default 0.5).</p></dd>
 
 
 <dt id="arg-field">field<a class="anchor" aria-label="anchor" href="#arg-field"></a></dt>
 <dd><p>Optional length-<code>N</code> shared spatial field added to every species'
-<code>log lambda</code>. When given alongside <code>n_factors &gt; 0</code> the loadings are centred
+<code>log lambda</code>. When given alongside <code>n.factors &gt; 0</code> the loadings are centred
 across species, so the field owns the shared spatial mean.</p></dd>
 
 
-<dt id="arg-quad-order">quad_order<a class="anchor" aria-label="anchor" href="#arg-quad-order"></a></dt>
+<dt id="arg-quad-order">quad.order<a class="anchor" aria-label="anchor" href="#arg-quad-order"></a></dt>
 <dd><p>Gauss-Legendre nodes per bin used to integrate the per-bin
 detection probabilities (default 64, matching <code><a href="ms_distance.html">ms_distance()</a></code>). Set it to
-the <code>quad_order</code> the model will be fit at: the rule is
-<code>(cutpoints, transect, quad_order)</code>, so a different order integrates a
+the <code>quad.order</code> the model will be fit at: the rule is
+<code>(cutpoints, transect, quad.order)</code>, so a different order integrates a
 different pi and the data would come from a model the fit does not use.</p></dd>
 
 
@@ -190,7 +190,7 @@ simulator and is not returned.</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_ms_distance</span><span class="op">(</span>n_species <span class="op">=</span> <span class="fl">4</span>, N <span class="op">=</span> <span class="fl">30</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_ms_distance</span><span class="op">(</span>n.species <span class="op">=</span> <span class="fl">4</span>, N <span class="op">=</span> <span class="fl">30</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

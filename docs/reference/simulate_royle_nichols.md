@@ -4,7 +4,7 @@ Latent abundance `N_i ~ Poisson(lambda_i)`,
 `log lambda = X beta_lambda`, and per-visit detection
 `y_ij ~ Bernoulli(1 - (1 - r_ij)^{N_i})` with per-individual detection
 `logit r_ij = beta_r`. Detection is site-level by default; supplying
-`beta_r_visit` draws a per-visit covariate `w` and makes
+`beta.r.visit` draws a per-visit covariate `w` and makes
 `logit r_ij = beta_r + beta_r_visit * w_ij` visit-varying. Matches the
 [`royle_nichols()`](https://gillescolling.com/tulpaObs/reference/royle_nichols.md)
 family; the response is an `N x J` 0/1 detection-history matrix.
@@ -15,9 +15,9 @@ family; the response is an `N x J` 0/1 detection-history matrix.
 simulate_royle_nichols(
   N = 200,
   J = 5,
-  beta_lambda = c(0.3, 0.5),
-  beta_r = -0.8,
-  beta_r_visit = NULL,
+  beta.lambda = c(0.3, 0.5),
+  beta.r = -0.8,
+  beta.r.visit = NULL,
   seed = NULL
 )
 ```
@@ -32,15 +32,15 @@ simulate_royle_nichols(
 
   Number of visits per site (default 5).
 
-- beta_lambda:
+- beta.lambda:
 
   Log-abundance coefficients `c(intercept, slope_on_x)`.
 
-- beta_r:
+- beta.r:
 
   Per-individual detection logit (a scalar intercept).
 
-- beta_r_visit:
+- beta.r.visit:
 
   Optional scalar slope on a drawn per-visit detection covariate `w`.
   When supplied, detection varies by visit and the returned list carries
@@ -62,6 +62,6 @@ per-visit `r`), and, when `beta_r_visit` is supplied, `visits`.
 sim <- simulate_royle_nichols(N = 100, J = 4, seed = 1)
 dim(sim$y)
 # Visit-varying detection:
-sv <- simulate_royle_nichols(N = 100, J = 4, beta_r_visit = 0.8, seed = 1)
+sv <- simulate_royle_nichols(N = 100, J = 4, beta.r.visit = 0.8, seed = 1)
 names(sv$visits)
 ```

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,16 +65,16 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">ms_abun</span><span class="op">(</span>K_max <span class="op">=</span> <span class="cn">NULL</span>, mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span>, <span class="st">"zip"</span>, <span class="st">"zinb"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">ms_abun</span><span class="op">(</span>K.max <span class="op">=</span> <span class="cn">NULL</span>, mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span>, <span class="st">"zip"</span>, <span class="st">"zinb"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-k-max">K_max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
+<dl><dt id="arg-k-max">K.max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
 <dd><p>upper bound for the latent-abundance marginal sum (the exact
-integration over <code>N</code> is truncated at <code>K_max</code>). <code>NULL</code> (default) lets the
+integration over <code>N</code> is truncated at <code>K.max</code>). <code>NULL</code> (default) lets the
 engine pick <code>max(y) + 100</code> (matching <code><a href="https://ecoverseR.github.io/unmarked/reference/pcount.html" class="external-link">unmarked::pcount()</a></code>); raise it if a
 fit warns that the posterior over <code>N</code> puts mass on the boundary.</p></dd>
 
@@ -95,6 +95,26 @@ shared field stays Poisson / negbin.</p></dd>
     <p>A <code>tobs_family</code> object.</p>
     </div>
     <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – the in-tree C++ community Laplace-EM (per-species
+coefficient random effects, closed-form community covariance M-step, AGHQ
+variance debias), the default; <code><a href="tobs_terms.html">latent()</a></code> factors run here through the
+block-coordinate driver.</p></li>
+<li><p><code>method = "nested_laplace"</code> – a shared areal field (<code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">bym2()</a></code> /
+<code><a href="tobs_terms.html">car_proper()</a></code>) on the abundance arm (the spAbundance <code>sfMsNMix</code> model),
+Poisson or grid-integrated negative-binomial size; with <code><a href="tobs_terms.html">latent()</a></code> factors
+beside the field the spatial-factor model by block coordinate ascent.</p></li>
+<li><p><code>method = "nuts"</code> – the non-spatial community sampler over the closed-form
+per-(species, site) marginal, sampling the community means, per-species
+deviations and community covariances jointly (Poisson, or per-species
+negative-binomial <code>log_r_s</code>), warm-started at the Laplace-EM mode; with a
+shared <code><a href="tobs_terms.html">car_proper()</a></code> field (Poisson) a fixed-hyper non-centered field
+joins the sampler, while <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">bym2()</a></code>, <code><a href="tobs_terms.html">temporal()</a></code> and <code><a href="tobs_terms.html">re()</a></code>
+terms stay on <code>"nested_laplace"</code>.</p></li>
+</ul></div>
+    <div class="section level2">
     <h2 id="reading-the-negbin-community-dispersion">Reading the negbin community dispersion<a class="anchor" aria-label="anchor" href="#reading-the-negbin-community-dispersion"></a></h2>
 
 
@@ -106,7 +126,7 @@ two are not independent: <code>sigma_log_r</code> is a scalar variance over spec
 at few species it can settle near its lower boundary, which shifts
 <code>mu_log_r</code> and narrows its SE at the same time.</p>
 <p>Measured on simulated data (39 <code>laplace</code> fits at 8 and 36 species,
-<code>sigma_logr = 0.5</code>): where <code>sigma_log_r</code> came back at
+<code>sigma.logr = 0.5</code>): where <code>sigma_log_r</code> came back at
 least 0.30, the nominal 95% interval covered 33 of 34 with a
 <code>sqrt(mean(z^2))</code> of 0.88; where it came back below, it covered 2 of 5, the
 point estimate was 2.2x further from the truth and the SE 28% narrower. So
@@ -121,7 +141,7 @@ group count measured. Over 97 fits at 8 / 18 / 36 species the scale
 is the seed block rather than the estimator: <code>mu_log_r</code> is a POPULATION mean,
 each seed draws <code>S</code> log-dispersions around it, and that draw supplies about
 two thirds of the across-seed spread. The 18-species blocks drew theirs
-18-21% wider than <code>sigma_logr / sqrt(S)</code>. Put the draw at its expectation and
+18-21% wider than <code>sigma.logr / sqrt(S)</code>. Put the draw at its expectation and
 the scale is 1.077 / 1.101 / 0.977; rebuild the SE at the simulated sigma as
 well and it is 0.990 / 1.035 / 0.963 (NOTES_measurements.md). The residual
 there is the attenuation of

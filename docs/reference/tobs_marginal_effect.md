@@ -11,7 +11,7 @@ tobs_marginal_effect(
   object,
   covariate,
   process = c("occupancy", "detection", "abundance"),
-  n_points = 100L
+  n.points = 100L
 )
 ```
 
@@ -30,7 +30,7 @@ tobs_marginal_effect(
   `"occupancy"` (default), `"detection"`, or `"abundance"` (the state
   process of a count family, on the intensity scale).
 
-- n_points:
+- n.points:
 
   Number of prediction points (default 100).
 
@@ -42,10 +42,10 @@ A data.frame with covariate values and the predicted response.
 
 ``` r
 # \donttest{
-sim <- simulate_abun(N = 100, J = 4, n_abund_covs = 2, n_det_covs = 1,
+sim <- simulate_abun(N = 100, J = 4, n.abund.covs = 2, n.det.covs = 1,
                      seed = 1)
 fit <- tobs(~ abund_cov1 + abund_cov2, data = sim$data,
-            family = abun(K_max = 50), detection = ~ det_cov1, y = sim$y,
+            family = abun(K.max = 50), detection = ~ det_cov1, y = sim$y,
             control = list(verbose = FALSE))
 me <- tobs_marginal_effect(fit, "abund_cov1", process = "abundance")
 head(me)   # estimate is on the abundance (lambda) scale, not a probability

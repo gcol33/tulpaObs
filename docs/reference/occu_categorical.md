@@ -43,13 +43,14 @@ is for classes with no ordering.
 `k`. It may sit on the formula left-hand side (`y ~ ...`), so `y =` can
 be dropped. The `formula` predictors are shared by both arms.
 
-## Scope
+## Engines
 
-Non-spatial Laplace (`method = "laplace"`). The multinomial math is the
-FD-validated tulpa kernel (`multinomial_logit.h`); the non-spatial fit
-is the vectorised R Newton over the same closed forms. Spatial fields /
-NUTS (the native multi-process likelihood) and the latent-class
-*misclassification* variant (the K-class generalisation of
+Non-spatial Laplace (`method = "laplace"`), the only route. The
+multinomial math is the FD-validated tulpa kernel
+(`multinomial_logit.h`); the non-spatial fit is the vectorised R Newton
+over the same closed forms. Spatial fields / NUTS (the native
+multi-process likelihood) and the latent-class *misclassification*
+variant (the K-class generalisation of
 [`fp_occu()`](https://gillescolling.com/tulpaObs/reference/fp_occu.md),
 a confusion matrix on the observed label) are documented follow-ups.
 

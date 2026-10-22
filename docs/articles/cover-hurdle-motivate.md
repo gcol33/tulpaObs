@@ -1,5 +1,24 @@
 # Cover hurdle on resurvey panels (MOTIVATE reduction)
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ## Introduction
 
 Vegetation cover is a zero-inflated quantity. A plot either holds a
@@ -287,7 +306,7 @@ within every plot.
 The BYM2 plot-level field is written into the formula as a
 [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 term. The graph is over plots, so the term carries
-`group_var = "plot_id"` to map each visit row to its plot. The positive
+`group.var = "plot_id"` to map each visit row to its plot. The positive
 family is chosen by `cover("beta")` or `cover("lognormal")`, the cover
 values pass through `y`, and `method = "nested_laplace"` selects the
 joint shared-field engine. Everything else is a default: the field
@@ -298,7 +317,7 @@ and the dispersion are integrated on the outer hyperparameter grid.
 
 fit_beta <- tobs(
   formula   = ~ year_btw + year_wtn +
-               bym2(graph = sim_beta$adj, group_var = "plot_id"),
+               bym2(graph = sim_beta$adj, group.var = "plot_id"),
   data      = dat_beta,
   family    = cover("beta"),
   y         = sim_beta$y,
@@ -320,7 +339,7 @@ second panel:
 
 fit_ln <- tobs(
   formula   = ~ year_btw + year_wtn +
-               bym2(graph = sim_ln$adj, group_var = "plot_id"),
+               bym2(graph = sim_ln$adj, group.var = "plot_id"),
   data      = dat_ln,
   family    = cover("lognormal"),
   y         = sim_ln$y,
@@ -359,7 +378,7 @@ check that nothing moved:
 
 fit_full <- tobs(
   formula = ~ year_btw + year_wtn +
-             bym2(graph = sim_beta$adj, group_var = "plot_id"),
+             bym2(graph = sim_beta$adj, group.var = "plot_id"),
   data    = dat_beta, family = cover("beta"), y = sim_beta$y,
   method  = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = FALSE)
@@ -548,7 +567,7 @@ fit_oc <- suppressWarnings(tobs(
   detection = ~ det_cov1,
   positive  = ~ pos_cov1 + share(spatial(), alpha = grid(c(0, 0.5, 1.0))),
   y         = od$y,
-  y_pos     = y_pos,
+  y.pos     = y_pos,
   visits    = od$det.covs,
   method    = "nested_laplace",
   control   = list(verbose = FALSE, max.iter = 300L,
@@ -721,24 +740,24 @@ interval.
 ``` r
 
 pr_chg <- predict(fit_oc, newdata = cell_dat, type = "change",
-                  times = c(0, 1), time_col = "year", nsim = 1000L)
+                  times = c(0, 1), time.col = "year", nsim = 1000L)
 names(pr_chg)
 ```
 
 The contract is fixed. Three headline deltas come with `.lwr` / `.upr`
-interval columns: `delta_p` (change in occupancy probability),
+interval columns: `delta_psi` (change in occupancy probability),
 `delta_cover_cond` (change in conditional cover given presence), and
 `delta_cover_exp` (change in expected cover $`\psi\mu`$). Two further
 columns decompose the expected-cover change into the part driven by
 occupancy moving and the part driven by conditional cover moving,
 `delta_cover_from_occ` and `delta_cover_from_ab`, and these sum to
 `delta_cover_exp` exactly, per draw. The states at each time point are
-reported too (`p_T1`, `p_T2`, `cover_exp_T1`, and so on).
+reported too (`psi_T1`, `psi_T2`, `cover_exp_T1`, and so on).
 
 ``` r
 
 with(pr_chg, head(data.frame(
-  cell, delta_p,
+  cell, delta_psi,
   delta_cover_exp,
   from_occ = delta_cover_from_occ,
   from_ab  = delta_cover_from_ab,

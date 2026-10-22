@@ -18,11 +18,11 @@ identifiable, and the per-site primary indicator is returned as
 simulate_double_observer(
   N = 200,
   type = c("independent", "dependent"),
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_p1 = NULL,
-  beta_p2 = NULL,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.p1 = NULL,
+  beta.p2 = NULL,
   seed = NULL
 )
 ```
@@ -37,16 +37,16 @@ simulate_double_observer(
 
   `"independent"` (default) or `"dependent"` (role-swapping).
 
-- n_abund_covs, n_det_covs:
+- n.abund.covs, n.det.covs:
 
   Number of abundance / detection covariates.
 
-- beta_lambda:
+- beta.lambda:
 
   Log-abundance coefficients `c(intercept, slopes...)`. Default
-  `c(log(8), runif(n_abund_covs, -0.5, 0.5))`.
+  `c(log(8), runif(n.abund.covs, -0.5, 0.5))`.
 
-- beta_p1, beta_p2:
+- beta.p1, beta.p2:
 
   Per-observer detection coefficients (logit). Default moderate
   detection.

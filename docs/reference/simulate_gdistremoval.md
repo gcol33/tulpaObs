@@ -12,14 +12,14 @@ by a removal period (per-period capture `r`).
 simulate_gdistremoval(
   N = 200,
   cutpoints = c(0, 10, 20, 30, 40),
-  n_periods = 4L,
+  n.periods = 4L,
   transect = "line",
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  n_rem_covs = 1,
-  beta_lambda = NULL,
-  beta_sigma = NULL,
-  beta_r = NULL,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  n.rem.covs = 1,
+  beta.lambda = NULL,
+  beta.sigma = NULL,
+  beta.r = NULL,
   seed = NULL
 )
 ```
@@ -34,7 +34,7 @@ simulate_gdistremoval(
 
   Distance-bin edges `0 = c_0 < ... < c_B`.
 
-- n_periods:
+- n.periods:
 
   Number of removal periods.
 
@@ -42,11 +42,11 @@ simulate_gdistremoval(
 
   `"line"` (default) or `"point"`.
 
-- n_abund_covs, n_det_covs, n_rem_covs:
+- n.abund.covs, n.det.covs, n.rem.covs:
 
   Number of abundance / distance / removal covariates.
 
-- beta_lambda, beta_sigma, beta_r:
+- beta.lambda, beta.sigma, beta.r:
 
   Coefficients on the log-abundance, log-scale, and logit-removal arms
   (`c(intercept, slopes...)`). Defaults give moderate abundance /

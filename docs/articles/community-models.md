@@ -1,5 +1,24 @@
 # Community models in tulpaObs
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -140,15 +159,15 @@ species across a few hundred sites.
 
 [`simulate_ms_occu()`](https://gillescolling.com/tulpaObs/reference/simulate_ms_occu.md)
 draws an assemblage of occupancy histories with a known community truth.
-The community mean occupancy coefficients are `beta_comm_mean`
+The community mean occupancy coefficients are `beta.comm.mean`
 (intercept and one covariate slope `x`), and species scatter around them
-with standard deviations `beta_comm_sd`. Here eight species share an
+with standard deviations `beta.comm.sd`. Here eight species share an
 occupancy intercept of 0 and a slope of 0.5, with species-level spread
 of 0.5 on the intercept and 0.3 on the slope.
 
 ``` r
 
-sm <- simulate_ms_occu(N = 120, J = 5, n_species = 8, seed = 3)
+sm <- simulate_ms_occu(N = 120, J = 5, n.species = 8, seed = 3)
 dim(sm$y)            # 120 sites x 5 visits x 8 species
 sm$truth$beta_comm_mean   # community occupancy intercept + slope on x
 sm$truth$beta_comm_sd     # species-level SD around each community mean
@@ -370,8 +389,8 @@ mean.
 
 ``` r
 
-sab <- simulate_ms_abun(n_species = 8, N = 80, J = 4,
-                        n_abund_covs = 1, n_det_covs = 1, seed = 7)
+sab <- simulate_ms_abun(n.species = 8, N = 80, J = 4,
+                        n.abund.covs = 1, n.det.covs = 1, seed = 7)
 dim(sab$y)              # 80 sites x 4 visits x 8 species
 sab$truth$mu_lambda     # community abundance mean (log scale): log(3), slope 0.4
 sab$truth$mu_p          # community detection mean (logit scale)
@@ -522,17 +541,17 @@ species with many counts keeps its own.
 
 Simulate an assemblage with genuine overdispersion. `size = 5` sets the
 community-mean size (so $`\mu_{\log r} = \log 5`$), and
-`sigma_logr = 0.5` spreads the per-species sizes around it. Eight
+`sigma.logr = 0.5` spreads the per-species sizes around it. Eight
 species over 80 sites with four visits keep the example quick while
 still letting per-species dispersion register.
 
 ``` r
 
-snb <- simulate_ms_abun(n_species = 8, N = 80, J = 4,
-                        n_abund_covs = 1, n_det_covs = 1,
-                        mu_lambda = c(log(5), 0.4), mu_p = c(0.3, -0.3),
-                        sd_lambda = 0.4, sd_p = 0.35,
-                        mixture = "negbin", size = 5, sigma_logr = 0.5,
+snb <- simulate_ms_abun(n.species = 8, N = 80, J = 4,
+                        n.abund.covs = 1, n.det.covs = 1,
+                        mu.lambda = c(log(5), 0.4), mu.p = c(0.3, -0.3),
+                        sd.lambda = 0.4, sd.p = 0.35,
+                        mixture = "negbin", size = 5, sigma.logr = 0.5,
                         seed = 14)
 snb$truth$mu_log_r          # community log-dispersion: log(5)
 snb$truth$sigma_log_r       # spread of per-species log r
@@ -634,7 +653,7 @@ A species sitting below the band is more overdispersed than the
 assemblage typically is; one above it is closer to Poisson. The species
 that fall inside the band are the ones whose own counts told the model
 little, so the community log-dispersion supplied most of their size.
-With `sigma_logr = 0` the simulator would give a single shared $`r`$ and
+With `sigma.logr = 0` the simulator would give a single shared $`r`$ and
 every point would land on the line; the spread here is the assemblage
 genuinely differing in how clumped its species are.
 
@@ -748,11 +767,28 @@ you can defend from one that merely produced numbers.
 
 ## The community engine
 
-The community families fit under `method = "laplace"`. Each is driven by
-one community Laplace-EM: per species the latent state integrates out in
-closed form, the per-species coefficient deviations are integrated by a
-joint-Newton mode-find with the random-effect blocks folded out by a
-Schur complement, and a closed-form M-step updates the per-arm community
+The community families fit under `method = "laplace"`; every one of them
+except
+[`ms_distance()`](https://gillescolling.com/tulpaObs/reference/ms_distance.md)
+also takes `method = "nuts"`,
+[`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md),
+[`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md),
+[`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md),
+[`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md),
+[`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md)
+and
+[`ms_distance()`](https://gillescolling.com/tulpaObs/reference/ms_distance.md)
+take `method = "nested_laplace"` for a shared field, and
+[`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md),
+[`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md),
+[`ms_int_occu()`](https://gillescolling.com/tulpaObs/reference/ms_int_occu.md),
+[`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md) and
+[`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md)
+take `method = "pg_gibbs"`. Each Laplace fit is driven by one community
+Laplace-EM: per species the latent state integrates out in closed form,
+the per-species coefficient deviations are integrated by a joint-Newton
+mode-find with the random-effect blocks folded out by a Schur
+complement, and a closed-form M-step updates the per-arm community
 covariance. The occupancy and detection deviations are independent, each
 with its own covariance $`\Sigma`$, so a species’ occupancy departure
 and its detection departure are estimated separately rather than tied

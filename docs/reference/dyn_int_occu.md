@@ -32,11 +32,24 @@ transitions (required, as in
 its own coefficients). v1: every source covers all sites and the same
 season grid, constant transitions, site-level detection.
 
+## Engines
+
+- `method = "laplace"` – the non-spatial fit: the HMM-forward marginal
+  maximised with analytic forward-backward gradients and an
+  observed-information covariance.
+
+- `method = "nested_laplace"` – a shared
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field on the first-season occupancy formula (spOccupancy `stIntPGOcc`)
+  through the shared areal-BFGS driver, the field hyperparameters
+  integrated on an outer grid; that field is the only structured term
+  accepted and is required on this route.
+
 ## Examples
 
 ``` r
 # \donttest{
-sim <- simulate_dyn_int_occu(N = 200, T_seasons = 4, S = 2, seed = 1)
+sim <- simulate_dyn_int_occu(N = 200, T.seasons = 4, S = 2, seed = 1)
 fit <- tobs(~ 1, data = sim$data, family = dyn_int_occu(),
             detection = ~ 1, colonization = ~ 1, extinction = ~ 1,
             y = sim$y, sources = sim$sources, control = list(verbose = FALSE))

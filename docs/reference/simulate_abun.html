@@ -28,7 +28,7 @@ N x J integer count matrix suitable for tobs() with abun().'><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,10 +80,10 @@ variance <code>lambda + lambda^2 / size</code>) with <code>log lambda_i = X_lamb
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_abun</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>  n_abund_covs <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_p <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n.abund.covs <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.p <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span>, <span class="st">"zip"</span>, <span class="st">"zinb"</span><span class="op">)</span>,</span>
 <span>  size <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  omega <span class="op">=</span> <span class="fl">0.3</span>,</span>
@@ -103,22 +103,22 @@ variance <code>lambda + lambda^2 / size</code>) with <code>log lambda_i = X_lamb
 <dd><p>Number of replicate visits (default 4).</p></dd>
 
 
-<dt id="arg-n-abund-covs">n_abund_covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs"></a></dt>
+<dt id="arg-n-abund-covs">n.abund.covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs"></a></dt>
 <dd><p>Number of abundance covariates (default 2).</p></dd>
 
 
-<dt id="arg-n-det-covs">n_det_covs<a class="anchor" aria-label="anchor" href="#arg-n-det-covs"></a></dt>
+<dt id="arg-n-det-covs">n.det.covs<a class="anchor" aria-label="anchor" href="#arg-n-det-covs"></a></dt>
 <dd><p>Number of detection covariates (default 1).</p></dd>
 
 
-<dt id="arg-beta-lambda">beta_lambda<a class="anchor" aria-label="anchor" href="#arg-beta-lambda"></a></dt>
+<dt id="arg-beta-lambda">beta.lambda<a class="anchor" aria-label="anchor" href="#arg-beta-lambda"></a></dt>
 <dd><p>Abundance coefficients <code>c(intercept, slopes...)</code> on the
-log scale. Default <code>c(log(3), runif(n_abund_covs, -0.5, 0.5))</code>.</p></dd>
+log scale. Default <code>c(log(3), runif(n.abund.covs, -0.5, 0.5))</code>.</p></dd>
 
 
-<dt id="arg-beta-p">beta_p<a class="anchor" aria-label="anchor" href="#arg-beta-p"></a></dt>
+<dt id="arg-beta-p">beta.p<a class="anchor" aria-label="anchor" href="#arg-beta-p"></a></dt>
 <dd><p>Detection coefficients <code>c(intercept, slopes...)</code> on the logit
-scale. Default <code>c(0, runif(n_det_covs, -0.5, 0.5))</code> (intercept 0 = p 0.5).</p></dd>
+scale. Default <code>c(0, runif(n.det.covs, -0.5, 0.5))</code> (intercept 0 = p 0.5).</p></dd>
 
 
 <dt id="arg-mixture">mixture<a class="anchor" aria-label="anchor" href="#arg-mixture"></a></dt>

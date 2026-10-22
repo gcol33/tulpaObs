@@ -16,7 +16,7 @@ birds are distance-sampled into bins.
 distsamp_open(
   transect = c("line", "point"),
   cutpoints = NULL,
-  K_max = NULL,
+  K.max = NULL,
   mixture = c("poisson", "negbin", "zip", "zinb"),
   dynamics = c("constant", "notrend", "trend", "autoreg", "ricker", "gompertz")
 )
@@ -33,7 +33,7 @@ distsamp_open(
   Distance-bin edges, length `dim(y)[2] + 1`, strictly increasing and
   starting at `>= 0`.
 
-- K_max:
+- K.max:
 
   Truncation for the latent abundance HMM. Defaults to
   `3 * max(period total) + 40`.
@@ -98,6 +98,12 @@ Four site-level arms: log abundance `lambda` (the
 `y` is a 3D array `[n_sites x n_bins x n_seasons]` of per-distance-band
 counts at each primary period (secondary occasions absorbed into the
 period total).
+
+## Engines
+
+- `method = "laplace"` – the forward-HMM marginal maximised (BFGS) with
+  an observed-information covariance; the only route (no field, no
+  sampler).
 
 ## References
 

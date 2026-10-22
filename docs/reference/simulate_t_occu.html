@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,9 +67,9 @@
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_t_occu</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">150</span>,</span>
-<span>  T_seasons <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>  T.seasons <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span><span class="op">)</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span><span class="op">)</span>,</span>
 <span>  p <span class="op">=</span> <span class="fl">0.4</span>,</span>
 <span>  rho <span class="op">=</span> <span class="fl">0.6</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="fl">0.7</span>,</span>
@@ -85,7 +85,7 @@
 <dd><p>Number of sites (default 150).</p></dd>
 
 
-<dt id="arg-t-seasons">T_seasons<a class="anchor" aria-label="anchor" href="#arg-t-seasons"></a></dt>
+<dt id="arg-t-seasons">T.seasons<a class="anchor" aria-label="anchor" href="#arg-t-seasons"></a></dt>
 <dd><p>Number of seasons / years (default 8).</p></dd>
 
 
@@ -93,7 +93,7 @@
 <dd><p>Visits per season (default 3).</p></dd>
 
 
-<dt id="arg-beta-occ">beta_occ<a class="anchor" aria-label="anchor" href="#arg-beta-occ"></a></dt>
+<dt id="arg-beta-occ">beta.occ<a class="anchor" aria-label="anchor" href="#arg-beta-occ"></a></dt>
 <dd><p>Occupancy coefficients (intercept first; default <code>c(0.2)</code>).</p></dd>
 
 
@@ -124,7 +124,7 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_t_occu</span><span class="op">(</span>N <span class="op">=</span> <span class="fl">30</span>, T_seasons <span class="op">=</span> <span class="fl">4</span>, J <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_t_occu</span><span class="op">(</span>N <span class="op">=</span> <span class="fl">30</span>, T.seasons <span class="op">=</span> <span class="fl">4</span>, J <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

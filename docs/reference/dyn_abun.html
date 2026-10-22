@@ -36,7 +36,7 @@ marginal."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,17 +89,17 @@ marginal.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">dyn_abun</span><span class="op">(</span>K_max <span class="op">=</span> <span class="cn">NULL</span>, mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span>, <span class="st">"zip"</span>, <span class="st">"zinb"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">dyn_abun</span><span class="op">(</span>K.max <span class="op">=</span> <span class="cn">NULL</span>, mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span>, <span class="st">"zip"</span>, <span class="st">"zinb"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-k-max">K_max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
+<dl><dt id="arg-k-max">K.max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
 <dd><p>abundance-state truncation for the forward recursion (states
 <code>0..K_max</code>). <code>NULL</code> (default) uses <code>max(count) + 40</code>; raise it if abundance
-may exceed that (the forward cost is roughly cubic in <code>K_max</code>).</p></dd>
+may exceed that (the forward cost is roughly cubic in <code>K.max</code>).</p></dd>
 
 
 <dt id="arg-mixture">mixture<a class="anchor" aria-label="anchor" href="#arg-mixture"></a></dt>
@@ -128,6 +128,21 @@ transition interval) on <code>omega</code> / <code>gamma</code> gives interval-s
 rates. The response <code>y</code> is a 3D array <code>[n_sites x max_visits x n_seasons]</code> (or
 a list of per-season count matrices); missing visits are <code>NA</code>.</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – analytic-gradient BFGS over the forward marginal
+with an observed-information covariance; a grouped random effect on the
+initial-abundance arm is integrated by adaptive Gauss-Hermite quadrature.</p></li>
+<li><p><code>method = "nested_laplace"</code> – an areal <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">car_proper()</a></code> field on
+the initial-abundance arm (BFGS over the forward marginal plus the CAR
+prior), optionally composed with a <code><a href="tobs_terms.html">temporal()</a></code> field, through the shared
+areal-BFGS driver.</p></li>
+<li><p><code>method = "nuts"</code> – the in-tree C++ NUTS sampler over the same forward
+marginal, with a fixed-hyper areal field block on the initial-abundance
+arm; a <code><a href="tobs_terms.html">temporal()</a></code> term is not sampled.</p></li>
+</ul></div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Dail, D., Madsen, L. (2011). Models for estimating abundance from

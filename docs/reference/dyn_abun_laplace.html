@@ -32,7 +32,7 @@ gamma) are site-level."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,7 +86,7 @@ finite-difference Jacobian of the analytic gradient at the mode. All four arms
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">dyn_abun_laplace</span><span class="op">(</span></span>
 <span>  <span class="va">y_flat</span>,</span>
 <span>  <span class="va">n_sites</span>,</span>
-<span>  <span class="cn">T</span>,</span>
+<span>  <span class="va">n_seasons</span>,</span>
 <span>  <span class="va">J</span>,</span>
 <span>  <span class="va">K_max</span>,</span>
 <span>  <span class="va">X_lambda</span>,</span>
@@ -110,7 +110,7 @@ finite-difference Jacobian of the analytic gradient at the mode. All four arms
 season, then visit; <code>-1</code> marks a missing visit).</p></dd>
 
 
-<dt id="arg-n-sites-t-j">n_sites, T, J<a class="anchor" aria-label="anchor" href="#arg-n-sites-t-j"></a></dt>
+<dt id="arg-n-sites-n-seasons-j">n_sites, n_seasons, J<a class="anchor" aria-label="anchor" href="#arg-n-sites-n-seasons-j"></a></dt>
 <dd><p>Sites, primary seasons, secondary visits per season.</p></dd>
 
 

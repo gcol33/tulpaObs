@@ -58,6 +58,31 @@ cover(
 
 A `tobs_family` object.
 
+## Engines
+
+- `method = "laplace"` – two independent `tulpa_laplace()` fits, one per
+  arm (presence, positive), non-spatial; the default.
+
+- `method = "laplace_sla"` – the same two fits with simplified-Laplace
+  skew-corrected marginals.
+
+- `method = "nested_laplace"` – the joint nested-Laplace engine: shared
+  or arm-specific areal fields, weighted trend fields,
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  and
+  [`re()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  blocks, every hyperparameter integrated on an outer grid; the route
+  the `"lognormal_trunc"` and `"ordinal"` arms require.
+
+- `method = "nested_laplace_sla"` – the nested route with skew-corrected
+  marginals.
+
+- `method = "nuts"` – the non-spatial sampler over the exact two-arm
+  coefficient vector `c(beta_presence, beta_positive, log_disp)`, giving
+  calibrated intervals and a per-draw pointwise likelihood for WAIC /
+  LOO; `"beta"`, `"lognormal"` and `"gaussian"` arms only, and any
+  structured term errors with a pointer to `"nested_laplace"`.
+
 ## Response on the formula left-hand side
 
 The cover response is a single length-N vector, so it may sit on the top
@@ -107,8 +132,8 @@ formula as a SECOND, weighted areal term on the same graph as the
 intercept field, not through `control`:
 
     ~ time.sc +
-      icar(graph = adj, group_var = "cell_idx") +
-      icar(graph = adj, weight = time.sc, group_var = "cell_idx")
+      icar(graph = adj, group.var = "cell_idx") +
+      icar(graph = adj, weight = time.sc, group.var = "cell_idx")
 
 The unweighted term is the shared intercept field; the weighted term
 `icar(..., weight = col)` is the trend field, whose contribution to each
@@ -165,7 +190,7 @@ The bar left-hand side spells the coefficient fields: the intercept
 column (`1`) is the unweighted field; each covariate column (`time.sc`)
 is a weight-scaled coefficient field (`weight_i * z[cell_i]`). The bar
 right-hand side (`cell_idx`) is the graph node index (the areal
-`group_var`); `||` requests independent intercept and slope fields, a
+`group.var`); `||` requests independent intercept and slope fields, a
 single `|` makes them correlated. This desugars to exactly the two-term
 weighted-areal form above, so the two spellings give the same fit.
 
@@ -263,9 +288,9 @@ on the cells write either the compact
 [`spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 bar of the section above, `spatial(~ 1 + x || cell, graph = adj)`, or
 the two-term weighted-areal form,
-`icar(graph = adj, group_var = "cell") +`
-`icar(graph = adj, weight = x, group_var = "cell")`. When a formula
-carries a bar whose grouping factor is also an areal term's `group_var`,
+`icar(graph = adj, group.var = "cell") +`
+`icar(graph = adj, weight = x, group.var = "cell")`. When a formula
+carries a bar whose grouping factor is also an areal term's `group.var`,
 `cover()` emits a one-time message noting the bar is fitted as a random
 effect; suppress it with
 [`base::suppressMessages()`](https://rdrr.io/r/base/message.html).

@@ -22,6 +22,25 @@ dyn_occu()
 
 A `tobs_family` object.
 
+## Engines
+
+- `method = "laplace"` – EM + Laplace over the exact HMM-forward
+  marginal, the default and the route every season-varying path runs on.
+
+- `method = "laplace_sla"` – the Laplace fit with simplified-Laplace
+  skew-corrected marginals.
+
+- `method = "laplace_gibbs"` / `method = "laplace_mi"` – the Laplace fit
+  with a post-EM Gibbs / multiple-imputation variance correction.
+
+- `method = "nested_laplace"` – an areal field on the occupancy arm
+  through the nested-Laplace EM, its hyperparameters integrated on an
+  outer grid.
+
+- `method = "nuts"` – the unified C++ NUTS sampler over the HMM
+  marginal; season-varying colonisation / extinction / detection error
+  with a pointer.
+
 ## Examples
 
 ``` r

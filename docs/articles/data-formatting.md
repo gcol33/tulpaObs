@@ -1,5 +1,24 @@
 # Shaping data for tobs()
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -23,9 +42,9 @@ dataset shows the layout.
 
 sim <- simulate_occu(
   N = 120, J = 5,
-  n_occ_covs = 1, n_det_covs = 1,
-  beta_occ = c(0.2, 0.9),
-  beta_det = c(0.5, 0.4),
+  n.occ.covs = 1, n.det.covs = 1,
+  beta.occ = c(0.2, 0.9),
+  beta.det = c(0.5, 0.4),
   seed = 1
 )
 y   <- sim$y
@@ -229,7 +248,7 @@ ms_hand$species_names
 The list-of-matrices form is convenient when species come from separate
 files: each matrix is one species, the list names become the species
 dimension. Passing a pre-built `N x J x species` array works the same
-way, with `species_names` supplied separately or defaulted to `sp1`,
+way, with `species.names` supplied separately or defaulted to `sp1`,
 `sp2`, and so on.
 
 Which constructor to reach for follows from where the data already sits.
@@ -427,7 +446,7 @@ returns an `N x J x species` array, and `species` names that dimension.
 
 ``` r
 
-sm <- simulate_ms_occu(N = 80, J = 4, n_species = 6, seed = 3)
+sm <- simulate_ms_occu(N = 80, J = 4, n.species = 6, seed = 3)
 dim(sm$y)   # sites x visits x species
 ```
 
@@ -438,8 +457,8 @@ returns `y` as a list of matrices that differ in their visit counts.
 
 ``` r
 
-si <- simulate_int_occu(N_total = 100, n_data = 2, J = c(4, 3),
-                        n_shared = 20, seed = 42)
+si <- simulate_int_occu(N.total = 100, n.data = 2, J = c(4, 3),
+                        n.shared = 20, seed = 42)
 vapply(si$y, dim, integer(2))   # each source: sites x its own visit count
 ```
 
@@ -450,7 +469,7 @@ returns an `N x J x season` array, and the fit needs `colonization` and
 
 ``` r
 
-sd <- simulate_dyn_occu(N = 60, J = 3, n_seasons = 4, seed = 1)
+sd <- simulate_dyn_occu(N = 60, J = 3, n.seasons = 4, seed = 1)
 dim(sd$y)   # sites x visits x seasons
 ```
 

@@ -24,7 +24,7 @@ site-level detections at the observed visit pattern."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,10 +75,10 @@ site-level detections at the observed visit pattern.</p>
 <span>  S <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  N <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>  n_state_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_first <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_second <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_p <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n.state.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.first <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.second <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.p <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -99,22 +99,22 @@ site-level detections at the observed visit pattern.</p>
 <dd><p>Number of replicate visits (default 4).</p></dd>
 
 
-<dt id="arg-n-state-covs">n_state_covs<a class="anchor" aria-label="anchor" href="#arg-n-state-covs"></a></dt>
+<dt id="arg-n-state-covs">n.state.covs<a class="anchor" aria-label="anchor" href="#arg-n-state-covs"></a></dt>
 <dd><p>Number of shared occupancy covariates (default 1).</p></dd>
 
 
-<dt id="arg-beta-first">beta_first<a class="anchor" aria-label="anchor" href="#arg-beta-first"></a></dt>
+<dt id="arg-beta-first">beta.first<a class="anchor" aria-label="anchor" href="#arg-beta-first"></a></dt>
 <dd><p>Length-<code>S</code> list of first-order natural-parameter
 coefficients <code>c(intercept, slopes...)</code>. Default moderate occupancy.</p></dd>
 
 
-<dt id="arg-beta-second">beta_second<a class="anchor" aria-label="anchor" href="#arg-beta-second"></a></dt>
+<dt id="arg-beta-second">beta.second<a class="anchor" aria-label="anchor" href="#arg-beta-second"></a></dt>
 <dd><p>Length-<code>choose(S, 2)</code> list of second-order (interaction)
 coefficients (in <code>combn(S, 2)</code> order). Default a single positive
 interaction for <code>S = 2</code>, else 0.</p></dd>
 
 
-<dt id="arg-beta-p">beta_p<a class="anchor" aria-label="anchor" href="#arg-beta-p"></a></dt>
+<dt id="arg-beta-p">beta.p<a class="anchor" aria-label="anchor" href="#arg-beta-p"></a></dt>
 <dd><p>Length-<code>S</code> list of detection coefficients (logit). Default
 <code>c(qlogis(0.5), ...)</code>.</p></dd>
 

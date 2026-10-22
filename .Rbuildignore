@@ -38,3 +38,6 @@
 ^\.Rhistory$
 ^build_site\.R$
 ^Rplots\.pdf$
+^sidecars$
+^\.run.*$
+^CITATION\.cff$

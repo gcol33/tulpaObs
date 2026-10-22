@@ -21,6 +21,8 @@ simulation-based calibration) accompany each model.
 
 Useful links:
 
+- <https://gillescolling.com/tulpaObs/>
+
 - <https://github.com/gcol33/tulpaObs>
 
 - Report bugs at <https://github.com/gcol33/tulpaObs/issues>

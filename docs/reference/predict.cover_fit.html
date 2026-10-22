@@ -22,7 +22,7 @@ conditional positive cover mu depends on the positive-part family:"><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,12 +73,17 @@ conditional positive cover <code>mu</code> depends on the positive-part family:<
 <span>  <span class="va">object</span>,</span>
 <span>  newdata <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  type <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  include_RE <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  include.RE <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  times <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  time_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  time.col <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  level <span class="op">=</span> <span class="fl">0.95</span>,</span>
 <span>  nsim <span class="op">=</span> <span class="fl">1000L</span>,</span>
 <span>  draws <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  weights <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  aggregate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  mc.tol <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>  nsim.max <span class="op">=</span> <span class="fl">10000L</span>,</span>
+<span>  mc.floor <span class="op">=</span> <span class="fl">0.001</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -99,17 +104,38 @@ the nested-Laplace fit, one row per spatial unit (or a <code>cell</code> column)
 <dt id="arg-type">type<a class="anchor" aria-label="anchor" href="#arg-type"></a></dt>
 <dd><p>Separate-Laplace fit: one of <code>"expected"</code>, <code>"occupancy"</code>,
 <code>"conditional"</code>. Nested-Laplace fit: <code>"occurrence"</code>, <code>"cover_cond"</code>,
-<code>"cover_exp"</code>, or <code>"change"</code> (the legacy aliases are accepted and mapped).</p></dd>
+<code>"cover_exp"</code>, or <code>"change"</code>; the separate-Laplace names <code>"expected"</code>,
+<code>"occupancy"</code> and <code>"conditional"</code> map to <code>"cover_exp"</code>, <code>"occurrence"</code> and
+<code>"cover_cond"</code>.</p></dd>
 
 
-<dt id="arg-include-re">include_RE<a class="anchor" aria-label="anchor" href="#arg-include-re"></a></dt>
+<dt id="arg-include-re">include.RE<a class="anchor" aria-label="anchor" href="#arg-include-re"></a></dt>
 <dd><p>Ignored for the separate-Laplace fit (no spatial
 projection); the nested-Laplace fit always projects the shared field.</p></dd>
 
 
-<dt id="arg-times-time-col-level-nsim-draws">times, time_col, level, nsim, draws<a class="anchor" aria-label="anchor" href="#arg-times-time-col-level-nsim-draws"></a></dt>
-<dd><p>Nested-Laplace fit only: <code>times = c(t1, t2)</code> and <code>time_col</code> drive the <code>"change"</code> map; <code>level</code> is the credible
-level, <code>nsim</code> the draw count, <code>draws</code> whether to attach the draw matrices.</p></dd>
+<dt id="arg-times-time-col-level-nsim-draws">times, time.col, level, nsim, draws<a class="anchor" aria-label="anchor" href="#arg-times-time-col-level-nsim-draws"></a></dt>
+<dd><p>Nested-Laplace fit only: <code>times = c(t1, t2)</code> and <code>time.col</code> drive the <code>"change"</code> map; <code>level</code> is the credible
+level, <code>nsim</code> the draw count (or <code>"auto"</code> for a trajectory, as in
+<code><a href="predict.tobs_fit.html">predict.tobs_fit()</a></code>), <code>draws</code> whether to attach the draw matrices.</p></dd>
+
+
+<dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
+<dd><p>Nested-Laplace fit only: pool several <code>newdata</code> rows into one
+prediction per <code>cell</code>, as in <code><a href="predict.tobs_fit.html">predict.tobs_fit()</a></code>. A numeric vector (one
+weight per row) or the name of a <code>newdata</code> column.</p></dd>
+
+
+<dt id="arg-aggregate">aggregate<a class="anchor" aria-label="anchor" href="#arg-aggregate"></a></dt>
+<dd><p>Nested-Laplace fit, <code>type = "trajectory"</code> only: <code>TRUE</code>
+averages each quantity over the prediction units per posterior draw and
+returns one row per time, as in <code><a href="predict.tobs_fit.html">predict.tobs_fit()</a></code>.</p></dd>
+
+
+<dt id="arg-mc-tol-nsim-max-mc-floor">mc.tol, nsim.max, mc.floor<a class="anchor" aria-label="anchor" href="#arg-mc-tol-nsim-max-mc-floor"></a></dt>
+<dd><p>Nested-Laplace fit, trajectory only: the
+Monte Carlo precision target, the draw cap and the SD floor the error is
+measured against, as in <code><a href="predict.tobs_fit.html">predict.tobs_fit()</a></code>.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
@@ -134,12 +160,23 @@ numeric vector. The nested-Laplace shared-field fit
 (<code>method = "nested_laplace"</code>) instead projects the shared occupancy-cover
 field and returns a <code>tobs_prediction</code> of posterior draws – the same tidy /
 <code>change</code> contract as <code><a href="predict.tobs_fit.html">predict.tobs_fit()</a></code> for <code><a href="occu_cover.html">occu_cover()</a></code>: pass
-<code>type = "change"</code> with <code>times = c(t1, t2)</code> and <code>time_col</code> for a per-cell
+<code>type = "change"</code> with <code>times = c(t1, t2)</code> and <code>time.col</code> for a per-cell
 delta map. Each prediction unit is a row of <code>newdata</code> (or a <code>cell</code> column
 indexing the field cells), and every quantity is marginalized per draw over
 the grid-integrated joint posterior.</p>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="va">cover</span> <span class="op">~</span> <span class="va">moisture</span>, data <span class="op">=</span> <span class="va">meadow_cover</span>,</span>
+<span>            family <span class="op">=</span> <span class="fu"><a href="cover.html">cover</a></span><span class="op">(</span>response <span class="op">=</span> <span class="st">"beta"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">nd</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>moisture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">nd</span>, type <span class="op">=</span> <span class="st">"occupancy"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">nd</span>, type <span class="op">=</span> <span class="st">"conditional"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">nd</span>, type <span class="op">=</span> <span class="st">"expected"</span><span class="op">)</span></span>
+<span><span class="co"># }</span></span></code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

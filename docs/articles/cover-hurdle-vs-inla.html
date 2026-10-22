@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,7 +93,7 @@
     
 <p><code>tulpaObs::cover(response = "lognormal")</code> fits a two-arm
 hurdle model: a binomial GLM on the occurrence indicator
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>𝟏</mn><mo stretchy="false" form="prefix">{</mo><msub><mi>y</mi><mi>i</mi></msub><mo>&gt;</mo><mn>0</mn><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">\mathbf{1}\{y_i &gt; 0\}</annotation></semantics></math>,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn mathvariant="bold">𝟏</mn><mo stretchy="false" form="prefix">{</mo><msub><mi>y</mi><mi>i</mi></msub><mo>&gt;</mo><mn>0</mn><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">\mathbf{1}\{y_i &gt; 0\}</annotation></semantics></math>,
 and a Gaussian GLM on
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><msub><mi>y</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\log y_i</annotation></semantics></math>
 over the positive subset, with the lognormal back-transform
@@ -278,8 +278,7 @@ an <code>N x J</code> visit matrix</td>
 <span><span class="va">dat</span><span class="op">$</span><span class="va">log_cover</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">cover</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">cover</span><span class="op">)</span>, <span class="cn">NA_real_</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">truth</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">truth</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">occur</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">occur</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 165.0000   0.4125</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">occur</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">occur</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The simulator’s <code>truth$beta_occ</code>,
 <code>truth$beta_pos</code>, and <code>truth$sigma_pos</code> give the
 parameters used to generate <code>cover</code>. Site-level prevalence
@@ -302,34 +301,13 @@ approximation error rather than model misspecification.</p>
 <span>  family  <span class="op">=</span> <span class="fu"><a href="../reference/cover.html">cover</a></span><span class="op">(</span>response <span class="op">=</span> <span class="st">"lognormal"</span><span class="op">)</span>,</span>
 <span>  y       <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">cover</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">fit_tulpa</span></span>
-<span><span class="co">#&gt; &lt;cover_fit (lognormal positive part)&gt;</span></span>
-<span><span class="co">#&gt;   N total      : 400</span></span>
-<span><span class="co">#&gt;   N positive   : 165 (41.2%)</span></span>
-<span><span class="co">#&gt;   sigma_pos    : 0.4127</span></span>
-<span><span class="co">#&gt;   converged    : yes</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Presence (binomial logit):</span></span>
-<span><span class="co">#&gt;               estimate   std.err   z.value</span></span>
-<span><span class="co">#&gt; (Intercept) -0.3796073 0.1075194 -3.530594</span></span>
-<span><span class="co">#&gt; x            0.7321596 0.1218140  6.010469</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Positive (Gaussian on log y &gt; 0):</span></span>
-<span><span class="co">#&gt;               estimate    std.err    z.value</span></span>
-<span><span class="co">#&gt; (Intercept) -1.0145209 0.03420426 -29.660658</span></span>
-<span><span class="co">#&gt; x            0.3086659 0.03375217   9.145068</span></span></code></pre></div>
+<span><span class="va">fit_tulpa</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="fit-with-inla-michaels-separate-hurdle-workflow">Fit with INLA (Michael’s separate-hurdle workflow)<a class="anchor" aria-label="anchor" href="#fit-with-inla-michaels-separate-hurdle-workflow"></a>
 </h2>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">INLA</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Loading required package: Matrix</span></span>
-<span><span class="co">#&gt; This is INLA_25.10.19 built 2025-10-19 19:10:20 UTC.</span></span>
-<span><span class="co">#&gt;  - See www.r-inla.org/contact-us for how to get help.</span></span>
-<span><span class="co">#&gt;  - List available models/likelihoods/etc with inla.list.models()</span></span>
-<span><span class="co">#&gt;  - Use inla.doc(&lt;NAME&gt;) to access documentation</span></span>
-<span><span class="co">#&gt;  - Consider upgrading R-INLA to testing[26.08.22] or stable[26.08.07].</span></span>
 <span></span>
 <span><span class="va">m_occ_inla</span> <span class="op">&lt;-</span> <span class="fu">INLA</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/INLA/man/inla.html" class="external-link">inla</a></span><span class="op">(</span></span>
 <span>  <span class="va">occur</span> <span class="op">~</span> <span class="va">x</span>,</span>
@@ -352,11 +330,15 @@ approximation error rather than model misspecification.</p>
 <span><span class="va">inla_sigma_pos</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span></span>
 <span>  <span class="va">m_pos_inla</span><span class="op">$</span><span class="va">summary.hyperpar</span><span class="op">[</span><span class="st">"Precision for the Gaussian observations"</span>, <span class="st">"mean"</span><span class="op">]</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># INLA is not installed in this environment; the comparison below is</span></span>
+<span><span class="co"># skipped. To run the full vignette: install.packages("INLA",</span></span>
+<span><span class="co"># repos = "https://inla.r-inla-download.org/R/stable").</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="parameter-recovery">Parameter recovery<a class="anchor" aria-label="anchor" href="#parameter-recovery"></a>
 </h2>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">recovery</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta_occ_0"</span>, <span class="st">"beta_occ_x"</span>,</span>
 <span>                <span class="st">"beta_pos_0"</span>, <span class="st">"beta_pos_x"</span>,</span>
@@ -367,13 +349,7 @@ approximation error rather than model misspecification.</p>
 <span><span class="op">)</span></span>
 <span><span class="va">recovery</span><span class="op">$</span><span class="va">delta_tulpa</span> <span class="op">&lt;-</span> <span class="va">recovery</span><span class="op">$</span><span class="va">tulpaObs</span> <span class="op">-</span> <span class="va">recovery</span><span class="op">$</span><span class="va">truth</span></span>
 <span><span class="va">recovery</span><span class="op">$</span><span class="va">delta_inla</span>  <span class="op">&lt;-</span> <span class="va">recovery</span><span class="op">$</span><span class="va">INLA</span>     <span class="op">-</span> <span class="va">recovery</span><span class="op">$</span><span class="va">truth</span></span>
-<span><span class="va">recovery</span></span>
-<span><span class="co">#&gt;    parameter truth   tulpaObs       INLA  delta_tulpa   delta_inla</span></span>
-<span><span class="co">#&gt; 1 beta_occ_0  -0.4 -0.3796073 -0.3816751  0.020392720  0.018324926</span></span>
-<span><span class="co">#&gt; 2 beta_occ_x   0.8  0.7321596  0.7393164 -0.067840445 -0.060683625</span></span>
-<span><span class="co">#&gt; 3 beta_pos_0  -1.0 -1.0145209 -1.0145214 -0.014520890 -0.014521384</span></span>
-<span><span class="co">#&gt; 4 beta_pos_x   0.3  0.3086659  0.3086657  0.008665909  0.008665746</span></span>
-<span><span class="co">#&gt; 5  sigma_pos   0.4  0.4127451  0.4102460  0.012745070  0.010246036</span></span></code></pre></div>
+<span><span class="va">recovery</span></span></code></pre></div>
 <p>Both engines hit the same fixed-effects estimates to within the
 Laplace/MAP vs. INLA-integrated marginal-mean tolerance. The two
 discrepancies that matter:</p>
@@ -394,7 +370,7 @@ attributes to the data.</li>
 <div class="section level2">
 <h2 id="predictive-equivalence">Predictive equivalence<a class="anchor" aria-label="anchor" href="#predictive-equivalence"></a>
 </h2>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">newdata</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span>, <span class="fl">2</span>, length.out <span class="op">=</span> <span class="fl">50</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">pred_tulpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
@@ -411,9 +387,7 @@ attributes to the data.</li>
 <span><span class="va">pred_inla</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">newdata</span><span class="op">$</span><span class="va">x</span>, E_cover <span class="op">=</span> <span class="va">p_inla</span> <span class="op">*</span> <span class="va">mu_inla</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">pred_tulpa</span><span class="op">$</span><span class="va">E_cover</span>, <span class="va">pred_inla</span><span class="op">$</span><span class="va">E_cover</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9999998</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">pred_tulpa</span><span class="op">$</span><span class="va">E_cover</span> <span class="op">-</span> <span class="va">pred_inla</span><span class="op">$</span><span class="va">E_cover</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.001122747</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">pred_tulpa</span><span class="op">$</span><span class="va">E_cover</span> <span class="op">-</span> <span class="va">pred_inla</span><span class="op">$</span><span class="va">E_cover</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Both engines reconstruct expected cover the same way,
 <code>E[y] = p * mu</code> with
 <code>mu = exp(eta_pos + sigma^2 / 2)</code>, so the curves track each
@@ -423,88 +397,11 @@ difference noted above: a small shift in the residual SD feeds through
 the lognormal back-transform and scales <code>mu</code>. On 400 sites
 with prevalence near 0.5 the gap stays a few percent of the predicted
 mean; it shrinks as the positive subset grows.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pred_tulpa</span><span class="op">$</span><span class="va">x</span>, <span class="va">pred_tulpa</span><span class="op">$</span><span class="va">E_cover</span>, type <span class="op">=</span> <span class="st">"l"</span>, lwd <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"x"</span>, ylab <span class="op">=</span> <span class="st">"E[cover]"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">"Expected cover: tulpaObs (black) vs INLA (red)"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">pred_inla</span><span class="op">$</span><span class="va">x</span>, <span class="va">pred_inla</span><span class="op">$</span><span class="va">E_cover</span>, col <span class="op">=</span> <span class="fl">2</span>, lwd <span class="op">=</span> <span class="fl">2</span>, lty <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='252.00pt' viewBox='0 0 432.00 252.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyNTIuMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='252.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyNTIuMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDE3OC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='119.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDE3OC41Ng==)'>
-<polyline points='71.73,174.13 78.21,173.64 84.69,173.11 91.16,172.54 97.64,171.93 104.11,171.28 110.59,170.58 117.07,169.83 123.54,169.03 130.02,168.18 136.50,167.27 142.97,166.31 149.45,165.28 155.92,164.19 162.40,163.03 168.88,161.80 175.35,160.49 181.83,159.11 188.30,157.66 194.78,156.12 201.26,154.49 207.73,152.78 214.21,150.98 220.69,149.09 227.16,147.11 233.64,145.03 240.11,142.85 246.59,140.58 253.07,138.20 259.54,135.72 266.02,133.13 272.50,130.45 278.97,127.65 285.45,124.75 291.92,121.74 298.40,118.62 304.88,115.39 311.35,112.06 317.83,108.61 324.30,105.06 330.78,101.39 337.26,97.62 343.73,93.73 350.21,89.74 356.69,85.64 363.16,81.42 369.64,77.10 376.11,72.66 382.59,68.12 389.07,63.47 ' style='stroke-width: 1.50;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyNTIuMDA=)'>
-<line x1='71.73' y1='178.56' x2='389.07' y2='178.56' style='stroke-width: 0.75;' />
-<line x1='71.73' y1='178.56' x2='71.73' y2='185.76' style='stroke-width: 0.75;' />
-<line x1='151.07' y1='178.56' x2='151.07' y2='185.76' style='stroke-width: 0.75;' />
-<line x1='230.40' y1='178.56' x2='230.40' y2='185.76' style='stroke-width: 0.75;' />
-<line x1='309.73' y1='178.56' x2='309.73' y2='185.76' style='stroke-width: 0.75;' />
-<line x1='389.07' y1='178.56' x2='389.07' y2='185.76' style='stroke-width: 0.75;' />
-<text x='71.73' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-2</text>
-<text x='151.07' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1</text>
-<text x='230.40' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
-<text x='309.73' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='389.07' y='204.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<line x1='59.04' y1='158.98' x2='59.04' y2='73.52' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='158.98' x2='51.84' y2='158.98' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='137.62' x2='51.84' y2='137.62' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='116.25' x2='51.84' y2='116.25' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='94.89' x2='51.84' y2='94.89' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='73.52' x2='51.84' y2='73.52' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,158.98) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.1</text>
-<text transform='translate(41.76,116.25) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
-<text transform='translate(41.76,73.52) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<polygon points='59.04,178.56 401.76,178.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='34.67' text-anchor='middle' style='font-size: 1.44em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Expected cover: tulpaObs (black) vs INLA (red)</text>
-<text x='230.40' y='233.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>x</text>
-<text transform='translate(12.96,118.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>E[cover]</text>
-</g>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDE3OC41Ng==)'>
-<polyline points='71.73,174.23 78.21,173.74 84.69,173.21 91.16,172.64 97.64,172.04 104.11,171.38 110.59,170.69 117.07,169.94 123.54,169.15 130.02,168.30 136.50,167.39 142.97,166.43 149.45,165.40 155.92,164.31 162.40,163.15 168.88,161.92 175.35,160.61 181.83,159.23 188.30,157.77 194.78,156.23 201.26,154.60 207.73,152.88 214.21,151.08 220.69,149.18 227.16,147.19 233.64,145.10 240.11,142.92 246.59,140.63 253.07,138.24 259.54,135.75 266.02,133.16 272.50,130.45 278.97,127.65 285.45,124.73 291.92,121.71 298.40,118.57 304.88,115.33 311.35,111.98 317.83,108.52 324.30,104.95 330.78,101.27 337.26,97.48 343.73,93.58 350.21,89.57 356.69,85.46 363.16,81.23 369.64,76.89 376.11,72.45 382.59,67.89 389.07,63.23 ' style='stroke-width: 1.50; stroke: #DF536B; stroke-dasharray: 8.00,8.00;' />
-</g>
-</g>
-</svg></div></p>
 </div>
 <div class="section level2">
 <h2 id="the-joint-copy-model-side-by-side">The joint copy= model side by side<a class="anchor" aria-label="anchor" href="#the-joint-copy-model-side-by-side"></a>
@@ -520,7 +417,7 @@ identifies one field <code>z</code> per region and writes
 <code>eta_pos = X beta_pos + alpha * sigma * z</code>, integrating the
 copy coefficient <code>alpha</code> on the outer hyperparameter
 grid.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">n_s</span> <span class="op">&lt;-</span> <span class="fl">25L</span></span>
 <span><span class="va">adj</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0L</span>, <span class="va">n_s</span>, <span class="va">n_s</span><span class="op">)</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">s</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n_s</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -553,7 +450,7 @@ demeaning matters in INLA: a <code>bym2</code> field there is also
 sum-to-zero constrained, so a simulator that skips the demean biases the
 intercept in INLA the same way it does here. The constrained field
 causes it; the behaviour is identical across both implementations.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_joint</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  formula <span class="op">=</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">bym2</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group.var <span class="op">=</span> <span class="st">"region"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>              <span class="fu">share</span><span class="op">(</span><span class="fu"><a href="../reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="op">)</span>, alpha <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/graphics/grid.html" class="external-link">grid</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.75</span>, <span class="fl">1.5</span>, <span class="fl">2.5</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
@@ -567,32 +464,6 @@ causes it; the behaviour is identical across both implementations.</p>
 <span>    verbose    <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/112 cells (1%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 11/11 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/18 cells (6%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 5/5 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/3 cells (33%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/16 cells (6%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 8/8 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/12 cells (8%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/15 cells (7%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 8/8 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/4 cells (25%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/20 cells (5%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 12/12 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/18 cells (6%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.01s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/32 cells (3%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 21/21 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/16 cells (6%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/32 cells (3%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 20/20 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/10 cells (10%) | elapsed 0s | ETA &gt;=0s | 0.00s/cells</span></span>
-<span><span class="co">#&gt; [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells</span></span>
 <span></span>
 <span><span class="va">joint_recovery</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta_occ_x"</span>, <span class="st">"beta_pos_x"</span>, <span class="st">"alpha"</span>, <span class="st">"sigma"</span><span class="op">)</span>,</span>
@@ -602,12 +473,7 @@ causes it; the behaviour is identical across both implementations.</p>
 <span>                <span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="va">fit_joint</span><span class="op">$</span><span class="va">joint</span><span class="op">$</span><span class="va">theta_mean</span><span class="op">[</span><span class="st">"alpha"</span><span class="op">]</span><span class="op">)</span>,</span>
 <span>                <span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="va">fit_joint</span><span class="op">$</span><span class="va">joint</span><span class="op">$</span><span class="va">theta_mean</span><span class="op">[</span><span class="st">"sigma"</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">joint_recovery</span></span>
-<span><span class="co">#&gt;    parameter truth   estimate</span></span>
-<span><span class="co">#&gt; 1 beta_occ_x   0.7  0.6579782</span></span>
-<span><span class="co">#&gt; 2 beta_pos_x  -0.5 -0.4723106</span></span>
-<span><span class="co">#&gt; 3      alpha   1.0  1.1124143</span></span>
-<span><span class="co">#&gt; 4      sigma   0.6  0.7026160</span></span></code></pre></div>
+<span><span class="va">joint_recovery</span></span></code></pre></div>
 <p>The occurrence and cover slopes land on the right side of zero (truth
 +0.7 and -0.5), and <code>alpha</code> recovers near its true 1.0. The
 estimate of <code>sigma</code> reads off the field amplitude on the
@@ -624,7 +490,7 @@ on a shared index, with the cover arm’s field declared as a
 <code>copy</code> of the occurrence arm’s. The copy weight is the fitted
 scalar <code>Beta for ...</code> hyperparameter, the direct counterpart
 of tulpaObs’s <code>alpha</code>.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Joint shared-field hurdle in INLA (Michael's mod.joint pattern). Not run</span></span>
 <span><span class="co"># here (INLA may be absent at build); shown for the structural mapping.</span></span>
 <span><span class="co">#</span></span>
@@ -853,83 +719,5 @@ dispatcher in isolation.</li>
 
 
 
-  <script>
-/* SVG Copy Button Functionality */
-(function() {
-  "use strict";
-
-  // Initialize SVG copy buttons after DOM is ready
-  document.addEventListener("DOMContentLoaded", function() {
-    if (typeof ClipboardJS === "undefined") {
-      console.warn("ClipboardJS not loaded - SVG copy buttons disabled");
-      return;
-    }
-
-    // Initialize clipboard for SVG copy buttons
-    var svgClipboard = new ClipboardJS(".btn-copy-svg", {
-      text: function(trigger) {
-        var container = trigger.closest(".svg-container");
-        if (!container) return "";
-
-        var svg = container.querySelector("svg");
-        if (!svg) return "";
-
-        // Clone SVG to avoid modifying the original
-        var clone = svg.cloneNode(true);
-
-        // Remove inline-svg class (not needed in copied version)
-        clone.classList.remove("inline-svg");
-
-        // Add XML declaration and serialize
-        var serializer = new XMLSerializer();
-        var svgString = serializer.serializeToString(clone);
-
-        // Add XML declaration if not present
-        if (!svgString.startsWith("<?xml")) {
-          svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-        }
-
-        return svgString;
-      }
-    });
-
-    // Handle success
-    svgClipboard.on("success", function(e) {
-      var btn = e.trigger;
-      var originalTitle = btn.getAttribute("data-bs-original-title") || btn.getAttribute("title");
-
-      // Update tooltip to show "Copied!"
-      btn.setAttribute("data-bs-original-title", "Copied!");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-
-      // Reset after delay
-      setTimeout(function() {
-        btn.setAttribute("data-bs-original-title", originalTitle);
-      }, 1500);
-
-      e.clearSelection();
-    });
-
-    // Handle error
-    svgClipboard.on("error", function(e) {
-      var btn = e.trigger;
-      btn.setAttribute("data-bs-original-title", "Press Ctrl+C to copy");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-    });
-
-    // Initialize tooltips for SVG copy buttons
-    var svgCopyButtons = document.querySelectorAll(".btn-copy-svg");
-    svgCopyButtons.forEach(function(btn) {
-      new bootstrap.Tooltip(btn, { container: "body" });
-    });
-  });
-})();
-</script>
-</body>
+  </body>
 </html>

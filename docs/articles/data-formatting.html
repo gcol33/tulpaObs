@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -135,19 +135,8 @@ simulated dataset shows the layout.</p>
 <span><span class="va">y</span>   <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 120   5</span></span>
 <span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, <span class="op">]</span></span>
-<span><span class="co">#&gt;      [,1] [,2] [,3] [,4] [,5]</span></span>
-<span><span class="co">#&gt; [1,]    0    0    1    0    0</span></span>
-<span><span class="co">#&gt; [2,]    0    1    1    0    1</span></span>
-<span><span class="co">#&gt; [3,]    0    1    1    1    0</span></span>
-<span><span class="co">#&gt; [4,]    0    0    0    0    0</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dat</span>, <span class="fl">4</span><span class="op">)</span></span>
-<span><span class="co">#&gt;     occ_cov1   det_cov1</span></span>
-<span><span class="co">#&gt; 1 -0.6264538 -0.5059575</span></span>
-<span><span class="co">#&gt; 2  0.1836433  1.3430388</span></span>
-<span><span class="co">#&gt; 3 -0.8356286 -0.2145794</span></span>
-<span><span class="co">#&gt; 4  1.5952808 -0.1795565</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dat</span>, <span class="fl">4</span><span class="op">)</span></span></code></pre></div>
 <p>The matrix has 120 rows to match the 120 rows in <code>dat</code>.
 Row <code>i</code> of <code>y</code> is the detection history for the
 site described by row <code>i</code> of <code>dat</code>. That alignment
@@ -205,9 +194,7 @@ it is what the simulators produce.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 </span></span>
-<span><span class="co">#&gt;       0.3625745       0.9012885       0.3668280       0.5797823</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
 <p><code>occ_cov1</code> and <code>det_cov1</code> both came out of
 <code>dat</code>. The occupancy slope used the value once per site; the
 detection slope used the same value for each of the five visits at that
@@ -230,14 +217,7 @@ is a <code><a href="https://rdrr.io/r/stats/reshape.html" class="external-link">
 <span>  detected <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="fl">18</span>, <span class="fl">1</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
 <span>  elev     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">6</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>   <span class="co"># a site-level covariate</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">long</span>, <span class="fl">6</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   site visit detected       elev</span></span>
-<span><span class="co">#&gt; 1   S1     1        0  0.8816725</span></span>
-<span><span class="co">#&gt; 2   S1     2        0  0.8816725</span></span>
-<span><span class="co">#&gt; 3   S1     3        0  0.8816725</span></span>
-<span><span class="co">#&gt; 4   S2     1        0 -0.9745003</span></span>
-<span><span class="co">#&gt; 5   S2     2        0 -0.9745003</span></span>
-<span><span class="co">#&gt; 6   S2     3        0 -0.9745003</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">long</span>, <span class="fl">6</span><span class="op">)</span></span></code></pre></div>
 <p>The direct route fills a matrix by indexing on the site and visit
 positions. Build the empty matrix at the right size, then scatter each
 row of the long table into its <code>[site, visit]</code> cell.</p>
@@ -249,27 +229,13 @@ row of the long table into its <code>[site, visit]</code> cell.</p>
 <span><span class="va">si</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">site</span>,  <span class="va">sites</span><span class="op">)</span></span>
 <span><span class="va">vi</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">visit</span>, <span class="va">visits</span><span class="op">)</span></span>
 <span><span class="va">ymat</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">si</span>, <span class="va">vi</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">long</span><span class="op">$</span><span class="va">detected</span><span class="op">)</span></span>
-<span><span class="va">ymat</span></span>
-<span><span class="co">#&gt;    V1 V2 V3</span></span>
-<span><span class="co">#&gt; S1  0  0  0</span></span>
-<span><span class="co">#&gt; S2  0  0  0</span></span>
-<span><span class="co">#&gt; S3  0  0  0</span></span>
-<span><span class="co">#&gt; S4  0  1  0</span></span>
-<span><span class="co">#&gt; S5  0  0  1</span></span>
-<span><span class="co">#&gt; S6  1  0  1</span></span></code></pre></div>
+<span><span class="va">ymat</span></span></code></pre></div>
 <p>The site-level table then takes one row per site, in the same site
 order as the matrix rows.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">site_dat</span> <span class="op">&lt;-</span> <span class="va">long</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">sites</span>, <span class="va">long</span><span class="op">$</span><span class="va">site</span><span class="op">)</span>, <span class="st">"elev"</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">site_dat</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
-<span><span class="va">site_dat</span></span>
-<span><span class="co">#&gt;          elev</span></span>
-<span><span class="co">#&gt; 1  0.88167254</span></span>
-<span><span class="co">#&gt; 2 -0.97450027</span></span>
-<span><span class="co">#&gt; 3  0.39910492</span></span>
-<span><span class="co">#&gt; 4 -0.41543326</span></span>
-<span><span class="co">#&gt; 5 -0.01865714</span></span>
-<span><span class="co">#&gt; 6  1.57122440</span></span></code></pre></div>
+<span><span class="va">site_dat</span></span></code></pre></div>
 <p><code><a href="../reference/tobs_data.html">tobs_data()</a></code> packages both steps. Hand it the long frame
 and the column names; it returns a <code>tobs_data</code> object
 carrying the detection matrix, the site-level covariates, and any
@@ -284,13 +250,7 @@ matrices.</p>
 <span>  occ.covs <span class="op">=</span> <span class="st">"elev"</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">obs</span></span>
-<span><span class="co">#&gt; tobs_data: 6 sites, 3 visits</span></span>
-<span><span class="co">#&gt;   Occupancy covariates: elev</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span>
-<span><span class="co">#&gt;  int [1:6, 1:3] 0 0 0 0 0 1 0 0 0 1 ...</span></span>
-<span><span class="co">#&gt;  - attr(*, "dimnames")=List of 2</span></span>
-<span><span class="co">#&gt;   ..$ : chr [1:6] "S1" "S2" "S3" "S4" ...</span></span>
-<span><span class="co">#&gt;   ..$ : NULL</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
 <p><code>obs$y</code> is the same <code>6 x 3</code> matrix, with site
 ids on the rows. <code>obs$occ.covs</code> holds the per-site
 <code>elev</code> column. A detection covariate passed through
@@ -314,12 +274,7 @@ each call names the matching column and <code>type</code>.</p>
 <span><span class="op">)</span></span>
 <span><span class="va">cov_obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">cov_long</span>, y <span class="op">=</span> <span class="st">"cover"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
 <span>                     type <span class="op">=</span> <span class="st">"cover"</span><span class="op">)</span></span>
-<span><span class="va">cov_obs</span><span class="op">$</span><span class="va">y</span></span>
-<span><span class="co">#&gt;    [,1] [,2]</span></span>
-<span><span class="co">#&gt; S1 0.45 0.68</span></span>
-<span><span class="co">#&gt; S2 0.73 0.21</span></span>
-<span><span class="co">#&gt; S3 0.31 0.35</span></span>
-<span><span class="co">#&gt; S4 0.50 0.23</span></span></code></pre></div>
+<span><span class="va">cov_obs</span><span class="op">$</span><span class="va">y</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="building-a-tobs_data-object-by-hand">Building a <code>tobs_data</code> object by hand<a class="anchor" aria-label="anchor" href="#building-a-tobs_data-object-by-hand"></a>
@@ -342,14 +297,7 @@ matrices, one per visit-varying covariate).</p>
 <span><span class="va">obs_hand</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_format.html">tobs_format</a></span><span class="op">(</span>y <span class="op">=</span> <span class="va">y_hand</span>, occ.covs <span class="op">=</span> <span class="va">occ_hand</span>,</span>
 <span>                        det.covs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>effort <span class="op">=</span> <span class="va">eff_hand</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">obs_hand</span></span>
-<span><span class="co">#&gt; tobs_data: 5 sites, 3 visits</span></span>
-<span><span class="co">#&gt;   Occupancy covariates: elev</span></span>
-<span><span class="co">#&gt;   Detection covariates: effort</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs_hand</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span>
-<span><span class="co">#&gt;  int [1:5, 1:3] 1 0 0 1 0 0 0 1 0 0 ...</span></span>
-<span><span class="co">#&gt;  - attr(*, "dimnames")=List of 2</span></span>
-<span><span class="co">#&gt;   ..$ : chr [1:5] "S1" "S2" "S3" "S4" ...</span></span>
-<span><span class="co">#&gt;   ..$ : chr [1:3] "V1" "V2" "V3"</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">obs_hand</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
 <p><code>obs_hand$det.covs$effort</code> carries one effort value per
 site-visit cell, so the detection formula <code>~ effort</code> reads a
 genuinely per-visit covariate rather than a broadcast site value. The
@@ -371,9 +319,7 @@ and <code>det.covs</code>.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">sp_list</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"warbler"</span>, <span class="st">"finch"</span>, <span class="st">"wren"</span><span class="op">)</span></span>
 <span><span class="va">ms_hand</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs_format_ms.html">tobs_format_ms</a></span><span class="op">(</span><span class="va">sp_list</span>, occ.covs <span class="op">=</span> <span class="va">occ_hand</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">ms_hand</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>          <span class="co"># sites x visits x species</span></span>
-<span><span class="co">#&gt; [1] 5 3 3</span></span>
-<span><span class="va">ms_hand</span><span class="op">$</span><span class="va">species_names</span></span>
-<span><span class="co">#&gt; [1] "warbler" "finch"   "wren"</span></span></code></pre></div>
+<span><span class="va">ms_hand</span><span class="op">$</span><span class="va">species_names</span></span></code></pre></div>
 <p>The list-of-matrices form is convenient when species come from
 separate files: each matrix is one species, the list names become the
 species dimension. Passing a pre-built <code>N x J x species</code>
@@ -405,219 +351,19 @@ a matrix.</p>
 <span>  occ.covs <span class="op">=</span> <span class="va">dat</span><span class="op">[</span><span class="st">"occ_cov1"</span><span class="op">]</span>,</span>
 <span>  det.covs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>det_cov1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">det_cov1</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">obs2</span></span>
-<span><span class="co">#&gt; tobs_data: 120 sites, 5 visits</span></span>
-<span><span class="co">#&gt;   Occupancy covariates: occ_cov1</span></span>
-<span><span class="co">#&gt;   Detection covariates: det_cov1</span></span></code></pre></div>
+<span><span class="va">obs2</span></span></code></pre></div>
 <p>The <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> method reports the naive occupancy and
 detection rates, the distribution of detections per site, and the
 per-visit detection rate. Naive occupancy is the fraction of sites with
 any detection, which sits below true occupancy because an occupied site
 can be missed on every visit.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">obs2</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Occupancy data summary</span></span>
-<span><span class="co">#&gt;   Sites: 120 | Max visits: 5</span></span>
-<span><span class="co">#&gt;   Observations: 600 | Missing: 0 (0.0%)</span></span>
-<span><span class="co">#&gt;   Naive occupancy: 0.583 (70 / 120 sites)</span></span>
-<span><span class="co">#&gt;   Naive detection: 0.603</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;   Detection frequency (detections per site):</span></span>
-<span><span class="co">#&gt;  detections sites</span></span>
-<span><span class="co">#&gt;           0    50</span></span>
-<span><span class="co">#&gt;           1     7</span></span>
-<span><span class="co">#&gt;           2    17</span></span>
-<span><span class="co">#&gt;           3    22</span></span>
-<span><span class="co">#&gt;           4    16</span></span>
-<span><span class="co">#&gt;           5     8</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt;   Per-visit detection rate: V1=0.33  V2=0.33  V3=0.35  V4=0.32  V5=0.42</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">obs2</span><span class="op">)</span></span></code></pre></div>
 <p>The <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> method draws the same information: detections
 per site, detection rate by visit, and visit completeness (the share of
 sites actually surveyed on each visit).</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">obs2</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpMC4wMHwxNDQuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='144.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHwxNDQuMDB8MC4wMHwyODguMDA=)'>
-<text x='86.26' y='15.28' text-anchor='middle' style='font-size: 0.95em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Detections per site</text>
-<text x='86.26' y='286.10' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Number of detections</text>
-<text transform='translate(7.60,136.87) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Frequency</text>
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='49.03' y1='249.98' x2='123.48' y2='249.98' style='stroke-width: 0.75;' />
-<line x1='49.03' y1='249.98' x2='49.03' y2='254.74' style='stroke-width: 0.75;' />
-<line x1='63.92' y1='249.98' x2='63.92' y2='254.74' style='stroke-width: 0.75;' />
-<line x1='78.81' y1='249.98' x2='78.81' y2='254.74' style='stroke-width: 0.75;' />
-<line x1='93.70' y1='249.98' x2='93.70' y2='254.74' style='stroke-width: 0.75;' />
-<line x1='108.59' y1='249.98' x2='108.59' y2='254.74' style='stroke-width: 0.75;' />
-<line x1='123.48' y1='249.98' x2='123.48' y2='254.74' style='stroke-width: 0.75;' />
-<text x='49.03' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
-<text x='63.92' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='78.81' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='93.70' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='108.59' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='123.48' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<line x1='38.02' y1='241.61' x2='38.02' y2='32.14' style='stroke-width: 0.75;' />
-<line x1='38.02' y1='241.61' x2='33.26' y2='241.61' style='stroke-width: 0.75;' />
-<line x1='38.02' y1='199.71' x2='33.26' y2='199.71' style='stroke-width: 0.75;' />
-<line x1='38.02' y1='157.82' x2='33.26' y2='157.82' style='stroke-width: 0.75;' />
-<line x1='38.02' y1='115.93' x2='33.26' y2='115.93' style='stroke-width: 0.75;' />
-<line x1='38.02' y1='74.03' x2='33.26' y2='74.03' style='stroke-width: 0.75;' />
-<line x1='38.02' y1='32.14' x2='33.26' y2='32.14' style='stroke-width: 0.75;' />
-<text transform='translate(26.61,241.61) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
-<text transform='translate(26.61,199.71) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>10</text>
-<text transform='translate(26.61,157.82) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>20</text>
-<text transform='translate(26.61,115.93) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>30</text>
-<text transform='translate(26.61,74.03) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>40</text>
-<text transform='translate(26.61,32.14) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>50</text>
-</g>
-<defs>
-  <clipPath id='cpMzguMDJ8MTM0LjUwfDIzLjc2fDI0OS45OA=='>
-    <rect x='38.02' y='23.76' width='96.48' height='226.22' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMzguMDJ8MTM0LjUwfDIzLjc2fDI0OS45OA==)'>
-<rect x='41.59' y='32.14' width='14.89' height='209.47' style='stroke-width: 0.75; stroke: #7F7F7F; fill: #CCCCCC;' />
-<rect x='56.48' y='212.28' width='14.89' height='29.33' style='stroke-width: 0.75; stroke: #7F7F7F; fill: #CCCCCC;' />
-<rect x='71.37' y='170.39' width='14.89' height='71.22' style='stroke-width: 0.75; stroke: #7F7F7F; fill: #CCCCCC;' />
-<rect x='86.26' y='149.44' width='14.89' height='92.17' style='stroke-width: 0.75; stroke: #7F7F7F; fill: #CCCCCC;' />
-<rect x='101.14' y='174.58' width='14.89' height='67.03' style='stroke-width: 0.75; stroke: #7F7F7F; fill: #CCCCCC;' />
-<rect x='116.03' y='208.09' width='14.89' height='33.51' style='stroke-width: 0.75; stroke: #7F7F7F; fill: #CCCCCC;' />
-</g>
-<defs>
-  <clipPath id='cpMTgyLjAyfDI3OC41MHwyMy43NnwyNDkuOTg='>
-    <rect x='182.02' y='23.76' width='96.48' height='226.22' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMTgyLjAyfDI3OC41MHwyMy43NnwyNDkuOTg=)'>
-</g>
-<defs>
-  <clipPath id='cpMTQ0LjAwfDI4OC4wMHwwLjAwfDI4OC4wMA=='>
-    <rect x='144.00' y='0.00' width='144.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMTQ0LjAwfDI4OC4wMHwwLjAwfDI4OC4wMA==)'>
-<rect x='185.59' y='102.13' width='15.40' height='147.86' style='stroke-width: 0.75; fill: #4682B4;' />
-<rect x='204.07' y='102.13' width='15.40' height='147.86' style='stroke-width: 0.75; fill: #4682B4;' />
-<rect x='222.55' y='94.73' width='15.40' height='155.25' style='stroke-width: 0.75; fill: #4682B4;' />
-<rect x='241.04' y='105.82' width='15.40' height='144.16' style='stroke-width: 0.75; fill: #4682B4;' />
-<rect x='259.52' y='65.16' width='15.40' height='184.82' style='stroke-width: 0.75; fill: #4682B4;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<text x='193.29' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V1</text>
-<text x='211.77' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V2</text>
-<text x='230.26' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V3</text>
-<text x='248.74' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V4</text>
-<text x='267.22' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V5</text>
-</g>
-<g clip-path='url(#cpMTQ0LjAwfDI4OC4wMHwwLjAwfDI4OC4wMA==)'>
-<text x='230.26' y='15.28' text-anchor='middle' style='font-size: 0.95em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Detection rate by visit</text>
-<text transform='translate(151.60,136.87) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>P(detect)</text>
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='182.02' y1='249.98' x2='182.02' y2='28.20' style='stroke-width: 0.75;' />
-<line x1='182.02' y1='249.98' x2='177.26' y2='249.98' style='stroke-width: 0.75;' />
-<line x1='182.02' y1='205.63' x2='177.26' y2='205.63' style='stroke-width: 0.75;' />
-<line x1='182.02' y1='161.27' x2='177.26' y2='161.27' style='stroke-width: 0.75;' />
-<line x1='182.02' y1='116.91' x2='177.26' y2='116.91' style='stroke-width: 0.75;' />
-<line x1='182.02' y1='72.55' x2='177.26' y2='72.55' style='stroke-width: 0.75;' />
-<line x1='182.02' y1='28.20' x2='177.26' y2='28.20' style='stroke-width: 0.75;' />
-<text transform='translate(170.61,249.98) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text transform='translate(170.61,205.63) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.1</text>
-<text transform='translate(170.61,161.27) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.2</text>
-<text transform='translate(170.61,116.91) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
-<text transform='translate(170.61,72.55) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.4</text>
-<text transform='translate(170.61,28.20) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-</g>
-<defs>
-  <clipPath id='cpMzI2LjAyfDQyMi41MHwyMy43NnwyNDkuOTg='>
-    <rect x='326.02' y='23.76' width='96.48' height='226.22' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMzI2LjAyfDQyMi41MHwyMy43NnwyNDkuOTg=)'>
-</g>
-<defs>
-  <clipPath id='cpMjg4LjAwfDQzMi4wMHwwLjAwfDI4OC4wMA=='>
-    <rect x='288.00' y='0.00' width='144.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjg4LjAwfDQzMi4wMHwwLjAwfDI4OC4wMA==)'>
-<rect x='329.59' y='23.76' width='15.40' height='226.22' style='stroke-width: 0.75; fill: #8FBC8F;' />
-<rect x='348.07' y='23.76' width='15.40' height='226.22' style='stroke-width: 0.75; fill: #8FBC8F;' />
-<rect x='366.55' y='23.76' width='15.40' height='226.22' style='stroke-width: 0.75; fill: #8FBC8F;' />
-<rect x='385.04' y='23.76' width='15.40' height='226.22' style='stroke-width: 0.75; fill: #8FBC8F;' />
-<rect x='403.52' y='23.76' width='15.40' height='226.22' style='stroke-width: 0.75; fill: #8FBC8F;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<text x='337.29' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V1</text>
-<text x='355.77' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V2</text>
-<text x='374.26' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V3</text>
-<text x='392.74' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V4</text>
-<text x='411.22' y='267.09' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>V5</text>
-</g>
-<g clip-path='url(#cpMjg4LjAwfDQzMi4wMHwwLjAwfDI4OC4wMA==)'>
-<text x='374.26' y='15.28' text-anchor='middle' style='font-size: 0.95em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Visit completeness</text>
-<text transform='translate(295.60,136.87) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Proportion surveyed</text>
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='326.02' y1='249.98' x2='326.02' y2='23.76' style='stroke-width: 0.75;' />
-<line x1='326.02' y1='249.98' x2='321.26' y2='249.98' style='stroke-width: 0.75;' />
-<line x1='326.02' y1='204.74' x2='321.26' y2='204.74' style='stroke-width: 0.75;' />
-<line x1='326.02' y1='159.49' x2='321.26' y2='159.49' style='stroke-width: 0.75;' />
-<line x1='326.02' y1='114.25' x2='321.26' y2='114.25' style='stroke-width: 0.75;' />
-<line x1='326.02' y1='69.00' x2='321.26' y2='69.00' style='stroke-width: 0.75;' />
-<line x1='326.02' y1='23.76' x2='321.26' y2='23.76' style='stroke-width: 0.75;' />
-<text transform='translate(314.61,249.98) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text transform='translate(314.61,204.74) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.2</text>
-<text transform='translate(314.61,159.49) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.4</text>
-<text transform='translate(314.61,114.25) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.6</text>
-<text transform='translate(314.61,69.00) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.8</text>
-<text transform='translate(314.61,23.76) rotate(-90)' text-anchor='middle' style='font-size: 0.792em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1.0</text>
-</g>
-</g>
-</svg></div></p>
 <p>These summaries are a quick check that the reshape did what you
 meant. A visit column that is mostly empty, or a naive occupancy of
 zero, usually points to a site or visit id that did not line up during
@@ -636,11 +382,7 @@ dropped sites.</p>
 <code class="sourceCode R"><span><span class="va">y_miss</span> <span class="op">&lt;-</span> <span class="va">y</span></span>
 <span><span class="va">y_miss</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">4</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA</span>   <span class="co"># site 1 surveyed 3 times</span></span>
 <span><span class="va">y_miss</span><span class="op">[</span><span class="fl">2</span>, <span class="fl">5</span><span class="op">]</span>   <span class="op">&lt;-</span> <span class="cn">NA</span>   <span class="co"># site 2 surveyed 4 times</span></span>
-<span><span class="va">y_miss</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span></span>
-<span><span class="co">#&gt;      [,1] [,2] [,3] [,4] [,5]</span></span>
-<span><span class="co">#&gt; [1,]    0    0    1   NA   NA</span></span>
-<span><span class="co">#&gt; [2,]    0    1    1    0   NA</span></span>
-<span><span class="co">#&gt; [3,]    0    1    1    1    0</span></span></code></pre></div>
+<span><span class="va">y_miss</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="op">]</span></span></code></pre></div>
 <p>The fit runs unchanged on the gappy matrix, and the estimates stay
 close to the truth because the present visits still carry their
 information.</p>
@@ -654,9 +396,7 @@ information.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_miss</span><span class="op">)</span></span>
-<span><span class="co">#&gt; psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 </span></span>
-<span><span class="co">#&gt;       0.3589342       0.9007435       0.3778563       0.5671907</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_miss</span><span class="op">)</span></span></code></pre></div>
 <p>A site with every visit missing is a special case: with no
 observations it contributes nothing to the detection likelihood, and
 under the spatial nested-Laplace engine it becomes a held-out site whose
@@ -677,26 +417,20 @@ out.</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>     detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span>,</span>
-<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `.tobs_build_single()`:</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> y must be a matrix (n_sites x max_visits)</span></span></code></pre></div>
+<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>If the matrix has a different number of rows than <code>data</code>,
 the error quotes both counts so you can see which side is wrong.</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">100</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>     detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">y</span>,</span>
-<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;">:</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> y has 120 rows but data has 100 rows</span></span></code></pre></div>
+<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="../reference/tobs_data.html">tobs_data()</a></code> validates earlier, while it is still
 reshaping the long frame. Naming a covariate column that is not in the
 frame stops with the missing name quoted, before any matrix is
 built.</p>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">long</span>, y <span class="op">=</span> <span class="st">"detected"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
-<span>          occ.covs <span class="op">=</span> <span class="st">"elevation"</span><span class="op">)</span>   <span class="co"># column is named 'elev', not 'elevation'</span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `[.data.frame`:</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> undefined columns selected</span></span></code></pre></div>
+<span>          occ.covs <span class="op">=</span> <span class="st">"elevation"</span><span class="op">)</span>   <span class="co"># column is named 'elev', not 'elevation'</span></span></code></pre></div>
 <p>The <code>type</code> argument is checked against the response
 values. An occurrence response carrying a <code>2</code> is rejected,
 since occurrence data is 0/1; an abundance response with a negative
@@ -706,9 +440,7 @@ against their own domains.</p>
 <code class="sourceCode R"><span><span class="va">bad</span> <span class="op">&lt;-</span> <span class="va">long</span></span>
 <span><span class="va">bad</span><span class="op">$</span><span class="va">detected</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
 <span><span class="fu"><a href="../reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">bad</span>, y <span class="op">=</span> <span class="st">"detected"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
-<span>          type <span class="op">=</span> <span class="st">"occurrence"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `.tobs_response_values()`:</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> tobs_data(type = 'occurrence'): y must be 0/1</span></span></code></pre></div>
+<span>          type <span class="op">=</span> <span class="st">"occurrence"</span><span class="op">)</span></span></code></pre></div>
 <p>The community and dynamic builders apply the matching check on their
 own shapes. A <code><a href="../reference/dyn_occu.html">dyn_occu()</a></code> fit wants a 3D
 <code>[site x visit x season]</code> array, and handing it a 2D matrix
@@ -716,9 +448,7 @@ reports the array requirement directly.</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/dyn_occu.html">dyn_occu</a></span><span class="op">(</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">y</span>,</span>
 <span>     colonization <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, extinction <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
-<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `.tobs_build_dynamic()`:</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> y must be a 3D array [n_sites x max_visits x n_seasons] or a list of matrices</span></span></code></pre></div>
+<span>     method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The pattern is the same across families: declare the site table and
 the response, let the builder reconcile them, and read the error when
 they do not match. When a fit refuses to start, checking
@@ -746,8 +476,7 @@ form the matching family expects.</p>
 array, and <code>species</code> names that dimension.</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_ms_occu.html">simulate_ms_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">80</span>, J <span class="op">=</span> <span class="fl">4</span>, n.species <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sm</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x species</span></span>
-<span><span class="co">#&gt; [1] 80  4  6</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sm</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x species</span></span></code></pre></div>
 <p>An integrated model has one detection matrix per data source, with a
 shared occupancy state across sources. <code><a href="../reference/simulate_int_occu.html">simulate_int_occu()</a></code>
 returns <code>y</code> as a list of matrices that differ in their visit
@@ -755,10 +484,7 @@ counts.</p>
 <div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">si</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_int_occu.html">simulate_int_occu</a></span><span class="op">(</span>N.total <span class="op">=</span> <span class="fl">100</span>, n.data <span class="op">=</span> <span class="fl">2</span>, J <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span>,</span>
 <span>                        n.shared <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span>, <span class="va">dim</span>, <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span>   <span class="co"># each source: sites x its own visit count</span></span>
-<span><span class="co">#&gt;      [,1] [,2]</span></span>
-<span><span class="co">#&gt; [1,]   60   60</span></span>
-<span><span class="co">#&gt; [2,]    4    3</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">si</span><span class="op">$</span><span class="va">y</span>, <span class="va">dim</span>, <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span>   <span class="co"># each source: sites x its own visit count</span></span></code></pre></div>
 <p>A dynamic model adds the season as a third dimension.
 <code><a href="../reference/simulate_dyn_occu.html">simulate_dyn_occu()</a></code> returns an <code>N x J x season</code>
 array, and the fit needs <code>colonization</code> and
@@ -766,8 +492,7 @@ array, and the fit needs <code>colonization</code> and
 processes.</p>
 <div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sd</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dyn_occu.html">simulate_dyn_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">60</span>, J <span class="op">=</span> <span class="fl">3</span>, n.seasons <span class="op">=</span> <span class="fl">4</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sd</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x seasons</span></span>
-<span><span class="co">#&gt; [1] 60  3  4</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sd</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>   <span class="co"># sites x visits x seasons</span></span></code></pre></div>
 <p>Each of those families has its own vignette that fits the model end
 to end. This one stops at the data shape, which is the part that is the
 same whether you go on to a Laplace fit or a full NUTS posterior.</p>
@@ -807,83 +532,5 @@ responses fit end to end.</p></li>
 
 
 
-  <script>
-/* SVG Copy Button Functionality */
-(function() {
-  "use strict";
-
-  // Initialize SVG copy buttons after DOM is ready
-  document.addEventListener("DOMContentLoaded", function() {
-    if (typeof ClipboardJS === "undefined") {
-      console.warn("ClipboardJS not loaded - SVG copy buttons disabled");
-      return;
-    }
-
-    // Initialize clipboard for SVG copy buttons
-    var svgClipboard = new ClipboardJS(".btn-copy-svg", {
-      text: function(trigger) {
-        var container = trigger.closest(".svg-container");
-        if (!container) return "";
-
-        var svg = container.querySelector("svg");
-        if (!svg) return "";
-
-        // Clone SVG to avoid modifying the original
-        var clone = svg.cloneNode(true);
-
-        // Remove inline-svg class (not needed in copied version)
-        clone.classList.remove("inline-svg");
-
-        // Add XML declaration and serialize
-        var serializer = new XMLSerializer();
-        var svgString = serializer.serializeToString(clone);
-
-        // Add XML declaration if not present
-        if (!svgString.startsWith("<?xml")) {
-          svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-        }
-
-        return svgString;
-      }
-    });
-
-    // Handle success
-    svgClipboard.on("success", function(e) {
-      var btn = e.trigger;
-      var originalTitle = btn.getAttribute("data-bs-original-title") || btn.getAttribute("title");
-
-      // Update tooltip to show "Copied!"
-      btn.setAttribute("data-bs-original-title", "Copied!");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-
-      // Reset after delay
-      setTimeout(function() {
-        btn.setAttribute("data-bs-original-title", originalTitle);
-      }, 1500);
-
-      e.clearSelection();
-    });
-
-    // Handle error
-    svgClipboard.on("error", function(e) {
-      var btn = e.trigger;
-      btn.setAttribute("data-bs-original-title", "Press Ctrl+C to copy");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-    });
-
-    // Initialize tooltips for SVG copy buttons
-    var svgCopyButtons = document.querySelectorAll(".btn-copy-svg");
-    svgCopyButtons.forEach(function(btn) {
-      new bootstrap.Tooltip(btn, { container: "body" });
-    });
-  });
-})();
-</script>
-</body>
+  </body>
 </html>

@@ -15,30 +15,30 @@ uses.
 
 ``` r
 cover_priors(
-  occ_intercept = list(mean = 0, sd = 2),
-  occ_slope = list(mean = 0, sd = 2.5),
-  pos_intercept = list(mean = 0, sd = 3),
-  pos_slope = list(mean = 0, sd = 2.5)
+  occ.intercept = list(mean = 0, sd = 2),
+  occ.slope = list(mean = 0, sd = 2.5),
+  pos.intercept = list(mean = 0, sd = 3),
+  pos.slope = list(mean = 0, sd = 2.5)
 )
 ```
 
 ## Arguments
 
-- occ_intercept:
+- occ.intercept:
 
   Prior on the occurrence (presence) intercept, logit scale.
   `list(mean, sd)`. Default `list(mean = 0, sd = 2)`.
 
-- occ_slope:
+- occ.slope:
 
   Prior on occurrence slopes. Default `list(mean = 0, sd = 2.5)`.
 
-- pos_intercept:
+- pos.intercept:
 
   Prior on the positive-cover intercept (logit scale for `"beta"`, log
   scale for `"lognormal"`). Default `list(mean = 0, sd = 3)`.
 
-- pos_slope:
+- pos.slope:
 
   Prior on positive-cover slopes. Default `list(mean = 0, sd = 2.5)`.
 
@@ -76,8 +76,8 @@ to combine the two.
 
 ``` r
 # regularise the occurrence arm, leave the positive arm unpenalised
-priors <- cover_priors(pos_intercept = list(mean = 0, sd = Inf),
-                       pos_slope     = list(mean = 0, sd = Inf))
+priors <- cover_priors(pos.intercept = list(mean = 0, sd = Inf),
+                       pos.slope     = list(mean = 0, sd = Inf))
 priors
 
 # \donttest{

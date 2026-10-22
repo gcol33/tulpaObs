@@ -21,6 +21,13 @@ t_occu()
 
 A `tobs_family` object.
 
+## Engines
+
+- `method = "pg_gibbs"` – the Polya-Gamma Gibbs sampler: conditional on
+  the year effects the seasons factorise, so the joint (coefficients,
+  AR1 year effect) update is one exact Gaussian Markov random field
+  draw; the only route.
+
 ## Examples
 
 ``` r

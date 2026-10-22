@@ -46,6 +46,25 @@ MODEL” is to fit a single binomial on the row-stacked detection
 histories. This vignette shows what’s lost compared to the true
 marginalized fit.
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ## Function mapping
 
 The table below maps the INLA constructs you would reach for against the
@@ -101,10 +120,10 @@ library(tulpaObs)
 sim <- simulate_occu(
   N          = 600,
   J          = 6,
-  n_occ_covs = 1,
-  n_det_covs = 1,
-  beta_occ   = c(0.5, 1.2),    # intercept + slope on occ_cov1
-  beta_det   = c(0.0, 0.8),    # intercept + slope on det_cov1
+  n.occ.covs = 1,
+  n.det.covs = 1,
+  beta.occ   = c(0.5, 1.2),    # intercept + slope on occ_cov1
+  beta.det   = c(0.0, 0.8),    # intercept + slope on det_cov1
   seed       = 42
 )
 
@@ -330,10 +349,10 @@ to separate.
 sim2 <- simulate_occu(
   N          = 400,
   J          = 5,
-  n_occ_covs = 1,
-  n_det_covs = 1,
-  beta_occ   = c(0.2, 0.9),
-  beta_det   = c(0.4, 0.5),
+  n.occ.covs = 1,
+  n.det.covs = 1,
+  beta.occ   = c(0.2, 0.9),
+  beta.det   = c(0.4, 0.5),
   seed       = 7
 )
 

@@ -62,6 +62,29 @@ latent factors are available through `method = "nested_laplace"` / the
 [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 term; see the package overview for the spatial and factor variants.
 
+## Engines
+
+- `method = "laplace"` – the shared community Laplace-EM, the default;
+  [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  factors alone run here through the block-coordinate driver.
+
+- `method = "nested_laplace"` – a shared areal field
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  on the abundance formula (the spAbundance `sfMsAbund` model), with or
+  without
+  [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  factors, by block coordinate ascent; the field is required on this
+  route.
+
+- `method = "nuts"` – the exact joint community posterior sampled by the
+  in-tree C++ target, warm-started at the Laplace-EM mode, as described
+  above; non-spatial.
+
+- `method = "pg_gibbs"` – a per-species Polya-Gamma conjugate Gibbs with
+  community mean and Inverse-Gamma variance updates, for the logistic
+  `"binomial"` response only (another response errors with a pointer);
+  non-spatial.
+
 ## See also
 
 [`count()`](https://gillescolling.com/tulpaObs/reference/count.md)
@@ -73,7 +96,7 @@ term; see the package overview for the spatial and factor variants.
 
 ``` r
 # \donttest{
-sim <- simulate_ms_count(N = 120, n_species = 8, seed = 1)
+sim <- simulate_ms_count(N = 120, n.species = 8, seed = 1)
 fit <- tobs(~ x, data = sim$data, family = ms_count(), y = sim$y,
             species = colnames(sim$y), method = "laplace")
 summary(fit)

@@ -13,10 +13,10 @@ simulate_occu_multi(
   S = 2,
   N = 300,
   J = 4,
-  n_state_covs = 1,
-  beta_first = NULL,
-  beta_second = NULL,
-  beta_p = NULL,
+  n.state.covs = 1,
+  beta.first = NULL,
+  beta.second = NULL,
+  beta.p = NULL,
   seed = NULL
 )
 ```
@@ -35,22 +35,22 @@ simulate_occu_multi(
 
   Number of replicate visits (default 4).
 
-- n_state_covs:
+- n.state.covs:
 
   Number of shared occupancy covariates (default 1).
 
-- beta_first:
+- beta.first:
 
   Length-`S` list of first-order natural-parameter coefficients
   `c(intercept, slopes...)`. Default moderate occupancy.
 
-- beta_second:
+- beta.second:
 
   Length-`choose(S, 2)` list of second-order (interaction) coefficients
   (in `combn(S, 2)` order). Default a single positive interaction for
   `S = 2`, else 0.
 
-- beta_p:
+- beta.p:
 
   Length-`S` list of detection coefficients (logit). Default
   `c(qlogis(0.5), ...)`.

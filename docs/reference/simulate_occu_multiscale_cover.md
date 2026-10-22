@@ -13,40 +13,40 @@ recovery tests.
 
 ``` r
 simulate_occu_multiscale_cover(
-  n_cells = 60L,
-  plots_per_cell = 4L,
-  visits_per_plot = 2L,
-  beta_psi = c(0.4, 0.6),
-  beta_theta = c(0.2, 0.5),
-  beta_p = c(0, 0.5),
-  beta_pos = c(log(0.1), -0.4),
+  n.cells = 60L,
+  plots.per.cell = 4L,
+  visits.per.plot = 2L,
+  beta.psi = c(0.4, 0.6),
+  beta.theta = c(0.2, 0.5),
+  beta.p = c(0, 0.5),
+  beta.pos = c(log(0.1), -0.4),
   positive = c("lognormal", "beta", "gaussian"),
   phi = 0.35,
   adj = NULL,
   sigma = 0.7,
   alpha = 1,
   trend = FALSE,
-  sigma_trend = 0.7,
-  alpha_trend = 1,
+  sigma.trend = 0.7,
+  alpha.trend = 1,
   seed = NULL
 )
 ```
 
 ## Arguments
 
-- n_cells:
+- n.cells:
 
   number of areal cells (graph nodes).
 
-- plots_per_cell:
+- plots.per.cell:
 
   plots (the availability units) per cell.
 
-- visits_per_plot:
+- visits.per.plot:
 
   detection replicate visits per plot.
 
-- beta_psi, beta_theta, beta_p, beta_pos:
+- beta.psi, beta.theta, beta.p, beta.pos:
 
   length-2 `c(intercept, slope)` coefficients for the four arms (one
   covariate each).
@@ -61,7 +61,7 @@ simulate_occu_multiscale_cover(
 
 - adj:
 
-  `n_cells x n_cells` adjacency; default a 1-D chain.
+  `n.cells x n.cells` adjacency; default a 1-D chain.
 
 - sigma:
 
@@ -75,11 +75,11 @@ simulate_occu_multiscale_cover(
 
   add a second, spatially-varying-coefficient (SVC) areal field weighted
   per cell by a cell-level covariate `tcov` (added to `data`):
-  `tcov_c * sigma_trend * f_trend[c]` on occupancy and
-  `tcov_c * alpha_trend * sigma_trend * f_trend[c]` on cover. Default
+  `tcov_c * sigma.trend * f_trend[c]` on occupancy and
+  `tcov_c * alpha.trend * sigma.trend * f_trend[c]` on cover. Default
   `FALSE`.
 
-- sigma_trend, alpha_trend:
+- sigma.trend, alpha.trend:
 
   trend-field marginal SD and its cover-arm scaling (used only when
   `trend = TRUE`).
@@ -96,7 +96,7 @@ A list with `y`, `y_pos` (`[n_plots x visits_per_plot]`), the plot-level
 ## Examples
 
 ``` r
-sim <- simulate_occu_multiscale_cover(n_cells = 10, plots_per_cell = 2,
-                                      visits_per_plot = 2, seed = 1)
+sim <- simulate_occu_multiscale_cover(n.cells = 10, plots.per.cell = 2,
+                                      visits.per.plot = 2, seed = 1)
 dim(sim$y)
 ```

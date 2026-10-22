@@ -1,5 +1,24 @@
 # Occupancy with a continuous SPDE spatial field
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -215,8 +234,8 @@ term, the way `mgcv` writes `s(lon, lat)`.
 [`spde()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 builds a triangular mesh over the observation coordinates (via
 tulpaMesh) and constructs the SPDE precision at the prior modes of
-`prior_range` and `prior_sigma`. The mesh covers the data extent plus a
-small buffer; `max_edge = c(inner, outer)` controls the spacing inside
+`prior.range` and `prior.sigma`. The mesh covers the data extent plus a
+small buffer; `max.edge = c(inner, outer)` controls the spacing inside
 and outside the data. The coordinate columns (`lon`, `lat`) are taken
 from `data`. We fit a non-spatial model first as the baseline, then the
 SPDE model, so the two are directly comparable.
@@ -236,21 +255,21 @@ round(fit_ns$means, 3)
 ```
 
 The SPDE call adds one term to the occupancy formula and changes nothing
-else. The `prior_range = c(0.3, 0.5)` is a PC prior on the range: the
+else. The `prior.range = c(0.3, 0.5)` is a PC prior on the range: the
 first number is the median range guess (0.3 of the unit square), the
 second the probability the range is below it.
-`prior_sigma = c(0.7, 0.5)` is the matching prior on the marginal SD.
-`max_edge = c(0.3, 0.6)` sets the mesh spacing inside and outside the
+`prior.sigma = c(0.7, 0.5)` is the matching prior on the marginal SD.
+`max.edge = c(0.3, 0.6)` sets the mesh spacing inside and outside the
 data; `nu = 1` fixes the Matern smoothness.
 
 ``` r
 
 fit_sp <- tobs(
   formula   = ~ occ_cov + spde(lon, lat,
-                               max_edge    = c(0.3, 0.6),
+                               max.edge    = c(0.3, 0.6),
                                nu          = 1,
-                               prior_range = c(0.3, 0.5),
-                               prior_sigma = c(0.7, 0.5)),
+                               prior.range = c(0.3, 0.5),
+                               prior.sigma = c(0.7, 0.5)),
   data      = dat,
   family    = occu(),
   detection = ~ det_cov,
@@ -271,7 +290,7 @@ credible bounds for every fixed effect.
 ``` r
 
 coef(fit_sp)
-round(summary(fit_sp), 3)
+round(coef(summary(fit_sp)), 3)
 ```
 
 The fitted SPDE field itself is stored on the fit as `spatial_field`, a
@@ -361,7 +380,7 @@ the field earned its place: the non-spatial residuals should carry
 autocorrelation the SPDE residuals do not. If the SPDE residuals still
 test significant, the field is under-fitting, usually because the prior
 range is too long for the signal, and shortening it (a smaller
-`prior_range` median) lets the field track finer variation. If neither
+`prior.range` median) lets the field track finer variation. If neither
 fit shows autocorrelation, there was no spatial signal to capture and
 the field is not needed; the comparison section makes that call formal.
 
@@ -584,7 +603,7 @@ A few rules of thumb for continuous occupancy fields, with the numbers
 that make them usable.
 
 - **Set the range prior to roughly a third of the study extent, then
-  check.** `prior_range = c(0.3, 0.5)` on a unit square says the median
+  check.** `prior.range = c(0.3, 0.5)` on a unit square says the median
   range is 0.3 of the domain, the distance over which sites stay
   correlated, with even odds it is smaller. A range much shorter than
   the typical inter-site spacing leaves the field unable to borrow
@@ -594,11 +613,11 @@ that make them usable.
   recovered field SD: if it collapses toward zero the prior range is
   fighting the data.
 
-- **Tie `max_edge` to the range, inner edge well below it.** The mesh
+- **Tie `max.edge` to the range, inner edge well below it.** The mesh
   resolution has to be fine enough to represent the field’s wiggles. A
-  useful default is an inner `max_edge` of one-fifth to one-third of the
+  useful default is an inner `max.edge` of one-fifth to one-third of the
   prior range, with the outer edge two to three times the inner so the
-  buffer stays cheap. Here `max_edge = c(0.3, 0.6)` against a range of
+  buffer stays cheap. Here `max.edge = c(0.3, 0.6)` against a range of
   0.3 is at the coarse end and gives a few hundred nodes; halving the
   inner edge to 0.15 roughly doubles the node count and sharpens the
   field, at a proportional cost in fit time. The N = 1500 recovery tier

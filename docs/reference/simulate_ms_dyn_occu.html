@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,10 +68,10 @@
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_ms_dyn_occu</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">50</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>  n_species <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  n_seasons <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>  beta_comm_mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>,</span>
-<span>  beta_comm_sd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>  n.species <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  n.seasons <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  beta.comm.mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>,</span>
+<span>  beta.comm.sd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>  gamma <span class="op">=</span> <span class="fl">0.15</span>,</span>
 <span>  epsilon <span class="op">=</span> <span class="fl">0.1</span>,</span>
 <span>  field <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -92,19 +92,19 @@
 <dd><p>Visits per season (default 3).</p></dd>
 
 
-<dt id="arg-n-species">n_species<a class="anchor" aria-label="anchor" href="#arg-n-species"></a></dt>
+<dt id="arg-n-species">n.species<a class="anchor" aria-label="anchor" href="#arg-n-species"></a></dt>
 <dd><p>Number of species (default 5).</p></dd>
 
 
-<dt id="arg-n-seasons">n_seasons<a class="anchor" aria-label="anchor" href="#arg-n-seasons"></a></dt>
+<dt id="arg-n-seasons">n.seasons<a class="anchor" aria-label="anchor" href="#arg-n-seasons"></a></dt>
 <dd><p>Number of seasons (default 4).</p></dd>
 
 
-<dt id="arg-beta-comm-mean">beta_comm_mean<a class="anchor" aria-label="anchor" href="#arg-beta-comm-mean"></a></dt>
+<dt id="arg-beta-comm-mean">beta.comm.mean<a class="anchor" aria-label="anchor" href="#arg-beta-comm-mean"></a></dt>
 <dd><p>Community mean for occupancy (default c(0)).</p></dd>
 
 
-<dt id="arg-beta-comm-sd">beta_comm_sd<a class="anchor" aria-label="anchor" href="#arg-beta-comm-sd"></a></dt>
+<dt id="arg-beta-comm-sd">beta.comm.sd<a class="anchor" aria-label="anchor" href="#arg-beta-comm-sd"></a></dt>
 <dd><p>Community SD for occupancy (default c(0.5)).</p></dd>
 
 
@@ -144,7 +144,7 @@ community dynamic-spatial model (svcTMsPGOcc). Default <code>NULL</code>.</p></d
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_ms_dyn_occu</span><span class="op">(</span>N <span class="op">=</span> <span class="fl">30</span>, J <span class="op">=</span> <span class="fl">2</span>, n_species <span class="op">=</span> <span class="fl">3</span>, n_seasons <span class="op">=</span> <span class="fl">3</span>,</span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_ms_dyn_occu</span><span class="op">(</span>N <span class="op">=</span> <span class="fl">30</span>, J <span class="op">=</span> <span class="fl">2</span>, n.species <span class="op">=</span> <span class="fl">3</span>, n.seasons <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>                            seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
     </div>

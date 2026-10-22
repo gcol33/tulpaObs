@@ -13,32 +13,32 @@ joint occupancy + cover hurdle family (see
 simulate_occu_cover(
   N = 200L,
   J = 4L,
-  n_occ_covs = 1L,
-  n_det_covs = 1L,
-  n_pos_covs = 1L,
-  beta_occ = NULL,
-  beta_p = NULL,
-  beta_pos = NULL,
+  n.occ.covs = 1L,
+  n.det.covs = 1L,
+  n.pos.covs = 1L,
+  beta.occ = NULL,
+  beta.p = NULL,
+  beta.pos = NULL,
   positive = c("lognormal", "beta", "gaussian"),
   phi = 30,
-  sigma_pos = 0.4,
+  sigma.pos = 0.4,
   adj = NULL,
   sigma = 0.6,
   alpha = 1,
   trend = FALSE,
-  sigma_trend = 0.6,
-  alpha_trend = 1,
-  pos_field = FALSE,
-  sigma_pos_int = 0.5,
-  sigma_pos_trend = 0.6,
-  det_field = FALSE,
-  sigma_p_int = 0.5,
-  sigma_p_trend = 0.6,
-  re_det_groups = NULL,
-  sigma_re_p = 0.7,
-  re_pos_groups = NULL,
-  sigma_re_pos = 0.7,
-  re_det = NULL,
+  sigma.trend = 0.6,
+  alpha.trend = 1,
+  pos.field = FALSE,
+  sigma.pos.int = 0.5,
+  sigma.pos.trend = 0.6,
+  det.field = FALSE,
+  sigma.p.int = 0.5,
+  sigma.p.trend = 0.6,
+  re.det.groups = NULL,
+  sigma.re.p = 0.7,
+  re.pos.groups = NULL,
+  sigma.re.pos = 0.7,
+  re.det = NULL,
   seed = NULL
 )
 ```
@@ -53,11 +53,11 @@ simulate_occu_cover(
 
   Number of visits per site.
 
-- n_occ_covs, n_det_covs, n_pos_covs:
+- n.occ.covs, n.det.covs, n.pos.covs:
 
   Number of covariates on each arm (drawn IID standard normal).
 
-- beta_occ, beta_p, beta_pos:
+- beta.occ, beta.p, beta.pos:
 
   Coefficient vectors c(intercept, slopes). Defaults pick
   weakly-informative values: psi intercept at logit(0.4), p intercept at
@@ -71,7 +71,7 @@ simulate_occu_cover(
 
   Beta precision when `positive = "beta"` (default 30).
 
-- sigma_pos:
+- sigma.pos:
 
   Lognormal residual SD when `positive = "lognormal"` (default 0.4).
 
@@ -103,20 +103,20 @@ simulate_occu_cover(
   field `f2` (a spatially-varying temporal trend) is generated on the
   same graph, weighted by a per-cell covariate `time` drawn IID standard
   normal. The trend enters the occupancy and cover predictors as
-  `sigma_trend * time_i * f2[i]` (occupancy) and
-  `alpha_trend * sigma_trend * time_i * f2[i]` (cover); the detection
+  `sigma.trend * time_i * f2[i]` (occupancy) and
+  `alpha.trend * sigma.trend * time_i * f2[i]` (cover); the detection
   predictor is unaffected. The `time` covariate is per-cell and
   broadcast to every visit of that cell.
 
-- sigma_trend:
+- sigma.trend:
 
   Trend-field amplitude (used only when `trend = TRUE`).
 
-- alpha_trend:
+- alpha.trend:
 
   Cover-arm scaling on the trend field (used only when `trend = TRUE`).
 
-- pos_field:
+- pos.field:
 
   Logical; when `TRUE` (and `adj` is supplied) draw an INDEPENDENT areal
   field on the cover (positive) arm only – an intercept field plus a
@@ -126,15 +126,15 @@ simulate_occu_cover(
   placing `spatial(~ 1 + time || cell, graph = adj)` in the `positive`
   formula.
 
-- sigma_pos_int:
+- sigma.pos.int:
 
-  Cover-arm intercept-field SD (used only when `pos_field = TRUE`).
+  Cover-arm intercept-field SD (used only when `pos.field = TRUE`).
 
-- sigma_pos_trend:
+- sigma.pos.trend:
 
-  Cover-arm trend-field SD (used only when `pos_field = TRUE`).
+  Cover-arm trend-field SD (used only when `pos.field = TRUE`).
 
-- det_field:
+- det.field:
 
   Logical; when `TRUE` (and `adj` is supplied) draw an INDEPENDENT areal
   field on the detection arm only – an intercept field plus a
@@ -144,41 +144,41 @@ simulate_occu_cover(
   `spatial(~ 0 + time || cell, graph = adj, to = "detection")` in the
   `detection` formula.
 
-- sigma_p_int:
+- sigma.p.int:
 
-  Detection-arm intercept-field SD (used only when `det_field = TRUE`).
+  Detection-arm intercept-field SD (used only when `det.field = TRUE`).
 
-- sigma_p_trend:
+- sigma.p.trend:
 
-  Detection-arm trend-field SD (used only when `det_field = TRUE`).
+  Detection-arm trend-field SD (used only when `det.field = TRUE`).
 
-- re_det_groups:
+- re.det.groups:
 
   Optional integer `>= 2`: the number of levels of a per-visit detection
   random intercept (a `habitat` factor on `visit_data`, levels
-  `hab1..K`), drawn `b_g ~ N(0, sigma_re_p^2)` and centred. `NULL`
+  `hab1..K`), drawn `b_g ~ N(0, sigma.re.p^2)` and centred. `NULL`
   (default) adds no detection RE. Recover it with
   `detection = ~ ... + (1 | habitat)`.
 
-- sigma_re_p:
+- sigma.re.p:
 
-  SD of the `re_det_groups` random intercept (default 0.7).
+  SD of the `re.det.groups` random intercept (default 0.7).
 
-- re_pos_groups:
+- re.pos.groups:
 
   Optional integer `>= 2`: the number of levels of a per-visit COVER-arm
   random intercept (a `habitat` factor on `visit_data`, levels
-  `hab1..K`), drawn `b_g ~ N(0, sigma_re_pos^2)` and centred, added to
+  `hab1..K`), drawn `b_g ~ N(0, sigma.re.pos^2)` and centred, added to
   the positive-cover linear predictor. `NULL` (default) adds no cover
   RE. Recover it with `positive = ~ ... + (1 | habitat)` under
-  `cover_aggregate = "none"`. Truth in `truth$b_pos_re` /
+  `cover.aggregate = "none"`. Truth in `truth$b_pos_re` /
   `truth$sigma_re_pos`.
 
-- sigma_re_pos:
+- sigma.re.pos:
 
-  SD of the `re_pos_groups` random intercept (default 0.7).
+  SD of the `re.pos.groups` random intercept (default 0.7).
 
-- re_det:
+- re.det:
 
   Optional named list of FURTHER per-visit detection random effects, for
   crossed / nested / slope designs. Each element
@@ -218,7 +218,10 @@ the linear predictors become
     eta_psi_i = X_psi[i, ] %*% beta_occ + sigma * f[i]
     eta_pos_ij = X_pos[i, ] %*% beta_pos + alpha * sigma * f[i]
 
-matching the v2 nested-Laplace fit's parameterisation.
+This is the shared-field parameterisation (field SD `sigma`, cover-arm
+copy amplitude `alpha`) that the nested-Laplace
+[`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
+fit estimates.
 
 ## Examples
 

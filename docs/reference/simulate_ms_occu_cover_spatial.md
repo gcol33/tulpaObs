@@ -1,6 +1,6 @@
 # Simulate a reduced-rank spatial-factor community occu_cover data set (K = 1)
 
-Generates occupancy / detection / cover data for `n_species` species
+Generates occupancy / detection / cover data for `n.species` species
 sharing one latent ICAR spatial factor `w` on the cell graph, with
 per-species loadings `L_s` on the occupancy state predictor and Gaussian
 community priors on the per-species arm coefficients. This is the
@@ -11,27 +11,27 @@ ground-truth generator for the Stage-1 reduced-rank spatial JSDM.
 ``` r
 simulate_ms_occu_cover_spatial(
   adj,
-  n_species = 8L,
+  n.species = 8L,
   J = 4L,
   K = 1L,
-  n_occ_covs = 1L,
-  n_det_covs = 1L,
-  n_pos_covs = 1L,
-  mu_occ = NULL,
-  mu_p = NULL,
-  mu_pos = NULL,
-  sd_occ = 0.4,
-  sd_p = 0.4,
-  sd_pos = 0.3,
-  mean_load = 0,
-  sd_load = 1,
-  cover_factor = FALSE,
-  mean_load_pos = 0,
-  sd_load_pos = 1,
+  n.occ.covs = 1L,
+  n.det.covs = 1L,
+  n.pos.covs = 1L,
+  mu.occ = NULL,
+  mu.p = NULL,
+  mu.pos = NULL,
+  sd.occ = 0.4,
+  sd.p = 0.4,
+  sd.pos = 0.3,
+  mean.load = 0,
+  sd.load = 1,
+  cover.factor = FALSE,
+  mean.load.pos = 0,
+  sd.load.pos = 1,
   field = c("icar", "car_proper", "bym2"),
   rho = 0.9,
   phi = 0.7,
-  sigma_pos = 0.4,
+  sigma.pos = 0.4,
   positive = c("lognormal", "beta"),
   seed = NULL
 )
@@ -43,7 +43,7 @@ simulate_ms_occu_cover_spatial(
 
   N x N 0/1 adjacency matrix of the cell graph (required); `N` cells.
 
-- n_species:
+- n.species:
 
   Number of species.
 
@@ -53,32 +53,32 @@ simulate_ms_occu_cover_spatial(
 
 - K:
 
-  Number of shared latent spatial factors (`1 <= K <= n_species`).
+  Number of shared latent spatial factors (`1 <= K <= n.species`).
   `K = 1` is the Stage-1 single-field case (loading vector, field
   vector); `K > 1` draws `K` ICAR fields with lower-triangular,
   positive-diagonal loadings and returns the `S x K` loading matrix /
   `N x K` field matrix.
 
-- n_occ_covs, n_det_covs, n_pos_covs:
+- n.occ.covs, n.det.covs, n.pos.covs:
 
   Number of (Gaussian) covariates on the occupancy, detection, and cover
   arms; each arm also has an intercept.
 
-- mu_occ, mu_p, mu_pos:
+- mu.occ, mu.p, mu.pos:
 
   Community mean coefficient vectors (intercept first). `NULL` picks
   sensible defaults of the right length.
 
-- sd_occ, sd_p, sd_pos:
+- sd.occ, sd.p, sd.pos:
 
   Community RE SDs (diagonal `Sigma_.`); scalar (recycled) or
   per-coefficient.
 
-- mean_load, sd_load:
+- mean.load, sd.load:
 
   Mean and SD of the per-species loadings `L_s`.
 
-- cover_factor:
+- cover.factor:
 
   Logical; when `TRUE` the same shared fields `W` also load on the cover
   (positive) predictor through a free `S x K` loading matrix `L_pos`
@@ -86,10 +86,10 @@ simulate_ms_occu_cover_spatial(
   (the default) reproduces the no-factor RNG stream exactly.
   `truth$L_pos` carries the generating cover loadings.
 
-- mean_load_pos, sd_load_pos:
+- mean.load.pos, sd.load.pos:
 
   Mean and SD of the cover-arm loadings `L_pos` (used only when
-  `cover_factor = TRUE`).
+  `cover.factor = TRUE`).
 
 - field:
 
@@ -111,7 +111,7 @@ simulate_ms_occu_cover_spatial(
   `field = "bym2"` (`phi = 1` is the pure ICAR field, `phi = 0` pure
   iid).
 
-- sigma_pos:
+- sigma.pos:
 
   Lognormal cover residual SD (on the log scale).
 
@@ -137,6 +137,6 @@ parameters: `mu_*`, `sd_*`, per-species `b_*`, loadings `L`, field `w`,
 adj <- matrix(0, 10, 10)
 adj[cbind(1:9, 2:10)] <- 1
 adj <- adj + t(adj)
-sim <- simulate_ms_occu_cover_spatial(adj, n_species = 4, J = 3, seed = 1)
+sim <- simulate_ms_occu_cover_spatial(adj, n.species = 4, J = 3, seed = 1)
 dim(sim$y)
 ```

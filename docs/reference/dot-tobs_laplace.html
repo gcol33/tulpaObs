@@ -34,7 +34,7 @@ types. Called from .tobs_fit_model(); not user-facing."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -124,7 +124,7 @@ types. Called from <code><a href="dot-tobs_fit_model.html">.tobs_fit_model()</a>
 <dt id="arg-priors">priors<a class="anchor" aria-label="anchor" href="#arg-priors"></a></dt>
 <dd><p>Optional prior spec from <code><a href="occu_priors.html">occu_priors()</a></code>. <code>NULL</code> -&gt; use
 the package defaults. Pass <code>FALSE</code> (or <code>"none"</code>) to disable the prior
-and recover the historical unpenalised MAP behavior – the penalised
+and fit the unpenalised MAP – the penalised
 objective is <code>Q(beta) = -log L(beta) + sum (beta_j - mu_j)^2 / (2 sd_j^2)</code>,
 so <code>sd_j = Inf</code> yields a zero penalty term.</p></dd>
 

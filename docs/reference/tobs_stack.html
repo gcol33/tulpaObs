@@ -34,7 +34,7 @@ cover hurdle), each scored by the marginal likelihood in
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -158,7 +158,7 @@ identical, so the weights come out roughly uniform.)</p>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">3</span>, n_occ_covs <span class="op">=</span> <span class="fl">2</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">3</span>, n.occ.covs <span class="op">=</span> <span class="fl">2</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>                     seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">f1</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>

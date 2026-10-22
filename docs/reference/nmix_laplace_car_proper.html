@@ -44,7 +44,7 @@ precomputed once via a dense Cholesky on the \(n_{\mathrm{spatial}}
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -199,8 +199,9 @@ pass an explicit grid in that interval.</p></dd>
 
 <dt id="arg-k-max">K_max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
 <dd><p>Truncation for the per-site marginal sum over N. Defaults to
-<code>max(y) + 100</code>. Returned <code>boundary_max</code> flags any grid point whose worst
-site puts non-trivial mass on <code>K_max</code> – raise <code>K_max</code> if it exceeds 1e-4.</p></dd>
+<code>max(y) + 100</code>. Returned <code>boundary_max</code> holds, per grid point, the worst
+site's posterior mass on <code>K_max</code>; the fit warns when the grid-weighted
+mass <code>sum(weights * boundary_max)</code> exceeds 1e-4 – raise <code>K_max</code> then.</p></dd>
 
 
 <dt id="arg-max-iter-tol">max_iter, tol<a class="anchor" aria-label="anchor" href="#arg-max-iter-tol"></a></dt>

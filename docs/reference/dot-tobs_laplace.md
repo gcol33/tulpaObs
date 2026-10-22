@@ -54,8 +54,8 @@ not user-facing.
   Optional prior spec from
   [`occu_priors()`](https://gillescolling.com/tulpaObs/reference/occu_priors.md).
   `NULL` -\> use the package defaults. Pass `FALSE` (or `"none"`) to
-  disable the prior and recover the historical unpenalised MAP behavior
-  – the penalised objective is
+  disable the prior and fit the unpenalised MAP – the penalised
+  objective is
   `Q(beta) = -log L(beta) + sum (beta_j - mu_j)^2 / (2 sd_j^2)`, so
   `sd_j = Inf` yields a zero penalty term.
 

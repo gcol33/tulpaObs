@@ -52,9 +52,15 @@ intercept-only).
 ## Inputs
 
 `y` is an `n_sites x n_bins` integer matrix of per-distance-band counts;
-`y_rem` an `n_sites x n_periods` integer matrix of per-removal-period
+`y.rem` an `n_sites x n_periods` integer matrix of per-removal-period
 counts. The per-site row totals must match (the same detected birds
 cross-classified).
+
+## Engines
+
+- `method = "laplace"` – the closed-form marginal maximised (BFGS) with
+  an observed-information covariance; the only route (no field, no
+  sampler).
 
 ## References
 

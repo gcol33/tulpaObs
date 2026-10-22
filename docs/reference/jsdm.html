@@ -22,7 +22,7 @@ replication – treats observed presence/absence as the response."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,6 +75,24 @@ replication – treats observed presence/absence as the response.</p>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>tobs_family</code> object.</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – the community Laplace-EM shared with <code><a href="ms_count.html">ms_count()</a></code>
+(a logit-link community GLMM); <code><a href="tobs_terms.html">latent()</a></code> factors alone (lfJSDM) run here
+through the block-coordinate driver.</p></li>
+<li><p><code>method = "nuts"</code> – samples the exact joint community posterior
+(community means, per-species deviations, community covariance) over the
+Bernoulli response, warm-started at the Laplace-EM mode; non-spatial, an
+areal or <code><a href="tobs_terms.html">latent()</a></code> term errors with a pointer.</p></li>
+<li><p><code>method = "pg_gibbs"</code> – a per-species Polya-Gamma conjugate Gibbs with
+community mean and Inverse-Gamma variance updates, giving a calibrated
+community-variance posterior; non-spatial.</p></li>
+<li><p><code>method = "nested_laplace"</code> – a shared areal field (<code><a href="tobs_terms.html">icar()</a></code> /
+<code><a href="tobs_terms.html">car_proper()</a></code> / <code><a href="tobs_terms.html">bym2()</a></code>), with or without <code><a href="tobs_terms.html">latent()</a></code> factors (sfJSDM),
+by block coordinate ascent; the areal term is required on this route.</p></li>
+</ul></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

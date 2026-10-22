@@ -1,5 +1,24 @@
 # Diagnostics: checking, comparing, and residuals
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -48,9 +67,9 @@ processes apart.
 
 sim <- simulate_occu(
   N = 300, J = 6,
-  n_occ_covs = 1, n_det_covs = 1,
-  beta_occ = c(0.3, 1.0),
-  beta_det = c(0.7, 0.6),
+  n.occ.covs = 1, n.det.covs = 1,
+  beta.occ = c(0.3, 1.0),
+  beta.det = c(0.7, 0.6),
   seed = 1
 )
 dat <- sim$data
@@ -404,9 +423,9 @@ for (s in seq_len(N)) {
   if (s < N)  adj[s, s + 1L] <- 1L
 }
 sim <- simulate_occu_cover(N = N, J = J, positive = "lognormal", adj = adj,
-                           beta_occ = c(0.2, 0.6), beta_p = c(0.4, -0.5),
-                           beta_pos = c(log(0.25), 0.3),
-                           sigma = 0.8, alpha = 1.0, sigma_pos = 0.4,
+                           beta.occ = c(0.2, 0.6), beta.p = c(0.4, -0.5),
+                           beta.pos = c(log(0.25), 0.3),
+                           sigma = 0.8, alpha = 1.0, sigma.pos = 0.4,
                            seed = 707L)
 long <- data.frame(site_id = rep(seq_len(N), each = J),
                    visit = rep(seq_len(J), times = N),
@@ -425,7 +444,7 @@ fit <- tobs(~ occ_cov1 + icar(graph = adj),
             family = occu_cover("lognormal"),
             detection = ~ det_cov1,
             positive  = ~ pos_cov1 + share(spatial()),
-            y = od$y, y_pos = y_pos, visits = od$det.covs,
+            y = od$y, y.pos = y_pos, visits = od$det.covs,
             method = "nested_laplace", control = ctl)
 ```
 
@@ -784,8 +803,8 @@ with `priors = FALSE` to recover the unpenalised MAP.
 
 ``` r
 
-sim3 <- simulate_occu(N = 120, J = 3, n_occ_covs = 1, n_det_covs = 1,
-                      beta_occ = c(0.3, 1.0), beta_det = c(0.0, 0.8), seed = 7)
+sim3 <- simulate_occu(N = 120, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                      beta.occ = c(0.3, 1.0), beta.det = c(0.0, 0.8), seed = 7)
 fit_pen   <- tobs(~ occ_cov1, data = sim3$data, family = occu(),
                   detection = ~ det_cov1, y = sim3$y, method = "laplace",
                   control = list(verbose = FALSE))

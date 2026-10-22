@@ -44,14 +44,14 @@ reuses the same nested-Laplace cell-coupling machinery as
 
 ## Inputs
 
-`y` / `y_pos` are `[n_plots x max_visits]` matrices (plots are the rows,
+`y` / `y.pos` are `[n_plots x max_visits]` matrices (plots are the rows,
 the availability units; visits the columns). The state-process `formula`
 is the cell-level occupancy predictor and MUST carry an areal field
 naming the per-plot cell column,
-`icar(graph = adj, group_var = "cell")`. `availability = ~ ...` is the
+`icar(graph = adj, group.var = "cell")`. `availability = ~ ...` is the
 plot-level theta predictor (default `~ 1`); `detection` the per-visit p
 predictor; `positive = ~ ...` the cover predictor (default the detection
-formula). `y_pos` is read only where `y == 1`.
+formula). `y.pos` is read only where `y == 1`.
 
 A detected visit (`y_cjv = 1`) with a missing cover (`y_pos_cjv = NA`)
 keeps its detection term but drops the `f_pos` factor: cover is taken
@@ -70,7 +70,7 @@ to
 with `p := theta * p`. Within-plot temporal replication (e.g. a resurvey
 of the same plot in a later period) makes the third level estimable.
 
-## Scope
+## Engines
 
 Three engines. `method = "nested_laplace"` carries a single shared areal
 field coupled across the occupancy (`sigma`) and cover (`alpha * sigma`)
@@ -81,11 +81,11 @@ plots both summed in closed form) optimised directly (`"laplace"`, a
 Gaussian observed-Fisher posterior) or sampled (`"nuts"`, the exact
 coefficient posterior with calibrated intervals and WAIC / LOO). Cells
 are declared the same way on every path, via an
-`icar(graph = adj, group_var = "<cell>")` term (the graph drives the
+`icar(graph = adj, group.var = "<cell>")` term (the graph drives the
 field under `"nested_laplace"` and supplies only the plot -\> cell map
 under `"laplace"` / `"nuts"`). On the `"nested_laplace"` path additional
 weighted areal terms in the psi formula
-(`icar(graph = adj, group_var = "<cell>", weight = <cell covariate>)`)
+(`icar(graph = adj, group.var = "<cell>", weight = <cell covariate>)`)
 add spatially-varying-coefficient trend fields, each coupled onto the
 cover arm with its own `alpha_trend`; the fitted fields are in
 `fit$trend_field` / `fit$trend_fields`. The coupled / trend field is not

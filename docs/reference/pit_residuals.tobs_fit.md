@@ -62,3 +62,17 @@ Numeric vector of PIT residuals.
 
 [`tulpa::test_uniformity()`](https://gillescolling.com/tulpa/reference/test_uniformity.html)
 for the uniformity test on the result.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+pit <- pit_residuals(fit, seed = 1)
+hist(pit, breaks = 10)
+# }
+```

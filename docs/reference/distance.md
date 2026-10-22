@@ -7,7 +7,7 @@ multinomial over `(bin 1, ..., bin B, undetected)` with cell
 probabilities `pi_b = integral_bin g(x; sigma) f(x) dx` and
 `1 - sum_b pi_b`, where `f(x)` is the distance density (uniform for a
 line transect, proportional to distance for a point transect). The
-latent `N` is summed out in closed form (truncation `K_max`), so the fit
+latent `N` is summed out in closed form (truncation `K.max`), so the fit
 is a direct Laplace approximation (no EM), with a NUTS path over the
 same marginal; the per-bin detection integrals are evaluated by
 Gauss-Legendre quadrature.
@@ -19,7 +19,7 @@ distance(
   key = c("halfnorm", "hazard"),
   transect = c("line", "point"),
   cutpoints = NULL,
-  K_max = NULL,
+  K.max = NULL,
   mixture = c("poisson", "negbin")
 )
 ```
@@ -42,10 +42,10 @@ distance(
   numeric distance-bin edges, length `n_bins + 1`
   (`0 = c_0 < c_1 < ... < c_B`). Required.
 
-- K_max:
+- K.max:
 
   upper bound for the latent-abundance marginal sum (the exact
-  integration over `N` is truncated at `K_max`). `NULL` (default) lets
+  integration over `N` is truncated at `K.max`). `NULL` (default) lets
   the engine pick `max(y) + 100` (matching
   [`unmarked::pcount()`](https://ecoverseR.github.io/unmarked/reference/pcount.html));
   raise it if a fit warns that the posterior over `N` puts mass on the
@@ -78,6 +78,29 @@ site-level detection-scale (`log sigma`) model. The response `y` is an
 edges and transect geometry travel with the family:
 `distance(cutpoints = ...)`.
 
+## Engines
+
+- `method = "laplace"` – a direct Laplace approximation over the
+  closed-form marginal (Poisson or negative binomial); a grouped random
+  effect on the abundance arm is integrated by adaptive Gauss-Hermite
+  quadrature.
+
+- `method = "nested_laplace"` – an areal
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field on the abundance arm, optionally composed with a
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field, through the shared areal-BFGS driver; a hazard-rate fit
+  recovers the shape alongside the field.
+
+- `method = "nuts"` – the in-tree C++ NUTS sampler over the same
+  marginal, with a fixed-hyper areal or temporal field block on the
+  abundance arm (one of the two, not both); the hazard-rate log-shape
+  rides alongside.
+
 ## References
 
 Buckland, S. T., Anderson, D. R., Burnham, K. P., Laake, J. L.,
@@ -90,7 +113,7 @@ abundance effects in distance sampling. *Ecology* 85, 1591-1597.
 ``` r
 # \donttest{
 sim <- simulate_distance(N = 200, key = "halfnorm", transect = "line",
-                         n_abund_covs = 1, n_sigma_covs = 1, seed = 1)
+                         n.abund.covs = 1, n.sigma.covs = 1, seed = 1)
 fit <- tobs(~ abund_cov1, data = sim$data,
             family = distance(key = "halfnorm", transect = "line",
                               cutpoints = sim$cutpoints),

@@ -17,10 +17,10 @@ simulate_distance(
   cutpoints = seq(0, 1, length.out = 6),
   key = c("halfnorm", "hazard"),
   transect = c("line", "point"),
-  n_abund_covs = 1,
-  n_sigma_covs = 1,
-  beta_lambda = NULL,
-  beta_sigma = NULL,
+  n.abund.covs = 1,
+  n.sigma.covs = 1,
+  beta.lambda = NULL,
+  beta.sigma = NULL,
   shape = 3,
   mixture = c("poisson", "negbin"),
   size = 5,
@@ -47,19 +47,19 @@ simulate_distance(
 
   `"line"` (default) or `"point"`.
 
-- n_abund_covs, n_sigma_covs:
+- n.abund.covs, n.sigma.covs:
 
   Number of abundance / detection covariates.
 
-- beta_lambda:
+- beta.lambda:
 
   Abundance coefficients (log scale). Default
-  `c(log(40), runif(n_abund_covs, -0.4, 0.4))`.
+  `c(log(40), runif(n.abund.covs, -0.4, 0.4))`.
 
-- beta_sigma:
+- beta.sigma:
 
   Detection-scale coefficients (log scale). Default
-  `c(log(0.4), runif(n_sigma_covs, -0.3, 0.3))`.
+  `c(log(0.4), runif(n.sigma.covs, -0.3, 0.3))`.
 
 - shape:
 

@@ -28,6 +28,25 @@ where the two engines should agree closely, then walks the function
 mapping, two side-by-side fits, the algorithmic differences, and the
 cases where INLA remains the better tool.
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ## Function mapping
 
 The table below maps the INLA constructs in Michael’s two workflows to
@@ -48,7 +67,7 @@ engine).
 | `inla(log_cover ~ x, family = "gaussian", data = subset(occur == 1))` | the positive arm of the same [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md) fit | tulpaObs subsets to `y > 0` internally inside [`encode_cover_hurdle()`](https://gillescolling.com/tulpaObs/reference/encode_cover_hurdle.md). |
 | `family = "gaussian"` precision hyperparameter | `fit$sigma_pos` (residual SD, `1 / sqrt(precision)`) | tulpaObs reports the SD directly; INLA reports a precision posterior. |
 | `family = c("binomial", "beta")` for cover in $`(0, 1)`$ | `cover("beta")` | Logit-link beta with precision `phi`; see `fit$phi_pos`. |
-| `f(site, model = "bym2", graph = adj)` | `bym2(graph = adj, group_var = "site")` in the formula | Areal field on the latent-presence linear predictor. |
+| `f(site, model = "bym2", graph = adj)` | `bym2(graph = adj, group.var = "site")` in the formula | Areal field on the latent-presence linear predictor. |
 | `f(site, model = "iid")`, `"besag"`, `"besagproper2"` | `icar(graph = adj)`, `car(graph = adj)`, `car_proper(graph = adj)` | One areal term per latent-presence formula. |
 | `copy = "site", fixed = FALSE` (shared field, fitted scale) | the joint [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md) path: `method = "nested_laplace"` with a [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md) term, copy coefficient `alpha` | `alpha` is integrated on the outer grid, surfaced as `fit$joint$theta_mean["alpha"]`. |
 | [`inla.stack()`](https://rdrr.io/pkg/INLA/man/inla.stack.html) for the joint design | not needed | tulpaObs builds the two-arm design from one formula and one `y`. |
@@ -65,9 +84,9 @@ library(tulpaObs)
 
 sim <- simulate_cover(
   N         = 400,
-  beta_occ  = c(-0.4, 0.8),
-  beta_pos  = c(-1.0, 0.3),
-  sigma_pos = 0.4,
+  beta.occ  = c(-0.4, 0.8),
+  beta.pos  = c(-1.0, 0.3),
+  sigma.pos = 0.4,
   seed      = 11
 )
 
@@ -237,8 +256,8 @@ for (s in seq_len(n_s)) {
 sim_joint <- simulate_cover_joint(
   N        = 300L,
   adj      = adj,
-  beta_occ = c(-0.3, 0.7),
-  beta_pos = c(-1.5, -0.5),
+  beta.occ = c(-0.3, 0.7),
+  beta.pos = c(-1.5, -0.5),
   sigma    = 0.6,
   rho      = 0.7,
   alpha    = 1.0,
@@ -266,7 +285,7 @@ implementations.
 ``` r
 
 fit_joint <- tobs(
-  formula = ~ x + bym2(graph = adj, group_var = "region") +
+  formula = ~ x + bym2(graph = adj, group.var = "region") +
               share(spatial(), alpha = grid(c(0.25, 0.75, 1.5, 2.5))),
   data    = sim_joint$data,
   family  = cover("lognormal"),

@@ -46,6 +46,19 @@ The response is a numeric vector (one value per site), supplied via
 `y =` or on a two-sided `formula` left-hand side
 (`count.value ~ predictors`).
 
+## Engines
+
+- `method = "laplace"` – one tulpa GLMM block; the negative-binomial
+  size and the Gaussian residual variance are estimated by an outer
+  dispersion loop.
+
+- `method = "nested_laplace"` – a plain areal field
+  ([`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md))
+  on the formula as a latent GMRF, integrated over its hyperparameters
+  by the nested-Laplace EM; the areal term is required on this route.
+
 ## See also
 
 [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md)

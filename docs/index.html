@@ -37,7 +37,7 @@
 
     <a class="navbar-brand me-2" href="index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,382 +82,201 @@
 <div class="page-header"><h1 id="tulpaobs">tulpaObs<a class="anchor" aria-label="anchor" href="#tulpaobs"></a>
 </h1></div>
 <p><em>false zeros from imperfect detection</em></p>
-<p><a href="https://lifecycle.r-lib.org/articles/stages.html#stable" class="external-link"><img src="https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg" alt="Lifecycle: stable"></a> <a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a> <a href="https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://app.codecov.io/gh/gcol33/tulpaObs" class="external-link"><img src="https://codecov.io/gh/gcol33/tulpaObs/graph/badge.svg" alt="Codecov test coverage"></a> <a href="https://github.com/gcol33/tulpaObs/actions/workflows/smoke.yaml" class="external-link"><img src="https://github.com/gcol33/tulpaObs/actions/workflows/smoke.yaml/badge.svg" alt="smoke"></a></p>
-<p><strong>Hierarchical observation models on the <a href="https://github.com/gcol33/tulpa" class="external-link">tulpa</a> inference engine: occupancy, N-mixture abundance, distance, removal, cover.</strong></p>
-<p>A site reads zero because the species is absent, or because you visited on the wrong day. <code>tulpaObs</code> fits the models that hold those two apart: a latent ecological state under an imperfect detection process, with the state integrated out exactly so occupancy and detection come back as separate estimates. One fitter, one family object per model, and the spatial fields, temporal structure, random effects, and latent factors written inside the formula.</p>
+<!-- badges: start -->
+
+<p>tulpaObs fits Bayesian models for species surveys with imperfect detection, such as site occupancy from repeated visits, N-mixture abundance from replicated counts, distance and removal sampling, and vegetation cover.</p>
+<p>A site can read zero because the species is absent, or because it was present and missed on every visit. Each model writes the ecological state (occupied or not, how many individuals) and the detection process as separate levels and integrates the latent state out of the likelihood, so occupancy and detection come back as separate estimates. Each model supplies its observation likelihood to the <a href="https://CRAN.R-project.org/package=tulpa" class="external-link">tulpa</a> engine, which fits it by Laplace approximation, by nested Laplace integration over the hyperparameters, or by the No-U-Turn sampler (NUTS). You choose the model through a family object, write spatial, temporal and random effects inside the formula, and pick the inference method for each fit.</p>
+<p>tulpaObs supports:</p>
+<ul>
+<li>
+<strong>Occupancy, abundance and cover models.</strong> Single-season, dynamic, integrated, false-positive, time-to-detection and community occupancy; N-mixture, distance, removal and double-observer abundance; and a hurdle model for vegetation cover. One fitter, <code><a href="reference/tobs.html">tobs()</a></code>, takes a family constructor per model (<a href="https://gillescolling.com/tulpaObs/reference/index.html">families in the reference</a>).</li>
+<li>
+<strong>Structured effects inside the formula.</strong> Areal and continuous spatial fields, temporal processes and lme4-style random effects enter the occupancy or the detection formula as terms.</li>
+<li>
+<strong>Several inference routes.</strong> Laplace approximation is the default; nested Laplace handles areal fields, NUTS gives the full posterior, and a Polya-Gamma Gibbs sampler is available for single-season and community models.</li>
+<li>
+<strong>Simulation with known truth.</strong> Every family has a simulator that returns the data with the parameters that generated them, so a model can be checked against known values before it meets field data.</li>
+</ul>
+<p>The package’s recovery tests are built on these simulators. <a href="https://gillescolling.com/tulpaObs/articles/occupancy-vs-inla.html">Occupancy: tulpaObs vs INLA aggregated-binomial</a> and <a href="https://gillescolling.com/tulpaObs/articles/cover-hurdle-vs-inla.html">Cover hurdle: tulpaObs vs INLA on simulated cover data</a> compare fits with INLA on simulated data with known truth.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pak"</span><span class="op">)</span></span>
-<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span>            <span class="co"># latest from GitHub</span></span>
-<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs@v0.1.1"</span><span class="op">)</span>     <span class="co"># a specific tagged release</span></span></code></pre></div>
-<p>Tagged releases are listed at <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link uri">https://github.com/gcol33/tulpaObs/releases</a>.</p>
-<p>pak resolves the dependency tree, pulling <code>tulpa</code> and <code>tulpaMesh</code> from the r-universe repository DESCRIPTION declares in <code>Additional_repositories</code>, at or above the <code>Imports</code> floor. A C++17 toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS, <code>r-base-dev</code> on Linux); both <code>tulpa</code> and <code>tulpaObs</code> compile their backends on first install.</p>
-</div>
-<div class="section level2">
-<h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
-</h2>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span></span>
-<span>  <span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span> <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>, <span class="co"># occupancy: fixed effects + a spatial field</span></span>
-<span>  data      <span class="op">=</span> <span class="va">camera_data</span>,</span>
-<span>  family    <span class="op">=</span> <span class="fu"><a href="reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,                <span class="co"># MacKenzie et al. (2002) single-season</span></span>
-<span>  detection <span class="op">=</span> <span class="op">~</span> <span class="va">wind</span> <span class="op">+</span> <span class="va">time</span>,         <span class="co"># the detection process</span></span>
-<span>  y         <span class="op">=</span> <span class="va">y</span>                      <span class="co"># N x J detection-history matrix</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">grid</span><span class="op">)</span>         <span class="co"># marginalized per-site psi</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="one-fitter-every-family">One fitter, every family<a class="anchor" aria-label="anchor" href="#one-fitter-every-family"></a>
-</h2>
-<p><code><a href="reference/tobs.html">tobs()</a></code> is the only fitter; the family object chooses the model, and the response shape follows from it.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">forest</span>, data <span class="op">=</span> <span class="va">sites</span>, family <span class="op">=</span> <span class="fu"><a href="reference/abun.html">abun</a></span><span class="op">(</span>K.max <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="va">effort</span>, y <span class="op">=</span> <span class="va">counts</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">moisture</span>, data <span class="op">=</span> <span class="va">plots</span>, family <span class="op">=</span> <span class="fu"><a href="reference/cover.html">cover</a></span><span class="op">(</span>response <span class="op">=</span> <span class="st">"beta"</span><span class="op">)</span>, y <span class="op">=</span> <span class="va">pct_cover</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">elev</span>, data <span class="op">=</span> <span class="va">sites</span>, family <span class="op">=</span> <span class="fu"><a href="reference/ms_occu.html">ms_occu</a></span><span class="op">(</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="va">effort</span>, y <span class="op">=</span> <span class="va">y_array</span>,</span>
-<span>     species <span class="op">=</span> <span class="va">species_id</span><span class="op">)</span></span></code></pre></div>
+<p>tulpaObs compiles C++17 code. Install the build tools for your operating system first:</p>
 <table class="table">
 <colgroup>
-<col width="26%">
-<col width="46%">
-<col width="27%">
+<col width="50%">
+<col width="50%">
 </colgroup>
 <thead><tr>
-<th>Constructor</th>
-<th>Model</th>
-<th>Reference</th>
+<th>Operating system</th>
+<th>Build tools</th>
 </tr></thead>
 <tbody>
 <tr>
-<td><code><a href="reference/occu.html">occu()</a></code></td>
-<td>Single-season occupancy</td>
-<td>MacKenzie et al. (2002)</td>
+<td>Windows</td>
+<td>
+<a href="https://cran.r-project.org/bin/windows/Rtools/" class="external-link">Rtools</a> matching your R version</td>
 </tr>
 <tr>
-<td><code><a href="reference/dyn_occu.html">dyn_occu()</a></code></td>
-<td>Dynamic occupancy (colonization / extinction)</td>
-<td>MacKenzie et al. (2003)</td>
+<td>macOS</td>
+<td>Run <code>xcode-select --install</code> in Terminal</td>
 </tr>
 <tr>
-<td><code><a href="reference/t_occu.html">t_occu()</a></code></td>
-<td>Multi-season occupancy, AR1 year effect</td>
-<td>spOccupancy <code>tPGOcc</code>
+<td>Debian / Ubuntu</td>
+<td>Install <code>r-base-dev</code>
 </td>
-</tr>
-<tr>
-<td><code><a href="reference/int_occu.html">int_occu()</a></code></td>
-<td>Integrated multi-source occupancy</td>
-<td>Miller et al. (2019)</td>
-</tr>
-<tr>
-<td><code><a href="reference/dyn_int_occu.html">dyn_int_occu()</a></code></td>
-<td>Multi-season integrated occupancy</td>
-<td>spOccupancy <code>tIntPGOcc</code>
-</td>
-</tr>
-<tr>
-<td><code><a href="reference/fp_occu.html">fp_occu()</a></code></td>
-<td>False-positive occupancy</td>
-<td>Miller et al. (2011)</td>
-</tr>
-<tr>
-<td><code><a href="reference/royle_nichols.html">royle_nichols()</a></code></td>
-<td>Abundance-induced detection heterogeneity</td>
-<td>Royle &amp; Nichols (2003)</td>
-</tr>
-<tr>
-<td><code><a href="reference/occu_ttd.html">occu_ttd()</a></code></td>
-<td>Time-to-detection occupancy</td>
-<td>Garrard et al. (2008)</td>
-</tr>
-<tr>
-<td><code><a href="reference/occu_multi.html">occu_multi()</a></code></td>
-<td>Multi-species co-occurrence occupancy</td>
-<td>Rota et al. (2016)</td>
-</tr>
-<tr>
-<td><code><a href="reference/jsdm.html">jsdm()</a></code></td>
-<td>Joint species distribution (no detection)</td>
-<td></td>
-</tr>
-<tr>
-<td><code><a href="reference/abun.html">abun()</a></code></td>
-<td>N-mixture abundance (Poisson / negbin)</td>
-<td>Royle (2004)</td>
-</tr>
-<tr>
-<td><code><a href="reference/dyn_abun.html">dyn_abun()</a></code></td>
-<td>Open (Dail-Madsen) N-mixture</td>
-<td>Dail &amp; Madsen (2011)</td>
-</tr>
-<tr>
-<td><code><a href="reference/count.html">count()</a></code></td>
-<td>Count / relative-abundance GLMM (no detection)</td>
-<td>spAbundance <code>abund</code>
-</td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_count.html">ms_count()</a></code></td>
-<td>Community relative-abundance GLMM (no detection)</td>
-<td>spAbundance <code>msAbund</code>
-</td>
-</tr>
-<tr>
-<td><code><a href="reference/distance.html">distance()</a></code></td>
-<td>Binned distance sampling</td>
-<td>Buckland et al. (2001)</td>
-</tr>
-<tr>
-<td><code><a href="reference/distsamp_open.html">distsamp_open()</a></code></td>
-<td>Open-population distance sampling</td>
-<td>Sollmann et al. (2015)</td>
-</tr>
-<tr>
-<td><code><a href="reference/gdistremoval.html">gdistremoval()</a></code></td>
-<td>Joint distance + removal</td>
-<td>Amundson et al. (2014)</td>
-</tr>
-<tr>
-<td><code><a href="reference/removal.html">removal()</a></code></td>
-<td>Removal sampling</td>
-<td>Dorazio et al. (2005)</td>
-</tr>
-<tr>
-<td><code><a href="reference/double_observer.html">double_observer()</a></code></td>
-<td>Double-observer abundance</td>
-<td>Nichols et al. (2000)</td>
-</tr>
-<tr>
-<td><code><a href="reference/cover.html">cover()</a></code></td>
-<td>Cover hurdle (beta / lognormal / ordinal)</td>
-<td></td>
-</tr>
-<tr>
-<td><code><a href="reference/occu_categorical.html">occu_categorical()</a></code></td>
-<td>Presence + nominal-class hurdle</td>
-<td></td>
-</tr>
-<tr>
-<td><code><a href="reference/occu_cover.html">occu_cover()</a></code></td>
-<td>Joint occupancy + cover hurdle</td>
-<td></td>
-</tr>
-<tr>
-<td><code><a href="reference/occu_multiscale_cover.html">occu_multiscale_cover()</a></code></td>
-<td>Three-level (cell / plot / visit) + cover</td>
-<td>Nichols et al. (2008)</td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_occu.html">ms_occu()</a></code></td>
-<td>Community occupancy</td>
-<td>spOccupancy <code>msPGOcc</code>
-</td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_dyn_occu.html">ms_dyn_occu()</a></code></td>
-<td>Community dynamic occupancy</td>
-<td></td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_int_occu.html">ms_int_occu()</a></code></td>
-<td>Community integrated occupancy</td>
-<td></td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_abun.html">ms_abun()</a></code></td>
-<td>Community N-mixture</td>
-<td>spAbundance <code>msNMix</code>
-</td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_distance.html">ms_distance()</a></code></td>
-<td>Community distance sampling</td>
-<td>Sollmann et al. (2016)</td>
-</tr>
-<tr>
-<td><code><a href="reference/ms_occu_cover.html">ms_occu_cover()</a></code></td>
-<td>Community joint occupancy + cover</td>
-<td></td>
 </tr>
 </tbody>
 </table>
-<p>Every family carries the same structured-effect vocabulary, so any of them composes with the engine’s spatial, temporal, and latent structure.</p>
+<p>Check that R can find the compiler:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">pkgbuild</span><span class="fu">::</span><span class="fu"><a href="https://pkgbuild.r-lib.org/reference/has_build_tools.html" class="external-link">has_build_tools</a></span><span class="op">(</span>debug <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>Then install tulpaObs:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span></span></code></pre></div>
+<p>pak installs tulpa and <a href="https://CRAN.R-project.org/package=tulpaMesh" class="external-link">tulpaMesh</a> from CRAN along with it. The build links against the BLAS and LAPACK libraries that R itself uses, so no other system library is needed. Tagged releases are listed on the <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link">releases page</a>.</p>
+<div class="section level3">
+<h3 id="optional-multithreading">Optional: multithreading<a class="anchor" aria-label="anchor" href="#optional-multithreading"></a>
+</h3>
+<p>OpenMP lets the community NUTS samplers (<code><a href="reference/ms_occu.html">ms_occu()</a></code>, <code><a href="reference/ms_count.html">ms_count()</a></code>, <code><a href="reference/jsdm.html">jsdm()</a></code>, <code><a href="reference/ms_abun.html">ms_abun()</a></code>, <code><a href="reference/ms_dyn_occu.html">ms_dyn_occu()</a></code>) evaluate their gradient on several CPU threads, set through <code>n.threads.grad</code> in the <code>control</code> list of <code><a href="reference/tobs.html">tobs()</a></code>. The per-species reduction runs in a fixed order, so the gradient is the same at any thread count.</p>
+<p>Rtools on Windows and the default compiler on Linux include OpenMP. Without it, the package installs and runs on one thread.</p>
+<div class="section level4">
+<h4 id="macos-setup">macOS setup<a class="anchor" aria-label="anchor" href="#macos-setup"></a>
+</h4>
+<p>Apple’s compiler needs an additional OpenMP runtime. Install it in Terminal:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="ex">brew</span> install libomp</span></code></pre></div>
+<p>Before installing tulpaObs, add the settings for your Mac to <code>~/.R/Makevars</code>, R’s personal compiler-settings file. Create the directory and file if needed.</p>
+<p><strong>Apple Silicon:</strong></p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode makefile"><code class="sourceCode makefile"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="dt">CPPFLAGS</span> <span class="ch">+=</span><span class="st"> -I/opt/homebrew/opt/libomp/include -Xclang -fopenmp</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="dt">LDFLAGS</span> <span class="ch">+=</span><span class="st"> -L/opt/homebrew/opt/libomp/lib -lomp</span></span></code></pre></div>
+<p><strong>Intel:</strong></p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode makefile"><code class="sourceCode makefile"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="dt">CPPFLAGS</span> <span class="ch">+=</span><span class="st"> -I/usr/local/opt/libomp/include -Xclang -fopenmp</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="dt">LDFLAGS</span> <span class="ch">+=</span><span class="st"> -L/usr/local/opt/libomp/lib -lomp</span></span></code></pre></div>
+</div>
+</div>
 </div>
 <div class="section level2">
-<h2 id="structured-effects-inside-the-formula">Structured effects inside the formula<a class="anchor" aria-label="anchor" href="#structured-effects-inside-the-formula"></a>
+<h2 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>
 </h2>
-<p>Structured terms are written <em>in</em> the formula, the way <code>lme4</code>, <code>mgcv</code>, and <code>INLA</code> do. The parser resolves bare symbols against <code>data</code> columns, so a spatial field is one term in the formula:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span> <span class="op">+</span>               <span class="co"># areal: icar / bym2 / car / car_proper</span></span>
-<span>  <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, model <span class="op">=</span> <span class="st">"spde"</span><span class="op">)</span> <span class="op">+</span>  <span class="co"># continuous: spde / gp / multiscale_gp</span></span>
-<span>  <span class="fu"><a href="reference/tobs_terms.html">temporal</a></span><span class="op">(</span><span class="va">year</span>, type <span class="op">=</span> <span class="st">"ar1"</span><span class="op">)</span> <span class="op">+</span>       <span class="co"># temporal: ar1 / rw1 / rw2 / iid</span></span>
-<span>  <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">observer</span><span class="op">)</span>                       <span class="co"># random intercept (lme4 bar syntax)</span></span></code></pre></div>
-<p><code><a href="reference/tobs_terms.html">spatial()</a></code> and <code><a href="reference/tobs_terms.html">temporal()</a></code> are the two front doors: <code>model =</code> picks the spatial model (<code>"icar"</code> by default), <code>type =</code> the temporal one.</p>
-<p>A coefficient that varies over space is a spatial field, so it is written under <code><a href="reference/tobs_terms.html">spatial()</a></code> and <code>model =</code> says whether space is a graph or a set of coordinates. The areal form is a bar over graph nodes and has the broad family coverage:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="op">~</span> <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span> <span class="op">+</span> <span class="va">year</span> <span class="op">||</span> <span class="va">cell</span>, graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>   <span class="co"># areal SVC, method = "nested_laplace"</span></span></code></pre></div>
-<p>The continuous form names the varying coefficients directly and asks for a range prior (<code>P(range &lt; r0) = alpha</code>):</p>
+<ol style="list-style-type: decimal">
+<li>Fit a model with <code><a href="reference/tobs.html">tobs()</a></code>: the occupancy formula, the data, a family such as <code><a href="reference/occu.html">occu()</a></code>, the detection formula and the detection histories.</li>
+<li>Read the estimates with <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> or <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>.</li>
+<li>Predict with <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> and check the fit with <code><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model()</a></code>.</li>
+</ol>
+<p><code>peatland_occu</code> is a synthetic survey shipped with the package: 120 sites visited four times, with elevation and wetness per site and survey effort per visit.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span> <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, model <span class="op">=</span> <span class="st">"svc"</span>,</span>
-<span>                      coefficients <span class="op">=</span> <span class="st">"elevation"</span>, prior.range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">50</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>The continuous form fits on single-season <code><a href="reference/occu.html">occu()</a></code> under <code>laplace</code> / <code>nested_laplace</code> / <code>nuts</code>, and on <code><a href="reference/removal.html">removal()</a></code>, <code><a href="reference/distance.html">distance()</a></code>, <code><a href="reference/fp_occu.html">fp_occu()</a></code> and <code><a href="reference/dyn_abun.html">dyn_abun()</a></code> under <code>laplace</code> / <code>nested_laplace</code>; the surfaces come back as <code>fit$svc_field</code>. Elsewhere the term errors and points at the areal bar. <code>svc(lon, lat, coefficients = )</code> is the direct constructor, as <code><a href="reference/tobs_terms.html">icar()</a></code> is for <code>spatial(model = "icar")</code>.</p>
-<p>A term enters whichever process it is written in, so <code>detection = ~ (1 | observer)</code> puts the random effect on detection. <code>share("id")</code> shares one realization across both processes. <code><a href="reference/tobs_terms.html">?tobs_terms</a></code> documents every term and its arguments; <code><a href="reference/tobs_terms.html">?svc</a></code> and <code><a href="reference/tobs_terms.html">?icar</a></code> land there too. Bar syntax follows <code>lme4</code> throughout: <code>(1 | site)</code>, <code>(x | site)</code> for a correlated random slope, <code>(x || site)</code> uncorrelated, <code>(1 | g:h)</code> and <code>(1 | g/h)</code> for crossed and nested factors.</p>
-<p>Advanced usage: each spatial model also has a direct constructor, and <code><a href="reference/tobs_terms.html">spatial()</a></code> forwards its arguments to it, so the two forms build the same term.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>                     <span class="co"># spatial(graph = adj)</span></span>
-<span><span class="fu"><a href="reference/tobs_terms.html">bym2</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>                     <span class="co"># spatial(graph = adj, model = "bym2")</span></span>
-<span><span class="fu"><a href="reference/tobs_terms.html">spde</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span><span class="op">)</span>                        <span class="co"># spatial(lon, lat, model = "spde")</span></span>
-<span><span class="fu"><a href="reference/tobs_terms.html">gp</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, cov <span class="op">=</span> <span class="st">"matern"</span>,          <span class="co"># spatial(lon, lat, model = "gp", cov = "matern",</span></span>
-<span>   prior.range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span>        <span class="co">#         prior.range = c(0.1, 0.05))</span></span></code></pre></div>
-<p>Model-specific arguments are checked against the model named in <code>model =</code>, so an argument that model does not take is an error. <code><a href="reference/tobs_terms.html">gp()</a></code> requires a PC prior on the range: <code>prior.range = c(r0, alpha)</code> encodes <code>P(range &lt; r0) = alpha</code> in the units of the coordinates.</p>
-</div>
-<div class="section level2">
-<h2 id="the-latent-state-integrates-out">The latent state integrates out<a class="anchor" aria-label="anchor" href="#the-latent-state-integrates-out"></a>
-</h2>
-<p>An occupancy site contributes a mixture over its latent state: occupied with probability <code>psi</code> and detected on a Bernoulli schedule, or unoccupied and silent. <code>tulpaObs</code> evaluates that marginalized likelihood directly, and the same holds for the N-mixture abundance <code>N</code>, so <code>psi</code> and <code>p</code> come back as separate processes. Fitting the detection histories as one stacked binomial identifies only their product <code>psi * p</code>; the <a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd" class="external-link">occupancy-vs-INLA vignette</a> runs that head-to-head on simulated data with known truth.</p>
-</div>
-<div class="section level2">
-<h2 id="choose-the-inference-route">Choose the inference route<a class="anchor" aria-label="anchor" href="#choose-the-inference-route"></a>
-</h2>
-<p><code>method</code> names one fully specified route. Laplace is fast and the default; the stochastic corrections debias it where it is biased; NUTS gives the full posterior on eighteen of the families, the structured terms it samples listed on each family’s help page.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="va">...</span>, method <span class="op">=</span> <span class="st">"laplace"</span><span class="op">)</span>         <span class="co"># EM + Laplace, deterministic</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="va">...</span>, method <span class="op">=</span> <span class="st">"laplace_sla"</span><span class="op">)</span>     <span class="co"># skew-corrected marginals, adds a `skew` column</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="va">...</span>, method <span class="op">=</span> <span class="st">"laplace_gibbs"</span><span class="op">)</span>   <span class="co"># post-EM Gibbs chain, Rubin-pooled</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="va">...</span>, method <span class="op">=</span> <span class="st">"nested_laplace"</span><span class="op">)</span>  <span class="co"># multi-block: areal fields, joint cover hurdle</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="va">...</span>, method <span class="op">=</span> <span class="st">"nuts"</span><span class="op">)</span>            <span class="co"># HMC, reports split-Rhat and bulk / tail ESS</span></span></code></pre></div>
-<p>Single-season <code><a href="reference/occu.html">occu()</a></code>, <code><a href="reference/t_occu.html">t_occu()</a></code> and the community families <code><a href="reference/ms_occu.html">ms_occu()</a></code>, <code><a href="reference/ms_dyn_occu.html">ms_dyn_occu()</a></code>, <code><a href="reference/ms_int_occu.html">ms_int_occu()</a></code>, <code><a href="reference/jsdm.html">jsdm()</a></code> and <code><a href="reference/ms_count.html">ms_count()</a></code> also take <code>method = "pg_gibbs"</code>, an exact Polya-Gamma Gibbs sampler that recovers the community variance components the Laplace EM attenuates. <code>fit$method</code> records the resolved route, and an unsupported combination errors with a pointer to the methods that family accepts.</p>
-<p>Random-effect variance components carry the Laplace small-cluster bias for binary data (the <code>glmer</code> <code>nAGQ = 1</code> regime). An adaptive Gauss-Hermite refinement on the exact per-group marginal runs by default (<code>re.aghq</code>), cutting the occupancy per-group-<code>n = 8</code> sigma bias from ~18% to ~4% and the detection-arm bias from ~70% to ~1%, both against NUTS.</p>
-</div>
-<div class="section level2">
-<h2 id="the-data-shape-you-already-have">The data shape you already have<a class="anchor" aria-label="anchor" href="#the-data-shape-you-already-have"></a>
-</h2>
-<p>Detection histories arrive as matrices, as long tables with one row per site-visit, or as species arrays. Three helpers build the same <code>tobs_data</code> object from any of them:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/tobs_format.html">tobs_format</a></span><span class="op">(</span><span class="va">y</span>, occ.covs <span class="op">=</span> <span class="va">sites</span>, det.covs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>wind <span class="op">=</span> <span class="va">wind_mat</span><span class="op">)</span>, coords <span class="op">=</span> <span class="va">xy</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">visits_df</span>, y <span class="op">=</span> <span class="st">"detected"</span>, site <span class="op">=</span> <span class="st">"site_id"</span>, visit <span class="op">=</span> <span class="st">"visit"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/tobs_format_ms.html">tobs_format_ms</a></span><span class="op">(</span><span class="va">y_array</span>, occ.covs <span class="op">=</span> <span class="va">sites</span>, species.names <span class="op">=</span> <span class="va">spp</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="reference/occu_cover_inputs.html">occu_cover_inputs</a></span><span class="op">(</span><span class="va">plot_df</span>, site <span class="op">=</span> <span class="st">"plot"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
-<span>                  response <span class="op">=</span> <span class="st">"present"</span>, y.pos <span class="op">=</span> <span class="st">"cover"</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>, <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code>, and <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> on a <code>tobs_data</code> report naive occupancy and detection, per-visit rates, completeness, and a detection map when coordinates are present. Three fixed-seed example datasets ship with a known <code>truth</code> attached: <code>peatland_occu</code>, <code>foray_counts</code>, and <code>meadow_cover</code>.</p>
-</div>
-<div class="section level2">
-<h2 id="simulate-fit-recover">Simulate, fit, recover<a class="anchor" aria-label="anchor" href="#simulate-fit-recover"></a>
-</h2>
-<p>Every family has a matching simulator that returns <code>y</code>, <code>data</code>, and the <code>truth</code> that generated them, so a model can be checked against known parameters before it meets real data. The package’s own recovery tests are built on these:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">200</span>, J <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>                     beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.5</span>, <span class="fl">1.2</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
-<span>                     beta.det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="op">-</span><span class="fl">0.8</span><span class="op">)</span>,</span>
-<span>                     seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span> <span class="op">+</span> <span class="va">occ_cov2</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>            detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span>
-<span></span>
+<span><span class="va">occ</span> <span class="op">&lt;-</span> <span class="va">peatland_occu</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span></span>
+<span>  <span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span> <span class="va">wetness</span>,</span>
+<span>  data <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">occ.covs</span>,</span>
+<span>  family <span class="op">=</span> <span class="fu"><a href="reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  detection <span class="op">=</span> <span class="op">~</span> <span class="va">effort</span>,</span>
+<span>  y <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">y</span>,</span>
+<span>  visits <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">det.covs</span></span>
+<span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="va">sim</span><span class="op">$</span><span class="va">truth</span></span></code></pre></div>
-<p><code><a href="reference/simulate_abun.html">simulate_abun()</a></code>, <code><a href="reference/simulate_cover.html">simulate_cover()</a></code>, <code><a href="reference/simulate_dyn_occu.html">simulate_dyn_occu()</a></code>, <code><a href="reference/simulate_ms_occu.html">simulate_ms_occu()</a></code>, <code><a href="reference/simulate_distance.html">simulate_distance()</a></code>, and the rest cover the remaining families, including a <code><a href="reference/simulate_cover_joint.html">simulate_cover_joint()</a></code> that shares a demeaned BYM2 field across both hurdle arms.</p>
+<span><span class="co">#&gt; psi_(Intercept)   psi_elevation     psi_wetness   p_(Intercept)  p_visit_effort </span></span>
+<span><span class="co">#&gt;     0.242198812    -0.505199672     0.691204862    -0.001590117     0.853642172</span></span></code></pre></div>
+<p>The <code>psi_</code> coefficients belong to the occupancy formula and the <code>p_</code> coefficients to the detection formula, both on the logit scale.</p>
+<p>The detection histories <code>y</code> are a matrix with one row per site and one column per visit (1 detected, 0 not detected, <code>NA</code> missing). Site covariates are a data frame with one row per site, and covariates that change between visits are matrices of the same shape as <code>y</code>, passed through <code>visits</code>. <code><a href="reference/tobs_format.html">tobs_format()</a></code> and <code><a href="reference/tobs_data.html">tobs_data()</a></code> build the same input from matrices or from a long table with one row per site-visit; <a href="https://gillescolling.com/tulpaObs/articles/data-formatting.html">Shaping data for tobs()</a> covers both.</p>
 </div>
 <div class="section level2">
-<h2 id="the-usual-r-surface">The usual R surface<a class="anchor" aria-label="anchor" href="#the-usual-r-surface"></a>
+<h2 id="structured-effects">Structured effects<a class="anchor" aria-label="anchor" href="#structured-effects"></a>
 </h2>
-<p>A fit is an ordinary R model object, whichever route produced it:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/simulate.html" class="external-link">simulate</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://generics.r-lib.org/reference/tidy.html" class="external-link">tidy</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://generics.r-lib.org/reference/glance.html" class="external-link">glance</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://rdrr.io/r/stats/update.html" class="external-link">update</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/convergence.html">converged</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="reference/convergence.html">convergence</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted()</a></code> returns <code>list(psi, p, z)</code> at the posterior mean, <code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> per-group BLUPs with standard errors, and <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> works in-sample, on a design matrix (<code>X.0=</code>), or on terms (<code>terms=</code>, which returns a <code>tobs_prediction</code> with a <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> method). Spatial fits interpolate to new coordinates through <code><a href="reference/tobs_predict_spatial.html">tobs_predict_spatial()</a></code>. <code>$</code> accessors (<code>beta.samples</code>, <code>psi.samples</code>, <code>z.samples</code>, <code>run.time</code>) follow spOccupancy naming.</p>
+<p>Spatial fields, temporal processes and random effects are terms in the formula, and each enters the process whose formula it is written in:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="reference/tobs_terms.html">temporal</a></span><span class="op">(</span><span class="va">year</span>, type <span class="op">=</span> <span class="st">"ar1"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">observer</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="reference/tobs_terms.html">spatial()</a></code> takes an adjacency matrix for areal models (ICAR by default, BYM2, CAR) or coordinates for continuous fields (<code>model = "spde"</code> or <code>"gp"</code>). Random effects follow lme4’s bar syntax, including correlated slopes, crossed and nested grouping. <code><a href="reference/tobs_terms.html">?tobs_terms</a></code> documents every term. <a href="https://gillescolling.com/tulpaObs/articles/spatial-occupancy.html">Areal spatial occupancy with ICAR, BYM2, and CAR</a>, <a href="https://gillescolling.com/tulpaObs/articles/occupancy-spatial-spde.html">Occupancy with a continuous SPDE spatial field</a> and <a href="https://gillescolling.com/tulpaObs/articles/random-effects.html">Random effects with lme4 bar syntax</a> work through each.</p>
 </div>
 <div class="section level2">
-<h2 id="diagnostics-and-identifiability">Diagnostics and identifiability<a class="anchor" aria-label="anchor" href="#diagnostics-and-identifiability"></a>
+<h2 id="inference-methods">Inference methods<a class="anchor" aria-label="anchor" href="#inference-methods"></a>
 </h2>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model</a></span><span class="op">(</span><span class="va">fit</span>, coords <span class="op">=</span> <span class="va">xy</span><span class="op">)</span>    <span class="co"># roll-up: sampler, WAIC, PPC, zero-inflation, Moran's I</span></span>
-<span><span class="fu"><a href="reference/tobs_check_id.html">tobs_check_id</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">model</span><span class="op">)</span>         <span class="co"># confounding, low detection, sparse data</span></span>
-<span></span>
-<span><span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://gillescolling.com/tulpa/reference/criteria_doors.html" class="external-link">dic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://gillescolling.com/tulpa/reference/criteria_doors.html" class="external-link">cpo</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/ppc.html">ppc</a></span><span class="op">(</span><span class="va">fit</span>, fit.stat <span class="op">=</span> <span class="st">"chi-squared"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_dispersion.html" class="external-link">test_dispersion</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_zero_inflation.html" class="external-link">test_zero_inflation</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>; <span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_outliers.html" class="external-link">test_outliers</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/test_uniformity.html" class="external-link">test_uniformity</a></span><span class="op">(</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/pit_residuals.html" class="external-link">pit_residuals</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic()</a></code> and <code><a href="https://mc-stan.org/loo/reference/loo.html" class="external-link">loo()</a></code> are the loo generics, so <code><a href="https://mc-stan.org/loo/reference/loo_compare.html" class="external-link">loo::loo_compare()</a></code> reads a <code>tobs_fit</code> directly.</p>
-<p>Moran’s I, Durbin-Watson, variograms, and <code>spatial_range</code> / <code>temporal_corr</code> for the latent structure come through from tulpa. <code><a href="reference/tobs_stack.html">tobs_stack()</a></code> LOO-weights two or more fits on the same observations into an ensemble whose <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> returns the combined predictive.</p>
+<p><code>method</code> in <code><a href="reference/tobs.html">tobs()</a></code> selects the route: <code>"laplace"</code> (the default), <code>"nested_laplace"</code> for areal fields and the joint cover hurdle, <code>"nuts"</code> for the full posterior with split-Rhat and effective sample sizes, and <code>"pg_gibbs"</code>, an exact Polya-Gamma Gibbs sampler, on single-season occupancy, <code><a href="reference/t_occu.html">t_occu()</a></code> and the community families. An unsupported combination of family and method stops with the methods that family accepts.</p>
+<p>Variance components of binary random effects are biased under the Laplace approximation when groups are small. An adaptive Gauss-Hermite pass corrects them by default; with eight observations per group it lowers the measured bias in the random-effect standard deviation from about 18 % to about 4 %, matching a NUTS fit (<a href="https://gillescolling.com/tulpaObs/articles/random-effects.html">Random effects with lme4 bar syntax</a>).</p>
 </div>
 <div class="section level2">
-<h2 id="longitudinal-and-community-extras">Longitudinal and community extras<a class="anchor" aria-label="anchor" href="#longitudinal-and-community-extras"></a>
+<h2 id="checking-and-comparing-fits">Checking and comparing fits<a class="anchor" aria-label="anchor" href="#checking-and-comparing-fits"></a>
 </h2>
-<p><code><a href="reference/within_between.html">within_between()</a></code> splits a covariate into its per-group mean and within-group deviation, so <code>~ x_btw + x_wtn</code> separates the cross-site gradient from change inside a site across a resurvey:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/within_between.html">within_between</a></span><span class="op">(</span><span class="va">plots</span>, group <span class="op">=</span> <span class="st">"plot"</span>, vars <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"temperature"</span>, <span class="st">"grazing"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">temperature_btw</span> <span class="op">+</span> <span class="va">temperature_wtn</span>, data <span class="op">=</span> <span class="va">d</span>, family <span class="op">=</span> <span class="fu"><a href="reference/cover.html">cover</a></span><span class="op">(</span><span class="op">)</span>, y <span class="op">=</span> <span class="va">d</span><span class="op">$</span><span class="va">cover</span><span class="op">)</span></span></code></pre></div>
-<p>For community fits, <code><a href="reference/tobs_richness.html">tobs_richness()</a></code> returns posterior species richness and <code><a href="reference/tobs_associations.html">tobs_associations()</a></code> the residual species-association matrix from the latent factors.</p>
+<p><code><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model()</a></code> collects the sampler diagnostics, WAIC, a posterior predictive check, a zero-inflation test and Moran’s I in one report. <code><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic()</a></code> and <code><a href="https://mc-stan.org/loo/reference/loo.html" class="external-link">loo()</a></code> are the generics of the <a href="https://mc-stan.org/loo/" class="external-link">loo</a> package, so <code><a href="https://mc-stan.org/loo/reference/loo_compare.html" class="external-link">loo::loo_compare()</a></code> compares tulpaObs fits directly. <a href="https://gillescolling.com/tulpaObs/articles/diagnostics.html">Diagnostics: checking, comparing, and residuals</a> covers the full workflow.</p>
 </div>
 <div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
 </h2>
-<p>Getting started</p>
+<p>Start with <a href="https://gillescolling.com/tulpaObs/articles/quickstart.html">Getting started with tulpaObs</a>: one path from simulated detection histories to a fitted, compared and predicted occupancy model.</p>
 <ul>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/quickstart.Rmd" class="external-link">Quickstart</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/data-formatting.Rmd" class="external-link">Data formatting</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy.Rmd" class="external-link">Occupancy</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-vs-inla.Rmd" class="external-link">Occupancy vs INLA</a></li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/data-formatting.html">Shaping data for tobs()</a>: detection histories and covariates from matrices or long tables.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/occupancy.html">Single-season occupancy</a>: the base model end to end, including when occupancy and detection cannot be separated.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/dynamic-occupancy.html">Dynamic (multi-season) occupancy</a>: colonisation and extinction across seasons.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/integrated-occupancy.html">Integrated occupancy: combining data sources</a>: several detection processes sharing one occupancy state.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/abundance.html">N-mixture abundance with tulpaObs</a>: abundance from replicated counts.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/community-models.html">Community models in tulpaObs</a>: many species with shared community priors.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/cover-hurdle.html">Cover hurdle (independent arms)</a> and <a href="https://gillescolling.com/tulpaObs/articles/cover-hurdle-motivate.html">Cover hurdle on resurvey panels (MOTIVATE reduction)</a>: vegetation cover with zeros.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/spatial-occupancy.html">Areal spatial occupancy with ICAR, BYM2, and CAR</a> and <a href="https://gillescolling.com/tulpaObs/articles/occupancy-spatial-spde.html">Occupancy with a continuous SPDE spatial field</a>: spatial fields.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/random-effects.html">Random effects with lme4 bar syntax</a>: grouped effects and the small-group correction.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/diagnostics.html">Diagnostics: checking, comparing, and residuals</a>: checking and comparing fits.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/articles/occupancy-vs-inla.html">Occupancy: tulpaObs vs INLA aggregated-binomial</a> and <a href="https://gillescolling.com/tulpaObs/articles/cover-hurdle-vs-inla.html">Cover hurdle: tulpaObs vs INLA on simulated cover data</a>: comparisons with INLA.</li>
+<li>
+<a href="https://gillescolling.com/tulpaObs/reference/index.html">Full reference</a>: every function, grouped by job.</li>
 </ul>
-<p>Model families</p>
-<ul>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/abundance.Rmd" class="external-link">Abundance (N-mixture)</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/dynamic-occupancy.Rmd" class="external-link">Dynamic occupancy</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/integrated-occupancy.Rmd" class="external-link">Integrated occupancy</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/community-models.Rmd" class="external-link">Community models</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle.Rmd" class="external-link">Cover hurdle</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-motivate.Rmd" class="external-link">Cover hurdle, motivated</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/cover-hurdle-vs-inla.Rmd" class="external-link">Cover hurdle vs INLA</a></li>
-</ul>
-<p>Structure</p>
-<ul>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/spatial-occupancy.Rmd" class="external-link">Spatial occupancy</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/occupancy-spatial-spde.Rmd" class="external-link">Spatial occupancy with SPDE</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/random-effects.Rmd" class="external-link">Random effects</a></li>
-<li><a href="https://github.com/gcol33/tulpaObs/blob/main/vignettes/diagnostics.Rmd" class="external-link">Diagnostics</a></li>
-</ul>
-<p><a href="https://github.com/gcol33/tulpaObs/blob/main/API.md" class="external-link">API.md</a> is the full reference: every argument of <code><a href="reference/tobs.html">tobs()</a></code>, the term registry, the method table, the <code>control</code> list, and the complete export list.</p>
 </div>
 <div class="section level2">
-<h2 id="status">Status<a class="anchor" aria-label="anchor" href="#status"></a>
+<h2 id="getting-help">Getting help<a class="anchor" aria-label="anchor" href="#getting-help"></a>
 </h2>
-<p>The public API (<code><a href="reference/tobs.html">tobs()</a></code>, the family constructors, and the <code>tobs_*</code> S3 classes) is stable. Internal entry points (<code><a href="reference/dot-tobs_build_model.html">.tobs_build_model()</a></code>, <code><a href="reference/dot-tobs_fit_model.html">.tobs_fit_model()</a></code>, <code><a href="reference/dot-tobs_laplace.html">.tobs_laplace()</a></code>) and the C++ surface follow tulpa’s ABI version and may change between releases.</p>
+<p>Questions and bug reports go to the <a href="https://github.com/gcol33/tulpaObs/issues" class="external-link">GitHub issues</a>. A bug report is easiest to act on with a small reproducible example, for instance made with <a href="https://reprex.tidyverse.org/" class="external-link">reprex</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="support">Support<a class="anchor" aria-label="anchor" href="#support"></a>
 </h2>
 <blockquote>
-<p>“Software is like sex: it’s better when it’s free.”</p>
-<p>Linus Torvalds</p>
+<p>“Software is like sex: it’s better when it’s free.” — Linus Torvalds</p>
 </blockquote>
 <p>I’m a PhD student who builds R packages in my free time because I believe good tools should be free and open. I started these projects for my own work and figured others might find them useful too.</p>
 <p>If this package saved you some time, buying me a coffee is a nice way to say thanks. It helps with my coffee addiction.</p>
 <p><a href="https://buymeacoffee.com/gcol33" class="external-link"><img src="https://img.shields.io/badge/-Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&amp;logoColor=black" alt="Buy Me A Coffee"></a></p>
 </div>
 <div class="section level2">
+<h2 id="acknowledgements">Acknowledgements<a class="anchor" aria-label="anchor" href="#acknowledgements"></a>
+</h2>
+<p>Inference, the latent spatial and temporal structures and the generic diagnostics come from <a href="https://CRAN.R-project.org/package=tulpa" class="external-link">tulpa</a>; spatial meshes come from <a href="https://CRAN.R-project.org/package=tulpaMesh" class="external-link">tulpaMesh</a>.</p>
+</div>
+<div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
 </h2>
-<p>MIT (see the LICENSE file)</p>
+<p>tulpaObs is licensed under MIT.</p>
 </div>
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb14"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="co">@software{tulpaObs,</span></span>
-<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="co">  author = {Colling, Gilles},</span></span>
-<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="co">  title  = {tulpaObs: Hierarchical Latent-State Observation Models via tulpa},</span></span>
-<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="co">  year   = {2026},</span></span>
-<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="co">  url    = {https://github.com/gcol33/tulpaObs}</span></span>
-<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="co">}</span></span></code></pre></div>
+<p>To cite the tulpaObs package in publications, use:</p>
+<pre class="text"><code>Colling G (2026). _tulpaObs: Bayesian Occupancy, Abundance and
+Detection Models via 'tulpa'_. R package version 0.6.2,
+&lt;https://gillescolling.com/tulpaObs/&gt;.</code></pre>
+<p>BibTeX:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bibtex"><code class="sourceCode bibtex"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="va">@Manual</span>{<span class="ot">colling2026tulpaobs</span>,</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="dt">title</span> = {{tulpaObs}: Bayesian Occupancy, Abundance and Detection Models via 'tulpa'},</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="dt">author</span> = {Gilles Colling},</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="dt">year</span> = {2026},</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>  <span class="dt">note</span> = {R package version 0.6.2},</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>  <span class="dt">url</span> = {https://gillescolling.com/tulpaObs/},</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>}</span></code></pre></div>
+<p>Download the citation as <a href="https://gillescolling.com/tulpaObs/tulpaObs.bib">BibTeX</a> or <a href="https://gillescolling.com/tulpaObs/tulpaObs.ris">RIS</a>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
@@ -492,7 +311,14 @@
 </ul>
 </div>
 
-
+<div class="dev-status">
+<h2 data-toc-skip>Dev status</h2>
+<ul class="list-unstyled">
+<li><a href="https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/gcol33/tulpaObs/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://app.codecov.io/gh/gcol33/tulpaObs" class="external-link"><img src="https://codecov.io/gh/gcol33/tulpaObs/graph/badge.svg" alt="Codecov test coverage"></a></li>
+<li><a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a></li>
+</ul>
+</div>
 
   </aside>
 </div>

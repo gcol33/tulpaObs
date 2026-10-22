@@ -27,6 +27,12 @@ A `tobs_family` object for
 `y` is a length-`S` list of `N x J` 0/1/NA detection matrices (or a 3D
 `[sites x visits x species]` array); `species` names the arms.
 
+## Engines
+
+- `method = "laplace"` – the enumerated `2^S`-state marginal maximised
+  (BFGS) with an observed-information covariance; the only route (no
+  field, no sampler).
+
 ## Examples
 
 ``` r

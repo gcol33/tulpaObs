@@ -24,7 +24,7 @@ sigma) and by a removal period (per-period capture r)."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,14 +74,14 @@ the detected birds cross-classified by a distance band (half-normal key, scale
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_gdistremoval</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  cutpoints <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span>, <span class="fl">20</span>, <span class="fl">30</span>, <span class="fl">40</span><span class="op">)</span>,</span>
-<span>  n_periods <span class="op">=</span> <span class="fl">4L</span>,</span>
+<span>  n.periods <span class="op">=</span> <span class="fl">4L</span>,</span>
 <span>  transect <span class="op">=</span> <span class="st">"line"</span>,</span>
-<span>  n_abund_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_rem_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_r <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n.abund.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.rem.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.r <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -98,7 +98,7 @@ the detected birds cross-classified by a distance band (half-normal key, scale
 <dd><p>Distance-bin edges <code>0 = c_0 &lt; ... &lt; c_B</code>.</p></dd>
 
 
-<dt id="arg-n-periods">n_periods<a class="anchor" aria-label="anchor" href="#arg-n-periods"></a></dt>
+<dt id="arg-n-periods">n.periods<a class="anchor" aria-label="anchor" href="#arg-n-periods"></a></dt>
 <dd><p>Number of removal periods.</p></dd>
 
 
@@ -106,12 +106,12 @@ the detected birds cross-classified by a distance band (half-normal key, scale
 <dd><p><code>"line"</code> (default) or <code>"point"</code>.</p></dd>
 
 
-<dt id="arg-n-abund-covs-n-det-covs-n-rem-covs">n_abund_covs, n_det_covs, n_rem_covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs-n-det-covs-n-rem-covs"></a></dt>
+<dt id="arg-n-abund-covs-n-det-covs-n-rem-covs">n.abund.covs, n.det.covs, n.rem.covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs-n-det-covs-n-rem-covs"></a></dt>
 <dd><p>Number of abundance / distance /
 removal covariates.</p></dd>
 
 
-<dt id="arg-beta-lambda-beta-sigma-beta-r">beta_lambda, beta_sigma, beta_r<a class="anchor" aria-label="anchor" href="#arg-beta-lambda-beta-sigma-beta-r"></a></dt>
+<dt id="arg-beta-lambda-beta-sigma-beta-r">beta.lambda, beta.sigma, beta.r<a class="anchor" aria-label="anchor" href="#arg-beta-lambda-beta-sigma-beta-r"></a></dt>
 <dd><p>Coefficients on the log-abundance,
 log-scale, and logit-removal arms (<code>c(intercept, slopes...)</code>). Defaults give
 moderate abundance / detection.</p></dd>

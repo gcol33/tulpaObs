@@ -4,7 +4,7 @@ covariate grid, and the site-level design frame that an occu_cover() fit
 consumes, from one long (one row per site-visit / plot) data frame. This is
 the same construction tobs() runs internally when a single occu_cover()
 fit is handed a long frame; call it directly when you want to inspect the
-arms before fitting, or pass them on as y = , y_pos = , visits = ,
+arms before fitting, or pass them on as y = , y.pos = , visits = ,
 data =  to tobs().
 The occurrence and cover arms are pivoted onto one shared (sites, visits)
 grid, so they align row-for-row, and the site-level design is the first row
@@ -16,7 +16,7 @@ covariate grid, and the site-level design frame that an occu_cover() fit
 consumes, from one long (one row per site-visit / plot) data frame. This is
 the same construction tobs() runs internally when a single occu_cover()
 fit is handed a long frame; call it directly when you want to inspect the
-arms before fitting, or pass them on as y = , y_pos = , visits = ,
+arms before fitting, or pass them on as y = , y.pos = , visits = ,
 data =  to tobs().
 The occurrence and cover arms are pivoted onto one shared (sites, visits)
 grid, so they align row-for-row, and the site-level design is the first row
@@ -44,7 +44,7 @@ read by the joint engine."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,7 +89,7 @@ covariate grid, and the site-level design frame that an <code><a href="occu_cove
 consumes, from one long (one row per site-visit / plot) data frame. This is
 the same construction <code><a href="tobs.html">tobs()</a></code> runs internally when a single <code><a href="occu_cover.html">occu_cover()</a></code>
 fit is handed a long frame; call it directly when you want to inspect the
-arms before fitting, or pass them on as <code>y = </code>, <code>y_pos = </code>, <code>visits = </code>,
+arms before fitting, or pass them on as <code>y = </code>, <code>y.pos = </code>, <code>visits = </code>,
 <code>data = </code> to <code><a href="tobs.html">tobs()</a></code>.</p>
 <p>The occurrence and cover arms are pivoted onto one shared <code>(sites, visits)</code>
 grid, so they align row-for-row, and the site-level design is the first row
@@ -106,7 +106,7 @@ read by the joint engine.</p>
 <span>  <span class="va">site</span>,</span>
 <span>  <span class="va">visit</span>,</span>
 <span>  <span class="va">response</span>,</span>
-<span>  <span class="va">y_pos</span>,</span>
+<span>  <span class="va">y.pos</span>,</span>
 <span>  occ.covs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  det.covs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  coords <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -123,10 +123,10 @@ read by the joint engine.</p>
 <dd><p>A long / plot-level data frame: one row per site-visit.</p></dd>
 
 
-<dt id="arg-site-visit-response-y-pos">site, visit, response, y_pos<a class="anchor" aria-label="anchor" href="#arg-site-visit-response-y-pos"></a></dt>
+<dt id="arg-site-visit-response-y-pos">site, visit, response, y.pos<a class="anchor" aria-label="anchor" href="#arg-site-visit-response-y-pos"></a></dt>
 <dd><p>Column names: the site identifier, the
 visit / replicate, the 0/1 detection response, and the continuous cover
-response (used only where <code>response == 1</code>). The accepted range of <code>y_pos</code>
+response (used only where <code>response == 1</code>). The accepted range of <code>y.pos</code>
 follows <code>positive</code>.</p></dd>
 
 
@@ -152,7 +152,7 @@ cap), or the dense <code>[n_sites x max_visits]</code> grid.</p></dd>
 
 <dt id="arg-positive">positive<a class="anchor" aria-label="anchor" href="#arg-positive"></a></dt>
 <dd><p>The cover-arm distribution, matching <code><a href="occu_cover.html">occu_cover()</a></code>: <code>"beta"</code>
-(default) stores <code>y_pos</code> as a proportion in <code>[0, 1]</code> (<code><a href="tobs_data.html">tobs_data()</a></code> type
+(default) stores <code>y.pos</code> as a proportion in <code>[0, 1]</code> (<code><a href="tobs_data.html">tobs_data()</a></code> type
 <code>"cover"</code>); <code>"lognormal"</code> / <code>"gamma"</code> store it as a positive real <code>(0, Inf)</code>
 (type <code>"positive"</code>, validated non-negative with no upper bound). Pick the
 value you pass to <code>occu_cover(response = )</code>.</p></dd>
@@ -178,7 +178,7 @@ value you pass to <code>occu_cover(response = )</code>.</p></dd>
 <span>                   det_cov1 <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">visit_data</span><span class="op">$</span><span class="va">det_cov1</span>,</span>
 <span>                   occ_cov1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">data</span><span class="op">$</span><span class="va">occ_cov1</span>, each <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu">occu_cover_inputs</span><span class="op">(</span><span class="va">long</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
-<span>                         response <span class="op">=</span> <span class="st">"occur"</span>, y_pos <span class="op">=</span> <span class="st">"cover"</span>,</span>
+<span>                         response <span class="op">=</span> <span class="st">"occur"</span>, y.pos <span class="op">=</span> <span class="st">"cover"</span>,</span>
 <span>                         det.covs <span class="op">=</span> <span class="st">"det_cov1"</span>, compact <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>                         positive <span class="op">=</span> <span class="st">"lognormal"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">inp</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>

@@ -8,10 +8,10 @@ Simulate temporal multi-species occupancy data
 simulate_ms_dyn_occu(
   N = 50,
   J = 3,
-  n_species = 5,
-  n_seasons = 4,
-  beta_comm_mean = c(0),
-  beta_comm_sd = c(0.5),
+  n.species = 5,
+  n.seasons = 4,
+  beta.comm.mean = c(0),
+  beta.comm.sd = c(0.5),
   gamma = 0.15,
   epsilon = 0.1,
   field = NULL,
@@ -30,19 +30,19 @@ simulate_ms_dyn_occu(
 
   Visits per season (default 3).
 
-- n_species:
+- n.species:
 
   Number of species (default 5).
 
-- n_seasons:
+- n.seasons:
 
   Number of seasons (default 4).
 
-- beta_comm_mean:
+- beta.comm.mean:
 
   Community mean for occupancy (default c(0)).
 
-- beta_comm_sd:
+- beta.comm.sd:
 
   Community SD for occupancy (default c(0.5)).
 
@@ -84,7 +84,7 @@ the family this simulates for.
 ## Examples
 
 ``` r
-sim <- simulate_ms_dyn_occu(N = 30, J = 2, n_species = 3, n_seasons = 3,
+sim <- simulate_ms_dyn_occu(N = 30, J = 2, n.species = 3, n.seasons = 3,
                             seed = 1)
 dim(sim$y)
 ```

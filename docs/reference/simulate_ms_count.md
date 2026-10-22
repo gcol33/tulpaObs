@@ -13,9 +13,9 @@ detection.
 ``` r
 simulate_ms_count(
   N = 120,
-  n_species = 10,
-  beta_comm_mean = c(1, 0.5),
-  beta_comm_sd = c(0.4, 0.3),
+  n.species = 10,
+  beta.comm.mean = c(1, 0.5),
+  beta.comm.sd = c(0.4, 0.3),
   response = c("poisson", "negbin", "gaussian", "binomial"),
   size = 2,
   size.log.sd = 0.3,
@@ -31,11 +31,11 @@ simulate_ms_count(
 
   Number of sites.
 
-- n_species:
+- n.species:
 
   Number of species.
 
-- beta_comm_mean, beta_comm_sd:
+- beta.comm.mean, beta.comm.sd:
 
   Community mean and SD of the per-species coefficients (intercept
   first). Length sets the number of covariates.
@@ -73,6 +73,6 @@ A list with `y` (an `N x n_species` matrix), `data`, and `truth`.
 ## Examples
 
 ``` r
-sim <- simulate_ms_count(N = 50, n_species = 4, seed = 1)
+sim <- simulate_ms_count(N = 50, n.species = 4, seed = 1)
 head(sim$y)
 ```

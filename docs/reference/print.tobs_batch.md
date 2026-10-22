@@ -24,3 +24,17 @@ print(x, ...)
 ## Value
 
 `x`, invisibly.
+
+## Examples
+
+``` r
+# \donttest{
+sims <- lapply(1:2, function(s) simulate_occu_cover(N = 40, J = 3, seed = s))
+y <- lapply(sims, function(s) s$y)
+y_pos <- lapply(sims, function(s) { p <- s$y_pos; p[is.na(p)] <- 0; p })
+fit <- tobs(~ occ_cov1, data = sims[[1]]$data,
+            family = occu_cover("lognormal"), detection = ~ 1,
+            y = y, y.pos = y_pos, species = c("a", "b"), method = "laplace")
+print(fit)
+# }
+```

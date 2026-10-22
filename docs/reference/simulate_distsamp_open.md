@@ -12,12 +12,12 @@ sampling (half-normal key, scale `sigma`) at each primary period.
 simulate_distsamp_open(
   N = 200,
   cutpoints = c(0, 10, 20, 30, 40),
-  n_seasons = 4L,
+  n.seasons = 4L,
   transect = "line",
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_sigma = NULL,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.sigma = NULL,
   omega = 0.7,
   gamma = 2.5,
   mixture = c("poisson", "negbin", "zip", "zinb"),
@@ -40,7 +40,7 @@ simulate_distsamp_open(
 
   Distance-bin edges `0 = c_0 < ... < c_B`.
 
-- n_seasons:
+- n.seasons:
 
   Number of primary periods (default 4).
 
@@ -48,11 +48,11 @@ simulate_distsamp_open(
 
   `"line"` (default) or `"point"`.
 
-- n_abund_covs, n_det_covs:
+- n.abund.covs, n.det.covs:
 
   Number of abundance / distance covariates.
 
-- beta_lambda, beta_sigma:
+- beta.lambda, beta.sigma:
 
   Coefficients on the log-abundance and log-scale arms. Defaults give
   moderate abundance / detection.
@@ -110,6 +110,6 @@ A list with `y` (`[n_sites x n_bins x n_seasons]` distance-band counts),
 ## Examples
 
 ``` r
-sim <- simulate_distsamp_open(N = 40, n_seasons = 3, seed = 1)
+sim <- simulate_distsamp_open(N = 40, n.seasons = 3, seed = 1)
 dim(sim$y)
 ```

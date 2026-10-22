@@ -9,7 +9,7 @@ This is the same construction
 internally when a single
 [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
 fit is handed a long frame; call it directly when you want to inspect
-the arms before fitting, or pass them on as `y = `, `y_pos = `,
+the arms before fitting, or pass them on as `y = `, `y.pos = `,
 `visits = `, `data = ` to
 [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md).
 
@@ -28,7 +28,7 @@ occu_cover_inputs(
   site,
   visit,
   response,
-  y_pos,
+  y.pos,
   occ.covs = NULL,
   det.covs = NULL,
   coords = NULL,
@@ -43,11 +43,11 @@ occu_cover_inputs(
 
   A long / plot-level data frame: one row per site-visit.
 
-- site, visit, response, y_pos:
+- site, visit, response, y.pos:
 
   Column names: the site identifier, the visit / replicate, the 0/1
   detection response, and the continuous cover response (used only where
-  `response == 1`). The accepted range of `y_pos` follows `positive`.
+  `response == 1`). The accepted range of `y.pos` follows `positive`.
 
 - occ.covs:
 
@@ -75,7 +75,7 @@ occu_cover_inputs(
 
   The cover-arm distribution, matching
   [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md):
-  `"beta"` (default) stores `y_pos` as a proportion in `[0, 1]`
+  `"beta"` (default) stores `y.pos` as a proportion in `[0, 1]`
   ([`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
   type `"cover"`); `"lognormal"` / `"gamma"` store it as a positive real
   `(0, Inf)` (type `"positive"`, validated non-negative with no upper
@@ -102,7 +102,7 @@ long <- data.frame(site = rep(1:20, each = 3), visit = rep(1:3, 20),
                    det_cov1 = sim$visit_data$det_cov1,
                    occ_cov1 = rep(sim$data$occ_cov1, each = 3))
 inp <- occu_cover_inputs(long, site = "site", visit = "visit",
-                         response = "occur", y_pos = "cover",
+                         response = "occur", y.pos = "cover",
                          det.covs = "det_cov1", compact = FALSE,
                          positive = "lognormal")
 dim(inp$y)

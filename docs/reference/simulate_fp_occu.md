@@ -17,8 +17,8 @@ suitable for
 simulate_fp_occu(
   N = 300,
   J = 5,
-  n_occ_covs = 1,
-  beta_psi = NULL,
+  n.occ.covs = 1,
+  beta.psi = NULL,
   p11 = 0.6,
   p10 = 0.05,
   b = 0.5,
@@ -36,14 +36,14 @@ simulate_fp_occu(
 
   Number of visits (default 5).
 
-- n_occ_covs:
+- n.occ.covs:
 
   Number of occupancy covariates (default 1).
 
-- beta_psi:
+- beta.psi:
 
   Occupancy coefficients (logit). Default
-  `c(qlogis(0.5), runif(n_occ_covs, -0.6, 0.6))`.
+  `c(qlogis(0.5), runif(n.occ.covs, -0.6, 0.6))`.
 
 - p11, p10, b:
 

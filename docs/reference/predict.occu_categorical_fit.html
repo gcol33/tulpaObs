@@ -26,7 +26,7 @@ unconditional class probabilities psi * p_k plus the absent probability
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -100,6 +100,15 @@ unconditional class probabilities <code>psi * p_k</code> plus the absent probabi
 probabilities), and <code>joint</code> (n x (K+1): absent, then class 1..K).</p>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu_categorical.html">simulate_occu_categorical</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">300</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="occu_categorical.html">occu_categorical</a></span><span class="op">(</span><span class="op">)</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span>
+<span><span class="va">pr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">pr</span><span class="op">$</span><span class="va">joint</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co"># }</span></span></code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

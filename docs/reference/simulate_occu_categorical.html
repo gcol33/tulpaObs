@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,8 +67,8 @@
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_occu_categorical</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">500L</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.8</span><span class="op">)</span>,</span>
-<span>  beta_class <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.8</span><span class="op">)</span>,</span>
+<span>  beta.class <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -81,11 +81,11 @@
 <dd><p>number of units.</p></dd>
 
 
-<dt id="arg-beta-occ">beta_occ<a class="anchor" aria-label="anchor" href="#arg-beta-occ"></a></dt>
+<dt id="arg-beta-occ">beta.occ<a class="anchor" aria-label="anchor" href="#arg-beta-occ"></a></dt>
 <dd><p>length-2 presence coefficients (intercept, slope on <code>x</code>).</p></dd>
 
 
-<dt id="arg-beta-class">beta_class<a class="anchor" aria-label="anchor" href="#arg-beta-class"></a></dt>
+<dt id="arg-beta-class">beta.class<a class="anchor" aria-label="anchor" href="#arg-beta-class"></a></dt>
 <dd><p>a <code>2 x (K-1)</code> matrix of class coefficients (rows
 intercept / slope on <code>x</code>; columns the non-baseline classes), or <code>NULL</code>
 for a built-in 3-class default.</p></dd>

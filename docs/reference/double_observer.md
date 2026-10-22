@@ -52,6 +52,12 @@ interchangeable pair) the dependent protocol reduces to a two-pass
 [`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md)
 model.
 
+## Engines
+
+- `method = "laplace"` – the closed-form Poisson-multinomial marginal
+  maximised (BFGS) with an observed-information covariance; the only
+  route (no field, no sampler).
+
 ## Examples
 
 ``` r

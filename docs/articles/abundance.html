@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -270,20 +270,13 @@ separate the two arms.</p>
 <span><span class="op">)</span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="va">sa</span><span class="op">$</span><span class="va">data</span>       <span class="co"># site covariates, one row per site</span></span>
 <span><span class="va">y</span>   <span class="op">&lt;-</span> <span class="va">sa</span><span class="op">$</span><span class="va">y</span>          <span class="co"># 200 x 5 count matrix</span></span>
-<span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, <span class="op">]</span></span>
-<span><span class="co">#&gt;      [,1] [,2] [,3] [,4] [,5]</span></span>
-<span><span class="co">#&gt; [1,]    1    1    0    1    1</span></span>
-<span><span class="co">#&gt; [2,]    3    2    0    1    2</span></span>
-<span><span class="co">#&gt; [3,]    0    1    1    1    0</span></span>
-<span><span class="co">#&gt; [4,]    1    1    1    0    1</span></span></code></pre></div>
+<span><span class="va">y</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, <span class="op">]</span></span></code></pre></div>
 <p>The counts undercount the latent abundance. Averaging the per-site
 maximum count against the simulated truth shows the gap that detection
 opens.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>mean_max_count <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">y</span>, <span class="fl">1</span>, <span class="va">max</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  mean_true_N    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sa</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">N</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; mean_max_count    mean_true_N </span></span>
-<span><span class="co">#&gt;          2.820          3.275</span></span></code></pre></div>
+<span>  mean_true_N    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sa</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">N</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The fit follows the same call shape as occupancy. The abundance
 formula is the first argument, detection is its own formula, and
 <code><a href="../reference/abun.html">abun()</a></code> selects the N-mixture family.
@@ -309,14 +302,10 @@ arm with the log link in mind: the intercept is on the log scale, so
 back-transforming with <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp()</a></code> gives baseline expected
 abundance.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fa</span><span class="op">)</span></span>
-<span><span class="co">#&gt; lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 </span></span>
-<span><span class="co">#&gt;          1.0671676          0.4453561          0.4086084          0.2462074</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fa</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>baseline_lambda <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fa</span>, arm <span class="op">=</span> <span class="st">"lambda"</span><span class="op">)</span><span class="op">[[</span><span class="st">"(Intercept)"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  true_baseline   <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="co">#&gt; baseline_lambda   true_baseline </span></span>
-<span><span class="co">#&gt;        2.907134        3.000000</span></span></code></pre></div>
+<span>  true_baseline   <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
 <p>The abundance intercept back-transforms to roughly the three animals
 the data were built with, and the slope on <code>abund_cov1</code> lands
 near the simulated 0.5. <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> adds the posterior
@@ -324,12 +313,7 @@ standard deviation and the credible bounds for every coefficient; the
 <code>lambda_</code> rows are the abundance arm and the <code>p_</code>
 rows the detection arm.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fa</span><span class="op">)</span></span>
-<span><span class="co">#&gt;                     estimate  std.error     2.5 %    97.5 %</span></span>
-<span><span class="co">#&gt; lambda_(Intercept) 1.0671676 0.04902181 0.9747811 1.1612617</span></span>
-<span><span class="co">#&gt; lambda_abund_cov1  0.4453561 0.03999136 0.3667358 0.5213671</span></span>
-<span><span class="co">#&gt; p_(Intercept)      0.4086084 0.07297071 0.2728524 0.5536938</span></span>
-<span><span class="co">#&gt; p_det_cov1         0.2462074 0.06268696 0.1242706 0.3717937</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fa</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted()</a></code> returns the per-site quantities the fit
 implies: expected abundance <code>lambda</code>, detection probability
 <code>p</code>, and the posterior mean abundance <code>N</code> given
@@ -337,11 +321,7 @@ the counts. The last one is the estimate that matters for a population
 total, since it conditions on what was actually seen at each site.</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fv</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted</a></span><span class="op">(</span><span class="va">fa</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fv</span>, <span class="va">head</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; List of 3</span></span>
-<span><span class="co">#&gt;  $ lambda: num [1:4] 1.95 3.15 5.87 1.76</span></span>
-<span><span class="co">#&gt;  $ p     : num [1:4] 0.618 0.618 0.618 0.618</span></span>
-<span><span class="co">#&gt;  $ N     : num [1:4] 1.12 3.31 1.02 1.11</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fv</span>, <span class="va">head</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Plotting the posterior mean abundance against the simulated truth
 shows the model recovers the site-level signal through the thinning, not
 just the population average.</p>
@@ -349,294 +329,6 @@ just the population average.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sa</span><span class="op">$</span><span class="va">truth</span><span class="op">$</span><span class="va">N</span>, <span class="va">fv</span><span class="op">$</span><span class="va">N</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.35</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"true N"</span>, ylab <span class="op">=</span> <span class="st">"fitted E[N | y]"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='155.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<circle class='theme-fill-fg' cx='94.40' cy='197.56' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='175.45' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.53' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='196.70' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='166.57' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='187.23' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='174.66' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='298.40' cy='124.87' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='197.85' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='185.93' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='163.67' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.28' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='179.65' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='186.26' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.60' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='134.49' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='176.10' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='157.49' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='143.00' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='275.73' cy='120.29' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.74' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='173.83' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='176.62' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='184.41' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.77' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='186.30' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.72' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='157.71' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='168.01' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.18' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='207.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='253.07' cy='160.01' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='187.37' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.09' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.96' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='186.26' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='174.30' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='177.12' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='182.17' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='167.75' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.73' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.76' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='152.18' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='132.24' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='321.07' cy='94.73' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='172.30' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='176.10' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.82' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='177.92' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='155.82' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='175.44' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='182.65' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='186.89' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.75' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.54' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='275.73' cy='113.62' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='146.25' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='138.92' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.79' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='253.07' cy='134.03' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='196.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='151.40' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='178.81' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='186.20' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='178.29' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='173.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='177.51' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.34' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='196.67' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='182.68' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='188.04' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='142.92' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='185.93' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.60' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='137.70' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='167.22' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='158.94' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='196.67' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.43' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.75' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='185.84' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.59' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='149.21' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='185.76' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='175.46' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='178.09' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='145.92' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='140.16' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='253.07' cy='125.39' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.11' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.65' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='187.76' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.62' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='172.57' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='192.38' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='183.60' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.46' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='171.00' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='186.16' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.41' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='194.24' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.87' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='298.40' cy='113.89' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='183.26' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='389.07' cy='64.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='167.32' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.76' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.78' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='196.21' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='184.46' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='174.17' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='275.73' cy='131.08' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='160.88' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='136.36' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='182.67' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='185.45' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.86' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='151.05' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='158.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='134.31' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='175.31' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.63' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='186.40' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.95' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='177.78' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='188.45' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.09' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='155.42' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='136.55' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='176.12' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.77' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='161.33' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='141.79' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='253.07' cy='128.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='275.73' cy='121.74' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='147.73' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='183.26' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='165.47' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='188.07' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='164.72' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.58' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='143.90' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='187.00' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='185.74' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.06' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='185.25' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.47' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='198.18' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='173.68' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='180.96' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='176.84' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='167.97' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='167.16' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.04' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='175.26' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.44' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='183.52' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.98' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='167.14' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='175.48' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='171.72' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.26' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='164.23' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='253.07' cy='131.52' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='177.84' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='176.49' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='164.17' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='184.31' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='156.70' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='193.15' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='162.17' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='186.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='176.27' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.55' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='166.76' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='186.87' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.16' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='187.07' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.55' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='176.49' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.62' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='230.40' cy='143.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='160.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.18' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='161.72' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='177.46' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='162.40' cy='162.03' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='198.18' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='185.07' cy='154.25' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='71.73' cy='208.77' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.78' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='185.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='139.73' cy='171.15' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='187.11' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='207.73' cy='148.39' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='117.07' cy='185.81' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-<circle class='theme-fill-fg' cx='94.40' cy='197.94' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.35;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='71.73' y1='214.56' x2='389.07' y2='214.56' style='stroke-width: 0.75;' />
-<line x1='71.73' y1='214.56' x2='71.73' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='117.07' y1='214.56' x2='117.07' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='162.40' y1='214.56' x2='162.40' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='207.73' y1='214.56' x2='207.73' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='253.07' y1='214.56' x2='253.07' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='298.40' y1='214.56' x2='298.40' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='343.73' y1='214.56' x2='343.73' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='389.07' y1='214.56' x2='389.07' y2='221.76' style='stroke-width: 0.75;' />
-<text x='71.73' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
-<text x='117.07' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='162.40' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='207.73' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>6</text>
-<text x='253.07' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>8</text>
-<text x='298.40' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>10</text>
-<text x='343.73' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>12</text>
-<text x='389.07' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>14</text>
-<line x1='59.04' y1='208.84' x2='59.04' y2='67.58' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='208.84' x2='51.84' y2='208.84' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='188.66' x2='51.84' y2='188.66' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='168.48' x2='51.84' y2='168.48' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='148.30' x2='51.84' y2='148.30' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='128.12' x2='51.84' y2='128.12' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='107.94' x2='51.84' y2='107.94' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='87.76' x2='51.84' y2='87.76' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='67.58' x2='51.84' y2='67.58' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,208.84) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
-<text transform='translate(41.76,188.66) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text transform='translate(41.76,168.48) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text transform='translate(41.76,148.30) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>6</text>
-<text transform='translate(41.76,128.12) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>8</text>
-<text transform='translate(41.76,107.94) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>10</text>
-<text transform='translate(41.76,67.58) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>14</text>
-<polygon points='59.04,214.56 401.76,214.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='269.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>true N</text>
-<text transform='translate(12.96,136.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>fitted E[N | y]</text>
-</g>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<line x1='59.04' y1='214.49' x2='401.76' y2='61.93' style='stroke-width: 1.50; stroke: #4682B4;' />
-</g>
-</g>
-</svg></div></p>
 <p>The points track the identity line with scatter that grows at higher
 abundance, which is the right behaviour: a site with more animals leaves
 more room for the binomial thinning to vary the counts, so its posterior
@@ -670,10 +362,7 @@ estimate is stable.</p>
 <span>             detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">y</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>             control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span>default_K <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fa</span>, arm <span class="op">=</span> <span class="st">"lambda"</span><span class="op">)</span>,</span>
-<span>      K_max_200 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fa_k</span>, arm <span class="op">=</span> <span class="st">"lambda"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;           (Intercept) abund_cov1</span></span>
-<span><span class="co">#&gt; default_K    1.067168  0.4453561</span></span>
-<span><span class="co">#&gt; K_max_200    1.065566  0.4400979</span></span></code></pre></div>
+<span>      K_max_200 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fa_k</span>, arm <span class="op">=</span> <span class="st">"lambda"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The two fits agree to several decimals, so the default ceiling was
 already high enough here. On data where they disagree, take the
 higher-<code>K.max</code> fit and keep raising it until the estimate
@@ -757,25 +446,13 @@ on the object.</p>
 <code class="sourceCode R"><span><span class="va">fb</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">abund_cov1</span>, data <span class="op">=</span> <span class="va">sb</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/abun.html">abun</a></span><span class="op">(</span>mixture <span class="op">=</span> <span class="st">"negbin"</span><span class="op">)</span>,</span>
 <span>           detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">sb</span><span class="op">$</span><span class="va">y</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>           control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fb</span><span class="op">)</span></span>
-<span><span class="co">#&gt; lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 </span></span>
-<span><span class="co">#&gt;          1.3186647          0.4671972          0.4868058          0.1193980 </span></span>
-<span><span class="co">#&gt;              log_r </span></span>
-<span><span class="co">#&gt;          0.9198933</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fb</span><span class="op">)</span></span></code></pre></div>
 <p>The dispersion lives in <code>fb$nmix_dispersion</code>: the
 natural-scale size <code>$r</code>, its log-scale value
 <code>$log_r</code>, and the delta-method standard error
 <code>$r_sd</code>.</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">fb</span><span class="op">$</span><span class="va">nmix_dispersion</span></span>
-<span><span class="co">#&gt; $r</span></span>
-<span><span class="co">#&gt; [1] 2.522005</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $log_r</span></span>
-<span><span class="co">#&gt; [1] 0.9250543</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $r_sd</span></span>
-<span><span class="co">#&gt; [1] 0.4615203</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">fb</span><span class="op">$</span><span class="va">nmix_dispersion</span></span></code></pre></div>
 <p>The estimated
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
 sits near the simulated 2, with a standard error wide enough to tell you
@@ -793,9 +470,7 @@ represent.</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">maxcount</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">sb</span><span class="op">$</span><span class="va">y</span>, <span class="fl">1</span>, <span class="va">max</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">maxcount</span><span class="op">)</span>, var <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">var</a></span><span class="op">(</span><span class="va">maxcount</span><span class="op">)</span>,</span>
-<span>  ratio <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">var</a></span><span class="op">(</span><span class="va">maxcount</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">maxcount</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;     mean      var    ratio </span></span>
-<span><span class="co">#&gt; 3.510000 9.306432 2.651405</span></span></code></pre></div>
+<span>  ratio <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">var</a></span><span class="op">(</span><span class="va">maxcount</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">maxcount</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>A ratio near one says Poisson will do; a ratio of two or more says
 reach for the negative binomial. This is a rough diagnostic on the
 observed counts, not the latent state, so treat it as a flag rather than
@@ -811,11 +486,7 @@ scale, with the posterior spread propagated through the joint
 coefficient covariance. Pass one column per abundance coefficient.</p>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">X0</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>`(Intercept)` <span class="op">=</span> <span class="fl">1</span>, abund_cov1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.5</span>, <span class="fl">0</span>, <span class="fl">1.5</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fa</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span>
-<span><span class="co">#&gt;       mean        sd     q2.5      q50    q97.5</span></span>
-<span><span class="co">#&gt; 1 1.496578 0.1350134 1.248987 1.483833 1.776139</span></span>
-<span><span class="co">#&gt; 2 2.910627 0.1428580 2.650587 2.909445 3.193961</span></span>
-<span><span class="co">#&gt; 3 5.681138 0.3554934 5.033413 5.672292 6.400644</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fa</span>, X.0 <span class="op">=</span> <span class="va">X0</span><span class="op">)</span></span></code></pre></div>
 <p>Expected abundance climbs across the three covariate values, and the
 credible bounds widen with the mean, the multiplicative spread a log
 link produces. That widening is what the log link means. A fixed
@@ -845,89 +516,13 @@ ready to plot.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/polygon.html" class="external-link">polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">pr</span><span class="op">$</span><span class="va">x</span>, <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="va">pr</span><span class="op">$</span><span class="va">x</span><span class="op">)</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">pr</span><span class="op">$</span><span class="va">lower</span>, <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="va">pr</span><span class="op">$</span><span class="va">upper</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/adjustcolor.html" class="external-link">adjustcolor</a></span><span class="op">(</span><span class="st">"steelblue"</span>, <span class="fl">0.25</span><span class="op">)</span>, border <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">pr</span><span class="op">$</span><span class="va">x</span>, <span class="va">pr</span><span class="op">$</span><span class="va">estimate</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='103.16' y1='214.56' x2='381.41' y2='214.56' style='stroke-width: 0.75;' />
-<line x1='103.16' y1='214.56' x2='103.16' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='172.72' y1='214.56' x2='172.72' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='242.28' y1='214.56' x2='242.28' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='311.85' y1='214.56' x2='311.85' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='381.41' y1='214.56' x2='381.41' y2='221.76' style='stroke-width: 0.75;' />
-<text x='103.16' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-2</text>
-<text x='172.72' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1</text>
-<text x='242.28' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0</text>
-<text x='311.85' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='381.41' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<line x1='59.04' y1='186.51' x2='59.04' y2='78.31' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='186.51' x2='51.84' y2='186.51' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='150.45' x2='51.84' y2='150.45' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='114.38' x2='51.84' y2='114.38' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='78.31' x2='51.84' y2='78.31' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,186.51) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text transform='translate(41.76,150.45) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text transform='translate(41.76,114.38) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>6</text>
-<text transform='translate(41.76,78.31) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>8</text>
-<polygon points='59.04,214.56 401.76,214.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='269.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>abund_cov1</text>
-<text transform='translate(12.96,136.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>expected abundance</text>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='155.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<polygon points='71.73,208.80 78.21,208.13 84.69,207.41 91.16,206.66 97.64,205.84 104.11,205.00 110.59,204.13 117.07,203.23 123.54,202.31 130.02,201.31 136.50,200.29 142.97,199.21 149.45,198.05 155.92,196.86 162.40,195.58 168.88,194.25 175.35,192.85 181.83,191.44 188.30,189.99 194.78,188.34 201.26,186.69 207.73,185.06 214.21,183.29 220.69,181.50 227.16,179.56 233.64,177.54 240.11,175.45 246.59,173.43 253.07,171.22 259.54,168.96 266.02,166.56 272.50,164.20 278.97,161.75 285.45,159.20 291.92,156.65 298.40,153.83 304.88,151.16 311.35,148.32 317.83,145.50 324.30,142.60 330.78,139.58 337.26,136.53 343.73,133.36 350.21,130.04 356.69,126.59 363.16,122.94 369.64,119.14 376.11,115.20 382.59,111.42 389.07,107.37 389.07,64.80 382.59,72.50 376.11,79.82 369.64,86.46 363.16,92.63 356.69,98.61 350.21,104.15 343.73,109.49 337.26,114.38 330.78,119.11 324.30,123.67 317.83,128.05 311.35,132.50 304.88,136.55 298.40,140.13 291.92,143.50 285.45,146.88 278.97,149.92 272.50,152.91 266.02,155.71 259.54,158.48 253.07,161.09 246.59,163.44 240.11,165.74 233.64,167.90 227.16,169.88 220.69,171.90 214.21,173.77 207.73,175.49 201.26,177.20 194.78,178.74 188.30,180.28 181.83,181.80 175.35,183.11 168.88,184.57 162.40,185.92 155.92,187.17 149.45,188.38 142.97,189.63 136.50,190.81 130.02,191.93 123.54,192.92 117.07,193.89 110.59,194.92 104.11,195.84 97.64,196.72 91.16,197.60 84.69,198.45 78.21,199.27 71.73,200.06 ' style='stroke-width: 0.75; stroke: none; fill: #4682B4; fill-opacity: 0.25;' />
-<polyline points='71.73,204.85 78.21,204.11 84.69,203.33 91.16,202.53 97.64,201.69 104.11,200.81 110.59,199.90 117.07,198.94 123.54,197.95 130.02,196.92 136.50,195.84 142.97,194.71 149.45,193.54 155.92,192.32 162.40,191.05 168.88,189.72 175.35,188.34 181.83,186.89 188.30,185.39 194.78,183.82 201.26,182.19 207.73,180.48 214.21,178.71 220.69,176.86 227.16,174.93 233.64,172.91 240.11,170.81 246.59,168.63 253.07,166.34 259.54,163.97 266.02,161.49 272.50,158.90 278.97,156.20 285.45,153.39 291.92,150.46 298.40,147.40 304.88,144.22 311.35,140.89 317.83,137.43 324.30,133.81 330.78,130.04 337.26,126.11 343.73,122.02 350.21,117.74 356.69,113.29 363.16,108.64 369.64,103.79 376.11,98.74 382.59,93.46 389.07,87.96 ' style='stroke-width: 1.50;' />
-</g>
-</g>
-</svg></div></p>
 <p>The band is the abundance arm’s uncertainty alone. The detection arm
 has its own prediction surface, reached with
 <code>type = "detection"</code>, which is the right call when the
 question is about survey efficiency rather than population size.</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fa</span>, X.0 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>`(Intercept)` <span class="op">=</span> <span class="fl">1</span>, det_cov1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>        type <span class="op">=</span> <span class="st">"detection"</span><span class="op">)</span></span>
-<span><span class="co">#&gt;        mean         sd      q2.5       q50     q97.5</span></span>
-<span><span class="co">#&gt; 1 0.5403838 0.02728106 0.4927461 0.5400680 0.5963365</span></span>
-<span><span class="co">#&gt; 2 0.6006247 0.01745972 0.5677930 0.6002470 0.6349921</span></span>
-<span><span class="co">#&gt; 3 0.6578694 0.01787446 0.6221247 0.6573987 0.6937747</span></span></code></pre></div>
+<span>        type <span class="op">=</span> <span class="st">"detection"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="random-effects-on-abundance">Random effects on abundance<a class="anchor" aria-label="anchor" href="#random-effects-on-abundance"></a>
@@ -990,9 +585,7 @@ misses.</p>
 <span>  method    <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n.quad <span class="op">=</span> <span class="fl">5</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fr</span>, arm <span class="op">=</span> <span class="st">"lambda"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; (Intercept)          x1 </span></span>
-<span><span class="co">#&gt;   0.4106965   0.5210838</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fr</span>, arm <span class="op">=</span> <span class="st">"lambda"</span><span class="op">)</span></span></code></pre></div>
 <p>The abundance intercept and slope recover near the simulated 0.6 and
 0.4 with the group structure absorbed into the random effect rather than
 blended into the coefficients. The variance component lives in
@@ -1000,20 +593,14 @@ blended into the coefficients. The variance component lives in
 spread across watershed baselines.</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sig_name</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_g"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fr</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>estimate <span class="op">=</span> <span class="va">fr</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="va">sig_name</span><span class="op">]</span><span class="op">]</span>, truth <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span></span>
-<span><span class="co">#&gt;  estimate     truth </span></span>
-<span><span class="co">#&gt; 0.7453534 0.6000000</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>estimate <span class="op">=</span> <span class="va">fr</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="va">sig_name</span><span class="op">]</span><span class="op">]</span>, truth <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> returns the joint fixed-effect covariance over
 the abundance and detection coefficients alone, the same block the
 non-grouped fit carries. The variance-component point estimate sits
 outside it, since the marginal-Hessian path does not surface its joint
 posterior covariance with the fixed effects.</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">fr</span><span class="op">)</span>, <span class="fl">4</span><span class="op">)</span></span>
-<span><span class="co">#&gt;                    lambda_(Intercept) lambda_x1 p_(Intercept)</span></span>
-<span><span class="co">#&gt; lambda_(Intercept)             0.0838   -0.0024       -0.0068</span></span>
-<span><span class="co">#&gt; lambda_x1                     -0.0024    0.0055       -0.0006</span></span>
-<span><span class="co">#&gt; p_(Intercept)                 -0.0068   -0.0006        0.0199</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">fr</span><span class="op">)</span>, <span class="fl">4</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> returns the per-group effects, the BLUPs, one
 row per group level and coefficient: the arm, the grouping factor, the
 level, the term, the estimate, and its standard error. The standard
@@ -1021,16 +608,7 @@ error is the genuine AGHQ marginal posterior spread, wider for groups
 with fewer sites.</p>
 <div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fr</span><span class="op">)</span></span>
-<span><span class="va">re</span></span>
-<span><span class="co">#&gt;      arm group level        term    estimate std.error</span></span>
-<span><span class="co">#&gt; 1 lambda     g     1 (Intercept) -0.05460644 0.2092936</span></span>
-<span><span class="co">#&gt; 2 lambda     g     2 (Intercept)  0.03921651 0.2190470</span></span>
-<span><span class="co">#&gt; 3 lambda     g     3 (Intercept) -1.08035897 0.3048384</span></span>
-<span><span class="co">#&gt; 4 lambda     g     4 (Intercept) -0.44822134 0.2898862</span></span>
-<span><span class="co">#&gt; 5 lambda     g     5 (Intercept)  0.72807203 0.1509854</span></span>
-<span><span class="co">#&gt; 6 lambda     g     6 (Intercept) -0.70742394 0.2566427</span></span>
-<span><span class="co">#&gt; 7 lambda     g     7 (Intercept)  1.02900226 0.1385809</span></span>
-<span><span class="co">#&gt; 8 lambda     g     8 (Intercept)  0.68121607 0.1538180</span></span></code></pre></div>
+<span><span class="va">re</span></span></code></pre></div>
 <p>Plot the recovered group effects against the simulated truth with the
 BLUP standard error as an interval. The points track the identity line,
 with the shrinkage that pulls sparse groups toward zero and the
@@ -1046,129 +624,6 @@ uncertainty band that widens where a group carries less data.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"true group effect"</span>, y <span class="op">=</span> <span class="st">"estimated BLUP"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span>,</span>
 <span>        plot.background  <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<rect x='0.000000000000032' y='0.00' width='432.00' height='288.00' style='stroke-width: 1.07; stroke: #FFFFFF;' />
-</g>
-<defs>
-  <clipPath id='cpMzguNDl8NDI2LjUyfDUuNDh8MjU2LjUw'>
-    <rect x='38.49' y='5.48' width='388.03' height='251.02' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMzguNDl8NDI2LjUyfDUuNDh8MjU2LjUw)'>
-<rect x='38.49' y='5.48' width='388.03' height='251.02' style='stroke-width: 1.07; stroke: none;' /> fill: #F5F6F8;' />
-<polyline points='38.49,233.01 426.52,233.01 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,188.31 426.52,188.31 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,143.61 426.52,143.61 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,98.92 426.52,98.92 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,54.22 426.52,54.22 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,9.52 426.52,9.52 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='89.23,256.50 89.23,5.48 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='192.73,256.50 192.73,5.48 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='296.24,256.50 296.24,5.48 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='399.74,256.50 399.74,5.48 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,255.36 426.52,255.36 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,210.66 426.52,210.66 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,165.96 426.52,165.96 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,121.26 426.52,121.26 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,76.57 426.52,76.57 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='38.49,31.87 426.52,31.87 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='140.98,256.50 140.98,5.48 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='244.49,256.50 244.49,5.48 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='347.99,256.50 347.99,5.48 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<line x1='-349.55' y1='377.79' x2='814.55' y2='-124.92' style='stroke-width: 2.13; stroke: #4682B4; stroke-linecap: butt;' />
-<polyline points='171.08,107.44 171.08,107.44 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='171.08,107.44 171.08,144.86 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='171.08,144.86 171.08,144.86 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='247.79,98.18 247.79,98.18 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='247.79,98.18 247.79,137.34 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='247.79,137.34 247.79,137.34 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='56.12,190.59 56.12,190.59 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='56.12,190.59 56.12,245.09 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='56.12,245.09 56.12,245.09 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='75.24,135.42 75.24,135.42 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='75.24,135.42 75.24,187.25 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='75.24,187.25 75.24,187.25 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='390.86,42.68 390.86,42.68 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='390.86,42.68 390.86,69.68 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='390.86,69.68 390.86,69.68 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='128.46,161.56 128.46,161.56 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='128.46,161.56 128.46,207.45 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='128.46,207.45 128.46,207.45 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='408.88,16.89 408.88,16.89 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='408.88,16.89 408.88,41.67 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='408.88,41.67 408.88,41.67 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='322.10,46.62 322.10,46.62 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='322.10,46.62 322.10,74.12 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<polyline points='322.10,74.12 322.10,74.12 ' style='stroke-width: 1.07; stroke: #7F7F7F; stroke-linecap: butt;' />
-<circle class='theme-fill-fg' cx='171.08' cy='126.15' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='247.79' cy='117.76' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='56.12' cy='217.84' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='75.24' cy='161.33' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='390.86' cy='56.18' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='128.46' cy='184.50' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='408.88' cy='29.28' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-<circle class='theme-fill-fg' cx='322.10' cy='60.37' r='2.49' style='stroke-width: 0.71; fill: #3E3F3A;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<text x='33.56' y='258.51' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1.5</text>
-<text x='33.56' y='213.81' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1.0</text>
-<text x='33.56' y='169.11' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.5</text>
-<text x='33.56' y='124.41' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text x='33.56' y='79.72' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text x='33.56' y='35.02' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1.0</text>
-<polyline points='35.75,255.36 38.49,255.36 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='35.75,210.66 38.49,210.66 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='35.75,165.96 38.49,165.96 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='35.75,121.26 38.49,121.26 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='35.75,76.57 38.49,76.57 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='35.75,31.87 38.49,31.87 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='140.98,259.24 140.98,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='244.49,259.24 244.49,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='347.99,259.24 347.99,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='140.98' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.5</text>
-<text x='244.49' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text x='347.99' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text x='232.50' y='280.20' text-anchor='middle' style='font-size: 1.1em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>true group effect</text>
-<text transform='translate(13.36,130.99) rotate(-90)' text-anchor='middle' style='font-size: 1.1em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>estimated BLUP</text>
-</g>
-</g>
-</svg></div></p>
 <p>The same machinery moves to detection by writing the bar in the
 <code>detection</code> formula, where it varies the per-group logit of
 detection and the variance component is named <code>sigma_p</code> for
@@ -1226,8 +681,7 @@ neighbours the cells directly above, below, left, and right.</p>
 <span>  <span class="va">adj</span></span>
 <span><span class="op">}</span></span>
 <span><span class="va">adj</span> <span class="op">&lt;-</span> <span class="fu">grid_adj</span><span class="op">(</span><span class="fl">6</span><span class="op">)</span>        <span class="co"># 36 cells, one site per cell</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">adj</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 36 36</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">adj</span><span class="op">)</span></span></code></pre></div>
 <p>Simulate counts on the grid with a smooth abundance field added to
 the log-linear mean, then thin them to visits. The field is the regional
 signal the fit has to recover alongside the covariate slope.</p>
@@ -1271,9 +725,7 @@ as the non-spatial path, with <code>fs$method</code> reading
 <span>  method    <span class="op">=</span> <span class="st">"nested_laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span>, max.iter <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fs</span><span class="op">)</span></span>
-<span><span class="co">#&gt; lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 </span></span>
-<span><span class="co">#&gt;         1.64698503         0.46238494        -0.03558411         0.32983111</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fs</span><span class="op">)</span></span></code></pre></div>
 <p>The covariate slopes recover with the regional signal absorbed into
 the field rather than blended into the coefficient:
 <code>coef(fs)</code> reads back the abundance slope near the simulated
@@ -1289,9 +741,7 @@ cannot reconstruct one draw of a noisy field exactly, but it recovers
 its shape, and that shape is what removes the bias from the slopes.</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>field_cor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">fs</span><span class="op">$</span><span class="va">spatial_field</span>, <span class="va">ss</span><span class="op">$</span><span class="va">phi</span><span class="op">)</span>,</span>
-<span>  method    <span class="op">=</span> <span class="va">fs</span><span class="op">$</span><span class="va">method</span><span class="op">)</span></span>
-<span><span class="co">#&gt;           field_cor              method </span></span>
-<span><span class="co">#&gt; "0.906389733746009"    "nested_laplace"</span></span></code></pre></div>
+<span>  method    <span class="op">=</span> <span class="va">fs</span><span class="op">$</span><span class="va">method</span><span class="op">)</span></span></code></pre></div>
 <p>Under <code>mixture = "negbin"</code> the size
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
 is integrated over the outer grid alongside the field’s smoothing
@@ -1313,9 +763,7 @@ counts better, not that it has more freedom.</p>
 <span>                control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>poisson <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fb_pois</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  negbin  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fb</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   poisson    negbin </span></span>
-<span><span class="co">#&gt; -1526.102 -1476.182</span></span></code></pre></div>
+<span>  negbin  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fb</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The negative binomial carries the higher log-likelihood on data built
 with
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">r = 2</annotation></semantics></math>,
@@ -1419,83 +867,5 @@ vignettes.</li>
 
 
 
-  <script>
-/* SVG Copy Button Functionality */
-(function() {
-  "use strict";
-
-  // Initialize SVG copy buttons after DOM is ready
-  document.addEventListener("DOMContentLoaded", function() {
-    if (typeof ClipboardJS === "undefined") {
-      console.warn("ClipboardJS not loaded - SVG copy buttons disabled");
-      return;
-    }
-
-    // Initialize clipboard for SVG copy buttons
-    var svgClipboard = new ClipboardJS(".btn-copy-svg", {
-      text: function(trigger) {
-        var container = trigger.closest(".svg-container");
-        if (!container) return "";
-
-        var svg = container.querySelector("svg");
-        if (!svg) return "";
-
-        // Clone SVG to avoid modifying the original
-        var clone = svg.cloneNode(true);
-
-        // Remove inline-svg class (not needed in copied version)
-        clone.classList.remove("inline-svg");
-
-        // Add XML declaration and serialize
-        var serializer = new XMLSerializer();
-        var svgString = serializer.serializeToString(clone);
-
-        // Add XML declaration if not present
-        if (!svgString.startsWith("<?xml")) {
-          svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-        }
-
-        return svgString;
-      }
-    });
-
-    // Handle success
-    svgClipboard.on("success", function(e) {
-      var btn = e.trigger;
-      var originalTitle = btn.getAttribute("data-bs-original-title") || btn.getAttribute("title");
-
-      // Update tooltip to show "Copied!"
-      btn.setAttribute("data-bs-original-title", "Copied!");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-
-      // Reset after delay
-      setTimeout(function() {
-        btn.setAttribute("data-bs-original-title", originalTitle);
-      }, 1500);
-
-      e.clearSelection();
-    });
-
-    // Handle error
-    svgClipboard.on("error", function(e) {
-      var btn = e.trigger;
-      btn.setAttribute("data-bs-original-title", "Press Ctrl+C to copy");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-    });
-
-    // Initialize tooltips for SVG copy buttons
-    var svgCopyButtons = document.querySelectorAll(".btn-copy-svg");
-    svgCopyButtons.forEach(function(btn) {
-      new bootstrap.Tooltip(btn, { container: "body" });
-    });
-  });
-})();
-</script>
-</body>
+  </body>
 </html>

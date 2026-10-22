@@ -26,7 +26,7 @@ community Laplace-EM."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,17 +82,25 @@ community Laplace-EM.</p>
     <p>A <code>tobs_family</code> object.</p>
     </div>
     <div class="section level2">
-    <h2 id="scope">Scope<a class="anchor" aria-label="anchor" href="#scope"></a></h2>
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
 
 
-<p>The Laplace engine is the supported route: the shared occupancy mean and the
-per-source detection community components recover near nominal across seeds
-and more than one source (see <code>tests/testthat/test-ms-int-occu.R</code>). A NUTS
-sampler and an areal-field path are a deliberate follow-up, not part of this
-family's working surface; <code>method = "nuts"</code> / <code>"nested_laplace"</code> error from the
-dispatcher with a pointer rather than silently downgrading. The binary
-community-mean intervals carry the mild Laplace under-dispersion typical of
-occupancy data (measured 95% CI coverage ~0.89 at small per-species n).</p>
+<ul><li><p><code>method = "laplace"</code> – the shared community Laplace-EM, the default: the
+shared occupancy mean and the per-source detection community components
+recover near nominal across seeds and more than one source (see
+<code>tests/testthat/test-ms-int-occu.R</code>). The binary community-mean intervals
+carry the mild Laplace under-dispersion typical of occupancy data
+(measured 95% CI coverage ~0.89 at small per-species n).</p></li>
+<li><p><code>method = "pg_gibbs"</code> – the community integrated Polya-Gamma Gibbs
+sampler (one latent state per species-site observed by every source),
+giving a calibrated community-variance posterior; site-level per-source
+detection.</p></li>
+<li><p><code>method = "nuts"</code> – the community integrated sampler over the exact
+multi-source two-state per-(species, site) marginal (in-tree C++),
+sampling the community means, per-species deviations and the <code>D + 1</code>
+per-arm community covariances jointly, warm-started at the Laplace-EM mode.</p></li>
+</ul><p>No route takes a structured term: a field or random effect on either formula
+errors with a pointer, and there is no nested-Laplace path for this family.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

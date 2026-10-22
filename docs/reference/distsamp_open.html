@@ -28,7 +28,7 @@ primary period the detected birds are distance-sampled into bins."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,7 +80,7 @@ primary period the detected birds are distance-sampled into bins.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">distsamp_open</span><span class="op">(</span></span>
 <span>  transect <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"line"</span>, <span class="st">"point"</span><span class="op">)</span>,</span>
 <span>  cutpoints <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  K_max <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  K.max <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span>, <span class="st">"zip"</span>, <span class="st">"zinb"</span><span class="op">)</span>,</span>
 <span>  dynamics <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"constant"</span>, <span class="st">"notrend"</span>, <span class="st">"trend"</span>, <span class="st">"autoreg"</span>, <span class="st">"ricker"</span>, <span class="st">"gompertz"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -99,7 +99,7 @@ primary period the detected birds are distance-sampled into bins.</p>
 increasing and starting at <code>&gt;= 0</code>.</p></dd>
 
 
-<dt id="arg-k-max">K_max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
+<dt id="arg-k-max">K.max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
 <dd><p>Truncation for the latent abundance HMM. Defaults to
 <code>3 * max(period total) + 40</code>.</p></dd>
 
@@ -158,6 +158,13 @@ default.</p>
 <p><code>y</code> is a 3D array <code>[n_sites x n_bins x n_seasons]</code> of per-distance-band counts
 at each primary period (secondary occasions absorbed into the period total).</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – the forward-HMM marginal maximised (BFGS) with an
+observed-information covariance; the only route (no field, no sampler).</p></li>
+</ul></div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Dail, D., Madsen, L. (2011). Models for estimating abundance from repeated

@@ -14,7 +14,7 @@ mode. All four arms (initial abundance `lambda`, detection `p`, survival
 dyn_abun_laplace(
   y_flat,
   n_sites,
-  T,
+  n_seasons,
   J,
   K_max,
   X_lambda,
@@ -36,7 +36,7 @@ dyn_abun_laplace(
   Integer vector, flattened detection counts (site-major, then season,
   then visit; `-1` marks a missing visit).
 
-- n_sites, T, J:
+- n_sites, n_seasons, J:
 
   Sites, primary seasons, secondary visits per season.
 

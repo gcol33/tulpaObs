@@ -15,10 +15,10 @@ with [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md).
 simulate_abun(
   N = 100,
   J = 4,
-  n_abund_covs = 2,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_p = NULL,
+  n.abund.covs = 2,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.p = NULL,
   mixture = c("poisson", "negbin", "zip", "zinb"),
   size = 2,
   omega = 0.3,
@@ -36,23 +36,23 @@ simulate_abun(
 
   Number of replicate visits (default 4).
 
-- n_abund_covs:
+- n.abund.covs:
 
   Number of abundance covariates (default 2).
 
-- n_det_covs:
+- n.det.covs:
 
   Number of detection covariates (default 1).
 
-- beta_lambda:
+- beta.lambda:
 
   Abundance coefficients `c(intercept, slopes...)` on the log scale.
-  Default `c(log(3), runif(n_abund_covs, -0.5, 0.5))`.
+  Default `c(log(3), runif(n.abund.covs, -0.5, 0.5))`.
 
-- beta_p:
+- beta.p:
 
   Detection coefficients `c(intercept, slopes...)` on the logit scale.
-  Default `c(0, runif(n_det_covs, -0.5, 0.5))` (intercept 0 = p 0.5).
+  Default `c(0, runif(n.det.covs, -0.5, 0.5))` (intercept 0 = p 0.5).
 
 - mixture:
 

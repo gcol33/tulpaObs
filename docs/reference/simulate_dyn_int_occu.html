@@ -24,7 +24,7 @@ detection sources with per-source detection probability."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,7 +73,7 @@ detection sources with per-source detection probability.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_dyn_int_occu</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">200</span>,</span>
-<span>  T_seasons <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  T.seasons <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  S <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  psi1 <span class="op">=</span> <span class="fl">0.5</span>,</span>
@@ -82,7 +82,7 @@ detection sources with per-source detection probability.</p>
 <span>  p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.4</span>, <span class="fl">0.6</span><span class="op">)</span>,</span>
 <span>  field <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  trend <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  source_seasons <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  source.seasons <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -95,7 +95,7 @@ detection sources with per-source detection probability.</p>
 <dd><p>Number of sites (default 200).</p></dd>
 
 
-<dt id="arg-t-seasons">T_seasons<a class="anchor" aria-label="anchor" href="#arg-t-seasons"></a></dt>
+<dt id="arg-t-seasons">T.seasons<a class="anchor" aria-label="anchor" href="#arg-t-seasons"></a></dt>
 <dd><p>Number of seasons (default 4).</p></dd>
 
 
@@ -130,8 +130,8 @@ gains <code>w * trend</code> on top of <code>field</code> – the svcTIntPGOcc s
 covariate <code>w</code> for the bar <code>spatial(~ 1 + w || cell, graph)</code>.</p></dd>
 
 
-<dt id="arg-source-seasons">source_seasons<a class="anchor" aria-label="anchor" href="#arg-source-seasons"></a></dt>
-<dd><p>Optional length-<code>S</code> list; <code>source_seasons[[s]]</code> is the
+<dt id="arg-source-seasons">source.seasons<a class="anchor" aria-label="anchor" href="#arg-source-seasons"></a></dt>
+<dd><p>Optional length-<code>S</code> list; <code>source.seasons[[s]]</code> is the
 integer vector of seasons source <code>s</code> observes (partial season overlap). The
 seasons a source does not cover are set to <code>NA</code> in its array – the staggered
 survey where sources rarely share the full season grid. Default <code>NULL</code> (every
@@ -150,7 +150,7 @@ source observes every season).</p></dd>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_dyn_int_occu</span><span class="op">(</span>N <span class="op">=</span> <span class="fl">40</span>, T_seasons <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_dyn_int_occu</span><span class="op">(</span>N <span class="op">=</span> <span class="fl">40</span>, T.seasons <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span>, <span class="va">dim</span><span class="op">)</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

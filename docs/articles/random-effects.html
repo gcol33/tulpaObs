@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -245,10 +245,7 @@ about 0.45 across six visits.</p>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu">sim_re</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">d</span><span class="op">)</span></span>
-<span><span class="co">#&gt; 'data.frame':    750 obs. of  2 variables:</span></span>
-<span><span class="co">#&gt;  $ g: Factor w/ 30 levels "1","2","3","4",..: 1 1 1 1 1 1 1 1 1 1 ...</span></span>
-<span><span class="co">#&gt;  $ x: num  -0.326 0.552 -0.675 0.214 0.311 ...</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">d</span><span class="op">)</span></span></code></pre></div>
 <p>The grouping factor <code>g</code> is a <code>factor</code>. Fit
 occupancy with a fixed slope on <code>x</code> and a random intercept
 for <code>g</code>. The default <code>method = "laplace"</code> fits the
@@ -268,19 +265,14 @@ iterations.</p>
 <p>The fixed effects come back from <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> as usual. The
 occupancy intercept and slope land near the simulated 0.3 and -0.6.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; (Intercept)           x </span></span>
-<span><span class="co">#&gt;   0.2369320  -0.6833076</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span></code></pre></div>
 <p>The variance component is a hyperparameter in <code>fit$means</code>,
 named for the group it belongs to. There is one <code>sigma_</code>
 entry for the random intercept.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sig_name</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">sig_name</span></span>
-<span><span class="co">#&gt; [1] "sigma_g1_(Intercept)"</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>estimate <span class="op">=</span> <span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="va">sig_name</span><span class="op">]</span><span class="op">]</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
-<span><span class="co">#&gt;  estimate     truth </span></span>
-<span><span class="co">#&gt; 0.7309166 0.9000000</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>estimate <span class="op">=</span> <span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="va">sig_name</span><span class="op">]</span><span class="op">]</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> returns the per-group effects (the BLUPs, best
 linear unbiased predictors) as a data frame with one row per group and
 term: which arm the effect enters, which grouping factor, which level,
@@ -289,15 +281,7 @@ returns these same columns.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">re</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   arm group level        term   estimate std.error</span></span>
-<span><span class="co">#&gt; 1 psi     g     1 (Intercept) -0.3783381 0.3687621</span></span>
-<span><span class="co">#&gt; 2 psi     g     2 (Intercept)  0.4034067 0.3834248</span></span>
-<span><span class="co">#&gt; 3 psi     g     3 (Intercept)  0.6410361 0.3966751</span></span>
-<span><span class="co">#&gt; 4 psi     g     4 (Intercept)  0.6755256 0.3915525</span></span>
-<span><span class="co">#&gt; 5 psi     g     5 (Intercept) -0.2302246 0.3732743</span></span>
-<span><span class="co">#&gt; 6 psi     g     6 (Intercept) -1.0928680 0.3860100</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">re</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 30</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">re</span><span class="op">)</span></span></code></pre></div>
 <p>The point of the random effect is that these per-cluster intercepts
 track the truth. Plotting the recovered BLUPs against the simulated
 cluster effects shows the model recovers the cluster-level signal, with
@@ -305,119 +289,8 @@ the shrinkage that pulls small-data clusters toward zero.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">b_true</span>, <span class="va">re</span><span class="op">$</span><span class="va">estimate</span>, pch <span class="op">=</span> <span class="fl">16</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"true cluster effect"</span>, ylab <span class="op">=</span> <span class="st">"estimated BLUP"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='155.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<circle class='theme-fill-fg' cx='176.02' cy='160.52' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='235.63' cy='107.70' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='389.07' cy='91.64' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='219.99' cy='89.31' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='194.61' cy='150.51' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='91.46' cy='208.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='347.38' cy='80.22' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='197.80' cy='178.04' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='174.70' cy='148.31' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='102.20' cy='175.79' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='99.25' cy='169.55' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='367.56' cy='66.61' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='152.40' cy='143.31' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='325.11' cy='83.42' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='301.72' cy='147.86' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='275.07' cy='110.85' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='210.78' cy='149.07' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='318.62' cy='92.96' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='71.73' cy='190.63' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='82.84' cy='191.59' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='268.14' cy='103.77' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='269.54' cy='97.14' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='194.38' cy='143.12' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='90.63' cy='169.15' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='124.26' cy='189.22' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='170.42' cy='168.21' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='342.56' cy='113.69' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='330.15' cy='64.80' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='142.25' cy='171.43' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-<circle class='theme-fill-fg' cx='203.02' cy='110.50' r='2.70' style='stroke-width: 0.75; stroke: none; fill: #3E3F3A; fill-opacity: 0.50;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='109.46' y1='214.56' x2='393.75' y2='214.56' style='stroke-width: 0.75;' />
-<line x1='109.46' y1='214.56' x2='109.46' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='166.32' y1='214.56' x2='166.32' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='223.18' y1='214.56' x2='223.18' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='280.03' y1='214.56' x2='280.03' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='336.89' y1='214.56' x2='336.89' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='393.75' y1='214.56' x2='393.75' y2='221.76' style='stroke-width: 0.75;' />
-<text x='109.46' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1.0</text>
-<text x='166.32' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.5</text>
-<text x='223.18' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text x='280.03' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text x='336.89' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1.0</text>
-<text x='393.75' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1.5</text>
-<line x1='59.04' y1='202.53' x2='59.04' y2='67.39' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='202.53' x2='51.84' y2='202.53' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='168.74' x2='51.84' y2='168.74' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='134.96' x2='51.84' y2='134.96' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='101.17' x2='51.84' y2='101.17' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='67.39' x2='51.84' y2='67.39' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,202.53) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-1.0</text>
-<text transform='translate(41.76,168.74) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.5</text>
-<text transform='translate(41.76,134.96) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text transform='translate(41.76,101.17) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text transform='translate(41.76,67.39) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1.0</text>
-<polygon points='59.04,214.56 401.76,214.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='269.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>true cluster effect</text>
-<text transform='translate(12.96,136.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>estimated BLUP</text>
-</g>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<line x1='59.04' y1='232.48' x2='401.76' y2='28.84' style='stroke-width: 1.50; stroke: #4682B4;' />
-</g>
-</g>
-</svg></div></p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">b_true</span>, <span class="va">re</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.8786531</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">b_true</span>, <span class="va">re</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="the-em-the-small-cluster-bias-and-the-aghq-debias">The EM, the small-cluster bias, and the AGHQ debias<a class="anchor" aria-label="anchor" href="#the-em-the-small-cluster-bias-and-the-aghq-debias"></a>
@@ -436,18 +309,16 @@ the Laplace approximation misses, and re-estimates the variance
 component. The control is <code>re.aghq</code> (on by default) and
 <code>n.quad</code> (the number of quadrature nodes, default 9). The fit
 records what happened in <code>fit$aghq</code>.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">applied</span></span>
-<span><span class="co">#&gt; [1] TRUE</span></span>
-<span><span class="va">fit</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">n_quad</span></span>
-<span><span class="co">#&gt; [1] 9</span></span></code></pre></div>
+<span><span class="va">fit</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">n_quad</span></span></code></pre></div>
 <p>The effect is largest when groups are small. With per-group
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">n = 8</annotation></semantics></math>
 the measured sigma bias runs about 18% under the raw EM and drops to
 about 4% after the AGHQ pass, matching a NUTS fit. We can see the
 direction on a single small-cluster dataset by turning the pass off and
 on.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s8</span> <span class="op">&lt;-</span> <span class="fu">sim_re</span><span class="op">(</span>seed <span class="op">=</span> <span class="fl">21</span>, ng <span class="op">=</span> <span class="fl">30L</span>, per <span class="op">=</span> <span class="fl">8L</span>, sigma <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">fit_em</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">g</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">s8</span><span class="op">$</span><span class="va">d</span>, y <span class="op">=</span> <span class="va">s8</span><span class="op">$</span><span class="va">y</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
@@ -460,9 +331,7 @@ on.</p>
 <span><span class="va">get_sigma</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="va">f</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">f</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>truth <span class="op">=</span> <span class="fl">0.9</span>,</span>
 <span>  EM    <span class="op">=</span> <span class="fu">get_sigma</span><span class="op">(</span><span class="va">fit_em</span><span class="op">)</span>,</span>
-<span>  AGHQ  <span class="op">=</span> <span class="fu">get_sigma</span><span class="op">(</span><span class="va">fit_aghq</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;     truth        EM      AGHQ </span></span>
-<span><span class="co">#&gt; 0.9000000 0.5597824 0.6318479</span></span></code></pre></div>
+<span>  AGHQ  <span class="op">=</span> <span class="fu">get_sigma</span><span class="op">(</span><span class="va">fit_aghq</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The EM estimate sits below the truth; the AGHQ pass corrects it
 upward. The mechanism is worth one sentence: a single Gaussian centred
 at the per-group mode underweights the tails of the integral over the
@@ -485,7 +354,7 @@ and its own slope on <code>x</code>, with a correlation between the two
 estimated as well. We simulate from a known
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">2 \times 2</annotation></semantics></math>
 covariance with a positive intercept-slope correlation.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_corr</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">seed</span> <span class="op">=</span> <span class="fl">402</span>, <span class="va">ng</span> <span class="op">=</span> <span class="fl">40L</span>, <span class="va">per</span> <span class="op">=</span> <span class="fl">25L</span>, <span class="va">J</span> <span class="op">=</span> <span class="fl">6L</span>,</span>
 <span>                     <span class="va">b0</span> <span class="op">=</span> <span class="fl">0.2</span>, <span class="va">b1</span> <span class="op">=</span> <span class="op">-</span><span class="fl">0.4</span>, <span class="va">p</span> <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>                     <span class="va">Sigma</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.3</span>, <span class="fl">0.3</span>, <span class="fl">0.4</span><span class="op">)</span>, <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -509,10 +378,8 @@ covariance with a positive intercept-slope correlation.</p>
 for the slope) and the off-diagonal as a correlation named
 <code>cor_&lt;g&gt;_...</code>. The true correlation here is
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.3</mn><mi>/</mi><msqrt><mrow><mn>0.6</mn><mo>×</mo><mn>0.4</mn></mrow></msqrt><mo>≈</mo><mn>0.61</mn></mrow><annotation encoding="application/x-tex">0.3 / \sqrt{0.6 \times 0.4} \approx 0.61</annotation></semantics></math>.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_|^cor_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="co">#&gt; sigma_g1_(Intercept)           sigma_g1_x cor_g1_(Intercept)_x </span></span>
-<span><span class="co">#&gt;            0.8249986            0.7169608            0.7626199</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_|^cor_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_c</span><span class="op">$</span><span class="va">means</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 <p>The Laplace correlation is regularized by a default
 LKJ(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mo>=</mo><mn>1.5</mn></mrow><annotation encoding="application/x-tex">\eta = 1.5</annotation></semantics></math>)
 penalty (<code>re.lkj</code>) on each correlated block. A random-effect
@@ -526,13 +393,11 @@ the correlation, use NUTS.</p>
 <p>The per-group slopes recover too. The <code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> table now
 carries both an <code>(Intercept)</code> term and an <code>x</code> term
 per group.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re_c</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_c</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">re_c</span><span class="op">$</span><span class="va">term</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] "(Intercept)" "x"</span></span>
 <span><span class="va">b1_hat</span> <span class="op">&lt;-</span> <span class="va">re_c</span><span class="op">$</span><span class="va">estimate</span><span class="op">[</span><span class="va">re_c</span><span class="op">$</span><span class="va">term</span> <span class="op">==</span> <span class="st">"x"</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">b1_hat</span>, <span class="va">sc</span><span class="op">$</span><span class="va">U</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.8839711</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">b1_hat</span>, <span class="va">sc</span><span class="op">$</span><span class="va">U</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
 <p>The uncorrelated forms <code>(x || g)</code>,
 <code>(1 + x || g)</code>, and the slope-only <code>(0 + x | g)</code>
 fit the same way; they drop the off-diagonal, so you get the standard
@@ -553,7 +418,7 @@ is crossed, <code>(1 | g/h)</code> is nested.</p>
 <p>Crossed grouping builds one random intercept for each observed
 combination of the two factors. We cross eight site groups with six
 survey rounds and give each combination its own occupancy intercept.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">55</span><span class="op">)</span></span>
 <span><span class="va">ng</span> <span class="op">&lt;-</span> <span class="fl">8L</span>; <span class="va">nh</span> <span class="op">&lt;-</span> <span class="fl">6L</span>; <span class="va">per</span> <span class="op">&lt;-</span> <span class="fl">12L</span></span>
 <span><span class="va">combos</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>g <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">ng</span><span class="op">)</span>, h <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">nh</span><span class="op">)</span><span class="op">)</span></span>
@@ -571,10 +436,7 @@ survey rounds and give each combination its own occupancy intercept.</p>
 <span>               family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
 <span>               control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_cr</span><span class="op">)</span><span class="op">)</span>      <span class="co"># one BLUP per observed g:h combination</span></span>
-<span><span class="co">#&gt; [1] 48</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_cr</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; (Intercept)           x </span></span>
-<span><span class="co">#&gt;   0.3424996  -0.5272869</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_cr</span>, arm <span class="op">=</span> <span class="st">"psi"</span><span class="op">)</span></span></code></pre></div>
 <p>The crossed term <code>(1 | g:h)</code> collapses to a single
 interaction factor, so the Laplace path treats it as one grouping factor
 and the AGHQ debias applies. The nested form <code>(1 | g/h)</code>
@@ -593,7 +455,7 @@ probability instead of occupancy. Here observers each have their own
 detection intercept, drawn from
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msup><mn>0.8</mn><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">N(0, 0.8^2)</annotation></semantics></math>,
 while occupancy depends on a site covariate with no random part.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_det</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">seed</span> <span class="op">=</span> <span class="fl">1</span>, <span class="va">N</span> <span class="op">=</span> <span class="fl">400L</span>, <span class="va">J</span> <span class="op">=</span> <span class="fl">6L</span>, <span class="va">ng</span> <span class="op">=</span> <span class="fl">40L</span>,</span>
 <span>                    <span class="va">b0</span> <span class="op">=</span> <span class="fl">0.4</span>, <span class="va">b1</span> <span class="op">=</span> <span class="op">-</span><span class="fl">0.7</span>, <span class="va">d0</span> <span class="op">=</span> <span class="fl">0.2</span>, <span class="va">sigma</span> <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="va">seed</span><span class="op">)</span></span>
@@ -616,11 +478,9 @@ while occupancy depends on a site covariate with no random part.</p>
 named for the detection process: <code>sigma_p&lt;t&gt;_</code> rather
 than the occupancy <code>sigma_g&lt;t&gt;_</code>. The AGHQ pass records
 that it ran on the detection arm.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_d</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] "sigma_p1_(Intercept)"</span></span>
-<span><span class="va">fit_d</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">arm</span></span>
-<span><span class="co">#&gt; [1] "det"</span></span></code></pre></div>
+<span><span class="va">fit_d</span><span class="op">$</span><span class="va">aghq</span><span class="op">$</span><span class="va">arm</span></span></code></pre></div>
 <p>The detection arm is harder than the occupancy arm because only
 occupied sites carry information about detection. A site that is empty
 tells you nothing about how well the observer detects. The raw EM
@@ -629,11 +489,10 @@ in the measured sims), and the AGHQ pass on the exact detection marginal
 restores it to within about 1% with 88-96% fixed-effect interval
 coverage. The per-group detection BLUPs track the simulated observer
 effects.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re_d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_d</span><span class="op">)</span></span>
 <span><span class="va">rp</span> <span class="op">&lt;-</span> <span class="va">re_d</span><span class="op">[</span><span class="va">re_d</span><span class="op">$</span><span class="va">group</span> <span class="op">==</span> <span class="st">"observer"</span>, <span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">rp</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">sd_re</span><span class="op">$</span><span class="va">b_obs</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.900168</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">rp</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">sd_re</span><span class="op">$</span><span class="va">b_obs</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="laplace-versus-nuts-for-random-effects">Laplace versus NUTS for random effects<a class="anchor" aria-label="anchor" href="#laplace-versus-nuts-for-random-effects"></a>
@@ -650,7 +509,7 @@ approximation.</p>
 is reported on the natural scale under the same <code>sigma_</code> name
 the Laplace fit uses, and <code><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef()</a></code> reconstructs the
 per-group BLUPs by marginalising over the draws.</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_n</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">g</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">s</span><span class="op">$</span><span class="va">d</span>, y <span class="op">=</span> <span class="va">s</span><span class="op">$</span><span class="va">y</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
 <span>              family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"nuts"</span>,</span>
 <span>              control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n.iter <span class="op">=</span> <span class="fl">400</span>, n.warmup <span class="op">=</span> <span class="fl">200</span>, seed <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -658,15 +517,12 @@ per-group BLUPs by marginalising over the draws.</p>
 <span></span>
 <span><span class="va">sig_l</span> <span class="op">&lt;-</span> <span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="va">sig_n</span> <span class="op">&lt;-</span> <span class="va">fit_n</span><span class="op">$</span><span class="va">means</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^sigma_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fit_n</span><span class="op">$</span><span class="va">means</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>laplace <span class="op">=</span> <span class="va">sig_l</span>, nuts <span class="op">=</span> <span class="va">sig_n</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   laplace      nuts     truth </span></span>
-<span><span class="co">#&gt; 0.7309166 0.7792917 0.9000000</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>laplace <span class="op">=</span> <span class="va">sig_l</span>, nuts <span class="op">=</span> <span class="va">sig_n</span>, truth <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span></code></pre></div>
 <p>The two backends agree on the variance, and the BLUPs agree across
 engines.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">re_n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://gillescolling.com/tulpa/reference/ranef.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit_n</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">re</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">re_n</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9994081</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">re</span><span class="op">$</span><span class="va">estimate</span>, <span class="va">re_n</span><span class="op">$</span><span class="va">estimate</span><span class="op">)</span></span></code></pre></div>
 <p>Two random-effect specifications are NUTS-only. The Laplace path
 errors, with a pointer to NUTS, for: a single random effect shared
 across both the occupancy and detection predictors (<code>share()</code>
@@ -777,83 +633,5 @@ community covariances are fit internally:
 
 
 
-  <script>
-/* SVG Copy Button Functionality */
-(function() {
-  "use strict";
-
-  // Initialize SVG copy buttons after DOM is ready
-  document.addEventListener("DOMContentLoaded", function() {
-    if (typeof ClipboardJS === "undefined") {
-      console.warn("ClipboardJS not loaded - SVG copy buttons disabled");
-      return;
-    }
-
-    // Initialize clipboard for SVG copy buttons
-    var svgClipboard = new ClipboardJS(".btn-copy-svg", {
-      text: function(trigger) {
-        var container = trigger.closest(".svg-container");
-        if (!container) return "";
-
-        var svg = container.querySelector("svg");
-        if (!svg) return "";
-
-        // Clone SVG to avoid modifying the original
-        var clone = svg.cloneNode(true);
-
-        // Remove inline-svg class (not needed in copied version)
-        clone.classList.remove("inline-svg");
-
-        // Add XML declaration and serialize
-        var serializer = new XMLSerializer();
-        var svgString = serializer.serializeToString(clone);
-
-        // Add XML declaration if not present
-        if (!svgString.startsWith("<?xml")) {
-          svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-        }
-
-        return svgString;
-      }
-    });
-
-    // Handle success
-    svgClipboard.on("success", function(e) {
-      var btn = e.trigger;
-      var originalTitle = btn.getAttribute("data-bs-original-title") || btn.getAttribute("title");
-
-      // Update tooltip to show "Copied!"
-      btn.setAttribute("data-bs-original-title", "Copied!");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-
-      // Reset after delay
-      setTimeout(function() {
-        btn.setAttribute("data-bs-original-title", originalTitle);
-      }, 1500);
-
-      e.clearSelection();
-    });
-
-    // Handle error
-    svgClipboard.on("error", function(e) {
-      var btn = e.trigger;
-      btn.setAttribute("data-bs-original-title", "Press Ctrl+C to copy");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-    });
-
-    // Initialize tooltips for SVG copy buttons
-    var svgCopyButtons = document.querySelectorAll(".btn-copy-svg");
-    svgCopyButtons.forEach(function(btn) {
-      new bootstrap.Tooltip(btn, { container: "body" });
-    });
-  });
-})();
-</script>
-</body>
+  </body>
 </html>

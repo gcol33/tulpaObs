@@ -34,6 +34,26 @@ and `b` predictors default to intercept-only and are set with the
 (`certainty` is the `b` arm). The response `y` is an `n_sites x J`
 integer matrix in `{0, 1, 2}` (NA visits dropped).
 
+## Engines
+
+- `method = "laplace"` – analytic-gradient BFGS over the exact marginal
+  with an observed-information covariance; a grouped random effect on
+  the `psi` or `p11` arm is integrated by adaptive Gauss-Hermite
+  quadrature.
+
+- `method = "nested_laplace"` – an areal
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field on the occupancy arm (BFGS over the marginal plus the CAR
+  prior), optionally composed with a
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field, through the shared areal-BFGS driver.
+
+- `method = "nuts"` – the in-tree C++ NUTS sampler over the same
+  marginal, with a fixed-hyper areal or temporal field block on the
+  occupancy arm (one of the two, not both).
+
 ## References
 
 Miller, D. A. W., Nichols, J. D., McClintock, B. T., Grant, E. H. C.,

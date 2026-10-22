@@ -1,5 +1,24 @@
 # Integrated occupancy: combining data sources
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -107,12 +126,12 @@ shared sites, and each also covers sites the other does not.
 ``` r
 
 si <- simulate_int_occu(
-  N_total  = 500,                       # unique sites across both sources
-  n_data   = 2,                         # two sources
+  N.total  = 500,                       # unique sites across both sources
+  n.data   = 2,                         # two sources
   J        = c(2, 5),                   # visits per source: shallow vs deep
-  n_shared = 250,                       # sites observed by both
-  beta_occ = c(0.3, 0.9),               # occupancy intercept + slope on x
-  beta_det = list(c(0.5, 0), c(0.7, 0)),# per-source detection intercept
+  n.shared = 250,                       # sites observed by both
+  beta.occ = c(0.3, 0.9),               # occupancy intercept + slope on x
+  beta.det = list(c(0.5, 0), c(0.7, 0)),# per-source detection intercept
   seed     = 11
 )
 ```
@@ -233,7 +252,7 @@ and a narrower credible interval.
 ``` r
 
 row_x <- function(f) {
-  s <- summary(f)["psi_x", c("estimate", "std.error", "2.5 %", "97.5 %")]
+  s <- coef(summary(f))["psi_x", c("estimate", "std.error", "2.5 %", "97.5 %")]
   s <- as.numeric(s)
   c(estimate = s[1], sd = s[2], lower = s[3], upper = s[4],
     width = s[4] - s[3])
@@ -280,9 +299,9 @@ same occupancy surface.
 ``` r
 
 sd2 <- simulate_int_occu(
-  N_total  = 500, n_data = 2, J = c(5, 4), n_shared = 200,
-  beta_occ = c(0.3, 0.9),
-  beta_det = list(c(1.2, 0),   # survey: logit p = 1.2, so p about 0.77
+  N.total  = 500, n.data = 2, J = c(5, 4), n.shared = 200,
+  beta.occ = c(0.3, 0.9),
+  beta.det = list(c(1.2, 0),   # survey: logit p = 1.2, so p about 0.77
                   c(-0.8, 0)), # casual: logit p = -0.8, so p about 0.31
   seed = 21
 )

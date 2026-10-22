@@ -16,7 +16,7 @@ ms_distance(
   key = c("halfnorm", "hazard"),
   transect = c("line", "point"),
   cutpoints = NULL,
-  K_max = NULL,
+  K.max = NULL,
   mixture = c("poisson", "negbin")
 )
 ```
@@ -37,7 +37,7 @@ ms_distance(
   Distance-bin edges, length `dim(y)[2] + 1`, strictly increasing and
   starting at `>= 0`.
 
-- K_max:
+- K.max:
 
   Truncation for the latent abundance sum. Defaults to
   `3 * max(rowSums(y)) + 100`.
@@ -80,6 +80,26 @@ or
 [`spde()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 alongside gives a shared spatial field. Both route through the same
 block-coordinate engine as the other community families.
+
+## Engines
+
+- `method = "laplace"` – the shared community Laplace-EM over the
+  existing distance kernel, plain or with
+  [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  factors alone (lfMsDS).
+
+- `method = "nested_laplace"` – a shared field
+  ([`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`spde()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md))
+  on the abundance formula, with or without factors (sfMsDS), by block
+  coordinate ascent; the field is required on this route.
+
+Poisson only, and no sampler route.
 
 ## Inputs
 

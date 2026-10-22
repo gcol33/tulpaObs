@@ -23,6 +23,24 @@ per-source fields are reported as a named list in
 `fit$spatial_field_det`. All sources must share one detection formula;
 areal terms belong on the state arm.
 
+## Engines
+
+- `method = "laplace"` – EM + Laplace over the multi-source two-state
+  marginal, the default.
+
+- `method = "laplace_sla"` – the Laplace fit with simplified-Laplace
+  skew-corrected marginals.
+
+- `method = "laplace_gibbs"` / `method = "laplace_mi"` – the Laplace fit
+  with a post-EM Gibbs / multiple-imputation variance correction.
+
+- `method = "nested_laplace"` – an areal field on the state arm through
+  the nested-Laplace EM, its hyperparameters integrated on an outer
+  grid.
+
+- `method = "nuts"` – the unified C++ NUTS sampler over the same
+  marginal.
+
 ## Examples
 
 ``` r

@@ -16,10 +16,10 @@ suitable for
 simulate_removal(
   N = 100,
   K = 4,
-  n_abund_covs = 2,
-  n_det_covs = 1,
-  beta_lambda = NULL,
-  beta_p = NULL,
+  n.abund.covs = 2,
+  n.det.covs = 1,
+  beta.lambda = NULL,
+  beta.p = NULL,
   mixture = c("poisson", "negbin"),
   size = 3,
   seed = NULL
@@ -36,23 +36,23 @@ simulate_removal(
 
   Number of removal passes (default 4).
 
-- n_abund_covs:
+- n.abund.covs:
 
   Number of abundance covariates (default 2).
 
-- n_det_covs:
+- n.det.covs:
 
   Number of detection covariates (default 1).
 
-- beta_lambda:
+- beta.lambda:
 
   Abundance coefficients on the log scale. Default
-  `c(log(6), runif(n_abund_covs, -0.5, 0.5))`.
+  `c(log(6), runif(n.abund.covs, -0.5, 0.5))`.
 
-- beta_p:
+- beta.p:
 
   Detection coefficients on the logit scale. Default
-  `c(0.4, runif(n_det_covs, -0.5, 0.5))`.
+  `c(0.4, runif(n.det.covs, -0.5, 0.5))`.
 
 - mixture:
 

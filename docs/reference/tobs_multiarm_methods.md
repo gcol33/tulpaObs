@@ -93,10 +93,25 @@ two-column matrix, both named as
 [`logLik()`](https://rdrr.io/r/stats/logLik.html) a `logLik` object;
 [`tidy()`](https://generics.r-lib.org/reference/tidy.html) the `arm` /
 `term` / `estimate` / `std.error` / `conf.low` / `conf.high` table;
-[`summary()`](https://rdrr.io/r/base/summary.html) the estimate /
-std.error / interval data frame;
+[`summary()`](https://rdrr.io/r/base/summary.html) a `summary.tulpa_fit`
+object whose [`coef()`](https://rdrr.io/r/stats/coef.html) is the
+estimate / std.error / interval table, rows named as
+[`coef()`](https://rdrr.io/r/stats/coef.html);
 [`glance()`](https://generics.r-lib.org/reference/glance.html) the
 one-row column set of
 [`glance.tobs_fit()`](https://gillescolling.com/tulpaObs/reference/glance.tobs_fit.md);
 [`plot()`](https://rdrr.io/r/graphics/plot.default.html) one
 Gaussian-density panel per coefficient (up to 4), invisibly.
+
+## Examples
+
+``` r
+# \donttest{
+fit <- tobs(cover ~ moisture, data = meadow_cover,
+            family = cover(response = "beta"))
+coef(fit, arm = "positive")
+confint(fit)
+tidy(fit)
+summary(fit)
+# }
+```

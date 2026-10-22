@@ -34,7 +34,7 @@ recursion; the exact marginal is maximised with an observed-information vcov."><
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -102,11 +102,23 @@ recursion; the exact marginal is maximised with an observed-information vcov.</p
 coefficients). v1: every source covers all sites and the same season grid,
 constant transitions, site-level detection.</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – the non-spatial fit: the HMM-forward marginal
+maximised with analytic forward-backward gradients and an
+observed-information covariance.</p></li>
+<li><p><code>method = "nested_laplace"</code> – a shared <code><a href="tobs_terms.html">icar()</a></code> field on the first-season
+occupancy formula (spOccupancy <code>stIntPGOcc</code>) through the shared areal-BFGS
+driver, the field hyperparameters integrated on an outer grid; that field
+is the only structured term accepted and is required on this route.</p></li>
+</ul></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_dyn_int_occu.html">simulate_dyn_int_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">200</span>, T_seasons <span class="op">=</span> <span class="fl">4</span>, S <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_dyn_int_occu.html">simulate_dyn_int_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">200</span>, T.seasons <span class="op">=</span> <span class="fl">4</span>, S <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu">dyn_int_occu</span><span class="op">(</span><span class="op">)</span>,</span>
 <span>            detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, colonization <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, extinction <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
 <span>            y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>, sources <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">sources</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>

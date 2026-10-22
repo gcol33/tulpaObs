@@ -12,15 +12,15 @@ rather than this directly.
 ``` r
 obs_family(
   name,
-  class_long,
+  class.long,
   latent,
   observation,
   replicates = c("required", "optional", "single"),
-  default_engine = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
+  default.engine = c("laplace", "nested_laplace", "nuts", "pg_gibbs"),
   status = c("working", "planned", "experimental"),
   params = list(),
-  control_keys = character(0),
-  control_groups = character(0),
+  control.keys = character(0),
+  control.groups = character(0),
   response = c("matrix", "vector")
 )
 ```
@@ -31,7 +31,7 @@ obs_family(
 
   short slug, e.g. `"occu"`.
 
-- class_long:
+- class.long:
 
   human-readable name, e.g. `"single-season occupancy"`.
 
@@ -49,7 +49,7 @@ obs_family(
 
   one of `"required"`, `"optional"`, `"single"`.
 
-- default_engine:
+- default.engine:
 
   `"laplace"`, `"nested_laplace"`, `"nuts"`, or `"pg_gibbs"`. This is
   the route `method = "auto"` resolves to.
@@ -63,7 +63,7 @@ obs_family(
   named list of family-specific parameters carried with the object
   (K_max, positive-part link, etc.).
 
-- control_keys:
+- control.keys:
 
   character vector of extra `control` names this family's dispatcher
   accepts beyond the engine/route controls. These are added to the
@@ -73,11 +73,11 @@ obs_family(
   (e.g. the cover hurdle's grid controls) is not rejected. Admitted on
   every route the family supports.
 
-- control_groups:
+- control.groups:
 
   character vector of capability groups (names of
   `.tobs_control_groups`) this family participates in beyond the ones
-  its route admits unconditionally. Unlike `control_keys` these stay
+  its route admits unconditionally. Unlike `control.keys` these stay
   route-gated, so a group tied to the Laplace engines is still rejected
   under `"nuts"`. `"block_coordinate"` is the case this exists for:
   `max.outer` / `factor.starts` mean something only to a family whose

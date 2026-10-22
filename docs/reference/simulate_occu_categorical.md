@@ -7,8 +7,8 @@ Simulate from an occu_categorical model
 ``` r
 simulate_occu_categorical(
   N = 500L,
-  beta_occ = c(0.2, 0.8),
-  beta_class = NULL,
+  beta.occ = c(0.2, 0.8),
+  beta.class = NULL,
   seed = NULL
 )
 ```
@@ -19,11 +19,11 @@ simulate_occu_categorical(
 
   number of units.
 
-- beta_occ:
+- beta.occ:
 
   length-2 presence coefficients (intercept, slope on `x`).
 
-- beta_class:
+- beta.class:
 
   a `2 x (K-1)` matrix of class coefficients (rows intercept / slope on
   `x`; columns the non-baseline classes), or `NULL` for a built-in

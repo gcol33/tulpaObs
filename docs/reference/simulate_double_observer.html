@@ -34,7 +34,7 @@ identifiable, and the per-site primary indicator is returned as primary."><scrip
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,11 +89,11 @@ identifiable, and the per-site primary indicator is returned as <code>primary</c
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_double_observer</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"independent"</span>, <span class="st">"dependent"</span><span class="op">)</span>,</span>
-<span>  n_abund_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_p1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_p2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n.abund.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.lambda <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.p1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.p2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -110,16 +110,16 @@ identifiable, and the per-site primary indicator is returned as <code>primary</c
 <dd><p><code>"independent"</code> (default) or <code>"dependent"</code> (role-swapping).</p></dd>
 
 
-<dt id="arg-n-abund-covs-n-det-covs">n_abund_covs, n_det_covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs-n-det-covs"></a></dt>
+<dt id="arg-n-abund-covs-n-det-covs">n.abund.covs, n.det.covs<a class="anchor" aria-label="anchor" href="#arg-n-abund-covs-n-det-covs"></a></dt>
 <dd><p>Number of abundance / detection covariates.</p></dd>
 
 
-<dt id="arg-beta-lambda">beta_lambda<a class="anchor" aria-label="anchor" href="#arg-beta-lambda"></a></dt>
+<dt id="arg-beta-lambda">beta.lambda<a class="anchor" aria-label="anchor" href="#arg-beta-lambda"></a></dt>
 <dd><p>Log-abundance coefficients <code>c(intercept, slopes...)</code>.
-Default <code>c(log(8), runif(n_abund_covs, -0.5, 0.5))</code>.</p></dd>
+Default <code>c(log(8), runif(n.abund.covs, -0.5, 0.5))</code>.</p></dd>
 
 
-<dt id="arg-beta-p-beta-p-">beta_p1, beta_p2<a class="anchor" aria-label="anchor" href="#arg-beta-p-beta-p-"></a></dt>
+<dt id="arg-beta-p-beta-p-">beta.p1, beta.p2<a class="anchor" aria-label="anchor" href="#arg-beta-p-beta-p-"></a></dt>
 <dd><p>Per-observer detection coefficients (logit). Default
 moderate detection.</p></dd>
 

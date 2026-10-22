@@ -34,7 +34,7 @@ from uniformity is a verdict on the approximation."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -318,7 +318,7 @@ Statistics and Computing 36:78.</p>
 <span>            family <span class="op">=</span> <span class="fu"><a href="occu_cover.html">occu_cover</a></span><span class="op">(</span><span class="st">"lognormal"</span><span class="op">)</span>,</span>
 <span>            detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>,</span>
 <span>            positive <span class="op">=</span> <span class="op">~</span> <span class="va">pos_cov1</span> <span class="op">+</span> <span class="fu">share</span><span class="op">(</span><span class="fu"><a href="tobs_terms.html">spatial</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>            y <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">y</span>, y_pos <span class="op">=</span> <span class="va">y_pos</span>, visits <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">det.covs</span>,</span>
+<span>            y <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">y</span>, y.pos <span class="op">=</span> <span class="va">y_pos</span>, visits <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">det.covs</span>,</span>
 <span>            method <span class="op">=</span> <span class="st">"nested_laplace"</span>, control <span class="op">=</span> <span class="va">ctl</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/sbc.html" class="external-link">sbc</a></span><span class="op">(</span><span class="va">fit</span>, n.sim <span class="op">=</span> <span class="fl">20L</span>, controls <span class="op">=</span> <span class="st">"narrow"</span>, fit.control <span class="op">=</span> <span class="va">ctl</span><span class="op">)</span></span>
 <span><span class="co"># }</span></span></code></pre></div>

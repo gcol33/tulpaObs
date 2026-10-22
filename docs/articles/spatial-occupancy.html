@@ -35,7 +35,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -279,9 +279,7 @@ directly north, south, east, and west of it.</p>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="va">j</span> <span class="op">&lt;</span> <span class="va">gy</span><span class="op">)</span> <span class="op">{</span> <span class="va">b</span> <span class="op">&lt;-</span> <span class="fu">idx_of</span><span class="op">(</span><span class="va">i</span>, <span class="va">j</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span>; <span class="va">adj</span><span class="op">[</span><span class="va">a</span>, <span class="va">b</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">adj</span><span class="op">[</span><span class="va">b</span>, <span class="va">a</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">}</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">adj</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 25 25</span></span>
-<span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">adj</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span>   <span class="co"># neighbour count per cell: corners 2, edges 3, interior 4</span></span>
-<span><span class="co">#&gt; [1] 2 3 3 3 2 3</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">adj</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span>   <span class="co"># neighbour count per cell: corners 2, edges 3, interior 4</span></span></code></pre></div>
 <p>A chain graph is even simpler: site
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>i</mi><annotation encoding="application/x-tex">i</annotation></semantics></math>
 borders
@@ -294,8 +292,7 @@ random walk along a transect.</p>
 <code class="sourceCode R"><span><span class="va">K</span> <span class="op">&lt;-</span> <span class="fl">12</span></span>
 <span><span class="va">chain</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">K</span>, <span class="va">K</span><span class="op">)</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">K</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="va">chain</span><span class="op">[</span><span class="va">i</span>, <span class="va">i</span> <span class="op">+</span> <span class="fl">1</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">chain</span><span class="op">[</span><span class="va">i</span> <span class="op">+</span> <span class="fl">1</span>, <span class="va">i</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
-<span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">chain</span><span class="op">)</span>   <span class="co"># endpoints have 1 neighbour, interior 2</span></span>
-<span><span class="co">#&gt;  [1] 1 2 2 2 2 2 2 2 2 2 2 1</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">chain</span><span class="op">)</span>   <span class="co"># endpoints have 1 neighbour, interior 2</span></span></code></pre></div>
 <p>Whatever the source (a shapefile’s <code>poly2nb</code>, a regular
 lattice, a hand-drawn graph), the field only ever sees this dense
 matrix. Real shapefile workflows usually produce a neighbour list;
@@ -337,9 +334,7 @@ detection.</p>
 <span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>site <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>occupied_cells <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">z</span><span class="op">)</span>, naive_rate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
-<span>  true_rate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">z</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; occupied_cells     naive_rate      true_rate </span></span>
-<span><span class="co">#&gt;           15.0            0.6            0.6</span></span></code></pre></div>
+<span>  true_rate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">z</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The naive detection rate undercounts occupancy, the usual occupancy
 problem. The field is what we want back: a smooth surface that peaks in
 the grid centre and rises toward the high-coordinate corner.</p>
@@ -368,17 +363,14 @@ known.</p>
 intercept-only mean structure the only occupancy coefficient is the
 floating level the field sits against.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_bym2</span><span class="op">)</span></span>
-<span><span class="co">#&gt; psi_(Intercept)   p_(Intercept) </span></span>
-<span><span class="co">#&gt;       0.5767000      -0.2377645</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_bym2</span><span class="op">)</span></span></code></pre></div>
 <p>The block that did the spatial work is recorded on the fit. The
 nested-Laplace path stores its prior blocks under
 <code>fit$nested_laplace$multi_prior</code>, one entry per latent term,
 and the first block’s <code>type</code> confirms BYM2 was the field
 used.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">fit_bym2</span><span class="op">$</span><span class="va">nested_laplace</span><span class="op">$</span><span class="va">multi_prior</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">type</span></span>
-<span><span class="co">#&gt; [1] "bym2"</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">fit_bym2</span><span class="op">$</span><span class="va">nested_laplace</span><span class="op">$</span><span class="va">multi_prior</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">type</span></span></code></pre></div>
 <p>Swapping the field is a one-token change. Fit the same data with an
 ICAR field and read its block type.</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
@@ -391,8 +383,7 @@ ICAR field and read its block type.</p>
 <span>  method    <span class="op">=</span> <span class="st">"nested_laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>max.iter <span class="op">=</span> <span class="fl">30L</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">fit_icar</span><span class="op">$</span><span class="va">nested_laplace</span><span class="op">$</span><span class="va">multi_prior</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">type</span></span>
-<span><span class="co">#&gt; [1] "icar"</span></span></code></pre></div>
+<span><span class="va">fit_icar</span><span class="op">$</span><span class="va">nested_laplace</span><span class="op">$</span><span class="va">multi_prior</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">type</span></span></code></pre></div>
 <p>ICAR has one fewer parameter than BYM2 (no mixing fraction
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>),
 assumes the whole field is smooth, and is the lighter call for a quick
@@ -426,8 +417,7 @@ again a one-token change to the field term.</p>
 <span>  method    <span class="op">=</span> <span class="st">"nested_laplace"</span>,</span>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>max.iter <span class="op">=</span> <span class="fl">30L</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">fit_car</span><span class="op">$</span><span class="va">nested_laplace</span><span class="op">$</span><span class="va">multi_prior</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">type</span></span>
-<span><span class="co">#&gt; [1] "car_proper"</span></span></code></pre></div>
+<span><span class="va">fit_car</span><span class="op">$</span><span class="va">nested_laplace</span><span class="op">$</span><span class="va">multi_prior</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">type</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="recovering-and-mapping-the-field">Recovering and mapping the field<a class="anchor" aria-label="anchor" href="#recovering-and-mapping-the-field"></a>
@@ -439,14 +429,7 @@ smoothed <code>psi</code> for every cell, with a calibrated credible
 band, integrated over the smoothing grid.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sp_bym2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit_bym2</span>, type <span class="op">=</span> <span class="st">"state"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   row       psi    psi_lower psi_upper heldout</span></span>
-<span><span class="co">#&gt; 1   1 0.2360535 0.0004963978 0.8768881   FALSE</span></span>
-<span><span class="co">#&gt; 2   2 0.2397662 0.0009757824 0.8436601   FALSE</span></span>
-<span><span class="co">#&gt; 3   3 0.2712448 0.0020474328 0.8535132   FALSE</span></span>
-<span><span class="co">#&gt; 4   4 0.3373814 0.0063591157 0.8841046   FALSE</span></span>
-<span><span class="co">#&gt; 5   5 0.6850097 0.1002075276 0.9955408   FALSE</span></span>
-<span><span class="co">#&gt; 6   6 0.2556114 0.0013913675 0.8516452   FALSE</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">)</span></span></code></pre></div>
 <p>The <code>psi</code> column is the field on the probability scale.
 Plotting it against the true occupancy probability shows the fit
 recovered the cell-by-cell surface, well past the population mean a flat
@@ -454,405 +437,28 @@ model would give.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">psi_true</span>, <span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi</span>, pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"true occupancy"</span>, ylab <span class="op">=</span> <span class="st">"fitted occupancy (BYM2)"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='155.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<circle cx='71.73' cy='208.80' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='101.80' cy='207.87' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='147.92' cy='200.00' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='191.39' cy='183.46' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='231.35' cy='96.50' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='95.36' cy='203.91' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='163.59' cy='200.67' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='245.24' cy='188.34' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='283.13' cy='171.03' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='299.80' cy='87.91' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='128.16' cy='183.75' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='231.37' cy='175.99' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='321.02' cy='94.94' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='346.32' cy='82.13' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='349.89' cy='74.42' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='155.28' cy='87.46' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='255.79' cy='81.89' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='335.58' cy='73.15' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='363.45' cy='67.85' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='374.36' cy='66.73' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='178.43' cy='75.82' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='259.48' cy='71.20' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='328.21' cy='67.24' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='365.84' cy='64.80' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='389.07' cy='66.18' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='125.11' y1='214.56' x2='365.79' y2='214.56' style='stroke-width: 0.75;' />
-<line x1='125.11' y1='214.56' x2='125.11' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='205.34' y1='214.56' x2='205.34' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='285.56' y1='214.56' x2='285.56' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='365.79' y1='214.56' x2='365.79' y2='221.76' style='stroke-width: 0.75;' />
-<text x='125.11' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.2</text>
-<text x='205.34' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.4</text>
-<text x='285.56' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.6</text>
-<text x='365.79' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.8</text>
-<line x1='59.04' y1='192.81' x2='59.04' y2='67.74' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='192.81' x2='51.84' y2='192.81' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='167.79' x2='51.84' y2='167.79' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='142.78' x2='51.84' y2='142.78' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='117.77' x2='51.84' y2='117.77' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='92.75' x2='51.84' y2='92.75' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='67.74' x2='51.84' y2='67.74' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,192.81) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
-<text transform='translate(41.76,142.78) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text transform='translate(41.76,92.75) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.7</text>
-<polygon points='59.04,214.56 401.76,214.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='269.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>true occupancy</text>
-<text transform='translate(12.96,136.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>fitted occupancy (BYM2)</text>
-</g>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<line x1='59.04' y1='259.02' x2='401.76' y2='45.31' style='stroke-width: 1.50; stroke: #666666;' />
-</g>
-</g>
-</svg></div></p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">psi_true</span>, <span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.7815982</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">psi_true</span>, <span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi</span><span class="op">)</span></span></code></pre></div>
 <p>The ICAR fit recovers the same surface. Lining up the two fitted
 fields shows the choice of field barely moves the smoothed map on data
 this smooth, which is what the simulation predicts.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sp_icar</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit_icar</span>, type <span class="op">=</span> <span class="st">"state"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sp_icar</span><span class="op">$</span><span class="va">psi</span>, <span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi</span>, pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="st">"darkorange"</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">"fitted occupancy (ICAR)"</span>, ylab <span class="op">=</span> <span class="st">"fitted occupancy (BYM2)"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='155.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<circle cx='71.73' cy='208.80' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='72.17' cy='207.87' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='91.96' cy='200.00' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='140.58' cy='183.46' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='302.85' cy='96.50' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='82.13' cy='203.91' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='89.36' cy='200.67' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='125.68' cy='188.34' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='179.50' cy='171.03' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='326.66' cy='87.91' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='139.54' cy='183.75' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='164.75' cy='175.99' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='302.04' cy='94.94' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='342.27' cy='82.13' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='365.59' cy='74.42' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='327.07' cy='87.46' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='343.35' cy='81.89' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='369.51' cy='73.15' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='382.93' cy='67.85' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='384.59' cy='66.73' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='361.40' cy='75.82' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='373.91' cy='71.20' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='383.72' cy='67.24' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='389.07' cy='64.80' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-<circle cx='384.34' cy='66.18' r='2.70' style='stroke-width: 0.75; stroke: #FF8C00; fill: #FF8C00;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='67.06' y1='214.56' x2='369.99' y2='214.56' style='stroke-width: 0.75;' />
-<line x1='67.06' y1='214.56' x2='67.06' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='117.55' y1='214.56' x2='117.55' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='168.04' y1='214.56' x2='168.04' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='218.53' y1='214.56' x2='218.53' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='269.02' y1='214.56' x2='269.02' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='319.51' y1='214.56' x2='319.51' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='369.99' y1='214.56' x2='369.99' y2='221.76' style='stroke-width: 0.75;' />
-<text x='67.06' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.2</text>
-<text x='117.55' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
-<text x='168.04' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.4</text>
-<text x='218.53' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text x='269.02' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.6</text>
-<text x='319.51' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.7</text>
-<text x='369.99' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.8</text>
-<line x1='59.04' y1='192.81' x2='59.04' y2='67.74' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='192.81' x2='51.84' y2='192.81' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='167.79' x2='51.84' y2='167.79' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='142.78' x2='51.84' y2='142.78' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='117.77' x2='51.84' y2='117.77' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='92.75' x2='51.84' y2='92.75' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='67.74' x2='51.84' y2='67.74' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,192.81) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
-<text transform='translate(41.76,142.78) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text transform='translate(41.76,92.75) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.7</text>
-<polygon points='59.04,214.56 401.76,214.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='269.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>fitted occupancy (ICAR)</text>
-<text transform='translate(12.96,136.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>fitted occupancy (BYM2)</text>
-</g>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<line x1='59.04' y1='221.79' x2='401.76' y2='52.01' style='stroke-width: 1.50; stroke: #666666;' />
-</g>
-</g>
-</svg></div></p>
 <p>A map makes the smoothing visible. Lay the fitted <code>psi</code>
 back on the grid coordinates and shade each cell. The high-occupancy
 ridge runs through the grid centre and the upper corner, exactly where
 the simulated bump and gradient put it.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">shade</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/gray.html" class="external-link">grey</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="op">(</span><span class="va">p</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">p</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">p</span><span class="op">)</span><span class="op">)</span> <span class="op">*</span> <span class="fl">0.85</span><span class="op">)</span></span>
 <span><span class="va">op</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>mfrow <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span><span class="op">)</span>, mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">3</span>, <span class="fl">2</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">coord</span><span class="op">$</span><span class="va">cx</span>, <span class="va">coord</span><span class="op">$</span><span class="va">cy</span>, pch <span class="op">=</span> <span class="fl">22</span>, cex <span class="op">=</span> <span class="fl">4</span>, bg <span class="op">=</span> <span class="fu">shade</span><span class="op">(</span><span class="va">psi_true</span><span class="op">)</span>,</span>
 <span>     xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">""</span>, main <span class="op">=</span> <span class="st">"true occupancy"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">coord</span><span class="op">$</span><span class="va">cx</span>, <span class="va">coord</span><span class="op">$</span><span class="va">cy</span>, pch <span class="op">=</span> <span class="fl">22</span>, cex <span class="op">=</span> <span class="fl">4</span>, bg <span class="op">=</span> <span class="fu">shade</span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi</span><span class="op">)</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">""</span>, main <span class="op">=</span> <span class="st">"fitted (BYM2)"</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='504.00pt' height='244.80pt' viewBox='0 0 504.00 244.80' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA='>
-    <rect x='0.00' y='0.00' width='504.00' height='244.80' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-</g>
-<defs>
-  <clipPath id='cpNDMuMjB8MjM3LjYwfDI4LjgwfDIwMS42MA=='>
-    <rect x='43.20' y='28.80' width='194.40' height='172.80' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNDMuMjB8MjM3LjYwfDI4LjgwfDIwMS42MA==)'>
-<rect rx='4' x='40.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; stroke: #DFD7CA; fill: #F5F6F8;' />
-<rect x='85.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #EAEAEA;' />
-<rect x='130.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #CBCBCB;' />
-<rect x='175.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #ADADAD;' />
-<rect x='220.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #929292;' />
-<rect x='40.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #EFEFEF;' />
-<rect x='85.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #C0C0C0;' />
-<rect x='130.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #888888;' />
-<rect x='175.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #6F6F6F;' />
-<rect x='220.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #636363;' />
-<rect x='40.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #D8D8D8;' />
-<rect x='85.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #929292;' />
-<rect x='130.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #555555;' />
-<rect x='175.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #434343;' />
-<rect x='220.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #414141;' />
-<rect x='40.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #C6C6C6;' />
-<rect x='85.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #818181;' />
-<rect x='130.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #4B4B4B;' />
-<rect x='175.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #383838;' />
-<rect x='220.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #303030;' />
-<rect x='40.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #B6B6B6;' />
-<rect x='85.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #7F7F7F;' />
-<rect x='130.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #505050;' />
-<rect x='175.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #363636;' />
-<rect x='220.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #262626;' />
-</g>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-<line x1='50.40' y1='201.60' x2='230.40' y2='201.60' style='stroke-width: 0.75;' />
-<line x1='50.40' y1='201.60' x2='50.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='95.40' y1='201.60' x2='95.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='140.40' y1='201.60' x2='140.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='185.40' y1='201.60' x2='185.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='230.40' y1='201.60' x2='230.40' y2='208.80' style='stroke-width: 0.75;' />
-<text x='50.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='95.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='140.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='185.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='230.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<line x1='43.20' y1='195.20' x2='43.20' y2='35.20' style='stroke-width: 0.75;' />
-<line x1='43.20' y1='195.20' x2='36.00' y2='195.20' style='stroke-width: 0.75;' />
-<line x1='43.20' y1='155.20' x2='36.00' y2='155.20' style='stroke-width: 0.75;' />
-<line x1='43.20' y1='115.20' x2='36.00' y2='115.20' style='stroke-width: 0.75;' />
-<line x1='43.20' y1='75.20' x2='36.00' y2='75.20' style='stroke-width: 0.75;' />
-<line x1='43.20' y1='35.20' x2='36.00' y2='35.20' style='stroke-width: 0.75;' />
-<text transform='translate(25.92,195.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text transform='translate(25.92,155.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text transform='translate(25.92,115.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text transform='translate(25.92,75.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text transform='translate(25.92,35.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<polygon points='43.20,201.60 237.60,201.60 237.60,28.80 43.20,28.80 ' style='stroke-width: 0.75;' />
-</g>
-<defs>
-  <clipPath id='cpMC4wMHwyNTIuMDB8MC4wMHwyNDQuODA='>
-    <rect x='0.00' y='0.00' width='252.00' height='244.80' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHwyNTIuMDB8MC4wMHwyNDQuODA=)'>
-<text x='140.40' y='19.55' text-anchor='middle' style='font-size: 1.44em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>true occupancy</text>
-</g>
-<defs>
-  <clipPath id='cpMjk1LjIwfDQ4OS42MHwyOC44MHwyMDEuNjA='>
-    <rect x='295.20' y='28.80' width='194.40' height='172.80' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjk1LjIwfDQ4OS42MHwyOC44MHwyMDEuNjA=)'>
-<rect rx='4' x='292.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; stroke: #DFD7CA; fill: #F5F6F8;' />
-<rect x='337.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #FEFEFE;' />
-<rect x='382.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #F2F2F2;' />
-<rect x='427.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #D9D9D9;' />
-<rect x='472.83' y='185.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #565656;' />
-<rect x='292.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #F8F8F8;' />
-<rect x='337.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #F3F3F3;' />
-<rect x='382.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #E0E0E0;' />
-<rect x='427.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #C6C6C6;' />
-<rect x='472.83' y='145.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #494949;' />
-<rect x='292.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #D9D9D9;' />
-<rect x='337.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #CECECE;' />
-<rect x='382.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #545454;' />
-<rect x='427.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #404040;' />
-<rect x='472.83' y='105.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #353535;' />
-<rect x='292.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #484848;' />
-<rect x='337.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #404040;' />
-<rect x='382.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #333333;' />
-<rect x='427.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #2B2B2B;' />
-<rect x='472.83' y='65.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #292929;' />
-<rect x='292.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #373737;' />
-<rect x='337.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #303030;' />
-<rect x='382.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #2A2A2A;' />
-<rect x='427.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #262626;' />
-<rect x='472.83' y='25.63' width='19.14' height='19.14' style='stroke-width: 0.75; fill: #282828;' />
-</g>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-<line x1='302.40' y1='201.60' x2='482.40' y2='201.60' style='stroke-width: 0.75;' />
-<line x1='302.40' y1='201.60' x2='302.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='347.40' y1='201.60' x2='347.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='392.40' y1='201.60' x2='392.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='437.40' y1='201.60' x2='437.40' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='482.40' y1='201.60' x2='482.40' y2='208.80' style='stroke-width: 0.75;' />
-<text x='302.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='347.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='392.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='437.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='482.40' y='227.52' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<line x1='295.20' y1='195.20' x2='295.20' y2='35.20' style='stroke-width: 0.75;' />
-<line x1='295.20' y1='195.20' x2='288.00' y2='195.20' style='stroke-width: 0.75;' />
-<line x1='295.20' y1='155.20' x2='288.00' y2='155.20' style='stroke-width: 0.75;' />
-<line x1='295.20' y1='115.20' x2='288.00' y2='115.20' style='stroke-width: 0.75;' />
-<line x1='295.20' y1='75.20' x2='288.00' y2='75.20' style='stroke-width: 0.75;' />
-<line x1='295.20' y1='35.20' x2='288.00' y2='35.20' style='stroke-width: 0.75;' />
-<text transform='translate(277.92,195.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text transform='translate(277.92,155.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text transform='translate(277.92,115.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text transform='translate(277.92,75.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text transform='translate(277.92,35.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<polygon points='295.20,201.60 489.60,201.60 489.60,28.80 295.20,28.80 ' style='stroke-width: 0.75;' />
-</g>
-<defs>
-  <clipPath id='cpMjUyLjAwfDUwNC4wMHwwLjAwfDI0NC44MA=='>
-    <rect x='252.00' y='0.00' width='252.00' height='244.80' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjUyLjAwfDUwNC4wMHwwLjAwfDI0NC44MA==)'>
-<text x='392.40' y='19.55' text-anchor='middle' style='font-size: 1.44em; font-weight: bold; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>fitted (BYM2)</text>
-</g>
-</g>
-</svg></div></p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span><span class="va">op</span><span class="op">)</span></span></code></pre></div>
+<span>     xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">""</span>, main <span class="op">=</span> <span class="st">"fitted (BYM2)"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span><span class="va">op</span><span class="op">)</span></span></code></pre></div>
 <p>Darker cells are higher occupancy. The fitted map smooths the binary
 noise that an isolated per-cell estimate would carry: a cell with few
 detections is pulled toward the surface its neighbours trace.</p>
@@ -900,26 +506,22 @@ the spatial fit is the signature of a field that did its job.</p>
 residuals, and run <code><a href="https://gillescolling.com/tulpa/reference/moran_i.html" class="external-link">tulpa::moran_i()</a></code> against the grid
 coordinates. The residuals come back from <code><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals()</a></code> as a
 list with an <code>occ</code> element, one value per cell.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_flat</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="fl">1</span>, data <span class="op">=</span> <span class="va">dat</span>, family <span class="op">=</span> <span class="fu"><a href="../reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">y</span>,</span>
 <span>  method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">coords</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">coord</span><span class="op">$</span><span class="va">cx</span>, <span class="va">coord</span><span class="op">$</span><span class="va">cy</span><span class="op">)</span></span>
 <span><span class="va">mi_flat</span> <span class="op">&lt;-</span> <span class="fu">tulpa</span><span class="fu">::</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/moran_i.html" class="external-link">moran_i</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_flat</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, <span class="va">coords</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>I <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">mi_flat</span><span class="op">$</span><span class="va">statistic</span>, <span class="fl">3</span><span class="op">)</span>, p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">mi_flat</span><span class="op">$</span><span class="va">p.value</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; I.Moran's I           p </span></span>
-<span><span class="co">#&gt;    1.65e-01    3.07e-12</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>I <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">mi_flat</span><span class="op">$</span><span class="va">statistic</span>, <span class="fl">3</span><span class="op">)</span>, p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">mi_flat</span><span class="op">$</span><span class="va">p.value</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The flat fit’s residuals carry positive autocorrelation, the smooth
 field leaking into the part of the model that has nowhere to put it. Now
 repeat on the BYM2 residuals. With the field absorbing the spatial
 structure, the leftover residual correlation should drop toward its null
 expectation.</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mi_bym2</span> <span class="op">&lt;-</span> <span class="fu">tulpa</span><span class="fu">::</span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/moran_i.html" class="external-link">moran_i</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_bym2</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, <span class="va">coords</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>I <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">mi_bym2</span><span class="op">$</span><span class="va">statistic</span>, <span class="fl">3</span><span class="op">)</span>, p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">mi_bym2</span><span class="op">$</span><span class="va">p.value</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; I.Moran's I           p </span></span>
-<span><span class="co">#&gt;    1.41e-01    6.39e-10</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>I <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">mi_bym2</span><span class="op">$</span><span class="va">statistic</span>, <span class="fl">3</span><span class="op">)</span>, p <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">mi_bym2</span><span class="op">$</span><span class="va">p.value</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The spatial fit’s Moran’s I sits far closer to its expected value
 under no pattern, and its p-value no longer rejects the null. The field
 pulled the neighbour correlation out of the residuals, which is the
@@ -930,7 +532,7 @@ residual back on the grid and shade it. The flat residuals show patches
 of like sign, high in the grid centre where the bump sits, the spatial
 print of an unmodelled field. The BYM2 residuals scatter without that
 block structure.</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">resid_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">coord</span>, r <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_flat</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, model <span class="op">=</span> <span class="st">"flat"</span><span class="op">)</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">coord</span>, r <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit_bym2</span><span class="op">)</span><span class="op">$</span><span class="va">occ</span>, model <span class="op">=</span> <span class="st">"BYM2"</span><span class="op">)</span></span>
@@ -942,231 +544,6 @@ block structure.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">""</span>, y <span class="op">=</span> <span class="st">""</span>, fill <span class="op">=</span> <span class="st">"residual"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span>,</span>
 <span>        plot.background  <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='504.00pt' height='244.80pt' viewBox='0 0 504.00 244.80' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA='>
-    <rect x='0.00' y='0.00' width='504.00' height='244.80' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-<rect x='0.000000000000064' y='0.00' width='504.00' height='244.80' style='stroke-width: 1.07; stroke: #FFFFFF;' />
-</g>
-<defs>
-  <clipPath id='cpMjguMjR8MjI4LjI4fDIyLjQwfDIxMy4zMA=='>
-    <rect x='28.24' y='22.40' width='200.05' height='190.91' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjguMjR8MjI4LjI4fDIyLjQwfDIxMy4zMA==)'>
-<rect x='28.24' y='22.40' width='200.05' height='190.91' style='stroke-width: 1.07; stroke: none;' /> fill: #F5F6F8;' />
-<polyline points='28.24,204.63 228.28,204.63 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,169.92 228.28,169.92 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,135.21 228.28,135.21 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,100.50 228.28,100.50 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,65.78 228.28,65.78 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,31.07 228.28,31.07 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='37.33,213.30 37.33,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='73.70,213.30 73.70,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='110.07,213.30 110.07,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='146.45,213.30 146.45,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='182.82,213.30 182.82,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='219.19,213.30 219.19,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,187.27 228.28,187.27 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,152.56 228.28,152.56 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,117.85 228.28,117.85 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,83.14 228.28,83.14 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,48.43 228.28,48.43 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='55.52,213.30 55.52,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='91.89,213.30 91.89,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='128.26,213.30 128.26,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='164.63,213.30 164.63,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='201.01,213.30 201.01,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<rect x='37.33' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #9BB6D4;' />
-<rect x='73.70' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #97B3D3;' />
-<rect x='110.07' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #8EADCF;' />
-<rect x='146.45' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #7EA2C8;' />
-<rect rx='4' x='182.82' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect x='37.33' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #93B0D1;' />
-<rect x='73.70' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #8EADCF;' />
-<rect x='110.07' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #81A5CA;' />
-<rect x='146.45' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #709AC3;' />
-<rect rx='4' x='182.82' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect x='37.33' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #7EA2C8;' />
-<rect x='73.70' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #759DC5;' />
-<rect rx='4' x='110.07' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='146.45' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='182.82' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='37.33' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='73.70' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='110.07' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='146.45' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='182.82' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='37.33' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='73.70' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='110.07' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='146.45' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='182.82' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-</g>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-</g>
-<defs>
-  <clipPath id='cpMjMzLjc2fDQzMy44MXwyMi40MHwyMTMuMzA='>
-    <rect x='233.76' y='22.40' width='200.05' height='190.91' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjMzLjc2fDQzMy44MXwyMi40MHwyMTMuMzA=)'>
-<rect x='233.76' y='22.40' width='200.05' height='190.91' style='stroke-width: 1.07; stroke: none;' /> fill: #F5F6F8;' />
-<polyline points='233.76,204.63 433.81,204.63 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,169.92 433.81,169.92 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,135.21 433.81,135.21 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,100.50 433.81,100.50 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,65.78 433.81,65.78 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,31.07 433.81,31.07 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='242.86,213.30 242.86,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='279.23,213.30 279.23,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='315.60,213.30 315.60,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='351.97,213.30 351.97,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='388.35,213.30 388.35,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='424.72,213.30 424.72,22.40 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,187.27 433.81,187.27 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,152.56 433.81,152.56 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,117.85 433.81,117.85 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,83.14 433.81,83.14 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='233.76,48.43 433.81,48.43 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='261.04,213.30 261.04,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='297.42,213.30 297.42,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='333.79,213.30 333.79,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='370.16,213.30 370.16,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='406.53,213.30 406.53,22.40 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<rect x='242.86' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='279.23' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='315.60' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='351.97' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect rx='4' x='388.35' y='169.92' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect x='242.86' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='279.23' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='315.60' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='351.97' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect rx='4' x='388.35' y='135.21' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect x='242.86' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect x='279.23' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #4682B4;' />
-<rect rx='4' x='315.60' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='351.97' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='388.35' y='100.50' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='242.86' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='279.23' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='315.60' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='351.97' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='388.35' y='65.78' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='242.86' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='279.23' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='315.60' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='351.97' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-<rect rx='4' x='388.35' y='31.07' width='36.37' height='34.71' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F5F6F8;' />
-</g>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-</g>
-<defs>
-  <clipPath id='cpMjguMjR8MjI4LjI4fDUuNDh8MjIuNDA='>
-    <rect x='28.24' y='5.48' width='200.05' height='16.92' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjguMjR8MjI4LjI4fDUuNDh8MjIuNDA=)'>
-<rect x='28.24' y='5.48' width='200.05' height='16.92' style='stroke-width: 1.07; stroke: none; fill: #D9D9D9;' />
-<text class='preserve-color' x='128.26' y='17.09' text-anchor='middle' style='font-size: 0.88em;fill: #1A1A1A; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>BYM2</text>
-</g>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-</g>
-<defs>
-  <clipPath id='cpMjMzLjc2fDQzMy44MXw1LjQ4fDIyLjQw'>
-    <rect x='233.76' y='5.48' width='200.05' height='16.92' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjMzLjc2fDQzMy44MXw1LjQ4fDIyLjQw)'>
-<rect x='233.76' y='5.48' width='200.05' height='16.92' style='stroke-width: 1.07; stroke: none; fill: #D9D9D9;' />
-<text class='preserve-color' x='333.79' y='17.09' text-anchor='middle' style='font-size: 0.88em;fill: #1A1A1A; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>flat</text>
-</g>
-<g clip-path='url(#cpMC4wMHw1MDQuMDB8MC4wMHwyNDQuODA=)'>
-<polyline points='55.52,216.04 55.52,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='91.89,216.04 91.89,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='128.26,216.04 128.26,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='164.63,216.04 164.63,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='201.01,216.04 201.01,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='55.52' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='91.89' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='128.26' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='164.63' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='201.01' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<polyline points='261.04,216.04 261.04,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='297.42,216.04 297.42,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='333.79,216.04 333.79,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='370.16,216.04 370.16,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='406.53,216.04 406.53,213.30 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='261.04' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='297.42' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='333.79' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='370.16' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='406.53' y='224.54' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<text x='23.31' y='190.42' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='23.31' y='155.71' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='23.31' y='121.00' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='23.31' y='86.29' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='23.31' y='51.58' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<polyline points='25.50,187.27 28.24,187.27 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,152.56 28.24,152.56 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,117.85 28.24,117.85 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,83.14 28.24,83.14 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,48.43 28.24,48.43 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<rect rx='4' x='444.77' y='61.33' width='53.75' height='113.03' style='stroke-width: 1.07; stroke: none; fill: #F5F6F8;' />
-<text x='450.25' y='75.85' style='font-size: 1.1em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>residual</text>
-<image width='17.28' height='86.40' x='450.25' y='82.49' preserveAspectRatio='none' xlink:href='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEsCAYAAAACUNnVAAAAnElEQVQ4ja1UWw7AIAwi3v/O7MP5aFO0Rv8aA1IYEyRZCKCARJvwTyRRUCe0CbQQoAA0EHac49r7qprkDkg/c/ttdnZcq4HgvtDv0Aj8Og3NDfx67gRR3H4mudLbxD36lpJrc457sIouUZXz2HUtVKVuuFcRJ381WdvXWelKJXPJeHu3n6vo+mlZa+j99jlHWSV2SWhEfqPnQWX6ASohheG3HItFAAAAAElFTkSuQmCC'/>
-<polyline points='464.07,162.53 467.53,162.53 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='464.07,142.55 467.53,142.55 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='464.07,122.58 467.53,122.58 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='464.07,102.61 467.53,102.61 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='464.07,82.63 467.53,82.63 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='453.71,162.53 450.25,162.53 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='453.71,142.55 450.25,142.55 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='453.71,122.58 450.25,122.58 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='453.71,102.61 450.25,102.61 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='453.71,82.63 450.25,82.63 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<text x='473.01' y='165.68' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.16</text>
-<text x='473.01' y='145.70' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.12</text>
-<text x='473.01' y='125.73' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.08</text>
-<text x='473.01' y='105.76' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>-0.04</text>
-<text x='473.01' y='85.78' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.00</text>
-</g>
-</g>
-</svg></div></p>
 <p>A clean residual map plus a non-significant Moran’s I is the pair to
 report together. The map shows where any leftover pattern sits; the test
 says whether it is more than noise. If the field leaves a significant I
@@ -1185,20 +562,18 @@ already accounts for the uncertainty in the smoothing strength rather
 than conditioning on a single value. The band width is the quantity to
 read off a spatial fit: a narrow band where neighbours agree and surveys
 are dense, a wide band where the field has little to lean on.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">width</span> <span class="op">&lt;-</span> <span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi_upper</span> <span class="op">-</span> <span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi_lower</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>median_width <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">width</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
 <span>  min_width    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">width</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
-<span>  max_width    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">width</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; median_width    min_width    max_width </span></span>
-<span><span class="co">#&gt;        0.851        0.806        0.895</span></span></code></pre></div>
+<span>  max_width    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">width</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The widths vary cell to cell, which is the point of a Bayesian field
 over a single smoothed surface. A cell with many detecting visits and
 agreeing neighbours pins <code>psi</code> tightly; a cell on the grid
 edge with few neighbours and a marginal detection history carries a
 wider band. Mapping the width turns that into a picture of where the
 model is confident.</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">unc_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">coord</span>, width <span class="op">=</span> <span class="va">sp_bym2</span><span class="op">$</span><span class="va">width</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">unc_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">cx</span>, <span class="va">cy</span>, fill <span class="op">=</span> <span class="va">width</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_tile.html" class="external-link">geom_tile</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
@@ -1207,137 +582,6 @@ model is confident.</p>
 <span>       title <span class="op">=</span> <span class="st">"Posterior 95% interval width"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span>,</span>
 <span>        plot.background  <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_rect</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"transparent"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<rect x='0.000000000000032' y='0.00' width='432.00' height='288.00' style='stroke-width: 1.07; stroke: #FFFFFF;' />
-</g>
-<defs>
-  <clipPath id='cpMjguMjR8MzU5Ljg0fDIzLjE4fDI1Ni41MA=='>
-    <rect x='28.24' y='23.18' width='331.61' height='233.33' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMjguMjR8MzU5Ljg0fDIzLjE4fDI1Ni41MA==)'>
-<rect x='28.24' y='23.18' width='331.61' height='233.33' style='stroke-width: 1.07; stroke: none;' /> fill: #F5F6F8;' />
-<polyline points='28.24,245.90 359.84,245.90 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,203.47 359.84,203.47 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,161.05 359.84,161.05 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,118.63 359.84,118.63 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,76.21 359.84,76.21 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,33.78 359.84,33.78 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='43.31,256.50 43.31,23.18 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='103.60,256.50 103.60,23.18 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='163.89,256.50 163.89,23.18 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='224.19,256.50 224.19,23.18 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='284.48,256.50 284.48,23.18 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='344.77,256.50 344.77,23.18 ' style='stroke-width: 0.53; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,224.69 359.84,224.69 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,182.26 359.84,182.26 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,139.84 359.84,139.84 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,97.42 359.84,97.42 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='28.24,54.99 359.84,54.99 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='73.46,256.50 73.46,23.18 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='133.75,256.50 133.75,23.18 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='194.04,256.50 194.04,23.18 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='254.33,256.50 254.33,23.18 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='314.62,256.50 314.62,23.18 ' style='stroke-width: 1.07; stroke: #FFFFFF; stroke-linecap: butt;' />
-<rect x='43.31' y='203.47' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FC9A6D;' />
-<rect x='103.60' y='203.47' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #902A80;' />
-<rect x='163.89' y='203.47' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #B93974;' />
-<rect x='224.19' y='203.47' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FEA06E;' />
-<rect x='284.48' y='203.47' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FCFDBF;' />
-<rect x='43.31' y='161.05' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #B43776;' />
-<rect x='103.60' y='161.05' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #5E1977;' />
-<rect x='163.89' y='161.05' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #BA3974;' />
-<rect x='224.19' y='161.05' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FEA06E;' />
-<rect x='284.48' y='161.05' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #E7626A;' />
-<rect x='43.31' y='118.63' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FC9A6D;' />
-<rect x='103.60' y='118.63' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #F27E6C;' />
-<rect x='163.89' y='118.63' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #B63875;' />
-<rect x='224.19' y='118.63' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #611978;' />
-<rect x='284.48' y='118.63' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #982D7E;' />
-<rect x='43.31' y='76.21' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #EC6F6B;' />
-<rect x='103.60' y='76.21' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #6F1E7B;' />
-<rect x='163.89' y='76.21' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #1C0D2E;' />
-<rect x='224.19' y='76.21' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #000004;' />
-<rect x='284.48' y='76.21' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #8E2981;' />
-<rect x='43.31' y='33.78' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FFD49A;' />
-<rect x='103.60' y='33.78' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #9E2F7C;' />
-<rect x='163.89' y='33.78' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #681C79;' />
-<rect x='224.19' y='33.78' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #81257F;' />
-<rect x='284.48' y='33.78' width='60.29' height='42.42' style='stroke-width: 0.43; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FFDAA0;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<text x='23.31' y='227.84' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='23.31' y='185.41' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='23.31' y='142.99' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='23.31' y='100.57' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='23.31' y='58.14' text-anchor='end' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<polyline points='25.50,224.69 28.24,224.69 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,182.26 28.24,182.26 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,139.84 28.24,139.84 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,97.42 28.24,97.42 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='25.50,54.99 28.24,54.99 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='73.46,259.24 73.46,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='133.75,259.24 133.75,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='194.04,259.24 194.04,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='254.33,259.24 254.33,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<polyline points='314.62,259.24 314.62,256.50 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='73.46' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1</text>
-<text x='133.75' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>2</text>
-<text x='194.04' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>3</text>
-<text x='254.33' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>4</text>
-<text x='314.62' y='267.74' text-anchor='middle' style='font-size: 0.88em;fill: #4D4D4D; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>5</text>
-<rect rx='4' x='370.80' y='83.32' width='55.72' height='113.03' style='stroke-width: 1.07; stroke: none; fill: #F5F6F8;' />
-<text x='376.28' y='97.84' style='font-size: 1.1em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>CI width</text>
-<image width='17.28' height='86.40' x='376.28' y='104.48' preserveAspectRatio='none' xlink:href='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEsCAYAAAACUNnVAAAA2UlEQVQ4jY2QSxLDIAxDH57e/0q9WGN1wfCxAySbjIye5Lr8rq8MF1bkVEVUpSph+NHI6mistmXjGNsbzy0vs8pHC5ODITAJDO9KLFwd3XM2uXri9gXjZ/gx5sdtKZvg2FeVCiaachFGAuIqLcaA29sE13EFL5pTdizK8Kk0J7ZGqspI2OGLmFA8Rr0lvKXE3NdbXiBTKZijedwjo+rl8ukPW5yQ9iYkJ3CMmvD2KT6PDCNxr91oqL0R4cFNhnRDiC1SP0F9r3RDpqp6flc95uqfOl6YcwF89Ae5HR1/OtkDtwAAAABJRU5ErkJggg=='/>
-<polyline points='390.11,172.57 393.56,172.57 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='390.11,148.42 393.56,148.42 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='390.11,124.27 393.56,124.27 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='379.74,172.57 376.28,172.57 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='379.74,148.42 376.28,148.42 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<polyline points='379.74,124.27 376.28,124.27 ' style='stroke-width: 0.38; stroke: #FFFFFF; stroke-linecap: butt;' />
-<text x='399.04' y='175.72' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.825</text>
-<text x='399.04' y='151.57' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.850</text>
-<text x='399.04' y='127.42' style='font-size: 0.88em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.875</text>
-<text x='28.24' y='14.93' style='font-size: 1.32em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>Posterior 95% interval width</text>
-</g>
-</g>
-</svg></div></p>
 <p>Brighter cells carry more uncertainty. The pattern is the honest
 counterpart to the smoothed occupancy map: the field reports both its
 best guess and how far that guess can be trusted, and the two maps read
@@ -1347,12 +591,11 @@ only weakly support; a high <code>psi</code> with a tight band is one
 the neighbourhood backs.</p>
 <p>For a single cell the interval reads directly. Pull the cell with the
 highest fitted occupancy and report its band as a sentence.</p>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">peak</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">$</span><span class="va">psi</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">sp_bym2</span><span class="op">[</span><span class="va">peak</span>, <span class="op">]</span>,</span>
 <span>     <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"cell %d: psi = %.2f (95%% CI %.2f to %.2f)"</span>,</span>
-<span>             <span class="va">row</span>, <span class="va">psi</span>, <span class="va">psi_lower</span>, <span class="va">psi_upper</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] "cell 24: psi = 0.81 (95% CI 0.16 to 1.00)"</span></span></code></pre></div>
+<span>             <span class="va">row</span>, <span class="va">psi</span>, <span class="va">psi_lower</span>, <span class="va">psi_upper</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Reporting the band rather than the point is the difference between
 “this cell is occupied” and “this cell is probably occupied, with this
 much room for doubt”. For an unsurveyed or thinly surveyed cell that
@@ -1390,16 +633,15 @@ every prior.</p>
 histories to <code>NA</code>. Scattering them (rather than blanking a
 contiguous block) keeps each held-out cell with observed neighbours, so
 the field interpolates rather than extrapolates across a gap.</p>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">heldout</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">2</span>, <span class="va">n</span>, by <span class="op">=</span> <span class="fl">4</span><span class="op">)</span>        <span class="co"># every fourth cell, scattered across the grid</span></span>
 <span><span class="va">y_ho</span> <span class="op">&lt;-</span> <span class="va">y</span></span>
 <span><span class="va">y_ho</span><span class="op">[</span><span class="va">heldout</span>, <span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">heldout</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 6</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">heldout</span><span class="op">)</span></span></code></pre></div>
 <p>Fit the field on the punctured data.
 <code>predict(type = "state")</code> flags the held-out rows and returns
 their interpolated occupancy with a band.</p>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_ho</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span></span>
 <span>  <span class="op">~</span> <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>,</span>
 <span>  data      <span class="op">=</span> <span class="va">dat</span>,</span>
@@ -1410,15 +652,12 @@ their interpolated occupancy with a band.</p>
 <span>  control   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>max.iter <span class="op">=</span> <span class="fl">30L</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">sp_ho</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit_ho</span>, type <span class="op">=</span> <span class="st">"state"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sp_ho</span><span class="op">$</span><span class="va">heldout</span><span class="op">)</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; FALSE  TRUE </span></span>
-<span><span class="co">#&gt;    19     6</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">sp_ho</span><span class="op">$</span><span class="va">heldout</span><span class="op">)</span></span></code></pre></div>
 <p>The <code>heldout = TRUE</code> rows are the cells the model never
 saw a detection for. Their <code>psi</code> is the field’s best guess,
 and <code>psi_lower</code> / <code>psi_upper</code> carry the 95% band.
 Check the guess against the truth the held-out cells actually had.</p>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ho</span> <span class="op">&lt;-</span> <span class="va">sp_ho</span><span class="op">[</span><span class="va">sp_ho</span><span class="op">$</span><span class="va">heldout</span>, <span class="op">]</span></span>
 <span><span class="va">truth_ho</span> <span class="op">&lt;-</span> <span class="va">psi_true</span><span class="op">[</span><span class="va">heldout</span><span class="op">]</span></span>
 <span></span>
@@ -1427,117 +666,9 @@ Check the guess against the truth the held-out cells actually had.</p>
 <span>     xlab <span class="op">=</span> <span class="st">"true occupancy (held out)"</span>, ylab <span class="op">=</span> <span class="st">"interpolated occupancy"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/arrows.html" class="external-link">arrows</a></span><span class="op">(</span><span class="va">truth_ho</span><span class="op">[</span><span class="va">ord</span><span class="op">]</span>, <span class="va">ho</span><span class="op">$</span><span class="va">psi_lower</span><span class="op">[</span><span class="va">ord</span><span class="op">]</span>, <span class="va">truth_ho</span><span class="op">[</span><span class="va">ord</span><span class="op">]</span>, <span class="va">ho</span><span class="op">$</span><span class="va">psi_upper</span><span class="op">[</span><span class="va">ord</span><span class="op">]</span>,</span>
 <span>       length <span class="op">=</span> <span class="fl">0.02</span>, angle <span class="op">=</span> <span class="fl">90</span>, code <span class="op">=</span> <span class="fl">3</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/adjustcolor.html" class="external-link">adjustcolor</a></span><span class="op">(</span><span class="st">"steelblue"</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span></span></code></pre></div>
-<p><div class="svg-container"><button type="button" class="btn btn-primary btn-copy-svg" title="Copy SVG to clipboard" aria-label="Copy SVG to clipboard" data-bs-toggle="tooltip" data-bs-placement="left"><i class="fa fa-copy"></i></button>
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='432.00pt' height='288.00pt' viewBox='0 0 432.00 288.00' class="r-plt inline-svg" style="width:100%;height:auto;">
-<g class='svglite'>
-<defs>
-  <style type='text/css'><![CDATA[
-    /* theme-aware-processed */
-    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite circle {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite > g > rect {
-      fill: none;
-      stroke: #3E3F3A;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-miterlimit: 10.00;
-    }
-    .svglite text {
-      white-space: pre;
-      fill: #3E3F3A;
-    }
-    .svglite g.glyphgroup path {
-      fill: inherit;
-      stroke: none;
-    }
-  ]]></style>
-</defs>
-<rect width='100%' height='100%' style='stroke: none; fill: #F5F6F8;'/>
-<defs>
-  <clipPath id='cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA='>
-    <rect x='0.00' y='0.00' width='432.00' height='288.00' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-</g>
-<defs>
-  <clipPath id='cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng=='>
-    <rect x='59.04' y='59.04' width='342.72' height='155.52' />
-  </clipPath>
-</defs>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<circle cx='71.73' cy='157.14' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='79.87' cy='161.04' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='279.26' cy='105.98' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='330.24' cy='125.05' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='375.49' cy='107.95' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-<circle cx='389.07' cy='118.07' r='2.70' style='stroke-width: 0.75; stroke: #4682B4; fill: #4682B4;' />
-</g>
-<g clip-path='url(#cpMC4wMHw0MzIuMDB8MC4wMHwyODguMDA=)'>
-<line x1='109.35' y1='214.56' x2='362.96' y2='214.56' style='stroke-width: 0.75;' />
-<line x1='109.35' y1='214.56' x2='109.35' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='160.07' y1='214.56' x2='160.07' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='210.80' y1='214.56' x2='210.80' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='261.52' y1='214.56' x2='261.52' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='312.24' y1='214.56' x2='312.24' y2='221.76' style='stroke-width: 0.75;' />
-<line x1='362.96' y1='214.56' x2='362.96' y2='221.76' style='stroke-width: 0.75;' />
-<text x='109.35' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.2</text>
-<text x='160.07' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.3</text>
-<text x='210.80' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.4</text>
-<text x='261.52' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.5</text>
-<text x='312.24' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.6</text>
-<text x='362.96' y='240.48' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.7</text>
-<line x1='59.04' y1='208.80' x2='59.04' y2='64.80' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='208.80' x2='51.84' y2='208.80' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='180.00' x2='51.84' y2='180.00' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='151.20' x2='51.84' y2='151.20' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='122.40' x2='51.84' y2='122.40' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='93.60' x2='51.84' y2='93.60' style='stroke-width: 0.75;' />
-<line x1='59.04' y1='64.80' x2='51.84' y2='64.80' style='stroke-width: 0.75;' />
-<text transform='translate(41.76,208.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.0</text>
-<text transform='translate(41.76,180.00) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.2</text>
-<text transform='translate(41.76,151.20) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.4</text>
-<text transform='translate(41.76,122.40) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.6</text>
-<text transform='translate(41.76,93.60) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>0.8</text>
-<text transform='translate(41.76,64.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>1.0</text>
-<polygon points='59.04,214.56 401.76,214.56 401.76,59.04 59.04,59.04 ' style='stroke-width: 0.75;' />
-<text x='230.40' y='269.28' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>true occupancy (held out)</text>
-<text transform='translate(12.96,136.80) rotate(-90)' text-anchor='middle' style='font-size: 1.2em; font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'>interpolated occupancy</text>
-</g>
-<g clip-path='url(#cpNTkuMDR8NDAxLjc2fDU5LjA0fDIxNC41Ng==)'>
-<line x1='71.73' y1='208.09' x2='71.73' y2='83.42' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='70.29,208.09 71.73,208.09 73.17,208.09 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='73.17,83.42 71.73,83.42 70.29,83.42 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<line x1='79.87' y1='208.29' x2='79.87' y2='86.73' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='78.43,208.29 79.87,208.29 81.31,208.29 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='81.31,86.73 79.87,86.73 78.43,86.73 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<line x1='279.26' y1='184.92' x2='279.26' y2='65.27' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='277.82,184.92 279.26,184.92 280.70,184.92 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='280.70,65.27 279.26,65.27 277.82,65.27 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<line x1='330.24' y1='199.92' x2='330.24' y2='67.49' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='328.80,199.92 330.24,199.92 331.68,199.92 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='331.68,67.49 330.24,67.49 328.80,67.49 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<line x1='375.49' y1='179.06' x2='375.49' y2='65.93' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='374.05,179.06 375.49,179.06 376.93,179.06 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='376.93,65.93 375.49,65.93 374.05,65.93 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<line x1='389.07' y1='190.85' x2='389.07' y2='67.59' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='387.63,190.85 389.07,190.85 390.51,190.85 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<polyline points='390.51,67.59 389.07,67.59 387.63,67.59 ' style='stroke-width: 0.75; stroke: #4682B4; stroke-opacity: 0.50;' />
-<line x1='59.04' y1='194.28' x2='401.76' y2='96.98' style='stroke-width: 1.50; stroke: #666666;' />
-</g>
-</g>
-</svg></div></p>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>cor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">ho</span><span class="op">$</span><span class="va">psi</span>, <span class="va">truth_ho</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
-<span>  mae <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">ho</span><span class="op">$</span><span class="va">psi</span> <span class="op">-</span> <span class="va">truth_ho</span><span class="op">)</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   cor   mae </span></span>
-<span><span class="co">#&gt; 0.900 0.134</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>cor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">ho</span><span class="op">$</span><span class="va">psi</span>, <span class="va">truth_ho</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  mae <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">ho</span><span class="op">$</span><span class="va">psi</span> <span class="op">-</span> <span class="va">truth_ho</span><span class="op">)</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The interpolated points track the truth and the bands cover it, all
 from neighbour borrowing alone. The band is the calibrated mixture-CDF
 interval the nested path computes from the exact-marginal field pass, so
@@ -1561,7 +692,7 @@ vignette makes the same point). A flat-versus-spatial WAIC table
 therefore compares the models’ fixed parts, which here is the shared
 intercept, so it does not on its own credit the field. The table below
 is worth reading with that scope in mind.</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">waic_row</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">fit</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">w</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>waic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fl">1</span><span class="op">)</span>, elpd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"elpd_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fl">1</span><span class="op">)</span>, p_waic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">w</span><span class="op">$</span><span class="va">estimates</span><span class="op">[</span><span class="st">"p_waic"</span>, <span class="st">"Estimate"</span><span class="op">]</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
@@ -1571,17 +702,7 @@ is worth reading with that scope in mind.</p>
 <span>  icar        <span class="op">=</span> <span class="fu">waic_row</span><span class="op">(</span><span class="va">fit_icar</span><span class="op">)</span>,</span>
 <span>  bym2        <span class="op">=</span> <span class="fu">waic_row</span><span class="op">(</span><span class="va">fit_bym2</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Warning: </span></span>
-<span><span class="co">#&gt; 1 (4.0%) p_waic estimates greater than 0.4. We recommend trying loo instead.</span></span>
-<span><span class="co">#&gt; Warning: </span></span>
-<span><span class="co">#&gt; 1 (4.0%) p_waic estimates greater than 0.4. We recommend trying loo instead.</span></span>
-<span><span class="co">#&gt; Warning: </span></span>
-<span><span class="co">#&gt; 1 (4.0%) p_waic estimates greater than 0.4. We recommend trying loo instead.</span></span>
-<span><span class="va">waic_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">[</span>, <span class="st">"waic"</span><span class="op">]</span><span class="op">)</span>, <span class="op">]</span></span>
-<span><span class="co">#&gt;              waic   elpd p_waic</span></span>
-<span><span class="co">#&gt; icar        178.2  -89.1    1.8</span></span>
-<span><span class="co">#&gt; bym2        187.5  -93.7    2.0</span></span>
-<span><span class="co">#&gt; non_spatial 202.4 -101.2    2.4</span></span></code></pre></div>
+<span><span class="va">waic_tab</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">waic_tab</span><span class="op">[</span>, <span class="st">"waic"</span><span class="op">]</span><span class="op">)</span>, <span class="op">]</span></span></code></pre></div>
 <p>The three rows sit close together because the occupancy mean
 structure is an intercept in every fit. The field, which is what
 separates these models, does not enter the score, so the small spread
@@ -1773,83 +894,5 @@ spatial-models vignette.</li>
 
 
 
-  <script>
-/* SVG Copy Button Functionality */
-(function() {
-  "use strict";
-
-  // Initialize SVG copy buttons after DOM is ready
-  document.addEventListener("DOMContentLoaded", function() {
-    if (typeof ClipboardJS === "undefined") {
-      console.warn("ClipboardJS not loaded - SVG copy buttons disabled");
-      return;
-    }
-
-    // Initialize clipboard for SVG copy buttons
-    var svgClipboard = new ClipboardJS(".btn-copy-svg", {
-      text: function(trigger) {
-        var container = trigger.closest(".svg-container");
-        if (!container) return "";
-
-        var svg = container.querySelector("svg");
-        if (!svg) return "";
-
-        // Clone SVG to avoid modifying the original
-        var clone = svg.cloneNode(true);
-
-        // Remove inline-svg class (not needed in copied version)
-        clone.classList.remove("inline-svg");
-
-        // Add XML declaration and serialize
-        var serializer = new XMLSerializer();
-        var svgString = serializer.serializeToString(clone);
-
-        // Add XML declaration if not present
-        if (!svgString.startsWith("<?xml")) {
-          svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
-        }
-
-        return svgString;
-      }
-    });
-
-    // Handle success
-    svgClipboard.on("success", function(e) {
-      var btn = e.trigger;
-      var originalTitle = btn.getAttribute("data-bs-original-title") || btn.getAttribute("title");
-
-      // Update tooltip to show "Copied!"
-      btn.setAttribute("data-bs-original-title", "Copied!");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-
-      // Reset after delay
-      setTimeout(function() {
-        btn.setAttribute("data-bs-original-title", originalTitle);
-      }, 1500);
-
-      e.clearSelection();
-    });
-
-    // Handle error
-    svgClipboard.on("error", function(e) {
-      var btn = e.trigger;
-      btn.setAttribute("data-bs-original-title", "Press Ctrl+C to copy");
-      var tooltip = bootstrap.Tooltip.getInstance(btn);
-      if (tooltip) {
-        tooltip.show();
-      }
-    });
-
-    // Initialize tooltips for SVG copy buttons
-    var svgCopyButtons = document.querySelectorAll(".btn-copy-svg");
-    svgCopyButtons.forEach(function(btn) {
-      new bootstrap.Tooltip(btn, { container: "body" });
-    });
-  });
-})();
-</script>
-</body>
+  </body>
 </html>

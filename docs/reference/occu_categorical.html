@@ -34,7 +34,7 @@ with \(p = \mathrm{softmax}(X \beta_{class})\)."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -120,10 +120,10 @@ It may sit on the formula left-hand side (<code>y ~ ...</code>), so <code>y =</c
 The <code>formula</code> predictors are shared by both arms.</p>
     </div>
     <div class="section level2">
-    <h2 id="scope">Scope<a class="anchor" aria-label="anchor" href="#scope"></a></h2>
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
 
 
-<p>Non-spatial Laplace (<code>method = "laplace"</code>). The multinomial math is the
+<p>Non-spatial Laplace (<code>method = "laplace"</code>), the only route. The multinomial math is the
 FD-validated tulpa kernel (<code>multinomial_logit.h</code>); the non-spatial fit is the
 vectorised R Newton over the same closed forms. Spatial fields / NUTS (the
 native multi-process likelihood) and the latent-class <em>misclassification</em>

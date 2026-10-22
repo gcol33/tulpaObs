@@ -14,20 +14,20 @@ array `[n_sites x J x n_species]` suitable for
 
 ``` r
 simulate_ms_abun(
-  n_species = 12,
+  n.species = 12,
   N = 80,
   J = 4,
-  n_abund_covs = 1,
-  n_det_covs = 1,
-  mu_lambda = NULL,
-  mu_p = NULL,
-  sd_lambda = 0.5,
-  sd_p = 0.4,
+  n.abund.covs = 1,
+  n.det.covs = 1,
+  mu.lambda = NULL,
+  mu.p = NULL,
+  sd.lambda = 0.5,
+  sd.p = 0.4,
   mixture = c("poisson", "negbin", "zip", "zinb"),
   size = 3,
-  sigma_logr = 0.4,
+  sigma.logr = 0.4,
   omega = 0.3,
-  sigma_omega = 0.4,
+  sigma.omega = 0.4,
   graph = NULL,
   sigma.field = 0.6,
   seed = NULL
@@ -36,7 +36,7 @@ simulate_ms_abun(
 
 ## Arguments
 
-- n_species:
+- n.species:
 
   Number of species (default 12).
 
@@ -48,31 +48,31 @@ simulate_ms_abun(
 
   Number of replicate visits (default 4).
 
-- n_abund_covs:
+- n.abund.covs:
 
   Number of abundance covariates (default 1).
 
-- n_det_covs:
+- n.det.covs:
 
   Number of detection covariates (default 1).
 
-- mu_lambda:
+- mu.lambda:
 
   Community-mean abundance coefficients `c(intercept, slopes...)` on the
-  log scale. Default `c(log(3), rep(0.4, n_abund_covs))`.
+  log scale. Default `c(log(3), rep(0.4, n.abund.covs))`.
 
-- mu_p:
+- mu.p:
 
   Community-mean detection coefficients on the logit scale. Default
-  `c(0.3, rep(-0.3, n_det_covs))`.
+  `c(0.3, rep(-0.3, n.det.covs))`.
 
-- sd_lambda:
+- sd.lambda:
 
   Per-coefficient community SD for the abundance arm (the sqrt-diagonal
-  of `Sigma_lambda`). Length 1 (recycled) or `1 + n_abund_covs`. Default
+  of `Sigma_lambda`). Length 1 (recycled) or `1 + n.abund.covs`. Default
   0.5.
 
-- sd_p:
+- sd.p:
 
   Per-coefficient community SD for the detection arm. Default 0.4.
 
@@ -89,7 +89,7 @@ simulate_ms_abun(
   \\r_s = \exp(\mu\_{\log r} + b^{\log r}\_s)\\ with \\b^{\log r}\_s
   \sim N(0, \sigma\_{\log r}^2)\\.
 
-- sigma_logr:
+- sigma.logr:
 
   Standard deviation of the per-species log-dispersion random effect
   `log_r_s` (used only under `mixture = "negbin"` / `"zinb"`). Default
@@ -103,7 +103,7 @@ simulate_ms_abun(
   are \\\omega_s = \mathrm{plogis}(\mu\_\omega + b^\omega_s)\\ with
   \\b^\omega_s \sim N(0, \sigma\_\omega^2)\\.
 
-- sigma_omega:
+- sigma.omega:
 
   Standard deviation of the per-species structural-zero-logit random
   effect `logit_omega_s` (used only under zero-inflation). Default 0.4.
@@ -159,6 +159,6 @@ them.
 ## Examples
 
 ``` r
-sim <- simulate_ms_abun(n_species = 4, N = 30, J = 3, seed = 1)
+sim <- simulate_ms_abun(n.species = 4, N = 30, J = 3, seed = 1)
 dim(sim$y)
 ```

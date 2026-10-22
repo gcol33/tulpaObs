@@ -5,15 +5,15 @@ Per-species N-mixture with shared community-level hyperparameters.
 ## Usage
 
 ``` r
-ms_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+ms_abun(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 ```
 
 ## Arguments
 
-- K_max:
+- K.max:
 
   upper bound for the latent-abundance marginal sum (the exact
-  integration over `N` is truncated at `K_max`). `NULL` (default) lets
+  integration over `N` is truncated at `K.max`). `NULL` (default) lets
   the engine pick `max(y) + 100` (matching
   [`unmarked::pcount()`](https://ecoverseR.github.io/unmarked/reference/pcount.html));
   raise it if a fit warns that the posterior over `N` puts mass on the
@@ -35,6 +35,42 @@ ms_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 
 A `tobs_family` object.
 
+## Engines
+
+- `method = "laplace"` – the in-tree C++ community Laplace-EM
+  (per-species coefficient random effects, closed-form community
+  covariance M-step, AGHQ variance debias), the default;
+  [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  factors run here through the block-coordinate driver.
+
+- `method = "nested_laplace"` – a shared areal field
+  ([`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md))
+  on the abundance arm (the spAbundance `sfMsNMix` model), Poisson or
+  grid-integrated negative-binomial size; with
+  [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  factors beside the field the spatial-factor model by block coordinate
+  ascent.
+
+- `method = "nuts"` – the non-spatial community sampler over the
+  closed-form per-(species, site) marginal, sampling the community
+  means, per-species deviations and community covariances jointly
+  (Poisson, or per-species negative-binomial `log_r_s`), warm-started at
+  the Laplace-EM mode; with a shared
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field (Poisson) a fixed-hyper non-centered field joins the sampler,
+  while
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`bym2()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  and
+  [`re()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  terms stay on `"nested_laplace"`.
+
 ## Reading the negbin community dispersion
 
 Under `mixture = "negbin"` the community mean `mu_log_r` reaches
@@ -49,7 +85,7 @@ can settle near its lower boundary, which shifts `mu_log_r` and narrows
 its SE at the same time.
 
 Measured on simulated data (39 `laplace` fits at 8 and 36 species,
-`sigma_logr = 0.5`): where `sigma_log_r` came back at least 0.30, the
+`sigma.logr = 0.5`): where `sigma_log_r` came back at least 0.30, the
 nominal 95% interval covered 33 of 34 with a `sqrt(mean(z^2))` of 0.88;
 where it came back below, it covered 2 of 5, the point estimate was 2.2x
 further from the truth and the SE 28% narrower. So read
@@ -66,7 +102,7 @@ scale `sd(mu_log_r) / mean(se)` reads 1.066 / 1.265 / 0.981, and the
 middle figure is the seed block rather than the estimator: `mu_log_r` is
 a POPULATION mean, each seed draws `S` log-dispersions around it, and
 that draw supplies about two thirds of the across-seed spread. The
-18-species blocks drew theirs 18-21% wider than `sigma_logr / sqrt(S)`.
+18-species blocks drew theirs 18-21% wider than `sigma.logr / sqrt(S)`.
 Put the draw at its expectation and the scale is 1.077 / 1.101 / 0.977;
 rebuild the SE at the simulated sigma as well and it is 0.990 / 1.035 /
 0.963 (NOTES_measurements.md). The residual there is the attenuation of

@@ -8,8 +8,8 @@ Simulate integrated multi-species occupancy data
 simulate_ms_int_occu(
   N = 100,
   J = c(3, 4),
-  n_species = 5,
-  n_data = 2,
+  n.species = 5,
+  n.data = 2,
   seed = NULL
 )
 ```
@@ -24,11 +24,11 @@ simulate_ms_int_occu(
 
   Vector of visits per source (default c(3, 4)).
 
-- n_species:
+- n.species:
 
   Number of species (default 5).
 
-- n_data:
+- n.data:
 
   Number of data sources (default 2).
 
@@ -48,6 +48,6 @@ the family this simulates for.
 ## Examples
 
 ``` r
-sim <- simulate_ms_int_occu(N = 40, n_species = 3, seed = 1)
+sim <- simulate_ms_int_occu(N = 40, n.species = 3, seed = 1)
 lapply(sim$y, dim)
 ```

@@ -1,5 +1,24 @@
 # N-mixture abundance with tulpaObs
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -139,9 +158,9 @@ replication to separate the two arms.
 
 sa <- simulate_abun(
   N = 200, J = 5,
-  n_abund_covs = 1, n_det_covs = 1,
-  beta_lambda = c(log(3), 0.5),   # log link: intercept is log(baseline lambda)
-  beta_p      = c(0.4, 0.3),      # logit link on detection
+  n.abund.covs = 1, n.det.covs = 1,
+  beta.lambda = c(log(3), 0.5),   # log link: intercept is log(baseline lambda)
+  beta.p      = c(0.4, 0.3),      # logit link on detection
   seed = 2
 )
 dat <- sa$data       # site covariates, one row per site
@@ -239,38 +258,38 @@ abundance, which is the right behaviour: a site with more animals leaves
 more room for the binomial thinning to vary the counts, so its posterior
 abundance is less certain.
 
-## The count ceiling K_max
+## The count ceiling K.max
 
 The marginal likelihood sums over abundance from each site’s maximum
-count up to a ceiling. That ceiling is `K_max`, and the fit chooses a
+count up to a ceiling. That ceiling is `K.max`, and the fit chooses a
 default from the data when you do not set it. The sum has to reach high
-enough that the Poisson mass above `K_max` is negligible; if `K_max`
+enough that the Poisson mass above `K.max` is negligible; if `K.max`
 sits too close to the true abundance, the model truncates probability
 that belongs in the likelihood and biases $`\lambda`$ downward.
 
-The default works for ordinary counts. You raise `K_max` when abundance
+The default works for ordinary counts. You raise `K.max` when abundance
 is large relative to detection, so the latent $`N`$ can sit far above
 any single count. A site with $`\lambda = 40`$ and detection 0.2 might
 never record more than a dozen animals on a visit, yet its abundance
 routinely exceeds thirty, and the sum has to climb past that. The
 symptom of a ceiling set too low is a boundary warning or an abundance
 estimate that drifts when you raise it. The check is to refit with a
-higher `K_max` and confirm the estimate is stable.
+higher `K.max` and confirm the estimate is stable.
 
 ``` r
 
-fa_k <- tobs(~ abund_cov1, data = dat, family = abun(),
+fa_k <- tobs(~ abund_cov1, data = dat, family = abun(K.max = 200),
              detection = ~ det_cov1, y = y, method = "laplace",
-             control = list(verbose = FALSE), K_max = 200)
+             control = list(verbose = FALSE))
 rbind(default_K = coef(fa, arm = "lambda"),
       K_max_200 = coef(fa_k, arm = "lambda"))
 ```
 
 The two fits agree to several decimals, so the default ceiling was
 already high enough here. On data where they disagree, take the
-higher-`K_max` fit and keep raising it until the estimate settles. The
+higher-`K.max` fit and keep raising it until the estimate settles. The
 cost of a generous ceiling is compute time, since the inner sum runs
-over more terms, and that cost is linear in `K_max`, so a ceiling a few
+over more terms, and that cost is linear in `K.max`, so a ceiling a few
 times the largest plausible abundance is a safe default rather than an
 expensive one.
 
@@ -284,7 +303,7 @@ $`\lambda`$ that fits its mass entirely below the ceiling, and the
 abundance estimate comes out biased low. The bias is invisible in any
 single fit; it shows only when you raise the ceiling and watch the
 estimate move. That is why the stability check is the diagnostic rather
-than any one number. A practical starting point is to set `K_max` to
+than any one number. A practical starting point is to set `K.max` to
 several times the largest count you would believe at the most abundant
 site, then confirm a doubling of it leaves the coefficients unchanged.
 The negative-binomial state, with its heavier tail, needs more headroom
@@ -325,9 +344,9 @@ Poisson value.
 ``` r
 
 sb <- simulate_abun(
-  N = 200, J = 5, n_abund_covs = 1, n_det_covs = 1,
+  N = 200, J = 5, n.abund.covs = 1, n.det.covs = 1,
   mixture = "negbin", size = 2,
-  beta_lambda = c(log(4), 0.4), beta_p = c(0.5, 0.2),
+  beta.lambda = c(log(4), 0.4), beta.p = c(0.5, 0.2),
   seed = 5
 )
 ```
@@ -529,9 +548,9 @@ round(vcov(fr), 4)
 
 [`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html)
 returns the per-group effects, the BLUPs, one row per group level and
-coefficient: the grouping factor, the level, the term, the estimate, and
-its standard error. The standard error is the genuine AGHQ marginal
-posterior spread, wider for groups with fewer sites.
+coefficient: the arm, the grouping factor, the level, the term, the
+estimate, and its standard error. The standard error is the genuine AGHQ
+marginal posterior spread, wider for groups with fewer sites.
 
 ``` r
 
@@ -754,11 +773,11 @@ A handful of rules of thumb make the rest of the modelling decisions.
   uncertainty, so a coefficient can read significant when it is not.
   When in doubt, fit both and compare the marginal log-likelihood.
 
-- **Raise K_max when abundance dwarfs detection.** The default ceiling
+- **Raise K.max when abundance dwarfs detection.** The default ceiling
   suits ordinary counts. When expected abundance is large and detection
   is small, the latent $`N`$ sits far above any visit’s count, and a
   ceiling set too low truncates the likelihood and biases $`\lambda`$
-  down. A workable rule is to set `K_max` to roughly three to five times
+  down. A workable rule is to set `K.max` to roughly three to five times
   the largest count you would believe at the richest site, then double
   it and confirm the coefficients do not move. The negative-binomial
   state needs the upper end of that range for the same mean, since its

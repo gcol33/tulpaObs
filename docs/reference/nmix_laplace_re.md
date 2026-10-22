@@ -309,7 +309,8 @@ nmix_laplace_re(
 
 - verbose:
 
-  Unused (kept for backward compatibility); the engine is silent.
+  Print the per-iteration community-covariance change of the
+  `optimizer = "em"` solver; the joint AGHQ optimizers are silent.
 
 ## Value
 
@@ -318,13 +319,16 @@ A list of class `nmix_re_fit`: `mu_lambda`, `mu_p` (community means),
 `(p_lambda + p_p)` square; marginalizes the community-covariance
 uncertainty rather than plugging in `Sigma`), `Sigma_lambda`, `Sigma_p`
 (community covariances), `b_lambda`, `b_p` (per-species BLUP deviations,
-`n_species` rows), `log_lik` (AGHQ marginal), `converged`, `K_max`,
-`n_quad`, `lkj_eta`, and (when `mixture = "NB"`) the dispersion
-summaries: `mu_log_r` (community-mean log-dispersion; its SE is the
-trailing `vcov` diagonal), `sigma_log_r` (the per-species log-dispersion
-SD), `b_logr` (per-species deviations), `r_s` (per-species sizes
-\\\exp(\mu\_{\log r} + b^{\log r}\_s)\\), and `r` equal to
-\\\exp(\mu\_{\log r})\\ (the community-mean size, the LogNormal median).
+`n_species` rows), `blup_cov_g` (per-species list of the posterior
+covariance of the species' stacked RE vector, lambda then p, then the
+`log_r` / `logit_omega` deviation when present), `log_lik` (AGHQ
+marginal), `converged`, `K_max`, `n_quad`, `lkj_eta`, and (when
+`mixture = "NB"`) the dispersion summaries: `mu_log_r` (community-mean
+log-dispersion; its SE is the trailing `vcov` diagonal), `sigma_log_r`
+(the per-species log-dispersion SD), `b_logr` (per-species deviations),
+`r_s` (per-species sizes \\\exp(\mu\_{\log r} + b^{\log r}\_s)\\), and
+`r` equal to \\\exp(\mu\_{\log r})\\ (the community-mean size, the
+LogNormal median).
 
 ## References
 

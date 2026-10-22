@@ -24,7 +24,7 @@ detection probability, or abundance intensity)."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,7 +75,7 @@ detection probability, or abundance intensity).</p>
 <span>  <span class="va">object</span>,</span>
 <span>  <span class="va">covariate</span>,</span>
 <span>  process <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"occupancy"</span>, <span class="st">"detection"</span>, <span class="st">"abundance"</span><span class="op">)</span>,</span>
-<span>  n_points <span class="op">=</span> <span class="fl">100L</span></span>
+<span>  n.points <span class="op">=</span> <span class="fl">100L</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -96,7 +96,7 @@ detection probability, or abundance intensity).</p>
 state process of a count family, on the intensity scale).</p></dd>
 
 
-<dt id="arg-n-points">n_points<a class="anchor" aria-label="anchor" href="#arg-n-points"></a></dt>
+<dt id="arg-n-points">n.points<a class="anchor" aria-label="anchor" href="#arg-n-points"></a></dt>
 <dd><p>Number of prediction points (default 100).</p></dd>
 
 </dl></div>
@@ -108,10 +108,10 @@ state process of a count family, on the intensity scale).</p></dd>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_abun.html">simulate_abun</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">4</span>, n_abund_covs <span class="op">=</span> <span class="fl">2</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_abun.html">simulate_abun</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">4</span>, n.abund.covs <span class="op">=</span> <span class="fl">2</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>                     seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">abund_cov1</span> <span class="op">+</span> <span class="va">abund_cov2</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>,</span>
-<span>            family <span class="op">=</span> <span class="fu"><a href="abun.html">abun</a></span><span class="op">(</span>K_max <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>,</span>
+<span>            family <span class="op">=</span> <span class="fu"><a href="abun.html">abun</a></span><span class="op">(</span>K.max <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>,</span>
 <span>            control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">me</span> <span class="op">&lt;-</span> <span class="fu">tobs_marginal_effect</span><span class="op">(</span><span class="va">fit</span>, <span class="st">"abund_cov1"</span>, process <span class="op">=</span> <span class="st">"abundance"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">me</span><span class="op">)</span>   <span class="co"># estimate is on the abundance (lambda) scale, not a probability</span></span>

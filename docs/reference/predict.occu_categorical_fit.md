@@ -30,3 +30,14 @@ predict(object, newdata, ...)
 
 A list with `psi` (length n), `cond` (n x K conditional class
 probabilities), and `joint` (n x (K+1): absent, then class 1..K).
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu_categorical(N = 300, seed = 1)
+fit <- tobs(~ x, data = sim$data, family = occu_categorical(), y = sim$y)
+pr <- predict(fit, newdata = data.frame(x = c(-1, 0, 1)))
+round(pr$joint, 3)
+# }
+```

@@ -30,7 +30,7 @@ negative log-likelihood, the same mechanism occu_priors() uses."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,10 +81,10 @@ negative log-likelihood, the same mechanism <code><a href="occu_priors.html">occ
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">cover_priors</span><span class="op">(</span></span>
-<span>  occ_intercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
-<span>  occ_slope <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span>,</span>
-<span>  pos_intercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span>
-<span>  pos_slope <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span></span>
+<span>  occ.intercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  occ.slope <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span>,</span>
+<span>  pos.intercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  pos.slope <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -92,22 +92,22 @@ negative log-likelihood, the same mechanism <code><a href="occu_priors.html">occ
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-occ-intercept">occ_intercept<a class="anchor" aria-label="anchor" href="#arg-occ-intercept"></a></dt>
+<dl><dt id="arg-occ-intercept">occ.intercept<a class="anchor" aria-label="anchor" href="#arg-occ-intercept"></a></dt>
 <dd><p>Prior on the occurrence (presence) intercept, logit
 scale. <code>list(mean, sd)</code>. Default <code>list(mean = 0, sd = 2)</code>.</p></dd>
 
 
-<dt id="arg-occ-slope">occ_slope<a class="anchor" aria-label="anchor" href="#arg-occ-slope"></a></dt>
+<dt id="arg-occ-slope">occ.slope<a class="anchor" aria-label="anchor" href="#arg-occ-slope"></a></dt>
 <dd><p>Prior on occurrence slopes. Default
 <code>list(mean = 0, sd = 2.5)</code>.</p></dd>
 
 
-<dt id="arg-pos-intercept">pos_intercept<a class="anchor" aria-label="anchor" href="#arg-pos-intercept"></a></dt>
+<dt id="arg-pos-intercept">pos.intercept<a class="anchor" aria-label="anchor" href="#arg-pos-intercept"></a></dt>
 <dd><p>Prior on the positive-cover intercept (logit scale for
 <code>"beta"</code>, log scale for <code>"lognormal"</code>). Default <code>list(mean = 0, sd = 3)</code>.</p></dd>
 
 
-<dt id="arg-pos-slope">pos_slope<a class="anchor" aria-label="anchor" href="#arg-pos-slope"></a></dt>
+<dt id="arg-pos-slope">pos.slope<a class="anchor" aria-label="anchor" href="#arg-pos-slope"></a></dt>
 <dd><p>Prior on positive-cover slopes. Default
 <code>list(mean = 0, sd = 2.5)</code>.</p></dd>
 
@@ -144,8 +144,8 @@ nested-Laplace path to combine the two.</p>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># regularise the occurrence arm, leave the positive arm unpenalised</span></span>
-<span><span class="va">priors</span> <span class="op">&lt;-</span> <span class="fu">cover_priors</span><span class="op">(</span>pos_intercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span>,</span>
-<span>                       pos_slope     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">priors</span> <span class="op">&lt;-</span> <span class="fu">cover_priors</span><span class="op">(</span>pos.intercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span>,</span>
+<span>                       pos.slope     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>mean <span class="op">=</span> <span class="fl">0</span>, sd <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">priors</span></span>
 <span></span>
 <span><span class="co"># \donttest{</span></span>

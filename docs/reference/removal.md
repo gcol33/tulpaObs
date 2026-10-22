@@ -6,21 +6,21 @@ ordered removal passes, where pass `k` removes
 `Binomial(N_i - sum_{l<k} y_{il}, p_{ik})` of the individuals still
 present. The declining catch sequence identifies detection `p` and
 abundance `N`; the latent `N` is summed out in closed form (truncation
-`K_max`), so the fit is a direct Laplace approximation (no EM), with a
+`K.max`), so the fit is a direct Laplace approximation (no EM), with a
 NUTS path over the same marginal.
 
 ## Usage
 
 ``` r
-removal(K_max = NULL, mixture = c("poisson", "negbin"))
+removal(K.max = NULL, mixture = c("poisson", "negbin"))
 ```
 
 ## Arguments
 
-- K_max:
+- K.max:
 
   upper bound for the latent-abundance marginal sum (the exact
-  integration over `N` is truncated at `K_max`). `NULL` (default) lets
+  integration over `N` is truncated at `K.max`). `NULL` (default) lets
   the engine pick `max(y) + 100` (matching
   [`unmarked::pcount()`](https://ecoverseR.github.io/unmarked/reference/pcount.html));
   raise it if a fit warns that the posterior over `N` puts mass on the
@@ -52,6 +52,24 @@ per-pass detection (`logit p`) model. The response `y` is an
 `n_sites x K` integer matrix of per-pass removals with the passes in
 column order; complete pass sequences are required (no `NA`).
 
+## Engines
+
+- `method = "laplace"` – a direct Laplace approximation over the
+  closed-form marginal (Poisson or negative binomial); a grouped random
+  effect is integrated by adaptive Gauss-Hermite quadrature.
+
+- `method = "nested_laplace"` – an areal
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field on the abundance arm, optionally composed with a
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field, through the shared areal-BFGS driver.
+
+- `method = "nuts"` – the in-tree C++ NUTS sampler over the same
+  marginal, with a fixed-hyper areal or temporal field block on the
+  abundance arm (one of the two, not both).
+
 ## References
 
 Royle, J. A. (2004). N-mixture models for estimating population size
@@ -62,6 +80,6 @@ of abundance. *Biometrics* 61, 1093-1101.
 ## Examples
 
 ``` r
-f <- removal(K_max = 100)
+f <- removal(K.max = 100)
 f
 ```

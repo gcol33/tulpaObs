@@ -26,7 +26,7 @@ template. The specific model is chosen via the family argument; the engine
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -110,9 +110,9 @@ or an expression. Matrix / array / list response families (<code><a href="occu.h
 response via <code>y =</code>; a two-sided formula for those errors.</p>
 <p>Structured effects are written as terms inside the formula, the way
 <code>lme4</code>, <code>mgcv</code>, and <code>INLA</code> do: spatial fields <code>icar(graph = adj)</code>,
-<code>bym2(graph = adj)</code>, <code>gp(lon, lat, prior_range = c(r0, alpha))</code>,
+<code>bym2(graph = adj)</code>, <code>gp(lon, lat, prior.range = c(r0, alpha))</code>,
 <code>spde(lon, lat)</code>; random effects <code>re(group)</code>; temporal fields
-<code>temporal(time)</code>; spatially varying coefficients <code>spatial(~ 1 + w || cell, graph = adj)</code> over a graph or <code>spatial(lon, lat, model = "svc", coefficients = ..., prior_range = c(r0, alpha))</code> over coordinates;
+<code>temporal(time)</code>; spatially varying coefficients <code>spatial(~ 1 + w || cell, graph = adj)</code> over a graph or <code>spatial(lon, lat, model = "svc", coefficients = ..., prior.range = c(r0, alpha))</code> over coordinates;
 community latent factors
 <code>latent(k)</code>. A term enters whichever linear predictor it is written in
 (occupancy <code>formula</code> or <code>detection</code>). To share one realization across
@@ -128,11 +128,11 @@ umbrella also reads a varying-coefficient bar
 (<code>spatial(~ 1 + w || cell, graph = adj)</code>), so both flavours of
 spatially-varying coefficient – areal over a graph, continuous over
 coordinates (<code>model = "svc"</code>) – are written through the same verb.</p>
-<p>The continuous fields (<code><a href="tobs_terms.html">gp()</a></code>, <code><a href="tobs_terms.html">svc()</a></code>, <code><a href="tobs_terms.html">spde()</a></code>) require <code>prior_range = c(r0, alpha)</code>, a penalized-complexity prior on the spatial range encoding
+<p>The continuous fields (<code><a href="tobs_terms.html">gp()</a></code>, <code><a href="tobs_terms.html">svc()</a></code>, <code><a href="tobs_terms.html">spde()</a></code>) require <code>prior.range = c(r0, alpha)</code>, a penalized-complexity prior on the spatial range encoding
 <code>P(range &lt; r0) = alpha</code> (Fuglstad et al. 2019). The range is in the units
 of the coordinates – the kernel is <code>exp(-d / range)</code> – so choose <code>r0</code> as
 a distance below which the field's correlation would be surprisingly short:
-on unit-square coordinates <code>prior_range = c(0.1, 0.05)</code> reads as "a 5%
+on unit-square coordinates <code>prior.range = c(0.1, 0.05)</code> reads as "a 5%
 chance the range is under 0.1". There is no default, deliberately. The
 range is weakly identified by the likelihood alone, so a default would be
 an invented prior doing real work on the posterior rather than a
@@ -228,28 +228,42 @@ detection logit on the visits it made. It is fitted with
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
 <dd><p>inference route, naming a fully-specified path rather than a
-pair of orthogonal knobs:</p><ul><li><p><code>"auto"</code> – the family's default route (see <code>default_engine</code>).</p></li>
-<li><p><code>"laplace"</code> – EM + Laplace with Gaussian marginals (fast default).</p></li>
+pair of orthogonal knobs. Each family accepts a subset of the routes below
+(listed per route, from the package's support table); an unsupported
+method errors with the list of methods that family supports, and the
+structured terms a route carries for a given family are on that family's
+help page.</p><ul><li><p><code>"auto"</code> – the family's default route (see <code>default_engine</code>).</p></li>
+<li><p><code>"laplace"</code> – EM + Laplace with Gaussian marginals (fast default).
+Every family except <code><a href="t_occu.html">t_occu()</a></code>.</p></li>
 <li><p><code>"laplace_sla"</code> – Laplace with skew-corrected (simplified-Laplace)
-marginals.</p></li>
+marginals. <code><a href="occu.html">occu()</a></code>, <code><a href="dyn_occu.html">dyn_occu()</a></code>, <code><a href="int_occu.html">int_occu()</a></code>, <code><a href="cover.html">cover()</a></code>.</p></li>
 <li><p><code>"laplace_gibbs"</code> / <code>"laplace_mi"</code> – Laplace with a post-EM Gibbs /
 multiple-imputation correction. The fixed-effect prior threads into the
 correction refits, so these use the same
 weakly-informative default prior as <code>"laplace"</code>; pass <code>priors = FALSE</code>
-for the unpenalised correction.</p></li>
-<li><p><code>"pg_gibbs"</code> – a Polya-Gamma Gibbs sampler over the exact single-season
-occupancy posterior (the spOccupancy <code>PGOcc</code> engine). A real MCMC chain
+for the unpenalised correction. <code><a href="occu.html">occu()</a></code>, <code><a href="dyn_occu.html">dyn_occu()</a></code>, <code><a href="int_occu.html">int_occu()</a></code>.</p></li>
+<li><p><code>"pg_gibbs"</code> – a Polya-Gamma Gibbs sampler over the exact occupancy
+posterior (the spOccupancy <code>PGOcc</code> engines). A real MCMC chain
 (with <code>Rhat</code> / <code>ESS</code> diagnostics), distinct from <code>"laplace_gibbs"</code> (a
 stochastic-EM variance correction). Sampler controls (<code>n.iter</code>,
-<code>n.warmup</code>, <code>n.chains</code>, <code>n.thin</code>, <code>seed</code>, <code>sigma.beta</code>). v1: single-season
-<code><a href="occu.html">occu()</a></code>, site-level detection, no structured terms.</p></li>
-<li><p><code>"nested_laplace"</code> – multi-block nested Laplace (single-season
-occupancy and cover-hurdle joint).</p></li>
-<li><p><code>"nested_laplace_sla"</code> – nested Laplace with skew-corrected marginals.</p></li>
-<li><p><code>"nuts"</code> – HMC / NUTS sampler (every structure; reports Rhat / ESS).
-Not every method is available for every family (e.g. the cover hurdle has
-no <code>"nuts"</code> path; <code>"nested_laplace"</code> is occupancy- and cover-only). An
-unsupported method errors with the list of methods that family supports.</p></li>
+<code>n.warmup</code>, <code>n.chains</code>, <code>n.thin</code>, <code>seed</code>, <code>sigma.beta</code>). <code><a href="occu.html">occu()</a></code>
+(site-level detection; an <code><a href="tobs_terms.html">icar()</a></code> field on occupancy), <code><a href="ms_occu.html">ms_occu()</a></code>,
+<code><a href="ms_dyn_occu.html">ms_dyn_occu()</a></code>, <code><a href="ms_int_occu.html">ms_int_occu()</a></code>, <code><a href="jsdm.html">jsdm()</a></code>, <code><a href="ms_count.html">ms_count()</a></code>, and
+<code><a href="t_occu.html">t_occu()</a></code>, whose only route it is.</p></li>
+<li><p><code>"nested_laplace"</code> – multi-block nested Laplace: the structured terms
+(areal fields, shared cover-hurdle fields, latent factors) are
+integrated over a grid of their hyperparameters. <code><a href="occu.html">occu()</a></code>,
+<code><a href="dyn_occu.html">dyn_occu()</a></code>, <code><a href="int_occu.html">int_occu()</a></code>, <code><a href="dyn_int_occu.html">dyn_int_occu()</a></code>, <code><a href="ms_occu.html">ms_occu()</a></code>,
+<code><a href="ms_dyn_occu.html">ms_dyn_occu()</a></code>, <code><a href="jsdm.html">jsdm()</a></code>, <code><a href="count.html">count()</a></code>, <code><a href="ms_count.html">ms_count()</a></code>, <code><a href="abun.html">abun()</a></code>,
+<code><a href="ms_abun.html">ms_abun()</a></code>, <code><a href="dyn_abun.html">dyn_abun()</a></code>, <code><a href="removal.html">removal()</a></code>, <code><a href="distance.html">distance()</a></code>, <code><a href="ms_distance.html">ms_distance()</a></code>,
+<code><a href="fp_occu.html">fp_occu()</a></code>, <code><a href="cover.html">cover()</a></code>, <code><a href="occu_cover.html">occu_cover()</a></code>, <code><a href="occu_multiscale_cover.html">occu_multiscale_cover()</a></code>.</p></li>
+<li><p><code>"nested_laplace_sla"</code> – nested Laplace with skew-corrected marginals.
+<code><a href="occu.html">occu()</a></code>, <code><a href="cover.html">cover()</a></code>.</p></li>
+<li><p><code>"nuts"</code> – HMC / NUTS sampler (reports Rhat / ESS). <code><a href="occu.html">occu()</a></code>,
+<code><a href="dyn_occu.html">dyn_occu()</a></code>, <code><a href="int_occu.html">int_occu()</a></code>, <code><a href="ms_occu.html">ms_occu()</a></code>, <code><a href="ms_dyn_occu.html">ms_dyn_occu()</a></code>,
+<code><a href="ms_int_occu.html">ms_int_occu()</a></code>, <code><a href="jsdm.html">jsdm()</a></code>, <code><a href="ms_count.html">ms_count()</a></code>, <code><a href="abun.html">abun()</a></code>, <code><a href="ms_abun.html">ms_abun()</a></code>,
+<code><a href="dyn_abun.html">dyn_abun()</a></code>, <code><a href="removal.html">removal()</a></code>, <code><a href="distance.html">distance()</a></code>, <code><a href="fp_occu.html">fp_occu()</a></code>, <code><a href="cover.html">cover()</a></code>,
+<code><a href="occu_cover.html">occu_cover()</a></code>, <code><a href="ms_occu_cover.html">ms_occu_cover()</a></code>, <code><a href="occu_multiscale_cover.html">occu_multiscale_cover()</a></code>.</p></li>
 </ul></dd>
 
 
@@ -289,7 +303,8 @@ gradient evaluation.</p></li>
 community NUTS target (<code><a href="ms_occu.html">ms_occu()</a></code>, <code><a href="ms_count.html">ms_count()</a></code> / <code><a href="jsdm.html">jsdm()</a></code>,
 <code><a href="ms_abun.html">ms_abun()</a></code>, <code><a href="ms_dyn_occu.html">ms_dyn_occu()</a></code>), whose per-species loop is parallel.
 Default 0 leaves the count to OpenMP. The per-species reduction is
-serial and order-fixed, so the gradient is the same at any count.</p></li>
+serial and order-fixed, so the gradient is the same at any count.
+Rejected on the other families.</p></li>
 <li><p><code>adapt.delta</code> – target acceptance probability (default 0.8 on the
 single-species families, 0.9 on the community samplers).</p></li>
 <li><p><code>max.treedepth</code> – NUTS maximum tree depth (default 10).</p></li>
@@ -303,10 +318,12 @@ multiplicative; 5 on the logit-link community samplers <code><a href="ms_occu.ht
 <code><a href="ms_dyn_occu.html">ms_dyn_occu()</a></code>, <code><a href="ms_int_occu.html">ms_int_occu()</a></code>, <code><a href="ms_occu_cover.html">ms_occu_cover()</a></code>).</p></li>
 <li><p><code>sigma.logr</code> – prior SD on the community-mean log-dispersion <code>mu_log_r</code>
 (default 1.5), on the negative-binomial samplers that carry one
-(<code><a href="ms_abun.html">ms_abun()</a></code>, <code><a href="ms_count.html">ms_count()</a></code>, <code><a href="jsdm.html">jsdm()</a></code>). At the default this is an
+(<code><a href="ms_abun.html">ms_abun()</a></code>, <code><a href="ms_count.html">ms_count()</a></code>, <code><a href="jsdm.html">jsdm()</a></code>), and on the log-dispersion and
+grouped random-effect log-SD of the <code><a href="abun.html">abun()</a></code> / <code><a href="removal.html">removal()</a></code> /
+<code><a href="distance.html">distance()</a></code> samplers. At the default this is an
 informative prior on the dispersion scale, so raise it to compare the
-sampler against a maximum-likelihood target. Ignored where the family or
-mixture has no log-dispersion arm.</p></li>
+sampler against a maximum-likelihood target. Ignored under a Poisson
+mixture; rejected on the other families.</p></li>
 </ul><p>Sampler controls (<code>method = "pg_gibbs"</code>). A conjugate sweep is far cheaper
 than a NUTS trajectory, so the chain is longer and two chains run by
 default. <strong><code>n.iter</code> counts differently here</strong>: it is the TOTAL number of
@@ -326,7 +343,7 @@ those are HMC knobs.</p></li>
 <li><p><code>n.seeds</code> – number of seed-offset refits to fit and LOO-stack into a
 <code>tobs_stack</code> ensemble (default 1, a single fit). Member <code>k</code> uses base
 seed <code>seed + k - 1</code>. Only meaningful for the stochastic routes
-(<code>"nuts"</code>, <code>"laplace_gibbs"</code>, <code>"laplace_mi"</code>); the deterministic Laplace
+(<code>"nuts"</code>, <code>"pg_gibbs"</code>, <code>"laplace_gibbs"</code>, <code>"laplace_mi"</code>); the deterministic Laplace
 methods reject it. Seed-variants are statistically identical, so their
 stacking weights come out roughly uniform (this is a Monte-Carlo
 robustness device) – pass distinct fits to <code><a href="tobs_stack.html">tobs_stack()</a></code> for a genuine
@@ -366,7 +383,7 @@ coordinate, integrated separately.
 Community joint occupancy-cover (<code><a href="ms_occu_cover.html">ms_occu_cover()</a></code>): 5. Tensor AGHQ over
 the joint per-species RE vector, so the node count is raised to a power
 of the RE dimension and stays small.
-Latent cover-per-unit (<code>cover_aggregate = "latent"</code>): 15 for a beta cover
+Latent cover-per-unit (<code>cover.aggregate = "latent"</code>): 15 for a beta cover
 arm, 1 for lognormal, whose per-unit marginal is closed form and needs no
 quadrature at all.
 Community <code><a href="tobs_terms.html">latent()</a></code> factors: 5, the Gauss-Hermite nodes the joint site
@@ -435,6 +452,15 @@ two compose and neither implies the other. The saving is largest where a
 fit carries several outer axes – two spatial arms (a shared field plus an
 arm-specific one) put three on the grid, which <code>integration = "auto"</code>
 resolves to the dense tensor.</p></li>
+<li><p><code>max.grid.cells</code> – for the same joint-coupled spatial families, an
+opt-in ceiling on the dense outer tensor's cell count (the engine's
+<code>max_grid_cells</code>, unset by default). A grid past it is refused before any
+inner solve, with the axes that produced the count. The count is the
+number of inner solves: two copied field blocks at the default field-SD
+and copy axes cross to 2500 latent cells, and an active positive-arm
+dispersion grid multiplies that by its node count. Unset, a tensor of any
+size is solved, including the one a declined <code>integration = "grid_adaptive"</code> falls back to, and one past 2048 cells is announced with
+a warning first.</p></li>
 <li><p><code>diagnose.k</code> – for the joint-coupled spatial families (<code><a href="occu_cover.html">occu_cover()</a></code>,
 <code><a href="occu.html">occu()</a></code> spatial, <code><a href="occu_multiscale_cover.html">occu_multiscale_cover()</a></code>), whether to score the outer
 hyperparameter Gaussian summary with an importance-sampling Pareto-k.
@@ -484,13 +510,13 @@ call; for a community model that borrows strength across species use
 <code><a href="ms_occu_cover.html">ms_occu_cover()</a></code>. The long -&gt; response pivot needs the column names: pass
 <code>site = </code> and <code>response = </code> (the detection 0/1 column for <code><a href="occu_cover.html">occu_cover()</a></code>,
 the cover column for <code><a href="cover.html">cover()</a></code>), plus, for <code><a href="occu_cover.html">occu_cover()</a></code>, <code>visit = </code> (the
-replicate column) and <code>y_pos = </code> (the cover column) and any visit-level
+replicate column) and <code>y.pos = </code> (the cover column) and any visit-level
 <code>det.covs = </code>. Site-level covariates (those the <code>formula</code> / <code>detection</code>
 reference at the cell level) are read as the first row per site, the way
 <code><a href="tobs_data.html">tobs_data()</a></code><code>(occ.covs = )</code> does.</p>
 <p>The same long-frame contract drives a SINGLE <code><a href="occu_cover.html">occu_cover()</a></code> fit when <code>by</code>
 is omitted: pass <code>site = </code>, <code>visit = </code>, <code>response = </code> (the 0/1 detection
-column) and <code>y_pos = </code> (the cover column), plus any visit-level
+column) and <code>y.pos = </code> (the cover column), plus any visit-level
 <code>det.covs = </code>, with a long, plot-level <code>data</code>, and <code>tobs()</code> builds the
 paired occurrence / cover arms and the site-level design for you – the
 by= batch reduced to one species, so you no longer hand-build the two
@@ -523,7 +549,7 @@ refits is returned instead (see <code><a href="tobs_stack.html">tobs_stack()</a>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
 <span><span class="co"># Single-season occupancy</span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">3</span>, n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">3</span>, n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>                     seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">tobs</span><span class="op">(</span></span>
 <span>  formula   <span class="op">=</span> <span class="op">~</span> <span class="va">occ_cov1</span>,</span>

@@ -1,0 +1,23 @@
+citHeader("To cite the tulpaObs package in publications, use:")
+
+year <- sub("-.*", "", meta$Date)
+if (!length(year) || is.na(year) || !nzchar(year)) {
+  year <- format(Sys.Date(), "%Y")
+}
+note <- sprintf("R package version %s", meta$Version)
+
+bibentry(
+  bibtype = "Manual",
+  key     = "colling2026tulpaobs",
+  title   = "{tulpaObs}: Bayesian Occupancy, Abundance and Detection Models via 'tulpa'",
+  author  = person("Gilles", "Colling",
+                   comment = c(ORCID = "0000-0003-3070-6066")),
+  year    = year,
+  note    = note,
+  url     = "https://gillescolling.com/tulpaObs/",
+  textVersion = paste0(
+    "Colling, G. (", year, "). ",
+    "tulpaObs: Bayesian Occupancy, Abundance and Detection Models via 'tulpa'. ",
+    note, ". https://gillescolling.com/tulpaObs/"
+  )
+)

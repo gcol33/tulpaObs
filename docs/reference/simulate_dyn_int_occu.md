@@ -11,7 +11,7 @@ per-source detection probability.
 ``` r
 simulate_dyn_int_occu(
   N = 200,
-  T_seasons = 4,
+  T.seasons = 4,
   S = 2,
   J = 3,
   psi1 = 0.5,
@@ -20,7 +20,7 @@ simulate_dyn_int_occu(
   p = c(0.4, 0.6),
   field = NULL,
   trend = NULL,
-  source_seasons = NULL,
+  source.seasons = NULL,
   seed = NULL
 )
 ```
@@ -31,7 +31,7 @@ simulate_dyn_int_occu(
 
   Number of sites (default 200).
 
-- T_seasons:
+- T.seasons:
 
   Number of seasons (default 4).
 
@@ -66,9 +66,9 @@ simulate_dyn_int_occu(
   Default `NULL`. When set, `data` carries a `cell` node index (`1..N`)
   and the covariate `w` for the bar `spatial(~ 1 + w || cell, graph)`.
 
-- source_seasons:
+- source.seasons:
 
-  Optional length-`S` list; `source_seasons[[s]]` is the integer vector
+  Optional length-`S` list; `source.seasons[[s]]` is the integer vector
   of seasons source `s` observes (partial season overlap). The seasons a
   source does not cover are set to `NA` in its array – the staggered
   survey where sources rarely share the full season grid. Default `NULL`
@@ -86,6 +86,6 @@ A list with `y` (a length-`S` list of `[N x J x T]` arrays), `data`,
 ## Examples
 
 ``` r
-sim <- simulate_dyn_int_occu(N = 40, T_seasons = 3, seed = 1)
+sim <- simulate_dyn_int_occu(N = 40, T.seasons = 3, seed = 1)
 lapply(sim$y, dim)
 ```

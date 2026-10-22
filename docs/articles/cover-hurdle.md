@@ -1,5 +1,24 @@
 # Cover hurdle (independent arms)
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ## Introduction
 
 Vegetation cover comes with a pile of zeros. A plot either holds a
@@ -125,9 +144,9 @@ is the case the hurdle split is built to separate.
 library(tulpaObs)
 sim <- simulate_cover(
   N         = 400,
-  beta_occ  = c(-0.4, 0.7),
-  beta_pos  = c(-1.0, 0.3),
-  sigma_pos = 0.4,
+  beta.occ  = c(-0.4, 0.7),
+  beta.pos  = c(-1.0, 0.3),
+  sigma.pos = 0.4,
   seed      = 7
 )
 head(sim$data)
@@ -179,10 +198,10 @@ with a binomial and the spread with the positive family, each on its own
 data.
 
 The simulator exposes the knobs that matter for the fit’s behaviour.
-`beta_occ` sets the occurrence intercept and slope, so lowering the
+`beta.occ` sets the occurrence intercept and slope, so lowering the
 intercept thins the positives and raising the slope sharpens the
-dependence of presence on `x`; `beta_pos` does the same for conditional
-cover. `sigma_pos` is the lognormal residual SD, the width of the
+dependence of presence on `x`; `beta.pos` does the same for conditional
+cover. `sigma.pos` is the lognormal residual SD, the width of the
 positive distribution on the log scale, and shrinking it tightens the
 cover values around the fitted curve. The `seed` argument fixes the
 random draw so the example reproduces exactly, which is what lets the
@@ -256,7 +275,7 @@ data. The occurrence arm carries no dispersion parameter at all, being a
 binomial with the trial count fixed at one.
 
 Two arms means two convergence states folded into one flag.
-`fit$converged` is `TRUE` only when both the binomial and the Gaussian
+`converged(fit)` is `TRUE` only when both the binomial and the Gaussian
 Laplace solves converged, so a single number reports the health of the
 whole hurdle. The per-arm marginal likelihoods sit in `fit$log_marginal`
 under the names `occ` and `pos`, which the model-comparison section

@@ -22,3 +22,10 @@ print(x, ...)
 ## Value
 
 `x`, invisibly.
+
+## Examples
+
+``` r
+occu()
+abun(mixture = "negbin")
+```

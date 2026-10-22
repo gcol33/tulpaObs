@@ -12,10 +12,10 @@ exponential time-to-detection at rate `lambda` over a survey of length
 simulate_occu_ttd(
   N = 200,
   J = 4,
-  n_psi_covs = 1,
-  n_rate_covs = 1,
-  beta_psi = NULL,
-  beta_rate = NULL,
+  n.psi.covs = 1,
+  n.rate.covs = 1,
+  beta.psi = NULL,
+  beta.rate = NULL,
   Tmax = 3,
   seed = NULL
 )
@@ -31,19 +31,19 @@ simulate_occu_ttd(
 
   Number of replicate surveys per site (default 4).
 
-- n_psi_covs, n_rate_covs:
+- n.psi.covs, n.rate.covs:
 
   Number of occupancy / rate covariates.
 
-- beta_psi:
+- beta.psi:
 
   Occupancy coefficients `c(intercept, slopes...)` (logit). Default
-  `c(qlogis(0.6), runif(n_psi_covs, -0.5, 0.5))`.
+  `c(qlogis(0.6), runif(n.psi.covs, -0.5, 0.5))`.
 
-- beta_rate:
+- beta.rate:
 
   Log detection-rate coefficients `c(intercept, slopes...)`. Default
-  `c(log(0.6), runif(n_rate_covs, -0.4, 0.4))`.
+  `c(log(0.6), runif(n.rate.covs, -0.4, 0.4))`.
 
 - Tmax:
 

@@ -8,12 +8,12 @@ generative model:
 ``` r
 simulate_cover(
   N = 200L,
-  beta_occ = c(-0.5, 0.8),
-  beta_pos = c(-1, 0.3),
-  sigma_pos = 0.4,
+  beta.occ = c(-0.5, 0.8),
+  beta.pos = c(-1, 0.3),
+  sigma.pos = 0.4,
   response = c("lognormal", "gaussian"),
-  spatial_range = NULL,
-  spatial_var = 1,
+  spatial.range = NULL,
+  spatial.var = 1,
   seed = NULL
 )
 ```
@@ -24,15 +24,15 @@ simulate_cover(
 
   Number of sites (default 200).
 
-- beta_occ:
+- beta.occ:
 
   Length-2 occurrence coefficients (intercept, slope on x).
 
-- beta_pos:
+- beta.pos:
 
   Length-2 log-cover coefficients (intercept, slope on x).
 
-- sigma_pos:
+- sigma.pos:
 
   Lognormal residual standard deviation (default 0.4).
 
@@ -40,12 +40,12 @@ simulate_cover(
 
   Positive-arm likelihood: `"lognormal"` (default) or `"gaussian"`.
 
-- spatial_range:
+- spatial.range:
 
   Length scale of the exponential spatial field (in unit-square
   distance). `NULL` disables the spatial layer.
 
-- spatial_var:
+- spatial.var:
 
   Marginal variance of the spatial field (default 1).
 
@@ -102,7 +102,7 @@ A list with:
   = exp(log_cover) when occur = 1, else 0
 
 Both layers share the same design matrix by default (one continuous
-covariate plus an intercept). When `spatial_range` is supplied, a simple
+covariate plus an intercept). When `spatial.range` is supplied, a simple
 exponential-kernel Gaussian field on a random unit-square coordinate set
 is added to both linear predictors; the two layers see independently
 simulated draws of that field, which matches the two-independent-arm

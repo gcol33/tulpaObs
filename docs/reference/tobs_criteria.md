@@ -74,7 +74,7 @@ pointwise_loglik(object, ndraws = NULL, ...)
   correspondingly higher and are the diagnostic to read before trusting
   the cell-level number. Implemented for
   [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md)
-  (the areal field node, when sites are grouped via `group_var`) and
+  (the areal field node, when sites are grouped via `group.var`) and
   [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
   (the `site_cell` map); a non-spatial fit has no cells, so `"cell"`
   errors there. Equivalent to passing `group =` the cell map directly,
@@ -147,3 +147,18 @@ are tulpa's, and return a `tulpa_criteria` object.
 
 [`tulpa::tulpa_criteria()`](https://gillescolling.com/tulpa/reference/tulpa_criteria.html),
 [`loo::loo_compare()`](https://mc-stan.org/loo/reference/loo_compare.html)
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+waic(fit)
+loo(fit)
+dic(fit)
+# }
+```

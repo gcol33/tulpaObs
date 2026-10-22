@@ -28,7 +28,7 @@ sigma_pos = alpha * sigma is the derived ratio surfaced as the
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,14 +80,14 @@ supplied region adjacency. The cover-arm field amplitude
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_cover_joint</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">300L</span>,</span>
 <span>  <span class="va">adj</span>,</span>
-<span>  beta_occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.3</span>, <span class="fl">0.7</span><span class="op">)</span>,</span>
-<span>  beta_pos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.4</span>, <span class="op">-</span><span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>  beta.occ <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.3</span>, <span class="fl">0.7</span><span class="op">)</span>,</span>
+<span>  beta.pos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.4</span>, <span class="op">-</span><span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="fl">0.6</span>,</span>
 <span>  rho <span class="op">=</span> <span class="fl">0.7</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  positive <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta"</span>, <span class="st">"lognormal"</span>, <span class="st">"gaussian"</span><span class="op">)</span>,</span>
 <span>  phi <span class="op">=</span> <span class="fl">30</span>,</span>
-<span>  sigma_pos_resid <span class="op">=</span> <span class="fl">0.4</span>,</span>
+<span>  sigma.pos.resid <span class="op">=</span> <span class="fl">0.4</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -104,11 +104,11 @@ supplied region adjacency. The cover-arm field amplitude
 <dd><p><code>n_s x n_s</code> integer adjacency matrix for the BYM2 field.</p></dd>
 
 
-<dt id="arg-beta-occ">beta_occ<a class="anchor" aria-label="anchor" href="#arg-beta-occ"></a></dt>
+<dt id="arg-beta-occ">beta.occ<a class="anchor" aria-label="anchor" href="#arg-beta-occ"></a></dt>
 <dd><p>Length-2 occurrence coefficients (intercept + slope).</p></dd>
 
 
-<dt id="arg-beta-pos">beta_pos<a class="anchor" aria-label="anchor" href="#arg-beta-pos"></a></dt>
+<dt id="arg-beta-pos">beta.pos<a class="anchor" aria-label="anchor" href="#arg-beta-pos"></a></dt>
 <dd><p>Length-2 cover-arm coefficients (intercept + slope).</p></dd>
 
 
@@ -136,7 +136,7 @@ occurrence-arm linear predictor adds <code>sigma * z[region]</code>.</p></dd>
 <dd><p>Beta precision when <code>positive = "beta"</code> (default 30).</p></dd>
 
 
-<dt id="arg-sigma-pos-resid">sigma_pos_resid<a class="anchor" aria-label="anchor" href="#arg-sigma-pos-resid"></a></dt>
+<dt id="arg-sigma-pos-resid">sigma.pos.resid<a class="anchor" aria-label="anchor" href="#arg-sigma-pos-resid"></a></dt>
 <dd><p>Lognormal residual SD when <code>positive = "lognormal"</code> (default 0.4); independent of the spatial <code>sigma</code>.</p></dd>
 
 

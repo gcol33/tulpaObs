@@ -115,9 +115,10 @@ nmix_laplace_car_proper(
 - K_max:
 
   Truncation for the per-site marginal sum over N. Defaults to
-  `max(y) + 100`. Returned `boundary_max` flags any grid point whose
-  worst site puts non-trivial mass on `K_max` – raise `K_max` if it
-  exceeds 1e-4.
+  `max(y) + 100`. Returned `boundary_max` holds, per grid point, the
+  worst site's posterior mass on `K_max`; the fit warns when the
+  grid-weighted mass `sum(weights * boundary_max)` exceeds 1e-4 – raise
+  `K_max` then.
 
 - max_iter, tol:
 

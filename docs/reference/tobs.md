@@ -50,11 +50,11 @@ tobs(
 
   Structured effects are written as terms inside the formula, the way
   `lme4`, `mgcv`, and `INLA` do: spatial fields `icar(graph = adj)`,
-  `bym2(graph = adj)`, `gp(lon, lat, prior_range = c(r0, alpha))`,
+  `bym2(graph = adj)`, `gp(lon, lat, prior.range = c(r0, alpha))`,
   `spde(lon, lat)`; random effects `re(group)`; temporal fields
   `temporal(time)`; spatially varying coefficients
   `spatial(~ 1 + w || cell, graph = adj)` over a graph or
-  `spatial(lon, lat, model = "svc", coefficients = ..., prior_range = c(r0, alpha))`
+  `spatial(lon, lat, model = "svc", coefficients = ..., prior.range = c(r0, alpha))`
   over coordinates; community latent factors `latent(k)`. A term enters
   whichever linear predictor it is written in (occupancy `formula` or
   `detection`). To share one realization across both predictors, tag the
@@ -77,12 +77,12 @@ tobs(
   ([`gp()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
   [`svc()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md),
   [`spde()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md))
-  require `prior_range = c(r0, alpha)`, a penalized-complexity prior on
+  require `prior.range = c(r0, alpha)`, a penalized-complexity prior on
   the spatial range encoding `P(range < r0) = alpha` (Fuglstad et al.
   2019). The range is in the units of the coordinates – the kernel is
   `exp(-d / range)` – so choose `r0` as a distance below which the
   field's correlation would be surprisingly short: on unit-square
-  coordinates `prior_range = c(0.1, 0.05)` reads as "a 5% chance the
+  coordinates `prior.range = c(0.1, 0.05)` reads as "a 5% chance the
   range is under 0.1". There is no default, deliberately. The range is
   weakly identified by the likelihood alone, so a default would be an
   invented prior doing real work on the posterior rather than a
@@ -227,41 +227,99 @@ tobs(
 - method:
 
   inference route, naming a fully-specified path rather than a pair of
-  orthogonal knobs:
+  orthogonal knobs. Each family accepts a subset of the routes below
+  (listed per route, from the package's support table); an unsupported
+  method errors with the list of methods that family supports, and the
+  structured terms a route carries for a given family are on that
+  family's help page.
 
   - `"auto"` – the family's default route (see `default_engine`).
 
   - `"laplace"` – EM + Laplace with Gaussian marginals (fast default).
+    Every family except
+    [`t_occu()`](https://gillescolling.com/tulpaObs/reference/t_occu.md).
 
   - `"laplace_sla"` – Laplace with skew-corrected (simplified-Laplace)
     marginals.
+    [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md),
+    [`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md),
+    [`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md),
+    [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md).
 
   - `"laplace_gibbs"` / `"laplace_mi"` – Laplace with a post-EM Gibbs /
     multiple-imputation correction. The fixed-effect prior threads into
     the correction refits, so these use the same weakly-informative
     default prior as `"laplace"`; pass `priors = FALSE` for the
     unpenalised correction.
-
-  - `"pg_gibbs"` – a Polya-Gamma Gibbs sampler over the exact
-    single-season occupancy posterior (the spOccupancy `PGOcc` engine).
-    A real MCMC chain (with `Rhat` / `ESS` diagnostics), distinct from
-    `"laplace_gibbs"` (a stochastic-EM variance correction). Sampler
-    controls (`n.iter`, `n.warmup`, `n.chains`, `n.thin`, `seed`,
-    `sigma.beta`). v1: single-season
     [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md),
-    site-level detection, no structured terms.
+    [`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md),
+    [`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md).
 
-  - `"nested_laplace"` – multi-block nested Laplace (single-season
-    occupancy and cover-hurdle joint).
+  - `"pg_gibbs"` – a Polya-Gamma Gibbs sampler over the exact occupancy
+    posterior (the spOccupancy `PGOcc` engines). A real MCMC chain (with
+    `Rhat` / `ESS` diagnostics), distinct from `"laplace_gibbs"` (a
+    stochastic-EM variance correction). Sampler controls (`n.iter`,
+    `n.warmup`, `n.chains`, `n.thin`, `seed`, `sigma.beta`).
+    [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md)
+    (site-level detection; an
+    [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+    field on occupancy),
+    [`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md),
+    [`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md),
+    [`ms_int_occu()`](https://gillescolling.com/tulpaObs/reference/ms_int_occu.md),
+    [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md),
+    [`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md),
+    and
+    [`t_occu()`](https://gillescolling.com/tulpaObs/reference/t_occu.md),
+    whose only route it is.
+
+  - `"nested_laplace"` – multi-block nested Laplace: the structured
+    terms (areal fields, shared cover-hurdle fields, latent factors) are
+    integrated over a grid of their hyperparameters.
+    [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md),
+    [`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md),
+    [`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md),
+    [`dyn_int_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_int_occu.md),
+    [`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md),
+    [`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md),
+    [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md),
+    [`count()`](https://gillescolling.com/tulpaObs/reference/count.md),
+    [`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md),
+    [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md),
+    [`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md),
+    [`dyn_abun()`](https://gillescolling.com/tulpaObs/reference/dyn_abun.md),
+    [`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md),
+    [`distance()`](https://gillescolling.com/tulpaObs/reference/distance.md),
+    [`ms_distance()`](https://gillescolling.com/tulpaObs/reference/ms_distance.md),
+    [`fp_occu()`](https://gillescolling.com/tulpaObs/reference/fp_occu.md),
+    [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md),
+    [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md),
+    [`occu_multiscale_cover()`](https://gillescolling.com/tulpaObs/reference/occu_multiscale_cover.md).
 
   - `"nested_laplace_sla"` – nested Laplace with skew-corrected
     marginals.
+    [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md),
+    [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md).
 
-  - `"nuts"` – HMC / NUTS sampler (every structure; reports Rhat / ESS).
-    Not every method is available for every family (e.g. the cover
-    hurdle has no `"nuts"` path; `"nested_laplace"` is occupancy- and
-    cover-only). An unsupported method errors with the list of methods
-    that family supports.
+  - `"nuts"` – HMC / NUTS sampler (reports Rhat / ESS).
+    [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md),
+    [`dyn_occu()`](https://gillescolling.com/tulpaObs/reference/dyn_occu.md),
+    [`int_occu()`](https://gillescolling.com/tulpaObs/reference/int_occu.md),
+    [`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md),
+    [`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md),
+    [`ms_int_occu()`](https://gillescolling.com/tulpaObs/reference/ms_int_occu.md),
+    [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md),
+    [`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md),
+    [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md),
+    [`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md),
+    [`dyn_abun()`](https://gillescolling.com/tulpaObs/reference/dyn_abun.md),
+    [`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md),
+    [`distance()`](https://gillescolling.com/tulpaObs/reference/distance.md),
+    [`fp_occu()`](https://gillescolling.com/tulpaObs/reference/fp_occu.md),
+    [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md),
+    [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md),
+    [`ms_occu_cover()`](https://gillescolling.com/tulpaObs/reference/ms_occu_cover.md),
+    [`occu_multiscale_cover()`](https://gillescolling.com/tulpaObs/reference/occu_multiscale_cover.md).
 
 - priors:
 
@@ -315,7 +373,7 @@ tobs(
     [`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md)),
     whose per-species loop is parallel. Default 0 leaves the count to
     OpenMP. The per-species reduction is serial and order-fixed, so the
-    gradient is the same at any count.
+    gradient is the same at any count. Rejected on the other families.
 
   - `adapt.delta` – target acceptance probability (default 0.8 on the
     single-species families, 0.9 on the community samplers).
@@ -343,11 +401,16 @@ tobs(
     carry one
     ([`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md),
     [`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md),
-    [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md)).
-    At the default this is an informative prior on the dispersion scale,
-    so raise it to compare the sampler against a maximum-likelihood
-    target. Ignored where the family or mixture has no log-dispersion
-    arm.
+    [`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md)),
+    and on the log-dispersion and grouped random-effect log-SD of the
+    [`abun()`](https://gillescolling.com/tulpaObs/reference/abun.md) /
+    [`removal()`](https://gillescolling.com/tulpaObs/reference/removal.md)
+    /
+    [`distance()`](https://gillescolling.com/tulpaObs/reference/distance.md)
+    samplers. At the default this is an informative prior on the
+    dispersion scale, so raise it to compare the sampler against a
+    maximum-likelihood target. Ignored under a Poisson mixture; rejected
+    on the other families.
 
   Sampler controls (`method = "pg_gibbs"`). A conjugate sweep is far
   cheaper than a NUTS trajectory, so the chain is longer and two chains
@@ -376,10 +439,11 @@ tobs(
   - `n.seeds` – number of seed-offset refits to fit and LOO-stack into a
     `tobs_stack` ensemble (default 1, a single fit). Member `k` uses
     base seed `seed + k - 1`. Only meaningful for the stochastic routes
-    (`"nuts"`, `"laplace_gibbs"`, `"laplace_mi"`); the deterministic
-    Laplace methods reject it. Seed-variants are statistically
-    identical, so their stacking weights come out roughly uniform (this
-    is a Monte-Carlo robustness device) – pass distinct fits to
+    (`"nuts"`, `"pg_gibbs"`, `"laplace_gibbs"`, `"laplace_mi"`); the
+    deterministic Laplace methods reject it. Seed-variants are
+    statistically identical, so their stacking weights come out roughly
+    uniform (this is a Monte-Carlo robustness device) – pass distinct
+    fits to
     [`tobs_stack()`](https://gillescolling.com/tulpaObs/reference/tobs_stack.md)
     for a genuine model average.
 
@@ -425,7 +489,7 @@ tobs(
     ([`ms_occu_cover()`](https://gillescolling.com/tulpaObs/reference/ms_occu_cover.md)): 5.
     Tensor AGHQ over the joint per-species RE vector, so the node count
     is raised to a power of the RE dimension and stays small. Latent
-    cover-per-unit (`cover_aggregate = "latent"`): 15 for a beta cover
+    cover-per-unit (`cover.aggregate = "latent"`): 15 for a beta cover
     arm, 1 for lognormal, whose per-unit marginal is closed form and
     needs no quadrature at all. Community
     [`latent()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
@@ -526,6 +590,17 @@ tobs(
     one) put three on the grid, which `integration = "auto"` resolves to
     the dense tensor.
 
+  - `max.grid.cells` – for the same joint-coupled spatial families, an
+    opt-in ceiling on the dense outer tensor's cell count (the engine's
+    `max_grid_cells`, unset by default). A grid past it is refused
+    before any inner solve, with the axes that produced the count. The
+    count is the number of inner solves: two copied field blocks at the
+    default field-SD and copy axes cross to 2500 latent cells, and an
+    active positive-arm dispersion grid multiplies that by its node
+    count. Unset, a tensor of any size is solved, including the one a
+    declined `integration = "grid_adaptive"` falls back to, and one past
+    2048 cells is announced with a warning first.
+
   - `diagnose.k` – for the joint-coupled spatial families
     ([`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md),
     [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md)
@@ -593,7 +668,7 @@ tobs(
   [`cover()`](https://gillescolling.com/tulpaObs/reference/cover.md)),
   plus, for
   [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md),
-  `visit = ` (the replicate column) and `y_pos = ` (the cover column)
+  `visit = ` (the replicate column) and `y.pos = ` (the cover column)
   and any visit-level `det.covs = `. Site-level covariates (those the
   `formula` / `detection` reference at the cell level) are read as the
   first row per site, the way
@@ -603,7 +678,7 @@ tobs(
   The same long-frame contract drives a SINGLE
   [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)
   fit when `by` is omitted: pass `site = `, `visit = `, `response = `
-  (the 0/1 detection column) and `y_pos = ` (the cover column), plus any
+  (the 0/1 detection column) and `y.pos = ` (the cover column), plus any
   visit-level `det.covs = `, with a long, plot-level `data`, and
   `tobs()` builds the paired occurrence / cover arms and the site-level
   design for you – the by= batch reduced to one species, so you no
@@ -643,7 +718,7 @@ When `by` is supplied, a `tobs_batch` of per-species fits is returned
 ``` r
 # \donttest{
 # Single-season occupancy
-sim <- simulate_occu(N = 100, J = 3, n_occ_covs = 1, n_det_covs = 1,
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
                      seed = 1)
 fit <- tobs(
   formula   = ~ occ_cov1,

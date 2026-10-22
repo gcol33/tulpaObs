@@ -18,12 +18,12 @@ is an error. This page documents the call shapes and their arguments.
 
 ## Areal spatial fields
 
-`icar(graph)`, `bym2(graph, scale_factor)`, `car(graph)` and
+`icar(graph)`, `bym2(graph, scale.factor)`, `car(graph)` and
 `car_proper(graph)` put a field over the nodes of a symmetric adjacency
-matrix `graph`. `bym2()` computes its Riebler `scale_factor` from the
+matrix `graph`. `bym2()` computes its Riebler `scale.factor` from the
 graph when it is not supplied. All four accept:
 
-- `group_var`:
+- `group.var`:
 
   Column naming each observation's graph node, when the graph is over
   regions rather than rows.
@@ -81,16 +81,16 @@ triangular mesh. Coordinates come either from bare column names or from
 - `nn`:
 
   Number of nearest neighbours in the Vecchia approximation, capped at
-  `n - 1`. `multiscale_gp()` splits this into `nn_local` and
-  `nn_regional`.
+  `n - 1`. `multiscale_gp()` splits this into `nn.local` and
+  `nn.regional`.
 
-- `prior_range`:
+- `prior.range`:
 
   Length-2 `c(r0, alpha)` PC prior on the range, read as
   `P(range < r0) = alpha`. Required by `gp()` and `svc()`, which ship no
-  default; `spde()` defaults to `c(0.5, 0.5)` alongside `prior_sigma`.
+  default; `spde()` defaults to `c(0.5, 0.5)` alongside `prior.sigma`.
 
-- `mesh`, `max_edge`, `cutoff`:
+- `mesh`, `max.edge`, `cutoff`:
 
   `spde()` mesh controls, passed to
   [`tulpa::spatial_spde()`](https://gillescolling.com/tulpa/reference/spatial_spde.html).
@@ -117,7 +117,7 @@ want. `model = ` selects the areal structure (`"icar"` by default, or
 **Continuous**, over coordinates, as NNGP surfaces:
 
     ~ elevation + spatial(lon, lat, model = "svc",
-                          coefficients = "elevation", prior_range = c(50, 0.05))
+                          coefficients = "elevation", prior.range = c(50, 0.05))
 
 There is no node index to group on, so the coefficients are named
 directly instead of through a bar.
@@ -147,11 +147,11 @@ directly instead of through a bar.
   Nearest neighbours in the Vecchia approximation, default 15, capped at
   `n - 1`.
 
-- `prior_range`:
+- `prior.range`:
 
   Required, no default: `c(r0, alpha)` with `P(range < r0) = alpha`.
 
-- `sigma2_prior_scale`:
+- `sigma2.prior.scale`:
 
   Scale of the prior on the surface's marginal variance.
 
@@ -219,15 +219,15 @@ evaluated.
 
   Wraps the last level onto the first.
 
-- `tau_shape`, `tau_rate`:
+- `tau.shape`, `tau.rate`:
 
   Gamma prior on the field precision.
 
 ## Latent factors and sharing
 
-`latent(n_factors)` adds per-site latent factors with per-species
+`latent(n.factors)` adds per-site latent factors with per-species
 loadings to a community model, giving residual co-occurrence.
-`constraint` and `sigma_prior_rate` control the identification anchor
+`constraint` and `sigma.prior.rate` control the identification anchor
 and the loading prior.
 
 `share("id")` shares one realization of the term named `id` across
@@ -316,13 +316,13 @@ adj[cbind(2:30, 1:29)] <- 1L
 ctrl <- list(verbose = FALSE, progress = FALSE)
 
 # Areal field on occupancy
-fit <- tobs(~ occ_cov1 + icar(graph = adj, group_var = "cell"),
+fit <- tobs(~ occ_cov1 + icar(graph = adj, group.var = "cell"),
             data = d, family = occu(), detection = ~ 1, y = sim$y,
             method = "nested_laplace", control = ctrl)
 fit$spatial_field[1:5]
 
 # Detection random effect by observer, who changes between visits
-obs <- simulate_occu(N = 60, J = 3, n_visit_groups = 4, seed = 1)
+obs <- simulate_occu(N = 60, J = 3, n.visit.groups = 4, seed = 1)
 fit_re <- tobs(~ occ_cov1, data = obs$data, family = occu(),
                detection = ~ (1 | visit_group), y = obs$y,
                visits = obs$visits, method = "laplace", control = ctrl)
@@ -337,7 +337,7 @@ coef(fit_svc)
 # Continuous NNGP varying coefficient on the `occ_cov2` slope
 fit_nngp <- tobs(~ occ_cov2 + spatial(lon, lat, model = "svc",
                                       coefficients = "occ_cov2",
-                                      prior_range = c(0.5, 0.05)),
+                                      prior.range = c(0.5, 0.05)),
                  data = d, family = occu(), detection = ~ 1, y = sim$y,
                  method = "laplace", control = ctrl)
 coef(fit_nngp)

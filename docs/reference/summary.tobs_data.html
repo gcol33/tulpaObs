@@ -22,7 +22,7 @@ per-visit rates, and detection frequency table."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,6 +89,18 @@ per-visit rates, and detection frequency table.</p>
     <p>An <code>tobs_data_summary</code> object (printed automatically).</p>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">30</span>, J <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>site <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>, times <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span>
+<span>                   visit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, each <span class="op">=</span> <span class="fl">30</span><span class="op">)</span>,</span>
+<span>                   det <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span>,</span>
+<span>                   occ_cov1 <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span><span class="op">$</span><span class="va">occ_cov1</span>,</span>
+<span>                   effort <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">90</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs_data.html">tobs_data</a></span><span class="op">(</span><span class="va">long</span>, y <span class="op">=</span> <span class="st">"det"</span>, site <span class="op">=</span> <span class="st">"site"</span>, visit <span class="op">=</span> <span class="st">"visit"</span>,</span>
+<span>                 occ.covs <span class="op">=</span> <span class="st">"occ_cov1"</span>, det.covs <span class="op">=</span> <span class="st">"effort"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span></span></code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

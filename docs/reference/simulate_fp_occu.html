@@ -32,7 +32,7 @@ suitable for tobs() with fp_occu()."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,8 +86,8 @@ suitable for <code><a href="tobs.html">tobs()</a></code> with <code><a href="fp_
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_fp_occu</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  n_occ_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_psi <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n.occ.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.psi <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  p11 <span class="op">=</span> <span class="fl">0.6</span>,</span>
 <span>  p10 <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  b <span class="op">=</span> <span class="fl">0.5</span>,</span>
@@ -107,13 +107,13 @@ suitable for <code><a href="tobs.html">tobs()</a></code> with <code><a href="fp_
 <dd><p>Number of visits (default 5).</p></dd>
 
 
-<dt id="arg-n-occ-covs">n_occ_covs<a class="anchor" aria-label="anchor" href="#arg-n-occ-covs"></a></dt>
+<dt id="arg-n-occ-covs">n.occ.covs<a class="anchor" aria-label="anchor" href="#arg-n-occ-covs"></a></dt>
 <dd><p>Number of occupancy covariates (default 1).</p></dd>
 
 
-<dt id="arg-beta-psi">beta_psi<a class="anchor" aria-label="anchor" href="#arg-beta-psi"></a></dt>
+<dt id="arg-beta-psi">beta.psi<a class="anchor" aria-label="anchor" href="#arg-beta-psi"></a></dt>
 <dd><p>Occupancy coefficients (logit). Default
-<code>c(qlogis(0.5), runif(n_occ_covs, -0.6, 0.6))</code>.</p></dd>
+<code>c(qlogis(0.5), runif(n.occ.covs, -0.6, 0.6))</code>.</p></dd>
 
 
 <dt id="arg-p-p-b">p11, p10, b<a class="anchor" aria-label="anchor" href="#arg-p-p-b"></a></dt>

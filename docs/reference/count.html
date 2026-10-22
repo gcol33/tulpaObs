@@ -32,7 +32,7 @@ or an identity-link Gaussian response."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -111,6 +111,18 @@ so an <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_te
     <p>The response is a numeric vector (one value per site), supplied via <code>y =</code> or
 on a two-sided <code>formula</code> left-hand side (<code>count.value ~ predictors</code>).</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – one tulpa GLMM block; the negative-binomial size
+and the Gaussian residual variance are estimated by an outer dispersion
+loop.</p></li>
+<li><p><code>method = "nested_laplace"</code> – a plain areal field (<code><a href="tobs_terms.html">icar()</a></code> /
+<code><a href="tobs_terms.html">car_proper()</a></code>) on the formula as a latent GMRF, integrated over its
+hyperparameters by the nested-Laplace EM; the areal term is required on
+this route.</p></li>
+</ul></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="abun.html">abun()</a></code> (N-mixture: latent abundance + detection), <code><a href="jsdm.html">jsdm()</a></code>

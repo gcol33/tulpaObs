@@ -37,3 +37,16 @@ site is occupied with certainty if ANY source detected it, and otherwise
 pools every source's non-detection evidence); for dynamic models `z` is
 the forward-backward (HMM smoothing) state posterior
 `P(z_t=1 | y_{1:T})` as an `[n_sites x n_seasons]` matrix.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+str(fitted(fit))
+# }
+```

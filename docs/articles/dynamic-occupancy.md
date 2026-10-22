@@ -1,5 +1,24 @@
 # Dynamic (multi-season) occupancy
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -144,16 +163,16 @@ section.
 builds a dataset with a known initial occupancy, known colonisation and
 extinction rates, and a known detection probability, so the fit has a
 truth to recover. The arguments `gamma` and `epsilon` are the
-colonisation and extinction probabilities directly; `beta_occ` and
-`beta_det` are logit-scale intercepts, so `beta_occ = c(0)` means
-$`\psi_1 = 0.5`$ and `beta_det = c(0)` means $`p = 0.5`$.
+colonisation and extinction probabilities directly; `beta.occ` and
+`beta.det` are logit-scale intercepts, so `beta.occ = c(0)` means
+$`\psi_1 = 0.5`$ and `beta.det = c(0)` means $`p = 0.5`$.
 
 ``` r
 
 sim <- simulate_dyn_occu(
-  N = 200, J = 4, n_seasons = 6,
-  beta_occ = c(0),    # psi1 = plogis(0) = 0.5
-  beta_det = c(0),    # p    = plogis(0) = 0.5
+  N = 200, J = 4, n.seasons = 6,
+  beta.occ = c(0),    # psi1 = plogis(0) = 0.5
+  beta.det = c(0),    # p    = plogis(0) = 0.5
   gamma    = 0.3,     # colonisation: empty -> occupied
   epsilon  = 0.2,     # extinction:   occupied -> empty
   seed     = 2026

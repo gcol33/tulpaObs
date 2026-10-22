@@ -40,7 +40,7 @@ ms_occu_cover() (y_pos is NA where not detected)."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,21 +96,21 @@ shared across species (community covariates). The returned <code>y</code> / <cod
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_ms_occu_cover</span><span class="op">(</span></span>
-<span>  n_species <span class="op">=</span> <span class="fl">12</span>,</span>
+<span>  n.species <span class="op">=</span> <span class="fl">12</span>,</span>
 <span>  N <span class="op">=</span> <span class="fl">120</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  n_occ_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_pos_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  mu_occ <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  mu_p <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  mu_pos <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  sd_occ <span class="op">=</span> <span class="fl">0.5</span>,</span>
-<span>  sd_p <span class="op">=</span> <span class="fl">0.4</span>,</span>
-<span>  sd_pos <span class="op">=</span> <span class="fl">0.4</span>,</span>
+<span>  n.occ.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.pos.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  mu.occ <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mu.p <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mu.pos <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  sd.occ <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span>  sd.p <span class="op">=</span> <span class="fl">0.4</span>,</span>
+<span>  sd.pos <span class="op">=</span> <span class="fl">0.4</span>,</span>
 <span>  positive <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lognormal"</span>, <span class="st">"beta"</span>, <span class="st">"gaussian"</span><span class="op">)</span>,</span>
 <span>  phi <span class="op">=</span> <span class="fl">30</span>,</span>
-<span>  sigma_pos <span class="op">=</span> <span class="fl">0.4</span>,</span>
+<span>  sigma.pos <span class="op">=</span> <span class="fl">0.4</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -119,7 +119,7 @@ shared across species (community covariates). The returned <code>y</code> / <cod
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-n-species">n_species<a class="anchor" aria-label="anchor" href="#arg-n-species"></a></dt>
+<dl><dt id="arg-n-species">n.species<a class="anchor" aria-label="anchor" href="#arg-n-species"></a></dt>
 <dd><p>Number of species (default 12).</p></dd>
 
 
@@ -131,18 +131,18 @@ shared across species (community covariates). The returned <code>y</code> / <cod
 <dd><p>Number of replicate visits (default 5).</p></dd>
 
 
-<dt id="arg-n-occ-covs-n-det-covs-n-pos-covs">n_occ_covs, n_det_covs, n_pos_covs<a class="anchor" aria-label="anchor" href="#arg-n-occ-covs-n-det-covs-n-pos-covs"></a></dt>
+<dt id="arg-n-occ-covs-n-det-covs-n-pos-covs">n.occ.covs, n.det.covs, n.pos.covs<a class="anchor" aria-label="anchor" href="#arg-n-occ-covs-n-det-covs-n-pos-covs"></a></dt>
 <dd><p>Number of covariates on each arm
 (drawn IID standard normal, shared across species).</p></dd>
 
 
-<dt id="arg-mu-occ-mu-p-mu-pos">mu_occ, mu_p, mu_pos<a class="anchor" aria-label="anchor" href="#arg-mu-occ-mu-p-mu-pos"></a></dt>
+<dt id="arg-mu-occ-mu-p-mu-pos">mu.occ, mu.p, mu.pos<a class="anchor" aria-label="anchor" href="#arg-mu-occ-mu-p-mu-pos"></a></dt>
 <dd><p>Community-mean coefficient vectors
 <code>c(intercept, slopes...)</code> on each arm's link scale. Defaults pick
 weakly-informative values.</p></dd>
 
 
-<dt id="arg-sd-occ-sd-p-sd-pos">sd_occ, sd_p, sd_pos<a class="anchor" aria-label="anchor" href="#arg-sd-occ-sd-p-sd-pos"></a></dt>
+<dt id="arg-sd-occ-sd-p-sd-pos">sd.occ, sd.p, sd.pos<a class="anchor" aria-label="anchor" href="#arg-sd-occ-sd-p-sd-pos"></a></dt>
 <dd><p>Per-coefficient community SD on each arm (length 1,
 recycled, or one per coefficient). Default 0.5 / 0.4 / 0.4.</p></dd>
 
@@ -155,7 +155,7 @@ recycled, or one per coefficient). Default 0.5 / 0.4 / 0.4.</p></dd>
 <dd><p>Beta precision when <code>positive = "beta"</code> (default 30).</p></dd>
 
 
-<dt id="arg-sigma-pos">sigma_pos<a class="anchor" aria-label="anchor" href="#arg-sigma-pos"></a></dt>
+<dt id="arg-sigma-pos">sigma.pos<a class="anchor" aria-label="anchor" href="#arg-sigma-pos"></a></dt>
 <dd><p>Lognormal residual SD when <code>positive = "lognormal"</code>
 (default 0.4).</p></dd>
 
@@ -175,7 +175,7 @@ coefficients, the dispersion, and the latent state).</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_ms_occu_cover</span><span class="op">(</span>n_species <span class="op">=</span> <span class="fl">4</span>, N <span class="op">=</span> <span class="fl">30</span>, J <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu">simulate_ms_occu_cover</span><span class="op">(</span>n.species <span class="op">=</span> <span class="fl">4</span>, N <span class="op">=</span> <span class="fl">30</span>, J <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

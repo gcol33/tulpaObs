@@ -22,7 +22,7 @@ its own detection process."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -83,6 +83,20 @@ spatially-structured detection field, broadcast to every source, under
 <code>fit$spatial_field_det</code>. All sources must share one detection formula; areal
 terms belong on the state arm.</p>
     </div>
+    <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – EM + Laplace over the multi-source two-state
+marginal, the default.</p></li>
+<li><p><code>method = "laplace_sla"</code> – the Laplace fit with simplified-Laplace
+skew-corrected marginals.</p></li>
+<li><p><code>method = "laplace_gibbs"</code> / <code>method = "laplace_mi"</code> – the Laplace fit
+with a post-EM Gibbs / multiple-imputation variance correction.</p></li>
+<li><p><code>method = "nested_laplace"</code> – an areal field on the state arm through the
+nested-Laplace EM, its hyperparameters integrated on an outer grid.</p></li>
+<li><p><code>method = "nuts"</code> – the unified C++ NUTS sampler over the same marginal.</p></li>
+</ul></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

@@ -19,28 +19,28 @@ suitable for
 
 ``` r
 simulate_ms_occu_cover(
-  n_species = 12,
+  n.species = 12,
   N = 120,
   J = 5,
-  n_occ_covs = 1,
-  n_det_covs = 1,
-  n_pos_covs = 1,
-  mu_occ = NULL,
-  mu_p = NULL,
-  mu_pos = NULL,
-  sd_occ = 0.5,
-  sd_p = 0.4,
-  sd_pos = 0.4,
+  n.occ.covs = 1,
+  n.det.covs = 1,
+  n.pos.covs = 1,
+  mu.occ = NULL,
+  mu.p = NULL,
+  mu.pos = NULL,
+  sd.occ = 0.5,
+  sd.p = 0.4,
+  sd.pos = 0.4,
   positive = c("lognormal", "beta", "gaussian"),
   phi = 30,
-  sigma_pos = 0.4,
+  sigma.pos = 0.4,
   seed = NULL
 )
 ```
 
 ## Arguments
 
-- n_species:
+- n.species:
 
   Number of species (default 12).
 
@@ -52,17 +52,17 @@ simulate_ms_occu_cover(
 
   Number of replicate visits (default 5).
 
-- n_occ_covs, n_det_covs, n_pos_covs:
+- n.occ.covs, n.det.covs, n.pos.covs:
 
   Number of covariates on each arm (drawn IID standard normal, shared
   across species).
 
-- mu_occ, mu_p, mu_pos:
+- mu.occ, mu.p, mu.pos:
 
   Community-mean coefficient vectors `c(intercept, slopes...)` on each
   arm's link scale. Defaults pick weakly-informative values.
 
-- sd_occ, sd_p, sd_pos:
+- sd.occ, sd.p, sd.pos:
 
   Per-coefficient community SD on each arm (length 1, recycled, or one
   per coefficient). Default 0.5 / 0.4 / 0.4.
@@ -75,7 +75,7 @@ simulate_ms_occu_cover(
 
   Beta precision when `positive = "beta"` (default 30).
 
-- sigma_pos:
+- sigma.pos:
 
   Lognormal residual SD when `positive = "lognormal"` (default 0.4).
 
@@ -94,6 +94,6 @@ coefficients, the dispersion, and the latent state).
 ## Examples
 
 ``` r
-sim <- simulate_ms_occu_cover(n_species = 4, N = 30, J = 3, seed = 1)
+sim <- simulate_ms_occu_cover(n.species = 4, N = 30, J = 3, seed = 1)
 dim(sim$y)
 ```

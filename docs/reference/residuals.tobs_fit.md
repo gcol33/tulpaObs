@@ -33,3 +33,17 @@ residuals(object, type = c("deviance", "pearson", "response"), ...)
 A list with `occ` (state-level) and `det` (observation-level) residuals,
 either of which may be `NULL` for a family that has no such level. A
 model type with no registered handler is an error naming it.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+res <- residuals(fit, type = "pearson")
+str(res)
+# }
+```

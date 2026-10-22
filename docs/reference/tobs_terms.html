@@ -28,7 +28,7 @@ detection = ~ ... acts on detection."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -88,11 +88,11 @@ shapes and their arguments.</p>
 
 
 
-<p><code>icar(graph)</code>, <code>bym2(graph, scale_factor)</code>, <code>car(graph)</code> and
+<p><code>icar(graph)</code>, <code>bym2(graph, scale.factor)</code>, <code>car(graph)</code> and
 <code>car_proper(graph)</code> put a field over the nodes of a symmetric adjacency
-matrix <code>graph</code>. <code>bym2()</code> computes its Riebler <code>scale_factor</code> from the
+matrix <code>graph</code>. <code>bym2()</code> computes its Riebler <code>scale.factor</code> from the
 graph when it is not supplied. All four accept:</p>
-<dl><dt><code>group_var</code></dt>
+<dl><dt><code>group.var</code></dt>
 <dd><p>Column naming each observation's graph node, when
 the graph is over regions rather than rows.</p></dd>
 
@@ -144,15 +144,15 @@ triangular mesh. Coordinates come either from bare column names or from
 <dt><code>nn</code></dt>
 <dd><p>Number of nearest neighbours in the Vecchia
 approximation, capped at <code>n - 1</code>. <code>multiscale_gp()</code> splits this
-into <code>nn_local</code> and <code>nn_regional</code>.</p></dd>
+into <code>nn.local</code> and <code>nn.regional</code>.</p></dd>
 
-<dt><code>prior_range</code></dt>
+<dt><code>prior.range</code></dt>
 <dd><p>Length-2 <code>c(r0, alpha)</code> PC prior on the
 range, read as <code>P(range &lt; r0) = alpha</code>. Required by <code>gp()</code> and
 <code>svc()</code>, which ship no default; <code>spde()</code> defaults to
-<code>c(0.5, 0.5)</code> alongside <code>prior_sigma</code>.</p></dd>
+<code>c(0.5, 0.5)</code> alongside <code>prior.sigma</code>.</p></dd>
 
-<dt><code>mesh</code>, <code>max_edge</code>, <code>cutoff</code></dt>
+<dt><code>mesh</code>, <code>max.edge</code>, <code>cutoff</code></dt>
 <dd><p><code>spde()</code> mesh
 controls, passed to <code><a href="https://gillescolling.com/tulpa/reference/spatial_spde.html" class="external-link">tulpa::spatial_spde()</a></code>.</p></dd>
 
@@ -179,7 +179,7 @@ selects the areal structure (<code>"icar"</code> by default, or <code>"bym2"</co
 <code>"car"</code> / <code>"car_proper"</code>).</p>
 <p><strong>Continuous</strong>, over coordinates, as NNGP surfaces:</p>
 <div class="sourceCode"><pre><code><span><span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, model <span class="op">=</span> <span class="st">"svc"</span>,</span>
-<span>                      coefficients <span class="op">=</span> <span class="st">"elevation"</span>, prior_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">50</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span>                      coefficients <span class="op">=</span> <span class="st">"elevation"</span>, prior.range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">50</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 
 <p>There is no node index to group on, so the coefficients are named directly
 instead of through a bar.</p>
@@ -205,11 +205,11 @@ bare <code>lon, lat</code> column names. One coordinate pair per site.</p></dd>
 <dd><p>Nearest neighbours in the Vecchia approximation, default
 15, capped at <code>n - 1</code>.</p></dd>
 
-<dt><code>prior_range</code></dt>
+<dt><code>prior.range</code></dt>
 <dd><p>Required, no default: <code>c(r0, alpha)</code> with
 <code>P(range &lt; r0) = alpha</code>.</p></dd>
 
-<dt><code>sigma2_prior_scale</code></dt>
+<dt><code>sigma2.prior.scale</code></dt>
 <dd><p>Scale of the prior on the surface's
 marginal variance.</p></dd>
 
@@ -276,7 +276,7 @@ giving a slope-only block.</p></dd>
 <dt><code>cyclic</code></dt>
 <dd><p>Wraps the last level onto the first.</p></dd>
 
-<dt><code>tau_shape</code>, <code>tau_rate</code></dt>
+<dt><code>tau.shape</code>, <code>tau.rate</code></dt>
 <dd><p>Gamma prior on the field
 precision.</p></dd>
 
@@ -287,9 +287,9 @@ precision.</p></dd>
 
 
 
-<p><code>latent(n_factors)</code> adds per-site latent factors with per-species
+<p><code>latent(n.factors)</code> adds per-site latent factors with per-species
 loadings to a community model, giving residual co-occurrence.
-<code>constraint</code> and <code>sigma_prior_rate</code> control the identification
+<code>constraint</code> and <code>sigma.prior.rate</code> control the identification
 anchor and the loading prior.</p>
 <p><code>share("id")</code> shares one realization of the term named <code>id</code> across
 processes, optionally scaled: <code>alpha = 0.5</code> pins the coupling
@@ -368,13 +368,13 @@ the region that hyperparameter's flat prior is supported on.</p>
 <span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Areal field on occupancy</span></span>
-<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span> <span class="op">+</span> <span class="fu">icar</span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group_var <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>,</span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span> <span class="op">+</span> <span class="fu">icar</span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group.var <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>,</span>
 <span>            data <span class="op">=</span> <span class="va">d</span>, family <span class="op">=</span> <span class="fu"><a href="occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>,</span>
 <span>            method <span class="op">=</span> <span class="st">"nested_laplace"</span>, control <span class="op">=</span> <span class="va">ctrl</span><span class="op">)</span></span>
 <span><span class="va">fit</span><span class="op">$</span><span class="va">spatial_field</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span>
 <span></span>
 <span><span class="co"># Detection random effect by observer, who changes between visits</span></span>
-<span><span class="va">obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">60</span>, J <span class="op">=</span> <span class="fl">3</span>, n_visit_groups <span class="op">=</span> <span class="fl">4</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">60</span>, J <span class="op">=</span> <span class="fl">3</span>, n.visit.groups <span class="op">=</span> <span class="fl">4</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">fit_re</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">obs</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>               detection <span class="op">=</span> <span class="op">~</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">visit_group</span><span class="op">)</span>, y <span class="op">=</span> <span class="va">obs</span><span class="op">$</span><span class="va">y</span>,</span>
 <span>               visits <span class="op">=</span> <span class="va">obs</span><span class="op">$</span><span class="va">visits</span>, method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="va">ctrl</span><span class="op">)</span></span>
@@ -389,7 +389,7 @@ the region that hyperparameter's flat prior is supported on.</p>
 <span><span class="co"># Continuous NNGP varying coefficient on the `occ_cov2` slope</span></span>
 <span><span class="va">fit_nngp</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov2</span> <span class="op">+</span> <span class="fu">spatial</span><span class="op">(</span><span class="va">lon</span>, <span class="va">lat</span>, model <span class="op">=</span> <span class="st">"svc"</span>,</span>
 <span>                                      coefficients <span class="op">=</span> <span class="st">"occ_cov2"</span>,</span>
-<span>                                      prior_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                                      prior.range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.05</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>                 data <span class="op">=</span> <span class="va">d</span>, family <span class="op">=</span> <span class="fu"><a href="occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>, detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>,</span>
 <span>                 method <span class="op">=</span> <span class="st">"laplace"</span>, control <span class="op">=</span> <span class="va">ctrl</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_nngp</span><span class="op">)</span></span>

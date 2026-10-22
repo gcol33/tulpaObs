@@ -24,7 +24,7 @@ community-wide colonisation / extinction transition coefficients."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -79,27 +79,38 @@ community-wide colonisation / extinction transition coefficients.</p>
     <p>A <code>tobs_family</code> object.</p>
     </div>
     <div class="section level2">
-    <h2 id="scope">Scope<a class="anchor" aria-label="anchor" href="#scope"></a></h2>
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
 
 
-<p>The Laplace engine is the supported route: the shared colonisation /
-extinction dynamics and the per-species first-season occupancy / detection
-components recover across seeds (see <code>tests/testthat/test-ms-dyn-occu.R</code>,
-community-mean 95% CI coverage measured ~0.98). A shared areal field on the
-first-season occupancy formula (<code>~ 1 + icar(graph = adj)</code>) fits the
-<code>spOccupancy</code> <code>stMsPGOcc</code> model under <code>method = "nested_laplace"</code>: the field
-is shared across species, and because the first-season occupancy <code>psi1</code> only
-sets the initial mixing weight of each species' HMM, the block-coordinate
-driver alternates the community EM (field as a <code>psi1</code> offset) with an areal
-field Newton, the field recovering cleanly (<code>cor</code> ~0.94). A
-spatially-varying-coefficient bar (<code>~ spatial(~ 1 + w || cell, graph = adj)</code>)
-adds a shared covariate-weighted field alongside the intercept field, fitting
-the <code>svcTMsPGOcc</code> model through the same K-field weighted-ICAR solve as the
-community count SVC (both fields recover, <code>cor</code> ~0.90 / ~0.89). <code><a href="tobs_terms.html">icar()</a></code> only;
-a NUTS sampler and <code><a href="tobs_terms.html">bym2()</a></code> / <code><a href="tobs_terms.html">car_proper()</a></code> fields are a deliberate
-follow-up; <code>method = "nuts"</code> errors from the dispatcher with a pointer rather
-than silently downgrading.</p>
-    </div>
+<ul><li><p><code>method = "laplace"</code> – the shared community Laplace-EM, the default: the
+shared colonisation / extinction dynamics and the per-species first-season
+occupancy / detection components recover across seeds (see
+<code>tests/testthat/test-ms-dyn-occu.R</code>, community-mean 95% CI coverage
+measured ~0.98).</p></li>
+<li><p><code>method = "pg_gibbs"</code> – the community Polya-Gamma machinery of <code>msPGOcc</code>
+with a two-state HMM forward-filtering backward-sampling latent step
+(spOccupancy <code>tMsPGOcc</code>), giving a calibrated community-variance
+posterior; constant transitions, site-level detection, no structured term.</p></li>
+<li><p><code>method = "nested_laplace"</code> – a shared areal field on the first-season
+occupancy formula (<code>~ 1 + icar(graph = adj)</code>) fits the <code>spOccupancy</code>
+<code>stMsPGOcc</code> model: the field is shared across species, and because the
+first-season occupancy <code>psi1</code> only sets the initial mixing weight of each
+species' HMM, the block-coordinate driver alternates the community EM
+(field as a <code>psi1</code> offset) with an areal field Newton, the field recovering
+cleanly (<code>cor</code> ~0.94). A spatially-varying-coefficient bar
+(<code>~ spatial(~ 1 + w || cell, graph = adj)</code>) adds a shared
+covariate-weighted field alongside the intercept field, fitting the
+<code>svcTMsPGOcc</code> model through the same K-field weighted-ICAR solve as the
+community count SVC (both fields recover, <code>cor</code> ~0.90 / ~0.89). <code><a href="tobs_terms.html">icar()</a></code>
+only; <code><a href="tobs_terms.html">bym2()</a></code> / <code><a href="tobs_terms.html">car_proper()</a></code> fields are a follow-up. The field is
+required on this route.</p></li>
+<li><p><code>method = "nuts"</code> – the non-spatial community sampler over the exact
+per-species HMM-forward marginal (in-tree C++), sampling the community
+means, per-species first-season / detection deviations, both per-arm
+community covariances and the shared colonisation / extinction
+coefficients jointly, warm-started at the Laplace-EM mode; an areal term
+errors with a pointer to <code>"nested_laplace"</code>.</p></li>
+</ul></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="dyn_occu.html">dyn_occu()</a></code>, <code><a href="ms_occu.html">ms_occu()</a></code></p></div>

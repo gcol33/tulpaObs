@@ -42,3 +42,17 @@ or species matrices, and so on. The list carries the `"seed"` attribute
 the `.Random.seed` in force when `seed` is `NULL`, otherwise `seed` with
 its [`RNGkind()`](https://rdrr.io/r/base/Random.html) as the `"kind"`
 attribute. Every family returns this layout, whatever `nsim` is.
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+y_rep <- simulate(fit, nsim = 2, seed = 1)
+lapply(y_rep, colMeans)
+# }
+```

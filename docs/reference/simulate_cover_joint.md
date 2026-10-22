@@ -13,14 +13,14 @@ on the supplied region adjacency. The cover-arm field amplitude
 simulate_cover_joint(
   N = 300L,
   adj,
-  beta_occ = c(-0.3, 0.7),
-  beta_pos = c(0.4, -0.5),
+  beta.occ = c(-0.3, 0.7),
+  beta.pos = c(0.4, -0.5),
   sigma = 0.6,
   rho = 0.7,
   alpha = 1,
   positive = c("beta", "lognormal", "gaussian"),
   phi = 30,
-  sigma_pos_resid = 0.4,
+  sigma.pos.resid = 0.4,
   seed = NULL
 )
 ```
@@ -35,11 +35,11 @@ simulate_cover_joint(
 
   `n_s x n_s` integer adjacency matrix for the BYM2 field.
 
-- beta_occ:
+- beta.occ:
 
   Length-2 occurrence coefficients (intercept + slope).
 
-- beta_pos:
+- beta.pos:
 
   Length-2 cover-arm coefficients (intercept + slope).
 
@@ -66,7 +66,7 @@ simulate_cover_joint(
 
   Beta precision when `positive = "beta"` (default 30).
 
-- sigma_pos_resid:
+- sigma.pos.resid:
 
   Lognormal residual SD when `positive = "lognormal"` (default 0.4);
   independent of the spatial `sigma`.

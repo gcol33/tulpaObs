@@ -9,18 +9,18 @@ probability. The state `formula` models `log lambda` (abundance);
 passing `visits` makes it visit-varying (`logit r_ij` gains the
 visit-level covariates), exactly as for the occupancy / N-mixture front
 doors. The latent `N` marginalises in closed form (a Poisson sum to
-`K_max`), so the fit maximises the exact marginal with an
+`K.max`), so the fit maximises the exact marginal with an
 observed-information vcov.
 
 ## Usage
 
 ``` r
-royle_nichols(K_max = NULL)
+royle_nichols(K.max = NULL)
 ```
 
 ## Arguments
 
-- K_max:
+- K.max:
 
   Upper summation bound for the latent abundance (default: a data-driven
   Poisson-tail guess).
@@ -29,6 +29,12 @@ royle_nichols(K_max = NULL)
 
 A `tobs_family` object for
 [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md).
+
+## Engines
+
+- `method = "laplace"` – the exact marginal maximised (BFGS) with an
+  observed-information covariance; the only route (no field, no
+  sampler).
 
 ## Examples
 
@@ -40,7 +46,7 @@ fit <- tobs(~ x, data = sim$data, family = royle_nichols(),
 coef(fit)
 
 # Visit-varying detection via `visits`:
-sv <- simulate_royle_nichols(N = 150, J = 5, beta_r_visit = 0.8, seed = 1)
+sv <- simulate_royle_nichols(N = 150, J = 5, beta.r.visit = 0.8, seed = 1)
 fv <- tobs(~ x, data = sv$data, family = royle_nichols(),
            detection = ~ w, y = sv$y, visits = sv$visits,
            control = list(verbose = FALSE))

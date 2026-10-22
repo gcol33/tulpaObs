@@ -42,3 +42,4 @@ tier3-timings.csv
 # knitr's own build output -- regenerated every vignette build, not the source.
 vignettes/*_files/
 vignettes/*.html
+.run*

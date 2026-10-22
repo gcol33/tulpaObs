@@ -32,7 +32,7 @@ marginal log-likelihood is exact."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,7 +85,7 @@ marginal log-likelihood is exact.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">occu_cover</span><span class="op">(</span></span>
 <span>  response <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta"</span>, <span class="st">"lognormal"</span>, <span class="st">"gaussian"</span><span class="op">)</span>,</span>
-<span>  cover_aggregate <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  cover.aggregate <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -100,7 +100,7 @@ identity-Gaussian magnitude on a real, unbounded scale – the delta-normal
 hurdle; not for cover fractions, which stay on <code>"beta"</code>/<code>"lognormal"</code>).</p></dd>
 
 
-<dt id="arg-cover-aggregate">cover_aggregate<a class="anchor" aria-label="anchor" href="#arg-cover-aggregate"></a></dt>
+<dt id="arg-cover-aggregate">cover.aggregate<a class="anchor" aria-label="anchor" href="#arg-cover-aggregate"></a></dt>
 <dd><p>how the cover arm collapses per occupancy unit on the
 shared-field spatial path: <code>"mean"</code>, <code>"median"</code>, <code>"latent"</code> (a per-unit
 cover random effect integrated out), or <code>"none"</code> (per-visit). <code>NULL</code>
@@ -287,21 +287,19 @@ covariate in the cell <code>data</code>; this is the equivalent of one weighted 
 term. Specify the trend field one way or the other, not both.</p>
     </div>
     <div class="section level2">
-    <h2 id="sites-larger-than-cells-group-var-">Sites larger than cells (<code>group_var</code>)<a class="anchor" aria-label="anchor" href="#sites-larger-than-cells-group-var-"></a></h2>
+    <h2 id="sites-larger-than-cells-group-var-">Sites larger than cells (<code>group.var</code>)<a class="anchor" aria-label="anchor" href="#sites-larger-than-cells-group-var-"></a></h2>
 
 
 <p>By default each site (one row of <code>y</code> / <code>data</code>, one latent occupancy state) is
 its own field node, so the graph must have one node per site. Passing
-<code>group_var = "&lt;col&gt;"</code> to the <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">bym2()</a></code> term maps each site to a
+<code>group.var = "&lt;col&gt;"</code> to the <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">bym2()</a></code> term maps each site to a
 field node named by that integer column, so several sites can share one node.
 The field then stays length <code>n_cells</code> (the graph) while occupancy, detection,
 and cover run over <code>n_sites</code>. The motivating layout is a site = cell x
 time-period: plots in a cell-period are the detection replicates, occupancy is
 per cell-period, and a per-site time weight on a coupled trend field
-(<code>icar(graph, weight = time, group_var = "cell")</code>) gives a detection-corrected
-occupancy trend on a shared cell field. Supported on the default
-<code>joint</code> engine; the <code>v2_joint</code> / <code>v3_nested</code> escape hatches bind the
-field 1:1 to sites and reject <code>group_var</code>.</p>
+(<code>icar(graph, weight = time, group.var = "cell")</code>) gives a detection-corrected
+occupancy trend on a shared cell field.</p>
     </div>
     <div class="section level2">
     <h2 id="per-group-random-intercept-on-the-shared-field-path-re-g-">Per-group random intercept on the shared-field path (<code><a href="tobs_terms.html">re()</a></code> / <code>(1 | g)</code>)<a class="anchor" aria-label="anchor" href="#per-group-random-intercept-on-the-shared-field-path-re-g-"></a></h2>
@@ -326,10 +324,10 @@ grouping factor names the areal graph nodes. The engine's inline-MCAR call
 <code>tulpa::spatial(graph, ~ 1 + x | cell)</code> reads <code>| cell</code> as a separable spatial
 field, but the same spelling in an <code>occu_cover()</code> formula is an IID random
 effect on <code>cell</code>. For a spatial field on the cells use an areal term –
-<code>icar(graph = adj, group_var = "cell")</code> (plus
-<code>icar(graph = adj, weight = x, group_var = "cell")</code> for a spatially-varying
+<code>icar(graph = adj, group.var = "cell")</code> (plus
+<code>icar(graph = adj, weight = x, group.var = "cell")</code> for a spatially-varying
 trend) – not a bar. When a formula carries a bar whose grouping factor is also
-an areal term's <code>group_var</code>, <code>occu_cover()</code> emits a one-time message noting the
+an areal term's <code>group.var</code>, <code>occu_cover()</code> emits a one-time message noting the
 bar is fitted as a random effect; suppress it with <code><a href="https://rdrr.io/r/base/message.html" class="external-link">base::suppressMessages()</a></code>.</p>
     </div>
     <div class="section level2">
@@ -345,10 +343,10 @@ cover arm inherits no field, so per-cell conditional cover (and its change over
 time, <code>delta_cover_cond</code>) comes out flat. A <code><a href="tobs_terms.html">spatial()</a></code> bar placed in the
 <code>positive</code> formula adds an INDEPENDENT, non-copied areal field on the cover arm
 alone:</p>
-<p></p><div class="sourceCode r"><pre><code><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span>occurrence <span class="op">=</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group_var <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>,</span>
+<p></p><div class="sourceCode r"><pre><code><span><span class="fu"><a href="../reference/tobs.html">tobs</a></span><span class="op">(</span>occurrence <span class="op">=</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group.var <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>,</span>
 <span>     detection  <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
 <span>     positive   <span class="op">=</span> <span class="op">~</span> <span class="va">time</span> <span class="op">+</span> <span class="fu"><a href="../reference/tobs_terms.html">spatial</a></span><span class="op">(</span><span class="op">~</span> <span class="fl">1</span> <span class="op">+</span> <span class="va">time</span> <span class="op">||</span> <span class="va">cell</span>, graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span>,</span>
-<span>     data <span class="op">=</span> <span class="va">cell_dat</span>, y <span class="op">=</span> <span class="va">y</span>, y_pos <span class="op">=</span> <span class="va">y_pos</span>,</span>
+<span>     data <span class="op">=</span> <span class="va">cell_dat</span>, y <span class="op">=</span> <span class="va">y</span>, y.pos <span class="op">=</span> <span class="va">y_pos</span>,</span>
 <span>     family <span class="op">=</span> <span class="fu"><a href="../reference/occu_cover.html">occu_cover</a></span><span class="op">(</span><span class="st">"lognormal"</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"nested_laplace"</span><span class="op">)</span></span></code></pre><p></p></div>
 <p>The occupancy field still drives psi and, via the alpha copy, <code>delta_cover_exp</code>;
 the independent cover field carries a cover-specific structure the alpha copy
@@ -360,7 +358,7 @@ column). The field SD grid defaults to <code>control$sigma.grid</code>; set
 grid, which keeps the added axis from multiplying the outer-grid cost.
 The per-cell field posterior is in <code>fit$pos_field</code> / <code>fit$pos_field_table</code>
 (and <code>fit$pos_field_tables</code> per column). Scope: it composes with the shared
-occupancy field but uses per-visit cover (<code>cover_aggregate = "none"</code>) and does
+occupancy field but uses per-visit cover (<code>cover.aggregate = "none"</code>) and does
 not combine with the correlated <code>|</code> MCAR field, the latent cover RE, or the
 batched fused path; like the shared field it is fitted as ICAR (bym2/car read as
 ICAR). A static intercept cover field is only weakly identified against the
@@ -387,14 +385,14 @@ re-solved, and a checkpoint written for different data or settings is rejected
 rather than resumed onto. Forwarded to <code><a href="https://gillescolling.com/tulpa/reference/tulpa_nested_laplace_joint.html" class="external-link">tulpa::tulpa_nested_laplace_joint()</a></code>.</p>
     </div>
     <div class="section level2">
-    <h2 id="cell-aggregated-cover-cover-aggregate-">Cell-aggregated cover (<code>cover_aggregate</code>)<a class="anchor" aria-label="anchor" href="#cell-aggregated-cover-cover-aggregate-"></a></h2>
+    <h2 id="cell-aggregated-cover-cover-aggregate-">Cell-aggregated cover (<code>cover.aggregate</code>)<a class="anchor" aria-label="anchor" href="#cell-aggregated-cover-cover-aggregate-"></a></h2>
 
 
 <p>On the shared-field spatial path the cover arm has one observation per
 detected visit, so a cell with many detected plots informs the shared field
 far more than the single occupancy observation for that cell; the field is
 then driven almost entirely by the cover arm and the detection-corrected
-occupancy surface flattens. <code>cover_aggregate</code> collapses the cover arm to a
+occupancy surface flattens. <code>cover.aggregate</code> collapses the cover arm to a
 single response per occupancy unit (cell-period) so the two arms inform the
 field with comparable weight:</p><ul><li><p><code>"mean"</code> – model the mean cover over the unit's detected visits;</p></li>
 <li><p><code>"median"</code> – model the median cover;</p></li>
@@ -457,7 +455,7 @@ slope BLUPs and <code>sigma</code> are back-transformed to the covariate's natur
 the outer grid, so its free-Sigma grid uses a compact principled default
 (symmetric correlation nodes including 0); widen it with
 <code>control$re.logchol.grid.p</code> / <code>re.logchol.grid.pos</code>.</p>
-<p>The positive-cover RE needs per-visit cover (<code>cover_aggregate = "none"</code>). As
+<p>The positive-cover RE needs per-visit cover (<code>cover.aggregate = "none"</code>). As
 with the occupancy-arm RE, each grid-integrated variance carries the binary /
 small-cluster inner-Laplace attenuation and is a lower bound on the truth; the
 BLUPs recover the per-group structure.</p>
@@ -488,8 +486,8 @@ same limitation the sampled coupled field has.</p>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
 <span><span class="va">N</span> <span class="op">&lt;-</span> <span class="fl">120</span>; <span class="va">J</span> <span class="op">&lt;-</span> <span class="fl">4</span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu_cover.html">simulate_occu_cover</a></span><span class="op">(</span>N <span class="op">=</span> <span class="va">N</span>, J <span class="op">=</span> <span class="va">J</span>, n_occ_covs <span class="op">=</span> <span class="fl">1</span>, n_det_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>                           n_pos_covs <span class="op">=</span> <span class="fl">1</span>, positive <span class="op">=</span> <span class="st">"beta"</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu_cover.html">simulate_occu_cover</a></span><span class="op">(</span>N <span class="op">=</span> <span class="va">N</span>, J <span class="op">=</span> <span class="va">J</span>, n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>                           n.pos.covs <span class="op">=</span> <span class="fl">1</span>, positive <span class="op">=</span> <span class="st">"beta"</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>site_id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">N</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">J</span><span class="op">)</span>,</span>
 <span>                   visit    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">J</span><span class="op">)</span>, times <span class="op">=</span> <span class="va">N</span><span class="op">)</span>,</span>
 <span>                   y        <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">y</span><span class="op">)</span><span class="op">)</span>,</span>
@@ -501,7 +499,7 @@ same limitation the sampled coupled field has.</p>
 <span><span class="va">y_pos</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">y_pos</span>; <span class="va">y_pos</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">y_pos</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">cell_dat</span>, family <span class="op">=</span> <span class="fu">occu_cover</span><span class="op">(</span><span class="st">"beta"</span><span class="op">)</span>,</span>
 <span>            detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, positive <span class="op">=</span> <span class="op">~</span> <span class="va">pos_cov1</span>,</span>
-<span>            y <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">y</span>, y_pos <span class="op">=</span> <span class="va">y_pos</span>, visits <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">det.covs</span>, method <span class="op">=</span> <span class="st">"laplace"</span><span class="op">)</span></span>
+<span>            y <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">y</span>, y.pos <span class="op">=</span> <span class="va">y_pos</span>, visits <span class="op">=</span> <span class="va">od</span><span class="op">$</span><span class="va">det.covs</span>, method <span class="op">=</span> <span class="st">"laplace"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="co"># }</span></span></code></pre></div>
     </div>

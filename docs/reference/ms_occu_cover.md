@@ -53,7 +53,7 @@ community parameter.
 
 ## Inputs
 
-`y` and `y_pos` are 3D arrays `[n_sites x max_visits x n_species]` (or
+`y` and `y.pos` are 3D arrays `[n_sites x max_visits x n_species]` (or
 named lists of `n_sites x max_visits` matrices, one per species);
 `species =` is required. The occupancy `formula`, the `detection`
 formula, and the cover `positive` formula carry community covariates
@@ -61,6 +61,19 @@ shared across species. [`coef()`](https://rdrr.io/r/stats/coef.html)
 returns the community means;
 [`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html) the
 per-species coefficient deviations.
+
+## Engines
+
+- `method = "laplace"` – the community Laplace-EM (per-species
+  deviations integrated, closed-form community covariance M-step),
+  non-spatial or with the reduced-rank spatial factors below.
+
+- `method = "nuts"` – the community sampler over the exact per-(species,
+  cell) two-state marginal, warm-started at the Laplace-EM mode:
+  non-spatial it samples the community means, per-species deviations,
+  the three per-arm community covariances and the shared log-dispersion
+  jointly; with a shared areal field it samples the spatial-factor model
+  below.
 
 ## Reduced-rank spatial factors
 
@@ -137,11 +150,11 @@ components are integrated on an outer grid (the engine route of
 [`occu_cover()`](https://gillescolling.com/tulpaObs/reference/occu_cover.md)'s
 joint-coupled path) is not used: the joint nested-Laplace engine
 integrates every variance component on its outer grid, so per-arm
-community RE variances plus the field hyperparameters exceed the
-engine's grid cap – the closed-form covariance M-step of the Laplace-EM
-is the scaling route for community variance components. Structured terms
-beyond the shared field error from the dispatcher rather than being
-silently dropped.
+community RE variances plus the field hyperparameters exceed any
+tractable grid size – the closed-form covariance M-step of the
+Laplace-EM is the scaling route for community variance components.
+Structured terms beyond the shared field error from the dispatcher
+rather than being silently dropped.
 
 ## Community variance debias
 

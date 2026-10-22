@@ -15,17 +15,17 @@ fit with a NUTS path over the same marginal.
 ## Usage
 
 ``` r
-dyn_abun(K_max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
+dyn_abun(K.max = NULL, mixture = c("poisson", "negbin", "zip", "zinb"))
 ```
 
 ## Arguments
 
-- K_max:
+- K.max:
 
   abundance-state truncation for the forward recursion (states
   `0..K_max`). `NULL` (default) uses `max(count) + 40`; raise it if
   abundance may exceed that (the forward cost is roughly cubic in
-  `K_max`).
+  `K.max`).
 
 - mixture:
 
@@ -54,6 +54,28 @@ site's seasons; supplying a season-varying covariate (a
 interval) on `omega` / `gamma` gives interval-specific vital rates. The
 response `y` is a 3D array `[n_sites x max_visits x n_seasons]` (or a
 list of per-season count matrices); missing visits are `NA`.
+
+## Engines
+
+- `method = "laplace"` – analytic-gradient BFGS over the forward
+  marginal with an observed-information covariance; a grouped random
+  effect on the initial-abundance arm is integrated by adaptive
+  Gauss-Hermite quadrature.
+
+- `method = "nested_laplace"` – an areal
+  [`icar()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  /
+  [`car_proper()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field on the initial-abundance arm (BFGS over the forward marginal
+  plus the CAR prior), optionally composed with a
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  field, through the shared areal-BFGS driver.
+
+- `method = "nuts"` – the in-tree C++ NUTS sampler over the same forward
+  marginal, with a fixed-hyper areal field block on the
+  initial-abundance arm; a
+  [`temporal()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
+  term is not sampled.
 
 ## References
 

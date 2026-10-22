@@ -30,7 +30,7 @@ mean of the parameters, supplied by the family-specific
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -131,7 +131,7 @@ ratio inverts the whole cell's likelihood. A whole cell is a larger
 perturbation of the posterior than a single row, so the Pareto k values are
 correspondingly higher and are the diagnostic to read before trusting the
 cell-level number. Implemented for <code><a href="cover.html">cover()</a></code> (the areal field node, when
-sites are grouped via <code>group_var</code>) and <code><a href="occu_cover.html">occu_cover()</a></code> (the <code>site_cell</code> map);
+sites are grouped via <code>group.var</code>) and <code><a href="occu_cover.html">occu_cover()</a></code> (the <code>site_cell</code> map);
 a non-spatial fit has no cells, so <code>"cell"</code> errors there. Equivalent to
 passing <code>group =</code> the cell map directly, without hand-building it. <code><a href="https://gillescolling.com/tulpa/reference/criteria_doors.html" class="external-link">dic()</a></code>
 has no cross-validation unit – it is a plug-in deviance over all
@@ -180,6 +180,19 @@ objects through <code><a href="https://mc-stan.org/loo/reference/waic.html" clas
     <div class="dont-index"><p><code><a href="https://gillescolling.com/tulpa/reference/tulpa_criteria.html" class="external-link">tulpa::tulpa_criteria()</a></code>, <code><a href="https://mc-stan.org/loo/reference/loo_compare.html" class="external-link">loo::loo_compare()</a></code></p></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># \donttest{</span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_occu.html">simulate_occu</a></span><span class="op">(</span>N <span class="op">=</span> <span class="fl">100</span>, J <span class="op">=</span> <span class="fl">3</span>, n.occ.covs <span class="op">=</span> <span class="fl">1</span>, n.det.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>                     seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="tobs.html">tobs</a></span><span class="op">(</span><span class="op">~</span> <span class="va">occ_cov1</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>, family <span class="op">=</span> <span class="fu"><a href="occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>            detection <span class="op">=</span> <span class="op">~</span> <span class="va">det_cov1</span>, y <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">y</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span>
+<span>            control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://mc-stan.org/loo/reference/loo.html" class="external-link">loo</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://gillescolling.com/tulpa/reference/criteria_doors.html" class="external-link">dic</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
+<span><span class="co"># }</span></span></code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

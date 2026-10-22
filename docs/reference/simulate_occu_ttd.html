@@ -24,7 +24,7 @@ survey of length Tmax (a non-detection is censored at Tmax)."><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,10 +74,10 @@ survey of length <code>Tmax</code> (a non-detection is censored at <code>Tmax</c
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">simulate_occu_ttd</span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  J <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>  n_psi_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  n_rate_covs <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  beta_psi <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_rate <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n.psi.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  n.rate.covs <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  beta.psi <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta.rate <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  Tmax <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -95,18 +95,18 @@ survey of length <code>Tmax</code> (a non-detection is censored at <code>Tmax</c
 <dd><p>Number of replicate surveys per site (default 4).</p></dd>
 
 
-<dt id="arg-n-psi-covs-n-rate-covs">n_psi_covs, n_rate_covs<a class="anchor" aria-label="anchor" href="#arg-n-psi-covs-n-rate-covs"></a></dt>
+<dt id="arg-n-psi-covs-n-rate-covs">n.psi.covs, n.rate.covs<a class="anchor" aria-label="anchor" href="#arg-n-psi-covs-n-rate-covs"></a></dt>
 <dd><p>Number of occupancy / rate covariates.</p></dd>
 
 
-<dt id="arg-beta-psi">beta_psi<a class="anchor" aria-label="anchor" href="#arg-beta-psi"></a></dt>
+<dt id="arg-beta-psi">beta.psi<a class="anchor" aria-label="anchor" href="#arg-beta-psi"></a></dt>
 <dd><p>Occupancy coefficients <code>c(intercept, slopes...)</code> (logit).
-Default <code>c(qlogis(0.6), runif(n_psi_covs, -0.5, 0.5))</code>.</p></dd>
+Default <code>c(qlogis(0.6), runif(n.psi.covs, -0.5, 0.5))</code>.</p></dd>
 
 
-<dt id="arg-beta-rate">beta_rate<a class="anchor" aria-label="anchor" href="#arg-beta-rate"></a></dt>
+<dt id="arg-beta-rate">beta.rate<a class="anchor" aria-label="anchor" href="#arg-beta-rate"></a></dt>
 <dd><p>Log detection-rate coefficients <code>c(intercept, slopes...)</code>.
-Default <code>c(log(0.6), runif(n_rate_covs, -0.4, 0.4))</code>.</p></dd>
+Default <code>c(log(0.6), runif(n.rate.covs, -0.4, 0.4))</code>.</p></dd>
 
 
 <dt id="arg-tmax">Tmax<a class="anchor" aria-label="anchor" href="#arg-tmax"></a></dt>

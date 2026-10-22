@@ -4,13 +4,13 @@ N_i ~ Poisson(lambda_i) (or negative binomial) observed through K ordered
 removal passes, where pass k removes
 Binomial(N_i - sum_{l&amp;lt;k} y_{il}, p_{ik}) of the individuals still present.
 The declining catch sequence identifies detection p and abundance N; the
-latent N is summed out in closed form (truncation K_max), so the fit is a
+latent N is summed out in closed form (truncation K.max), so the fit is a
 direct Laplace approximation (no EM), with a NUTS path over the same marginal."><meta property="og:description" content="Sequential-depletion removal sampling: latent abundance
 N_i ~ Poisson(lambda_i) (or negative binomial) observed through K ordered
 removal passes, where pass k removes
 Binomial(N_i - sum_{l&amp;lt;k} y_{il}, p_{ik}) of the individuals still present.
 The declining catch sequence identifies detection p and abundance N; the
-latent N is summed out in closed form (truncation K_max), so the fit is a
+latent N is summed out in closed form (truncation K.max), so the fit is a
 direct Laplace approximation (no EM), with a NUTS path over the same marginal."><script>
 (function () {
   var D = String.fromCharCode(36);
@@ -32,7 +32,7 @@ direct Laplace approximation (no EM), with a NUTS path over the same marginal.">
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -77,22 +77,22 @@ direct Laplace approximation (no EM), with a NUTS path over the same marginal.">
 removal passes, where pass <code>k</code> removes
 <code>Binomial(N_i - sum_{l&lt;k} y_{il}, p_{ik})</code> of the individuals still present.
 The declining catch sequence identifies detection <code>p</code> and abundance <code>N</code>; the
-latent <code>N</code> is summed out in closed form (truncation <code>K_max</code>), so the fit is a
+latent <code>N</code> is summed out in closed form (truncation <code>K.max</code>), so the fit is a
 direct Laplace approximation (no EM), with a NUTS path over the same marginal.</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">removal</span><span class="op">(</span>K_max <span class="op">=</span> <span class="cn">NULL</span>, mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">removal</span><span class="op">(</span>K.max <span class="op">=</span> <span class="cn">NULL</span>, mixture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"poisson"</span>, <span class="st">"negbin"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-k-max">K_max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
+<dl><dt id="arg-k-max">K.max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
 <dd><p>upper bound for the latent-abundance marginal sum (the exact
-integration over <code>N</code> is truncated at <code>K_max</code>). <code>NULL</code> (default) lets the
+integration over <code>N</code> is truncated at <code>K.max</code>). <code>NULL</code> (default) lets the
 engine pick <code>max(y) + 100</code> (matching <code><a href="https://ecoverseR.github.io/unmarked/reference/pcount.html" class="external-link">unmarked::pcount()</a></code>); raise it if a
 fit warns that the posterior over <code>N</code> puts mass on the boundary.</p></dd>
 
@@ -121,6 +121,20 @@ the per-pass detection (<code>logit p</code>) model. The response <code>y</code>
 order; complete pass sequences are required (no <code>NA</code>).</p>
     </div>
     <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – a direct Laplace approximation over the closed-form
+marginal (Poisson or negative binomial); a grouped random effect is
+integrated by adaptive Gauss-Hermite quadrature.</p></li>
+<li><p><code>method = "nested_laplace"</code> – an areal <code><a href="tobs_terms.html">icar()</a></code> / <code><a href="tobs_terms.html">car_proper()</a></code> field on
+the abundance arm, optionally composed with a <code><a href="tobs_terms.html">temporal()</a></code> field, through
+the shared areal-BFGS driver.</p></li>
+<li><p><code>method = "nuts"</code> – the in-tree C++ NUTS sampler over the same marginal,
+with a fixed-hyper areal or temporal field block on the abundance arm (one
+of the two, not both).</p></li>
+</ul></div>
+    <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Royle, J. A. (2004). N-mixture models for estimating population size from
 spatially replicated counts. <em>Biometrics</em> 60, 108-115.
@@ -130,7 +144,7 @@ estimates of abundance. <em>Biometrics</em> 61, 1093-1101.</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">f</span> <span class="op">&lt;-</span> <span class="fu">removal</span><span class="op">(</span>K_max <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">f</span> <span class="op">&lt;-</span> <span class="fu">removal</span><span class="op">(</span>K.max <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span><span class="va">f</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

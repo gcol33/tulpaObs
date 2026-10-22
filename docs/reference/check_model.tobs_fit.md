@@ -78,3 +78,16 @@ quantities through the family's own doors instead:
 [`test_dispersion()`](https://gillescolling.com/tulpa/reference/test_dispersion.html)
 and
 [`tulpa::moran_i()`](https://gillescolling.com/tulpa/reference/moran_i.html).
+
+## Examples
+
+``` r
+# \donttest{
+sim <- simulate_occu(N = 100, J = 3, n.occ.covs = 1, n.det.covs = 1,
+                     seed = 1)
+fit <- tobs(~ occ_cov1, data = sim$data, family = occu(),
+            detection = ~ det_cov1, y = sim$y, method = "laplace",
+            control = list(verbose = FALSE, progress = FALSE))
+check_model(fit, seed = 1, plot = FALSE)
+# }
+```

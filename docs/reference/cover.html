@@ -24,7 +24,7 @@ families – see vignette("families") for the conceptual caveat.'><script>
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -118,6 +118,26 @@ other families.</p></dd>
     <p>A <code>tobs_family</code> object.</p>
     </div>
     <div class="section level2">
+    <h2 id="engines">Engines<a class="anchor" aria-label="anchor" href="#engines"></a></h2>
+
+
+<ul><li><p><code>method = "laplace"</code> – two independent <code>tulpa_laplace()</code> fits, one per
+arm (presence, positive), non-spatial; the default.</p></li>
+<li><p><code>method = "laplace_sla"</code> – the same two fits with simplified-Laplace
+skew-corrected marginals.</p></li>
+<li><p><code>method = "nested_laplace"</code> – the joint nested-Laplace engine: shared or
+arm-specific areal fields, weighted trend fields, <code><a href="tobs_terms.html">temporal()</a></code> and <code><a href="tobs_terms.html">re()</a></code>
+blocks, every hyperparameter integrated on an outer grid; the route the
+<code>"lognormal_trunc"</code> and <code>"ordinal"</code> arms require.</p></li>
+<li><p><code>method = "nested_laplace_sla"</code> – the nested route with skew-corrected
+marginals.</p></li>
+<li><p><code>method = "nuts"</code> – the non-spatial sampler over the exact two-arm
+coefficient vector <code>c(beta_presence, beta_positive, log_disp)</code>, giving
+calibrated intervals and a per-draw pointwise likelihood for WAIC / LOO;
+<code>"beta"</code>, <code>"lognormal"</code> and <code>"gaussian"</code> arms only, and any structured
+term errors with a pointer to <code>"nested_laplace"</code>.</p></li>
+</ul></div>
+    <div class="section level2">
     <h2 id="response-on-the-formula-left-hand-side">Response on the formula left-hand side<a class="anchor" aria-label="anchor" href="#response-on-the-formula-left-hand-side"></a></h2>
 
 
@@ -166,8 +186,8 @@ coverage of the <em>population</em> truth collapses with alpha. See
 formula as a SECOND, weighted areal term on the same graph as the intercept
 field, not through <code>control</code>:</p>
 <p></p><div class="sourceCode r"><pre><code><span><span class="op">~</span> <span class="va">time.sc</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group_var <span class="op">=</span> <span class="st">"cell_idx"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, weight <span class="op">=</span> <span class="va">time.sc</span>, group_var <span class="op">=</span> <span class="st">"cell_idx"</span><span class="op">)</span></span></code></pre><p></p></div>
+<span>  <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, group.var <span class="op">=</span> <span class="st">"cell_idx"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="../reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span>, weight <span class="op">=</span> <span class="va">time.sc</span>, group.var <span class="op">=</span> <span class="st">"cell_idx"</span><span class="op">)</span></span></code></pre><p></p></div>
 <p>The unweighted term is the shared intercept field; the weighted term
 <code>icar(..., weight = col)</code> is the trend field, whose contribution to each
 arm's predictor is <code>weight_i * z[cell_i]</code>, coupled onto the cover arm with
@@ -213,7 +233,7 @@ the measurement is in <code>NOTES_measurements.md</code>.</p>
 <p>The bar left-hand side spells the coefficient fields: the intercept column
 (<code>1</code>) is the unweighted field; each covariate column (<code>time.sc</code>) is a
 weight-scaled coefficient field (<code>weight_i * z[cell_i]</code>). The bar right-hand
-side (<code>cell_idx</code>) is the graph node index (the areal <code>group_var</code>); <code>||</code>
+side (<code>cell_idx</code>) is the graph node index (the areal <code>group.var</code>); <code>||</code>
 requests independent intercept and slope fields, a single <code>|</code> makes them
 correlated. This desugars to exactly the two-term weighted-areal form above,
 so the two spellings give the same fit.</p>
@@ -292,9 +312,9 @@ field, but the same spelling inside a <code>cover()</code> formula is parsed as 
 random effect on <code>cell</code>. For a spatial field on the cells write either the
 compact <code><a href="tobs_terms.html">spatial()</a></code> bar of the section above,
 <code>spatial(~ 1 + x || cell, graph = adj)</code>, or the two-term weighted-areal form,
-<code>icar(graph = adj, group_var = "cell") +</code>
-<code>icar(graph = adj, weight = x, group_var = "cell")</code>. When a formula carries a
-bar whose grouping factor is also an areal term's <code>group_var</code>, <code>cover()</code> emits
+<code>icar(graph = adj, group.var = "cell") +</code>
+<code>icar(graph = adj, weight = x, group.var = "cell")</code>. When a formula carries a
+bar whose grouping factor is also an areal term's <code>group.var</code>, <code>cover()</code> emits
 a one-time message noting the bar is fitted as a random effect; suppress it
 with <code><a href="https://rdrr.io/r/base/message.html" class="external-link">base::suppressMessages()</a></code>.</p>
     </div>

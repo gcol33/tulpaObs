@@ -94,7 +94,7 @@ same AGHQ engine. The per-species size is
 
     <a class="navbar-brand me-2" href="../index.html">tulpaObs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -420,7 +420,8 @@ Ignored for Poisson / ZIP.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
-<dd><p>Unused (kept for backward compatibility); the engine is silent.</p></dd>
+<dd><p>Print the per-iteration community-covariance change of the
+<code>optimizer = "em"</code> solver; the joint AGHQ optimizers are silent.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -430,7 +431,10 @@ means), <code>vcov</code> (their joint covariance from the AGHQ marginal Hessian
 <code>(p_lambda + p_p)</code> square; marginalizes the community-covariance
 uncertainty rather than plugging in <code>Sigma</code>), <code>Sigma_lambda</code>, <code>Sigma_p</code>
 (community covariances), <code>b_lambda</code>, <code>b_p</code> (per-species BLUP deviations,
-<code>n_species</code> rows), <code>log_lik</code> (AGHQ marginal), <code>converged</code>, <code>K_max</code>,
+<code>n_species</code> rows), <code>blup_cov_g</code> (per-species list of the posterior
+covariance of the species' stacked RE vector, lambda then p, then the
+<code>log_r</code> / <code>logit_omega</code> deviation when present), <code>log_lik</code> (AGHQ
+marginal), <code>converged</code>, <code>K_max</code>,
 <code>n_quad</code>, <code>lkj_eta</code>, and (when <code>mixture = "NB"</code>) the dispersion summaries:
 <code>mu_log_r</code> (community-mean log-dispersion; its SE is the trailing <code>vcov</code>
 diagonal), <code>sigma_log_r</code> (the per-species log-dispersion SD), <code>b_logr</code>

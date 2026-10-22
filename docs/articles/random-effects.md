@@ -1,5 +1,24 @@
 # Random effects with lme4 bar syntax
 
+## Installation
+
+``` r
+
+install.packages("pak")
+pak::pak("gcol33/tulpaObs")            # latest from GitHub
+pak::pak("gcol33/tulpaObs@v0.1.1")     # a specific tagged release
+```
+
+Tagged releases are listed at
+<https://github.com/gcol33/tulpaObs/releases>.
+
+pak resolves the dependency tree, pulling `tulpa` and `tulpaMesh` from
+the r-universe repository DESCRIPTION declares in
+`Additional_repositories`, at or above the `Imports` floor. A C++17
+toolchain is needed (Rtools on Windows, Xcode CLI tools on macOS,
+`r-base-dev` on Linux); both `tulpa` and `tulpaObs` compile their
+backends on first install.
+
 ``` r
 
 library(tulpaObs)
@@ -145,9 +164,10 @@ c(estimate = fit$means[[sig_name]], truth = 0.9)
 
 [`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html)
 returns the per-group effects (the BLUPs, best linear unbiased
-predictors) as a data frame with one row per group and term: which
-grouping factor, which level, which coefficient, the estimate, and its
-standard error.
+predictors) as a data frame with one row per group and term: which arm
+the effect enters, which grouping factor, which level, which
+coefficient, the estimate, and its standard error. Every family returns
+these same columns.
 
 ``` r
 
@@ -389,7 +409,7 @@ per-group detection BLUPs track the simulated observer effects.
 ``` r
 
 re_d <- ranef(fit_d)
-rp <- re_d[re_d$group == "p1", ]
+rp <- re_d[re_d$group == "observer", ]
 cor(rp$estimate, sd_re$b_obs)
 ```
 
@@ -403,8 +423,9 @@ full posterior of the correlation rather than a regularized point
 estimate. It is the tool for the forms Laplace declines and for any case
 where you want draws rather than a Gaussian approximation.
 
-Here is the same random intercept under NUTS. The variance component
-comes back on the log scale as `log_sigma_`, and
+Here is the same random intercept under NUTS. The variance component is
+reported on the natural scale under the same `sigma_` name the Laplace
+fit uses, and
 [`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html)
 reconstructs the per-group BLUPs by marginalising over the draws.
 
@@ -416,7 +437,7 @@ fit_n <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
                              verbose = FALSE))
 
 sig_l <- fit$means[[grep("^sigma_", names(fit$means), value = TRUE)]]
-sig_n <- exp(fit_n$means[[grep("^log_sigma_", names(fit_n$means), value = TRUE)]])
+sig_n <- fit_n$means[[grep("^sigma_", names(fit_n$means), value = TRUE)]]
 c(laplace = sig_l, nuts = sig_n, truth = 0.9)
 ```
 
@@ -429,14 +450,16 @@ re_n <- ranef(fit_n)
 cor(re$estimate, re_n$estimate)
 ```
 
-A few random-effect specifications are NUTS-only. The Laplace path
-errors, with a pointer to NUTS, for: a single random effect shared
-across both the occupancy and detection predictors (`share()`
-semantics); a random effect combined with a spatial field in the same
-fit; and a random effect combined with visit-level detection covariates.
-In each case the deterministic path would have to fit something it
-cannot represent exactly, so it stops rather than silently fitting a
-different model. NUTS handles all three.
+Two random-effect specifications are NUTS-only. The Laplace path errors,
+with a pointer to NUTS, for: a single random effect shared across both
+the occupancy and detection predictors (`share()` semantics), and a
+random effect combined with a spatial field in the same fit. In each
+case the deterministic path would have to fit something it cannot
+represent exactly, so it stops rather than silently fitting a different
+model. NUTS handles both. A random effect beside visit-level detection
+covariates, or one grouped over visit rows, stays on the Laplace path:
+the detection arm is then fitted per (site, visit) row, and only the
+AGHQ debias declines, so the variance components are the EM values.
 
 The reason for the boundary is in how the Laplace path works. The
 variance-component EM splits the random effects into an occupancy arm
@@ -446,13 +469,15 @@ single effect that has to be the same realization in both predictors
 breaks that split: there is no way to fit it once on the occupancy arm
 and once on the detection arm and call the two the same. Likewise the
 AGHQ debias works on a per-site marginal with the latent occupancy state
-integrated out in closed form; a spatial field or a per-visit detection
-design changes that marginal in a way the closed form does not cover.
-Rather than approximate silently, the validator stops and names NUTS,
-which samples the joint posterior directly and needs none of these
-closed forms. The cost is speed: a NUTS fit takes seconds where Laplace
-takes a fraction of one, and you read convergence from `Rhat` and
-effective sample size rather than trusting a mode.
+integrated out in closed form; a spatial field changes that marginal in
+a way the closed form does not cover, and a per-visit detection design
+couples every visit of a site so the integrand no longer factors by
+group. The first stops the fit; the second only switches the debias off.
+Rather than approximate silently, the validator names NUTS, which
+samples the joint posterior directly and needs none of these closed
+forms. The cost is speed: a NUTS fit takes seconds where Laplace takes a
+fraction of one, and you read convergence from `Rhat` and effective
+sample size rather than trusting a mode.
 
 ## Practical guidance
 

@@ -12,9 +12,9 @@ is an `N x n_species` presence matrix.
 ``` r
 simulate_jsdm(
   N = 100,
-  n_species = 10,
-  beta_comm_mean = c(0, 0.5),
-  beta_comm_sd = c(0.5, 0.3),
+  n.species = 10,
+  beta.comm.mean = c(0, 0.5),
+  beta.comm.sd = c(0.5, 0.3),
   seed = NULL
 )
 ```
@@ -25,19 +25,19 @@ simulate_jsdm(
 
   Number of sites (default 100).
 
-- n_species:
+- n.species:
 
   Number of species (default 10).
 
-- beta_comm_mean:
+- beta.comm.mean:
 
   Community-mean occupancy coefficients, length `1 + n_occ_covs`
   (intercept first).
 
-- beta_comm_sd:
+- beta.comm.sd:
 
   Between-species SD of each occupancy coefficient (same length as
-  `beta_comm_mean`).
+  `beta.comm.mean`).
 
 - seed:
 
@@ -51,6 +51,6 @@ A list with `y` (an `N x n_species` 0/1 presence matrix), `data`, and
 ## Examples
 
 ``` r
-sim <- simulate_jsdm(N = 60, n_species = 5, seed = 1)
+sim <- simulate_jsdm(N = 60, n.species = 5, seed = 1)
 dim(sim$y)   # 60 sites x 5 species presence matrix
 ```
