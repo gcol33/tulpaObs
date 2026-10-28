@@ -202,8 +202,8 @@ y_pos <- sim$y_pos; y_pos[is.na(y_pos)] <- 0
 # The dispersion goes on the outer grid so it is estimated and scored, and
 # the field-SD grid is pinned so both stages integrate the same support.
 ctl <- list(engine = "joint", verbose = FALSE,
-            sigma.grid   = exp(seq(log(0.15), log(2.0), length.out = 9)),
-            phi.grid.pos = exp(seq(log(0.20), log(0.90), length.out = 7)))
+            sigma.grid   = exp(seq(log(0.15), log(2.0), length.out = 5)),
+            phi.grid.pos = exp(seq(log(0.20), log(0.90), length.out = 4)))
 fit <- tobs(~ occ_cov1 + icar(graph = adj),
             data = cbind(data.frame(site_id = seq_len(N)), sim$data),
             family = occu_cover("lognormal"),
@@ -211,7 +211,7 @@ fit <- tobs(~ occ_cov1 + icar(graph = adj),
             positive = ~ pos_cov1 + share(spatial()),
             y = od$y, y.pos = y_pos, visits = od$det.covs,
             method = "nested_laplace", control = ctl)
-sbc(fit, n.sim = 20L, controls = "narrow", fit.control = ctl)
+sbc(fit, n.sim = 5L, controls = "narrow", fit.control = ctl)
 }
 }
 \references{
