@@ -33,7 +33,13 @@ the first submission was under review; NEWS.md lists the changes.
 ## Test environments
 
 * local: Windows 11, R 4.6.1, `R CMD check --as-cran`
-* win-builder: R-devel
+* local: Windows 11, R-devel (2026-10-26 r90766 ucrt), `R CMD check
+  --as-cran` on the submitted tarball: 2 NOTEs (new submission / INLA in
+  Additional_repositories; HTML manual math rendering skipped because V8 is
+  not installed locally), check time 301 s, tests 2248 passed.
+  win-builder's R-devel queue was not processing on 2026-10-28: the tarball
+  was uploaded at 12:09 CET and the queue held the same packages, none
+  processed, for over two hours, so the local R-devel check stands in for it.
 * GitHub Actions: ubuntu-latest (R-release) on every push; a CRAN-like job
   without `NOT_CRAN` on x86_64 and aarch64
 
