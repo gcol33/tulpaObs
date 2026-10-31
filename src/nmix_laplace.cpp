@@ -6,9 +6,9 @@
 // observed Fisher information, the outer profile-score step on theta = log r
 // under NB, and the final joint observed-information inverse (Louis 1982; see
 // nmix_kernel.h) -- is the shared count-marginal Laplace driver
-// (marginal_count_laplace.h). This file is the (single-line) instantiation with
-// the N-mixture per-site kernel; the removal-sampling family is the same driver
-// with its own kernel (removal_laplace.cpp).
+// (marginal_count_laplace.cpp). This file calls it with the N-mixture per-site
+// kernel; the removal-sampling family is the same driver with its own kernel
+// (removal_laplace.cpp).
 
 #include "nmix_kernel.h"
 #include "marginal_count_laplace.h"
@@ -33,13 +33,13 @@ Rcpp::List cpp_nmix_laplace_fixed(
     double theta_max,
     int headroom = -1   // latent-N states above each site's own max(y); <0 = none
 ) {
+    auto kern = [headroom](const int* yy, const double* ep, int J, double el,
+                           int Km, double r) {
+        const tulpaObs::NMixSiteCache c =
+            tulpaObs::nmix_precompute_site(yy, J, Km, headroom);
+        return tulpaObs::compute_nmix_site_cached(c, ep, el, r);
+    };
     return tulpaObs::mcl::marginal_count_laplace_fixed(
         y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init,
-        K_max, max_iter, tol, verbose, nb, log_r_init, theta_max,
-        [headroom](const int* yy, const double* ep, int J, double el, int Km,
-                   double r) {
-            const tulpaObs::NMixSiteCache c =
-                tulpaObs::nmix_precompute_site(yy, J, Km, headroom);
-            return tulpaObs::compute_nmix_site_cached(c, ep, el, r);
-        });
+        K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, kern);
 }

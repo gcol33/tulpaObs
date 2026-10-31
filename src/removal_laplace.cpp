@@ -2,7 +2,7 @@
 // Non-spatial fixed-effects Laplace fit for the removal-sampling abundance
 // model with a Poisson OR negative-binomial abundance mixing distribution.
 //
-// Same shared count-marginal Laplace driver (marginal_count_laplace.h) the
+// Same shared count-marginal Laplace driver (marginal_count_laplace.cpp) the
 // N-mixture uses -- inner Newton on (beta_lambda, beta_p), outer profile step on
 // theta = log r under NB, final joint observed-information inverse -- with the
 // removal per-site kernel (removal_kernel.h), whose detection arm sees the
@@ -33,12 +33,13 @@ Rcpp::List cpp_removal_laplace_fixed(
     double log_r_init,
     double theta_max
 ) {
+    auto kern = [](const int* yy, const double* ep, int J, double el, int Km,
+                   double r) {
+        return tulpaObs::compute_removal_site(yy, ep, J, el, Km, r);
+    };
     return tulpaObs::mcl::marginal_count_laplace_fixed(
         y, site_idx, X_lambda_R, X_p_R, beta_lambda_init, beta_p_init,
-        K_max, max_iter, tol, verbose, nb, log_r_init, theta_max,
-        [](const int* yy, const double* ep, int J, double el, int Km, double r) {
-            return tulpaObs::compute_removal_site(yy, ep, J, el, Km, r);
-        });
+        K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, kern);
 }
 
 // Total marginal log-likelihood + per-site/per-pass gradients and observed-info

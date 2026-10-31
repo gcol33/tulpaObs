@@ -2,9 +2,9 @@
 // Nested-Laplace entry points for the spatial Royle (2004) N-mixture model with
 // an ICAR or proper-CAR field on the abundance arm. The family-agnostic inner
 // Newton / Laplace machinery AND the outer-grid orchestration live in
-// nmix_count_spatial_driver.h (shared with removal / distance, #51); these two
-// [[Rcpp::export]] functions are thin wrappers that instantiate the shared
-// orchestration with the Royle per-site kernel.
+// nmix_count_spatial_driver.cpp (shared with removal, #51); these two
+// [[Rcpp::export]] functions are thin wrappers that call it with the Royle
+// per-site kernel.
 
 #include "tobs_shape.h"
 #include "nmix_count_spatial_driver.h"
@@ -42,7 +42,7 @@ Rcpp::List cpp_nested_laplace_nmix_icar(
         tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        tulpaObs::NmixSiteKernel{});
+        &tulpaObs::compute_nmix_site);
 }
 
 // [[Rcpp::export]]
@@ -76,5 +76,5 @@ Rcpp::List cpp_nested_laplace_nmix_car_proper(
         tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        tulpaObs::NmixSiteKernel{});
+        &tulpaObs::compute_nmix_site);
 }

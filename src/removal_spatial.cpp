@@ -4,7 +4,7 @@
 // sequential-depletion removal marginal. The removal per-site marginal
 // (compute_removal_site) shares the NMixSiteResult moment interface with the
 // Royle N-mixture, so it reuses the family-agnostic nested-Laplace driver and
-// outer-grid orchestration in nmix_count_spatial_driver.h verbatim -- only the
+// outer-grid orchestration in nmix_count_spatial_driver.cpp verbatim -- only the
 // per-site kernel differs. `y` is long-form per-pass removals in PASS ORDER per
 // site (pass 1 first); `site_idx` maps each pass-row to its site; `X_p` is the
 // per-pass detection design. The depletion offset (cumulative prior removals) is
@@ -17,18 +17,6 @@
 #include <Rcpp.h>
 
 // [[Rcpp::depends(RcppEigen)]]
-
-namespace {
-
-// The removal per-site marginal as a callable for the generic spatial driver.
-struct RemovalSiteKernel {
-    tulpaObs::NMixSiteResult operator()(const int* y, const double* eta_p, int J,
-                                        double eta_lambda, int K_max, double r) const {
-        return tulpaObs::compute_removal_site(y, eta_p, J, eta_lambda, K_max, r);
-    }
-};
-
-}  // namespace
 
 // [[Rcpp::export]]
 Rcpp::List cpp_nested_laplace_removal_icar(
@@ -60,7 +48,7 @@ Rcpp::List cpp_nested_laplace_removal_icar(
         tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        RemovalSiteKernel{});
+        &tulpaObs::compute_removal_site);
 }
 
 // [[Rcpp::export]]
@@ -98,7 +86,7 @@ Rcpp::List cpp_nested_laplace_removal_bym2(
         tulpaObs::shape::optional_numeric(w_init.get(), "w_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        RemovalSiteKernel{});
+        &tulpaObs::compute_removal_site);
 }
 
 // [[Rcpp::export]]
@@ -132,5 +120,5 @@ Rcpp::List cpp_nested_laplace_removal_car_proper(
         tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        RemovalSiteKernel{});
+        &tulpaObs::compute_removal_site);
 }

@@ -81,6 +81,12 @@ struct NMixSiteResult {
     double score_wt_lambda;                // N-coefficient of s_lambda (1-q); Poisson: 1
 };
 
+// Per-site marginal kernel as a plain function pointer: (y, eta_p, n_visits,
+// eta_lambda, K_max, r) -> NMixSiteResult. The Royle, removal and distance site
+// marginals all match it, so the drivers that take one are kernel-agnostic.
+using CountKernelFn = NMixSiteResult (*)(const int*, const double*, int,
+                                         double, int, double);
+
 // --- Shared marginal-count math ------------------------------------------
 // The log-sum-exp moment accumulation and the negative-binomial dispersion
 // algebra below are the SAME for every count-marginal family whose per-site

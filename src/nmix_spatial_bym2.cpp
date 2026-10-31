@@ -1,9 +1,9 @@
 // nmix_spatial_bym2.cpp
 // Nested-Laplace entry point for the spatial Royle (2004) N-mixture model with a
 // BYM2 (Riebler et al. 2016) field on the abundance arm. The family-agnostic
-// inner Newton + outer-grid orchestration live in nmix_count_spatial_driver.h
-// (shared with removal, #51); this is a thin wrapper instantiating it with the
-// Royle per-site kernel.
+// inner Newton + outer-grid orchestration live in nmix_count_spatial_driver.cpp
+// (shared with removal, #51); this is a thin wrapper calling it with the Royle
+// per-site kernel.
 
 #include "tobs_shape.h"
 #include "nmix_count_spatial_driver.h"
@@ -46,5 +46,5 @@ Rcpp::List cpp_nested_laplace_nmix_bym2(
         tulpaObs::shape::optional_numeric(w_init.get(), "w_init"),
         K_max, max_iter, tol, verbose,
         progress, progress_every, progress_throttle, progress_file,
-        tulpaObs::NmixSiteKernel{});
+        &tulpaObs::compute_nmix_site);
 }

@@ -30,11 +30,6 @@
 
 namespace tulpaObs {
 
-// Per-site marginal kernel as a plain function pointer: both families' kernels
-// match this signature, so the NUTS target is kernel-agnostic.
-using CountKernelFn = NMixSiteResult (*)(const int*, const double*, int,
-                                         double, int, double);
-
 // Marshalled per-fit data: long form (y / site_idx site-major), X_lambda
 // site-level, X_p long form, plus per-site visit row lists built once.
 struct CountNutsData {
