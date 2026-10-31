@@ -3353,7 +3353,7 @@
 #'             positive = ~ pos_cov1 + share(spatial()),
 #'             y = od$y, y.pos = y_pos, visits = od$det.covs,
 #'             method = "nested_laplace", control = ctl)
-#' sbc(fit, n.sim = 5L, controls = "narrow", fit.control = ctl)
+#' sbc(fit, n.sim = 3L, controls = "narrow", fit.control = ctl)
 #' }
 #' @export
 sbc.tobs_fit <- function(object, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
