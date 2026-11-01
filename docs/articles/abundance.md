@@ -797,7 +797,7 @@ A handful of rules of thumb make the rest of the modelling decisions.
   between visits so abundance is not fixed, the binomial thinning
   assumption breaks and the model reads movement as detection. If you
   only have detection or non-detection rather than counts, occupancy is
-  the honest model and N-mixture adds a latent abundance the data cannot
+  the right model and N-mixture adds a latent abundance the data cannot
   inform. And if detection is near one, the counts are nearly the
   abundance itself, so a plain Poisson or negative-binomial regression
   on the counts is simpler and loses nothing.

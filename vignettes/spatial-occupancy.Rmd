@@ -722,7 +722,7 @@ make them usable.
   approach. If a non-spatial fit leaves no neighbour correlation in its
   residuals, a field adds parameters for nothing and WAIC will say so. If
   you have fewer than about eight regions, the smoothing parameter is too
-  weakly informed to help. And if the sites are not truly areal, raw
+  weakly informed to help. And if the sites are not areal, raw
   points on a map rather than regions joined by borders, a continuous
   field fits the geometry better than an adjacency you would have to
   invent by binning points into arbitrary cells. That last case is the

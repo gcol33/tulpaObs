@@ -641,11 +641,11 @@ tests whether larger patches hold their populations longer, the
 signature of demographic rescue. Because each rate carries its own
 formula, you can let colonisation depend on the landscape between
 patches and extinction depend on conditions within them, which matches
-how the two processes actually differ: one is about reaching empty
-habitat, the other about persisting in occupied habitat. The
-first-season occupancy formula and the detection formula accept
-covariates in the same way, so every layer of the model can be made a
-function of site or visit attributes without changing the call shape.
+how the two processes differ: one is about reaching empty habitat, the
+other about persisting in occupied habitat. The first-season occupancy
+formula and the detection formula accept covariates in the same way, so
+every layer of the model can be made a function of site or visit
+attributes without changing the call shape.
 
 ## Prediction
 
@@ -780,10 +780,10 @@ the covariate slots add parameters the data cannot put to work. The
 `delta` column is the gap from the best model; a drop of more than a few
 units is the usual rough threshold for preferring the larger model, and
 the covariate models miss that threshold, matching how the data were
-generated. On a real dataset where connectivity genuinely drove
-colonisation, the covariate model would carry the lower WAIC and the
-`delta` would favour it, which is the signal that the predictor is doing
-real work on the rate rather than fitting noise.
+generated. On a real dataset where connectivity drove colonisation, the
+covariate model would carry the lower WAIC and the `delta` would favour
+it, which is the signal that the predictor is doing real work on the
+rate rather than fitting noise.
 
 WAIC ranks models on predictive accuracy; it does not certify that the
 winner is correctly specified, and it will happily hand you the less

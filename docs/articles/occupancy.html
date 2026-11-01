@@ -895,8 +895,8 @@ wander, and it is the main thing to watch. NUTS does not have this
 failure mode, because it integrates over the ridge rather than sitting
 at its mode, which is why the rule of thumb below is to cross-check the
 two when detection is marginal.</p>
-<p><code><a href="../reference/tobs_check_id.html">tobs_check_id()</a></code> screens the model design and flags the
-usual trouble: very low or very high naive occupancy, too few visits per
+<p><code><a href="../reference/tobs_check_id.html">tobs_check_id()</a></code> screens the model design and flags three
+problems: very low or very high naive occupancy, too few visits per
 site, and collinear occupancy covariates. It reads the
 <code>tobs_model</code> stored on the fitted object.</p>
 <div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">

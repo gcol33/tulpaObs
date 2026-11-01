@@ -729,13 +729,12 @@ paired draws that share the field realization at both time points.
 
 ## Prediction
 
-The resurvey question is not “what is cover now” but “how does cover
-change”. A covariate that moves over time, here `year` on the occupancy
-arm, drives a change in occupancy, and through the shared field and the
-hurdle structure, a change in expected cover. `predict(type = "change")`
-evaluates the model at two values of the time covariate and differences
-the draws per cell, so every change quantity carries a credible
-interval.
+The resurvey question is “how does cover change”. A covariate that moves
+over time, here `year` on the occupancy arm, drives a change in
+occupancy, and through the shared field and the hurdle structure, a
+change in expected cover. `predict(type = "change")` evaluates the model
+at two values of the time covariate and differences the draws per cell,
+so every change quantity carries a credible interval.
 
 ``` r
 

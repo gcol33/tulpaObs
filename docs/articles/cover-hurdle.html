@@ -648,18 +648,19 @@ presence survey or a range estimate. Conditional cover answers how dense
 the species is where it does occur and is the right quantity for a
 biomass or competition argument, but it is silent about the zeros and so
 overstates the average cover across a landscape that includes empty
-plots. Expected cover folds the two together and is the honest landscape
-average, the quantity a monitoring programme usually wants, because a
-plot contributes its conditional cover weighted by how likely the
-species is to be there at all. The three predictions are fixed-effects
-only in this dispatcher, so they extrapolate the fitted covariate
-relationship to the <code>newdata</code> covariate values without any
-spatial adjustment; a site far outside the covariate range seen in
-training gets a prediction driven entirely by the extrapolated linear
-predictor, which the widening band in the interpretation plot already
-flagged. For the spatial case, where a fitted field would shift the
-prediction at a known location, the joint <code><a href="../reference/occu_cover.html">occu_cover()</a></code>
-engine carries the projection machinery this dispatcher does not.</p>
+plots. Expected cover folds the two together and is the landscape
+average that counts the empty plots, the quantity a monitoring programme
+usually wants, because a plot contributes its conditional cover weighted
+by how likely the species is to be there at all. The three predictions
+are fixed-effects only in this dispatcher, so they extrapolate the
+fitted covariate relationship to the <code>newdata</code> covariate
+values without any spatial adjustment; a site far outside the covariate
+range seen in training gets a prediction driven entirely by the
+extrapolated linear predictor, which the widening band in the
+interpretation plot already flagged. For the spatial case, where a
+fitted field would shift the prediction at a known location, the joint
+<code><a href="../reference/occu_cover.html">occu_cover()</a></code> engine carries the projection machinery this
+dispatcher does not.</p>
 </div>
 <div class="section level2">
 <h2 id="model-comparison">Model comparison<a class="anchor" aria-label="anchor" href="#model-comparison"></a>

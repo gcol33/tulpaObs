@@ -526,7 +526,7 @@ occupied sites that went undetected, and the question is whether those two
 sources together account for all the empty sites in the data. An observed
 value far above the expected, with a p-value near 0, would say they do not:
 the data have more empty sites than occupancy plus detection can explain.
-The usual culprits are a third zero-generating process the model omits,
+Two causes are common: a third zero-generating process the model omits,
 such as habitat that is structurally unsuitable, or detection that collapses
 to near zero at a subset of sites. Either points toward a zero-inflated or
 hurdle structure, or toward a detection covariate that separates the dead
@@ -839,9 +839,8 @@ The point throughout is that a clean coefficient table is necessary and not
 sufficient. The fit earns trust when it survives the checks, and each check
 that fails names the next term to add: a dispersion flag asks for a random
 effect, a zero-inflation flag for a hurdle or a detection covariate, a
-spatial-autocorrelation flag for a field. Diagnostics are not a final exam
-the model either passes or fails. They are the loop that turns a first fit
-into a defensible one, and the most useful outcome of a failed check is the
+spatial-autocorrelation flag for a field. Diagnostics are a loop that turns a
+first fit into a defensible one, and the most useful outcome of a failed check is the
 specific term it tells you to add before the next pass.
 
 ## Where to go next

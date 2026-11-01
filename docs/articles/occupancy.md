@@ -814,8 +814,8 @@ the ridge rather than sitting at its mode, which is why the rule of
 thumb below is to cross-check the two when detection is marginal.
 
 [`tobs_check_id()`](https://gillescolling.com/tulpaObs/reference/tobs_check_id.md)
-screens the model design and flags the usual trouble: very low or very
-high naive occupancy, too few visits per site, and collinear occupancy
+screens the model design and flags three problems: very low or very high
+naive occupancy, too few visits per site, and collinear occupancy
 covariates. It reads the `tobs_model` stored on the fitted object.
 
 ``` r

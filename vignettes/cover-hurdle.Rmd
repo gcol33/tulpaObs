@@ -502,7 +502,7 @@ range estimate. Conditional cover answers how dense the species is where it does
 occur and is the right quantity for a biomass or competition argument, but it is
 silent about the zeros and so overstates the average cover across a landscape
 that includes empty plots. Expected cover folds the two together and is the
-honest landscape average, the quantity a monitoring programme usually wants,
+landscape average that counts the empty plots, the quantity a monitoring programme usually wants,
 because a plot contributes its conditional cover weighted by how likely the
 species is to be there at all. The three predictions are fixed-effects only in
 this dispatcher, so they extrapolate the fitted covariate relationship to the

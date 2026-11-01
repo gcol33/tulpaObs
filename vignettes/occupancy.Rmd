@@ -743,7 +743,7 @@ to watch. NUTS does not have this failure mode, because it integrates over the
 ridge rather than sitting at its mode, which is why the rule of thumb below is
 to cross-check the two when detection is marginal.
 
-`tobs_check_id()` screens the model design and flags the usual trouble: very
+`tobs_check_id()` screens the model design and flags three problems: very
 low or very high naive occupancy, too few visits per site, and collinear
 occupancy covariates. It reads the `tobs_model` stored on the fitted object.
 

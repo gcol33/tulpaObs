@@ -857,10 +857,10 @@ share the field realization at both time points.</p>
 <div class="section level2">
 <h2 id="prediction">Prediction<a class="anchor" aria-label="anchor" href="#prediction"></a>
 </h2>
-<p>The resurvey question is not “what is cover now” but “how does cover
-change”. A covariate that moves over time, here <code>year</code> on the
-occupancy arm, drives a change in occupancy, and through the shared
-field and the hurdle structure, a change in expected cover.
+<p>The resurvey question is “how does cover change”. A covariate that
+moves over time, here <code>year</code> on the occupancy arm, drives a
+change in occupancy, and through the shared field and the hurdle
+structure, a change in expected cover.
 <code>predict(type = "change")</code> evaluates the model at two values
 of the time covariate and differences the draws per cell, so every
 change quantity carries a credible interval.</p>

@@ -271,12 +271,10 @@ visits per site, struggles to separate occupancy from detection on its
 own. Folding in the deeper source tightens the shared state without
 making the two sources pretend to share a detection process.
 
-The gain has a shape worth naming. Integration does not manufacture
-information; it pools what the sources already carry onto the one
-quantity they agree about. When the second source is itself thin, or
-observes few of the same sites, the interval barely moves. The benefit
-scales with how much real occupancy signal the added source brings to
-the shared state.
+Integration pools what the sources already carry onto the one quantity
+they agree about. When the second source is itself thin, or observes few
+of the same sites, the interval barely moves. The benefit scales with
+how much occupancy signal the added source brings to the shared state.
 
 It is worth being precise about what gets sharper and what does not. The
 occupancy slope tightens because more sites and more visits inform the
@@ -284,10 +282,10 @@ shared state surface. The detection parameters do not pool across
 sources, by design, so each source’s detection precision still depends
 only on that source’s own visits. A casual stream with few visits per
 site keeps a loose detection estimate even inside a large integrated
-fit. That separation is the feature, not a shortcoming: the survey’s
-detection stays calibrated by survey data, and the occupancy estimate
-borrows strength from both. If you find the casual detection intercept
-wandering, the fix is more casual visits, not more survey sites.
+fit. That separation is intended: the survey’s detection stays
+calibrated by survey data, and the occupancy estimate borrows strength
+from both. If you find the casual detection intercept wandering, the fix
+is more casual visits, not more survey sites.
 
 ## Source-specific detection
 

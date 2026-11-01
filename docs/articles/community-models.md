@@ -138,9 +138,9 @@ $`\beta_s`$ is estimated from its own data alone: this is no pooling,
 the stack of independent single-species fits. The community model sits
 between, and because $`\Sigma`$ is fitted, the data choose where
 between. An assemblage of near-identical species lands near complete
-pooling; a heterogeneous one lands near no pooling. You do not pick the
-pooling strength, you let it be inferred, which is the difference
-between a defensible community fit and an arbitrary one.
+pooling; a heterogeneous one lands near no pooling. The pooling strength
+is inferred instead of set by hand, which is the difference between a
+defensible community fit and an arbitrary one.
 
 The estimation works because the latent state never has to be sampled.
 In a naive formulation you would carry the occupancy indicators
