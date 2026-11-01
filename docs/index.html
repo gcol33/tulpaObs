@@ -46,12 +46,35 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="articles/quickstart.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="articles/quickstart.html">Getting started with tulpaObs</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Data</h6></li>
     <li><a class="dropdown-item" href="articles/data-formatting.html">Shaping data for tobs()</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Occupancy</h6></li>
+    <li><a class="dropdown-item" href="articles/occupancy.html">Single-season occupancy</a></li>
+    <li><a class="dropdown-item" href="articles/dynamic-occupancy.html">Dynamic (multi-season) occupancy</a></li>
+    <li><a class="dropdown-item" href="articles/integrated-occupancy.html">Integrated occupancy: combining data sources</a></li>
+    <li><a class="dropdown-item" href="articles/random-effects.html">Random effects with lme4 bar syntax</a></li>
+    <li><a class="dropdown-item" href="articles/spatial-occupancy.html">Areal spatial occupancy with ICAR, BYM2, and CAR</a></li>
+    <li><a class="dropdown-item" href="articles/occupancy-spatial-spde.html">Occupancy with a continuous SPDE spatial field</a></li>
+    <li><a class="dropdown-item" href="articles/occupancy-vs-inla.html">Occupancy: tulpaObs vs INLA aggregated-binomial</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Abundance and communities</h6></li>
+    <li><a class="dropdown-item" href="articles/abundance.html">N-mixture abundance with tulpaObs</a></li>
+    <li><a class="dropdown-item" href="articles/community-models.html">Community models in tulpaObs</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Cover</h6></li>
+    <li><a class="dropdown-item" href="articles/cover-hurdle.html">Cover hurdle (independent arms)</a></li>
+    <li><a class="dropdown-item" href="articles/cover-hurdle-motivate.html">Cover hurdle on resurvey panels (MOTIVATE reduction)</a></li>
+    <li><a class="dropdown-item" href="articles/cover-hurdle-vs-inla.html">Cover hurdle: tulpaObs vs INLA on simulated cover data</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Checking fits</h6></li>
+    <li><a class="dropdown-item" href="articles/diagnostics.html">Diagnostics: checking, comparing, and residuals</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><a class="dropdown-item" href="articles/index.html">More articles...</a></li>
   </ul>
@@ -85,19 +108,19 @@
 <!-- badges: start -->
 
 <p>tulpaObs fits Bayesian models for species surveys with imperfect detection, such as site occupancy from repeated visits, N-mixture abundance from replicated counts, distance and removal sampling, and vegetation cover.</p>
-<p>A site can read zero because the species is absent, or because it was present and missed on every visit. Each model writes the ecological state (occupied or not, how many individuals) and the detection process as separate levels and integrates the latent state out of the likelihood, so occupancy and detection come back as separate estimates. Each model supplies its observation likelihood to the <a href="https://CRAN.R-project.org/package=tulpa" class="external-link">tulpa</a> engine, which fits it by Laplace approximation, by nested Laplace integration over the hyperparameters, or by the No-U-Turn sampler (NUTS). You choose the model through a family object, write spatial, temporal and random effects inside the formula, and pick the inference method for each fit.</p>
+<p>A site can read zero because the species is absent, or because it was present and missed on every visit. Each model writes the ecological state (occupied or not, how many individuals) and the detection process as separate levels and integrates the latent state out of the likelihood, so occupancy and detection come back as separate estimates. Each model supplies its observation likelihood to the <a href="https://gillescolling.com/tulpa/" class="external-link">tulpa</a> engine, which fits it by Laplace approximation, by nested Laplace integration over the hyperparameters, or by the No-U-Turn sampler (NUTS). You choose the model through a family object, write spatial, temporal and random effects inside the formula, and pick the inference method for each fit.</p>
 <p>tulpaObs supports:</p>
 <ul>
 <li>
 <strong>Occupancy, abundance and cover models.</strong> Single-season, dynamic, integrated, false-positive, time-to-detection and community occupancy; N-mixture, distance, removal and double-observer abundance; and a hurdle model for vegetation cover. One fitter, <code><a href="reference/tobs.html">tobs()</a></code>, takes a family constructor per model (<a href="https://gillescolling.com/tulpaObs/reference/index.html">families in the reference</a>).</li>
 <li>
-<strong>Structured effects inside the formula.</strong> Areal and continuous spatial fields, temporal processes and lme4-style random effects enter the occupancy or the detection formula as terms.</li>
+<strong>Structured effects inside the formula.</strong> Areal and continuous spatial fields, temporal processes and random effects in the bar syntax of <a href="https://github.com/lme4/lme4/" class="external-link">lme4</a> enter the occupancy or the detection formula as terms.</li>
 <li>
 <strong>Several inference routes.</strong> Laplace approximation is the default; nested Laplace handles areal fields, NUTS gives the full posterior, and a Polya-Gamma Gibbs sampler is available for single-season and community models.</li>
 <li>
 <strong>Simulation with known truth.</strong> Every family has a simulator that returns the data with the parameters that generated them, so a model can be checked against known values before it meets field data.</li>
 </ul>
-<p>The package’s recovery tests are built on these simulators. <a href="https://gillescolling.com/tulpaObs/articles/occupancy-vs-inla.html">Occupancy: tulpaObs vs INLA aggregated-binomial</a> and <a href="https://gillescolling.com/tulpaObs/articles/cover-hurdle-vs-inla.html">Cover hurdle: tulpaObs vs INLA on simulated cover data</a> compare fits with INLA on simulated data with known truth.</p>
+<p>The package’s recovery tests are built on these simulators. <a href="https://gillescolling.com/tulpaObs/articles/occupancy-vs-inla.html">Occupancy: tulpaObs vs INLA aggregated-binomial</a> and <a href="https://gillescolling.com/tulpaObs/articles/cover-hurdle-vs-inla.html">Cover hurdle: tulpaObs vs INLA on simulated cover data</a> compare fits with INLA, the integrated nested Laplace approximation package, on simulated data with known truth.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -135,11 +158,11 @@
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"gcol33/tulpaObs"</span><span class="op">)</span></span></code></pre></div>
-<p>pak installs tulpa and <a href="https://CRAN.R-project.org/package=tulpaMesh" class="external-link">tulpaMesh</a> from CRAN along with it. The build links against the BLAS and LAPACK libraries that R itself uses, so no other system library is needed. Tagged releases are listed on the <a href="https://github.com/gcol33/tulpaObs/releases" class="external-link">releases page</a>.</p>
+<p>pak installs tulpa and <a href="https://CRAN.R-project.org/package=tulpaMesh" class="external-link">tulpaMesh</a> from CRAN along with it. The build links against the BLAS and LAPACK libraries that R itself uses, so no other system library is needed.</p>
 <div class="section level3">
 <h3 id="optional-multithreading">Optional: multithreading<a class="anchor" aria-label="anchor" href="#optional-multithreading"></a>
 </h3>
-<p>OpenMP lets the community NUTS samplers (<code><a href="reference/ms_occu.html">ms_occu()</a></code>, <code><a href="reference/ms_count.html">ms_count()</a></code>, <code><a href="reference/jsdm.html">jsdm()</a></code>, <code><a href="reference/ms_abun.html">ms_abun()</a></code>, <code><a href="reference/ms_dyn_occu.html">ms_dyn_occu()</a></code>) evaluate their gradient on several CPU threads, set through <code>n.threads.grad</code> in the <code>control</code> list of <code><a href="reference/tobs.html">tobs()</a></code>. The per-species reduction runs in a fixed order, so the gradient is the same at any thread count.</p>
+<p>OpenMP lets the community NUTS samplers (multi-species occupancy, dynamic occupancy, counts and N-mixture abundance, and the joint species distribution model) evaluate their gradient on several CPU threads. The thread count is <code>n.threads.grad</code> in the control list of the fitter. The per-species reduction runs in a fixed order, so the gradient is the same at any thread count.</p>
 <p>Rtools on Windows and the default compiler on Linux include OpenMP. Without it, the package installs and runs on one thread.</p>
 <div class="section level4">
 <h4 id="macos-setup">macOS setup<a class="anchor" aria-label="anchor" href="#macos-setup"></a>
@@ -160,11 +183,11 @@
 <h2 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>
 </h2>
 <ol style="list-style-type: decimal">
-<li>Fit a model with <code><a href="reference/tobs.html">tobs()</a></code>: the occupancy formula, the data, a family such as <code><a href="reference/occu.html">occu()</a></code>, the detection formula and the detection histories.</li>
+<li>Fit a model with <code><a href="reference/tobs.html">tobs()</a></code>, giving the occupancy formula, the site data, the family, the detection formula and the detection histories.</li>
 <li>Read the estimates with <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> or <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>.</li>
 <li>Predict with <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> and check the fit with <code><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model()</a></code>.</li>
 </ol>
-<p><code>peatland_occu</code> is a synthetic survey shipped with the package: 120 sites visited four times, with elevation and wetness per site and survey effort per visit.</p>
+<p>The family picks the model; <code><a href="reference/occu.html">occu()</a></code> is single-season occupancy. <code>peatland_occu</code> is a synthetic survey shipped with the package: 120 sites visited four times, with elevation and wetness per site and survey effort per visit.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gillescolling.com/tulpaObs/">tulpaObs</a></span><span class="op">)</span></span>
 <span></span>
@@ -173,15 +196,14 @@
 <span>  <span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span> <span class="va">wetness</span>,</span>
 <span>  data <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">occ.covs</span>,</span>
 <span>  family <span class="op">=</span> <span class="fu"><a href="reference/occu.html">occu</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  detection <span class="op">=</span> <span class="op">~</span> <span class="va">effort</span>,</span>
-<span>  y <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">y</span>,</span>
-<span>  visits <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">det.covs</span></span>
+<span>  detection <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span>,</span>
+<span>  y <span class="op">=</span> <span class="va">occ</span><span class="op">$</span><span class="va">y</span></span>
 <span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; psi_(Intercept)   psi_elevation     psi_wetness   p_(Intercept)  p_visit_effort </span></span>
-<span><span class="co">#&gt;     0.242198812    -0.505199672     0.691204862    -0.001590117     0.853642172</span></span></code></pre></div>
+<span><span class="co">#&gt; psi_(Intercept)   psi_elevation     psi_wetness   p_(Intercept) </span></span>
+<span><span class="co">#&gt;       0.1755798      -0.5017042       0.6452404       0.0816489</span></span></code></pre></div>
 <p>The <code>psi_</code> coefficients belong to the occupancy formula and the <code>p_</code> coefficients to the detection formula, both on the logit scale.</p>
-<p>The detection histories <code>y</code> are a matrix with one row per site and one column per visit (1 detected, 0 not detected, <code>NA</code> missing). Site covariates are a data frame with one row per site, and covariates that change between visits are matrices of the same shape as <code>y</code>, passed through <code>visits</code>. <code><a href="reference/tobs_format.html">tobs_format()</a></code> and <code><a href="reference/tobs_data.html">tobs_data()</a></code> build the same input from matrices or from a long table with one row per site-visit; <a href="https://gillescolling.com/tulpaObs/articles/data-formatting.html">Shaping data for tobs()</a> covers both.</p>
+<p>The detection histories <code>y</code> are a matrix with one row per site and one column per visit (1 detected, 0 not detected, <code>NA</code> missing). Site covariates are a data frame with one row per site. Covariates that change between visits, such as the survey effort in this dataset, are matrices of the same shape as the histories and are passed through <code>visits</code> for use in the detection formula. <code><a href="reference/tobs_format.html">tobs_format()</a></code> and <code><a href="reference/tobs_data.html">tobs_data()</a></code> build the same input from matrices or from a long table with one row per site-visit; <a href="https://gillescolling.com/tulpaObs/articles/data-formatting.html">Shaping data for tobs()</a> covers both.</p>
 </div>
 <div class="section level2">
 <h2 id="structured-effects">Structured effects<a class="anchor" aria-label="anchor" href="#structured-effects"></a>
@@ -189,21 +211,32 @@
 <p>Spatial fields, temporal processes and random effects are terms in the formula, and each enters the process whose formula it is written in:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="op">~</span> <span class="va">elevation</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="reference/tobs_terms.html">spatial</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="reference/tobs_terms.html">icar</a></span><span class="op">(</span>graph <span class="op">=</span> <span class="va">adj</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="reference/tobs_terms.html">temporal</a></span><span class="op">(</span><span class="va">year</span>, type <span class="op">=</span> <span class="st">"ar1"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">observer</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="reference/tobs_terms.html">spatial()</a></code> takes an adjacency matrix for areal models (ICAR by default, BYM2, CAR) or coordinates for continuous fields (<code>model = "spde"</code> or <code>"gp"</code>). Random effects follow lme4’s bar syntax, including correlated slopes, crossed and nested grouping. <code><a href="reference/tobs_terms.html">?tobs_terms</a></code> documents every term. <a href="https://gillescolling.com/tulpaObs/articles/spatial-occupancy.html">Areal spatial occupancy with ICAR, BYM2, and CAR</a>, <a href="https://gillescolling.com/tulpaObs/articles/occupancy-spatial-spde.html">Occupancy with a continuous SPDE spatial field</a> and <a href="https://gillescolling.com/tulpaObs/articles/random-effects.html">Random effects with lme4 bar syntax</a> work through each.</p>
+<p>An areal field takes an adjacency matrix between sites or regions, as an intrinsic conditional autoregressive (ICAR) field, a Besag-York-Mollié (BYM2) field or a proper conditional autoregressive (CAR) field. A continuous field takes coordinates, as a Matérn field through the stochastic partial differential equation (SPDE) approximation or as a nearest-neighbour Gaussian process. Random effects follow the bar syntax of lme4, including correlated slopes, crossed and nested grouping. The help page <code><a href="reference/tobs_terms.html">?tobs_terms</a></code> documents every term. <a href="https://gillescolling.com/tulpaObs/articles/spatial-occupancy.html">Areal spatial occupancy with ICAR, BYM2, and CAR</a>, <a href="https://gillescolling.com/tulpaObs/articles/occupancy-spatial-spde.html">Occupancy with a continuous SPDE spatial field</a> and <a href="https://gillescolling.com/tulpaObs/articles/random-effects.html">Random effects with lme4 bar syntax</a> work through each.</p>
 </div>
 <div class="section level2">
 <h2 id="inference-methods">Inference methods<a class="anchor" aria-label="anchor" href="#inference-methods"></a>
 </h2>
-<p><code>method</code> in <code><a href="reference/tobs.html">tobs()</a></code> selects the route: <code>"laplace"</code> (the default), <code>"nested_laplace"</code> for areal fields and the joint cover hurdle, <code>"nuts"</code> for the full posterior with split-Rhat and effective sample sizes, and <code>"pg_gibbs"</code>, an exact Polya-Gamma Gibbs sampler, on single-season occupancy, <code><a href="reference/t_occu.html">t_occu()</a></code> and the community families. An unsupported combination of family and method stops with the methods that family accepts.</p>
+<p>The <code>method</code> argument of the fitter selects the route:</p>
+<ul>
+<li>
+<code>"laplace"</code> (the default): expectation-maximisation with a Laplace approximation and Gaussian marginals.</li>
+<li>
+<code>"nested_laplace"</code>: the structured terms (areal fields, shared cover-hurdle fields, latent factors) are integrated over a grid of their hyperparameters.</li>
+<li>
+<code>"nuts"</code>: the full posterior by Hamiltonian Monte Carlo, with split-Rhat and effective sample sizes.</li>
+<li>
+<code>"pg_gibbs"</code>: a Polya-Gamma Gibbs sampler over the exact occupancy posterior, for single-season occupancy, the community families and the multi-season model <code><a href="reference/t_occu.html">t_occu()</a></code>.</li>
+</ul>
+<p>Each family accepts a subset of these routes; an unsupported combination stops with the methods that family accepts.</p>
 <p>Variance components of binary random effects are biased under the Laplace approximation when groups are small. An adaptive Gauss-Hermite pass corrects them by default; with eight observations per group it lowers the measured bias in the random-effect standard deviation from about 18 % to about 4 %, matching a NUTS fit (<a href="https://gillescolling.com/tulpaObs/articles/random-effects.html">Random effects with lme4 bar syntax</a>).</p>
 </div>
 <div class="section level2">
 <h2 id="checking-and-comparing-fits">Checking and comparing fits<a class="anchor" aria-label="anchor" href="#checking-and-comparing-fits"></a>
 </h2>
-<p><code><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model()</a></code> collects the sampler diagnostics, WAIC, a posterior predictive check, a zero-inflation test and Moran’s I in one report. <code><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic()</a></code> and <code><a href="https://mc-stan.org/loo/reference/loo.html" class="external-link">loo()</a></code> are the generics of the <a href="https://mc-stan.org/loo/" class="external-link">loo</a> package, so <code><a href="https://mc-stan.org/loo/reference/loo_compare.html" class="external-link">loo::loo_compare()</a></code> compares tulpaObs fits directly. <a href="https://gillescolling.com/tulpaObs/articles/diagnostics.html">Diagnostics: checking, comparing, and residuals</a> covers the full workflow.</p>
+<p><code><a href="https://gillescolling.com/tulpa/reference/check_model.html" class="external-link">check_model()</a></code> collects the sampler diagnostics, WAIC, a posterior predictive check, a zero-inflation test and Moran’s I in one report. The <code><a href="https://mc-stan.org/loo/reference/waic.html" class="external-link">waic()</a></code> and <code><a href="https://mc-stan.org/loo/reference/loo.html" class="external-link">loo()</a></code> methods return the objects of the <a href="https://mc-stan.org/loo/" class="external-link">loo</a> package, so its <code>loo_compare()</code> ranks tulpaObs fits directly. <a href="https://gillescolling.com/tulpaObs/articles/diagnostics.html">Diagnostics: checking, comparing, and residuals</a> covers the full workflow.</p>
 </div>
 <div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
@@ -254,7 +287,7 @@
 <div class="section level2">
 <h2 id="acknowledgements">Acknowledgements<a class="anchor" aria-label="anchor" href="#acknowledgements"></a>
 </h2>
-<p>Inference, the latent spatial and temporal structures and the generic diagnostics come from <a href="https://CRAN.R-project.org/package=tulpa" class="external-link">tulpa</a>; spatial meshes come from <a href="https://CRAN.R-project.org/package=tulpaMesh" class="external-link">tulpaMesh</a>.</p>
+<p>Inference, the latent spatial and temporal structures and the generic diagnostics come from <a href="https://gillescolling.com/tulpa/" class="external-link">tulpa</a>; spatial meshes come from <a href="https://CRAN.R-project.org/package=tulpaMesh" class="external-link">tulpaMesh</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>

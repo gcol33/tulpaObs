@@ -13,8 +13,8 @@ state (occupied or not, how many individuals) and the detection process
 as separate levels and integrates the latent state out of the
 likelihood, so occupancy and detection come back as separate estimates.
 Each model supplies its observation likelihood to the
-[tulpa](https://CRAN.R-project.org/package=tulpa) engine, which fits it
-by Laplace approximation, by nested Laplace integration over the
+[tulpa](https://gillescolling.com/tulpa/) engine, which fits it by
+Laplace approximation, by nested Laplace integration over the
 hyperparameters, or by the No-U-Turn sampler (NUTS). You choose the
 model through a family object, write spatial, temporal and random
 effects inside the formula, and pick the inference method for each fit.
@@ -29,8 +29,9 @@ tulpaObs supports:
   takes a family constructor per model ([families in the
   reference](https://gillescolling.com/tulpaObs/reference/index.html)).
 - **Structured effects inside the formula.** Areal and continuous
-  spatial fields, temporal processes and lme4-style random effects enter
-  the occupancy or the detection formula as terms.
+  spatial fields, temporal processes and random effects in the bar
+  syntax of [lme4](https://github.com/lme4/lme4/) enter the occupancy or
+  the detection formula as terms.
 - **Several inference routes.** Laplace approximation is the default;
   nested Laplace handles areal fields, NUTS gives the full posterior,
   and a Polya-Gamma Gibbs sampler is available for single-season and
@@ -44,7 +45,8 @@ tulpaObs vs INLA
 aggregated-binomial](https://gillescolling.com/tulpaObs/articles/occupancy-vs-inla.html)
 and [Cover hurdle: tulpaObs vs INLA on simulated cover
 data](https://gillescolling.com/tulpaObs/articles/cover-hurdle-vs-inla.html)
-compare fits with INLA on simulated data with known truth.
+compare fits with INLA, the integrated nested Laplace approximation
+package, on simulated data with known truth.
 
 ## Installation
 
@@ -75,21 +77,14 @@ pak::pak("gcol33/tulpaObs")
 pak installs tulpa and
 [tulpaMesh](https://CRAN.R-project.org/package=tulpaMesh) from CRAN
 along with it. The build links against the BLAS and LAPACK libraries
-that R itself uses, so no other system library is needed. Tagged
-releases are listed on the [releases
-page](https://github.com/gcol33/tulpaObs/releases).
+that R itself uses, so no other system library is needed.
 
 ### Optional: multithreading
 
-OpenMP lets the community NUTS samplers
-([`ms_occu()`](https://gillescolling.com/tulpaObs/reference/ms_occu.md),
-[`ms_count()`](https://gillescolling.com/tulpaObs/reference/ms_count.md),
-[`jsdm()`](https://gillescolling.com/tulpaObs/reference/jsdm.md),
-[`ms_abun()`](https://gillescolling.com/tulpaObs/reference/ms_abun.md),
-[`ms_dyn_occu()`](https://gillescolling.com/tulpaObs/reference/ms_dyn_occu.md))
-evaluate their gradient on several CPU threads, set through
-`n.threads.grad` in the `control` list of
-[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md). The
+OpenMP lets the community NUTS samplers (multi-species occupancy,
+dynamic occupancy, counts and N-mixture abundance, and the joint species
+distribution model) evaluate their gradient on several CPU threads. The
+thread count is `n.threads.grad` in the control list of the fitter. The
 per-species reduction runs in a fixed order, so the gradient is the same
 at any thread count.
 
@@ -126,10 +121,9 @@ LDFLAGS += -L/usr/local/opt/libomp/lib -lomp
 ## Usage
 
 1.  Fit a model with
-    [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md):
-    the occupancy formula, the data, a family such as
-    [`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md),
-    the detection formula and the detection histories.
+    [`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md),
+    giving the occupancy formula, the site data, the family, the
+    detection formula and the detection histories.
 2.  Read the estimates with
     [`coef()`](https://rdrr.io/r/stats/coef.html) or
     [`summary()`](https://rdrr.io/r/base/summary.html).
@@ -137,9 +131,11 @@ LDFLAGS += -L/usr/local/opt/libomp/lib -lomp
     check the fit with
     [`check_model()`](https://gillescolling.com/tulpa/reference/check_model.html).
 
-`peatland_occu` is a synthetic survey shipped with the package: 120
-sites visited four times, with elevation and wetness per site and survey
-effort per visit.
+The family picks the model;
+[`occu()`](https://gillescolling.com/tulpaObs/reference/occu.md) is
+single-season occupancy. `peatland_occu` is a synthetic survey shipped
+with the package: 120 sites visited four times, with elevation and
+wetness per site and survey effort per visit.
 
 ``` r
 
@@ -150,13 +146,12 @@ fit <- tobs(
   ~ elevation + wetness,
   data = occ$occ.covs,
   family = occu(),
-  detection = ~ effort,
-  y = occ$y,
-  visits = occ$det.covs
+  detection = ~ 1,
+  y = occ$y
 )
 coef(fit)
-#> psi_(Intercept)   psi_elevation     psi_wetness   p_(Intercept)  p_visit_effort 
-#>     0.242198812    -0.505199672     0.691204862    -0.001590117     0.853642172
+#> psi_(Intercept)   psi_elevation     psi_wetness   p_(Intercept) 
+#>       0.1755798      -0.5017042       0.6452404       0.0816489
 ```
 
 The `psi_` coefficients belong to the occupancy formula and the `p_`
@@ -164,9 +159,10 @@ coefficients to the detection formula, both on the logit scale.
 
 The detection histories `y` are a matrix with one row per site and one
 column per visit (1 detected, 0 not detected, `NA` missing). Site
-covariates are a data frame with one row per site, and covariates that
-change between visits are matrices of the same shape as `y`, passed
-through `visits`.
+covariates are a data frame with one row per site. Covariates that
+change between visits, such as the survey effort in this dataset, are
+matrices of the same shape as the histories and are passed through
+`visits` for use in the detection formula.
 [`tobs_format()`](https://gillescolling.com/tulpaObs/reference/tobs_format.md)
 and
 [`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
@@ -183,16 +179,19 @@ formula, and each enters the process whose formula it is written in:
 ``` r
 
 ~ elevation +
-  spatial(graph = adj) +
+  icar(graph = adj) +
   temporal(year, type = "ar1") +
   (1 | observer)
 ```
 
-[`spatial()`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
-takes an adjacency matrix for areal models (ICAR by default, BYM2, CAR)
-or coordinates for continuous fields (`model = "spde"` or `"gp"`).
-Random effects follow lme4’s bar syntax, including correlated slopes,
-crossed and nested grouping.
+An areal field takes an adjacency matrix between sites or regions, as an
+intrinsic conditional autoregressive (ICAR) field, a Besag-York-Mollié
+(BYM2) field or a proper conditional autoregressive (CAR) field. A
+continuous field takes coordinates, as a Matérn field through the
+stochastic partial differential equation (SPDE) approximation or as a
+nearest-neighbour Gaussian process. Random effects follow the bar syntax
+of lme4, including correlated slopes, crossed and nested grouping. The
+help page
 [`?tobs_terms`](https://gillescolling.com/tulpaObs/reference/tobs_terms.md)
 documents every term. [Areal spatial occupancy with ICAR, BYM2, and
 CAR](https://gillescolling.com/tulpaObs/articles/spatial-occupancy.html),
@@ -204,14 +203,21 @@ work through each.
 
 ## Inference methods
 
-`method` in
-[`tobs()`](https://gillescolling.com/tulpaObs/reference/tobs.md) selects
-the route: `"laplace"` (the default), `"nested_laplace"` for areal
-fields and the joint cover hurdle, `"nuts"` for the full posterior with
-split-Rhat and effective sample sizes, and `"pg_gibbs"`, an exact
-Polya-Gamma Gibbs sampler, on single-season occupancy,
-[`t_occu()`](https://gillescolling.com/tulpaObs/reference/t_occu.md) and
-the community families. An unsupported combination of family and method
+The `method` argument of the fitter selects the route:
+
+- `"laplace"` (the default): expectation-maximisation with a Laplace
+  approximation and Gaussian marginals.
+- `"nested_laplace"`: the structured terms (areal fields, shared
+  cover-hurdle fields, latent factors) are integrated over a grid of
+  their hyperparameters.
+- `"nuts"`: the full posterior by Hamiltonian Monte Carlo, with
+  split-Rhat and effective sample sizes.
+- `"pg_gibbs"`: a Polya-Gamma Gibbs sampler over the exact occupancy
+  posterior, for single-season occupancy, the community families and the
+  multi-season model
+  [`t_occu()`](https://gillescolling.com/tulpaObs/reference/t_occu.md).
+
+Each family accepts a subset of these routes; an unsupported combination
 stops with the methods that family accepts.
 
 Variance components of binary random effects are biased under the
@@ -226,12 +232,12 @@ syntax](https://gillescolling.com/tulpaObs/articles/random-effects.html)).
 
 [`check_model()`](https://gillescolling.com/tulpa/reference/check_model.html)
 collects the sampler diagnostics, WAIC, a posterior predictive check, a
-zero-inflation test and Moran’s I in one report.
+zero-inflation test and Moran’s I in one report. The
 [`waic()`](https://mc-stan.org/loo/reference/waic.html) and
-[`loo()`](https://mc-stan.org/loo/reference/loo.html) are the generics
-of the [loo](https://mc-stan.org/loo/) package, so
-[`loo::loo_compare()`](https://mc-stan.org/loo/reference/loo_compare.html)
-compares tulpaObs fits directly. [Diagnostics: checking, comparing, and
+[`loo()`](https://mc-stan.org/loo/reference/loo.html) methods return the
+objects of the [loo](https://mc-stan.org/loo/) package, so its
+`loo_compare()` ranks tulpaObs fits directly. [Diagnostics: checking,
+comparing, and
 residuals](https://gillescolling.com/tulpaObs/articles/diagnostics.html)
 covers the full workflow.
 
@@ -310,8 +316,8 @@ Coffee](https://img.shields.io/badge/-Buy%20me%20a%20coffee-FFDD00?logo=buymeaco
 ## Acknowledgements
 
 Inference, the latent spatial and temporal structures and the generic
-diagnostics come from [tulpa](https://CRAN.R-project.org/package=tulpa);
-spatial meshes come from
+diagnostics come from [tulpa](https://gillescolling.com/tulpa/); spatial
+meshes come from
 [tulpaMesh](https://CRAN.R-project.org/package=tulpaMesh).
 
 ## License

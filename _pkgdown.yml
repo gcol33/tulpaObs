@@ -19,6 +19,23 @@ template:
         };
       })();
       </script>
+
+navbar:
+  structure:
+    left:
+    - intro
+    - reference
+    - articles
+    - news
+    right:
+    - search
+    - github
+    - lightswitch
+  components:
+    intro:
+      text: Get started
+      href: articles/quickstart.html
+
 figures:
   dev: svglite::svglite
   fig.ext: svg
@@ -128,12 +145,15 @@ reference:
   - plot.tobs_data
   - within_between
 articles:
-- title: Start here
-  navbar: ~
+- title: Get started
   contents:
   - quickstart
+- title: Data
+  navbar: Data
+  contents:
   - data-formatting
 - title: Occupancy
+  navbar: Occupancy
   contents:
   - occupancy
   - dynamic-occupancy
@@ -143,13 +163,17 @@ articles:
   - occupancy-spatial-spde
   - occupancy-vs-inla
 - title: Abundance and communities
+  navbar: Abundance and communities
   contents:
   - abundance
   - community-models
 - title: Cover
+  navbar: Cover
   contents:
   - cover-hurdle
   - cover-hurdle-motivate
   - cover-hurdle-vs-inla
 - title: Checking fits
-  contents: diagnostics
+  navbar: Checking fits
+  contents:
+  - diagnostics
