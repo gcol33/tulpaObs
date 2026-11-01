@@ -103,6 +103,10 @@ sim <- simulate_occu(
 dat <- sim$data              # site covariates, one row per site
 y   <- sim$y                 # 300 x 6 detection-history matrix
 y[1:3, ]
+#>      [,1] [,2] [,3] [,4] [,5] [,6]
+#> [1,]    0    0    0    0    0    0
+#> [2,]    0    0    0    0    0    0
+#> [3,]    1    0    1    1    1    1
 ```
 
 The simulated object carries three pieces. `sim$data` is the site frame,
@@ -122,6 +126,8 @@ occupancy, because an occupied site can go undetected on every visit.
 
 c(naive_occupied = mean(rowSums(y) > 0),
   true_occupied  = mean(sim$truth$z))
+#> naive_occupied  true_occupied 
+#>      0.5800000      0.5833333
 ```
 
 The gap between those two numbers is the whole reason an occupancy model
@@ -191,6 +197,8 @@ near the simulated truth.
 ``` r
 
 coef(fit)
+#> psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 
+#>       0.3638670       1.0118715       0.6744931       0.5087683
 ```
 
 `coef(fit, arm = "psi")` holds the occupancy intercept and the slope on
@@ -226,6 +234,23 @@ coefficient. The `psi_` rows are the occupancy linear predictor, the
 ``` r
 
 summary(fit)
+#> tulpa fit 
+#>   n_obs: 300 
+#>   posterior draws: 1000 
+#> 
+#> Fixed effects:
+#>                 estimate std.error  2.5 % 97.5 %
+#> psi_(Intercept)   0.3639   0.12975 0.1096 0.6182
+#> psi_occ_cov1      1.0119   0.15489 0.7083 1.3154
+#> p_(Intercept)     0.6745   0.06862 0.5400 0.8090
+#> p_det_cov1        0.5088   0.06958 0.3724 0.6451
+#> 
+#> Reliability (iid draws):
+#>   outer pareto_k NA (NA); grid ESS 175.4 of 300 cells; inner skew NA (NA)
+#>   moments read from: draws
+#>   mean acceptance: NA
+#>   divergent transitions: NA
+#>   verdict: not computed (outer integration not assessed; inner Laplace not assessed)
 ```
 
 Read the summary as four numbers per coefficient: the posterior mean,
@@ -245,6 +270,11 @@ Laplace fit already computed, so there is no extra sampling step.
 ``` r
 
 confint(fit)
+#>                     2.5 %    97.5 %
+#> psi_(Intercept) 0.1095686 0.6181653
+#> psi_occ_cov1    0.7082995 1.3154436
+#> p_(Intercept)   0.5400064 0.8089798
+#> p_det_cov1      0.3724036 0.6451330
 ```
 
 ## Occupancy, detection, and the latent state
@@ -260,6 +290,10 @@ credit the model assigns from `psi` and `p`.
 
 fv <- fitted(fit)
 str(lapply(fv, head, 4))
+#> List of 3
+#>  $ psi: num [1:4] 0.433 0.634 0.382 0.878
+#>  $ p  : num [1:4] 0.756 0.535 0.843 0.618
+#>  $ z  : num [1:4] 0.000162 0.017137 1 1
 ```
 
 The three quantities answer three different questions about a site.
@@ -296,6 +330,10 @@ plot(sim$truth$psi, fv$psi, pch = 16, col = rgb(0, 0, 0, 0.35),
 abline(0, 1, col = "steelblue", lwd = 2)
 ```
 
+![Fitted occupancy probability against the true simulated probability,
+scattered around the identity
+line](tulpaObs_files/figure-html/fitted-plot-1.svg)
+
 The points scatter along the identity line rather than collapsing onto a
 single horizontal band, which is the test that matters. A model that
 recovered only the population mean would predict the same `psi` for
@@ -324,6 +362,20 @@ fit_nuts <- tobs(
   control   = list(n.iter = 800, n.warmup = 400, seed = 1, verbose = FALSE)
 )
 summary(fit_nuts)
+#> tulpa fit  (hmc) 
+#>   posterior draws: 800 
+#> 
+#> Fixed effects:
+#>                 estimate std.error  2.5 % 97.5 %  rhat ess_bulk ess_tail
+#> psi_(Intercept)   0.3727   0.12660 0.1357 0.6363 1.018    463.9    448.1
+#> psi_occ_cov1      1.0341   0.16177 0.7286 1.3701 1.009    630.0    504.3
+#> p_(Intercept)     0.6754   0.06668 0.5536 0.8117 1.012    424.5    404.9
+#> p_det_cov1        0.5146   0.06223 0.3899 0.6464 1.000    375.8    302.2
+#> 
+#> Reliability (chain draws):
+#>   max Rhat 1.018, min bulk-ESS 375.8, min tail-ESS 302.2
+#>   mean acceptance: 0.9018
+#>   divergent transitions: 0
 ```
 
 The two backends agree on the coefficients to within their uncertainty.
@@ -355,6 +407,11 @@ data.frame(
   nuts    = round(coef(fit_nuts), 3),
   row.names = NULL
 )
+#>              term laplace  nuts
+#> 1 psi_(Intercept)   0.364 0.373
+#> 2    psi_occ_cov1   1.012 1.034
+#> 3   p_(Intercept)   0.674 0.675
+#> 4      p_det_cov1   0.509 0.515
 ```
 
 ## Prediction
@@ -369,6 +426,9 @@ traces how occupancy responds to `occ_cov1`.
 me <- tobs_marginal_effect(fit_nuts, "occ_cov1", process = "occupancy")
 plot(me)
 ```
+
+![Predicted occupancy probability rising with occ_cov1, with a shaded
+95% credible band](tulpaObs_files/figure-html/marginal-1.svg)
 
 The curve rises across the covariate range because the occupancy slope
 is positive, and the band widens at the ends where the data thin out.
@@ -385,6 +445,10 @@ SD, and credible bounds of `psi` at each new row.
 
 X0 <- cbind(`(Intercept)` = 1, occ_cov1 = c(-1, 0, 1))
 predict(fit_nuts, X.0 = X0)
+#>        mean         sd      q2.5       q50     q97.5
+#> 1 0.3416830 0.04209410 0.2669885 0.3393469 0.4249586
+#> 2 0.5917456 0.03045209 0.5338715 0.5928335 0.6539069
+#> 3 0.8009468 0.03456605 0.7300807 0.8013661 0.8633308
 ```
 
 The three rows ask for occupancy at `occ_cov1` of -1, 0, and 1 with the
@@ -403,6 +467,10 @@ ggplot(me, aes(x = x, y = estimate)) +
   labs(x = "occ_cov1", y = "occupancy probability") +
   transparent
 ```
+
+![Predicted occupancy probability against occ_cov1 as a line with a
+shaded 95 percent credible
+band](tulpaObs_files/figure-html/predict-plot-1.svg)
 
 ## Random effects
 
@@ -446,6 +514,8 @@ fit_re <- tobs(~ x + (1 | g), data = d_re, y = y_re, detection = ~ 1,
                family = occu(), method = "laplace",
                control = list(verbose = FALSE))
 coef(fit_re, arm = "psi")
+#> (Intercept)           x 
+#>   0.2369320  -0.6833076
 ```
 
 The variance component lands in `fit$means`, named for the group it
@@ -466,6 +536,10 @@ ggplot(bl, aes(x = truth, y = blup)) +
   labs(x = "true cluster effect", y = "estimated BLUP") +
   transparent
 ```
+
+![Recovered per-cluster random intercepts against the simulated truth,
+scattered along the identity
+line](tulpaObs_files/figure-html/re-blup-1.svg)
 
 The estimated intercepts line up along the identity with a slight pull
 toward zero, the shrinkage the random effect applies where a cluster’s
@@ -492,6 +566,8 @@ fit0 <- tobs(~ 1, data = dat, family = occu(),
 
 c(intercept_only = waic(fit0)$estimates["waic", "Estimate"],
   with_covariate = waic(fit)$estimates["waic", "Estimate"])
+#> intercept_only with_covariate 
+#>       1695.451       1646.075
 ```
 
 The covariate model has the lower WAIC, matching how the data were
@@ -512,6 +588,8 @@ fit_re0 <- tobs(~ x, data = d_re, y = y_re, detection = ~ 1,
 
 c(no_random_effect = waic(fit_re0)$estimates["waic", "Estimate"],
   with_random_int  = waic(fit_re)$estimates["waic", "Estimate"])
+#> no_random_effect  with_random_int 
+#>         4347.346         4354.090
 ```
 
 The clustered model carries the lower WAIC, the random intercept paying
@@ -548,6 +626,15 @@ produced them, which is the first thing you read off a fresh fit.
 ``` r
 
 fit
+#> <tobs_fit: single-season occupancy>
+#>   family         : occu (status: working)
+#>   default method : laplace
+#> 
+#>   Sites: 300, Max visits: 6
+#>   Samples: 1000
+#> 
+#> Mean occupancy (intercept): 0.590
+#> Mean detection (intercept): 0.663
 ```
 
 A bar plot of the two occupancy coefficients against zero reads the
@@ -564,6 +651,9 @@ ggplot(co, aes(x = term, y = est)) +
   labs(x = NULL, y = "estimate (logit scale)") +
   transparent
 ```
+
+![Occupancy coefficients as bars against a zero reference
+line](tulpaObs_files/figure-html/taste-occu-plot-1.svg)
 
 Single-season occupancy is the spine the other families extend, and the
 identifiability tension between occupancy and detection runs through all
@@ -597,6 +687,7 @@ fa <- tobs(~ abund_cov1, data = sa$data, family = abun(),
            detection = ~ det_cov1, y = sa$y, method = "laplace",
            control = list(verbose = FALSE))
 exp(coef(fa, arm = "lambda")[["(Intercept)"]])    # baseline expected abundance
+#> [1] 2.907134
 ```
 
 The back-transformed intercept lands near the simulated baseline of
@@ -612,6 +703,9 @@ ggplot(pr, aes(x = x, y = estimate)) +
   labs(x = "abund_cov1", y = "expected abundance") +
   transparent
 ```
+
+![Predicted expected abundance rising with abund_cov1 across its
+range](tulpaObs_files/figure-html/taste-abun-plot-1.svg)
 
 The curve climbs because the abundance slope is positive, and the band
 carries the count uncertainty through the exponential. What lets the
@@ -651,6 +745,8 @@ fm <- tobs(~ x, data = sm$data, family = ms_occu(), detection = ~ 1,
            y = sm$y, species = paste0("sp", 1:8), method = "laplace",
            control = list(verbose = FALSE))
 coef(fm, arm = "psi")                                # community occupancy mean
+#> (Intercept)           x 
+#>  -0.1803196   0.5286092
 ```
 
 [`tobs_richness()`](https://gillescolling.com/tulpaObs/reference/tobs_richness.md)
@@ -671,6 +767,9 @@ ggplot(rich, aes(x = site, y = mean)) +
   labs(x = "site (ordered by richness)", y = "expected richness") +
   transparent
 ```
+
+![Estimated species richness per site, sorted, with a shaded 95 percent
+credible band](tulpaObs_files/figure-html/taste-ms-plot-1.svg)
 
 The modelled richness exceeds the naive detected count because it adds
 the species probably present but undetected, and the band carries every
@@ -712,6 +811,13 @@ fc <- tobs(~ x, data = sc$data, family = cover(response = "lognormal"),
 nd <- data.frame(x = seq(-2, 2, length.out = 50))
 nd$expected <- predict(fc, nd, type = "expected")
 head(nd)
+#>           x   expected
+#> 1 -2.000000 0.03160168
+#> 2 -1.918367 0.03393849
+#> 3 -1.836735 0.03643353
+#> 4 -1.755102 0.03909579
+#> 5 -1.673469 0.04193459
+#> 6 -1.591837 0.04495957
 ```
 
 The expected-cover curve combines both arms: the chance the species
@@ -726,6 +832,9 @@ ggplot(nd, aes(x = x, y = expected)) +
   labs(x = "x", y = "expected cover") +
   transparent
 ```
+
+![Expected vegetation cover rising with the covariate across its
+range](tulpaObs_files/figure-html/taste-cover-plot-1.svg)
 
 The rise reflects both a higher occurrence probability and more cover
 where present as the covariate climbs. Cover data have a shape that
@@ -798,6 +907,9 @@ ggplot(mp, aes(x = cx, y = cy, fill = psi)) +
   transparent
 ```
 
+![Grid map of fitted occupancy shaded by cell, peaking in the grid
+centre](tulpaObs_files/figure-html/taste-spatial-plot-1.svg)
+
 The high-occupancy ridge runs through the grid centre, smoothed from the
 binary noise an isolated per-cell estimate would carry. The field earns
 its keep two ways. It widens the slope standard errors to their honest
@@ -835,6 +947,21 @@ fit_dyn <- tobs(~ 1, data = sd_dyn$data, family = dyn_occu(),
                 colonization = ~ 1, extinction = ~ 1,
                 method = "laplace", control = list(verbose = FALSE))
 fit_dyn$intercepts                          # psi1, p, gamma, epsilon
+#> $psi1
+#> psi1_(Intercept) 
+#>        0.4709663 
+#> 
+#> $p
+#> p_(Intercept) 
+#>     0.5012209 
+#> 
+#> $gamma
+#> gamma_(Intercept) 
+#>         0.2985127 
+#> 
+#> $epsilon
+#> epsilon_(Intercept) 
+#>           0.2100606
 ```
 
 The four rates land near their simulated values. The two transition
@@ -854,6 +981,9 @@ ggplot(tj, aes(x = season)) +
   geom_point(aes(y = realised)) +
   ylim(0, 1) + labs(y = "occupied fraction") + transparent
 ```
+
+![Modelled occupancy trajectory across six seasons against the realised
+fractions](tulpaObs_files/figure-html/taste-dyn-plot-1.svg)
 
 The modelled curve rises from the fitted starting occupancy toward the
 equilibrium the rates imply, tracking the realised fractions. The reason
@@ -889,6 +1019,8 @@ fit_int <- tobs(~ x, data = si$data, family = int_occu(), detection = ~ 1,
                 y = list(survey = si$y[[1]], casual = si$y[[2]]),
                 method = "laplace", control = list(verbose = FALSE))
 coef(fit_int, arm = "psi")                           # shared occupancy block
+#> (Intercept)           x 
+#>   0.1627076   0.7712881
 ```
 
 The fit returns one shared occupancy block plus a detection block per
@@ -905,6 +1037,9 @@ ggplot(dp, aes(x = source, y = p)) +
   ylim(0, 1) + labs(x = NULL, y = "detection probability") +
   transparent
 ```
+
+![Per-source detection probability as bars, one per data
+source](tulpaObs_files/figure-html/taste-int-plot-1.svg)
 
 The two bars sit at different heights because the sources detect at
 different rates, which is the point of the separate detection blocks.
@@ -951,6 +1086,14 @@ co  <- coef(fit)            # named <process>_<coefficient>
 ci  <- confint(fit)         # matrix of credible bounds
 vc  <- vcov(fit)            # fixed-effect covariance
 list(coef = names(co), confint_rows = rownames(ci), vcov_dim = dim(vc))
+#> $coef
+#> [1] "psi_(Intercept)" "psi_occ_cov1"    "p_(Intercept)"   "p_det_cov1"     
+#> 
+#> $confint_rows
+#> [1] "psi_(Intercept)" "psi_occ_cov1"    "p_(Intercept)"   "p_det_cov1"     
+#> 
+#> $vcov_dim
+#> [1] 4 4
 ```
 
 Beyond the four above,

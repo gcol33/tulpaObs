@@ -31,12 +31,12 @@ clean — a single failing chunk fails the vignette.
   `tulpa::tulpa_fit`). `summary()` adds Rhat/ESS columns under NUTS.
 - Math in Rmd uses LaTeX `$...$` / `$$...$$` (Unicode is fine in Rmd, unlike
   Rd). Keep figures with `fig.alt = "..."`.
-- YAML header + setup chunk: copy exactly from `vignettes/quickstart.Rmd`
+- YAML header + setup chunk: copy exactly from `vignettes/tulpaObs.Rmd`
   (output `rmarkdown::html_vignette`, `set.seed(20260529)`, collapse/comment).
 
 ## Voice (read these first)
 
-Read `vignettes/quickstart.Rmd` (just written) and
+Read `vignettes/tulpaObs.Rmd` (just written) and
 `../tulpa/vignettes/spatial-models.Rmd` for the target voice. Collegial,
 concrete-first (show the R behaviour, then name the concept), flat
 statements, specific numbers not adjectives, 2-4 sentences of prose between

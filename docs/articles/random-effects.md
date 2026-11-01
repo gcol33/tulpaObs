@@ -122,6 +122,9 @@ sim_re <- function(seed = 101, ng = 30L, per = 25L, J = 6L,
 
 s <- sim_re()
 str(s$d)
+#> 'data.frame':    750 obs. of  2 variables:
+#>  $ g: Factor w/ 30 levels "1","2","3","4",..: 1 1 1 1 1 1 1 1 1 1 ...
+#>  $ x: num  -0.326 0.552 -0.675 0.214 0.311 ...
 ```
 
 The grouping factor `g` is a `factor`. Fit occupancy with a fixed slope
@@ -149,6 +152,8 @@ intercept and slope land near the simulated 0.3 and -0.6.
 ``` r
 
 coef(fit, arm = "psi")
+#> (Intercept)           x 
+#>   0.2369320  -0.6833076
 ```
 
 The variance component is a hyperparameter in `fit$means`, named for the
@@ -159,7 +164,10 @@ intercept.
 
 sig_name <- grep("^sigma_", names(fit$means), value = TRUE)
 sig_name
+#> [1] "sigma_g1_(Intercept)"
 c(estimate = fit$means[[sig_name]], truth = 0.9)
+#>  estimate     truth 
+#> 0.7309166 0.9000000
 ```
 
 [`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html)
@@ -173,7 +181,15 @@ these same columns.
 
 re <- ranef(fit)
 head(re)
+#>   arm group level        term   estimate std.error
+#> 1 psi     g     1 (Intercept) -0.3783381 0.3687621
+#> 2 psi     g     2 (Intercept)  0.4034067 0.3834248
+#> 3 psi     g     3 (Intercept)  0.6410361 0.3966751
+#> 4 psi     g     4 (Intercept)  0.6755256 0.3915525
+#> 5 psi     g     5 (Intercept) -0.2302246 0.3732743
+#> 6 psi     g     6 (Intercept) -1.0928680 0.3860100
 nrow(re)
+#> [1] 30
 ```
 
 The point of the random effect is that these per-cluster intercepts
@@ -186,7 +202,16 @@ the shrinkage that pulls small-data clusters toward zero.
 plot(s$b_true, re$estimate, pch = 16, col = rgb(0, 0, 0, 0.5),
      xlab = "true cluster effect", ylab = "estimated BLUP")
 abline(0, 1, col = "steelblue", lwd = 2)
+```
+
+![Recovered per-cluster random intercepts against the simulated truth,
+scattered along the identity line with slight shrinkage toward
+zero](random-effects_files/figure-html/blup-plot-1.svg)
+
+``` r
+
 cor(s$b_true, re$estimate)
+#> [1] 0.8786531
 ```
 
 ## The EM, the small-cluster bias, and the AGHQ debias
@@ -210,7 +235,9 @@ number of quadrature nodes, default 9). The fit records what happened in
 ``` r
 
 fit$aghq$applied
+#> [1] TRUE
 fit$aghq$n_quad
+#> [1] 9
 ```
 
 The effect is largest when groups are small. With per-group $`n = 8`$
@@ -234,6 +261,8 @@ get_sigma <- function(f) f$means[[grep("^sigma_", names(f$means), value = TRUE)]
 c(truth = 0.9,
   EM    = get_sigma(fit_em),
   AGHQ  = get_sigma(fit_aghq))
+#>     truth        EM      AGHQ 
+#> 0.9000000 0.5597824 0.6318479
 ```
 
 The EM estimate sits below the truth; the AGHQ pass corrects it upward.
@@ -287,6 +316,8 @@ $`0.3 / \sqrt{0.6 \times 0.4} \approx 0.61`$.
 ``` r
 
 fit_c$means[grep("^sigma_|^cor_", names(fit_c$means))]
+#> sigma_g1_(Intercept)           sigma_g1_x cor_g1_(Intercept)_x 
+#>            0.8249986            0.7169608            0.7626199
 ```
 
 The Laplace correlation is regularized by a default LKJ($`\eta = 1.5`$)
@@ -305,8 +336,10 @@ now carries both an `(Intercept)` term and an `x` term per group.
 
 re_c <- ranef(fit_c)
 unique(re_c$term)
+#> [1] "(Intercept)" "x"
 b1_hat <- re_c$estimate[re_c$term == "x"]
 cor(b1_hat, sc$U[, 2])
+#> [1] 0.8839711
 ```
 
 The uncorrelated forms `(x || g)`, `(1 + x || g)`, and the slope-only
@@ -347,7 +380,10 @@ fit_cr <- tobs(~ x + (1 | g:h), data = d_cr, y = y, detection = ~ 1,
                family = occu(), method = "laplace",
                control = list(verbose = FALSE))
 nrow(ranef(fit_cr))      # one BLUP per observed g:h combination
+#> [1] 48
 coef(fit_cr, arm = "psi")
+#> (Intercept)           x 
+#>   0.3424996  -0.5272869
 ```
 
 The crossed term `(1 | g:h)` collapses to a single interaction factor,
@@ -395,7 +431,9 @@ for the detection process: `sigma_p<t>_` rather than the occupancy
 ``` r
 
 grep("^sigma_", names(fit_d$means), value = TRUE)
+#> [1] "sigma_p1_(Intercept)"
 fit_d$aghq$arm
+#> [1] "det"
 ```
 
 The detection arm is harder than the occupancy arm because only occupied
@@ -411,6 +449,7 @@ per-group detection BLUPs track the simulated observer effects.
 re_d <- ranef(fit_d)
 rp <- re_d[re_d$group == "observer", ]
 cor(rp$estimate, sd_re$b_obs)
+#> [1] 0.900168
 ```
 
 ## Laplace versus NUTS for random effects
@@ -439,6 +478,8 @@ fit_n <- tobs(~ x + (1 | g), data = s$d, y = s$y, detection = ~ 1,
 sig_l <- fit$means[[grep("^sigma_", names(fit$means), value = TRUE)]]
 sig_n <- fit_n$means[[grep("^sigma_", names(fit_n$means), value = TRUE)]]
 c(laplace = sig_l, nuts = sig_n, truth = 0.9)
+#>   laplace      nuts     truth 
+#> 0.7309166 0.7792917 0.9000000
 ```
 
 The two backends agree on the variance, and the BLUPs agree across
@@ -448,6 +489,7 @@ engines.
 
 re_n <- ranef(fit_n)
 cor(re$estimate, re_n$estimate)
+#> [1] 0.9994081
 ```
 
 Two random-effect specifications are NUTS-only. The Laplace path errors,

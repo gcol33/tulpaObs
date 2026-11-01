@@ -14,7 +14,7 @@ Ecologists with repeated-visit detection histories, replicated counts, distance 
 - phrase: each model supplies its observation likelihood to the tulpa engine
 - same: inference (Laplace, nested Laplace, NUTS), structured effects (spatial, temporal, random effects), diagnostics generics
 - differs: observation likelihoods for imperfect detection, survey data helpers, simulators per family
-- home: vignettes/quickstart.Rmd
+- home: vignettes/tulpaObs.Rmd
 
 ## Arcs
 
@@ -54,6 +54,6 @@ Ecologists with repeated-visit detection histories, replicated counts, distance 
 
 - DESCRIPTION: claim, relation, the model list.
 - README.Rmd / README.md: claim, relation, installation, first fit, one section per arc, routing, citation.
-- vignettes/quickstart.Rmd: Get started.
+- vignettes/tulpaObs.Rmd: Get started.
 - Topic vignettes: one family or structure each; two comparisons with INLA.
 - Help pages and API.md: argument and return-value contracts.

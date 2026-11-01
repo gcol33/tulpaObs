@@ -166,6 +166,11 @@ sa <- simulate_abun(
 dat <- sa$data       # site covariates, one row per site
 y   <- sa$y          # 200 x 5 count matrix
 y[1:4, ]
+#>      [,1] [,2] [,3] [,4] [,5]
+#> [1,]    1    1    0    1    1
+#> [2,]    3    2    0    1    2
+#> [3,]    0    1    1    1    0
+#> [4,]    1    1    1    0    1
 ```
 
 The counts undercount the latent abundance. Averaging the per-site
@@ -176,6 +181,8 @@ opens.
 
 c(mean_max_count = mean(apply(y, 1, max)),
   mean_true_N    = mean(sa$truth$N))
+#> mean_max_count    mean_true_N 
+#>          2.820          3.275
 ```
 
 The fit follows the same call shape as occupancy. The abundance formula
@@ -210,12 +217,16 @@ abundance.
 ``` r
 
 coef(fa)
+#> lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 
+#>          1.0671676          0.4453561          0.4086084          0.2462074
 ```
 
 ``` r
 
 c(baseline_lambda = exp(coef(fa, arm = "lambda")[["(Intercept)"]]),
   true_baseline   = 3)
+#> baseline_lambda   true_baseline 
+#>        2.907134        3.000000
 ```
 
 The abundance intercept back-transforms to roughly the three animals the
@@ -228,6 +239,22 @@ the detection arm.
 ``` r
 
 summary(fa)
+#> tulpa fit 
+#>   n_obs: 1000 
+#>   posterior draws: 1000 
+#> 
+#> Fixed effects:
+#>                    estimate std.error  2.5 % 97.5 %
+#> lambda_(Intercept)   1.0672   0.04902 0.9748 1.1613
+#> lambda_abund_cov1    0.4454   0.03999 0.3667 0.5214
+#> p_(Intercept)        0.4086   0.07297 0.2729 0.5537
+#> p_det_cov1           0.2462   0.06269 0.1243 0.3718
+#> 
+#> Reliability (iid draws):
+#>   outer pareto_k NA (NA); grid ESS NA of NA cells; inner skew NA (NA)
+#>   moments read from: draws
+#>   mean acceptance: NA
+#>   divergent transitions: NA
 ```
 
 [`fitted()`](https://rdrr.io/r/stats/fitted.values.html) returns the
@@ -240,6 +267,10 @@ total, since it conditions on what was actually seen at each site.
 
 fv <- fitted(fa)
 str(lapply(fv, head, 4))
+#> List of 3
+#>  $ lambda: num [1:4] 1.95 3.15 5.87 1.76
+#>  $ p     : num [1:4] 0.618 0.618 0.618 0.618
+#>  $ N     : num [1:4] 1.12 3.31 1.02 1.11
 ```
 
 Plotting the posterior mean abundance against the simulated truth shows
@@ -252,6 +283,10 @@ plot(sa$truth$N, fv$N, pch = 16, col = rgb(0, 0, 0, 0.35),
      xlab = "true N", ylab = "fitted E[N | y]")
 abline(0, 1, col = "steelblue", lwd = 2)
 ```
+
+![Posterior mean abundance per site against the true simulated
+abundance, scattered around the identity
+line](abundance_files/figure-html/fitted-plot-1.svg)
 
 The points track the identity line with scatter that grows at higher
 abundance, which is the right behaviour: a site with more animals leaves
@@ -283,6 +318,9 @@ fa_k <- tobs(~ abund_cov1, data = dat, family = abun(K.max = 200),
              control = list(verbose = FALSE))
 rbind(default_K = coef(fa, arm = "lambda"),
       K_max_200 = coef(fa_k, arm = "lambda"))
+#>           (Intercept) abund_cov1
+#> default_K    1.067168  0.4453561
+#> K_max_200    1.065566  0.4400979
 ```
 
 The two fits agree to several decimals, so the default ceiling was
@@ -361,6 +399,10 @@ fb <- tobs(~ abund_cov1, data = sb$data, family = abun(mixture = "negbin"),
            detection = ~ det_cov1, y = sb$y, method = "laplace",
            control = list(verbose = FALSE))
 coef(fb)
+#> lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 
+#>          1.3186647          0.4671972          0.4868058          0.1193980 
+#>              log_r 
+#>          0.9198933
 ```
 
 The dispersion lives in `fb$nmix_dispersion`: the natural-scale size
@@ -370,6 +412,14 @@ The dispersion lives in `fb$nmix_dispersion`: the natural-scale size
 ``` r
 
 fb$nmix_dispersion
+#> $r
+#> [1] 2.522005
+#> 
+#> $log_r
+#> [1] 0.9250543
+#> 
+#> $r_sd
+#> [1] 0.4615203
 ```
 
 The estimated $`r`$ sits near the simulated 2, with a standard error
@@ -390,6 +440,8 @@ signature of overdispersion that a Poisson state cannot represent.
 maxcount <- apply(sb$y, 1, max)
 c(mean = mean(maxcount), var = var(maxcount),
   ratio = var(maxcount) / mean(maxcount))
+#>     mean      var    ratio 
+#> 3.510000 9.306432 2.651405
 ```
 
 A ratio near one says Poisson will do; a ratio of two or more says reach
@@ -409,6 +461,10 @@ joint coefficient covariance. Pass one column per abundance coefficient.
 
 X0 <- cbind(`(Intercept)` = 1, abund_cov1 = c(-1.5, 0, 1.5))
 predict(fa, X.0 = X0)
+#>       mean        sd     q2.5      q50    q97.5
+#> 1 1.496578 0.1350134 1.248987 1.483833 1.776139
+#> 2 2.910627 0.1428580 2.650587 2.909445 3.193961
+#> 3 5.681138 0.3554934 5.033413 5.672292 6.400644
 ```
 
 Expected abundance climbs across the three covariate values, and the
@@ -445,6 +501,9 @@ polygon(c(pr$x, rev(pr$x)), c(pr$lower, rev(pr$upper)),
 lines(pr$x, pr$estimate, lwd = 2)
 ```
 
+![Predicted expected abundance rising with abund_cov1, with a shaded 95
+percent credible band](abundance_files/figure-html/predict-terms-1.svg)
+
 The band is the abundance arm’s uncertainty alone. The detection arm has
 its own prediction surface, reached with `type = "detection"`, which is
 the right call when the question is about survey efficiency rather than
@@ -454,6 +513,10 @@ population size.
 
 predict(fa, X.0 = cbind(`(Intercept)` = 1, det_cov1 = c(-1, 0, 1)),
         type = "detection")
+#>        mean         sd      q2.5       q50     q97.5
+#> 1 0.5403838 0.02728106 0.4927461 0.5400680 0.5963365
+#> 2 0.6006247 0.01745972 0.5677930 0.6002470 0.6349921
+#> 3 0.6578694 0.01787446 0.6221247 0.6573987 0.6937747
 ```
 
 ## Random effects on abundance
@@ -520,6 +583,8 @@ fr <- tobs(
   control   = list(n.quad = 5, verbose = FALSE)
 )
 coef(fr, arm = "lambda")
+#> (Intercept)          x1 
+#>   0.4106965   0.5210838
 ```
 
 The abundance intercept and slope recover near the simulated 0.6 and 0.4
@@ -532,6 +597,8 @@ baselines.
 
 sig_name <- grep("^sigma_g", names(fr$means), value = TRUE)
 c(estimate = fr$means[[sig_name]], truth = 0.6)
+#>  estimate     truth 
+#> 0.7453534 0.6000000
 ```
 
 [`vcov()`](https://rdrr.io/r/stats/vcov.html) returns the joint
@@ -544,6 +611,10 @@ with the fixed effects.
 ``` r
 
 round(vcov(fr), 4)
+#>                    lambda_(Intercept) lambda_x1 p_(Intercept)
+#> lambda_(Intercept)             0.0838   -0.0024       -0.0068
+#> lambda_x1                     -0.0024    0.0055       -0.0006
+#> p_(Intercept)                 -0.0068   -0.0006        0.0199
 ```
 
 [`ranef()`](https://gillescolling.com/tulpa/reference/ranef.html)
@@ -556,6 +627,15 @@ marginal posterior spread, wider for groups with fewer sites.
 
 re <- ranef(fr)
 re
+#>      arm group level        term    estimate std.error
+#> 1 lambda     g     1 (Intercept) -0.05460644 0.2092936
+#> 2 lambda     g     2 (Intercept)  0.03921651 0.2190470
+#> 3 lambda     g     3 (Intercept) -1.08035897 0.3048384
+#> 4 lambda     g     4 (Intercept) -0.44822134 0.2898862
+#> 5 lambda     g     5 (Intercept)  0.72807203 0.1509854
+#> 6 lambda     g     6 (Intercept) -0.70742394 0.2566427
+#> 7 lambda     g     7 (Intercept)  1.02900226 0.1385809
+#> 8 lambda     g     8 (Intercept)  0.68121607 0.1538180
 ```
 
 Plot the recovered group effects against the simulated truth with the
@@ -576,6 +656,10 @@ ggplot(re, aes(truth, estimate)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![Recovered per-group random intercepts against the simulated truth,
+with standard-error bars, scattered along the identity
+line](abundance_files/figure-html/re-plot-1.svg)
 
 The same machinery moves to detection by writing the bar in the
 `detection` formula, where it varies the per-group logit of detection
@@ -640,6 +724,7 @@ grid_adj <- function(side) {
 }
 adj <- grid_adj(6)        # 36 cells, one site per cell
 dim(adj)
+#> [1] 36 36
 ```
 
 Simulate counts on the grid with a smooth abundance field added to the
@@ -693,6 +778,8 @@ fs <- suppressWarnings(tobs(
   control   = list(verbose = FALSE, max.iter = 50)
 ))
 coef(fs)
+#> lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 
+#>         1.64698503         0.46238494        -0.03558412         0.32983112
 ```
 
 The covariate slopes recover with the regional signal absorbed into the
@@ -714,6 +801,8 @@ shape is what removes the bias from the slopes.
 
 c(field_cor = cor(fs$spatial_field, ss$phi),
   method    = fs$method)
+#>           field_cor              method 
+#> "0.906389733396638"    "nested_laplace"
 ```
 
 Under `mixture = "negbin"` the size $`r`$ is integrated over the outer
@@ -738,6 +827,8 @@ fb_pois <- tobs(~ abund_cov1, data = sb$data, family = abun(),
 
 c(poisson = as.numeric(logLik(fb_pois)),
   negbin  = as.numeric(logLik(fb)))
+#>   poisson    negbin 
+#> -1526.102 -1476.182
 ```
 
 The negative binomial carries the higher log-likelihood on data built

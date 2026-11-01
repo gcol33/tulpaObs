@@ -185,6 +185,10 @@ sim <- simulate_occu(
 dat <- sim$data              # one row per site: occ_cov1, det_cov1
 y   <- sim$y                 # 300 x 6 detection-history matrix (0/1)
 y[1:3, ]
+#>      [,1] [,2] [,3] [,4] [,5] [,6]
+#> [1,]    0    0    0    0    0    0
+#> [2,]    0    0    0    0    0    0
+#> [3,]    1    0    1    1    1    1
 ```
 
 The covariates are standard normal, so a site at `occ_cov1 = 1` sits one
@@ -195,6 +199,12 @@ parameters and the realised latent quantities.
 ``` r
 
 str(sim$truth, max.level = 1)
+#> List of 5
+#>  $ beta_occ: num [1:2] 0.3 1
+#>  $ beta_det: num [1:2] 0.7 0.6
+#>  $ psi     : num [1:300] 0.419 0.619 0.369 0.869 0.652 ...
+#>  $ p       : num [1:300] 0.775 0.518 0.868 0.615 0.845 ...
+#>  $ z       : int [1:300] 0 0 1 1 0 1 0 0 1 1 ...
 ```
 
 The choice of six visits and detection near 0.67 is not arbitrary.
@@ -216,6 +226,8 @@ raw counts would throw away.
 
 c(naive_occupied = mean(rowSums(y) > 0),
   true_occupied  = mean(sim$truth$z))
+#> naive_occupied  true_occupied 
+#>      0.5800000      0.5833333
 ```
 
 ## Fitting
@@ -266,6 +278,8 @@ rather than discarded.
 ``` r
 
 coef(fit)
+#> psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 
+#>       0.3638670       1.0118715       0.6744931       0.5087683
 ```
 
 [`summary()`](https://rdrr.io/r/base/summary.html) adds the posterior
@@ -278,6 +292,23 @@ covariate name appears in both formulas.
 ``` r
 
 summary(fit)
+#> tulpa fit 
+#>   n_obs: 300 
+#>   posterior draws: 1000 
+#> 
+#> Fixed effects:
+#>                 estimate std.error  2.5 % 97.5 %
+#> psi_(Intercept)   0.3639   0.12975 0.1096 0.6182
+#> psi_occ_cov1      1.0119   0.15489 0.7083 1.3154
+#> p_(Intercept)     0.6745   0.06862 0.5400 0.8090
+#> p_det_cov1        0.5088   0.06958 0.3724 0.6451
+#> 
+#> Reliability (iid draws):
+#>   outer pareto_k NA (NA); grid ESS 175.4 of 300 cells; inner skew NA (NA)
+#>   moments read from: draws
+#>   mean acceptance: NA
+#>   divergent transitions: NA
+#>   verdict: not computed (outer integration not assessed; inner Laplace not assessed)
 ```
 
 Read the summary one row at a time. The estimate is the posterior mode
@@ -302,6 +333,11 @@ Laplace fit already computed, so there is no extra sampling step.
 ``` r
 
 confint(fit)
+#>                     2.5 %    97.5 %
+#> psi_(Intercept) 0.1095686 0.6181653
+#> psi_occ_cov1    0.7082995 1.3154436
+#> p_(Intercept)   0.5400064 0.8089798
+#> p_det_cov1      0.3724036 0.6451330
 ```
 
 The Laplace fit is exact when the posterior is Gaussian and a good
@@ -326,6 +362,20 @@ fit_nuts <- tobs(
   control   = list(n.iter = 800, n.warmup = 400, seed = 1, verbose = FALSE)
 )
 summary(fit_nuts)
+#> tulpa fit  (hmc) 
+#>   posterior draws: 800 
+#> 
+#> Fixed effects:
+#>                 estimate std.error  2.5 % 97.5 %  rhat ess_bulk ess_tail
+#> psi_(Intercept)   0.3727   0.12660 0.1357 0.6363 1.018    463.9    448.1
+#> psi_occ_cov1      1.0341   0.16177 0.7286 1.3701 1.009    630.0    504.3
+#> p_(Intercept)     0.6754   0.06668 0.5536 0.8117 1.012    424.5    404.9
+#> p_det_cov1        0.5146   0.06223 0.3899 0.6464 1.000    375.8    302.2
+#> 
+#> Reliability (chain draws):
+#>   max Rhat 1.018, min bulk-ESS 375.8, min tail-ESS 302.2
+#>   mean acceptance: 0.9018
+#>   divergent transitions: 0
 ```
 
 With six visits and detection near 0.67 the joint posterior is close to
@@ -355,6 +405,11 @@ data.frame(
   nuts    = round(coef(fit_nuts), 3),
   row.names = NULL
 )
+#>              term laplace  nuts
+#> 1 psi_(Intercept)   0.364 0.373
+#> 2    psi_occ_cov1   1.012 1.034
+#> 3   p_(Intercept)   0.674 0.675
+#> 4      p_det_cov1   0.509 0.515
 ```
 
 [`fitted()`](https://rdrr.io/r/stats/fitted.values.html) returns three
@@ -376,6 +431,10 @@ hard to detect, while the same zeros at a site with low $`\psi`$ pull
 
 fv <- fitted(fit)
 str(lapply(fv, head, 4))
+#> List of 3
+#>  $ psi: num [1:4] 0.433 0.634 0.382 0.878
+#>  $ p  : num [1:4] 0.756 0.535 0.843 0.618
+#>  $ z  : num [1:4] 0.000162 0.017137 1 1
 ```
 
 The conditional occupancy `z` at an all-zero site is Bayes’ rule applied
@@ -410,6 +469,10 @@ plot(sim$truth$psi, fv$psi, pch = 16, col = rgb(0, 0, 0, 0.35),
      xlab = "true psi", ylab = "fitted psi")
 abline(0, 1, col = "steelblue", lwd = 2)
 ```
+
+![Fitted occupancy probability against the true simulated probability,
+scattered around the identity
+line](occupancy_files/figure-html/fitted-plot-1.svg)
 
 The same fitted object answers the standard accessors, and they behave
 the same way on a Laplace fit and a NUTS fit. The Laplace tier reports
@@ -455,6 +518,8 @@ same data.
 
 w <- waic(fit)
 c(waic = w$estimates["waic", "Estimate"], elpd = w$estimates["elpd_waic", "Estimate"], p_waic = w$estimates["p_waic", "Estimate"])
+#>        waic        elpd      p_waic 
+#> 1646.075327 -823.037664    3.811516
 ```
 
 The three numbers are facets of one calculation. `elpd` is the expected
@@ -480,6 +545,7 @@ typical draw from the fitted model; values near 0 or 1 flag a misfit.
 
 pp <- ppc(fit, fit.stat = "freeman-tukey")
 pp$bayesian.p
+#> [1] 0.478
 ```
 
 ``` r
@@ -488,6 +554,10 @@ hist(pp$fit.y.rep, breaks = 30, col = "grey85", border = "white",
      main = "", xlab = "Freeman-Tukey statistic (replicated)")
 abline(v = mean(pp$fit.y), col = "firebrick", lwd = 2)
 ```
+
+![Histogram of replicated Freeman-Tukey statistics with the observed
+value marked by a vertical line falling inside the
+bulk](occupancy_files/figure-html/ppc-plot-1.svg)
 
 The observed statistic sits inside the bulk of the replicated values, so
 the fit reproduces the spread of the detection histories. The
@@ -503,7 +573,15 @@ runs the formal Kolmogorov-Smirnov test against that target.
 pit <- pit_residuals(fit)
 hist(pit, breaks = 12, col = "grey85", border = "white",
      main = "", xlab = "PIT residual")
+```
+
+![Histogram of PIT residuals across sites, roughly flat between zero and
+one](occupancy_files/figure-html/pit-1.svg)
+
+``` r
+
 test_uniformity(pit)$p.value
+#> [1] 0.6501897
 ```
 
 The histogram is roughly flat and the test does not reject uniformity,
@@ -530,6 +608,9 @@ plot(fv$psi, res$occ, pch = 16, col = rgb(0, 0, 0, 0.3),
      xlab = "fitted psi", ylab = "occupancy deviance residual")
 abline(h = 0, col = "grey50")
 ```
+
+![Occupancy deviance residuals against fitted occupancy probability,
+scattered with no trend](occupancy_files/figure-html/resid-1.svg)
 
 A residual plot with no trend against the fitted values, as here, says
 the mean structure is adequate; a funnel or a curve would point to a
@@ -562,6 +643,11 @@ doing real work; the same holds for detection.
 
 ci <- confint(fit)
 ci
+#>                     2.5 %    97.5 %
+#> psi_(Intercept) 0.1095686 0.6181653
+#> psi_occ_cov1    0.7082995 1.3154436
+#> p_(Intercept)   0.5400064 0.8089798
+#> p_det_cov1      0.3724036 0.6451330
 ```
 
 The intervals carry the inference. A coefficient whose interval spans
@@ -590,6 +676,9 @@ me <- tobs_marginal_effect(fit, "occ_cov1", process = "occupancy")
 plot(me)
 ```
 
+![Predicted occupancy probability rising with occ_cov1, with a shaded 95
+percent credible band](occupancy_files/figure-html/marginal-1.svg)
+
 The curve is the occupancy-covariate relationship on the scale a reader
 cares about. It rises with `occ_cov1`, steeply through the middle where
 the logit is near zero and the probability is most sensitive, and it
@@ -609,6 +698,9 @@ reverse, and plotting each arm separately is how you tell which.
 me_det <- tobs_marginal_effect(fit, "det_cov1", process = "detection")
 plot(me_det)
 ```
+
+![Predicted detection probability rising with det_cov1, with a shaded 95
+percent credible band](occupancy_files/figure-html/marginal-det-1.svg)
 
 ## Prediction
 
@@ -633,6 +725,10 @@ wide interval.
 
 X0 <- cbind(`(Intercept)` = 1, occ_cov1 = c(-1, 0, 1))
 predict(fit, X.0 = X0)
+#>        mean         sd      q2.5       q50     q97.5
+#> 1 0.3455812 0.04506214 0.2650332 0.3441281 0.4369669
+#> 2 0.5893301 0.03180065 0.5267301 0.5882291 0.6518637
+#> 3 0.7952724 0.03456338 0.7214816 0.7981468 0.8536645
 ```
 
 The columns of `X.0` must line up with the occupancy coefficients in
@@ -651,6 +747,10 @@ two land in the same place when the posterior is well behaved.
 ``` r
 
 predict(fit_nuts, X.0 = X0)
+#>        mean         sd      q2.5       q50     q97.5
+#> 1 0.3416830 0.04209410 0.2669885 0.3393469 0.4249586
+#> 2 0.5917456 0.03045209 0.5338715 0.5928335 0.6539069
+#> 3 0.8009468 0.03456605 0.7300807 0.8013661 0.8633308
 ```
 
 [`tobs_marginal_effect()`](https://gillescolling.com/tulpaObs/reference/tobs_marginal_effect.md)
@@ -667,6 +767,11 @@ because both are read from the same all-zero sites.
 ``` r
 
 round(vcov(fit), 3)
+#>                 psi_(Intercept) psi_occ_cov1 p_(Intercept) p_det_cov1
+#> psi_(Intercept)           0.017        0.003         0.000      0.000
+#> psi_occ_cov1              0.003        0.024         0.000      0.000
+#> p_(Intercept)             0.000        0.000         0.005      0.001
+#> p_det_cov1                0.000        0.000         0.001      0.005
 ```
 
 [`simulate()`](https://rdrr.io/r/stats/simulate.html) runs the
@@ -681,6 +786,8 @@ diagnostics do not cover.
 ysim <- simulate(fit, nsim = 1)[[1]]
 c(observed_detections = sum(y == 1),
   simulated_detections = sum(ysim == 1))
+#>  observed_detections simulated_detections 
+#>                  682                  712
 ```
 
 The simulated detection count lands near the observed one, as it should
@@ -713,6 +820,9 @@ waic_tab <- data.frame(
 )
 waic_tab$delta <- waic_tab$waic - min(waic_tab$waic)
 waic_tab
+#>            model     waic   p_waic    delta
+#> 1 intercept only 1695.349 2.723585 49.27383
+#> 2  with occ_cov1 1646.075 3.811516  0.00000
 ```
 
 The covariate model carries the lower WAIC, matching how the data were
@@ -748,6 +858,8 @@ disp <- test_dispersion(fit, n.samples = 200)
 zi   <- test_zero_inflation(fit, n.samples = 200)
 c(dispersion_ratio = disp$ratio, dispersion_p = disp$p.value,
   zero_ratio = zi$ratio, zero_p = zi$p.value)
+#> dispersion_ratio     dispersion_p       zero_ratio           zero_p 
+#>        0.9901005        0.5550000        1.0024664        0.4950000
 ```
 
 A dispersion ratio above one with a small $`p`$-value would say the
@@ -775,6 +887,8 @@ fit_misplaced <- tobs(~ occ_cov1 + det_cov1, data = dat, family = occu(),
 c(correct        = waic(fit)$estimates["waic", "Estimate"],
   no_det_cov     = waic(fit_det_only)$estimates["waic", "Estimate"],
   det_on_occ     = waic(fit_misplaced)$estimates["waic", "Estimate"])
+#>    correct no_det_cov det_on_occ 
+#>   1646.075   1709.588   1711.050
 ```
 
 The correct model, with `det_cov1` in the detection formula, carries the
@@ -821,7 +935,9 @@ covariates. It reads the `tobs_model` stored on the fitted object.
 ``` r
 
 chk <- tobs_check_id(fit$model)
+#> No identifiability issues detected.
 chk$identifiable
+#> [1] TRUE
 ```
 
 A short simulation shows the drift directly. Build a dataset with only
@@ -854,6 +970,11 @@ data.frame(
   nuts    = round(coef(fit_hmc), 2),
   row.names = NULL
 )
+#>              term truth laplace  nuts
+#> 1 psi_(Intercept)   0.3   -0.20  6.71
+#> 2    psi_occ_cov1   1.0    0.98  6.62
+#> 3   p_(Intercept)  -1.5   -1.13 -1.77
+#> 4      p_det_cov1   0.3    0.18  0.14
 ```
 
 The Laplace and NUTS estimates separate here in a way they did not at

@@ -244,7 +244,7 @@ covers the full workflow.
 ## Documentation
 
 Start with [Getting started with
-tulpaObs](https://gillescolling.com/tulpaObs/articles/quickstart.html):
+tulpaObs](https://gillescolling.com/tulpaObs/articles/tulpaObs.html):
 one path from simulated detection histories to a fitted, compared and
 predicted occupancy model.
 

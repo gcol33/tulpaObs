@@ -134,6 +134,8 @@ truth <- sim$truth
 c(naive_occ      = mean(rowSums(y) > 0),
   true_psi_mean  = mean(truth$psi),
   true_p_mean    = mean(truth$p))
+#>     naive_occ true_psi_mean   true_p_mean 
+#>     0.5733333     0.5905018     0.4945961
 ```
 
 The naive proportion of sites with any detection is biased low by
@@ -172,6 +174,17 @@ fit_tulpa_nuts <- tobs(
   control   = list(n.iter = 1500, n.warmup = 750, seed = 42, verbose = FALSE)
 )
 fit_tulpa_nuts
+#> <tobs_fit: single-season occupancy>
+#>   family         : occu (status: working)
+#>   default method : laplace
+#> 
+#>   Sites: 600, Max visits: 6
+#>   Samples: 1500 (1 chain), step size: 0.6798
+#>   Seeds: 42
+#>   Convergence: max Rhat 1.007, min bulk ESS 569
+#> 
+#> Mean occupancy (intercept): 0.655
+#> Mean detection (intercept): 0.482
 ```
 
 ## INLA workaround: row-stack the detection histories, fit a single binomial
@@ -194,11 +207,20 @@ long <- data.frame(
 )
 
 head(long)
+#>   y site visit occ_cov1   det_cov1
+#> 1 0    1     1 1.370958 -0.2484829
+#> 2 1    1     2 1.370958 -0.2484829
+#> 3 0    1     3 1.370958 -0.2484829
+#> 4 0    1     4 1.370958 -0.2484829
+#> 5 0    1     5 1.370958 -0.2484829
+#> 6 1    1     6 1.370958 -0.2484829
 ```
 
 ``` r
 
 library(INLA)
+#> Loading required package: Matrix
+#> 
 
 m_inla <- INLA::inla(
   y ~ occ_cov1 + det_cov1,
@@ -209,6 +231,10 @@ m_inla <- INLA::inla(
 
 inla_fixed <- m_inla$summary.fixed[, c("mean", "0.025quant", "0.975quant")]
 inla_fixed
+#>                   mean 0.025quant 0.975quant
+#> (Intercept) -1.0074000 -1.0871260 -0.9276740
+#> occ_cov1     0.6783235  0.5941426  0.7625045
+#> det_cov1     0.5145149  0.4341212  0.5949087
 ```
 
 ## What the workaround estimates
@@ -256,6 +282,11 @@ compare <- data.frame(
   row.names = NULL
 )
 compare
+#>         parameter truth tulpaObs_NUTS tulpaObs_Laplace INLA_workaround
+#> 1 (occ Intercept)   0.5    0.64049192       0.63767576      -1.0074000
+#> 2        occ_cov1   1.2    1.47156836       1.46010321       0.6783235
+#> 3 (det Intercept)   0.0   -0.07104716      -0.07400899              NA
+#> 4        det_cov1   0.8    0.72395648       0.72268534       0.5145149
 ```
 
 NUTS lands on the truth on both processes. Laplace gives biased point
@@ -295,6 +326,8 @@ cor_with_truth <- c(
   naive_any        = cor(as.numeric(rowSums(y) > 0), truth$psi)
 )
 round(cor_with_truth, 3)
+#>    tulpaObs_NUTS tulpaObs_Laplace  INLA_workaround        naive_any 
+#>            0.999            0.999            0.746            0.486
 ```
 
 For population-trend questions (“did $`\psi`$ change?”) the workaround
@@ -313,6 +346,12 @@ plot(truth$psi, psi_hat_inla, pch = 16, col = rgb(0, 0, 0, 0.4),
      xlab = "true psi", ylab = "INLA aggregated p(detection)",
      main = "binomial workaround: confounds psi and p")
 abline(0, 1, col = 2, lwd = 2)
+```
+
+![](occupancy-vs-inla_files/figure-html/predict-plot-1.svg)
+
+``` r
+
 par(op)
 ```
 
@@ -377,7 +416,13 @@ fit_re <- tobs(
   method    = "laplace",
   control   = list(verbose = FALSE)
 )
+#> Warning: occu(): the laplace fit stopped after 300 iterations without meeting
+#> its convergence criterion, so the estimates are not at the mode. Raise
+#> control$max.iter (or loosen control$tol); convergence(fit) has the record.
+#> boundary (singular) fit: sigma_g1_(Intercept) = 0.0519 (Wald 0.04) against 1.64 at the 0.05 level; the data do not separate this SD from zero. See convergence(fit)$re_boundary.
 coef(fit_re)
+#> psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 
+#>       0.2575148       0.9216788       0.3377668       0.4775783
 ```
 
 The same model in INLA needs the mixture likelihood it does not have, so
@@ -404,6 +449,10 @@ m_inla_re <- INLA::inla(
   control.compute = list(waic = TRUE)
 )
 m_inla_re$summary.fixed[, c("mean", "0.025quant", "0.975quant")]
+#>                   mean   0.025quant 0.975quant
+#> (Intercept) -1.4209719 -1.704298047 -1.1600298
+#> occ_cov1     0.8753305  0.629911370  1.1342319
+#> det_cov1     0.2532351  0.006005926  0.5012855
 ```
 
 Two practical points make the migration easier here. First, the grouping

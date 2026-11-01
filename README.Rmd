@@ -143,7 +143,7 @@ Variance components of binary random effects are biased under the Laplace approx
 
 ## Documentation
 
-Start with [Getting started with tulpaObs](https://gillescolling.com/tulpaObs/articles/quickstart.html): one path from simulated detection histories to a fitted, compared and predicted occupancy model.
+Start with [Getting started with tulpaObs](https://gillescolling.com/tulpaObs/articles/tulpaObs.html): one path from simulated detection histories to a fitted, compared and predicted occupancy model.
 
 - [Shaping data for tobs()](https://gillescolling.com/tulpaObs/articles/data-formatting.html): detection histories and covariates from matrices or long tables.
 - [Single-season occupancy](https://gillescolling.com/tulpaObs/articles/occupancy.html): the base model end to end, including when occupancy and detection cannot be separated.

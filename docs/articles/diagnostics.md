@@ -91,6 +91,8 @@ fit <- tobs(
   control   = list(verbose = FALSE)
 )
 coef(fit)
+#> psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 
+#>       0.3638670       1.0118715       0.6744931       0.5087683
 ```
 
 The coefficients land near the truth. That is a good start and nothing
@@ -116,7 +118,25 @@ something or once you want the plot behind a number.
 ``` r
 
 check_model(fit)
+#> === tobs Model Diagnostics ===
+#> 
+#> Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)
+#> 
+#> WAIC: 1646.1 (p_waic = 3.8)
+#> DIC:  1646.3 (p_DIC = 4.0)
+#> LPML: -823.1 (elpd_loo = -823.1)
+#> 
+#> PPC: Bayesian p = 0.488
+#> 
+#> Zero-inflation: obs=126, exp=126.5, p=0.508
+#> Dispersion:     ratio=1.00, p=0.556
+#> PIT uniformity: KS D=0.028, p=0.974
 ```
+
+![Three diagnostic panels: a QQ plot of PIT residuals against the
+uniform, a histogram of replicate fit statistics with the observed value
+marked, and a histogram of simulated variances with the observed
+variance marked](diagnostics_files/figure-html/check-panel-1.svg)
 
 The report has four blocks, each a condensed form of a section that
 follows, and the panel beneath it draws the three that have a plot
@@ -141,7 +161,34 @@ spatial autocorrelation is significant.
 ``` r
 
 out <- check_model(fit, coords = cbind(dat$occ_cov1, dat$det_cov1))
+#> === tobs Model Diagnostics ===
+#> 
+#> Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)
+#> 
+#> WAIC: 1646.1 (p_waic = 3.8)
+#> DIC:  1646.3 (p_DIC = 4.0)
+#> LPML: -823.1 (elpd_loo = -823.1)
+#> 
+#> PPC: Bayesian p = 0.484
+#> 
+#> Zero-inflation: obs=126, exp=126.9, p=0.552
+#> Dispersion:     ratio=1.00, p=0.540
+#> PIT uniformity: KS D=0.042, p=0.658
+#> 
+#> Moran's I: 0.024 (p = 0.000)
+#>   WARNING: spatial autocorrelation
+```
+
+![The same diagnostic panels with a fourth added: Moran's I of the
+occupancy residuals against the number of
+neighbours](diagnostics_files/figure-html/check-coords-1.svg)
+
+``` r
+
 names(out)
+#> [1] "waic"           "dic"            "cpo"            "ppc"           
+#> [5] "zero_inflation" "dispersion"     "pit"            "uniformity"    
+#> [9] "moran"
 ```
 
 The panel returns its components invisibly, so `out$waic`, `out$ppc`,
@@ -166,6 +213,24 @@ four numbers.
 
 w <- waic(fit)
 str(w)
+#> List of 8
+#>  $ estimates   : num [1:3, 1:2] -823.04 3.81 1646.08 32.61 0.26 ...
+#>   ..- attr(*, "dimnames")=List of 2
+#>   .. ..$ : chr [1:3] "elpd_waic" "p_waic" "waic"
+#>   .. ..$ : chr [1:2] "Estimate" "SE"
+#>  $ pointwise   : num [1:300, 1:3] -0.573 -0.992 -3.686 -4.471 -1.107 ...
+#>   ..- attr(*, "dimnames")=List of 2
+#>   .. ..$ : NULL
+#>   .. ..$ : chr [1:3] "elpd_waic" "p_waic" "waic"
+#>  $ elpd_waic   : num -823
+#>  $ p_waic      : num 3.81
+#>  $ waic        : num 1646
+#>  $ se_elpd_waic: num 32.6
+#>  $ se_p_waic   : num 0.26
+#>  $ se_waic     : num 65.2
+#>  - attr(*, "dims")= int [1:2] 1000 300
+#>  - attr(*, "class")= chr [1:2] "waic" "loo"
+#>  - attr(*, "loo_unit")= chr "obs"
 ```
 
 `lppd` is the log pointwise predictive density, the in-sample fit summed
@@ -214,8 +279,16 @@ waic_tab <- data.frame(
   waic   = c(waic(fit0)$estimates["waic", "Estimate"], waic(fit)$estimates["waic", "Estimate"], waic(fit2)$estimates["waic", "Estimate"]),
   p_waic = c(waic(fit0)$estimates["p_waic", "Estimate"], waic(fit)$estimates["p_waic", "Estimate"], waic(fit2)$estimates["p_waic", "Estimate"])
 )
+#> Warning: 
+#> 1 (0.3%) p_waic estimates greater than 0.4. We recommend trying loo instead.
+#> Warning: 
+#> 1 (0.3%) p_waic estimates greater than 0.4. We recommend trying loo instead.
 waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 2)
 waic_tab[order(waic_tab$waic), ]
+#>       model     waic   p_waic delta
+#> 2    linear 1646.075 3.811516  0.00
+#> 3 quadratic 1648.368 4.883220  2.29
+#> 1 intercept 1695.249 2.672623 49.17
 ```
 
 The linear model wins, which matches the recipe. Dropping the covariate
@@ -280,6 +353,10 @@ $`\psi_i (1 - p_i)^J / [\psi_i (1 - p_i)^J + (1 - \psi_i)]`$.
 
 pp <- ppc(fit, fit.stat = "freeman-tukey")
 str(pp)
+#> List of 3
+#>  $ fit.y     : num [1:500] 248 247 249 246 243 ...
+#>  $ fit.y.rep : num [1:500] 256 236 258 250 248 ...
+#>  $ bayesian.p: num 0.502
 ```
 
 `fit.y` is the statistic on the real data across draws, `fit.y.rep` the
@@ -298,6 +375,10 @@ legend("topright", c("observed", "replicate"), lwd = 2,
        col = c("firebrick", "steelblue"), bty = "n")
 ```
 
+![Distributions of the observed and replicate Freeman-Tukey fit
+statistics, with the observed values sitting above the replicate
+values](diagnostics_files/figure-html/ppc-plot-1.svg)
+
 The observed and replicate clouds overlap here, and the Bayesian p-value
 sits near the middle of its range, which is what a correctly specified
 model produces. The chi-squared statistic reads the same way.
@@ -305,6 +386,7 @@ model produces. The chi-squared statistic reads the same way.
 ``` r
 
 ppc(fit, fit.stat = "chi-squared")$bayesian.p
+#> [1] 0.434
 ```
 
 Conditioning the latent state on the detection history is what keeps the
@@ -345,6 +427,9 @@ correct, the resulting values are uniform on $`[0, 1]`$.
 
 pit <- pit_residuals(fit)
 length(pit); summary(pit)
+#> [1] 300
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#> 0.007594 0.252631 0.516891 0.503076 0.749373 0.997724
 ```
 
 [`test_uniformity()`](https://gillescolling.com/tulpa/reference/test_uniformity.html)
@@ -354,6 +439,12 @@ returns the standard `htest` object.
 ``` r
 
 test_uniformity(pit)
+#> 
+#>  Asymptotic one-sample Kolmogorov-Smirnov test
+#> 
+#> data:  r
+#> D = 0.029863, p-value = 0.9518
+#> alternative hypothesis: two-sided
 ```
 
 A large p-value, as here, says the PIT values are consistent with
@@ -366,6 +457,10 @@ hist(pit, breaks = 12, col = "grey80", border = "white",
      xlab = "PIT residual", main = "PIT residuals vs uniform")
 abline(h = length(pit) / 12, col = "steelblue", lwd = 2, lty = 2)
 ```
+
+![Histogram of PIT residuals lying roughly flat between zero and one,
+consistent with the uniform
+reference](diagnostics_files/figure-html/pit-hist-1.svg)
 
 The shape of a non-uniform PIT histogram tells you what went wrong, and
 the mapping is worth committing to memory because it generalises across
@@ -523,6 +618,86 @@ model predicts. The ratio is the observed variance over the expected.
 ``` r
 
 test_dispersion(fit)
+#> $observed
+#> [1] 4.721026
+#> 
+#> $expected
+#> [1] 4.70513
+#> 
+#> $ratio
+#> [1] 1.003378
+#> 
+#> $p.value
+#> [1] 0.468
+#> 
+#> $alternative
+#> [1] "greater"
+#> 
+#> $sim
+#>    sim_1    sim_2    sim_3    sim_4    sim_5    sim_6    sim_7    sim_8 
+#> 4.808651 4.855507 4.738194 4.509465 4.769353 4.717949 4.518116 4.641906 
+#>    sim_9   sim_10   sim_11   sim_12   sim_13   sim_14   sim_15   sim_16 
+#> 4.759465 4.573233 4.368294 4.515619 4.277324 5.314337 4.841695 4.833846 
+#>   sim_17   sim_18   sim_19   sim_20   sim_21   sim_22   sim_23   sim_24 
+#> 4.819799 4.511427 5.019130 4.762308 4.685574 4.605340 4.989287 4.628082 
+#>   sim_25   sim_26   sim_27   sim_28   sim_29   sim_30   sim_31   sim_32 
+#> 4.568685 4.635452 4.726544 4.528194 4.750234 4.723567 4.824571 4.874682 
+#>   sim_33   sim_34   sim_35   sim_36   sim_37   sim_38   sim_39   sim_40 
+#> 4.484103 4.601327 4.656455 4.645920 4.571360 4.462196 4.695608 4.455418 
+#>   sim_41   sim_42   sim_43   sim_44   sim_45   sim_46   sim_47   sim_48 
+#> 5.011773 4.504738 4.791260 4.890468 4.614314 4.743133 4.968328 4.645440 
+#>   sim_49   sim_50   sim_51   sim_52   sim_53   sim_54   sim_55   sim_56 
+#> 4.566511 4.601070 5.191572 5.103445 4.814671 4.376042 4.863534 4.738417 
+#>   sim_57   sim_58   sim_59   sim_60   sim_61   sim_62   sim_63   sim_64 
+#> 4.391026 4.239064 4.892698 5.000792 5.140959 4.793802 5.012531 4.592464 
+#>   sim_65   sim_66   sim_67   sim_68   sim_69   sim_70   sim_71   sim_72 
+#> 5.263501 5.014983 4.557414 5.043601 5.077492 5.146878 4.851940 4.310758 
+#>   sim_73   sim_74   sim_75   sim_76   sim_77   sim_78   sim_79   sim_80 
+#> 4.665541 4.677581 4.725574 4.579833 4.759019 4.619889 4.530658 4.592598 
+#>   sim_81   sim_82   sim_83   sim_84   sim_85   sim_86   sim_87   sim_88 
+#> 4.822029 4.239588 4.863534 4.863534 4.812430 4.007848 4.407258 4.786745 
+#>   sim_89   sim_90   sim_91   sim_92   sim_93   sim_94   sim_95   sim_96 
+#> 4.315485 4.555452 4.904303 4.181761 4.690123 4.856187 4.646109 4.714604 
+#>   sim_97   sim_98   sim_99  sim_100  sim_101  sim_102  sim_103  sim_104 
+#> 4.848785 4.926143 4.322007 4.995541 4.378417 4.789788 4.754114 4.596923 
+#>  sim_105  sim_106  sim_107  sim_108  sim_109  sim_110  sim_111  sim_112 
+#> 4.591695 4.613200 5.270056 5.115541 4.674905 4.609353 4.704247 4.270903 
+#>  sim_113  sim_114  sim_115  sim_116  sim_117  sim_118  sim_119  sim_120 
+#> 4.864337 4.637681 4.792363 4.466042 5.011137 4.299889 4.842129 4.705139 
+#>  sim_121  sim_122  sim_123  sim_124  sim_125  sim_126  sim_127  sim_128 
+#> 4.450123 4.938685 4.826522 4.660992 4.993935 4.673032 4.655284 4.642140 
+#>  sim_129  sim_130  sim_131  sim_132  sim_133  sim_134  sim_135  sim_136 
+#> 4.858417 4.940959 4.939398 5.079420 4.488294 4.694437 4.793969 4.799287 
+#>  sim_137  sim_138  sim_139  sim_140  sim_141  sim_142  sim_143  sim_144 
+#> 4.700959 4.575017 4.547726 4.771505 4.760970 4.749822 4.227380 4.737748 
+#>  sim_145  sim_146  sim_147  sim_148  sim_149  sim_150  sim_151  sim_152 
+#> 4.901494 4.155139 4.698718 4.893768 4.460323 4.626745 4.598651 4.451505 
+#>  sim_153  sim_154  sim_155  sim_156  sim_157  sim_158  sim_159  sim_160 
+#> 4.709431 4.767659 4.702341 5.001962 5.122230 4.717547 4.863980 4.822062 
+#>  sim_161  sim_162  sim_163  sim_164  sim_165  sim_166  sim_167  sim_168 
+#> 4.454169 4.229420 4.658852 4.591973 4.546477 4.341795 5.227414 4.163880 
+#>  sim_169  sim_170  sim_171  sim_172  sim_173  sim_174  sim_175  sim_176 
+#> 4.549654 5.169186 4.955407 4.936410 4.949788 4.538361 4.574036 5.452163 
+#>  sim_177  sim_178  sim_179  sim_180  sim_181  sim_182  sim_183  sim_184 
+#> 4.883779 4.598384 5.281561 4.397715 4.786577 4.536276 4.541628 4.284270 
+#>  sim_185  sim_186  sim_187  sim_188  sim_189  sim_190  sim_191  sim_192 
+#> 5.109688 5.107815 4.687848 4.300736 4.616009 4.712999 5.050658 4.258763 
+#>  sim_193  sim_194  sim_195  sim_196  sim_197  sim_198  sim_199  sim_200 
+#> 4.676076 4.712375 4.615151 4.999721 4.734716 4.961828 4.281505 4.970736 
+#>  sim_201  sim_202  sim_203  sim_204  sim_205  sim_206  sim_207  sim_208 
+#> 5.193133 4.388618 4.582776 4.462609 5.270190 4.958963 5.353969 4.914649 
+#>  sim_209  sim_210  sim_211  sim_212  sim_213  sim_214  sim_215  sim_216 
+#> 4.618450 4.542430 4.331093 4.919454 4.592408 4.668216 4.749565 4.845039 
+#>  sim_217  sim_218  sim_219  sim_220  sim_221  sim_222  sim_223  sim_224 
+#> 4.445307 4.928651 4.747146 4.142297 4.903411 4.677547 4.719688 4.224705 
+#>  sim_225  sim_226  sim_227  sim_228  sim_229  sim_230  sim_231  sim_232 
+#> 4.274203 4.846154 4.290033 4.076020 4.500992 4.490290 4.606143 4.835273 
+#>  sim_233  sim_234  sim_235  sim_236  sim_237  sim_238  sim_239  sim_240 
+#> 5.188361 4.741405 4.803512 4.764537 4.638517 4.975909 4.990803 4.958428 
+#>  sim_241  sim_242  sim_243  sim_244  sim_245  sim_246  sim_247  sim_248 
+#> 4.469688 4.317179 4.879320 4.299889 4.603969 4.445975 4.604236 4.413501 
+#>  sim_249  sim_250 
+#> 4.903668 4.818016
 ```
 
 A ratio near 1 and a p-value away from the extremes mean the spread of
@@ -545,6 +720,17 @@ produces that many all-zero sites.
 ``` r
 
 test_zero_inflation(fit)
+#> $observed
+#> [1] 126
+#> 
+#> $expected
+#> [1] 126.172
+#> 
+#> $ratio
+#> [1] 0.9986368
+#> 
+#> $p.value
+#> [1] 0.524
 ```
 
 The observed count of empty sites matches the expected count, so there
@@ -569,6 +755,17 @@ itself surprising.
 ``` r
 
 test_outliers(fit)
+#> $observed
+#> [1] 2
+#> 
+#> $expected
+#> [1] 1.612
+#> 
+#> $ratio
+#> [1] 1.240695
+#> 
+#> $p.value
+#> [1] 0.456
 ```
 
 A handful of outliers is expected by chance; 5% of sites sit outside a
@@ -598,7 +795,9 @@ not made.
 
 r <- residuals(fit, type = "pearson")
 length(r$occ)
+#> [1] 300
 dim(r$det)
+#> [1] 300   6
 ```
 
 The `type` argument follows the usual convention. `"response"` is the
@@ -635,6 +834,10 @@ plot(fv$psi, r$occ, pch = 16, col = rgb(0, 0, 0, 0.35),
 abline(h = 0, col = "steelblue", lwd = 2)
 ```
 
+![Pearson occupancy residuals plotted against fitted occupancy
+probability, scattered around zero with no
+trend](diagnostics_files/figure-html/resid-plot-1.svg)
+
 The detection residuals live in the matrix `r$det`, one row per site and
 one column per visit, with `NA` in the cells for visits that were not
 made. Collapsing them to a per-site mean gives a quick read on which
@@ -645,6 +848,8 @@ expected under a good model.
 
 det_site <- rowMeans(r$det, na.rm = TRUE)
 summary(det_site)
+#>     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#> -0.95472 -0.11116 -0.02528 -0.01322  0.09521  0.86808
 ```
 
 A per-site mean near zero across the board, as here, says the detection
@@ -714,6 +919,9 @@ fit_ns <- tobs(~ x, data = datg, family = occu(),
 fit_sp <- tobs(~ x + icar(graph = adj), data = datg, family = occu(),
                detection = ~ 1, y = yg, method = "nested_laplace",
                control = list(max.iter = 10L, verbose = FALSE))
+#> Warning: occu(): the nested_laplace fit stopped after 10 iterations without
+#> meeting its convergence criterion, so the estimates are not at the mode. Raise
+#> control$max.iter (or loosen control$tol); convergence(fit) has the record.
 ```
 
 Moran’s I on the occupancy residuals measures how strongly neighbouring
@@ -732,6 +940,9 @@ data.frame(
   moran_I  = round(c(mi_ns$statistic, mi_sp$statistic), 3),
   p_value  = signif(c(mi_ns$p.value, mi_sp$p.value), 2)
 )
+#>         model moran_I p_value
+#> 1 non-spatial   0.353 2.4e-19
+#> 2  icar field   0.057 1.1e-01
 ```
 
 Moran’s I runs from roughly $`-1`$ to $`+1`$, with values near its small
@@ -765,6 +976,10 @@ vg <- tulpa::tulpa_variogram(residuals(fit_ns)$occ, coords = coords)
 plot(vg)
 ```
 
+![Empirical semivariogram of non-spatial occupancy residuals rising with
+distance before levelling, indicating residual spatial
+structure](diagnostics_files/figure-html/variogram-1.svg)
+
 The rise in the non-spatial residual variogram confirms the Moran’s I
 verdict. If you compute the same curve on the spatial fit’s residuals,
 it flattens, which is the visual form of the autocorrelation shrinking.
@@ -790,6 +1005,11 @@ coefficient group.
 ``` r
 
 occu_priors()
+#> occu_priors (weakly-informative for method='laplace'):
+#>   p_(Intercept) ~ Normal(0, 1.5)
+#>   p slopes       ~ Normal(0, 2.5)
+#>   psi_(Intercept) ~ Normal(0, 2)
+#>   psi slopes     ~ Normal(0, 5)
 ```
 
 The four buckets cover the detection intercept (`sd = 1.5`), detection
@@ -827,6 +1047,9 @@ data.frame(
   se    = round(c(fit_pen$sds[["p_(Intercept)"]],
                   fit_unpen$sds[["p_(Intercept)"]]), 3)
 )
+#>           fit p_int    se
+#> 1   penalised 0.192 0.184
+#> 2 unpenalised 0.194 0.186
 ```
 
 The prior is doing identification work, not imposing a result. At

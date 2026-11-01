@@ -31,11 +31,6 @@ navbar:
     - search
     - github
     - lightswitch
-  components:
-    intro:
-      text: Get started
-      href: articles/quickstart.html
-
 figures:
   dev: svglite::svglite
   fig.ext: svg
@@ -145,9 +140,6 @@ reference:
   - plot.tobs_data
   - within_between
 articles:
-- title: Get started
-  contents:
-  - quickstart
 - title: Data
   navbar: Data
   contents:
@@ -177,3 +169,5 @@ articles:
   navbar: Checking fits
   contents:
   - diagnostics
+redirects:
+- ["articles/quickstart.html", "articles/tulpaObs.html"]

@@ -143,7 +143,14 @@ numbers of rows, because each source covers its own set of sites.
 ``` r
 
 str(si$y, max.level = 1)
+#> List of 2
+#>  $ : int [1:375, 1:2] 1 0 0 1 1 0 0 0 0 1 ...
+#>   ..- attr(*, "dimnames")=List of 2
+#>  $ : int [1:375, 1:5] 0 0 0 1 1 1 0 0 1 1 ...
+#>   ..- attr(*, "dimnames")=List of 2
 c(survey_sites = nrow(si$y[[1]]), casual_sites = nrow(si$y[[2]]))
+#> survey_sites casual_sites 
+#>          375          375
 ```
 
 The site covariates live in a single data frame with one row per unique
@@ -154,7 +161,10 @@ latent state for checking the fit.
 ``` r
 
 str(si$data)
+#> 'data.frame':    500 obs. of  1 variable:
+#>  $ x: num  -0.591 0.0266 -1.5166 -1.3627 1.1785 ...
 si$truth$beta_occ
+#> [1] 0.3 0.9
 ```
 
 ## Fitting the integrated model
@@ -185,6 +195,8 @@ the name you gave that source in `y`.
 ``` r
 
 coef(fit)
+#>    psi_(Intercept)              psi_x survey_(Intercept) casual_(Intercept) 
+#>          0.1627076          0.7712881          0.4767786          0.7466297
 ```
 
 The occupancy slope on `x` lands near the simulated 0.9. The two
@@ -198,6 +210,23 @@ predictors.
 ``` r
 
 summary(fit)
+#> tulpa fit 
+#>   n_obs: 500 
+#>   posterior draws: 1000 
+#> 
+#> Fixed effects:
+#>                    estimate std.error    2.5 % 97.5 %
+#> psi_(Intercept)      0.1627   0.09963 -0.03256 0.3580
+#> psi_x                0.7713   0.10969  0.55630 0.9863
+#> survey_(Intercept)   0.4768   0.10954  0.26208 0.6915
+#> casual_(Intercept)   0.7466   0.06763  0.61409 0.8792
+#> 
+#> Reliability (iid draws):
+#>   outer pareto_k NA (NA); grid ESS 276 of 500 cells; inner skew NA (NA)
+#>   moments read from: draws
+#>   mean acceptance: NA
+#>   divergent transitions: NA
+#>   verdict: not computed (outer integration not assessed; inner Laplace not assessed)
 ```
 
 ## Why integration helps
@@ -217,6 +246,8 @@ fit_survey <- tobs(
   method = "laplace", control = list(verbose = FALSE)
 )
 coef(fit_survey, arm = "psi")
+#> (Intercept)           x 
+#>   0.3317445   0.7705236
 ```
 
 The point estimates are in the same neighbourhood, so the comparison
@@ -263,6 +294,9 @@ comparison <- rbind(
   integrated    = row_x(fit_int_nuts)
 )
 round(comparison, 3)
+#>             estimate    sd lower upper width
+#> survey only    0.801 0.169 0.503 1.156 0.653
+#> integrated     0.777 0.110 0.574 1.004 0.430
 ```
 
 The integrated credible interval is narrower than the survey-only one,
@@ -323,6 +357,9 @@ data.frame(
   fitted_p     = round(plogis(c(coef(fit2, arm = "survey"), coef(fit2, arm = "casual"))), 2),
   row.names    = NULL
 )
+#>   source true_p fitted_p
+#> 1 survey   0.77     0.74
+#> 2 casual   0.31     0.34
 ```
 
 The casual stream comes back near its true detection of 0.31 and the
@@ -351,6 +388,8 @@ fit3 <- tobs(
   method = "laplace", control = list(verbose = FALSE)
 )
 names(coef(fit3))
+#> [1] "psi_(Intercept)"    "psi_x"              "survey_(Intercept)"
+#> [4] "survey_effort"      "casual_(Intercept)"
 ```
 
 The `survey` block now carries an `effort` slope alongside its
@@ -429,4 +468,4 @@ site. If not, fit them separately.
 
 - The shared engine, tiers, and how the Laplace and NUTS backends
   differ:
-  [`vignette("quickstart")`](https://gillescolling.com/tulpaObs/articles/quickstart.md).
+  [`vignette("tulpaObs")`](https://gillescolling.com/tulpaObs/articles/tulpaObs.md).

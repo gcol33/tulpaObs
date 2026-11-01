@@ -50,8 +50,19 @@ sim <- simulate_occu(
 y   <- sim$y
 dat <- sim$data
 dim(y)
+#> [1] 120   5
 y[1:4, ]
+#>      [,1] [,2] [,3] [,4] [,5]
+#> [1,]    0    0    1    0    0
+#> [2,]    0    1    1    0    1
+#> [3,]    0    1    1    1    0
+#> [4,]    0    0    0    0    0
 head(dat, 4)
+#>     occ_cov1   det_cov1
+#> 1 -0.6264538 -0.5059575
+#> 2  0.1836433  1.3430388
+#> 3 -0.8356286 -0.2145794
+#> 4  1.5952808 -0.1795565
 ```
 
 The matrix has 120 rows to match the 120 rows in `dat`. Row `i` of `y`
@@ -93,6 +104,8 @@ fit <- tobs(
   control   = list(verbose = FALSE)
 )
 coef(fit)
+#> psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 
+#>       0.3625745       0.9012885       0.3668280       0.5797823
 ```
 
 `occ_cov1` and `det_cov1` both came out of `dat`. The occupancy slope
@@ -120,6 +133,13 @@ long <- data.frame(
   elev     = rep(rnorm(6), each = 3)   # a site-level covariate
 )
 head(long, 6)
+#>   site visit detected       elev
+#> 1   S1     1        0  0.8816725
+#> 2   S1     2        0  0.8816725
+#> 3   S1     3        0  0.8816725
+#> 4   S2     1        0 -0.9745003
+#> 5   S2     2        0 -0.9745003
+#> 6   S2     3        0 -0.9745003
 ```
 
 The direct route fills a matrix by indexing on the site and visit
@@ -136,6 +156,13 @@ si <- match(long$site,  sites)
 vi <- match(long$visit, visits)
 ymat[cbind(si, vi)] <- as.integer(long$detected)
 ymat
+#>    V1 V2 V3
+#> S1  0  0  0
+#> S2  0  0  0
+#> S3  0  0  0
+#> S4  0  1  0
+#> S5  0  0  1
+#> S6  1  0  1
 ```
 
 The site-level table then takes one row per site, in the same site order
@@ -146,6 +173,13 @@ as the matrix rows.
 site_dat <- long[match(sites, long$site), "elev", drop = FALSE]
 rownames(site_dat) <- NULL
 site_dat
+#>          elev
+#> 1  0.88167254
+#> 2 -0.97450027
+#> 3  0.39910492
+#> 4 -0.41543326
+#> 5 -0.01865714
+#> 6  1.57122440
 ```
 
 [`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
@@ -164,7 +198,13 @@ obs <- tobs_data(
   occ.covs = "elev"
 )
 obs
+#> tobs_data: 6 sites, 3 visits
+#>   Occupancy covariates: elev
 str(obs$y)
+#>  int [1:6, 1:3] 0 0 0 0 0 1 0 0 0 1 ...
+#>  - attr(*, "dimnames")=List of 2
+#>   ..$ : chr [1:6] "S1" "S2" "S3" "S4" ...
+#>   ..$ : NULL
 ```
 
 `obs$y` is the same `6 x 3` matrix, with site ids on the rows.
@@ -192,6 +232,11 @@ cov_long <- data.frame(
 cov_obs <- tobs_data(cov_long, y = "cover", site = "site", visit = "visit",
                      type = "cover")
 cov_obs$y
+#>    [,1] [,2]
+#> S1 0.45 0.68
+#> S2 0.73 0.21
+#> S3 0.31 0.35
+#> S4 0.50 0.23
 ```
 
 ## Building a `tobs_data` object by hand
@@ -216,7 +261,14 @@ eff_hand <- matrix(round(runif(N * J, 1, 4)), N, J)   # per-visit effort
 obs_hand <- tobs_format(y = y_hand, occ.covs = occ_hand,
                         det.covs = list(effort = eff_hand))
 obs_hand
+#> tobs_data: 5 sites, 3 visits
+#>   Occupancy covariates: elev
+#>   Detection covariates: effort
 str(obs_hand$y)
+#>  int [1:5, 1:3] 1 0 0 1 0 0 0 1 0 0 ...
+#>  - attr(*, "dimnames")=List of 2
+#>   ..$ : chr [1:5] "S1" "S2" "S3" "S4" ...
+#>   ..$ : chr [1:3] "V1" "V2" "V3"
 ```
 
 `obs_hand$det.covs$effort` carries one effort value per site-visit cell,
@@ -242,7 +294,9 @@ sp_list <- lapply(1:3, function(s) matrix(rbinom(N * J, 1, 0.3), N, J))
 names(sp_list) <- c("warbler", "finch", "wren")
 ms_hand <- tobs_format_ms(sp_list, occ.covs = occ_hand)
 dim(ms_hand$y)          # sites x visits x species
+#> [1] 5 3 3
 ms_hand$species_names
+#> [1] "warbler" "finch"   "wren"
 ```
 
 The list-of-matrices form is convenient when species come from separate
@@ -284,6 +338,9 @@ obs2 <- tobs_format(
   det.covs = list(det_cov1 = matrix(dat$det_cov1, nrow(y), ncol(y)))
 )
 obs2
+#> tobs_data: 120 sites, 5 visits
+#>   Occupancy covariates: occ_cov1
+#>   Detection covariates: det_cov1
 ```
 
 The [`summary()`](https://rdrr.io/r/base/summary.html) method reports
@@ -295,6 +352,22 @@ because an occupied site can be missed on every visit.
 ``` r
 
 summary(obs2)
+#> Occupancy data summary
+#>   Sites: 120 | Max visits: 5
+#>   Observations: 600 | Missing: 0 (0.0%)
+#>   Naive occupancy: 0.583 (70 / 120 sites)
+#>   Naive detection: 0.603
+#> 
+#>   Detection frequency (detections per site):
+#>  detections sites
+#>           0    50
+#>           1     7
+#>           2    17
+#>           3    22
+#>           4    16
+#>           5     8
+#> 
+#>   Per-visit detection rate: V1=0.33  V2=0.33  V3=0.35  V4=0.32  V5=0.42
 ```
 
 The [`plot()`](https://rdrr.io/r/graphics/plot.default.html) method
@@ -306,6 +379,10 @@ each visit).
 
 plot(obs2)
 ```
+
+![Three panels showing detections per site, detection rate by visit, and
+survey completeness by
+visit](data-formatting_files/figure-html/plot-data-1.svg)
 
 These summaries are a quick check that the reshape did what you meant. A
 visit column that is mostly empty, or a naive occupancy of zero, usually
@@ -325,6 +402,10 @@ y_miss <- y
 y_miss[1, 4:5] <- NA   # site 1 surveyed 3 times
 y_miss[2, 5]   <- NA   # site 2 surveyed 4 times
 y_miss[1:3, ]
+#>      [,1] [,2] [,3] [,4] [,5]
+#> [1,]    0    0    1   NA   NA
+#> [2,]    0    1    1    0   NA
+#> [3,]    0    1    1    1    0
 ```
 
 The fit runs unchanged on the gappy matrix, and the estimates stay close
@@ -342,6 +423,8 @@ fit_miss <- tobs(
   control   = list(verbose = FALSE)
 )
 coef(fit_miss)
+#> psi_(Intercept)    psi_occ_cov1   p_(Intercept)      p_det_cov1 
+#>       0.3589342       0.9007435       0.3778563       0.5671907
 ```
 
 A site with every visit missing is a special case: with no observations
@@ -366,6 +449,8 @@ vector stops the build with the expected shape spelled out.
 tobs(~ occ_cov1, data = dat, family = occu(),
      detection = ~ det_cov1, y = as.data.frame(y),
      method = "laplace", control = list(verbose = FALSE))
+#> Error in `.tobs_build_single()`:
+#> ! y must be a matrix (n_sites x max_visits)
 ```
 
 If the matrix has a different number of rows than `data`, the error
@@ -376,6 +461,8 @@ quotes both counts so you can see which side is wrong.
 tobs(~ occ_cov1, data = dat[1:100, , drop = FALSE], family = occu(),
      detection = ~ det_cov1, y = y,
      method = "laplace", control = list(verbose = FALSE))
+#> Error:
+#> ! y has 120 rows but data has 100 rows
 ```
 
 [`tobs_data()`](https://gillescolling.com/tulpaObs/reference/tobs_data.md)
@@ -387,6 +474,8 @@ quoted, before any matrix is built.
 
 tobs_data(long, y = "detected", site = "site", visit = "visit",
           occ.covs = "elevation")   # column is named 'elev', not 'elevation'
+#> Error in `[.data.frame`:
+#> ! undefined columns selected
 ```
 
 The `type` argument is checked against the response values. An
@@ -400,6 +489,8 @@ bad <- long
 bad$detected[1] <- 2
 tobs_data(bad, y = "detected", site = "site", visit = "visit",
           type = "occurrence")
+#> Error in `.tobs_response_values()`:
+#> ! tobs_data(type = 'occurrence'): y must be 0/1
 ```
 
 The community and dynamic builders apply the matching check on their own
@@ -413,6 +504,8 @@ matrix reports the array requirement directly.
 tobs(~ 1, data = dat, family = dyn_occu(), detection = ~ 1, y = y,
      colonization = ~ 1, extinction = ~ 1,
      method = "laplace", control = list(verbose = FALSE))
+#> Error in `.tobs_build_dynamic()`:
+#> ! y must be a 3D array [n_sites x max_visits x n_seasons] or a list of matrices
 ```
 
 The pattern is the same across families: declare the site table and the
@@ -448,6 +541,7 @@ returns an `N x J x species` array, and `species` names that dimension.
 
 sm <- simulate_ms_occu(N = 80, J = 4, n.species = 6, seed = 3)
 dim(sm$y)   # sites x visits x species
+#> [1] 80  4  6
 ```
 
 An integrated model has one detection matrix per data source, with a
@@ -460,6 +554,9 @@ returns `y` as a list of matrices that differ in their visit counts.
 si <- simulate_int_occu(N.total = 100, n.data = 2, J = c(4, 3),
                         n.shared = 20, seed = 42)
 vapply(si$y, dim, integer(2))   # each source: sites x its own visit count
+#>      [,1] [,2]
+#> [1,]   60   60
+#> [2,]    4    3
 ```
 
 A dynamic model adds the season as a third dimension.
@@ -471,6 +568,7 @@ returns an `N x J x season` array, and the fit needs `colonization` and
 
 sd <- simulate_dyn_occu(N = 60, J = 3, n.seasons = 4, seed = 1)
 dim(sd$y)   # sites x visits x seasons
+#> [1] 60  3  4
 ```
 
 Each of those families has its own vignette that fits the model end to

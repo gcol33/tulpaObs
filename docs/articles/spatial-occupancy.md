@@ -175,7 +175,9 @@ for (i in seq_len(gx)) for (j in seq_len(gy)) {
   if (j < gy) { b <- idx_of(i, j + 1); adj[a, b] <- adj[b, a] <- 1 }
 }
 dim(adj)
+#> [1] 25 25
 rowSums(adj)[1:6]   # neighbour count per cell: corners 2, edges 3, interior 4
+#> [1] 2 3 3 3 2 3
 ```
 
 A chain graph is even simpler: site $`i`$ borders $`i-1`$ and $`i+1`$.
@@ -188,6 +190,7 @@ K <- 12
 chain <- matrix(0, K, K)
 for (i in seq_len(K - 1)) chain[i, i + 1] <- chain[i + 1, i] <- 1
 rowSums(chain)   # endpoints have 1 neighbour, interior 2
+#>  [1] 1 2 2 2 2 2 2 2 2 2 2 1
 ```
 
 Whatever the source (a shapefile’s `poly2nb`, a regular lattice, a
@@ -233,6 +236,8 @@ for (i in seq_len(n)) if (z[i]) y[i, ] <- rbinom(J, 1, p_det)
 dat <- data.frame(site = seq_len(n))
 c(occupied_cells = sum(z), naive_rate = round(mean(rowSums(y) > 0), 3),
   true_rate = round(mean(z), 3))
+#> occupied_cells     naive_rate      true_rate 
+#>           15.0            0.6            0.6
 ```
 
 The naive detection rate undercounts occupancy, the usual occupancy
@@ -269,6 +274,8 @@ field sits against.
 ``` r
 
 coef(fit_bym2)
+#> psi_(Intercept)   p_(Intercept) 
+#>       0.5767000      -0.2377645
 ```
 
 The block that did the spatial work is recorded on the fit. The
@@ -279,6 +286,7 @@ first block’s `type` confirms BYM2 was the field used.
 ``` r
 
 fit_bym2$nested_laplace$multi_prior[[1]]$type
+#> [1] "bym2"
 ```
 
 Swapping the field is a one-token change. Fit the same data with an ICAR
@@ -296,6 +304,7 @@ fit_icar <- tobs(
   control   = list(max.iter = 30L, tol = 1e-5, verbose = FALSE)
 )
 fit_icar$nested_laplace$multi_prior[[1]]$type
+#> [1] "icar"
 ```
 
 ICAR has one fewer parameter than BYM2 (no mixing fraction $`\lambda`$),
@@ -335,6 +344,7 @@ fit_car <- tobs(
   control   = list(max.iter = 30L, tol = 1e-5, verbose = FALSE)
 )
 fit_car$nested_laplace$multi_prior[[1]]$type
+#> [1] "car_proper"
 ```
 
 ## Recovering and mapping the field
@@ -349,6 +359,13 @@ smoothing grid.
 
 sp_bym2 <- predict(fit_bym2, type = "state")
 head(sp_bym2)
+#>   row       psi    psi_lower psi_upper heldout
+#> 1   1 0.2360534 0.0004963977 0.8768881   FALSE
+#> 2   2 0.2397662 0.0009757823 0.8436602   FALSE
+#> 3   3 0.2712448 0.0020474326 0.8535132   FALSE
+#> 4   4 0.3373813 0.0063591145 0.8841046   FALSE
+#> 5   5 0.6850097 0.1002075109 0.9955408   FALSE
+#> 6   6 0.2556114 0.0013913673 0.8516452   FALSE
 ```
 
 The `psi` column is the field on the probability scale. Plotting it
@@ -361,7 +378,16 @@ give.
 plot(psi_true, sp_bym2$psi, pch = 19, col = "steelblue",
      xlab = "true occupancy", ylab = "fitted occupancy (BYM2)")
 abline(0, 1, lwd = 2, col = "grey40")
+```
+
+![Fitted occupancy from the BYM2 field against the true simulated
+occupancy, scattered around the identity
+line](spatial-occupancy_files/figure-html/recover-plot-1.svg)
+
+``` r
+
 cor(psi_true, sp_bym2$psi)
+#> [1] 0.7815982
 ```
 
 The ICAR fit recovers the same surface. Lining up the two fitted fields
@@ -376,6 +402,9 @@ plot(sp_icar$psi, sp_bym2$psi, pch = 19, col = "darkorange",
 abline(0, 1, lwd = 2, col = "grey40")
 ```
 
+![Fitted occupancy from the ICAR field against the BYM2 field, near the
+identity line](spatial-occupancy_files/figure-html/icar-vs-bym2-1.svg)
+
 A map makes the smoothing visible. Lay the fitted `psi` back on the grid
 coordinates and shade each cell. The high-occupancy ridge runs through
 the grid centre and the upper corner, exactly where the simulated bump
@@ -389,6 +418,14 @@ plot(coord$cx, coord$cy, pch = 22, cex = 4, bg = shade(psi_true),
      xlab = "", ylab = "", main = "true occupancy")
 plot(coord$cx, coord$cy, pch = 22, cex = 4, bg = shade(sp_bym2$psi),
      xlab = "", ylab = "", main = "fitted (BYM2)")
+```
+
+![Two grid maps side by side, true occupancy and BYM2-fitted occupancy,
+both peaking in the grid
+centre](spatial-occupancy_files/figure-html/field-map-1.svg)
+
+``` r
+
 par(op)
 ```
 
@@ -451,6 +488,8 @@ fit_flat <- tobs(
 coords <- cbind(coord$cx, coord$cy)
 mi_flat <- tulpa::moran_i(residuals(fit_flat)$occ, coords)
 c(I = round(mi_flat$statistic, 3), p = signif(mi_flat$p.value, 3))
+#> I.Moran's I           p 
+#>    1.65e-01    3.07e-12
 ```
 
 The flat fit’s residuals carry positive autocorrelation, the smooth
@@ -463,6 +502,8 @@ expectation.
 
 mi_bym2 <- tulpa::moran_i(residuals(fit_bym2)$occ, coords)
 c(I = round(mi_bym2$statistic, 3), p = signif(mi_bym2$p.value, 3))
+#> I.Moran's I           p 
+#>    1.41e-01    6.39e-10
 ```
 
 The spatial fit’s Moran’s I sits far closer to its expected value under
@@ -491,6 +532,10 @@ ggplot(resid_df, aes(cx, cy, fill = r)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![Two grid maps of occupancy residuals, flat model showing a central
+patch and BYM2 model showing scattered
+residuals](spatial-occupancy_files/figure-html/resid-map-1.svg)
+
 A clean residual map plus a non-significant Moran’s I is the pair to
 report together. The map shows where any leftover pattern sits; the test
 says whether it is more than noise. If the field leaves a significant I
@@ -515,6 +560,8 @@ sp_bym2$width <- sp_bym2$psi_upper - sp_bym2$psi_lower
 c(median_width = round(median(sp_bym2$width), 3),
   min_width    = round(min(sp_bym2$width), 3),
   max_width    = round(max(sp_bym2$width), 3))
+#> median_width    min_width    max_width 
+#>        0.851        0.806        0.895
 ```
 
 The widths vary cell to cell, which is the point of a Bayesian field
@@ -536,6 +583,10 @@ ggplot(unc_df, aes(cx, cy, fill = width)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![Grid map of the 95 percent credible-interval width of fitted
+occupancy, wider at the grid edges and
+corners](spatial-occupancy_files/figure-html/uncertainty-map-1.svg)
+
 Brighter cells carry more uncertainty. The pattern is the honest
 counterpart to the smoothed occupancy map: the field reports both its
 best guess and how far that guess can be trusted, and the two maps read
@@ -552,6 +603,7 @@ peak <- which.max(sp_bym2$psi)
 with(sp_bym2[peak, ],
      sprintf("cell %d: psi = %.2f (95%% CI %.2f to %.2f)",
              row, psi, psi_lower, psi_upper))
+#> [1] "cell 24: psi = 0.81 (95% CI 0.16 to 1.00)"
 ```
 
 Reporting the band rather than the point is the difference between “this
@@ -599,6 +651,7 @@ heldout <- seq(2, n, by = 4)        # every fourth cell, scattered across the gr
 y_ho <- y
 y_ho[heldout, ] <- NA
 length(heldout)
+#> [1] 6
 ```
 
 Fit the field on the punctured data. `predict(type = "state")` flags the
@@ -617,6 +670,9 @@ fit_ho <- tobs(
 )
 sp_ho <- predict(fit_ho, type = "state")
 table(sp_ho$heldout)
+#> 
+#> FALSE  TRUE 
+#>    19     6
 ```
 
 The `heldout = TRUE` rows are the cells the model never saw a detection
@@ -635,8 +691,18 @@ plot(truth_ho[ord], ho$psi[ord], pch = 19, col = "steelblue", ylim = c(0, 1),
 arrows(truth_ho[ord], ho$psi_lower[ord], truth_ho[ord], ho$psi_upper[ord],
        length = 0.02, angle = 90, code = 3, col = adjustcolor("steelblue", 0.5))
 abline(0, 1, lwd = 2, col = "grey40")
+```
+
+![Interpolated occupancy for held-out cells against their true
+occupancy, with vertical 95 percent
+bands](spatial-occupancy_files/figure-html/holdout-recover-1.svg)
+
+``` r
+
 c(cor = round(cor(ho$psi, truth_ho), 3),
   mae = round(mean(abs(ho$psi - truth_ho)), 3))
+#>   cor   mae 
+#> 0.900 0.134
 ```
 
 The interpolated points track the truth and the bands cover it, all from
@@ -675,7 +741,17 @@ waic_tab <- rbind(
   icar        = waic_row(fit_icar),
   bym2        = waic_row(fit_bym2)
 )
+#> Warning: 
+#> 1 (4.0%) p_waic estimates greater than 0.4. We recommend trying loo instead.
+#> Warning: 
+#> 1 (4.0%) p_waic estimates greater than 0.4. We recommend trying loo instead.
+#> Warning: 
+#> 1 (4.0%) p_waic estimates greater than 0.4. We recommend trying loo instead.
 waic_tab[order(waic_tab[, "waic"]), ]
+#>              waic   elpd p_waic
+#> icar        178.2  -89.1    1.8
+#> bym2        187.5  -93.7    2.0
+#> non_spatial 202.4 -101.2    2.4
 ```
 
 The three rows sit close together because the occupancy mean structure

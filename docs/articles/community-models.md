@@ -169,8 +169,11 @@ of 0.5 on the intercept and 0.3 on the slope.
 
 sm <- simulate_ms_occu(N = 120, J = 5, n.species = 8, seed = 3)
 dim(sm$y)            # 120 sites x 5 visits x 8 species
+#> [1] 120   5   8
 sm$truth$beta_comm_mean   # community occupancy intercept + slope on x
+#> [1] 0.0 0.5
 sm$truth$beta_comm_sd     # species-level SD around each community mean
+#> [1] 0.5 0.3
 ```
 
 The response `y` is a three-dimensional array: sites by visits by
@@ -187,6 +190,8 @@ from drifting.
 
 detected <- apply(sm$y, 3, function(s) mean(rowSums(s, na.rm = TRUE) > 0))
 round(setNames(detected, paste0("sp", 1:8)), 2)
+#>  sp1  sp2  sp3  sp4  sp5  sp6  sp7  sp8 
+#> 0.36 0.41 0.42 0.51 0.54 0.30 0.44 0.42
 ```
 
 Fit with
@@ -218,6 +223,8 @@ detection mean. These are the assemblage-level fixed effects.
 ``` r
 
 coef(fm)
+#> psi_(Intercept)           psi_x   p_(Intercept) 
+#>      -0.1803196       0.5286092      -0.3517980
 ```
 
 Read the occupancy means against the truth. The simulated community
@@ -231,6 +238,9 @@ data.frame(
   truth     = sm$truth$beta_comm_mean,
   row.names = NULL
 )
+#>        term estimate truth
+#> 1 intercept   -0.180   0.0
+#> 2   slope_x    0.529   0.5
 ```
 
 [`summary()`](https://rdrr.io/r/base/summary.html) adds the posterior
@@ -241,6 +251,21 @@ detection one.
 ``` r
 
 summary(fm)
+#> tulpa fit 
+#>   n_obs: 4800 
+#>   posterior draws: 1000 
+#> 
+#> Fixed effects:
+#>                 estimate std.error   2.5 %   97.5 %
+#> psi_(Intercept)  -0.1803    0.1257 -0.4020  0.07935
+#> psi_x             0.5286    0.1486  0.2400  0.80831
+#> p_(Intercept)    -0.3518    0.1339 -0.6211 -0.10140
+#> 
+#> Reliability (iid draws):
+#>   outer pareto_k NA (NA); grid ESS NA of NA cells; inner skew NA (NA)
+#>   moments read from: draws
+#>   mean acceptance: NA
+#>   divergent transitions: NA
 ```
 
 The credible bounds here are tight because they describe the *community
@@ -268,6 +293,9 @@ rbind(
   single_species = round(confint(fit_one)["psi_x", ], 3),
   community_mean  = round(confint(fm)["psi_x", ], 3)
 )
+#>                 2.5 % 97.5 %
+#> single_species -0.601  0.232
+#> community_mean  0.240  0.808
 ```
 
 The single-species slope carries an interval several times wider than
@@ -296,6 +324,13 @@ interval.
 
 rich <- tobs_richness(fm)
 head(rich)
+#>   site     mean        sd     q2.5    q97.5
+#> 1    1 2.685140 0.2592832 2.195456 3.201013
+#> 2    2 3.342838 0.2216573 2.940087 3.780972
+#> 3    3 3.915262 0.2841169 3.414729 4.521491
+#> 4    4 2.514438 0.2827671 1.978909 3.097812
+#> 5    5 3.850002 0.2737118 3.366689 4.430828
+#> 6    6 3.677669 0.2494566 3.243775 4.195732
 ```
 
 The column `mean` is the expected number of species present, summed over
@@ -317,6 +352,9 @@ polygon(c(seq_len(nrow(r)), rev(seq_len(nrow(r)))),
         col = adjustcolor("steelblue", 0.25), border = NA)
 lines(seq_len(nrow(r)), r$mean, lwd = 2, col = "steelblue")
 ```
+
+![Estimated species richness per site, sorted, with a shaded 95 percent
+credible band](community-models_files/figure-html/richness-plot-1.svg)
 
 The band carries the occupancy uncertainty for every species into the
 richness estimate, so a site whose species are all marginally present
@@ -340,6 +378,13 @@ data.frame(
   modelled    = round(rich$mean[1:6], 2),
   correction  = round(rich$mean[1:6] - naive[1:6], 2)
 )
+#>   site detected modelled correction
+#> 1    1        3     2.69      -0.31
+#> 2    2        3     3.34       0.34
+#> 3    3        4     3.92      -0.08
+#> 4    4        2     2.51       0.51
+#> 5    5        2     3.85       1.85
+#> 6    6        4     3.68      -0.32
 ```
 
 The modelled richness exceeds the detected count at most sites, by the
@@ -367,6 +412,13 @@ the deviations on the linear-predictor scale.
 ``` r
 
 head(ranef(fm))
+#>   arm   group level        term     estimate std.error
+#> 1 psi species   sp1 (Intercept) -0.255318654 0.1472551
+#> 2 psi species   sp2 (Intercept)  0.008896697 0.1608401
+#> 3 psi species   sp3 (Intercept)  0.097276794 0.1672850
+#> 4 psi species   sp4 (Intercept)  0.190934586 0.1545410
+#> 5 psi species   sp5 (Intercept)  0.427014812 0.1718479
+#> 6 psi species   sp6 (Intercept) -0.373633186 0.1639106
 ```
 
 ## Community N-mixture
@@ -392,8 +444,11 @@ mean.
 sab <- simulate_ms_abun(n.species = 8, N = 80, J = 4,
                         n.abund.covs = 1, n.det.covs = 1, seed = 7)
 dim(sab$y)              # 80 sites x 4 visits x 8 species
+#> [1] 80  4  8
 sab$truth$mu_lambda     # community abundance mean (log scale): log(3), slope 0.4
+#> [1] 1.098612 0.400000
 sab$truth$mu_p          # community detection mean (logit scale)
+#> [1]  0.3 -0.3
 ```
 
 Fit with
@@ -426,7 +481,11 @@ not read it as a count directly.
 ``` r
 
 coef(fab)
+#> lambda_(Intercept)  lambda_abund_cov1      p_(Intercept)         p_det_cov1 
+#>          1.2540824          0.2358557          0.6379509         -0.4154767
 exp(coef(fab, arm = "lambda")["(Intercept)"])   # community mean abundance at covariate mean
+#> (Intercept) 
+#>    3.504621
 ```
 
 Compare the community means to the truth. The abundance arm is on the
@@ -441,6 +500,11 @@ data.frame(
   truth    = round(c(sab$truth$mu_lambda, sab$truth$mu_p), 3),
   row.names = NULL
 )
+#>      arm       term estimate  truth
+#> 1 lambda  intercept    1.254  1.099
+#> 2 lambda abund_cov1    0.236  0.400
+#> 3      p  intercept    0.638  0.300
+#> 4      p   det_cov1   -0.415 -0.300
 ```
 
 ### Per-species deviations
@@ -456,6 +520,15 @@ offset from the community mean on the link scale.
 
 re <- ranef(fab)
 head(re, 8)
+#>      arm   group level        term    estimate  std.error
+#> 1 lambda species   sp1 (Intercept)  0.01709827 0.06291508
+#> 2 lambda species   sp2 (Intercept) -0.20261975 0.06619251
+#> 3 lambda species   sp3 (Intercept) -0.14248986 0.06965831
+#> 4 lambda species   sp4 (Intercept)  0.13369841 0.06291802
+#> 5 lambda species   sp5 (Intercept)  0.39884530 0.05391479
+#> 6 lambda species   sp6 (Intercept) -0.27066324 0.06369904
+#> 7 lambda species   sp7 (Intercept)  0.01894771 0.06084120
+#> 8 lambda species   sp8 (Intercept)  0.08260407 0.06427508
 ```
 
 A positive abundance-intercept deviation marks a species more abundant
@@ -476,6 +549,10 @@ axis(2, at = seq_len(nrow(dev_int)), labels = dev_int$species, las = 1)
 abline(v = 0, lty = 2, col = "grey50")
 ```
 
+![Caterpillar plot of per-species abundance-intercept deviations,
+ordered, against the community mean at
+zero](community-models_files/figure-html/ms-abun-caterpillar-1.svg)
+
 The community covariances $`\Sigma_\lambda`$ and $`\Sigma_p`$ sit on the
 fitted object as `ms_community$sd_lambda` and `ms_community$sd_p`, the
 per-coefficient community standard deviations. They report how
@@ -485,7 +562,11 @@ the community distribution that drove the pooling.
 ``` r
 
 fab$ms_community$sd_lambda   # community SD of abundance coefficients
+#> (Intercept)  abund_cov1 
+#>   0.2076064   0.6141322
 fab$ms_community$sd_p        # community SD of detection coefficients
+#> (Intercept)    det_cov1 
+#>   0.3573648   0.5066321
 ```
 
 A small community SD says the species behave alike, so the pooling
@@ -505,6 +586,8 @@ the spread across species shows the assemblage from sparse to abundant.
 coef_lambda <- fab$ms_community$coef_lambda          # one row per species
 per_species_N <- round(exp(coef_lambda[, "(Intercept)"]), 2)
 sort(per_species_N)
+#>  sp6  sp2  sp3  sp1  sp7  sp8  sp4  sp5 
+#> 2.67 2.86 3.04 3.57 3.57 3.81 4.01 5.22
 ```
 
 These are the species-level estimates the community structure produced.
@@ -554,7 +637,9 @@ snb <- simulate_ms_abun(n.species = 8, N = 80, J = 4,
                         mixture = "negbin", size = 5, sigma.logr = 0.5,
                         seed = 14)
 snb$truth$mu_log_r          # community log-dispersion: log(5)
+#> [1] 1.609438
 snb$truth$sigma_log_r       # spread of per-species log r
+#> [1] 0.5
 ```
 
 Fit with `ms_abun(mixture = "negbin")`. The call is the Poisson
@@ -576,6 +661,7 @@ fnb <- tobs(
   control   = list(verbose = FALSE, n.quad = 2L)
 )
 fnb$mixture
+#> [1] "negbin"
 ```
 
 The community log-dispersion sits on `fit$ms_dispersion`, alongside the
@@ -589,6 +675,8 @@ disp <- fnb$ms_dispersion
 c(mu_log_r    = round(disp$mu_log_r, 3),
   sigma_log_r = round(disp$sigma_log_r, 3),
   r_community = round(disp$r, 3))
+#>    mu_log_r sigma_log_r r_community 
+#>       1.640       0.362       5.157
 ```
 
 Read the community log-dispersion against its truth. `mu_log_r` enters
@@ -604,6 +692,9 @@ data.frame(
   truth     = round(c(snb$truth$mu_log_r, snb$truth$sigma_log_r), 3),
   row.names = NULL
 )
+#>      quantity estimate truth
+#> 1    mu_log_r    1.640 1.609
+#> 2 sigma_log_r    0.362 0.500
 ```
 
 A community fit gains more from per-species dispersion than a
@@ -629,6 +720,13 @@ scale the coefficient deviations use.
 
 re_nb <- ranef(fnb)
 head(re_nb[re_nb$arm == "logr", ], 6)
+#>     arm   group level  term    estimate std.error
+#> 33 logr species   sp1 log_r -0.07748425 0.3213066
+#> 34 logr species   sp2 log_r  0.19427530 0.2659451
+#> 35 logr species   sp3 log_r  0.37531443 0.2680885
+#> 36 logr species   sp4 log_r -0.49715641 0.2087317
+#> 37 logr species   sp5 log_r  0.04376572 0.2151594
+#> 38 logr species   sp6 log_r  0.22623248 0.2556468
 ```
 
 Plot the per-species sizes with a band for the community spread. The
@@ -648,6 +746,10 @@ plot(seq_along(rs), rs, pch = 19, col = "steelblue", log = "y",
                         col = adjustcolor("steelblue", 0.15), border = NA))
 abline(h = disp$r, lty = 2, col = "grey40")
 ```
+
+![Per-species negative-binomial size r_s, sorted, against the
+community-mean size and its one-SD
+band](community-models_files/figure-html/ms-nb-plot-1.svg)
 
 A species sitting below the band is more overdispersed than the
 assemblage typically is; one above it is closer to Poisson. The species

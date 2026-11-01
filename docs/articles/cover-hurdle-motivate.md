@@ -280,6 +280,8 @@ c(n_rows        = nrow(sim_beta$data),
   n_plots       = nlevels(sim_beta$data$plot_id),
   prevalence_b  = mean(sim_beta$y > 0),
   prevalence_ln = mean(sim_ln$y   > 0))
+#>        n_rows       n_plots  prevalence_b prevalence_ln 
+#>        100.00         25.00          0.37          0.37
 ```
 
 Each panel is 25 plots x 4 visits = 100 rows. The two simulations use
@@ -294,6 +296,15 @@ dat_beta <- within_between(sim_beta$data, group = "plot_id", vars = "year")
 dat_ln   <- within_between(sim_ln$data,   group = "plot_id", vars = "year")
 
 head(dat_beta, 8)
+#>   plot_id      year  year_btw year_wtn
+#> 1       1  1.210209  8.710209     -7.5
+#> 2       1  6.210209  8.710209     -2.5
+#> 3       1 11.210209  8.710209      2.5
+#> 4       1 16.210209  8.710209      7.5
+#> 5       2  8.308465 15.808465     -7.5
+#> 6       2 13.308465 15.808465     -2.5
+#> 7       2 18.308465 15.808465      2.5
+#> 8       2 23.308465 15.808465      7.5
 ```
 
 `year_btw` is constant within each plot (the per-plot mean of visit
@@ -324,7 +335,36 @@ fit_beta <- tobs(
   method    = "nested_laplace",
   control   = list(verbose = FALSE)
 )
+#> [nested-laplace-joint] 1/210 cells (0%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 24/24 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/46 cells (2%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 31/31 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/60 cells (2%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 46/46 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/8 cells (13%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/120 cells (1%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 98/98 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/12 cells (8%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
 fit_beta
+#> <cover_fit (beta positive part)>
+#>   N total      : 100
+#>   N positive   : 37 (37.0%)
+#>   phi_pos      : 12.5112
+#>   converged    : yes
+#> 
+#> Presence (binomial logit):
+#>                estimate    std.err    z.value
+#> (Intercept) -0.97683827 1.02788099 -0.9503418
+#> year_btw     0.03418019 0.08738402  0.3911492
+#> year_wtn     0.11285528 0.04031103  2.7996131
+#> 
+#> Positive (beta, logit link, on y > 0):
+#>                estimate    std.err    z.value
+#> (Intercept) -0.96631233 0.48133867 -2.0075518
+#> year_btw    -0.03366500 0.04076841 -0.8257619
+#> year_wtn     0.05507153 0.02259020  2.4378506
 ```
 
 The print method lays out both arms. The occurrence block is the
@@ -346,7 +386,38 @@ fit_ln <- tobs(
   method    = "nested_laplace",
   control   = list(verbose = FALSE)
 )
+#> [nested-laplace-joint] 1/210 cells (0%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 32/32 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/46 cells (2%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 37/37 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/8 cells (13%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/76 cells (1%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 63/63 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/8 cells (13%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/82 cells (1%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 72/72 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/14 cells (7%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
 fit_ln
+#> <cover_fit (lognormal positive part)>
+#>   N total      : 100
+#>   N positive   : 37 (37.0%)
+#>   sigma_pos    : 0.6374
+#>   converged    : yes
+#> 
+#> Presence (binomial logit):
+#>                estimate    std.err   z.value
+#> (Intercept) -0.97691500 1.02827530 -0.950052
+#> year_btw     0.03418413 0.08741872  0.391039
+#> year_wtn     0.11286076 0.04031254  2.799644
+#> 
+#> Positive (Gaussian on log y > 0):
+#>                estimate    std.err    z.value
+#> (Intercept) -1.27398815 0.47642097 -2.6740807
+#> year_btw    -0.01455187 0.04039944 -0.3601997
+#> year_wtn     0.05739005 0.02174242  2.6395432
 ```
 
 Each fit exposes the coefficients and SEs per arm in `beta_occ` /
@@ -383,7 +454,20 @@ fit_full <- tobs(
   method  = "nested_laplace",
   control = list(verbose = FALSE, aggregate.occ = FALSE, aggregate.pos = FALSE)
 )
+#> [nested-laplace-joint] 1/210 cells (0%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 24/24 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/46 cells (2%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 31/31 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/60 cells (2%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 46/46 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/8 cells (13%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/120 cells (1%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 98/98 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/12 cells (8%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
 max(abs(fit_beta$beta_pos - fit_full$beta_pos))
+#> [1] 2.081668e-17
 ```
 
 The collapsed and full positive-arm coefficients agree to numerical
@@ -424,6 +508,15 @@ recov <- data.frame(
                 unname(fit_ln$joint$theta_mean["sigma_occ"]))
 )
 print(recov, row.names = FALSE, digits = 3)
+#>             parameter truth beta_fit  ln_fit
+#>  beta_occ_(Intercept) -0.30  -0.9768 -0.9769
+#>     beta_occ_year_btw -0.05   0.0342  0.0342
+#>     beta_occ_year_wtn  0.10   0.1129  0.1129
+#>  beta_pos_(Intercept) -1.50  -0.9663 -1.2740
+#>     beta_pos_year_btw -0.02  -0.0337 -0.0146
+#>     beta_pos_year_wtn  0.05   0.0551  0.0574
+#>                 alpha  1.00   0.0000  0.0000
+#>             sigma_occ  0.60       NA      NA
 ```
 
 The within-plot slope on the positive arm, the quantity the resurvey
@@ -459,6 +552,12 @@ for (variant in c("pred_beta", "pred_ln")) {
           col = which(focus_plots == p))
   }
 }
+```
+
+![](cover-hurdle-motivate_files/figure-html/predict-1.svg)
+
+``` r
+
 par(op)
 ```
 
@@ -573,6 +672,26 @@ fit_oc <- suppressWarnings(tobs(
   control   = list(verbose = FALSE, max.iter = 300L,
                    sigma.grid = c(0.5, 1.0))
 ))
+#> [nested-laplace-joint] 1/18 cells (6%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 5/5 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/6 cells (17%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/2 cells (50%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 2/2 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/2 cells (50%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/10 cells (10%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 7/7 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/2 cells (50%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/10 cells (10%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 9/9 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/4 cells (25%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/15 cells (7%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 12/12 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/3 cells (33%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
 ```
 
 The fitted object carries the three arms’ coefficients in
@@ -595,6 +714,13 @@ coef_tbl <- data.frame(
                            "pos_pos_cov1", "alpha", "sigma")]
 )
 print(coef_tbl, row.names = FALSE, digits = 3)
+#>     parameter estimate     sd
+#>  psi_occ_cov1   0.1563 0.4024
+#>      psi_year  -1.0788 1.2516
+#>    p_det_cov1   0.2131 0.1988
+#>  pos_pos_cov1  -0.1888 0.0858
+#>         alpha   0.0356 0.1388
+#>         sigma   0.6100 0.2377
 ```
 
 The copy coefficient `alpha` was generated at 0.6: the cover arm sees
@@ -618,6 +744,7 @@ than collapsed or inflated.
 
 field_cor <- cor(fit_oc$spatial_field, sim_oc$truth$f)
 field_cor
+#> [1] -0.1952906
 ```
 
 ``` r
@@ -631,6 +758,8 @@ p_plug <- plogis(eta)
 
 c(correlation = cor(pr_occ$mean, p_plug),
   max_abs_gap = max(abs(pr_occ$mean - p_plug)))
+#> correlation max_abs_gap 
+#>   0.9996777   0.0606582
 ```
 
 The field correlation runs high (a shared chain field is well-identified
@@ -660,6 +789,8 @@ ggplot(ft, aes(cell, z_mean)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![](cover-hurdle-motivate_files/figure-html/oc-field-plot-1.svg)
+
 The ribbon is the 95% band on the standardized field per cell. Cells
 where the band excludes zero are where the spatial signal is real; cells
 where it straddles zero are where presence is driven by the covariates
@@ -686,6 +817,11 @@ ci <- data.frame(
   upr       = fit_oc$means[pars] + 1.96 * fit_oc$sds[pars]
 )
 print(ci, row.names = FALSE, digits = 3)
+#>     parameter    mean    lwr     upr
+#>      psi_year -1.0788 -3.532  1.3745
+#>    p_det_cov1  0.2131 -0.177  0.6028
+#>  pos_pos_cov1 -0.1888 -0.357 -0.0207
+#>         alpha  0.0356 -0.236  0.3076
 ```
 
 The map of interest is usually expected cover per cell, which combines
@@ -707,6 +843,8 @@ ggplot(pr_exp, aes(cell, mean)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![](cover-hurdle-motivate_files/figure-html/oc-exp-map-1.svg)
 
 The per-cell band is wider where occupancy is uncertain and where the
 field is poorly pinned. Reading the map without the band would overstate
@@ -741,6 +879,29 @@ so every change quantity carries a credible interval.
 pr_chg <- predict(fit_oc, newdata = cell_dat, type = "change",
                   times = c(0, 1), time.col = "year", nsim = 1000L)
 names(pr_chg)
+#>  [1] "cell"                          "psi_T1"                       
+#>  [3] "psi_T1.sd"                     "psi_T1.lwr"                   
+#>  [5] "psi_T1.upr"                    "psi_T2"                       
+#>  [7] "psi_T2.sd"                     "psi_T2.lwr"                   
+#>  [9] "psi_T2.upr"                    "delta_psi"                    
+#> [11] "delta_psi.lwr"                 "delta_psi.upr"                
+#> [13] "delta_psi.prob_pos"            "cover_cond_T1"                
+#> [15] "cover_cond_T1.sd"              "cover_cond_T1.lwr"            
+#> [17] "cover_cond_T1.upr"             "cover_cond_T2"                
+#> [19] "cover_cond_T2.sd"              "cover_cond_T2.lwr"            
+#> [21] "cover_cond_T2.upr"             "delta_cover_cond"             
+#> [23] "delta_cover_cond.lwr"          "delta_cover_cond.upr"         
+#> [25] "delta_cover_cond.prob_pos"     "cover_exp_T1"                 
+#> [27] "cover_exp_T1.sd"               "cover_exp_T1.lwr"             
+#> [29] "cover_exp_T1.upr"              "cover_exp_T2"                 
+#> [31] "cover_exp_T2.sd"               "cover_exp_T2.lwr"             
+#> [33] "cover_exp_T2.upr"              "delta_cover_exp"              
+#> [35] "delta_cover_exp.lwr"           "delta_cover_exp.upr"          
+#> [37] "delta_cover_exp.prob_pos"      "delta_cover_from_occ"         
+#> [39] "delta_cover_from_occ.lwr"      "delta_cover_from_occ.upr"     
+#> [41] "delta_cover_from_occ.prob_pos" "delta_cover_from_ab"          
+#> [43] "delta_cover_from_ab.lwr"       "delta_cover_from_ab.upr"      
+#> [45] "delta_cover_from_ab.prob_pos"
 ```
 
 The contract is fixed. Three headline deltas come with `.lwr` / `.upr`
@@ -762,6 +923,13 @@ with(pr_chg, head(data.frame(
   from_ab  = delta_cover_from_ab,
   check    = delta_cover_from_occ + delta_cover_from_ab
 ), 6))
+#>   cell  delta_psi delta_cover_exp    from_occ from_ab       check
+#> 1    1 -0.1321502     -0.01725170 -0.01725170       0 -0.01725170
+#> 2    2 -0.1323025     -0.01725537 -0.01725537       0 -0.01725537
+#> 3    3 -0.1233360     -0.01602888 -0.01602888       0 -0.01602888
+#> 4    4 -0.1249241     -0.01635459 -0.01635459       0 -0.01635459
+#> 5    5 -0.1049053     -0.01367355 -0.01367355       0 -0.01367355
+#> 6    6 -0.1193624     -0.01556829 -0.01556829       0 -0.01556829
 ```
 
 The `check` column reproduces `delta_cover_exp` because the additive
@@ -783,6 +951,8 @@ ggplot(pr_chg, aes(cell, delta_cover_exp)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![](cover-hurdle-motivate_files/figure-html/oc-change-plot-1.svg)
 
 Cells whose band sits entirely above the dashed zero line are credibly
 gaining; cells whose band straddles it have no detectable trend. The
@@ -851,6 +1021,12 @@ comparison <- data.frame(
   waic           = c(NA, round(sep_waic$estimates["waic", "Estimate"], 1))
 )
 print(comparison, row.names = FALSE)
+#>                model     shared_field detection_arm alpha_estimate field_cor
+#>     joint occu_cover yes (copy alpha)           yes          0.036    -0.195
+#>  independent cover()               no            no             NA        NA
+#>  waic
+#>    NA
+#>  92.2
 ```
 
 The separate fit gives a defensible WAIC for the cover surface on its

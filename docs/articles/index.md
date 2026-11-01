@@ -1,10 +1,5 @@
 # Articles
 
-### Get started
-
-- [Getting started with
-  tulpaObs](https://gillescolling.com/tulpaObs/articles/quickstart.md):
-
 ### Data
 
 - [Shaping data for

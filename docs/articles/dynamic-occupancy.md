@@ -178,6 +178,21 @@ sim <- simulate_dyn_occu(
   seed     = 2026
 )
 str(sim, max.level = 2)
+#> List of 3
+#>  $ y    : int [1:200, 1:4, 1:6] 0 0 1 0 0 0 0 0 0 0 ...
+#>  $ data :'data.frame':   200 obs. of  1 variable:
+#>   ..$ x: num [1:200] 0.5206 -1.0797 0.1392 -0.0847 -0.6666 ...
+#>  $ truth:List of 10
+#>   ..$ psi1           : num 0.5
+#>   ..$ p              : num 0.5
+#>   ..$ gamma          : num 0.3
+#>   ..$ epsilon        : num 0.2
+#>   ..$ beta_gamma     : NULL
+#>   ..$ beta_epsilon   : NULL
+#>   ..$ beta_det_season: NULL
+#>   ..$ z              : num [1:200, 1:6] 0 0 1 0 0 0 0 0 0 1 ...
+#>   ..$ beta_occ       : num 0
+#>   ..$ beta_det       : num 0
 ```
 
 The response `sim$y` is a three-dimensional array indexed by site,
@@ -189,7 +204,13 @@ rejects it.
 ``` r
 
 dim(sim$y)             # 200 sites x 4 visits x 6 seasons
+#> [1] 200   4   6
 sim$y[1, , ]           # one site: rows are visits, columns are seasons
+#>      [,1] [,2] [,3] [,4] [,5] [,6]
+#> [1,]    0    0    0    0    1    0
+#> [2,]    0    0    0    0    0    0
+#> [3,]    0    0    0    0    1    1
+#> [4,]    0    1    0    0    1    1
 ```
 
 A missing visit is encoded as `NA` and dropped from that season’s
@@ -211,6 +232,7 @@ toward a higher level and then settles.
 
 occ_by_season <- colMeans(sim$truth$z)
 round(occ_by_season, 3)
+#> [1] 0.455 0.580 0.580 0.555 0.560 0.580
 traj <- data.frame(season = seq_along(occ_by_season), occ = occ_by_season)
 ggplot(traj, aes(season, occ)) +
   geom_hline(yintercept = 0.3 / (0.3 + 0.2), colour = "steelblue",
@@ -218,6 +240,10 @@ ggplot(traj, aes(season, occ)) +
   geom_line() + geom_point(size = 2) +
   ylim(0, 1) + labs(x = "season", y = "occupied fraction") + transparent
 ```
+
+![Realised occupancy fraction across six seasons, rising from one half
+toward about six
+tenths](dynamic-occupancy_files/figure-html/z-traj-1.svg)
 
 The dashed line marks $`\gamma / (\gamma + \epsilon) = 0.6`$, the
 occupancy the two rates pull the system toward in the long run. The
@@ -269,6 +295,17 @@ fit <- tobs(
   control     = list(verbose = FALSE)  # the EM prints its iterations otherwise
 )
 fit
+#> <tobs_fit: dynamic occupancy (HMM)>
+#>   family         : dyn_occu (status: working)
+#>   default method : laplace
+#> 
+#>   Sites: 200, Seasons: 6, Max visits: 4
+#>   Samples: 1000
+#> 
+#> Mean initial occupancy (intercept): 0.471
+#> Mean detection (intercept): 0.501
+#> Mean colonization (intercept): 0.299
+#> Mean extinction (intercept): 0.210
 ```
 
 The response array must be three-dimensional. Passing a flat matrix, the
@@ -281,6 +318,8 @@ tobs(~ 1, data = sim$data, family = dyn_occu(), detection = ~ 1,
      y = sim$y[, , 1],                 # a single season: 2D matrix
      colonization = ~ 1, extinction = ~ 1,
      control = list(verbose = FALSE))
+#> Error in `.tobs_build_dynamic()`:
+#> ! y must be a 3D array [n_sites x max_visits x n_seasons] or a list of matrices
 ```
 
 The fitted object holds the four rates back-transformed to the
@@ -291,6 +330,21 @@ occupied sites empty, and how often a present species is seen.
 ``` r
 
 fit$intercepts
+#> $psi1
+#> psi1_(Intercept) 
+#>        0.4709663 
+#> 
+#> $p
+#> p_(Intercept) 
+#>     0.5012209 
+#> 
+#> $gamma
+#> gamma_(Intercept) 
+#>         0.2985127 
+#> 
+#> $epsilon
+#> epsilon_(Intercept) 
+#>           0.2100606
 ```
 
 The values land near the simulated truth of $`\psi_1 = 0.5`$,
@@ -302,6 +356,8 @@ each name prefixed by its process.
 ``` r
 
 coef(fit)
+#>    psi1_(Intercept)       p_(Intercept)   gamma_(Intercept) epsilon_(Intercept) 
+#>        -0.116265609         0.004883729        -0.854390549        -1.324560099
 ```
 
 [`summary()`](https://rdrr.io/r/base/summary.html) adds the posterior
@@ -312,6 +368,22 @@ detection, `gamma_` for colonisation, and `epsilon_` for extinction.
 ``` r
 
 summary(fit)
+#> tulpa fit 
+#>   n_obs: 200 
+#>   posterior draws: 1000 
+#> 
+#> Fixed effects:
+#>                      estimate std.error   2.5 %   97.5 %
+#> psi1_(Intercept)    -0.116266   0.15045 -0.4111  0.17861
+#> p_(Intercept)        0.004884   0.04499 -0.0833  0.09306
+#> gamma_(Intercept)   -0.854391   0.11038 -1.0707 -0.63804
+#> epsilon_(Intercept) -1.324560   0.12328 -1.5662 -1.08294
+#> 
+#> Reliability (iid draws):
+#>   outer pareto_k NA (NA); grid ESS NA of NA cells; inner skew NA (NA)
+#>   moments read from: draws
+#>   mean acceptance: NA
+#>   divergent transitions: NA
 ```
 
 ## Recovering the rates
@@ -335,6 +407,11 @@ data.frame(
   abs_error = round(abs(est - truth), 3),
   row.names = NULL
 )
+#>   parameter truth estimate abs_error
+#> 1      psi1   0.5    0.471     0.029
+#> 2     gamma   0.3    0.299     0.001
+#> 3   epsilon   0.2    0.210     0.010
+#> 4         p   0.5    0.501     0.001
 ```
 
 All four absolute errors sit below the tolerance the package test
@@ -380,6 +457,8 @@ data.
 
 w <- waic(fit)
 c(waic = round(w$estimates["waic", "Estimate"], 1), elpd = round(w$estimates["elpd_waic", "Estimate"], 1), p_waic = round(w$estimates["p_waic", "Estimate"], 2))
+#>    waic    elpd  p_waic 
+#>  4828.5 -2414.2     4.1
 ```
 
 The `elpd` is the expected log pointwise predictive density, higher
@@ -414,6 +493,10 @@ ggplot(chk, aes(truth, smoothed)) +
   labs(x = "realised occupied fraction", y = "smoothed P(z = 1)") + transparent
 ```
 
+![Smoothed occupancy probability per season against the realised truth,
+points near the identity
+line](dynamic-occupancy_files/figure-html/dyn-fitted-z-1.svg)
+
 The points hug the identity line, so the per-season smoothed occupancy
 lands where the truth put it. On a real dataset there is no truth
 column, but the same matrix is still the honest layer to map: it carries
@@ -438,6 +521,10 @@ ggplot(rd, aes(z, r)) +
   geom_point(alpha = 0.3) +
   labs(x = "smoothed P(z = 1)", y = "occupancy deviance residual") + transparent
 ```
+
+![Occupancy deviance residuals against smoothed state probability,
+scattered with no
+trend](dynamic-occupancy_files/figure-html/dyn-resid-1.svg)
 
 A residual cloud with no trend against the smoothed state, as here, says
 the state structure is adequate across the range of fitted
@@ -473,6 +560,8 @@ g <- fit$intercepts$gamma
 e <- fit$intercepts$epsilon
 psi_eq <- g / (g + e)
 c(psi_eq = round(psi_eq, 3), truth = round(0.3 / (0.3 + 0.2), 3))
+#> psi_eq.gamma_(Intercept)                    truth 
+#>                    0.587                    0.600
 ```
 
 The second is turnover, the share of the occupied set that is made up of
@@ -493,6 +582,8 @@ one where the same sites stay occupied year after year.
 
 turnover <- (g * (1 - psi_eq)) / psi_eq
 round(turnover, 3)
+#> gamma_(Intercept) 
+#>              0.21
 ```
 
 A turnover of this size means a meaningful share of the occupied sites
@@ -555,6 +646,10 @@ ggplot(band, aes(season, mean)) +
   ylim(0, 1) + labs(x = "season", y = "occupied fraction") + transparent
 ```
 
+![Modelled occupancy trajectory with a shaded credible band overlaid on
+the realised occupancy fractions across six
+seasons](dynamic-occupancy_files/figure-html/traj-band-1.svg)
+
 The modelled curve rises from the fitted starting occupancy toward the
 equilibrium line and the realised fractions sit inside the band across
 the six seasons. The band is widest in the middle seasons, where the
@@ -575,6 +670,8 @@ point estimates.
 gd <- plogis(dr[, "gamma_(Intercept)"]); ed <- plogis(dr[, "epsilon_(Intercept)"])
 eq_draws <- gd / (gd + ed)
 round(quantile(eq_draws, c(0.025, 0.5, 0.975)), 3)
+#>  2.5%   50% 97.5% 
+#> 0.532 0.586 0.637
 ```
 
 The interval straddles the true equilibrium of 0.6 and its width reports
@@ -621,6 +718,8 @@ fit_cov <- tobs(
   control     = list(verbose = FALSE)
 )
 coef(fit_cov, arm = "gamma")
+#>  (Intercept) connectivity 
+#>  -0.85891068  -0.05577635
 ```
 
 The colonisation process now has an intercept and a `connectivity` slope
@@ -688,6 +787,10 @@ extremes where the data thin out.
 
 X0 <- cbind(`(Intercept)` = 1, elev = c(-1, 0, 1))
 predict(fit_pred, X.0 = X0)
+#>        mean         sd      q2.5       q50     q97.5
+#> 1 0.5602436 0.05749149 0.4443564 0.5619778 0.6686214
+#> 2 0.4759407 0.03816377 0.4039942 0.4755755 0.5495995
+#> 3 0.3932004 0.05293349 0.2993625 0.3916060 0.5005702
 ```
 
 The second part projects each of those starting points forward through
@@ -718,6 +821,10 @@ ggplot(proj, aes(season, psi, colour = site)) +
   geom_line(linewidth = 1) + geom_point(size = 2) +
   ylim(0, 1) + labs(x = "season", y = "projected occupancy") + transparent
 ```
+
+![Projected occupancy for three starting sites converging toward the
+shared equilibrium over future
+seasons](dynamic-occupancy_files/figure-html/pred-forward-1.svg)
 
 The three curves start apart, ranked by elevation, and converge on the
 dashed equilibrium line within a few seasons because the rates that
@@ -772,6 +879,10 @@ waic_tab$delta <- round(waic_tab$waic - min(waic_tab$waic), 1)
 waic_tab$waic  <- round(waic_tab$waic, 1)
 waic_tab$p_waic <- round(waic_tab$p_waic, 2)
 waic_tab
+#>                          model   waic p_waic delta
+#> 1               constant rates 4828.5   4.10   0.0
+#> 2 connectivity on colonisation 4830.4   5.21   1.9
+#> 3   connectivity on both rates 4832.8   6.42   4.3
 ```
 
 The constant-rate model carries the lowest WAIC here, because
@@ -817,6 +928,21 @@ fit_nuts <- tobs(
   control     = list(n.iter = 600, n.warmup = 300, seed = 1, verbose = FALSE)
 )
 fit_nuts$intercepts
+#> $psi1
+#> psi1_(Intercept) 
+#>        0.4707712 
+#> 
+#> $p
+#> p_(Intercept) 
+#>     0.5004326 
+#> 
+#> $gamma
+#> gamma_(Intercept) 
+#>         0.2972662 
+#> 
+#> $epsilon
+#> epsilon_(Intercept) 
+#>           0.2093402
 ```
 
 The sampler returns the same four rates near their simulated values. Its

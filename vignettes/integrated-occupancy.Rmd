@@ -412,4 +412,4 @@ them separately.
 - Posterior-predictive checks and residual diagnostics on any fit:
   `vignette("diagnostics")`.
 - The shared engine, tiers, and how the Laplace and NUTS backends differ:
-  `vignette("quickstart")`.
+  `vignette("tulpaObs")`.

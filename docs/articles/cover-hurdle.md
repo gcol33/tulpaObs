@@ -150,6 +150,13 @@ sim <- simulate_cover(
   seed      = 7
 )
 head(sim$data)
+#>       cover          x       lon       lat
+#> 1 1.0000000  2.2872472 0.3745957 0.1097551
+#> 2 0.1891462 -1.1967717 0.4804525 0.8830442
+#> 3 0.0000000 -0.6942925 0.8780038 0.5533614
+#> 4 0.0000000 -0.4122930 0.7827960 0.4722463
+#> 5 0.0000000 -0.9706733 0.2670661 0.3544873
+#> 6 0.0000000 -0.9472799 0.1044755 0.9312948
 ```
 
 The returned `sim$data` carries the cover values, the covariate `x`, and
@@ -170,6 +177,8 @@ c(
   prevalence = mean(sim$y > 0),
   median_pos = median(sim$y[sim$y > 0])
 )
+#>     n_sites  n_positive  prevalence  median_pos 
+#> 400.0000000 171.0000000   0.4275000   0.3990295
 ```
 
 Prevalence near one half on 400 sites leaves roughly 200 positive
@@ -190,6 +199,8 @@ ggplot(df, aes(cover, fill = occupied)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![](cover-hurdle_files/figure-html/sim-plot-1.svg)
 
 The tall bar at zero is the absence spike; the spread of positive values
 is the cover-arm signal. A Gaussian fit on the whole column would try to
@@ -234,6 +245,21 @@ fit <- tobs(
   y       = sim$y
 )
 fit
+#> <cover_fit (lognormal positive part)>
+#>   N total      : 400
+#>   N positive   : 171 (42.8%)
+#>   sigma_pos    : 0.3838
+#>   converged    : yes
+#> 
+#> Presence (binomial logit):
+#>               estimate   std.err   z.value
+#> (Intercept) -0.3514232 0.1069681 -3.285309
+#> x            0.6583625 0.1150473  5.722539
+#> 
+#> Positive (Gaussian on log y > 0):
+#>               estimate    std.err   z.value
+#> (Intercept) -1.0424600 0.03155631 -33.03492
+#> x            0.3223995 0.02945743  10.94459
 ```
 
 The print method lays out both arms. The header reports the positive
@@ -260,6 +286,12 @@ est <- data.frame(
   se        = c(fit$se_occ, fit$se_pos, NA)
 )
 print(est, row.names = FALSE, digits = 3)
+#>             parameter truth estimate     se
+#>  beta_occ_(Intercept)  -0.4   -0.351 0.1070
+#>            beta_occ_x   0.7    0.658 0.1150
+#>  beta_pos_(Intercept)  -1.0   -1.042 0.0316
+#>            beta_pos_x   0.3    0.322 0.0295
+#>             sigma_pos   0.4    0.384     NA
 ```
 
 The occurrence slope recovers near its generating value of +0.7 and the
@@ -323,6 +355,8 @@ ggplot(cal, aes(predicted, observed)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![](cover-hurdle_files/figure-html/check-occ-1.svg)
+
 The points fall close to the dashed diagonal across the probability
 range, which is what a well-calibrated occurrence arm looks like.
 Departures would show up as points sitting systematically above or below
@@ -334,6 +368,8 @@ prevalence.
 ``` r
 
 c(mean_predicted = mean(p_hat), observed_prevalence = mean(sim$y > 0))
+#>      mean_predicted observed_prevalence 
+#>           0.4275001           0.4275000
 ```
 
 The positive arm is a Gaussian on $`\log y_i`$, so its check is a
@@ -356,6 +392,8 @@ ggplot(data.frame(fitted = eta_pos, resid = resid_std), aes(fitted, resid)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![](cover-hurdle_files/figure-html/check-pos-1.svg)
+
 The residuals scatter evenly around zero with no fanning, so the
 lognormal arm’s constant-variance assumption holds on this data, as it
 should given the simulator drew log-cover with a fixed `sigma_pos`. On
@@ -367,6 +405,8 @@ quick spread check confirms.
 ``` r
 
 c(resid_sd = sd(resid_std), frac_within_2 = mean(abs(resid_std) < 2))
+#>      resid_sd frac_within_2 
+#>     0.9970545     0.9590643
 ```
 
 A standard deviation near one and about 95% of residuals inside
@@ -414,6 +454,11 @@ ci  <- data.frame(
   upr       = c(fit$beta_occ, fit$beta_pos) + z * c(fit$se_occ, fit$se_pos)
 )
 print(ci, row.names = FALSE, digits = 3)
+#>             parameter estimate    lwr    upr
+#>  beta_occ_(Intercept)   -0.351 -0.561 -0.142
+#>            beta_occ_x    0.658  0.433  0.884
+#>  beta_pos_(Intercept)   -1.042 -1.104 -0.981
+#>            beta_pos_x    0.322  0.265  0.380
 ```
 
 Both slopes on `x` have intervals clear of zero, so the covariate moves
@@ -456,6 +501,8 @@ ggplot(band, aes(x, mean)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![](cover-hurdle_files/figure-html/interp-curve-1.svg)
+
 The curve rises with `x` because the occurrence slope dominates the
 product, and the band widens at the extremes where the covariate has
 fewer supporting sites. Reading the curve without the band would
@@ -487,6 +534,13 @@ preds <- data.frame(
   expected  = predict(fit, newdata, type = "expected")
 )
 head(preds)
+#>           x occupancy   expected
+#> 1 -2.000000 0.1586712 0.03160168
+#> 2 -1.918367 0.1659780 0.03393849
+#> 3 -1.836735 0.1735519 0.03643353
+#> 4 -1.755102 0.1813962 0.03909579
+#> 5 -1.673469 0.1895138 0.04193459
+#> 6 -1.591837 0.1979068 0.04495957
 ```
 
 The `newdata` frame needs the same covariate columns the formula used; a
@@ -519,6 +573,8 @@ ggplot(long3, aes(x, value, colour = quantity)) +
         plot.background  = element_rect(fill = "transparent"))
 ```
 
+![](cover-hurdle_files/figure-html/predict-plot-1.svg)
+
 The occupancy curve climbs toward one as `x` rises, the conditional
 cover drifts up gently with its smaller slope, and the expected cover
 tracks their product. At low `x` the expected cover is pulled down by
@@ -533,6 +589,7 @@ e <- predict(fit, newdata, type = "expected")
 pm <- predict(fit, newdata, type = "occupancy") *
       predict(fit, newdata, type = "conditional")
 max(abs(e - pm))
+#> [1] 0
 ```
 
 The maximum gap is at numerical-tolerance level, confirming that
@@ -596,6 +653,9 @@ comparison <- data.frame(
 )
 comparison$delta_waic <- comparison$waic - min(comparison$waic)
 print(comparison, row.names = FALSE, digits = 4)
+#>   positive  waic   elpd p_waic delta_waic
+#>  lognormal 359.2 -179.6  3.800       0.00
+#>       beta 424.7 -212.3  6.646      65.48
 ```
 
 Because this data was simulated from the lognormal generative model, the

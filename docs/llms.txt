@@ -244,7 +244,7 @@ covers the full workflow.
 ## Documentation
 
 Start with [Getting started with
-tulpaObs](https://gillescolling.com/tulpaObs/articles/quickstart.html):
+tulpaObs](https://gillescolling.com/tulpaObs/articles/tulpaObs.html):
 one path from simulated detection histories to a fitted, compared and
 predicted occupancy model.
 
@@ -648,11 +648,6 @@ S3 methods on `tobs_fit`.
   : Within / between (Mundlak) decomposition for longitudinal data
 
 # Articles
-
-### Get started
-
-- [Getting started with
-  tulpaObs](https://gillescolling.com/tulpaObs/articles/quickstart.md):
 
 ### Data
 

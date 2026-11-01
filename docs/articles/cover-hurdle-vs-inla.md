@@ -96,6 +96,7 @@ dat$log_cover <- ifelse(dat$cover > 0, log(dat$cover), NA_real_)
 
 truth <- sim$truth
 c(sum(dat$occur), mean(dat$occur))
+#> [1] 165.0000   0.4125
 ```
 
 The simulator’s `truth$beta_occ`, `truth$beta_pos`, and
@@ -121,6 +122,21 @@ fit_tulpa <- tobs(
   y       = dat$cover
 )
 fit_tulpa
+#> <cover_fit (lognormal positive part)>
+#>   N total      : 400
+#>   N positive   : 165 (41.2%)
+#>   sigma_pos    : 0.4127
+#>   converged    : yes
+#> 
+#> Presence (binomial logit):
+#>               estimate   std.err   z.value
+#> (Intercept) -0.3796073 0.1075194 -3.530594
+#> x            0.7321596 0.1218140  6.010469
+#> 
+#> Positive (Gaussian on log y > 0):
+#>               estimate    std.err    z.value
+#> (Intercept) -1.0145209 0.03420426 -29.660658
+#> x            0.3086659 0.03375217   9.145068
 ```
 
 ## Fit with INLA (Michael’s separate-hurdle workflow)
@@ -128,6 +144,8 @@ fit_tulpa
 ``` r
 
 library(INLA)
+#> Loading required package: Matrix
+#> 
 
 m_occ_inla <- INLA::inla(
   occur ~ x,
@@ -152,13 +170,6 @@ inla_sigma_pos <- 1 / sqrt(
 )
 ```
 
-``` r
-
-# INLA is not installed in this environment; the comparison below is
-# skipped. To run the full vignette: install.packages("INLA",
-# repos = "https://inla.r-inla-download.org/R/stable").
-```
-
 ## Parameter recovery
 
 ``` r
@@ -174,6 +185,12 @@ recovery <- data.frame(
 recovery$delta_tulpa <- recovery$tulpaObs - recovery$truth
 recovery$delta_inla  <- recovery$INLA     - recovery$truth
 recovery
+#>    parameter truth   tulpaObs       INLA  delta_tulpa   delta_inla
+#> 1 beta_occ_0  -0.4 -0.3796073 -0.3816751  0.020392720  0.018324926
+#> 2 beta_occ_x   0.8  0.7321596  0.7393164 -0.067840445 -0.060683626
+#> 3 beta_pos_0  -1.0 -1.0145209 -1.0145214 -0.014520890 -0.014521384
+#> 4 beta_pos_x   0.3  0.3086659  0.3086657  0.008665909  0.008665746
+#> 5  sigma_pos   0.4  0.4127451  0.4102460  0.012745070  0.010246035
 ```
 
 Both engines hit the same fixed-effects estimates to within the
@@ -209,7 +226,9 @@ mu_inla      <- exp(eta_pos_inla + inla_sigma_pos^2 / 2)
 pred_inla    <- data.frame(x = newdata$x, E_cover = p_inla * mu_inla)
 
 cor(pred_tulpa$E_cover, pred_inla$E_cover)
+#> [1] 0.9999998
 max(abs(pred_tulpa$E_cover - pred_inla$E_cover))
+#> [1] 0.001122746
 ```
 
 Both engines reconstruct expected cover the same way, `E[y] = p * mu`
@@ -228,6 +247,8 @@ plot(pred_tulpa$x, pred_tulpa$E_cover, type = "l", lwd = 2,
      main = "Expected cover: tulpaObs (black) vs INLA (red)")
 lines(pred_inla$x, pred_inla$E_cover, col = 2, lwd = 2, lty = 2)
 ```
+
+![](cover-hurdle-vs-inla_files/figure-html/predict-plot-1.svg)
 
 ## The joint copy= model side by side
 
@@ -297,6 +318,32 @@ fit_joint <- tobs(
     verbose    = FALSE
   )
 )
+#> [nested-laplace-joint] 1/112 cells (1%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 11/11 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/18 cells (6%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 5/5 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/3 cells (33%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/16 cells (6%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 8/8 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/12 cells (8%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/15 cells (7%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 8/8 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/4 cells (25%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/20 cells (5%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 12/12 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/18 cells (6%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/32 cells (3%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 21/21 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/16 cells (6%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/32 cells (3%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 20/20 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
+#> [nested-laplace-joint] 1/10 cells (10%) | elapsed 0s | ETA >=0s | 0.00s/cells
+#> [nested-laplace-joint] 1/1 cells (100%) | elapsed 0s | ETA done | 0.00s/cells
 
 joint_recovery <- data.frame(
   parameter = c("beta_occ_x", "beta_pos_x", "alpha", "sigma"),
@@ -307,6 +354,11 @@ joint_recovery <- data.frame(
                 unname(fit_joint$joint$theta_mean["sigma"]))
 )
 joint_recovery
+#>    parameter truth   estimate
+#> 1 beta_occ_x   0.7  0.6579782
+#> 2 beta_pos_x  -0.5 -0.4723106
+#> 3      alpha   1.0  1.1124143
+#> 4      sigma   0.6  0.7026160
 ```
 
 The occurrence and cover slopes land on the right side of zero (truth

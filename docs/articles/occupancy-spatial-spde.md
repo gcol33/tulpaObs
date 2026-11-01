@@ -179,6 +179,8 @@ dat <- data.frame(occ_cov = x_cov, det_cov = det_cov,
                   lon = coords[, 1], lat = coords[, 2])
 c(true_occupancy_rate = mean(z),
   naive_any_detection = mean(rowSums(y) > 0))
+#> true_occupancy_rate naive_any_detection 
+#>                0.35                0.34
 ```
 
 The naive any-detection rate is biased low by `(1 - p)^J` at each
@@ -204,6 +206,10 @@ ggplot(truth_df, aes(lon, lat, colour = u)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![Scatter of the 400 site coordinates coloured by the true latent
+spatial field, a smooth ripple across the unit
+square](occupancy-spatial-spde_files/figure-html/truth-map-1.svg)
 
 The ripple is the part we want back: a smooth surface that the
 non-spatial fit has no place to put, so it will leak into the intercept
@@ -252,6 +258,8 @@ fit_ns <- tobs(
   control   = list(verbose = FALSE)
 )
 round(fit_ns$means, 3)
+#> psi_(Intercept)     psi_occ_cov   p_(Intercept)       p_det_cov 
+#>          -0.644           0.575          -0.237           0.389
 ```
 
 The SPDE call adds one term to the occupancy formula and changes nothing
@@ -278,6 +286,8 @@ fit_sp <- tobs(
   control   = list(verbose = FALSE)
 )
 round(fit_sp$means, 3)
+#> psi_(Intercept)     psi_occ_cov   p_(Intercept)       p_det_cov 
+#>          -0.751           0.599          -0.233           0.386
 ```
 
 The fixed-effect coefficients come back through
@@ -290,7 +300,14 @@ credible bounds for every fixed effect.
 ``` r
 
 coef(fit_sp)
+#> psi_(Intercept)     psi_occ_cov   p_(Intercept)       p_det_cov 
+#>      -0.7512681       0.5991743      -0.2333621       0.3860616
 round(coef(summary(fit_sp)), 3)
+#>                 estimate std.error  2.5 % 97.5 %
+#> psi_(Intercept)   -0.751     0.118 -0.983 -0.519
+#> psi_occ_cov        0.599     0.124  0.356  0.842
+#> p_(Intercept)     -0.233     0.066 -0.363 -0.104
+#> p_det_cov          0.386     0.066  0.256  0.516
 ```
 
 The fitted SPDE field itself is stored on the fit as `spatial_field`, a
@@ -306,6 +323,8 @@ mesh  <- fit_sp$spatial$tulpa_spec$mesh
 c(n_mesh_nodes  = fit_sp$spatial$tulpa_spec$n_mesh,
   field_length  = length(u_hat),
   field_sd      = round(sd(u_hat), 3))
+#> n_mesh_nodes field_length     field_sd 
+#>      420.000      420.000        0.667
 ```
 
 The 400 sites expand to a few hundred mesh nodes, more nodes than sites
@@ -327,6 +346,7 @@ only comparison is the flat population mean.
 field_at_sites <- as.numeric(fit_sp$spatial$tulpa_spec$A %*% u_hat)
 corr <- cor(field_at_sites, u_true)
 cat(sprintf("Correlation field-at-sites vs truth: %.3f\n", corr))
+#> Correlation field-at-sites vs truth: 0.652
 
 op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
 plot(u_true, field_at_sites, pch = 16, col = rgb(0, 0, 0, 0.4),
@@ -336,6 +356,14 @@ abline(0, 1, col = 2, lwd = 2)
 plot(coords[, 1], coords[, 2], pch = 16, cex = 0.6,
      col = ifelse(field_at_sites > 0, "red", "blue"),
      xlab = "x", ylab = "y", main = "Fitted field sign")
+```
+
+![Two panels: fitted field at sites against the true field near the
+identity line, and the site coordinates coloured by fitted field
+sign](occupancy-spatial-spde_files/figure-html/field-recovery-1.svg)
+
+``` r
+
 par(op)
 ```
 
@@ -357,7 +385,37 @@ Bayesian p-value. Run it on both fits.
 ``` r
 
 chk_ns <- check_model(fit_ns, coords = coords, n.samples = 200, plot = FALSE)
+#> === tobs Model Diagnostics ===
+#> 
+#> Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)
+#> 
+#> WAIC: 1951.5 (p_waic = 4.0)
+#> DIC:  1951.4 (p_DIC = 4.0)
+#> LPML: -975.8 (elpd_loo = -975.8)
+#> 
+#> PPC: Bayesian p = 0.485
+#> 
+#> Zero-inflation: obs=264, exp=263.7, p=0.535
+#> Dispersion:     ratio=1.06, p=0.205
+#> PIT uniformity: KS D=0.044, p=0.415
+#> 
+#> Moran's I: -0.001 (p = 0.838)
 chk_sp <- check_model(fit_sp, coords = coords, n.samples = 200, plot = FALSE)
+#> === tobs Model Diagnostics ===
+#> 
+#> Fit: laplace, 1000 posterior draws (no NUTS sampler diagnostics)
+#> 
+#> WAIC: 1880.7 (p_waic = 3.7)
+#> DIC:  1880.9 (p_DIC = 3.8)
+#> LPML: -940.4 (elpd_loo = -940.4)
+#> 
+#> PPC: Bayesian p = 0.470
+#> 
+#> Zero-inflation: obs=264, exp=271.8, p=0.735
+#> Dispersion:     ratio=1.10, p=0.185
+#> PIT uniformity: KS D=0.030, p=0.853
+#> 
+#> Moran's I: -0.013 (p = 0.095)
 ```
 
 A significant Moran’s I on the non-spatial residuals (small p-value) is
@@ -414,6 +472,11 @@ compare <- data.frame(
   spde      = unname(round(fit_sp$means, 3))
 )
 compare
+#>         parameter truth non_spat   spde
+#> 1 psi_(Intercept)  -0.5   -0.644 -0.751
+#> 2     psi_occ_cov   0.7    0.575  0.599
+#> 3   p_(Intercept)  -0.3   -0.237 -0.233
+#> 4       p_det_cov   0.4    0.389  0.386
 ```
 
 The detection coefficients are essentially unchanged: detection
@@ -435,6 +498,9 @@ rather than the optimistic one a model that ignores correlation reports.
 ci_ns <- confint(fit_ns)["psi_occ_cov", ]
 ci_sp <- confint(fit_sp)["psi_occ_cov", ]
 rbind(non_spatial = round(ci_ns, 3), spde = round(ci_sp, 3))
+#>             2.5 % 97.5 %
+#> non_spatial 0.342  0.809
+#> spde        0.356  0.842
 ```
 
 A map of the fitted field with its sign and magnitude shows where
@@ -454,6 +520,10 @@ ggplot(fitted_df, aes(lon, lat, colour = u_hat)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![Site coordinates coloured by the fitted SPDE field, tracing the
+simulated ripple across the unit
+square](occupancy-spatial-spde_files/figure-html/field-map-1.svg)
 
 The fitted surface is a damped, smoothed version of the truth map from
 the simulation section: the SPDE prior pulls neighbouring sites
@@ -480,6 +550,7 @@ grid <- expand.grid(lon = seq(0.05, 0.95, length.out = 30),
 A_new <- tulpaMesh::fem_matrices(mesh, obs_coords = as.matrix(grid))$A
 field_new <- as.numeric(A_new %*% u_hat)
 str(field_new)
+#>  num [1:900] -0.863 -1.036 -1.202 -1.327 -1.283 ...
 ```
 
 The fixed-effect part of the prediction comes from
@@ -500,6 +571,8 @@ eta_grid <- qlogis(pred_fixed$mean) + field_new
 psi_grid <- plogis(eta_grid)
 grid$psi <- psi_grid
 summary(grid$psi)
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#>  0.1073  0.2369  0.3110  0.3312  0.4046  0.6910
 ```
 
 Mapping the predicted occupancy over the grid gives the continuous
@@ -518,6 +591,10 @@ ggplot(grid, aes(lon, lat, fill = psi)) +
   theme(panel.background = element_rect(fill = "transparent"),
         plot.background  = element_rect(fill = "transparent"))
 ```
+
+![Predicted occupancy probability over a 30 by 30 grid of new
+coordinates, a smooth filled surface with the surveyed sites
+overlaid](occupancy-spatial-spde_files/figure-html/predict-map-1.svg)
 
 The fixed-effect SD in `pred_fixed$sd` propagates the coefficient
 uncertainty into the map, and a wider band appears where the data are
@@ -553,6 +630,9 @@ data.frame(
   p_waic = round(c(w_ns$estimates["p_waic", "Estimate"], w_sp$estimates["p_waic", "Estimate"]), 2),
   elpd   = round(c(w_ns$estimates["elpd_waic", "Estimate"], w_sp$estimates["elpd_waic", "Estimate"]), 1)
 )
+#>         model   waic p_waic   elpd
+#> 1 non_spatial 1951.5   4.04 -975.7
+#> 2        spde 1880.7   3.67 -940.4
 ```
 
 The cleaner test for the field on these data is the residual diagnostic
@@ -587,6 +667,9 @@ data.frame(
   non_spatial = c(NA_real_,    round(w_ns$estimates["waic", "Estimate"], 1)),
   spde        = c(round(corr, 3), round(w_sp$estimates["waic", "Estimate"], 1))
 )
+#>                 metric non_spatial     spde
+#> 1 field cor (vs truth)          NA    0.652
+#> 2  WAIC (fixed-effect)      1951.5 1880.700
 ```
 
 The field correlation is the simulation-only number, available only for
