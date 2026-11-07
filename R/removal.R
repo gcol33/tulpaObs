@@ -44,58 +44,10 @@
   if (any(y_int < 0L)) {
     stop("y must contain nonnegative integer removal counts.", call. = FALSE)
   }
-  n_sites  <- nrow(y_int)
-  n_passes <- ncol(y_int)
-
-  bind       <- .tobs_bind_formulas(list(lambda = abund_formula, p = det_formula),
-                                    data)
-  X_lambda   <- model.matrix(bind$fe$lambda, data)
-  X_det_site <- model.matrix(bind$fe$p, data)
-
-  X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
-                                     n_sites, n_passes, arm = "removal pass")
-
-  # Long form in site-major order (site slowest, pass fastest, in column order)
-  # so each site's passes reach the kernel in depletion order with no gaps.
-  site_mat  <- matrix(seq_len(n_sites), n_sites, n_passes)
-  visit_mat <- matrix(seq_len(n_passes), n_sites, n_passes, byrow = TRUE)
-  y_long    <- as.vector(t(y_int))
-  site_idx  <- as.vector(t(site_mat))
-  visit_idx <- as.vector(t(visit_mat))
-
-  X_p <- X_det_site[site_idx, , drop = FALSE]
-  if (!is.null(X_det_visit)) {
-    visit_row <- (site_idx - 1L) * n_passes + visit_idx
-    X_p <- cbind(X_p, X_det_visit[visit_row, , drop = FALSE])
-  }
-
-  det_coef_names <- colnames(X_det_site)
-  if (!is.null(X_det_visit)) {
-    det_coef_names <- c(det_coef_names, colnames(X_det_visit))
-  }
-
-  structure(list(
-    model_type = "removal",
-    y          = y_int,
-    y_long     = as.integer(y_long),
-    site_idx   = as.integer(site_idx),
-    visit_idx  = as.integer(visit_idx),
-    X_processes = list(X_lambda, X_p),
-    formulas   = list(lambda = bind$fe$lambda, det = bind$fe$p),
-    structured_terms = bind$terms,
-    data       = data,
-    n_sites    = n_sites,
-    max_visits = n_passes,
-    n_passes   = n_passes,
-    process_info = list(
-      list(name = "lambda", p = ncol(X_lambda), coef_names = colnames(X_lambda),
-           link = "log"),
-      list(name = "p",      p = ncol(X_p),      coef_names = det_coef_names,
-           link = "logit")
-    ),
-    mean_count = mean(y_long),
-    max_count  = if (length(y_long)) max(y_long) else 0L
-  ), class = "tobs_model")
+  # Each site's passes reach the kernel in depletion order with no gaps.
+  .tobs_build_count_model("removal", abund_formula, det_formula, data, y_int,
+                          det_visit_formula, det_visit_data, arm = "removal pass",
+                          extra = list(n_passes = ncol(y_int)))
 }
 
 

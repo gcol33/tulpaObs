@@ -138,17 +138,6 @@ fit_n_species <- function(fit) nrow(as.matrix(fit$b_lambda[[1]]))
        K_max = K_max)
 }
 
-# CSR adjacency from a spatial term (precomputed arrays if present, else from the
-# dense graph). Mirrors .tobs_fit_nmix_spatial.
-.nmix_spatial_csr <- function(spatial) {
-  if (!is.null(spatial$adj_row_ptr)) {
-    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-         n_neighbors = spatial$n_neighbors)
-  } else {
-    adjacency_to_csr(spatial$graph)
-  }
-}
-
 
 # ---------------------------------------------------------------------------
 # ICAR

@@ -78,8 +78,7 @@ projects mesh nodes onto sites. The detection arm is
 \eqn{\mathrm{logit}\, p_{ij} = X_p^{(ij)} \beta_p}.
 
 The SPDE hyperparameters \eqn{(\mathrm{range}, \sigma)} are integrated out
-by the SAME outer grid the areal path (\code{nmix_laplace_icar()} /
-\code{nmix_laplace_bym2()} / \code{nmix_laplace_car_proper()}) uses for
+by the SAME outer grid the areal path (\code{.count_spatial_fit()}) uses for
 \eqn{(\tau[, \rho], \sigma)}: at each grid point the inner Newton finds the
 joint mode of \eqn{(\beta_\lambda, \beta_p, u)} and the Laplace log-marginal
 \eqn{\log p(y \mid \mathrm{range}_k, \sigma_k)} is accumulated, then the

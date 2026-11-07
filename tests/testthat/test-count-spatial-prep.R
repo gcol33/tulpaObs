@@ -45,23 +45,21 @@ test_that("the tau axis is coarser on the 2D grid than on the 1D grid", {
 })
 
 test_that("both count families read the same default axes", {
-  # removal_laplace_car_proper() used to default to 9 tau nodes and a 6-point
-  # even rho grid where nmix_laplace_car_proper() used 7 and 5; neither door
-  # recorded which value was chosen and which was inherited. Settled on the
-  # nmix spelling for both, so the axis decides.
+  # One engine fits both families; a kind's missing axes come from the default
+  # table, whatever the family.
+  g <- .count_spatial_grids("icar")
+  expect_identical(g$tau_grid, .count_spatial_default_grid("tau_icar"))
+  g <- .count_spatial_grids("car_proper")
+  expect_identical(g$tau_grid, .count_spatial_default_grid("tau_car"))
+  expect_identical(g$rho_grid, .count_spatial_default_grid("rho_car"))
+  g <- .count_spatial_grids("bym2")
+  expect_identical(g$sigma_grid, .count_spatial_default_grid("sigma_bym2"))
+  expect_identical(g$rho_grid, .count_spatial_default_grid("rho_bym2"))
+  # A given axis is kept (after its range check).
+  expect_identical(.count_spatial_grids("icar", tau_grid = c(1, 2))$tau_grid, c(1, 2))
+  # No fitter carries a literal grid of its own.
   src <- function(f) paste(deparse(body(f)), collapse = " ")
-  for (pair in list(c("tau_car", "rho_car"), c("sigma_bym2", "rho_bym2"))) {
-    for (axis in pair) {
-      hits <- vapply(list(nmix_laplace_car_proper, removal_laplace_car_proper,
-                          nmix_laplace_bym2, removal_laplace_bym2),
-                     function(f) grepl(axis, src(f), fixed = TRUE), logical(1))
-      expect_equal(sum(hits), 2L, info = axis)
-    }
-  }
-  # No fitter carries a literal grid of its own any more.
-  for (f in list(nmix_laplace_icar, nmix_laplace_car_proper, nmix_laplace_bym2,
-                 removal_laplace_icar, removal_laplace_car_proper,
-                 removal_laplace_bym2)) {
+  for (f in list(.count_spatial_fit, .count_spatial_grids)) {
     expect_false(grepl("seq(log(0.3), log(30)", src(f), fixed = TRUE))
     expect_false(grepl("seq(log(0.2), log(3)", src(f), fixed = TRUE))
   }
@@ -84,31 +82,33 @@ test_that("the grid range check reports the open and closed intervals", {
   }
 })
 
-test_that("the proper-CAR rho range check now applies at both doors", {
-  # nmix_laplace_car_proper() rejected rho outside (0, 1); the removal copy did
-  # not validate it at all, so rho = 1 reached the dense Cholesky behind
-  # log|Q(rho)| at a rank-deficient Q.
+test_that("the proper-CAR rho range check applies to both families", {
+  # rho = 1 would reach the dense Cholesky behind log|Q(rho)| at a
+  # rank-deficient Q.
   d <- cs_design()
   csr <- adjacency_to_csr(matrix(0, 6L, 6L) + (abs(outer(1:6, 1:6, "-")) == 1))
-  for (f in list(nmix_laplace_car_proper, removal_laplace_car_proper)) {
+  for (fam in c("nmix", "removal")) {
     expect_error(
-      f(d$y, d$site_idx, seq_len(6L), d$X_lambda, d$X_p,
-        csr$row_ptr, csr$col_idx, csr$n_neighbors, 6L, rho_grid = c(0.5, 1)),
+      .count_spatial_fit(fam, "car_proper", d$y, d$site_idx, seq_len(6L),
+                         d$X_lambda, d$X_p, csr$row_ptr, csr$col_idx,
+                         csr$n_neighbors, 6L, rho_grid = c(0.5, 1)),
       "strictly in (0, 1)", fixed = TRUE)
   }
 })
 
-test_that("the BYM2 range checks now apply at both doors", {
+test_that("the BYM2 range checks apply to both families", {
   d <- cs_design()
   csr <- adjacency_to_csr(matrix(0, 6L, 6L) + (abs(outer(1:6, 1:6, "-")) == 1))
-  for (f in list(nmix_laplace_bym2, removal_laplace_bym2)) {
+  for (fam in c("nmix", "removal")) {
     expect_error(
-      f(d$y, d$site_idx, seq_len(6L), d$X_lambda, d$X_p,
-        csr$row_ptr, csr$col_idx, csr$n_neighbors, 6L, sigma_grid = c(0, 1)),
+      .count_spatial_fit(fam, "bym2", d$y, d$site_idx, seq_len(6L), d$X_lambda,
+                         d$X_p, csr$row_ptr, csr$col_idx, csr$n_neighbors, 6L,
+                         sigma_grid = c(0, 1)),
       "strictly in (0, Inf)", fixed = TRUE)
     expect_error(
-      f(d$y, d$site_idx, seq_len(6L), d$X_lambda, d$X_p,
-        csr$row_ptr, csr$col_idx, csr$n_neighbors, 6L, rho_grid = c(0.5, 1.2)),
+      .count_spatial_fit(fam, "bym2", d$y, d$site_idx, seq_len(6L), d$X_lambda,
+                         d$X_p, csr$row_ptr, csr$col_idx, csr$n_neighbors, 6L,
+                         rho_grid = c(0.5, 1.2)),
       "in [0, 1]", fixed = TRUE)
   }
 })
@@ -192,9 +192,7 @@ test_that("a latent warm start is checked against the length its door names", {
 
 test_that("the K.max boundary warning is one wording at every door", {
   src <- function(f) paste(deparse(body(f)), collapse = " ")
-  fitters <- list(nmix_laplace_icar, nmix_laplace_car_proper, nmix_laplace_bym2,
-                  nmix_laplace_spde, removal_laplace_icar,
-                  removal_laplace_car_proper, removal_laplace_bym2)
+  fitters <- list(.count_spatial_fit, nmix_laplace_spde)
   for (f in fitters) {
     expect_true(grepl(".count_spatial_warn_boundary", src(f), fixed = TRUE))
     expect_false(grepl("Max posterior weight on N = K.max", src(f), fixed = TRUE))
@@ -232,7 +230,7 @@ test_that("the BYM2 N-mixture repro from #416 fits without a K.max warning", {
   site <- rep(seq_len(36), each = 3)
   X_lambda <- model.matrix(~ abund_cov1, sim$data)
   X_p <- model.matrix(~ det_cov1, sim$data)[site, ]
-  expect_no_warning(fit <- nmix_laplace_bym2(
+  expect_no_warning(fit <- .count_spatial_fit("nmix", "bym2",
     as.vector(t(sim$y[, , 1])), site, seq_len(36), X_lambda, X_p,
     adj_row_ptr = c(0L, cumsum(lengths(nb))), adj_col_idx = unlist(nb),
     n_neighbors = lengths(nb), n_spatial = 36))

@@ -14,7 +14,7 @@
 "test-auto-grid-provenance.R","smoke",73,1,0.4
 "test-autoscale.R","full",14,0,0.7
 "test-autoscale.R","smoke",8,2,0.1
-"test-bym2-scale.R","smoke",46,0,0.5
+"test-bym2-scale.R","smoke",45,0,0.3
 "test-car-logdet.R","full",7,0,0.1
 "test-car-logdet.R","smoke",7,0,0.1
 "test-ccd-outer.R","full",7,0,60.4
@@ -41,8 +41,8 @@
 "test-count-residual-dispersion.R","smoke",37,0,11.1
 "test-count-spatial-nuts.R","full",78,0,977.4
 "test-count-spatial-nuts.R","smoke",0,15,0.2
-"test-count-spatial-prep.R","full",82,0,0.6
-"test-count-spatial-prep.R","smoke",85,1,0.3
+"test-count-spatial-prep.R","full",72,0,0.7
+"test-count-spatial-prep.R","smoke",69,1,0.2
 "test-count-spatial.R","full",56,0,595.5
 "test-count-spatial.R","smoke",25,7,2.7
 "test-count-svc.R","full",16,0,127.1

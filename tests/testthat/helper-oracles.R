@@ -296,35 +296,38 @@
   beta_sc
 }
 
-# Joint log-posterior + gradient of the N-mixture coefficient vector. `marg` is a
-# `nmix_marginal` object (nmix_site_marginal()); `lay` the layout above. Weak
-# Gaussian priors N(0, sigma.beta^2) on every coefficient and N(0, sigma.logr^2)
-# on log_r keep the ridge off the boundary without materially shifting the
-# data-dominated optimum, matching the other Laplace paths. Returns
-# list(lp, grad) over the packed coordinates.
-.tobs_abun_nuts_logpost <- function(theta, marg, lay,
-                                    sigma.beta = 10, sigma.logr = 1.5) {
-  beta_lambda <- theta[lay$lambda]
-  beta_p      <- theta[lay$p]
-  r <- if (lay$is_nb) exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
-  ev <- marg$eval_beta(beta_lambda, beta_p, r = r)
-
-  lp   <- ev$log_lik
-  grad <- c(as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda)),
-            as.numeric(crossprod(marg$X_p,      ev$grad_eta_p)))
-  if (lay$is_nb) grad <- c(grad, sum(ev$grad_theta))
-
-  # Weak Gaussian coefficient priors (data-dominated ridge).
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * (sum(beta_lambda^2) + sum(beta_p^2))
-  grad[lay$lambda] <- grad[lay$lambda] - ib2 * beta_lambda
-  grad[lay$p]      <- grad[lay$p]      - ib2 * beta_p
-  if (lay$is_nb) {
-    lr  <- theta[lay$log_r]; ilr2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * ilr2 * lr^2
-    grad[lay$log_r] <- grad[lay$log_r] - ilr2 * lr
+# Joint log-posterior + gradient of a single-species count-marginal coefficient
+# vector (abun, removal, distance): the abundance arm, the detection arm `det`
+# (`"p"`, or `"sigma"` for distance), and, where the layout carries them, the
+# hazard log-shape and the NB log r, each scalar entering as a one-by-one arm.
+# Weak Gaussian priors: sigma.beta on the coefficients, sigma.shape on the
+# log-shape, sigma.logr on log r. `marg` is the family's marginal object
+# (`eval_beta()` plus the arm designs); `lay` its layout. Returns list(lp, grad),
+# the value the family's C++ FullGradFn is cross-checked against.
+.tobs_count_nuts_logpost <- function(theta, marg, lay, det = "p",
+                                     sigma.beta = 10, sigma.shape = 1.5,
+                                     sigma.logr = 1.5) {
+  hazard <- isTRUE(lay$hazard)
+  is_nb  <- isTRUE(lay$is_nb)
+  extra  <- list(r = if (is_nb) exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf)
+  if (hazard) extra$eta_b <- theta[lay$log_shape]
+  ev <- do.call(marg$eval_beta, c(list(theta[lay$lambda], theta[lay[[det]]]), extra))
+  arms <- list(
+    list(idx = lay$lambda, X = marg$X_lambda, grad = "grad_eta_lambda"),
+    list(idx = lay[[det]], X = marg[[paste0("X_", det)]],
+         grad = paste0("grad_eta_", det)))
+  prior_sd <- rep(sigma.beta, length(theta))
+  one <- matrix(1, 1L, 1L)
+  if (hazard) {
+    arms <- c(arms, list(list(idx = lay$log_shape, X = one, grad = "grad_eta_b")))
+    prior_sd[lay$log_shape] <- sigma.shape
   }
-  list(lp = lp, grad = grad)
+  if (is_nb) {
+    ev$grad_log_r <- sum(ev$grad_theta)
+    arms <- c(arms, list(list(idx = lay$log_r, X = one, grad = "grad_log_r")))
+    prior_sd[lay$log_r] <- sigma.logr
+  }
+  .tobs_nuts_logpost_k(theta, ev, arms, length(theta), prior_sd)
 }
 
 # Joint log-posterior + gradient of the non-spatial cover-hurdle coefficient
@@ -403,38 +406,6 @@
   list(lp = lp, grad = grad)
 }
 
-# Joint log-posterior + gradient of the distance coefficient vector (R oracle).
-.tobs_distance_nuts_logpost <- function(theta, marg, lay,
-                                        sigma.beta = 10, sigma.shape = 1.5,
-                                        sigma.logr = 1.5) {
-  beta_lambda <- theta[lay$lambda]
-  beta_sigma  <- theta[lay$sigma]
-  eta_b <- if (lay$hazard) theta[lay$log_shape] else 0
-  r     <- if (lay$is_nb)  exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
-  ev <- marg$eval_beta(beta_lambda, beta_sigma, eta_b = eta_b, r = r)
-
-  lp   <- ev$log_lik
-  grad <- c(as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda)),
-            as.numeric(crossprod(marg$X_sigma,  ev$grad_eta_sigma)))
-  if (lay$hazard) grad <- c(grad, ev$grad_eta_b)
-  if (lay$is_nb)  grad <- c(grad, sum(ev$grad_theta))
-
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * (sum(beta_lambda^2) + sum(beta_sigma^2))
-  grad[lay$lambda] <- grad[lay$lambda] - ib2 * beta_lambda
-  grad[lay$sigma]  <- grad[lay$sigma]  - ib2 * beta_sigma
-  if (lay$hazard) {
-    is2 <- 1 / sigma.shape^2
-    lp  <- lp - 0.5 * is2 * eta_b^2
-    grad[lay$log_shape] <- grad[lay$log_shape] - is2 * eta_b
-  }
-  if (lay$is_nb) {
-    lr  <- theta[lay$log_r]; ilr2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * ilr2 * lr^2
-    grad[lay$log_r] <- grad[lay$log_r] - ilr2 * lr
-  }
-  list(lp = lp, grad = grad)
-}
 
 .tobs_dyn_abun_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10,
                                         sigma.logr = 1.5) {
@@ -1345,32 +1316,4 @@
   ll - 0.5 * ib2 * sum(theta[beta_idx]^2) - 0.5 * ild2 * theta[idx$disp]^2
 }
 
-# Joint log-posterior + gradient of the removal coefficient vector. `marg` is a
-# `.tobs_removal_nuts_marginal()` object; `lay` the shared abun layout. Weak
-# Gaussian priors keep the ridge off the boundary. Returns list(lp, grad). This
-# R version is the oracle the C++ FullGradFn (cpp_removal_nuts_joint_logpost) is
-# cross-checked against.
-.tobs_removal_nuts_logpost <- function(theta, marg, lay,
-                                       sigma.beta = 10, sigma.logr = 1.5) {
-  beta_lambda <- theta[lay$lambda]
-  beta_p      <- theta[lay$p]
-  r <- if (lay$is_nb) exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
-  ev <- marg$eval_beta(beta_lambda, beta_p, r = r)
-
-  lp   <- ev$log_lik
-  grad <- c(as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda)),
-            as.numeric(crossprod(marg$X_p,      ev$grad_eta_p)))
-  if (lay$is_nb) grad <- c(grad, sum(ev$grad_theta))
-
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * (sum(beta_lambda^2) + sum(beta_p^2))
-  grad[lay$lambda] <- grad[lay$lambda] - ib2 * beta_lambda
-  grad[lay$p]      <- grad[lay$p]      - ib2 * beta_p
-  if (lay$is_nb) {
-    lr  <- theta[lay$log_r]; ilr2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * ilr2 * lr^2
-    grad[lay$log_r] <- grad[lay$log_r] - ilr2 * lr
-  }
-  list(lp = lp, grad = grad)
-}
 

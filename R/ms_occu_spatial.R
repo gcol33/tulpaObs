@@ -107,17 +107,6 @@
   list(n_valid = nv, n_det = nd)
 }
 
-# CSR adjacency from a spatial term (precomputed arrays if present, else from the
-# dense graph). Mirrors .nmix_spatial_csr.
-.ms_occu_spatial_csr <- function(spatial) {
-  if (!is.null(spatial$adj_row_ptr)) {
-    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-         n_neighbors = spatial$n_neighbors)
-  } else {
-    adjacency_to_csr(spatial$graph)
-  }
-}
-
 # Warm start shared across grid points: a crude community mean + small community
 # covariances; each grid point runs its own EM to convergence.
 .ms_occu_spatial_warm_start <- function(summaries, p_psi, p_p) {
@@ -301,7 +290,7 @@
                                    verbose = verbose)
     n_spatial_report <- spatial$tulpa_spec$n_mesh
   } else {
-    csr   <- .ms_occu_spatial_csr(spatial)
+    csr   <- .tobs_spatial_csr(spatial)
     n_spatial <- spatial$n_units %||%
       (if (!is.null(spatial$graph)) nrow(spatial$graph) else length(csr$n_neighbors))
     if (n_spatial != model$n_sites) {

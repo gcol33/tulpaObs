@@ -204,9 +204,7 @@
   if (is.null(K_max)) K_max <- max(y_long) + 100L
   K_max <- as.integer(K_max)
   adj <- as.matrix(spatial$graph)
-  csr <- if (!is.null(spatial$adj_row_ptr))
-    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-         n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
+  csr <- .tobs_spatial_csr(spatial)
 
   # Fixed hyper + warm coefficients from the nested-Laplace areal fit, and the
   # whitened-field loading L (square for car_proper, sum-to-zero for icar / bym2).
@@ -216,10 +214,10 @@
                  n_spatial = n_sites, mixture = mix_code, K_max = K_max,
                  max_iter = 100L, tol = 1e-6, verbose = FALSE)
   nl <- switch(spatial$type,
-    icar       = do.call(nmix_laplace_icar, common),
-    car_proper = do.call(nmix_laplace_car_proper, common),
-    bym2       = do.call(nmix_laplace_bym2, c(common,
-                   .bym2_term_args(spatial))))
+    icar       = do.call(.count_spatial_fit, c(list("nmix", "icar"), common)),
+    car_proper = do.call(.count_spatial_fit, c(list("nmix", "car_proper"), common)),
+    bym2       = do.call(.count_spatial_fit, c(list("nmix", "bym2"), common,
+                                         .bym2_term_args(spatial))))
 
   # Whitened-field loading + fixed hyper (shared single source of truth, #71/#113).
   fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,

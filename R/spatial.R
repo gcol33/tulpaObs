@@ -8,6 +8,18 @@
 # build the NNGP neighbor structure. The helpers are not user-facing.
 # =============================================================================
 
+# CSR adjacency of a spatial term: the arrays the icar / bym2 / car_proper
+# constructors precompute, or, for a term carrying only its graph, derived from
+# the dense adjacency.
+.tobs_spatial_csr <- function(spatial) {
+  if (!is.null(spatial$adj_row_ptr)) {
+    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
+         n_neighbors = spatial$n_neighbors)
+  } else {
+    adjacency_to_csr(spatial$graph)
+  }
+}
+
 # Compressed-sparse-row representation of a 0/1 adjacency matrix (0-based
 # column indices, as the C++ ICAR/BYM2 likelihood expects).
 adjacency_to_csr <- function(adj) {

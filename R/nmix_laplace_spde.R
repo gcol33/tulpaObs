@@ -13,8 +13,7 @@
 #' \eqn{\mathrm{logit}\, p_{ij} = X_p^{(ij)} \beta_p}.
 #'
 #' The SPDE hyperparameters \eqn{(\mathrm{range}, \sigma)} are integrated out
-#' by the SAME outer grid the areal path (`nmix_laplace_icar()` /
-#' `nmix_laplace_bym2()` / `nmix_laplace_car_proper()`) uses for
+#' by the SAME outer grid the areal path (`.count_spatial_fit()`) uses for
 #' \eqn{(\tau[, \rho], \sigma)}: at each grid point the inner Newton finds the
 #' joint mode of \eqn{(\beta_\lambda, \beta_p, u)} and the Laplace log-marginal
 #' \eqn{\log p(y \mid \mathrm{range}_k, \sigma_k)} is accumulated, then the

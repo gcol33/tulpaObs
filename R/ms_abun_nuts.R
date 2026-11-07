@@ -478,7 +478,7 @@
   K_warm <- if (is.null(K_max)) max(lf$y) + 100L else as.integer(K_max)
   lay  <- .tobs_ms_abun_nuts_layout(p_lam, p_p, n_species, FALSE)
   pri  <- .ms_ocs_nuts_priors()
-  csr  <- .nmix_spatial_csr(spatial)
+  csr  <- .tobs_spatial_csr(spatial)
 
   # Warm the field precision + community means / covariances / field from the
   # matching nested-Laplace community-spatial (sfMsNMix) fit (#12), then build the

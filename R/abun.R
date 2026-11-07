@@ -36,66 +36,73 @@
     stop("y must contain nonnegative integer counts (or NA for unobserved ",
          "visits).", call. = FALSE)
   }
+  .tobs_build_count_model("nmix", abund_formula, det_formula, data, y_int,
+                          det_visit_formula, det_visit_data, arm = "detection")
+}
+
+# Site-major long form of a count matrix (site slowest, visit fastest) with its
+# NA cells dropped, and the per-row detection design: the site design repeated
+# over a site's visits, the visit design (site-major, n_sites x max_visits
+# rows) stacked on.
+.tobs_count_longform <- function(y_int, X_det_site, X_det_visit = NULL) {
+  n_sites <- nrow(y_int); n_vis <- ncol(y_int)
+  valid_t   <- as.vector(t(!is.na(y_int)))
+  site_idx  <- rep(seq_len(n_sites), each = n_vis)[valid_t]
+  visit_idx <- rep(seq_len(n_vis), times = n_sites)[valid_t]
+  X_p <- X_det_site[site_idx, , drop = FALSE]
+  if (!is.null(X_det_visit)) {
+    X_p <- cbind(X_p, X_det_visit[(site_idx - 1L) * n_vis + visit_idx, , drop = FALSE])
+  }
+  list(y_long = as.integer(as.vector(t(y_int))[valid_t]),
+       site_idx = as.integer(site_idx), visit_idx = as.integer(visit_idx), X_p = X_p)
+}
+
+# The single-species count model a binder returns (abun's "nmix", removal's
+# "removal"): the abundance design, the long form and its detection design, and
+# the structured terms stripped off the formulas (picked up by
+# .tobs_structures_from_model() as for occupancy). `y_int` is the validated
+# integer count matrix; `arm` names the visit axis in the visit-design errors.
+# X_processes carries (X_lambda, X_p) so the per-process autoscaler and unscaler
+# in occu_fit.R operate on both arms (a linear reparameterization of the design
+# columns, whatever the link).
+.tobs_build_count_model <- function(model_type, abund_formula, det_formula, data,
+                                    y_int, det_visit_formula, det_visit_data,
+                                    arm, extra = list()) {
   n_sites    <- nrow(y_int)
   max_visits <- ncol(y_int)
-
-  # Strip structured terms (spatial / re / temporal) into `bind$terms`; the
-  # fixed-effect formulas build the design matrices. Mirrors .tobs_build_single
-  # so icar()/bym2() on the abundance formula are picked up by
-  # .tobs_structures_from_model() exactly as for occupancy.
   bind       <- .tobs_bind_formulas(list(lambda = abund_formula, p = det_formula),
                                     data)
   X_lambda   <- model.matrix(bind$fe$lambda, data)
   X_det_site <- model.matrix(bind$fe$p, data)
-
   X_det_visit <- .tobs_build_visit_X(det_visit_formula, det_visit_data,
-                                     n_sites, max_visits, arm = "detection")
-
-  # Long form in site-major order (site varies slowest), dropping NA visits.
-  valid_t    <- as.vector(t(!is.na(y_int)))                       # site-major
-  site_mat   <- matrix(seq_len(n_sites), n_sites, max_visits)
-  visit_mat  <- matrix(seq_len(max_visits), n_sites, max_visits, byrow = TRUE)
-  y_long     <- as.vector(t(y_int))[valid_t]
-  site_idx   <- as.vector(t(site_mat))[valid_t]
-  visit_idx  <- as.vector(t(visit_mat))[valid_t]
-  if (length(y_long) == 0L) {
+                                     n_sites, max_visits, arm = arm)
+  lf <- .tobs_count_longform(y_int, X_det_site, X_det_visit)
+  if (length(lf$y_long) == 0L) {
     stop("y contains no observed visits (all NA).", call. = FALSE)
   }
-
-  X_p <- X_det_site[site_idx, , drop = FALSE]
-  if (!is.null(X_det_visit)) {
-    visit_row <- (site_idx - 1L) * max_visits + visit_idx
-    X_p <- cbind(X_p, X_det_visit[visit_row, , drop = FALSE])
-  }
-
-  det_coef_names <- colnames(X_det_site)
-  if (!is.null(X_det_visit)) {
-    det_coef_names <- c(det_coef_names, colnames(X_det_visit))
-  }
-
-  # X_processes carries (X_lambda, X_p) so the per-process autoscaler and
-  # unscaler in occu_fit.R operate on both arms (the scaling is link-agnostic,
-  # a linear reparameterization of the design columns).
-  structure(list(
-    model_type = "nmix",
+  det_coef_names <- c(colnames(X_det_site), colnames(X_det_visit))
+  structure(c(list(
+    model_type = model_type,
     y          = y_int,
-    y_long     = as.integer(y_long),
-    site_idx   = as.integer(site_idx),
-    visit_idx  = as.integer(visit_idx),
-    X_processes = list(X_lambda, X_p),
+    y_long     = lf$y_long,
+    site_idx   = lf$site_idx,
+    visit_idx  = lf$visit_idx,
+    X_processes = list(X_lambda, lf$X_p),
     formulas   = list(lambda = bind$fe$lambda, det = bind$fe$p),
     structured_terms = bind$terms,
     data       = data,
     n_sites    = n_sites,
-    max_visits = max_visits,
+    max_visits = max_visits),
+    extra,
+    list(
     process_info = list(
       list(name = "lambda", p = ncol(X_lambda), coef_names = colnames(X_lambda),
            link = "log"),
-      list(name = "p",      p = ncol(X_p),      coef_names = det_coef_names,
+      list(name = "p",      p = ncol(lf$X_p), coef_names = det_coef_names,
            link = "logit")
     ),
-    mean_count = mean(y_long),
-    max_count  = if (length(y_long)) max(y_long) else 0L
+    mean_count = mean(lf$y_long),
+    max_count  = max(lf$y_long))
   ), class = "tobs_model")
 }
 
@@ -306,14 +313,7 @@
                         "spatial unit per site is required for N-mixture."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
-  # icar/bym2/car_proper precompute the CSR adjacency; fall back to deriving
-  # it from the graph for any spatial term that carries only the graph.
-  csr <- if (!is.null(spatial$adj_row_ptr)) {
-    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-         n_neighbors = spatial$n_neighbors)
-  } else {
-    adjacency_to_csr(spatial$graph)
-  }
+  csr <- .tobs_spatial_csr(spatial)
   common <- list(
     y = y_long, site_idx = site_idx, map_site_to_unit = seq_len(n_sites),
     X_lambda = X_lambda, X_p = X_p,
@@ -325,9 +325,10 @@
   )
   switch(
     spatial$type,
-    icar = do.call(nmix_laplace_icar, common),
-    bym2 = do.call(nmix_laplace_bym2, c(common, .bym2_term_args(spatial))),
-    car_proper = do.call(nmix_laplace_car_proper, common)
+    icar = do.call(.count_spatial_fit, c(list("nmix", "icar"), common)),
+    bym2 = do.call(.count_spatial_fit, c(list("nmix", "bym2"), common,
+                                         .bym2_term_args(spatial))),
+    car_proper = do.call(.count_spatial_fit, c(list("nmix", "car_proper"), common))
   )
 }
 

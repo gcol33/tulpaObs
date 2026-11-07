@@ -127,25 +127,17 @@
   max_visits <- model$max_visits
   n_species  <- model$n_species
 
-  site_mat  <- matrix(seq_len(n_sites),  n_sites, max_visits)
-  visit_mat <- matrix(seq_len(max_visits), n_sites, max_visits, byrow = TRUE)
-
   y_long <- integer(0); site_idx <- integer(0); species_idx <- integer(0)
   Xp_list <- vector("list", n_species)
   for (s in seq_len(n_species)) {
-    ys      <- y[, , s]
-    valid_t <- as.vector(t(!is.na(ys)))                     # site-major mask
-    yl      <- as.vector(t(ys))[valid_t]
-    si      <- as.vector(t(site_mat))[valid_t]
-    vi      <- as.vector(t(visit_mat))[valid_t]
+    lf <- .tobs_count_longform(matrix(y[, , s], n_sites, max_visits),
+                               X_det_site, X_det_visit)
+    yl <- lf$y_long; si <- lf$site_idx
     if (length(yl) == 0L) {
       stop(sprintf("species '%s' has no observed visits (all NA).",
                    model$species_names[s]), call. = FALSE)
     }
-    Xp_s <- X_det_site[si, , drop = FALSE]
-    if (!is.null(X_det_visit)) {
-      Xp_s <- cbind(Xp_s, X_det_visit[(si - 1L) * max_visits + vi, , drop = FALSE])
-    }
+    Xp_s <- lf$X_p
     y_long      <- c(y_long, as.integer(yl))
     site_idx    <- c(site_idx, as.integer(si))
     species_idx <- c(species_idx, rep.int(s, length(yl)))
@@ -288,7 +280,7 @@
       spatial$n_units, n_sites), call. = FALSE)
   }
   lf  <- .tobs_ms_nmix_longform(model)
-  csr <- .nmix_spatial_csr(spatial)
+  csr <- .tobs_spatial_csr(spatial)
   common <- list(lf = lf, X_lambda = model$X_processes[[1]],
                  n_sites = n_sites, n_species = model$n_species,
                  csr = csr, n_spatial = spatial$n_units %||% n_sites,
@@ -333,7 +325,7 @@
                         "spatial unit per site is required."),
                  spatial$n_units, n_sites), call. = FALSE)
   }
-  csr <- .nmix_spatial_csr(spatial)
+  csr <- .tobs_spatial_csr(spatial)
 
   X_lambda <- model$X_processes[[1]]
   p_lam    <- ncol(X_lambda)

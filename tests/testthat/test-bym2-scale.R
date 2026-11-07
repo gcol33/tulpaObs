@@ -154,15 +154,12 @@ test_that(".bym2_resolve_scaling computes when absent and validates when given",
                "node_prec")
 })
 
-test_that("both areal count fitters treat a missing scale_factor the same way", {
-  # removal_laplace_bym2() used to default it to 1 and lean on the caller to
-  # supply one, while nmix_laplace_bym2() computed it; a missing argument meant
-  # different things at the two doors.
-  for (f in list(nmix_laplace_bym2, removal_laplace_bym2)) {
-    fm <- formals(f)
-    expect_true("scale_factor" %in% names(fm))
-    expect_null(fm$scale_factor)
-  }
+test_that("both areal count families treat a missing scale_factor the same way", {
+  # One engine fits both families, and a missing scale_factor is computed from
+  # the graph for either.
+  fm <- formals(.count_spatial_fit)
+  expect_true("scale_factor" %in% names(fm))
+  expect_null(fm$scale_factor)
 })
 
 test_that("the term carries s and the engine boundary converts it", {

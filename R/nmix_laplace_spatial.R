@@ -1,393 +1,155 @@
-#' Spatial Royle (2004) N-mixture model via nested Laplace
-#'
-#' @description
-#' Nested-Laplace fit of the spatial N-mixture model
-#' \deqn{N_i \sim \mathrm{Poisson}(\lambda_i), \qquad
-#'       y_{ij} | N_i \sim \mathrm{Binomial}(N_i, p_{ij}),}
-#' with abundance linear predictor
-#' \eqn{\log \lambda_i = X_\lambda^{(i)} \beta_\lambda + z_{u(i)}} where
-#' \eqn{z \sim \mathrm{ICAR}(\tau)} is an intrinsic conditional autoregressive
-#' field on the user-supplied adjacency graph, and detection linear predictor
-#' \eqn{\mathrm{logit}\, p_{ij} = X_p^{(ij)} \beta_p}.
-#'
-#' The hyperparameter \eqn{\tau} (ICAR precision) is integrated out by an
-#' outer grid: at each \eqn{\tau_k} the inner Newton finds the joint mode
-#' of \eqn{(\beta_\lambda, \beta_p, z)} and the Laplace log-marginal
-#' \eqn{\log p(y \mid \tau_k)} is accumulated. Posterior weights over
-#' \eqn{\tau} normalise the grid.
-#'
-#' Inner Newton uses the marginal observed Fisher information matrix for
-#' curvature (with the Var\eqn{[N \mid y_i]} rank-1 correction encoding
-#' cross-arm coupling) and falls back to the complete-data Fisher block when
-#' the observed-info matrix is not PSD. A small diagonal ridge keeps the
-#' Cholesky stable through the (intercept, constant-\eqn{z}) structural null
-#' direction; \eqn{z} is centered to sum zero after every step.
-#'
-#' @param y Integer vector of observed counts (long form, one entry per visit).
-#' @param site_idx Integer vector, 1-based site index for each visit, same
-#'   length as `y`.
-#' @param map_site_to_unit Integer vector of length `n_sites`, 1-based spatial
-#'   unit index for each site. Sites can share spatial units; the data
-#'   contribution to `z[u]` aggregates across all sites that map to `u`.
-#' @param X_lambda Numeric matrix `[n_sites x p_lambda]` of abundance covariates.
-#' @param X_p Numeric matrix `[n_obs x p_p]` of detection covariates.
-#' @param adj_row_ptr,adj_col_idx,n_neighbors CSR adjacency for the ICAR graph
-#'   on the `n_spatial` units. `adj_row_ptr` has length `n_spatial + 1`,
-#'   `adj_col_idx` lists 0-based neighbours, and `n_neighbors[s]` is the row
-#'   degree of unit s.
-#' @param n_spatial Number of spatial units.
-#' @param tau_grid Optional numeric vector of \eqn{\tau} grid points. Defaults
-#'   to `exp(seq(log(0.3), log(30), length.out = 9))`.
-#' @param mixture Abundance mixing distribution: `"P"` (Poisson, default) or
-#'   `"NB"` (negative binomial). Under `"NB"` the NB size \eqn{r} is integrated
-#'   as an additional outer grid dimension (alongside \eqn{\tau}); the posterior
-#'   `r_mean` / `r_sd` are reported from the grid weights.
-#' @param r_grid Optional numeric vector of NB size grid points (NB only).
-#'   Defaults to `exp(seq(log(0.5), log(40), length.out = 6))`. Ignored under
-#'   Poisson.
-#' @param beta_lambda_init Optional warm start; default `c(log(mean(y)+0.1), 0, ...)`.
-#' @param beta_p_init Optional warm start; default `rep(0, p_p)`.
-#' @param z_init Optional warm start for the spatial field; default zeros.
-#' @param K_max Truncation for the per-site marginal sum over N. Defaults to
-#'   `max(y) + 100`. Returned `boundary_max` holds, per grid point, the worst
-#'   site's posterior mass on `K_max`; the fit warns when the grid-weighted
-#'   mass `sum(weights * boundary_max)` exceeds 1e-4 -- raise `K_max` then.
-#' @param max_iter,tol Inner Newton iteration budget and gradient-norm tol.
-#' @param verbose Print per-iteration and per-grid-point progress.
-#'
-#' @return A list of class `nmix_spatial_fit`:
-#'   * `tau_grid` -- input grid
-#'   * `log_marginal` -- log marginal at each tau (up to a tau-independent constant)
-#'   * `weights` -- normalised grid weights (sum to 1)
-#'   * `tau_mean`, `tau_sd` -- posterior moments of tau
-#'   * `modes` -- `[n_grid x (p_lambda + p_p + n_spatial)]` matrix of inner modes
-#'   * `beta_lambda_mean`, `beta_p_mean` -- weighted-mean coefficient estimates
-#'   * `z_mean` -- weighted-mean spatial field
-#'   * `n_iter`, `converged`, `grad_norm`, `log_lik`, `boundary_max` -- per-grid diagnostics
-#'   * `p_lambda`, `p_p`, `n_spatial`, `K_max` -- echoed dimensions
-#'   * `call` -- matched call
-#'
-#' @references
-#' Royle, J. A. (2004). N-mixture models for estimating population size from
-#'   spatially replicated counts. *Biometrics* 60, 108-115.
-#' Besag, J., York, J., Mollie, A. (1991). Bayesian image restoration with two
-#'   applications in spatial statistics. *Ann. Inst. Statist. Math.* 43, 1-20.
-#' Rue, H., Martino, S., Chopin, N. (2009). Approximate Bayesian inference for
-#'   latent Gaussian models by using integrated nested Laplace approximations.
-#'   *JRSS-B* 71, 319-392.
-#'
-#' @keywords internal
-nmix_laplace_icar <- function(y,
-                                    site_idx,
-                                    map_site_to_unit,
-                                    X_lambda,
-                                    X_p,
-                                    adj_row_ptr,
-                                    adj_col_idx,
-                                    n_neighbors,
-                                    n_spatial,
-                                    tau_grid = NULL,
-                                    mixture = c("P", "NB"),
-                                    r_grid = NULL,
-                                    beta_lambda_init = NULL,
-                                    beta_p_init = NULL,
-                                    z_init = NULL,
-                                    K_max = NULL,
-                                    max_iter = 100L,
-                                    tol = 1e-6,
-                                    verbose = FALSE) {
-  mixture <- match.arg(mixture)
-  y                <- as.integer(y)
-  site_idx         <- as.integer(site_idx)
-  map_site_to_unit <- as.integer(map_site_to_unit)
-  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
-                            beta_lambda_init, beta_p_init, K_max, r_grid,
-                            map_site_to_unit = map_site_to_unit,
-                            n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
-                            n_neighbors = n_neighbors,
-                            latent = list(z_init = z_init),
-                            n_latent = c(n_spatial = n_spatial))
-  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_icar")
-  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
+# =============================================================================
+# Areal count-marginal abundance via nested Laplace: one engine for the Royle
+# (2004) N-mixture and the removal-sampling marginal, with an ICAR, proper-CAR
+# or BYM2 field on the abundance arm.
+#
+#   N_i ~ Poisson(lambda_i) (or NB with size r),
+#   log lambda_i = X_lambda_i beta_lambda + phi_u(i),
+#   y_i | N_i ~ the family's observation kernel (binomial visits for the
+#                N-mixture; depleting passes for removal), logit p from X_p.
+#
+# Field kinds (Besag, York and Mollie 1991; Cressie 1993; Riebler et al. 2016):
+#   icar        phi = z, z ~ ICAR(tau): sum-to-zero per connected component,
+#               the outer grid over tau.
+#   car_proper  phi = z, z ~ N(0, [tau (D - rho W)]^-1): full rank for rho < 1,
+#               no centring; the outer grid over (tau, rho), log|Q(rho)|
+#               precomputed per rho.
+#   bym2        phi = sigma (sqrt(rho / s) v + sqrt(1 - rho) w), v ICAR
+#               (per-component scaled, sum-to-zero), w iid N(0, I), s the
+#               Riebler scaling factor (geometric mean of diag(Q^+)); the
+#               outer grid over (sigma, rho).
+# Under NB the size r is one more outer axis. At each grid point the inner
+# Newton finds the joint mode of the coefficients and the field (marginal
+# observed information with the Var[N | y] cross-arm correction, falling back to
+# the complete-data Fisher block where that is not PSD) and the Laplace
+# log-marginal is accumulated; the grid weights integrate the hyperparameters
+# (Rue, Martino and Chopin 2009).
+#
+# The two families share the C++ inner Newton / Laplace driver
+# (cpp_nested_laplace_<family>_<kind>) and the grid summaries; they differ in
+# the C++ entry and the latent-N floor: the N-mixture count must clear the
+# site's largest visit count, the removal count the site's total removal.
+# Default axes are one table (.count_spatial_default_grid()), so both families
+# integrate the same grids. `K_max` defaults to the family floor + 100; the fit
+# warns when the grid-weighted posterior mass on K_max exceeds 1e-4.
+# =============================================================================
 
-  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_icar,
-    y                  = y,
-    site_idx           = site_idx,
-    map_site_to_unit_R = map_site_to_unit,
-    X_lambda_R         = X_lambda,
-    X_p_R              = X_p,
-    adj_row_ptr        = as.integer(adj_row_ptr),
-    adj_col_idx        = as.integer(adj_col_idx),
-    n_neighbors        = as.integer(n_neighbors),
-    n_spatial          = as.integer(n_spatial),
-    node_comp          = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
-    tau_grid           = as.numeric(tau_grid),
-    r_grid             = as.numeric(pp$r_grid),
-    beta_lambda_init   = as.numeric(pp$beta_lambda_init),
-    beta_p_init        = as.numeric(pp$beta_p_init),
-    z_init             = if (is.null(z_init)) NULL else as.numeric(z_init),
-    K_max              = pp$K_max,
-    max_iter           = as.integer(max_iter),
-    tol                = as.numeric(tol),
-    verbose            = isTRUE(verbose)
-  )
-
-  out <- c(fit, .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                           X_lambda, X_p, mixture),
-           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "icar",
-                call = match.call()))
-  .count_spatial_warn_boundary(out)
-  class(out) <- c("nmix_spatial_fit", "list")
-  out
+# The C++ nested-Laplace entry of a family and field kind.
+.count_spatial_cpp <- function(family, kind) {
+  switch(paste(family, kind),
+    "nmix icar"          = cpp_nested_laplace_nmix_icar,
+    "nmix car_proper"    = cpp_nested_laplace_nmix_car_proper,
+    "nmix bym2"          = cpp_nested_laplace_nmix_bym2,
+    "removal icar"       = cpp_nested_laplace_removal_icar,
+    "removal car_proper" = cpp_nested_laplace_removal_car_proper,
+    "removal bym2"       = cpp_nested_laplace_removal_bym2,
+    stop(sprintf("No areal count fitter for family '%s', field '%s'.", family, kind),
+         call. = FALSE))
 }
 
-#' Proper CAR Royle (2004) N-mixture model via nested Laplace
-#'
-#' @description
-#' Nested-Laplace fit of the spatial N-mixture model with a proper conditional
-#' autoregressive prior on the abundance-arm spatial offset:
-#' \deqn{N_i \sim \mathrm{Poisson}(\lambda_i), \qquad
-#'       y_{ij} | N_i \sim \mathrm{Binomial}(N_i, p_{ij}),}
-#' \eqn{\log \lambda_i = X_\lambda^{(i)} \beta_\lambda + z_{u(i)}}, where
-#' \eqn{z \mid \tau, \rho \sim \mathrm{N}(0, [\tau (D - \rho W)]^{-1})}.
-#' Both hyperparameters are integrated over an outer 2D grid; the inner
-#' Newton step shares the kernel with [nmix_laplace_icar()] (ICAR is
-#' the \eqn{\rho = 1} limit).
-#'
-#' Unlike the ICAR fit, no sum-to-zero centering is applied -- \eqn{Q(\rho)}
-#' is full rank for \eqn{\rho < 1}. The per-rho \eqn{\log |Q(\rho)|} is
-#' precomputed once via a dense Cholesky on the \eqn{n_{\mathrm{spatial}}
-#' \times n_{\mathrm{spatial}}} precision matrix.
-#'
-#' @inheritParams nmix_laplace_icar
-#' @param tau_grid Optional numeric vector of \eqn{\tau} grid points
-#'   (defaults to `exp(seq(log(0.3), log(30), length.out = 7L))`).
-#' @param mixture Abundance mixing distribution `"P"` (default) or `"NB"`; under
-#'   `"NB"` the NB size \eqn{r} is integrated as an additional outer grid axis.
-#' @param r_grid Optional NB size grid (NB only); see [nmix_laplace_icar()].
-#' @param rho_grid Optional numeric vector of \eqn{\rho} grid points in
-#'   the valid eigenvalue interval. Defaults to a 5-point grid in
-#'   \eqn{(0, 1)} -- callers that want eigenvalue-derived bounds should
-#'   compute them via tulpa::spatial_car_proper(adjacency)`$`rho_bounds and
-#'   pass an explicit grid in that interval.
-#'
-#' @return A list of class `nmix_spatial_fit`:
-#'   * `theta_grid` -- `[n_grid x 2]` matrix of (tau, rho) per grid point
-#'   * `tau_grid`, `rho_grid` -- input axes
-#'   * `log_det_Q_rho` -- precomputed log determinants per rho
-#'   * `log_marginal`, `weights`, `tau_mean`, `tau_sd`, `rho_mean`, `rho_sd`
-#'     -- as in [nmix_laplace_icar()] but with the rho marginal added
-#'   * other diagnostic fields and named coefficient means as in ICAR
-#'
-#' @references
-#' Cressie, N. (1993). Statistics for Spatial Data. Wiley.
-#' Rue, H., Held, L. (2005). Gaussian Markov Random Fields. CRC.
-#'
-#' @keywords internal
-nmix_laplace_car_proper <- function(y,
-                                          site_idx,
-                                          map_site_to_unit,
-                                          X_lambda,
-                                          X_p,
-                                          adj_row_ptr,
-                                          adj_col_idx,
-                                          n_neighbors,
-                                          n_spatial,
-                                          tau_grid = NULL,
-                                          rho_grid = NULL,
-                                          mixture = c("P", "NB"),
-                                          r_grid = NULL,
-                                          beta_lambda_init = NULL,
-                                          beta_p_init = NULL,
-                                          z_init = NULL,
-                                          K_max = NULL,
-                                          max_iter = 100L,
-                                          tol = 1e-6,
-                                          verbose = FALSE) {
-  mixture <- match.arg(mixture)
-  y                <- as.integer(y)
-  site_idx         <- as.integer(site_idx)
-  map_site_to_unit <- as.integer(map_site_to_unit)
-  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
-                            beta_lambda_init, beta_p_init, K_max, r_grid,
-                            map_site_to_unit = map_site_to_unit,
-                            n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
-                            n_neighbors = n_neighbors,
-                            latent = list(z_init = z_init),
-                            n_latent = c(n_spatial = n_spatial))
-  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_car")
-  if (is.null(rho_grid)) rho_grid <- .count_spatial_default_grid("rho_car")
-  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
-  rho_grid <- .count_spatial_check_grid(
-    rho_grid, "rho_grid", 0, 1, open = TRUE,
-    hint = "Pass explicit eigenvalue bounds via spatial_car_proper().")
-
-  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_car_proper,
-    y                  = y,
-    site_idx           = site_idx,
-    map_site_to_unit_R = map_site_to_unit,
-    X_lambda_R         = X_lambda,
-    X_p_R              = X_p,
-    adj_row_ptr        = as.integer(adj_row_ptr),
-    adj_col_idx        = as.integer(adj_col_idx),
-    n_neighbors        = as.integer(n_neighbors),
-    n_spatial          = as.integer(n_spatial),
-    tau_grid           = as.numeric(tau_grid),
-    rho_grid           = as.numeric(rho_grid),
-    r_grid             = as.numeric(pp$r_grid),
-    beta_lambda_init   = as.numeric(pp$beta_lambda_init),
-    beta_p_init        = as.numeric(pp$beta_p_init),
-    z_init             = if (is.null(z_init)) NULL else as.numeric(z_init),
-    K_max              = pp$K_max,
-    max_iter           = as.integer(max_iter),
-    tol                = as.numeric(tol),
-    verbose            = isTRUE(verbose)
-  )
-
-  # rho summaries are proper-CAR-specific; the rest of the grid summarisation is
-  # shared with the ICAR path.
-  common <- .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                       X_lambda, X_p, mixture)
-  rho <- .tobs_weighted_moment(common$weights, fit$theta_grid[, "rho"])
-
-  out <- c(fit, common,
-           list(rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
-                n_sites = pp$n_sites, n_obs = pp$n_obs,
-                prior_type = "car_proper", call = match.call()))
-  .count_spatial_warn_boundary(out)
-  class(out) <- c("nmix_spatial_fit", "list")
-  out
+# The outer hyperparameter axes of a field kind: each given axis checked, each
+# missing one taken from the default table.
+.count_spatial_grids <- function(kind, tau_grid = NULL, rho_grid = NULL,
+                                 sigma_grid = NULL) {
+  dflt <- function(x, axis) if (is.null(x)) .count_spatial_default_grid(axis) else x
+  switch(kind,
+    icar = list(tau_grid = .count_spatial_check_grid(dflt(tau_grid, "tau_icar"),
+                                                     "tau_grid", 0, Inf)),
+    car_proper = list(
+      tau_grid = .count_spatial_check_grid(dflt(tau_grid, "tau_car"), "tau_grid", 0, Inf),
+      rho_grid = .count_spatial_check_grid(
+        dflt(rho_grid, "rho_car"), "rho_grid", 0, 1, open = TRUE,
+        hint = "Pass explicit eigenvalue bounds via spatial_car_proper().")),
+    bym2 = list(
+      sigma_grid = .count_spatial_check_grid(dflt(sigma_grid, "sigma_bym2"),
+                                             "sigma_grid", 0, Inf),
+      rho_grid   = .count_spatial_check_grid(dflt(rho_grid, "rho_bym2"),
+                                             "rho_grid", 0, 1, open = FALSE)))
 }
 
-#' BYM2 Royle (2004) N-mixture model via nested Laplace
-#'
-#' @description
-#' Nested-Laplace fit of the spatial N-mixture model with a BYM2 (Riebler et al.
-#' 2016) prior on the abundance-arm spatial offset. The offset decomposes as
-#' \deqn{\phi_u = \sigma \left(\sqrt{\rho / s} \, v_u + \sqrt{1 - \rho} \, w_u\right),}
-#' with \eqn{v \sim \mathrm{ICAR}} (unscaled, sum-to-zero) and
-#' \eqn{w \sim \mathrm{N}(0, I)} iid. \eqn{s} is the Riebler scaling factor,
-#' the geometric mean of the marginal variances \eqn{\mathrm{diag}(Q^{+})} of
-#' the intrinsic ICAR field; \eqn{\sigma} is then the joint marginal standard
-#' deviation of \eqn{\phi}, and \eqn{\rho \in [0, 1]} is the spatial fraction
-#' of variance.
-#'
-#' The inner Newton works in the joint state
-#' \eqn{x = (\beta_\lambda, \beta_p, v, w)} (dimension
-#' \eqn{p_\lambda + p_p + 2 n_{\mathrm{spatial}}}). At the converged mode the
-#' Laplace log-marginal is accumulated; the outer 2D grid integrates over
-#' \eqn{(\sigma, \rho)}.
-#'
-#' @inheritParams nmix_laplace_icar
-#' @param mixture Abundance mixing distribution `"P"` (default) or `"NB"`; under
-#'   `"NB"` the NB size \eqn{r} is integrated as an additional outer grid axis.
-#' @param r_grid Optional NB size grid (NB only); see [nmix_laplace_icar()].
-#' @param sigma_grid Numeric vector of \eqn{\sigma} (joint sd) grid points.
-#'   Defaults to `exp(seq(log(0.2), log(3), length.out = 5L))`.
-#' @param rho_grid Numeric vector of spatial-fraction grid points in
-#'   \eqn{[0, 1]}. Defaults to `c(0.05, 0.3, 0.5, 0.7, 0.95)`.
-#' @param scale_factor Optional scalar Riebler scaling factor \eqn{s}, the
-#'   geometric mean of the marginal variances \eqn{\mathrm{diag}(Q^{+})} of the
-#'   intrinsic ICAR field. If `NULL`, it is computed from the adjacency via
-#'   dense eigendecomposition.
-#' @param v_init,w_init Optional warm starts (each length `n_spatial`) for the
-#'   two BYM2 latent components -- the structured (spatial) and unstructured
-#'   (iid) effects. `NULL` (default) starts both at zero.
-#'
-#' @return A list of class `nmix_spatial_fit`:
-#'   * `theta_grid` -- `[n_grid x 2]` matrix of (sigma, rho) per grid point
-#'   * `sigma_grid`, `rho_grid` -- input axes
-#'   * `scale_factor` -- the Riebler scaling factor
-#'   * `log_marginal`, `weights`, `sigma_mean`, `sigma_sd`, `rho_mean`, `rho_sd`
-#'     -- posterior summaries of the joint hyperparameters
-#'   * `modes` -- `[n_grid x (p_lambda + p_p + 2 n_spatial)]` per-grid modes;
-#'     columns `(p_lambda + p_p + 1) .. (p_lambda + p_p + n_spatial)` are `v`,
-#'     the next `n_spatial` columns are `w`
-#'   * `beta_lambda_mean`, `beta_p_mean` -- weighted-mean coefficients
-#'   * `v_mean`, `w_mean` -- weighted-mean ICAR and iid components
-#'   * `phi_mean` -- weighted-mean total offset \eqn{\phi}
-#'   * other diagnostic fields as in [nmix_laplace_icar()]
-#'
-#' @references
-#' Riebler, A., Sorbye, S. H., Simpson, D., Rue, H. (2016). An intuitive
-#'   Bayesian spatial model for disease mapping that accounts for scaling.
-#'   *Statistical Methods in Medical Research* 25, 1145-1165.
-#' Morris, M., Wheeler-Martin, K., Simpson, D., Mooney, S. J., Gelman, A.,
-#'   DiMaggio, C. (2019). Bayesian hierarchical spatial models: Implementing
-#'   the BYM2 model in Stan. *Spatial and Spatio-temporal Epidemiology* 31.
-#'
-#' @keywords internal
-nmix_laplace_bym2 <- function(y,
-                                    site_idx,
-                                    map_site_to_unit,
-                                    X_lambda,
-                                    X_p,
-                                    adj_row_ptr,
-                                    adj_col_idx,
-                                    n_neighbors,
-                                    n_spatial,
-                                    sigma_grid = NULL,
-                                    rho_grid = NULL,
-                                    mixture = c("P", "NB"),
-                                    r_grid = NULL,
-                                    scale_factor = NULL,
-                                    node_prec = NULL,
-                                    beta_lambda_init = NULL,
-                                    beta_p_init = NULL,
-                                    v_init = NULL,
-                                    w_init = NULL,
-                                    K_max = NULL,
-                                    max_iter = 100L,
-                                    tol = 1e-6,
-                                    verbose = FALSE) {
+# Fit one areal count model. `family` is "nmix" or "removal", `kind` the field.
+# Data arguments: long-form counts `y` with their 1-based `site_idx`, the
+# site -> spatial unit map, the abundance design (one row per site) and the
+# detection design (one row per visit / pass), and the CSR adjacency of the
+# `n_spatial` units (`adj_col_idx` 0-based). `tau_grid` / `rho_grid` /
+# `sigma_grid` override the kind's default axes, `r_grid` the NB size axis;
+# `scale_factor` / `node_prec` the BYM2 scaling (computed from the graph when
+# NULL); `beta_*_init`, `z_init` (icar / car_proper) and `v_init` / `w_init`
+# (bym2) are warm starts. Returns a list of class `nmix_spatial_fit`: the C++
+# grid result (theta_grid, log_marginal, modes, per-grid diagnostics) plus the
+# grid-weighted summaries (weights, hyperparameter moments, coefficient means
+# and the law-of-total-covariance vcov, the posterior-mean field, the NB size
+# when integrated), `n_sites`, `n_obs`, `prior_type` and `call`.
+.count_spatial_fit <- function(family = c("nmix", "removal"),
+                               kind = c("icar", "car_proper", "bym2"),
+                               y, site_idx, map_site_to_unit, X_lambda, X_p,
+                               adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
+                               tau_grid = NULL, rho_grid = NULL, sigma_grid = NULL,
+                               mixture = c("P", "NB"), r_grid = NULL,
+                               scale_factor = NULL, node_prec = NULL,
+                               beta_lambda_init = NULL, beta_p_init = NULL,
+                               z_init = NULL, v_init = NULL, w_init = NULL,
+                               K_max = NULL, max_iter = 100L, tol = 1e-6,
+                               verbose = FALSE) {
+  family  <- match.arg(family)
+  kind    <- match.arg(kind)
   mixture <- match.arg(mixture)
   y                <- as.integer(y)
   site_idx         <- as.integer(site_idx)
   map_site_to_unit <- as.integer(map_site_to_unit)
-  pp <- .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
-                            beta_lambda_init, beta_p_init, K_max, r_grid,
-                            map_site_to_unit = map_site_to_unit,
-                            n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
-                            n_neighbors = n_neighbors,
-                            latent = list(v_init = v_init, w_init = w_init),
-                            n_latent = c(n_spatial = n_spatial))
-  if (is.null(sigma_grid)) sigma_grid <- .count_spatial_default_grid("sigma_bym2")
-  if (is.null(rho_grid))   rho_grid   <- .count_spatial_default_grid("rho_bym2")
-  sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
-  rho_grid   <- .count_spatial_check_grid(rho_grid, "rho_grid", 0, 1, open = FALSE)
-  sc <- .bym2_resolve_scaling(scale_factor, node_prec, adj_row_ptr, adj_col_idx,
-                              n_spatial)
-  scale_factor <- sc$scale
+  bym2 <- identical(kind, "bym2")
+  pp <- .count_spatial_prep(
+    y, site_idx, X_lambda, X_p, mixture, beta_lambda_init, beta_p_init, K_max,
+    r_grid,
+    K_floor = if (identical(family, "removal")) .count_K_floor_site_total
+              else .count_K_floor_max_y,
+    map_site_to_unit = map_site_to_unit, n_spatial = n_spatial,
+    adj_row_ptr = adj_row_ptr, n_neighbors = n_neighbors,
+    latent = if (bym2) list(v_init = v_init, w_init = w_init) else list(z_init = z_init),
+    n_latent = c(n_spatial = n_spatial))
+  grids <- .count_spatial_grids(kind, tau_grid, rho_grid, sigma_grid)
+  num_or_null <- function(x) if (is.null(x)) NULL else as.numeric(x)
 
-  fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_bym2,
-    y                  = y,
-    site_idx           = site_idx,
-    map_site_to_unit_R = map_site_to_unit,
-    X_lambda_R         = X_lambda,
-    X_p_R              = X_p,
-    adj_row_ptr        = as.integer(adj_row_ptr),
-    adj_col_idx        = as.integer(adj_col_idx),
-    n_neighbors        = as.integer(n_neighbors),
-    n_spatial          = as.integer(n_spatial),
-    node_comp          = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
-    node_prec          = as.numeric(sc$node_prec),
-    sigma_grid         = as.numeric(sigma_grid),
-    rho_grid           = as.numeric(rho_grid),
-    r_grid             = as.numeric(pp$r_grid),
-    scale_factor       = as.numeric(scale_factor),
-    beta_lambda_init   = as.numeric(pp$beta_lambda_init),
-    beta_p_init        = as.numeric(pp$beta_p_init),
-    v_init             = if (is.null(v_init)) NULL else as.numeric(v_init),
-    w_init             = if (is.null(w_init)) NULL else as.numeric(w_init),
-    K_max              = pp$K_max,
-    max_iter           = as.integer(max_iter),
-    tol                = as.numeric(tol),
-    verbose            = isTRUE(verbose)
-  )
+  args <- list(
+    y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
+    X_lambda_R = X_lambda, X_p_R = X_p,
+    adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
+    n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial))
+  if (!identical(kind, "car_proper")) {
+    args$node_comp <- .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial)
+  }
+  if (bym2) {
+    sc <- .bym2_resolve_scaling(scale_factor, node_prec, adj_row_ptr, adj_col_idx,
+                                n_spatial)
+    scale_factor <- sc$scale
+    args$node_prec <- as.numeric(sc$node_prec)
+  }
+  args <- c(args, lapply(grids, as.numeric), list(r_grid = as.numeric(pp$r_grid)))
+  if (bym2) args$scale_factor <- as.numeric(scale_factor)
+  args <- c(args, list(
+    beta_lambda_init = as.numeric(pp$beta_lambda_init),
+    beta_p_init      = as.numeric(pp$beta_p_init)))
+  args <- c(args, if (bym2) list(v_init = num_or_null(v_init), w_init = num_or_null(w_init))
+                  else list(z_init = num_or_null(z_init)))
+  args <- c(args, list(K_max = pp$K_max, max_iter = as.integer(max_iter),
+                       tol = as.numeric(tol), verbose = isTRUE(verbose)))
+  fit <- do.call(.cpp_nmix_progress, c(list(.count_spatial_cpp(family, kind)), args))
 
-  out <- c(fit, .count_spatial_pack_bym2_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                                X_lambda, X_p, mixture, scale_factor),
-           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "bym2",
+  packed <- if (bym2) {
+    .count_spatial_pack_bym2_common(fit, pp$p_lam, pp$p_p, n_spatial, X_lambda,
+                                    X_p, mixture, scale_factor)
+  } else {
+    common <- .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
+                                         X_lambda, X_p, mixture)
+    if (identical(kind, "car_proper")) {
+      rho <- .tobs_weighted_moment(common$weights, fit$theta_grid[, "rho"])
+      common <- c(common, list(rho_mean = unname(rho["mean"]),
+                               rho_sd = unname(rho["sd"])))
+    }
+    common
+  }
+  out <- c(fit, packed,
+           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = kind,
                 call = match.call()))
   .count_spatial_warn_boundary(out)
   class(out) <- c("nmix_spatial_fit", "list")

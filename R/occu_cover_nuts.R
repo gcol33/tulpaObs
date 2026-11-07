@@ -708,7 +708,7 @@
 # to obtain the FIXED field hyperparameters (sigma, rho_car) and the copy
 # amplitude (alpha), plus the grid-weighted posterior-mean coupled field. This is
 # the occu_cover analogue of the warm fit .tobs_fit_abun_nuts_spatial reads from
-# nmix_laplace_car_proper: the same proper-CAR precision tau Q(rho) the NUTS field
+# .count_spatial_fit(kind = "car_proper"): the same proper-CAR precision tau Q(rho) the NUTS field
 # block then fixes, here estimated through the shared two-state cell-coupling
 # marginal (the occu_cover_{lognormal,beta} spec) so the field hyper sits at the
 # nested-Laplace estimate of THIS model (the marginalize-then-fix recipe). Returns

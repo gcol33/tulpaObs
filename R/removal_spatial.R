@@ -2,182 +2,17 @@
 # removal_spatial.R
 # - areal-spatial removal-sampling abundance
 #
-# An ICAR or proper-CAR field on the abundance arm of the removal marginal, fit
-# by nested Laplace (outer grid over tau[, rho][, NB size r], inner Newton over
-# (beta_lambda, beta_p, z)). The removal per-site marginal shares the count-
-# marginal moment interface with the Royle N-mixture, so the C++ inner Newton /
-# Laplace driver and the R grid-summarisation (.count_spatial_pack_common) are
-# reused verbatim; only the C++ entry point (cpp_nested_laplace_removal_*) and the
-# K_max default (the per-site removal TOTAL, since depletion sums passes) differ.
+# An ICAR, proper-CAR or BYM2 field on the abundance arm of the removal
+# marginal, fit by the areal count engine .count_spatial_fit("removal", kind)
+# (R/nmix_laplace_spatial.R), which it shares with the Royle N-mixture.
 #
-#   removal_laplace_icar()         R wrapper over cpp_nested_laplace_removal_icar
-#   removal_laplace_car_proper()   R wrapper over cpp_nested_laplace_removal_car_proper
-#   .tobs_fit_removal_spatial()    dispatch from .tobs_fit_model (icar / car_proper)
+#   .tobs_fit_removal_spatial()    dispatch from .tobs_fit_model
 # =============================================================================
 
 # The removal latent-N truncation on its own, for the BFGS driver -- which packs
 # its own state and so does not go through the wrapper preamble below.
 .removal_spatial_K_max <- function(y, site_idx, n_sites, K_max) {
   .count_spatial_K_max(K_max, .count_K_floor_site_total(y, site_idx, n_sites))
-}
-
-# Input validation for the removal areal wrappers. The count-marginal preamble
-# is shared with the N-mixture spatial wrappers; removal supplies only its own
-# truncation rule, since depleting passes at a site sum and the latent N must
-# clear that site's TOTAL removal.
-.removal_spatial_prep <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
-                                  adj_row_ptr, n_neighbors, n_spatial, mixture,
-                                  beta_lambda_init, beta_p_init, K_max, r_grid,
-                                  latent = list()) {
-  .count_spatial_prep(y, site_idx, X_lambda, X_p, mixture,
-                      beta_lambda_init, beta_p_init, K_max, r_grid,
-                      K_floor = .count_K_floor_site_total,
-                      map_site_to_unit = map_site_to_unit,
-                      n_spatial = n_spatial, adj_row_ptr = adj_row_ptr,
-                      n_neighbors = n_neighbors,
-                      latent = latent, n_latent = c(n_spatial = n_spatial))
-}
-
-#' Areal ICAR removal-sampling abundance via nested Laplace (internal)
-#' @keywords internal
-#' @noRd
-removal_laplace_icar <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
-                                 adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
-                                 tau_grid = NULL, mixture = c("P", "NB"),
-                                 r_grid = NULL, beta_lambda_init = NULL,
-                                 beta_p_init = NULL, z_init = NULL, K_max = NULL,
-                                 max_iter = 100L, tol = 1e-6, verbose = FALSE) {
-  mixture <- match.arg(mixture)
-  y <- as.integer(y); site_idx <- as.integer(site_idx)
-  map_site_to_unit <- as.integer(map_site_to_unit)
-  pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
-                              adj_row_ptr, n_neighbors, n_spatial, mixture,
-                              beta_lambda_init, beta_p_init, K_max, r_grid,
-                              latent = list(z_init = z_init))
-  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_icar")
-  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
-
-  fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_icar,
-    y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
-    X_lambda_R = X_lambda, X_p_R = X_p,
-    adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
-    n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial),
-    node_comp = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
-    tau_grid = as.numeric(tau_grid), r_grid = as.numeric(pp$r_grid),
-    beta_lambda_init = as.numeric(pp$beta_lambda_init),
-    beta_p_init = as.numeric(pp$beta_p_init),
-    z_init = if (is.null(z_init)) NULL else as.numeric(z_init),
-    K_max = pp$K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
-    verbose = isTRUE(verbose))
-
-  out <- c(fit, .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                           X_lambda, X_p, mixture),
-           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "icar",
-                call = match.call()))
-  .count_spatial_warn_boundary(out)
-  class(out) <- c("nmix_spatial_fit", "list")
-  out
-}
-
-#' Areal proper-CAR removal-sampling abundance via nested Laplace (internal)
-#' @keywords internal
-#' @noRd
-removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
-                                       X_p, adj_row_ptr, adj_col_idx, n_neighbors,
-                                       n_spatial, tau_grid = NULL, rho_grid = NULL,
-                                       mixture = c("P", "NB"), r_grid = NULL,
-                                       beta_lambda_init = NULL, beta_p_init = NULL,
-                                       z_init = NULL, K_max = NULL,
-                                       max_iter = 100L, tol = 1e-6, verbose = FALSE) {
-  mixture <- match.arg(mixture)
-  y <- as.integer(y); site_idx <- as.integer(site_idx)
-  map_site_to_unit <- as.integer(map_site_to_unit)
-  pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
-                              adj_row_ptr, n_neighbors, n_spatial, mixture,
-                              beta_lambda_init, beta_p_init, K_max, r_grid,
-                              latent = list(z_init = z_init))
-  if (is.null(tau_grid)) tau_grid <- .count_spatial_default_grid("tau_car")
-  if (is.null(rho_grid)) rho_grid <- .count_spatial_default_grid("rho_car")
-  tau_grid <- .count_spatial_check_grid(tau_grid, "tau_grid", 0, Inf)
-  rho_grid <- .count_spatial_check_grid(
-    rho_grid, "rho_grid", 0, 1, open = TRUE,
-    hint = "Pass explicit eigenvalue bounds via spatial_car_proper().")
-
-  fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_car_proper,
-    y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
-    X_lambda_R = X_lambda, X_p_R = X_p,
-    adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
-    n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial),
-    tau_grid = as.numeric(tau_grid), rho_grid = as.numeric(rho_grid),
-    r_grid = as.numeric(pp$r_grid),
-    beta_lambda_init = as.numeric(pp$beta_lambda_init),
-    beta_p_init = as.numeric(pp$beta_p_init),
-    z_init = if (is.null(z_init)) NULL else as.numeric(z_init),
-    K_max = pp$K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
-    verbose = isTRUE(verbose))
-
-  common <- .count_spatial_pack_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                       X_lambda, X_p, mixture)
-  rho <- .tobs_weighted_moment(common$weights, fit$theta_grid[, "rho"])
-  out <- c(fit, common,
-           list(rho_mean = unname(rho["mean"]), rho_sd = unname(rho["sd"]),
-                n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "car_proper",
-                call = match.call()))
-  .count_spatial_warn_boundary(out)
-  class(out) <- c("nmix_spatial_fit", "list")
-  out
-}
-
-#' Areal BYM2 removal-sampling abundance via nested Laplace (internal)
-#' @keywords internal
-#' @noRd
-removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
-                                 adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
-                                 sigma_grid = NULL, rho_grid = NULL,
-                                 scale_factor = NULL, node_prec = NULL,
-                                 mixture = c("P", "NB"),
-                                 r_grid = NULL, beta_lambda_init = NULL,
-                                 beta_p_init = NULL, v_init = NULL, w_init = NULL,
-                                 K_max = NULL, max_iter = 100L, tol = 1e-6,
-                                 verbose = FALSE) {
-  mixture <- match.arg(mixture)
-  y <- as.integer(y); site_idx <- as.integer(site_idx)
-  map_site_to_unit <- as.integer(map_site_to_unit)
-  pp <- .removal_spatial_prep(y, site_idx, map_site_to_unit, X_lambda, X_p,
-                              adj_row_ptr, n_neighbors, n_spatial, mixture,
-                              beta_lambda_init, beta_p_init, K_max, r_grid,
-                              latent = list(v_init = v_init, w_init = w_init))
-  if (is.null(sigma_grid)) sigma_grid <- .count_spatial_default_grid("sigma_bym2")
-  if (is.null(rho_grid))   rho_grid   <- .count_spatial_default_grid("rho_bym2")
-  sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
-  rho_grid   <- .count_spatial_check_grid(rho_grid, "rho_grid", 0, 1, open = FALSE)
-  sc <- .bym2_resolve_scaling(scale_factor, node_prec, adj_row_ptr, adj_col_idx,
-                              n_spatial)
-  scale_factor <- sc$scale
-
-  fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_bym2,
-    y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
-    X_lambda_R = X_lambda, X_p_R = X_p,
-    adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
-    n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial),
-    node_comp = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
-    node_prec = as.numeric(sc$node_prec),
-    sigma_grid = as.numeric(sigma_grid), rho_grid = as.numeric(rho_grid),
-    r_grid = as.numeric(pp$r_grid), scale_factor = as.numeric(scale_factor),
-    beta_lambda_init = as.numeric(pp$beta_lambda_init),
-    beta_p_init = as.numeric(pp$beta_p_init),
-    v_init = if (is.null(v_init)) NULL else as.numeric(v_init),
-    w_init = if (is.null(w_init)) NULL else as.numeric(w_init),
-    K_max = pp$K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
-    verbose = isTRUE(verbose))
-
-  out <- c(fit, .count_spatial_pack_bym2_common(fit, pp$p_lam, pp$p_p, n_spatial,
-                                                X_lambda, X_p, mixture, scale_factor),
-           list(n_sites = pp$n_sites, n_obs = pp$n_obs, prior_type = "bym2",
-                call = match.call()))
-  .count_spatial_warn_boundary(out)
-  class(out) <- c("nmix_spatial_fit", "list")
-  out
 }
 
 # Dispatch an areal-spatial removal fit from .tobs_fit_model. icar() / car_proper()
@@ -231,12 +66,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                           max_iter = max_iter, tol = tol,
                                           verbose = verbose))
   }
-  csr <- if (!is.null(spatial$adj_row_ptr)) {
-    list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-         n_neighbors = spatial$n_neighbors)
-  } else {
-    adjacency_to_csr(spatial$graph)
-  }
+  csr <- .tobs_spatial_csr(spatial)
   mix_code <- switch(mixture, poisson = "P", negbin = "NB", P = "P", NB = "NB",
                      stop(sprintf("Unknown mixture '%s'.", mixture), call. = FALSE))
   common <- list(
@@ -248,9 +78,10 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     mixture = mix_code, K_max = K_max, max_iter = as.integer(max_iter),
     tol = as.numeric(tol), verbose = isTRUE(verbose))
   raw <- switch(spatial$type,
-    icar       = do.call(removal_laplace_icar, common),
-    car_proper = do.call(removal_laplace_car_proper, common),
-    bym2       = do.call(removal_laplace_bym2, c(common, .bym2_term_args(spatial))))
+    icar       = do.call(.count_spatial_fit, c(list("removal", "icar"), common)),
+    car_proper = do.call(.count_spatial_fit, c(list("removal", "car_proper"), common)),
+    bym2       = do.call(.count_spatial_fit, c(list("removal", "bym2"), common,
+                                            .bym2_term_args(spatial))))
   fit <- build_nmix_fit(raw, model, spatial = spatial)
   # The field is part of log lambda, so its per-site contribution is recorded for
   # the post-fit readers (the areal-BFGS branches above record theirs through
@@ -426,9 +257,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     if (is_nb) beta0 <- c(beta0, log(if (is.finite(nlfit$r %||% NA_real_)) nlfit$r else 2))
   } else {
     adj <- as.matrix(spatial$graph)
-    csr <- if (!is.null(spatial$adj_row_ptr))
-      list(row_ptr = spatial$adj_row_ptr, col_idx = spatial$adj_col_idx,
-           n_neighbors = spatial$n_neighbors) else adjacency_to_csr(spatial$graph)
+    csr <- .tobs_spatial_csr(spatial)
 
     # Fixed hyper + warm coefficients from the matching nested-Laplace areal fit,
     # and the whitened-field loading L (square for car_proper, sum-to-zero for
@@ -439,9 +268,10 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
       adj_col_idx = csr$col_idx, n_neighbors = csr$n_neighbors, n_spatial = n_sites,
       mixture = mix_code, K_max = K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE)
     nl <- switch(spatial$type,
-      icar       = do.call(removal_laplace_icar, common),
-      car_proper = do.call(removal_laplace_car_proper, common),
-      bym2       = do.call(removal_laplace_bym2, c(common, .bym2_term_args(spatial))))
+      icar       = do.call(.count_spatial_fit, c(list("removal", "icar"), common)),
+      car_proper = do.call(.count_spatial_fit, c(list("removal", "car_proper"), common)),
+      bym2       = do.call(.count_spatial_fit, c(list("removal", "bym2"), common,
+                                            .bym2_term_args(spatial))))
     fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
                                    tau = nl$tau_mean, rho = nl$rho_mean,
                                    sigma = nl$sigma_mean,
