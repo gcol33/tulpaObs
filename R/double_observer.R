@@ -288,9 +288,7 @@
 .tobs_ploglik_double_observer <- function(object, n.draws = 1000L, n.threads = 1L) {
   model <- object$model
   draws <- object$draws
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   dependent <- identical(model$type, "dependent")
   n10 <- model$n10; n01 <- model$n01; n11 <- model$n11
   t(vapply(seq_len(nrow(draws)), function(d) {

@@ -350,24 +350,28 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
     stop("Pointwise log-likelihood needs a posterior draw matrix; ",
          "`object$draws` is missing or not a matrix.", call. = FALSE)
   }
-  if (!is.null(n.draws) && n.draws < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
-  .tobs_ploglik_from_draws(.tobs_model_with_nb_size(object), draws,
+  draws <- .tobs_subset_draws(draws, n.draws)
+  .tobs_ploglik_from_draws(.tobs_model_for_scoring(object), draws,
                            n.threads = n.threads)
 }
 
-# An areal count fit integrates the negative-binomial size over the outer
-# hyperparameter grid rather than estimating it as a draw coordinate, so the
-# per-family kernels cannot read it off the draw matrix and would otherwise score
-# the Poisson marginal for a negbin fit. Hand them a model carrying the
-# grid-integrated posterior mean, which .tobs_count_nb_size() reads when there is
-# no log_r column. `.tobs_fit_model()` re-attaches the outer model to the fit
-# after the family builder returns, so this is the boundary where the size and
-# the model are both in scope.
-.tobs_model_with_nb_size <- function(object) {
+# The per-family kernels read the model, but two quantities the fit settled live
+# on the fit. (1) An areal count fit integrates the negative-binomial size over
+# the outer hyperparameter grid rather than estimating it as a draw coordinate,
+# so the kernels cannot read it off the draw matrix and would otherwise score the
+# Poisson marginal for a negbin fit; the model carries the grid-integrated
+# posterior mean, which .tobs_count_nb_size() reads when there is no log_r
+# column. (2) The latent-N truncation the fit summed to (`fit$K_max`) becomes
+# `model$K_max`, so the criteria integrate the same marginal the fit did.
+# `.tobs_fit_model()` re-attaches the outer model to the fit after the family
+# builder returns, so this is the boundary where the fit and the model are both
+# in scope.
+.tobs_model_for_scoring <- function(object) {
   model <- object[["model"]]
-  if (is.null(model) || "log_r" %in% colnames(object[["draws"]])) return(model)
+  if (is.null(model)) return(model)
+  if (is.null(model[["K_max"]]) && !is.null(object[["K_max"]]))
+    model$K_max <- as.integer(object[["K_max"]])
+  if ("log_r" %in% colnames(object[["draws"]])) return(model)
   r <- object[["nmix_dispersion"]]$r %||% NA_real_
   if (is.finite(r)) model$nb_r <- as.numeric(r)
   model
@@ -464,7 +468,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
   # score the plain Poisson marginal for a negbin / zero-inflated fit.
   mean_draw <- matrix(colMeans(draws), nrow = 1L,
                       dimnames = list(NULL, colnames(draws)))
-  as.numeric(.tobs_ploglik_from_draws(.tobs_model_with_nb_size(object),
+  as.numeric(.tobs_ploglik_from_draws(.tobs_model_for_scoring(object),
                                       mean_draw))
 }
 
@@ -658,7 +662,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
 .tobs_ploglik_nmix <- function(model, draws, n.threads = 1L) {
   X_lambda <- model$X_processes[[1]]; X_p <- model$X_processes[[2]]
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
-  K_max <- as.integer(max(model$y_long) + 100L)
+  K_max <- model[["K_max"]] %||% as.integer(max(model$y_long) + 100L)
   # Per-draw linear predictors by BLAS; the per-site Royle marginal
   # (compute_nmix_site) is batched over draws in the kernel.
   eta_lambda <- draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda)  # [S x n_sites]
@@ -687,10 +691,13 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
   p_lam <- ncol(X_lambda); p_p <- ncol(X_p)
   y <- as.integer(model$y_long); site_idx <- as.integer(model$site_idx)
   n_sites <- model$n_sites
-  # K_max from per-site removal totals, matching .tobs_removal_nuts_marginal.
-  site_tot <- tapply(y, factor(site_idx, levels = seq_len(n_sites)), sum)
-  site_tot[is.na(site_tot)] <- 0L
-  K_max <- as.integer(max(as.integer(site_tot)) + 100L)
+  # The fit's truncation; without one, the removal default (largest per-site
+  # removal total + 100, as in .tobs_removal_nuts_marginal).
+  K_max <- model[["K_max"]] %||% {
+    site_tot <- tapply(y, factor(site_idx, levels = seq_len(n_sites)), sum)
+    site_tot[is.na(site_tot)] <- 0L
+    as.integer(max(as.integer(site_tot)) + 100L)
+  }
   eta_lambda <- .tobs_add_eta_offset(
     draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda), model, 1L)
   eta_p      <- .tobs_add_eta_offset(
@@ -711,7 +718,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
   is_nb  <- "log_r" %in% colnames(draws)
   X_lambda <- model$X_processes[[1]]; X_sigma <- model$X_processes[[2]]
   y <- model$y; storage.mode(y) <- "integer"
-  K_max <- as.integer(3L * max(rowSums(y)) + 100L)
+  K_max <- model[["K_max"]] %||% as.integer(3L * max(rowSums(y)) + 100L)
   off <- p_lam + p_sig
   eta_lambda <- .tobs_add_eta_offset(
     draws[, seq_len(p_lam), drop = FALSE] %*% t(X_lambda), model, 1L)  # [S x n_sites]
@@ -814,11 +821,8 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
   lf    <- .tobs_ms_nmix_longform(model)
   K_max <- nd$K_max %||% as.integer(max(lf$y) + 100L)
   draws <- nd$draws
+  draws <- .tobs_subset_draws(draws, n.draws)
   M <- nrow(draws)
-  if (!is.null(n.draws) && as.integer(n.draws) < M) {
-    idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
-    draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
-  }
   # The non-centered reconstruction (b = C z per species) and the per-(species,
   # site) Royle marginal (compute_nmix_site) are batched over draws in the
   # kernel; the R oracle (via .ms_ocs_b_from_z) is reproduced exactly.

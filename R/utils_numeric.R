@@ -89,3 +89,13 @@
   matrix(unlist(lst, use.names = FALSE), nrow = length(lst), ncol = width,
          byrow = TRUE)
 }
+
+# Keep at most `n.draws` rows of a draw matrix, evenly spaced over all rows.
+# Chains are pooled by stacking their rows, so the first n.draws rows would be
+# the first chain alone; spacing the rows draws from every chain.
+.tobs_subset_draws <- function(draws, n.draws) {
+  M <- nrow(draws)
+  if (is.null(n.draws) || as.integer(n.draws) >= M) return(draws)
+  idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
+  draws[idx, , drop = FALSE]
+}

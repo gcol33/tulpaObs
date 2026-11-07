@@ -272,9 +272,7 @@
 .tobs_ploglik_occu_ttd <- function(object, n.draws = 1000L, n.threads = 1L) {
   model <- object$model
   draws <- object$draws
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   p_psi <- model$process_info[[1L]]$p; p_rate <- model$process_info[[2L]]$p
   Xp <- model$X_processes[[1L]]; Xr <- model$X_processes[[2L]]
   k <- model$k_site; Sdet <- model$Sdet_site; Tcens <- model$Tcens_site

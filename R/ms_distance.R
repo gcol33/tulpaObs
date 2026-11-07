@@ -508,9 +508,7 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
   model <- object$model
   cm    <- object$ms_community
   draws <- object$draws
-  if (!is.null(n.draws) && n.draws < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   eng    <- .tobs_ms_distance_engine(model)
   hazard <- eng$hazard
   p_lam  <- model$process_info[[1L]]$p; p_sig <- model$process_info[[2L]]$p

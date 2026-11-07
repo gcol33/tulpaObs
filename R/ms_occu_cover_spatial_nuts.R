@@ -354,11 +354,8 @@
   lay <- nd_info$layout
   constrain <- isTRUE(nd_info$constrain)
   draws <- nd_info$draws[, lay$inner, drop = FALSE]
+  draws <- .tobs_subset_draws(draws, n.draws)
   M <- nrow(draws)
-  if (!is.null(n.draws) && as.integer(n.draws) < M) {
-    idx <- unique(round(seq(1, M, length.out = as.integer(n.draws))))
-    draws <- draws[idx, , drop = FALSE]; M <- nrow(draws)
-  }
   # Canonicalise each draw (constrained lfree -> full L, or a straight unpack) to
   # the unconstrained packed layout the kernel reads. This per-draw slicing is
   # cheap; the per-(cell, species) marginal (formerly the R inner loop over

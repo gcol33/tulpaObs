@@ -181,9 +181,7 @@
     # exp(log_disp) trailing column, so the score marginalizes the calibrated
     # NUTS posterior (the point of the sampler) rather than the Laplace mode.
     draws  <- object$draws
-    if (!is.null(n.draws) && n.draws < nrow(draws)) {
-      draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-    }
+    draws <- .tobs_subset_draws(draws, n.draws)
     p_pres <- ncol(enc$occ_data$X); p_pos <- ncol(X_pos)
     B_occ <- draws[, seq_len(p_pres), drop = FALSE]
     B_pos <- draws[, p_pres + seq_len(p_pos), drop = FALSE]

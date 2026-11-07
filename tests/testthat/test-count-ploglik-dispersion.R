@@ -78,7 +78,7 @@ test_that("an areal negbin abun() is scored as negbin, not Poisson", {
               family = abun(mixture = "negbin"), method = "nested_laplace",
               control = ctl)
   expect_false("log_r" %in% colnames(fit$draws))
-  model <- .tobs_model_with_nb_size(fit)
+  model <- .tobs_model_for_scoring(fit)
   expect_equal(model$nb_r, as.numeric(fit$nmix_dispersion$r))
   expect_true(all(is.finite(.tobs_count_nb_size(model, fit$draws))))
 

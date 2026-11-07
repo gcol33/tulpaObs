@@ -456,9 +456,7 @@
     stop("Pointwise log-likelihood needs a posterior draw matrix; ",
          "`object$draws` is missing or not a matrix.", call. = FALSE)
   }
-  if (!is.null(n.draws) && n.draws < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   .occu_mscale_cover_ploglik_core(model, draws, n.threads)
 }
 

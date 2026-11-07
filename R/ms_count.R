@@ -549,9 +549,7 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   model <- object$model
   cm    <- object$ms_community
   draws <- object$draws
-  if (!is.null(n.draws) && n.draws < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   response <- model$response %||% "poisson"
   is_log   <- identical(model$link, "log")
   disp     <- object$ms_dispersion

@@ -272,7 +272,7 @@
   draws <- fit$draws
   if (is.null(draws) || !is.matrix(draws) || !nrow(draws)) return(fit)
   par <- stats::setNames(colMeans(draws), colnames(draws))
-  ll  <- .tobs_laplace_marginal_loglik(.tobs_model_with_nb_size(fit), par)$loglik
+  ll  <- .tobs_laplace_marginal_loglik(.tobs_model_for_scoring(fit), par)$loglik
   if (!is.finite(ll)) return(fit)
   fit$log_lik  <- ll
   fit$log_prob <- rep(ll, max(1L, length(fit$log_prob)))

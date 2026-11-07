@@ -71,9 +71,7 @@
       stop("occu_cover WAIC: the fit carries no posterior draw matrix.",
            call. = FALSE)
     }
-    if (!is.null(n.draws) && n.draws < nrow(draws)) {
-      draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-    }
+    draws <- .tobs_subset_draws(draws, n.draws)
     b_occ <- draws[, seq_len(p_occ), drop = FALSE]
     b_det <- draws[, p_occ + seq_len(p_det), drop = FALSE]
     b_pos <- draws[, p_occ + p_det + seq_len(p_pos), drop = FALSE]

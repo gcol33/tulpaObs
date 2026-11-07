@@ -194,12 +194,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   if (is.null(nd) || is.null(nd$draws)) return(NULL)
   inner <- nd$draws[, nd$layout$inner, drop = FALSE]
   if (!is.null(cols)) inner <- inner[, cols, drop = FALSE]
-  M <- nrow(inner)
-  if (!is.null(n_draws) && as.integer(n_draws) < M) {
-    idx <- unique(round(seq(1, M, length.out = as.integer(n_draws))))
-    inner <- inner[idx, , drop = FALSE]
-  }
-  inner
+  .tobs_subset_draws(inner, n_draws)
 }
 
 .ms_ocs_joint_posterior <- function(model, fit, n_draws = 300L) {

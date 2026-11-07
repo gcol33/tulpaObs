@@ -252,9 +252,7 @@ t_occu <- function() {
 .tobs_ploglik_t_occu <- function(object, n.draws = 1000L, n.threads = 1L) {
   model <- object$model
   draws <- object$draws
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   p_psi <- model$process_info[[1L]]$p; p_p <- model$process_info[[2L]]$p
   n_seasons <- model$n_seasons
   eta_t <- object$temporal_field %||% rep(0, n_seasons)

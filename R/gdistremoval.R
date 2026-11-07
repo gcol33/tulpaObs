@@ -305,9 +305,7 @@
 .tobs_ploglik_gdistremoval <- function(object, n.draws = 1000L, n.threads = 1L) {
   model <- object$model
   draws <- object$draws
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   yD <- model$y; yR <- model$y_rem
   t(vapply(seq_len(nrow(draws)), function(d) {
     up <- .gdr_unpack(draws[d, ], model)

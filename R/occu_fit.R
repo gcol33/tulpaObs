@@ -189,6 +189,9 @@
     fit <- .unscale_fit_per_process(fit, scales, process_info)
     fit$vcov  <- .unscale_vcov(fit$vcov, scales, process_info)
     fit$model <- model
+    # The latent-N truncation the fit summed to, for the criteria to integrate
+    # the same marginal: the fitter's own record, else the K.max it was given.
+    if (is.null(fit$K_max) && !is.null(K.max)) fit$K_max <- as.integer(K.max)
     fit <- .tobs_attach_model_eta_offset(fit)
     fit <- .tobs_nuts_field_loglik(fit)
     fit$intercepts <- compute_intercepts(model, fit$means)

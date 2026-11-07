@@ -392,9 +392,7 @@
 .tobs_ploglik_royle_nichols <- function(object, n.draws = 1000L, n.threads = 1L) {
   model <- object$model
   draws <- object$draws
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   p_lam <- model$process_info[[1L]]$p; p_rs <- model$process_info[[2L]]$p
   Xl <- model$X_processes[[1L]]; Xr <- model$X_processes[[2L]]
   kk <- model$k_site; nn <- model$n_site; K <- model$K_max

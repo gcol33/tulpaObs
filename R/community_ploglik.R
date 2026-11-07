@@ -274,9 +274,7 @@
     stop("Community WAIC / LOO needs the community-mean pseudo-draw matrix; ",
          "`object$draws` is missing.", call. = FALSE)
   }
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   .tobs_ploglik_community(object, draws, n.threads)
 }
 

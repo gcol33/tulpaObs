@@ -316,9 +316,7 @@
 .tobs_ploglik_occu_multi <- function(object, n.draws = 1000L, n.threads = 1L) {
   model <- object$model
   draws <- object$draws
-  if (!is.null(n.draws) && as.integer(n.draws) < nrow(draws)) {
-    draws <- draws[seq_len(as.integer(n.draws)), , drop = FALSE]
-  }
+  draws <- .tobs_subset_draws(draws, n.draws)
   k_mat <- model$k_mat; n_mat <- model$n_mat; Z <- model$Z; pairs <- model$pairs
   t(vapply(seq_len(nrow(draws)), function(d) {
     up <- .occu_multi_unpack(draws[d, ], model)
