@@ -87,7 +87,7 @@
     .validate_re_laplace(re, model, spatial)
     em_result <- .tobs_em_laplace_re(model, re, priors = priors,
                                      max_iter = max_iter, tol = tol,
-                                     damping = damping, aghq = re_aghq,
+                                     aghq = re_aghq,
                                      n_quad = n_quad, lkj_eta = lkj_eta,
                                      verbose = verbose)
     re_block <- .tobs_re_param_block(em_result$re_post)

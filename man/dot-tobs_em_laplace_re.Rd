@@ -11,7 +11,6 @@ variance-component EM (internal).}
   priors = NULL,
   max_iter = 100L,
   tol = 1e-05,
-  damping = 0.3,
   aghq = TRUE,
   n_quad = 9L,
   lkj_eta = 1.5,
@@ -26,9 +25,10 @@ detection predictor (its \verb{$shared = c(occ, det)} membership); the iid
 intercept, uncorrelated-slope, and correlated-slope forms are supported on
 both arms. A term shared across both predictors is rejected (use NUTS).}
 
-\item{priors}{Prior spec; not applied on this path (warns when active).}
+\item{priors}{Prior spec; fixed-effect priors are not applied on this path,
+so a user-supplied spec warns.}
 
-\item{max_iter, tol, damping}{EM controls.}
+\item{max_iter, tol}{EM controls.}
 
 \item{aghq}{Logical; run the adaptive Gauss-Hermite debias pass on the
 variance components after the EM converges (default \code{TRUE}). See

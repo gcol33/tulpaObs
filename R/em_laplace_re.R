@@ -326,8 +326,9 @@
 #'   detection predictor (its `$shared = c(occ, det)` membership); the iid
 #'   intercept, uncorrelated-slope, and correlated-slope forms are supported on
 #'   both arms. A term shared across both predictors is rejected (use NUTS).
-#' @param priors Prior spec; not applied on this path (warns when active).
-#' @param max_iter,tol,damping EM controls.
+#' @param priors Prior spec; fixed-effect priors are not applied on this path,
+#'   so a user-supplied spec warns.
+#' @param max_iter,tol EM controls.
 #' @param aghq Logical; run the adaptive Gauss-Hermite debias pass on the
 #'   variance components after the EM converges (default `TRUE`). See
 #'   `R/re_aghq.R`.
@@ -338,9 +339,14 @@
 #' @param verbose Print per-iteration progress.
 #' @keywords internal
 .tobs_em_laplace_re <- function(model, re, priors = NULL,
-                                max_iter = 100L, tol = 1e-5, damping = 0.3,
+                                max_iter = 100L, tol = 1e-5,
                                 aghq = TRUE, n_quad = 9L, lkj_eta = 1.5,
                                 verbose = TRUE) {
+  if (!is.null(priors) && !isFALSE(priors) && !identical(priors, "none")) {
+    warning("Fixed-effect priors are not applied on the random-effect Laplace ",
+            "path; the fit is unpenalised. Use method = \"nuts\" for a prior.",
+            call. = FALSE)
+  }
   if (inherits(re, "tobs_re")) re <- list(re)
   arms <- .tobs_re_split_arms(re, model)
   design_occ <- arms$occ        # RE on the occupancy predictor (may be empty)
