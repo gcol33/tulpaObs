@@ -1,5 +1,43 @@
 # tulpaObs NEWS
 
+## development version
+
+* Requires tulpa >= 0.7.6 (Imports and LinkingTo), which builds against
+  tulpa's ABI 52.
+
+* `temporal(prior.sigma = c(U, alpha))` sets the PC prior on the temporal
+  field SD, `P(sigma > U) = alpha`, read by the sampled occupancy route.
+  It replaces `tau.shape` / `tau.rate`: tulpa 0.7.6 dropped the Gamma prior
+  on the temporal precision those set (#437).
+
+* `cover(positive = "lognormal_trunc")` and `cover(positive = "ordinal")`
+  hand the engine the residual variance it now reads as `phi` for the
+  truncated and interval-censored Gaussian arms (tulpa#1092); `sigma_pos`
+  stays an SD (#417).
+
+* `waic()`, `loo()` and `cpo()` with `n.draws` below the number of kept
+  draws now take rows spread over every chain; they had kept the first
+  `n.draws` rows, i.e. the first chain (#419).
+
+* The criteria of `abun()`, `removal()` and `distance()` fits integrate the
+  latent-N truncation the fit used, including an explicit `K.max` (#420).
+
+* `occu_cover(method = "nested_laplace")` applies `control$sigma.beta` to
+  the occupancy and detection arms, as the multiscale family already did
+  (#421).
+
+* `temporal(type = "rw1" / "rw2" / "iid")` on `removal()`, `distance()`,
+  `fp_occu()` and `dyn_abun()` fits under `nested_laplace` and `nuts`; only
+  `"ar1"` had worked (#422, #423).
+
+* Community latent fields: an `icar()` / `bym2()` graph with several
+  connected components carries one sum-to-zero per component (#424), and an
+  `spde()` field uses the precision of its own `nu`; a fractional
+  `nu + 1` errors (#425).
+
+* A random-effect fit on the Laplace route warns when given `priors`, which
+  that route does not apply (#427).
+
 ## 0.6.2
 
 * `simulate_dyn_abun()`: the number of primary seasons is `n.seasons`

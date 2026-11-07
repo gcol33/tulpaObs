@@ -34,10 +34,11 @@
 # axis as the lognormal sigma -- its discrete-class sibling), or the beta
 # precision. The ordinal grid runs a touch wider on the low side because the
 # midpoint-residual prefit over-disperses the censored latent.
-# The engine's R-level `phi` is not one scale for every family. For the plain
-# "gaussian" arm it is the residual VARIANCE -- tulpa converts it to the
-# kernel's SD parameterization itself, at `.joint_phi_args_to_kernel()` -- while
-# "truncated_gaussian" and "interval_gaussian" carry the SD at both levels.
+# The engine's R-level `phi` is not one scale for every family. For the
+# Gaussian-kernel arms ("gaussian", "truncated_gaussian", "interval_gaussian") it
+# is the residual VARIANCE -- tulpa converts it to the kernel's SD
+# parameterization itself, at `.joint_phi_args_to_kernel()` -- while "beta"
+# carries a precision.
 #
 # cover()'s own surface is the SD throughout: `control$phi.grid` is documented
 # as the lognormal noise SD, `sigma_pos` is reported as one, and the recovery
@@ -50,7 +51,9 @@
 # SDs cover data produce), so the fit converges, the arm coefficients are
 # unaffected -- the mean model does not see the dispersion scale -- and
 # `sigma_pos` comes back as the square of the right answer with no warning.
-.cover_phi_is_variance <- function(pos_family) identical(pos_family, "gaussian")
+.cover_phi_is_variance <- function(pos_family) {
+  pos_family %in% c("gaussian", "truncated_gaussian", "interval_gaussian")
+}
 
 # Which engine family a `positive =` spelling fits. `.cover_pos_family_grid()`
 # below chooses the same names when it builds the arm; this reader exists so the
@@ -152,15 +155,19 @@
     # ignores truncation and so over-disperses a touch; the grid runs a little
     # wider on the low side, as for the ordinal censored latent.
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
-    list(pos_family = "truncated_gaussian", phi_hat = sigma_hat,
+    sd_grid <- control[["phi.grid"]] %||% .cover_phi_grid_span(positive, sigma_hat)
+    list(pos_family = "truncated_gaussian",
+         phi_hat = .cover_phi_sd_to_engine(sigma_hat, "truncated_gaussian"),
          phi_grid_pos = .tobs_mark_auto(
-           control[["phi.grid"]] %||% .cover_phi_grid_span(positive, sigma_hat),
+           .cover_phi_sd_to_engine(sd_grid, "truncated_gaussian"),
            is.null(control[["phi.grid"]])))
   } else if (positive == "ordinal") {
     sigma_hat <- .prefit_lognormal_sigma(enc, control)
-    list(pos_family = "interval_gaussian", phi_hat = sigma_hat,
+    sd_grid <- control[["phi.grid"]] %||% .cover_phi_grid_span(positive, sigma_hat)
+    list(pos_family = "interval_gaussian",
+         phi_hat = .cover_phi_sd_to_engine(sigma_hat, "interval_gaussian"),
          phi_grid_pos = .tobs_mark_auto(
-           control[["phi.grid"]] %||% .cover_phi_grid_span(positive, sigma_hat),
+           .cover_phi_sd_to_engine(sd_grid, "interval_gaussian"),
            is.null(control[["phi.grid"]])))
   } else {
     # No beta dispersion pre-fit on this route (`phi_hat` is 1.0), so there is
