@@ -401,9 +401,18 @@
 # the cover_priors() default unless a cover_priors object narrows it. Precisions
 # are 1 / sd^2, floored at the engine's own weak default (1e-4) so an Inf-sd
 # bucket reproduces the engine's weak ridge rather than dropping the diagonal.
-.occu_cover_coupled_arm_priors <- function(priors, responses) {
+#
+# One builder for every joint-coupled route (occu_cover, occu_multiscale_cover,
+# the standalone occu() joint path): the arms returned are those present in
+# `responses` among psi / theta / p / pos. theta (the multiscale availability
+# gate) reuses the detection-arm prior shape. `sigma.beta`, when supplied and no
+# prior object was given, sets every occupancy-family SD to sigma.beta (mean 0),
+# the flat N(0, sigma.beta^2) the non-spatial laplace route puts on every
+# fixed-effect coefficient, so control$sigma.beta means the same on both engines.
+.occu_cover_coupled_arm_priors <- function(priors, responses, sigma.beta = NULL) {
+  arms <- intersect(c("psi", "theta", "p", "pos"), names(responses))
   if (identical(priors, FALSE) || identical(priors, "none")) {
-    return(list(psi = NULL, p = NULL, pos = NULL))
+    return(stats::setNames(vector("list", length(arms)), arms))
   }
   to_prec <- function(pr) {
     if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
@@ -411,14 +420,22 @@
   }
   occ_spec <- if (inherits(priors, "occu_priors")) priors
               else if (inherits(priors, "cover_priors")) occu_priors()
-              else .resolve_occu_priors(priors)        # NULL / list -> defaults
+              else if (!is.null(sigma.beta)) {
+                sd0 <- list(mean = 0, sd = sigma.beta)
+                occu_priors(p.intercept = sd0, p.slope = sd0,
+                            beta.occ.intercept = sd0, beta.occ.slope = sd0)
+              } else .resolve_occu_priors(priors)        # NULL / list -> defaults
   cover_spec <- if (inherits(priors, "cover_priors")) priors else cover_priors()
 
-  list(
-    psi = to_prec(.prior_for_submodel(occ_spec, "psi", colnames(responses$psi$X))),
-    p   = to_prec(.prior_for_submodel(occ_spec, "p",   colnames(responses$p$X))),
-    pos = to_prec(.cover_arm_prior(cover_spec, "pos",  colnames(responses$pos$X)))
-  )
+  out <- lapply(arms, function(a) {
+    cn <- colnames(responses[[a]]$X)
+    to_prec(switch(a,
+      psi   = .prior_for_submodel(occ_spec, "psi", cn),
+      theta = ,
+      p     = .prior_for_submodel(occ_spec, "p", cn),
+      pos   = .cover_arm_prior(cover_spec, "pos", cn)))
+  })
+  stats::setNames(out, arms)
 }
 
 

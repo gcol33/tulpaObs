@@ -21,7 +21,7 @@
                                                 max.iter  = 200L,
                                                 tol       = 1e-6,
                                                 verbose   = TRUE,
-                                                sigma.beta = 5,
+                                                sigma.beta = NULL,
                                                 ...) {
   # `fields` is the coupled-field list from .occu_cover_spatial_fields(): the
   # unweighted intercept field first, then any weighted SVC fields. They share
@@ -286,7 +286,7 @@
   # Attach the per-arm fixed-effect priors. These reach tulpa's joint engine as
   # per-arm `beta_prior_mean` / `beta_prior_prec` on each response and replace
   # the engine's uniform weak default in add_per_arm_beta_re_priors().
-  arm_priors <- .occu_cover_coupled_arm_priors(priors, responses)
+  arm_priors <- .occu_cover_coupled_arm_priors(priors, responses, sigma.beta)
   for (nm in c("psi", "p", "pos")) {
     ap <- arm_priors[[nm]]
     if (!is.null(ap)) {

@@ -288,6 +288,34 @@ test_that("joint regularises the cover (pos) intercept by default", {
 })
 
 
+test_that("control$sigma.beta sets the occupancy-arm priors on every joint route (#421)", {
+  responses <- list(
+    psi   = list(X = cbind(`(Intercept)` = 1, x = rnorm(3))),
+    theta = list(X = matrix(1, 3, 1, dimnames = list(NULL, "(Intercept)"))),
+    p     = list(X = cbind(`(Intercept)` = 1, w = rnorm(3))),
+    pos   = list(X = matrix(1, 3, 1, dimnames = list(NULL, "(Intercept)")))
+  )
+  ap <- tulpaObs:::.occu_cover_coupled_arm_priors(NULL, responses, sigma.beta = 2)
+  expect_named(ap, c("psi", "theta", "p", "pos"))
+  for (a in c("psi", "theta", "p")) {
+    expect_equal(ap[[a]]$prec, rep(1 / 4, ncol(responses[[a]]$X)), info = a)
+    expect_equal(ap[[a]]$mean, rep(0, ncol(responses[[a]]$X)), info = a)
+  }
+  ap_def <- tulpaObs:::.occu_cover_coupled_arm_priors(NULL, responses)
+  expect_equal(ap$pos, ap_def$pos)                 # cover arm keeps cover_priors()
+  expect_false(isTRUE(all.equal(ap$psi, ap_def$psi)))
+  # A prior object given explicitly wins over sigma.beta.
+  ap_obj <- tulpaObs:::.occu_cover_coupled_arm_priors(occu_priors(), responses,
+                                                      sigma.beta = 2)
+  expect_equal(ap_obj$psi, ap_def$psi)
+  # A two-arm (occu() joint) response set returns only its own arms.
+  expect_named(tulpaObs:::.occu_cover_coupled_arm_priors(NULL, responses[c("psi", "p")]),
+               c("psi", "p"))
+  # The fitter forwards control$sigma.beta and no longer carries a literal default.
+  expect_null(formals(tulpaObs:::.tobs_fit_occu_cover_joint)$sigma.beta)
+})
+
+
 test_that("joint recovers slopes, hypers, field shape (10 seeds)", {
   skip_on_cran()
   skip_if_fast()

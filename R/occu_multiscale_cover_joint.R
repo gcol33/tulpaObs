@@ -128,49 +128,6 @@
 }
 
 
-# Per-arm weakly-informative fixed-effect priors for the four coupled arms.
-# psi / theta / p carry the occu_priors() defaults (the detection-arm intercept
-# prior in particular keeps the coupled occupancy mixture off the psi = 1
-# boundary); pos always carries the cover_priors() default unless a supplied
-# cover_priors object narrows it -- the twin occu_cover() joint route
-# (.occu_cover_coupled_arm_priors()) keeps this load-bearing: the cover arm
-# sees the shared field only at detected visits, so its intercept trades off
-# against the field level over those cells, a direction the sum-to-zero field
-# constraint does not pin when low-occupancy cells carry no cover. Left at the
-# engine's flat 1e-4 default, that intercept floats to a huge posterior SD,
-# which blows up predict()'s conditional cover via Jensen. theta reuses the
-# detection-arm prior shape (a logit-scale availability gate). `sigma.beta`,
-# when the caller supplied one, overrides every occu_priors() SD uniformly
-# (mean 0), matching the flat N(0, sigma.beta^2) the non-spatial (laplace)
-# route puts on every fixed-effect coefficient -- otherwise a fit that moves
-# from laplace to the default nested_laplace engine has its explicit
-# control$sigma.beta silently stop applying.
-.occu_mscale_cover_arm_priors <- function(priors, responses, sigma.beta = NULL) {
-  if (identical(priors, FALSE) || identical(priors, "none")) {
-    return(list(psi = NULL, theta = NULL, p = NULL, pos = NULL))
-  }
-  to_prec <- function(pr) {
-    if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
-    list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
-  }
-  occ_spec <- if (inherits(priors, "occu_priors")) priors
-              else if (inherits(priors, "cover_priors")) occu_priors()
-              else if (!is.null(sigma.beta)) {
-                sd0 <- list(mean = 0, sd = sigma.beta)
-                occu_priors(p.intercept = sd0, p.slope = sd0,
-                           beta.occ.intercept = sd0, beta.occ.slope = sd0)
-              } else .resolve_occu_priors(priors)
-  cover_spec <- if (inherits(priors, "cover_priors")) priors else cover_priors()
-
-  list(
-    psi   = to_prec(.prior_for_submodel(occ_spec, "psi", colnames(responses$psi$X))),
-    theta = to_prec(.prior_for_submodel(occ_spec, "p",   colnames(responses$theta$X))),
-    p     = to_prec(.prior_for_submodel(occ_spec, "p",   colnames(responses$p$X))),
-    pos   = to_prec(.cover_arm_prior(cover_spec, "pos",  colnames(responses$pos$X)))
-  )
-}
-
-
 # Joint-coupled fitter for the three-level family. Registers the stateful
 # multiscale cell-coupling spec carrying this fit's per-cell plot structure,
 # calls tulpa_nested_laplace_joint() with the four arms, then unpacks the
@@ -258,7 +215,7 @@
   responses <- arms_out$responses
 
   # Attach per-arm fixed-effect priors.
-  arm_priors <- .occu_mscale_cover_arm_priors(priors, responses, sigma.beta)
+  arm_priors <- .occu_cover_coupled_arm_priors(priors, responses, sigma.beta)
   for (nm in c("psi", "theta", "p", "pos")) {
     ap <- arm_priors[[nm]]
     if (!is.null(ap)) {

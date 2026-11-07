@@ -99,29 +99,6 @@
 }
 
 
-# Resolve per-arm weakly-informative fixed-effect priors for the two coupled
-# arms, returning list(psi=, p=) of list(mean, prec) (NULL per arm -> the weak
-# engine default). The detection (p) intercept prior keeps the coupled occupancy
-# mixture off the psi = 1 boundary at weak detection -- the same load-bearing
-# default the occu_cover coupled arms carry (the logit-scale score vanishes as
-# psi -> 1, so an unpenalised intercept runs away). `priors = FALSE` / "none"
-# disables both. A supplied occu_priors() / list overrides the matching arm(s).
-.occu_joint_arm_priors <- function(priors, responses) {
-  if (identical(priors, FALSE) || identical(priors, "none")) {
-    return(list(psi = NULL, p = NULL))
-  }
-  to_prec <- function(pr) {
-    if (is.null(pr) || length(pr$sd) == 0L) return(NULL)
-    list(mean = as.numeric(pr$mean), prec = pmax(1 / pr$sd^2, 1e-4))
-  }
-  occ_spec <- .resolve_occu_priors(priors)        # NULL / list / occu_priors
-  list(
-    psi = to_prec(.prior_for_submodel(occ_spec, "psi", colnames(responses$psi$X))),
-    p   = to_prec(.prior_for_submodel(occ_spec, "p",   colnames(responses$p$X)))
-  )
-}
-
-
 # Single-arm occupancy joint-coupled fitter. Calls tulpa_nested_laplace_joint()
 # with the 2-arm responses and the occu_only cell-coupling spec, integrating the
 # field hyperparameter(s) on the outer (sigma [, sigma_trend]) grid, then unpacks
@@ -217,7 +194,7 @@
   cell_of_visit <- arms_out$cell_of_visit
   n_v           <- arms_out$n_visits_valid
 
-  arm_priors <- .occu_joint_arm_priors(priors, responses)
+  arm_priors <- .occu_cover_coupled_arm_priors(priors, responses)
   for (nm in c("psi", "p")) {
     ap <- arm_priors[[nm]]
     if (!is.null(ap)) {
