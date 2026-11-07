@@ -95,9 +95,9 @@
 # what the joint route carries, and its data label and levels. The term enters
 # psi alone, as one temporal prior block whose latent effect is indexed by the
 # term's time codes on the site rows. A replicated term (`group =`) has no
-# single-block form here, and the term's `tau.shape` / `tau.rate` are not read
-# by the joint driver (the precision is an outer-grid axis under the engine's
-# own hyperprior), so either is refused rather than ignored.
+# single-block form here, and the term's `prior.sigma` is not read by the joint
+# driver (the precision is an outer-grid axis under the engine's own
+# hyperprior), so either is refused rather than ignored.
 .occu_cover_psi_temporal <- function(terms, formula, data) {
   if (length(terms) > 1L) {
     stop("occu_cover(): the occurrence formula carries ", length(terms),
@@ -109,11 +109,11 @@
          "group) is not available on the occu_cover joint route; drop `group`.",
          call. = FALSE)
   }
-  if (!isTRUE(all.equal(c(ts$tau_shape, ts$tau_rate), c(1, 0.01)))) {
-    stop("occu_cover(): temporal(tau.shape = , tau.rate = ) sets a gamma prior ",
-         "the joint route does not read: the temporal precision is integrated on ",
-         "the outer grid (control$tau.temporal.grid) under the engine's default ",
-         "hyperprior. Drop the two arguments.", call. = FALSE)
+  if (!is.null(ts$prior_sigma)) {
+    stop("occu_cover(): temporal(prior.sigma = ) sets a prior the joint route ",
+         "does not read: the temporal precision is integrated on the outer grid ",
+         "(control$tau.temporal.grid) under the engine's default hyperprior. ",
+         "Drop the argument.", call. = FALSE)
   }
   lab <- .occu_cover_term_labels(ts, formula, data, .tobs_term_temporal, "time",
                                  ts$n_times)

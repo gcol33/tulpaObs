@@ -180,8 +180,8 @@ test_that("temporal() where the route cannot carry it is refused by name", {
     "temporal(yr.interval, type = 'rw1', group = grp) +", sp))),
     "temporal\\(group = \\)")
   expect_error(.oct_fit(sim, f(paste(
-    "temporal(yr.interval, type = 'rw1', tau.shape = 2) +", sp))),
-    "tau.shape")
+    "temporal(yr.interval, type = 'rw1', prior.sigma = c(1, 0.05)) +", sp))),
+    "prior.sigma")
   expect_error(.oct_fit(sim, f(paste(tt, "+ temporal(time.sc, type = 'rw1') +",
                                      sp))), "2 temporal\\(\\) terms")
   expect_error(.oct_fit(sim, f(paste(

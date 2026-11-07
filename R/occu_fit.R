@@ -458,10 +458,12 @@
   if (!is.null(temporal)) {
     temp_spec <- list(type = temporal$type, shared = temporal$shared,
                       cyclic = temporal$cyclic,
-                      tau_shape = temporal$tau_shape,
-                      tau_rate = temporal$tau_rate,
                       time_idx = temporal$time_idx,
                       n_times  = temporal$n_times)
+    if (!is.null(temporal$prior_sigma)) {
+      temp_spec$sigma_prior_U     <- temporal$prior_sigma[[1L]]
+      temp_spec$sigma_prior_alpha <- temporal$prior_sigma[[2L]]
+    }
     if (!is.null(temporal$group_idx)) {
       temp_spec$group_idx <- temporal$group_idx
       temp_spec$n_groups  <- temporal$n_groups

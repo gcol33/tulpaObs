@@ -35,6 +35,37 @@ test_that("temporal NUTS warm start reads an absent rho as NA", {
     "one time index per site is required for removal NUTS")
 })
 
+test_that("temporal(prior.sigma =) is validated and threaded to the engine (#437)", {
+  tt <- tulpaObs:::.tobs_term_temporal(rep(1:4, 3), type = "rw1",
+                                       prior.sigma = c(0.5, 0.05))
+  expect_identical(tt$prior_sigma, c(0.5, 0.05))
+  expect_null(tulpaObs:::.tobs_term_temporal(rep(1:4, 3))$prior_sigma)
+  for (bad in list(c(-1, 0.1), c(1, 1), 1, c(1, NA)))
+    expect_error(tulpaObs:::.tobs_term_temporal(rep(1:4, 3), prior.sigma = bad),
+                 "prior.sigma")
+  expect_error(tulpaObs:::.tobs_term_temporal(rep(1:4, 3), tau.shape = 2),
+               "unused argument")
+})
+
+test_that("temporal(prior.sigma =) reaches the occupancy NUTS engine (#437)", {
+  skip_on_cran()
+  skip_if_fast()
+  sim <- simulate_occu(N = 60, J = 3, seed = 1)
+  sim$data$time <- rep(1:6, length.out = 60)
+  ctl <- list(n.iter = 300L, n.warmup = 300L, n.chains = 1L, verbose = FALSE,
+              progress = FALSE, seed = 1L)
+  fit_with <- function(f)
+    tobs(f, data = sim$data, family = occu(), detection = ~ det_cov1,
+         y = sim$y, method = "nuts", control = ctl)
+  tight <- fit_with(~ occ_cov1 + temporal(time, type = "rw1",
+                                          prior.sigma = c(0.01, 0.01)))
+  dflt  <- fit_with(~ occ_cov1 + temporal(time, type = "rw1"))
+  # The temporal log-precision is the first sampler coordinate after the fixed
+  # effects; P(sigma > 0.01) = 0.01 pins the field SD near zero.
+  k <- sum(grepl("^(psi|p)_", colnames(tight$draws))) + 1L
+  expect_gt(mean(tight$draws[, k]), mean(dflt$draws[, k]) + 3)
+})
+
 test_that("removal() fits every documented temporal type under nested_laplace", {
   skip_on_cran()
   d <- .tt_removal_data()

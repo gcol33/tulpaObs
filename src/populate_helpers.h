@@ -218,10 +218,11 @@ inline void populate_temporal(tulpa::ModelData& data, Rcpp::List temp_spec) {
     if (temp_spec.containsElementNamed("cyclic"))
         data.temporal_cyclic = Rcpp::as<bool>(temp_spec["cyclic"]);
 
-    if (temp_spec.containsElementNamed("tau_shape"))
-        data.tau_temporal_shape = Rcpp::as<double>(temp_spec["tau_shape"]);
-    if (temp_spec.containsElementNamed("tau_rate"))
-        data.tau_temporal_rate = Rcpp::as<double>(temp_spec["tau_rate"]);
+    // PC prior on the field SD, P(sigma > U) = alpha; absent = engine default.
+    if (temp_spec.containsElementNamed("sigma_prior_U"))
+        data.temporal_sigma_prior_U = Rcpp::as<double>(temp_spec["sigma_prior_U"]);
+    if (temp_spec.containsElementNamed("sigma_prior_alpha"))
+        data.temporal_sigma_prior_alpha = Rcpp::as<double>(temp_spec["sigma_prior_alpha"]);
 
     // Sharing: which processes get temporal effect
     Rcpp::LogicalVector shared = Rcpp::as<Rcpp::LogicalVector>(temp_spec["shared"]);

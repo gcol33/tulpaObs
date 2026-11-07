@@ -168,8 +168,9 @@
 #'     \code{"iid"}.}
 #'   \item{\code{group}}{Optional grouping, for one series per group.}
 #'   \item{\code{cyclic}}{Wraps the last level onto the first.}
-#'   \item{\code{tau.shape}, \code{tau.rate}}{Gamma prior on the field
-#'     precision.}
+#'   \item{\code{prior.sigma}}{Length-2 \code{c(U, alpha)} PC prior on the
+#'     field SD, read as \code{P(sigma > U) = alpha}; the engine default when
+#'     omitted. Read by the sampled (\code{"nuts"}) occupancy route.}
 #' }
 #'
 #' @section Latent factors and sharing:

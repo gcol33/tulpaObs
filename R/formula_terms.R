@@ -418,13 +418,20 @@
 # temporal(time, ...)      — AR1 / RW1 / RW2 / IID temporal field
 .tobs_term_temporal <- function(time, type = c("ar1", "rw1", "rw2", "iid"),
                                 group = NULL, cyclic = FALSE,
-                                tau.shape = 1, tau.rate = 0.01, id = NULL) {
+                                prior.sigma = NULL, id = NULL) {
   type <- match.arg(type)
+  if (!is.null(prior.sigma) &&
+      (!is.numeric(prior.sigma) || length(prior.sigma) != 2L ||
+       anyNA(prior.sigma) || prior.sigma[1L] <= 0 ||
+       prior.sigma[2L] <= 0 || prior.sigma[2L] >= 1)) {
+    stop("temporal(): `prior.sigma` must be c(U, alpha) with U > 0 and ",
+         "0 < alpha < 1 (P(sigma > U) = alpha).", call. = FALSE)
+  }
   tcodes <- .tobs_index_codes(time, "temporal", "time")
   spec <- list(
     type = type, time_idx = tcodes$idx, n_times = tcodes$n,
     levels = tcodes$levels,
-    cyclic = cyclic, tau_shape = tau.shape, tau_rate = tau.rate
+    cyclic = cyclic, prior_sigma = if (!is.null(prior.sigma)) as.numeric(prior.sigma)
   )
   if (!is.null(group)) {
     gcodes <- .tobs_index_codes(group, "temporal", "group")
