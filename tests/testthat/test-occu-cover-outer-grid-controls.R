@@ -61,9 +61,13 @@ test_that("occu_cover() declares the outer-grid cost controls", {
 
 
 test_that("prune reaches the engine and does not move the answer", {
+  # The reference solves every cell; the screen runs at tulpa's documented
+  # tolerance scale (1e-4: coarser cuts add up in the tails, which is why it is
+  # the engine default). Against the unpruned grid, not the default fit, which
+  # screens too.
   fx   <- oc_grid_fixture()
-  full <- oc_grid_fit(fx)
-  cut  <- oc_grid_fit(fx, list(prune = TRUE, prune.tol = 1e-3))
+  full <- oc_grid_fit(fx, list(prune = FALSE))
+  cut  <- oc_grid_fit(fx, list(prune = TRUE, prune.tol = 1e-4))
 
   # The screen ran: the kernel emits prune_mask only when it actually screened,
   # and the safety gate replaces the result with a full-grid one carrying
