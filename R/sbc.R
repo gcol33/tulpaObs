@@ -2631,11 +2631,10 @@
 # #398's `blup_cross`/`blup_cov_g` additions expose exactly that (verified
 # against a closed-form joint-Hessian construction on a toy model with
 # deliberately collinear RE terms). Only reachable when the fit ran the
-# AGHQ/joint path (`control = list(optimizer = "joint_fd", n.quad > 1)`) --
-# the DEFAULT `n.quad = 1` route (`cpp_nmix_community_em()`, a different,
-# faster engine entirely) exposes Cinv but no cross-Hessian Bf, so
-# `.tobs_sbc_reject_ms_abun_scope()` requires it explicitly rather than
-# silently falling back to an independent (mu, b_s) draw (#226's exact bug).
+# AGHQ/joint path and on the default `n.quad = 1` Laplace-EM
+# (`tulpa::tulpa_re_em()`); `.tobs_sbc_reject_ms_abun_scope()` requires Bf
+# explicitly rather than silently falling back to an independent (mu, b_s)
+# draw (#226's exact bug).
 # Poisson only (negbin/zip/zinb add a further per-species RE arm
 # `.tobs_simulate_ms_nmix()` handles but this registration's `theta` layout
 # does not yet carry).
@@ -2649,13 +2648,11 @@
          "\".", call. = FALSE)
   }
   if (is.null(fit$ms_community$Cinv) || is.null(fit$ms_community$Bf)) {
-    stop("SBC on ms_abun() needs the joint AGHQ posterior covariance/cross-",
-         "Hessian (fit$ms_community$Cinv/Bf), only available when the fit ",
-         "ran control = list(optimizer = \"joint_fd\", n.quad > 1). ",
-         "The default n.quad = 1 Laplace-EM ",
-         "(cpp_nmix_community_em()) does not expose the mu-b_s ",
-         "cross-Hessian a joint (mu, b_s) draw needs -- refit with a ",
-         "higher n.quad rather than drawing mu and b_s independently.",
+    stop("SBC on ms_abun() needs the per-species posterior covariance and ",
+         "mode/theta cross-Hessian (fit$ms_community$Cinv/Bf), which this fit ",
+         "does not carry; a joint (mu, b_s) draw cannot be built without them. ",
+         "Refit with the default Laplace-EM or control = list(optimizer = ",
+         "\"joint_fd\") rather than drawing mu and b_s independently.",
          call. = FALSE)
   }
 }
@@ -2667,9 +2664,8 @@
   .tobs_sbc_reject_ms_abun_scope(fit)
   m <- fit$model
   cm <- fit$ms_community
-  # Preserve the ORIGINAL fit's engine choice on refit -- the default
-  # optimizer = "em" (n.quad = 1) does not expose Bf, so a refit
-  # that silently dropped back to it would break every downstream draw.
+  # Refit under the ORIGINAL fit's engine, so every replicate's posterior
+  # is the one the observed fit reported.
   ctl <- .tobs_sbc_control(fit, fit.control)
   ctl$optimizer <- cm$optimizer
   ctl[["n.quad"]] <- cm$n_quad

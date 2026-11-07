@@ -537,6 +537,9 @@
   # ms_count, jsdm, ms_abun). Distinct from `n.threads`, which spreads whole
   # chains. 0 leaves the count to OpenMP.
   nuts_grad_threads = "n.threads.grad",
+  # Threads for the per-species loops of the community N-mixture Laplace-EM
+  # (tulpa_re_em() on the native oracle). The fit does not depend on it.
+  laplace_threads = "n.threads",
   # Prior SD on the log-dispersion (community mean mu_log_r on ms_abun /
   # ms_count / jsdm; the log-dispersion and grouped-RE log-SD on the abun /
   # removal / distance / dyn_abun count targets; the grouped-RE log-SD on the
@@ -569,6 +572,7 @@
   block_coordinate        = c("laplace", "nested_laplace"),
   block_coordinate_factor = c("laplace", "nested_laplace"),
   nuts_grad_threads       = "nuts",
+  laplace_threads         = "laplace",
   nuts_logr               = "nuts",
   nuts_dispersion_re      = "nuts")
 

@@ -217,7 +217,7 @@ test_that("ranef(): fitted community Laplace routes report sqrt(diag(Cinv))", {
 test_that("ranef(): ms_abun EM and AGHQ routes carry the per-species covariance", {
   skip_on_cran()
   skip_if_fast()
-  # Default n.quad = 1 EM: the covariance comes from cpp_nmix_community_em().
+  # Default n.quad = 1 EM: the covariance comes from tulpa::tulpa_re_em().
   s6 <- simulate_ms_abun(n.species = 5, N = 30, J = 3, n.abund.covs = 1,
                          n.det.covs = 1, seed = 3)
   fit <- tobs(~ abund_cov1, data = s6$data, y = s6$y, family = ms_abun(),

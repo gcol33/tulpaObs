@@ -1,6 +1,6 @@
 // nmix_linalg.h
 // Small dense linear-algebra helpers shared by the N-mixture Laplace-EM drivers
-// (nmix_community_em.cpp and nmix_community_spatial.cpp). Kept in one header so
+// (community_spatial_em.cpp and nmix_community_spatial.cpp). Kept in one header so
 // the symmetric-inverse and log-determinant primitives have a single source
 // rather than a per-driver copy.
 

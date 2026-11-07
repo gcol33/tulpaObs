@@ -29,11 +29,10 @@ test_that("ms_abun posterior SBC: correct fit uniform, mis-scaled is not", {
   # joint-Hessian construction on a toy model with deliberately collinear RE
   # terms (tulpa test-re-aghq-cross-hessian.R).
   #
-  # Only reachable via the AGHQ/joint_fd engine (control = list(optimizer =
-  # "joint_fd", n.quad > 1)) -- the DEFAULT n.quad = 1 Laplace-EM
-  # (cpp_nmix_community_em(), a different, faster engine entirely) does not
-  # expose Cinv/Bf at all; .tobs_sbc_reject_ms_abun_scope() errors with a
-  # pointer rather than silently drawing an independent (mu, b_s).
+  # Needs the per-species Cinv/Bf, which both the AGHQ/joint engine and the
+  # default n.quad = 1 Laplace-EM (tulpa::tulpa_re_em()) report;
+  # .tobs_sbc_reject_ms_abun_scope() errors with a pointer when a fit lacks
+  # them rather than silently drawing an independent (mu, b_s).
   #
   # Registered at REDUCED n.sim = 15 (distsamp_open's own precedent for the
   # identical problem, NEWS.md 0.0.227): a n.sim = 3 probe at reduced

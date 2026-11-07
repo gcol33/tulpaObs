@@ -232,6 +232,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                   sigma_beta = 100,
                                   omega_sigma_prior = c(1, 0.05),
                                   logr_sigma_prior = NULL,
+                                  n_threads = 1L,
                                   verbose = FALSE) {
   mixture <- match.arg(mixture)
   is_nb <- mixture %in% c("NB", "ZINB")   # negative-binomial abundance (log_r RE)
@@ -367,38 +368,41 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
                                    nb = is_nb, zi = is_zi, headroom = headroom)
 
   if (optimizer == "em") {
-    # Default. EM is an outer driver over the shared oracle: block-coordinate
-    # Newton mode (complete-data Fisher) + closed-form Sigma M-step + Schur SE.
-    # It reaches the same n_quad = 1 (joint Laplace) stationary point as the
-    # joint optimizer (agq_plan.md 4.3) without the FD-gradient objective sweep
-    # that dominates joint_fd's runtime, so it is the production path. Quadrature
-    # (n_quad > 1) is a joint-driver feature; the EM is Laplace (n_quad = 1).
+    # Default. tulpa's Laplace-EM on the shared oracle (tulpa_re_em(), the
+    # n_quad = 1 sibling of tulpa_re_aghq()): per-species modes, closed-form
+    # Sigma update, BFGS on the Laplace marginal for the community means with its
+    # exact gradient. It lands on the joint Laplace maximum the joint optimizer
+    # reaches by finite differences. Quadrature (n_quad > 1) is a joint-driver
+    # feature; the EM is Laplace (n_quad = 1).
     if (n_quad != 1L) {
       stop("optimizer = \"em\" is the n_quad = 1 (Laplace) solver; AGHQ ",
            "(n_quad > 1) needs optimizer = \"joint_fd\".", call. = FALSE)
     }
-    # tol = 1e-4 on max|dSigma| between EM iters: the M-step Sigma update
-    # oscillates with amplitude > 1e-6 on sparse fixtures (few visits / many
-    # species) even after the estimate is statistically stable, so the
-    # a 1e-6 tolerance never fires and the EM grinds through max_iter,
-    # eating ~250s per fit at S=12 / N=60 / J=4 (12-arm covariance updates,
-    # Newton inner loop at inner_tol=1e-8). 1e-4 is still ~3 orders of
-    # magnitude tighter than any downstream coverage / recovery test gate
-    # (which read Sigma at ~0.1 precision) and shrinks the EM to a clean
-    # converge in 10-30 iters across the recovery / coverage fixtures.
-    em <- cpp_nmix_community_em(
-      orc, mu_init = c(as.numeric(mu_lambda_init), as.numeric(mu_p_init)),
-      Sigma_lambda_init = as.matrix(Sigma_lambda_init),
-      Sigma_p_init      = as.matrix(Sigma_p_init),
-      max_iter = as.integer(max_iter), tol = 1e-4,
-      inner_max = 50L, inner_tol = 1e-6, sigma_beta = sigma_beta,
-      verbose = isTRUE(verbose))
+    em <- tulpa::tulpa_re_em(
+      theta0   = c(as.numeric(mu_lambda_init), as.numeric(mu_p_init)),
+      re_terms = list(
+        list(n_groups = n_species, n_coefs = p_lam, correlated = p_lam > 1L),
+        list(n_groups = n_species, n_coefs = p_p,   correlated = p_p   > 1L)),
+      Sigma0   = list(as.matrix(Sigma_lambda_init), as.matrix(Sigma_p_init)),
+      oracle   = orc, theta_prior_sd = sigma_beta,
+      max_iter = as.integer(max_iter), n_threads = as.integer(n_threads))
+    if (is.null(em)) {
+      stop("Community N-mixture Laplace-EM failed: the per-species posterior ",
+           "solve is undefined at the starting values (the engine's warning ",
+           "names which species). Try a different K.max.", call. = FALSE)
+    }
     out <- list(
-      mu_lambda = as.numeric(em$mu_lambda), mu_p = as.numeric(em$mu_p),
-      vcov = em$vcov, Sigma_lambda = em$Sigma_lambda, Sigma_p = em$Sigma_p,
-      b_lambda = em$b_lambda, b_p = em$b_p, blup_cov_g = em$blup_cov_g,
-      log_lik = em$log_lik,
-      converged = isTRUE(em$converged), n_iter = as.integer(em$n_iter),
+      mu_lambda = em$theta[seq_len(p_lam)],
+      mu_p      = em$theta[p_lam + seq_len(p_p)],
+      vcov = em$theta_cov,
+      Sigma_lambda = em$Sigma_list[[1L]], Sigma_p = em$Sigma_list[[2L]],
+      b_lambda = em$blup[[1L]], b_p = em$blup[[2L]],
+      # Per-species joint posterior covariance and mode/theta cross-Hessian
+      # (the Bf sbc()'s posterior tier draws a species' deviations with).
+      blup_cov_g = em$blup_cov_g, blup_cross_g = em$blup_cross_g,
+      log_lik = em$log_marginal,
+      converged = isTRUE(em$converged) && all(em$group_ok),
+      group_ok = em$group_ok, n_iter = as.integer(em$n_iter),
       K_max = K_max,
       n_quad = 1L, lkj_eta = lkj_eta, optimizer = "em", mixture = "P")
     class(out) <- c("nmix_re_fit", "list")
@@ -567,8 +571,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
     # posterior tier to draw a species' (b_lambda_s, b_p_s) jointly with the
     # community mean instead of independently (the lambda/p identifiability
     # ridge means a species' abundance and detection deviations are
-    # themselves correlated). The n_quad = 1 Laplace-EM path above returns
-    # blup_cov_g only (cpp_nmix_community_em() has no cross-Hessian).
+    # themselves correlated).
     blup_cov_g   = fit$blup_cov_g,
     blup_cross_g = fit$blup_cross_g,
     log_lik      = fit$log_marginal,

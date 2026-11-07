@@ -166,6 +166,7 @@
                               n_quad_scalar = .TOBS_MIN_SCALAR_NQUAD,
                               lkj_eta = 1, omega_sigma_prior = c(1, 0.05),
                               logr_sigma_prior = NULL,
+                              n_threads = 1L,
                               verbose = TRUE) {
   # tulpaObs vocabulary ("poisson" / "negbin" / "zip" / "zinb") ->
   # nmix_laplace_re's mixing-distribution code ("P" / "NB" / "ZIP" / "ZINB").
@@ -203,6 +204,7 @@
     n_quad_scalar = as.integer(n_quad_scalar), lkj_eta = lkj_eta,
     omega_sigma_prior = omega_sigma_prior,
     logr_sigma_prior = logr_sigma_prior,
+    n_threads = n_threads,
     verbose = isTRUE(verbose))
   build_ms_nmix_fit(raw, model, mixture = mixture)
 }
@@ -705,9 +707,8 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
                dimnames = list(model$species_names, "logit_omega")) else NULL,
       # Per-species posterior covariance Cov(b_s | y) of the stacked RE vector
       # [lambda | p | log_r? | omega?], every route: the joint AGHQ engine's
-      # blup_cov_g (tulpa::tulpa_re_aghq(), every RE term of the species
-      # combined), the n_quad = 1 Laplace-EM's (A_s + Sigma^-1)^-1
-      # (cpp_nmix_community_em()), the law of total covariance over the outer
+      # blup_cov_g (tulpa::tulpa_re_aghq() / tulpa::tulpa_re_em(), every RE
+      # term of the species combined), the law of total covariance over the outer
       # grid on the spatial routes, the draws' covariance under NUTS. Same
       # convention as every .tobs_community_em()-based family's `Cinv[[s]]`
       # (R/community_em.R), indexed species-order-matching

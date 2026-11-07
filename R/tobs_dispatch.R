@@ -994,6 +994,7 @@
   n_quad    <- as.integer(control[["n.quad"]] %||% .tobs_n_quad("ms_nmix"))
   .tobs_fit_ms_nmix(
     model,
+    n_threads     = as.integer(control[["n.threads"]] %||% 1L),
     mixture       = family$params$mixture %||% "poisson",
     K_max         = family$params$K_max,
     max_iter      = control[["max.iter"]] %||% 100L,

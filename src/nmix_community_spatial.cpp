@@ -48,8 +48,8 @@ using tulpaObs::CommGridPoint;
 // visits). Fills grad_aug (na) and, when want_block, the symmetric small block
 // (na x na): small = Z_aug' B Z_aug with B the per-site eta-space curvature
 // (complete-data Fisher diagonal, plus -Var[N|y] rank-1 when want_obs). The
-// d x d top-left of small IS the per-species coefficient curvature (the
-// nmix_community_em block); the field rows/cols and crosses extend it to the
+// d x d top-left of small IS the per-species coefficient curvature; the field
+// rows/cols and crosses extend it to the
 // shared field. Returns the per-site marginal log-lik. A no-visit (J = 0)
 // species-site contributes nothing (interpolated by the field / prior), matching
 // the single-species held-out convention.

@@ -1529,7 +1529,7 @@ ms_abun <- function(K.max = NULL,
     # block-coordinate driver. A plain shared field with no factors keeps the
     # dedicated C++ path and reaches no outer loop.
     control.groups = c("block_coordinate", "block_coordinate_factor",
-                       "nuts_grad_threads", "nuts_logr")
+                       "nuts_grad_threads", "nuts_logr", "laplace_threads")
   )
 }
 

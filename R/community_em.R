@@ -208,27 +208,34 @@
 
 #' Generic community Laplace-EM engine
 #'
+#' A community model's per-species coefficients are `theta_s = mu + b_s`, with
+#' `b_s ~ N(0, Sigma)` block-diagonal over the arms in `arm_idx` and the
+#' community means `mu` (and any `global` parameters) shared. The fit is
+#' tulpa's Laplace-EM on the per-species oracle (`tulpa::tulpa_re_em()`,
+#' `theta_update = "latent"`): `(mu, global)` and every `b_s` solved jointly by
+#' a damped Newton on the penalized joint log-density, the closed-form
+#' covariance update per arm, and the community-mean covariance from the Schur
+#' complement of the species blocks. This function supplies the oracle: species
+#' `s`'s log-likelihood `sp_ll(s, theta, global)` with its derivatives.
+#'
 #' @keywords internal
+#' @param sp_grad Optional `function(s, theta, global)` returning the gradient
+#'   of `sp_ll` in `c(theta, global)`; `NULL` central-differences `sp_ll`.
 #' @param sp_info Optional `function(s, theta, global)` returning species `s`'s
 #'   `(P + G) x (P + G)` marginal observed information at `c(theta, global)`.
-#'   Defaults to `NULL`, which finite-differences `sp_grad` -- passing neither
-#'   leaves a fit byte-identical. Supply it when the family's kernel already
-#'   exposes the per-site marginal observed information (the N-mixture / distance
-#'   Louis block): the FD path spends `2 (P + G)` full marginal sweeps per species
-#'   per Newton step to rediscover it.
+#'   `NULL` central-differences the gradient, which costs `2 (P + G)` gradient
+#'   evaluations per species per Newton step; supply it when the family's
+#'   kernel already exposes the per-site marginal observed information (the
+#'   N-mixture / distance Louis block).
 #' @param init_b,init_Sigma Optional warm starts for the per-species deviations
-#'   and the per-arm community covariances. Both default to `NULL`, which is the
-#'   cold start (`b_s = 0`, `Sigma = sigma_init^2 I`) -- passing neither leaves a
-#'   fit byte-identical. A block-coordinate caller that re-enters this EM once per
-#'   outer pass (R/community_latent.R) passes the previous pass's state, so the
-#'   EM resumes from a near-converged point instead of rediscovering it; it is the
-#'   dominant cost when the per-species likelihood is expensive (an N-mixture /
-#'   distance marginal sums over the latent count).
+#'   and the per-arm community covariances; `NULL` is the cold start
+#'   (`b_s = 0`, `Sigma = sigma_init^2 I`). A block-coordinate caller that
+#'   re-enters this EM once per outer pass (R/community_latent.R) passes the
+#'   previous pass's state, so the EM resumes from a near-converged point.
 #' @param re_aghq Debias `Sigma`/`Cinv` by adaptive Gauss-Hermite quadrature of
-#'   the exact per-species RE posterior, gated to
-#'   `P <= re_aghq_maxdim` (tensor AGHQ over the joint b couples the arms).
-#'   Defaults `FALSE` -- every existing caller is byte-identical unless it
-#'   opts in. `n_quad` sets the per-dimension node count.
+#'   the exact per-species RE posterior, gated to `P <= re_aghq_maxdim` (tensor
+#'   AGHQ over the joint b couples the arms). `n_quad` sets the per-dimension
+#'   node count.
 .tobs_community_em <- function(S, P, arm_idx, sp_ll, sp_grad = NULL,
                                init_mu, init_global = numeric(0),
                                penalize_global = FALSE, sigma_beta = 5,
@@ -243,28 +250,130 @@
   P          <- as.integer(P)
   G          <- length(init_global)
   U          <- P + G
-  newton_max <- as.integer(newton_max)
-  max_iter   <- as.integer(max_iter)
-  tol        <- as.numeric(tol)
   arm_names  <- names(arm_idx)
+  glob_seq   <- seq_len(G)
+  # The oracle's RE vector stacks the arms in `arm_idx` order; `perm` maps its
+  # coordinates back to the species coefficient vector.
+  perm <- as.integer(unlist(arm_idx, use.names = FALSE))
+  if (!identical(sort(perm), seq_len(P))) {
+    stop(".tobs_community_em: `arm_idx` must partition 1:P.", call. = FALSE)
+  }
+  to_coef <- function(b) { o <- numeric(P); o[perm] <- b; o }
 
-  # Prior active when priors is NULL or any not-FALSE value.
+  # Prior precision on (mu, global): the mu-block when priors are active, the
+  # global block only where penalize_global is TRUE (recycled).
   priors_active <- isTRUE(is.null(priors)) || !isFALSE(priors)
-
-  # U x U diagonal prior precision. The mu-block is penalized when priors are
-  # active; the global block only where penalize_global is TRUE (recycled).
-  P_u <- matrix(0, U, U)
+  prec <- numeric(U)
   if (priors_active) {
-    diag(P_u)[seq_len(P)] <- 1 / (sigma_beta^2)
+    prec[seq_len(P)] <- 1 / sigma_beta^2
     if (G > 0L) {
       pen_g <- rep(as.logical(penalize_global), length.out = G)
-      diag(P_u)[P + seq_len(G)][pen_g] <- 1 / (sigma_beta^2)
+      prec[P + glob_seq][pen_g] <- 1 / sigma_beta^2
     }
   }
 
-  glob_seq <- seq_len(G)            # empty integer vector when G == 0
+  # Per-species gradient of the marginal log-likelihood wrt c(theta, global)
+  # (length P + G): supplied, or central difference of sp_ll (h = 1e-5).
+  sp_grad_fn <- if (!is.null(sp_grad)) sp_grad else {
+    function(s, theta, global) {
+      u <- c(theta, global); h <- 1e-5
+      g <- numeric(U)
+      for (k in seq_len(U)) {
+        up <- u; up[k] <- up[k] + h
+        dn <- u; dn[k] <- dn[k] - h
+        g[k] <- (sp_ll(s, up[seq_len(P)], up[P + glob_seq]) -
+                 sp_ll(s, dn[seq_len(P)], dn[P + glob_seq])) / (2 * h)
+      }
+      g
+    }
+  }
+  # Per-species observed information (U x U): supplied, or central difference
+  # of the gradient (h = 1e-4), symmetrized.
+  sp_info_fn <- if (!is.null(sp_info)) sp_info else {
+    function(s, theta, global) {
+      u <- c(theta, global); h <- 1e-4
+      J <- matrix(0, U, U)
+      for (k in seq_len(U)) {
+        up <- u; up[k] <- up[k] + h
+        dn <- u; dn[k] <- dn[k] - h
+        J[, k] <- (sp_grad_fn(s, up[seq_len(P)], up[P + glob_seq]) -
+                   sp_grad_fn(s, dn[seq_len(P)], dn[P + glob_seq])) / (2 * h)
+      }
+      -0.5 * (J + t(J))
+    }
+  }
 
-  # Block-diagonal P x P inverse community precision from per-arm Sigma.
+  # The per-species oracle at theta = c(mu, global): ell_s(b) = sp_ll(s, mu + b,
+  # global). theta enters as a location shift of b, so the theta score is the
+  # species gradient itself and the theta-b cross block its information read at
+  # the b columns.
+  make_group <- function(theta) {
+    mu <- theta[seq_len(P)]; gl <- theta[P + glob_seq]
+    joint <- function(s, b) {
+      th  <- mu + to_coef(b)
+      gr  <- sp_grad_fn(s, th, gl)
+      inf <- sp_info_fn(s, th, gl)
+      list(logL = sp_ll(s, th, gl), grad = gr[perm],
+           negH = inf[perm, perm, drop = FALSE],
+           theta_grad = gr, theta_info = inf,
+           cross = inf[, perm, drop = FALSE])
+    }
+    list(grad_hess = function(s, b) joint(s, b)[c("logL", "grad", "negH")],
+         node_ll = function(s, B) apply(B, 1L, function(b)
+           sp_ll(s, mu + to_coef(b), gl)),
+         joint = joint)
+  }
+
+  Sigma0 <- if (is.null(init_Sigma)) {
+    lapply(arm_idx, function(idx) diag(sigma_init^2, length(idx)))
+  } else init_Sigma[arm_names]
+  b0 <- if (is.null(init_b)) NULL else
+    do.call(rbind, lapply(init_b, function(b) as.numeric(b)[perm]))
+  re_terms <- lapply(arm_idx, function(idx)
+    list(n_groups = S, n_coefs = length(idx), correlated = TRUE))
+
+  em <- tulpa::tulpa_re_em(
+    theta0 = c(as.numeric(init_mu), as.numeric(init_global)),
+    re_terms = unname(re_terms), Sigma0 = unname(lapply(Sigma0, as.matrix)),
+    make_group = make_group,
+    theta_prior_sd = ifelse(prec > 0, 1 / sqrt(prec), Inf),
+    theta_update = "latent", b0 = b0,
+    # Eigenvalue floor 1e-4 on each community covariance.
+    sigma_floor = 1e-2, tol = as.numeric(tol),
+    max_iter = as.integer(max_iter), newton_max = as.integer(newton_max),
+    progress_label = "community-em")
+  if (is.null(em)) {
+    stop("community EM: the joint log-density is not finite at the starting ",
+         "values.", call. = FALSE)
+  }
+  converged <- isTRUE(em$converged)
+  if (isTRUE(em$stuck)) {
+    converged <- FALSE
+    warning(paste0(
+      "community EM: the Newton mode-find never accepted a step (undamped or ",
+      "Levenberg-damped); the coefficients did not move from their starting ",
+      "values. Reporting converged = FALSE rather than certifying the fit off ",
+      "the M-step's objective drift alone."), call. = FALSE)
+  }
+
+  theta  <- em$theta
+  mu     <- theta[seq_len(P)]
+  global <- theta[P + glob_seq]
+  B      <- do.call(cbind, em$blup)
+  b_list <- lapply(seq_len(S), function(s) to_coef(B[s, ]))
+  Cinv   <- lapply(em$blup_cov_g, function(C) {
+    o <- matrix(0, P, P); o[perm, perm] <- C; o
+  })
+  # Mode/theta cross blocks -d2 ell_s / d(mu, global) db_s, (P + G) x P.
+  Bf <- lapply(em$blup_cross_g, function(X) {
+    o <- matrix(0, U, P); o[, perm] <- X; o
+  })
+  Sigma <- stats::setNames(lapply(em$Sigma_list, as.matrix), arm_names)
+  Sf <- em$theta_hessian
+  Vf <- tryCatch(solve(Sf), error = function(e) .tobs_cem_ginv(Sf))
+  Vf <- (Vf + t(Vf)) / 2
+  logML <- em$log_marginal - 0.5 * sum(prec * theta^2)
+
   blockdiag_inv <- function(Sig) {
     out <- matrix(0, P, P)
     for (arm in arm_names) {
@@ -274,311 +383,34 @@
     out
   }
 
-  # Per-species gradient of the marginal log-likelihood wrt c(theta, global)
-  # (length P + G). Supplied analytically, or central finite difference of
-  # sp_ll with step h = 1e-5.
-  sp_grad_fn <- if (!is.null(sp_grad)) {
-    function(s, theta, global) sp_grad(s, theta, global)
-  } else {
-    function(s, theta, global) {
-      u <- c(theta, global); h <- 1e-5
-      g <- numeric(U)
-      for (k in seq_len(U)) {
-        up <- u; up[k] <- up[k] + h
-        dn <- u; dn[k] <- dn[k] - h
-        fp <- sp_ll(s, up[seq_len(P)], up[P + glob_seq])
-        fm <- sp_ll(s, dn[seq_len(P)], dn[P + glob_seq])
-        g[k] <- (fp - fm) / (2 * h)
-      }
-      g
-    }
-  }
-
-  # Per-species observed information (U x U). Supplied analytically, or by
-  # central finite difference of the gradient (step h = 1e-4), symmetrized:
-  # -0.5 (J + J'). The FD path costs 2U gradient evaluations per species per
-  # Newton step, which dominates when the per-species marginal is expensive (an
-  # N-mixture / distance marginal sums over the latent count); a family whose
-  # kernel already exposes the per-site marginal observed information should pass
-  # `sp_info` and skip it.
-  sp_info_fn <- if (!is.null(sp_info)) {
-    function(s, theta, global) sp_info(s, theta, global)
-  } else {
-    function(s, theta, global) {
-      u <- c(theta, global); h <- 1e-4
-      J <- matrix(0, U, U)
-      for (k in seq_len(U)) {
-        up <- u; up[k] <- up[k] + h
-        dn <- u; dn[k] <- dn[k] - h
-        gp <- sp_grad_fn(s, up[seq_len(P)], up[P + glob_seq])
-        gm <- sp_grad_fn(s, dn[seq_len(P)], dn[P + glob_seq])
-        J[, k] <- (gp - gm) / (2 * h)
-      }
-      -0.5 * (J + t(J))
-    }
-  }
-
-  # Penalized objective: sum of per-species log-likelihoods minus the RE and
-  # fixed-effect Gaussian penalties.
-  total_F <- function(mu, global, b_list, Sinv) {
-    ll <- 0
-    for (s in seq_len(S)) ll <- ll + sp_ll(s, mu + b_list[[s]], global)
-    pen_b <- 0
-    for (s in seq_len(S)) {
-      bs <- b_list[[s]]
-      pen_b <- pen_b + as.numeric(crossprod(bs, Sinv %*% bs))
-    }
-    u <- c(mu, global)
-    ll - 0.5 * pen_b - 0.5 * as.numeric(crossprod(u, P_u %*% u))
-  }
-
-  # Laplace approximation to the integrated (marginal) log-likelihood at fixed
-  # Sigma -- the quantity the EM increases monotonically. Per species the RE
-  # integral is exp(ll_s) N(b; 0, Sigma) integrated by Laplace at the mode:
-  #   logML_s = ll_s - 0.5 b' Sinv b + 0.5 log|Cinv_s|,
-  # with Cinv_s = (H_tt_s + Sinv)^-1 the per-species posterior covariance.
-  compute_logML <- function(mu, global, b_list, Cinv_list, Sigma, Sinv) {
-    logdet_Sigma <- 0
-    for (arm in arm_names) logdet_Sigma <- logdet_Sigma + .tobs_cem_logdet(Sigma[[arm]])
-    acc <- 0
-    for (s in seq_len(S)) {
-      bs <- b_list[[s]]
-      acc <- acc + sp_ll(s, mu + bs, global) -
-        0.5 * as.numeric(crossprod(bs, Sinv %*% bs)) +
-        0.5 * .tobs_cem_logdet(Cinv_list[[s]])
-    }
-    u <- c(mu, global)
-    acc - 0.5 * S * logdet_Sigma -
-      0.5 * as.numeric(crossprod(u, P_u %*% u))
-  }
-
-  # One joint-Newton mode-find of (mu, global, {b_s}) at fixed Sigma. Returns the
-  # updated mode, per-species posterior covariances Cinv (Cov(b_s|y)), the u-b_s
-  # cross-Hessian blocks Bf (u=(mu,global) -- needed to draw (u, b_s) jointly
-  # rather than independently: Cov(u,b_s) = -Vf %*% Bf_s %*% Cinv_s, and
-  # conditional on a draw of u, b_s's mean shifts by -Cinv_s %*% t(Bf_s) %*%
-  # (u_draw - u_hat) while its covariance stays exactly Cinv_s), and the marginal
-  # fixed-effect information Sf (Schur complement of the b-block, Vf =
-  # solve(Sf)).
-  # `stuck` (list()$stuck below) records a Newton iteration whose line search
-  # -- undamped AND Levenberg-damped -- accepted no step: the direction is not
-  # an ascent direction at any scale tried, distinct from a converged `ok =
-  # TRUE, delta < 1e-7` break. #349: without this, `mu`/`b_list` return
-  # unchanged from their input, the caller's M-step keeps shrinking Sigma
-  # toward its eigenvalue floor every EM iteration regardless, and the
-  # resulting slow drift in `logML` (from Sigma alone, not the mode) eventually
-  # satisfies the EM's relative-change test -- certifying convergence at the
-  # cold-start values.
-  solve_mode <- function(mu, global, b_list, Sinv) {
-    F_cur <- total_F(mu, global, b_list, Sinv)
-    Cinv_list <- vector("list", S)
-    Sf <- NULL
-    stuck <- FALSE
-    for (it in seq_len(newton_max)) {
-      sumg_theta <- numeric(P); sumg_glob <- numeric(G)
-      A11  <- matrix(0, P, P)
-      A_tg <- matrix(0, P, G)
-      A_gg <- matrix(0, G, G)
-      Bf_list <- vector("list", S); gb_list <- vector("list", S)
-      for (s in seq_len(S)) {
-        theta <- mu + b_list[[s]]
-        g    <- sp_grad_fn(s, theta, global)
-        info <- sp_info_fn(s, theta, global)
-        Htt <- info[seq_len(P), seq_len(P), drop = FALSE]
-        Htg <- info[seq_len(P), P + glob_seq, drop = FALSE]      # P x G
-        Hgg <- info[P + glob_seq, P + glob_seq, drop = FALSE]    # G x G
-        g_theta <- g[seq_len(P)]
-        g_glob  <- g[P + glob_seq]                               # length G
-        # Htt is the observed information of species s at the current iterate,
-        # which need not be positive definite away from the mode, so C_s is
-        # inverted by LU rather than through a Cholesky factor.
-        C_s  <- Htt + Sinv
-        Cinv <- tryCatch(solve(C_s), error = function(e) .tobs_cem_ginv(C_s))
-        Cinv_list[[s]] <- Cinv
-        Bf_list[[s]]   <- rbind(Htt, t(Htg))                     # (P+G) x P
-        gb_list[[s]]   <- g_theta - Sinv %*% b_list[[s]]
-        sumg_theta <- sumg_theta + g_theta
-        sumg_glob  <- sumg_glob + g_glob
-        A11  <- A11 + Htt
-        A_tg <- A_tg + Htg
-        A_gg <- A_gg + Hgg
-      }
-      u  <- c(mu, global)
-      gf <- c(sumg_theta, sumg_glob) - as.numeric(P_u %*% u)     # length U
-      if (G == 0L) {
-        A_uu <- A11 + P_u
-      } else {
-        A_uu <- rbind(cbind(A11, A_tg), cbind(t(A_tg), A_gg)) + P_u
-      }
-      Sf <- A_uu; rhs <- gf
-      for (s in seq_len(S)) {
-        M   <- Bf_list[[s]] %*% Cinv_list[[s]]
-        Sf  <- Sf  - M %*% t(Bf_list[[s]])
-        rhs <- rhs - as.numeric(M %*% gb_list[[s]])
-      }
-      # Backtracking line search on the penalized objective, escalating to a
-      # Levenberg-damped Newton direction (ridge added to the Schur complement
-      # Sf) when the undamped direction is not an ascent direction at any step
-      # size down to 1/2^24 -- an indefinite Sf (from subtracting the per-
-      # species Schur terms) or a non-finite F_n (likelihood overflow near a
-      # cold start) both show up this way. `db` is recomputed from the
-      # damped `du` each escalation, since it depends on it.
-      ok <- FALSE; step <- 1; lambda <- 0
-      for (damp in 0:6) {
-        Sf_d <- if (lambda == 0) Sf else Sf + diag(lambda, U)
-        du_d <- tryCatch(solve(Sf_d, rhs), error = function(e) {
-          solve(Sf_d + diag(max(lambda, 1e-6), U), rhs)
-        })
-        db_d <- lapply(seq_len(S), function(s) {
-          as.numeric(Cinv_list[[s]] %*% (gb_list[[s]] -
-                       t(Bf_list[[s]]) %*% du_d))
-        })
-        step <- 1
-        for (ls in 1:25) {
-          u_new    <- u + step * du_d
-          mu_n     <- u_new[seq_len(P)]
-          global_n <- u_new[P + glob_seq]
-          b_n      <- lapply(seq_len(S), function(s) b_list[[s]] + step * db_d[[s]])
-          F_n      <- total_F(mu_n, global_n, b_n, Sinv)
-          if (is.finite(F_n) && F_n >= F_cur - 1e-8) { ok <- TRUE; break }
-          step <- step / 2
-        }
-        if (ok) break
-        lambda <- if (lambda == 0) 1e-4 else lambda * 10
-      }
-      if (!ok) { stuck <- TRUE; break }
-      delta <- max(abs(c(step * du_d, unlist(db_d) * step)))
-      mu <- mu_n; global <- global_n; b_list <- b_n; F_cur <- F_n
-      if (delta < 1e-7) break
-    }
-    list(mu = mu, global = global, b_list = b_list, Cinv = Cinv_list,
-         Bf = Bf_list, Sf = Sf, Fm = F_cur, stuck = stuck)
-  }
-
-  # ---- initialization ----
-  # A warm start (init_b / init_Sigma) resumes a block-coordinate caller's
-  # previous outer pass; absent, the cold start below is unchanged.
-  mu     <- as.numeric(init_mu)
-  global <- as.numeric(init_global)
-  b_list <- if (is.null(init_b)) replicate(S, numeric(P), simplify = FALSE)
-            else init_b
-  if (is.null(init_Sigma)) {
-    Sigma <- vector("list", length(arm_idx))
-    names(Sigma) <- arm_names
-    for (arm in arm_names) {
-      k <- length(arm_idx[[arm]])
-      Sigma[[arm]] <- diag(sigma_init^2, k)
-    }
-  } else {
-    Sigma <- init_Sigma[arm_names]
-  }
-
-  # ---- EM loop ----
-  converged <- FALSE; n_iter <- 0L; logML_prev <- -Inf; mode_stuck <- FALSE
-  # Progress + ETA for the community EM iterations; ON by default, reusing tulpa's
-  # shared reporter so the heartbeat file matches every other fitting loop. ETA is
-  # the upper bound to max_iter, finalised on convergence.
-  .prog <- tulpa::tulpa_iter_progress("community-em", max_iter, unit = "iter")
-  for (em in seq_len(max_iter)) {
-    n_iter <- em
-    Sinv <- blockdiag_inv(Sigma)
-    res  <- solve_mode(mu, global, b_list, Sinv)
-    mu <- res$mu; global <- res$global; b_list <- res$b_list
-    mode_stuck <- isTRUE(res$stuck)
-
-    logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
-
-    # M-step: closed-form community covariance per arm.
-    for (arm in arm_names) {
-      idx <- arm_idx[[arm]]
-      k   <- length(idx)
-      acc <- matrix(0, k, k)
-      for (s in seq_len(S)) {
-        bs  <- b_list[[s]][idx]
-        cov <- res$Cinv[[s]][idx, idx, drop = FALSE]
-        acc <- acc + tcrossprod(bs) + cov
-      }
-      acc <- acc / S
-      acc <- (acc + t(acc)) / 2
-      ev  <- eigen(acc, symmetric = TRUE)
-      ev$values <- pmax(ev$values, 1e-4)          # floor off the singular boundary
-      Sigma[[arm]] <- ev$vectors %*% diag(ev$values, k) %*% t(ev$vectors)
-    }
-
-    rel <- abs(logML - logML_prev) / (abs(logML_prev) + 1)
-    .prog$tick()
-    if (isTRUE(verbose)) {
-      message(sprintf("[community EM %d] logML=%.4f  rel_change=%.2e",
-                      em, logML, rel))
-    }
-    # Convergence needs BOTH a small relative change in the objective AND an
-    # accepted inner Newton step this iteration -- a stuck mode-find can still
-    # produce a small `rel` (the M-step's Sigma shrink alone moves logML a
-    # little every pass, per #349), which is not the mode having converged.
-    if (em > 1L && rel < tol && !mode_stuck) { converged <- TRUE; break }
-    logML_prev <- logML
-  }
-  .prog$finish()
-
-  # ---- final marginal fixed-effect information -> community-mean covariance ----
-  Sinv <- blockdiag_inv(Sigma)
-  res  <- solve_mode(mu, global, b_list, Sinv)
-  mu <- res$mu; global <- res$global; b_list <- res$b_list
-  if (isTRUE(res$stuck)) {
-    converged <- FALSE
-    warning(paste0(
-      "community EM: the Newton mode-find never accepted a step (undamped or ",
-      "Levenberg-damped); the coefficients did not move from their starting ",
-      "values. Reporting converged = FALSE rather than certifying the fit off ",
-      "the M-step's objective drift alone."), call. = FALSE)
-  }
-  Vf <- tryCatch(solve(res$Sf), error = function(e) .tobs_cem_ginv(res$Sf))
-  Vf <- (Vf + t(Vf)) / 2
-  logML <- compute_logML(mu, global, b_list, res$Cinv, Sigma, Sinv)
-
-  # AGHQ variance-component debias, opt-in (re_aghq defaults FALSE -- every
-  # existing caller is byte-identical unless it explicitly asks for this).
-  # Sigma carries the documented Laplace small-cluster attenuation; Cinv must
-  # be reprojected at the debiased Sinv or it silently keeps the pre-debias
-  # value even though Sigma changed (the exact bug found and fixed in
-  # R/ms_occu_cover.R, commit `03b87ad`).
-  Cinv_out <- res$Cinv
+  # AGHQ variance-component debias, opt-in. Sigma carries the Laplace
+  # small-cluster attenuation; Cinv is reprojected at the debiased Sinv, and the
+  # community-mean covariance with it: Bf_s is pure likelihood curvature, so
+  # Sf_new = Sf + sum_s Bf_s (Cinv_s_old - Cinv_s_new) Bf_s' keeps Vf, Bf and
+  # Cinv on one Sigma, which the joint (u, b_s) draw of
+  # .tobs_sbc_community_b_draws() assumes.
+  Cinv_out <- Cinv
   debias_method <- "none"
   if (isTRUE(re_aghq) && P <= as.integer(re_aghq_maxdim)) {
+    Sinv <- blockdiag_inv(Sigma)
     aghq_out <- tryCatch({
-      Sinv_old <- Sinv
-      Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, global, b_list, res$Cinv, Sinv,
+      Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, global, b_list, Cinv, Sinv,
                                  arm_idx, P, n_quad = n_quad)
-      Sinv_new <- blockdiag_inv(Sd)
       list(Sigma = Sd,
-           Cinv = .tobs_cem_reproject_cinv(res$Cinv, Sinv_old, Sinv_new),
+           Cinv = .tobs_cem_reproject_cinv(Cinv, Sinv, blockdiag_inv(Sd)),
            ok = TRUE)
     }, error = function(e) {
       warning("community EM AGHQ variance debias failed (",
               conditionMessage(e), "); reporting the EM (Laplace) variance ",
               "components.", call. = FALSE)
-      list(Sigma = Sigma, Cinv = res$Cinv, ok = FALSE)
+      list(Sigma = Sigma, Cinv = Cinv, ok = FALSE)
     })
     Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
-    debias_method <- if (aghq_out$ok) "aghq" else "none"
     if (aghq_out$ok) {
-      # Vf (the community-mean marginal covariance) was computed under the
-      # PRE-debias Sinv (res$Sf = A_uu - sum_s Bf_s Cinv_s_old Bf_s'); leaving
-      # it there while Cinv is reprojected to the debiased Sinv makes Vf,
-      # Bf and Cinv mutually INCONSISTENT -- the joint (u, b_s) draw formula
-      # (.tobs_sbc_community_b_draws) assumes all three come from the SAME
-      # Sigma, and a fit whose Cinv shifts a lot under debiasing (unlike the
-      # small shift ms_occu_cover's own fixture happened to show) breaks that
-      # assumption badly: measured on ms_occu, this alone collapsed posterior
-      # SBC to p_unif = 0 on 8/21 quantities. A_uu is recoverable without
-      # re-deriving the Newton solve (Bf_s is pure likelihood curvature,
-      # unaffected by a Sigma change): A_uu = Sf_old + sum_s Bf_s Cinv_s_old
-      # Bf_s', so Sf_new = Sf_old + sum_s Bf_s (Cinv_s_old - Cinv_s_new) Bf_s'
-      # -- exact, no new approximation.
-      Sf_new <- res$Sf
+      debias_method <- "aghq"
+      Sf_new <- Sf
       for (s in seq_len(S)) {
-        dC <- res$Cinv[[s]] - Cinv_out[[s]]
-        Sf_new <- Sf_new + res$Bf[[s]] %*% dC %*% t(res$Bf[[s]])
+        Sf_new <- Sf_new + Bf[[s]] %*% (Cinv[[s]] - Cinv_out[[s]]) %*% t(Bf[[s]])
       }
       Vf <- tryCatch(solve(Sf_new), error = function(e) .tobs_cem_ginv(Sf_new))
       Vf <- (Vf + t(Vf)) / 2
@@ -586,8 +418,8 @@
   }
 
   list(mu = mu, global = global, b_list = b_list, Sigma = Sigma,
-       Cinv = Cinv_out, Bf = res$Bf, Vf = Vf, logML = logML,
-       converged = converged, n_iter = n_iter, debias_method = debias_method)
+       Cinv = Cinv_out, Bf = Bf, Vf = Vf, logML = logML,
+       converged = converged, n_iter = em$n_iter, debias_method = debias_method)
 }
 
 

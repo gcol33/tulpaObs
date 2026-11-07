@@ -1,7 +1,7 @@
 // nmix_community_oracle.cpp
 // Out-of-line bodies for NMixCommunityOracle (declared in nmix_community_oracle.h).
-// Kept out of the header so a translation unit that only calls the oracle (the EM
-// driver nmix_community_em.cpp, and the engine shim aghq_re.cpp) does not
+// Kept out of the header so a translation unit that only calls the oracle (the
+// spatial driver, and tulpa's engine shims) does not
 // re-instantiate the per-site Eigen assembly inline -- which overflows MinGW g++
 // under -O2. The per-site marginal math is nmix_kernel.h (the single source).
 

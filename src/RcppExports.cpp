@@ -1272,26 +1272,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// cpp_nmix_community_em
-List cpp_nmix_community_em(SEXP oracle, NumericVector mu_init, NumericMatrix Sigma_lambda_init, NumericMatrix Sigma_p_init, int max_iter, double tol, int inner_max, double inner_tol, double sigma_beta, bool verbose);
-RcppExport SEXP _tulpaObs_cpp_nmix_community_em(SEXP oracleSEXP, SEXP mu_initSEXP, SEXP Sigma_lambda_initSEXP, SEXP Sigma_p_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP inner_maxSEXP, SEXP inner_tolSEXP, SEXP sigma_betaSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type oracle(oracleSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type mu_init(mu_initSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type Sigma_lambda_init(Sigma_lambda_initSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type Sigma_p_init(Sigma_p_initSEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
-    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
-    Rcpp::traits::input_parameter< int >::type inner_max(inner_maxSEXP);
-    Rcpp::traits::input_parameter< double >::type inner_tol(inner_tolSEXP);
-    Rcpp::traits::input_parameter< double >::type sigma_beta(sigma_betaSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_nmix_community_em(oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter, tol, inner_max, inner_tol, sigma_beta, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
 // cpp_nmix_community_field_solve
 Rcpp::List cpp_nmix_community_field_solve(Rcpp::IntegerVector y, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector species_idx, Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix coef_lambda, Rcpp::NumericMatrix coef_p, Rcpp::IntegerVector map_site_to_unit_R, Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx, Rcpp::IntegerVector n_neighbors, int n_spatial, Rcpp::IntegerVector node_comp, double tau, double rho, double log_det_Q_rho, Rcpp::NumericVector z_init, int K_max, int max_iter, double tol, bool verbose);
 RcppExport SEXP _tulpaObs_cpp_nmix_community_field_solve(SEXP ySEXP, SEXP site_idxSEXP, SEXP species_idxSEXP, SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP coef_lambdaSEXP, SEXP coef_pSEXP, SEXP map_site_to_unit_RSEXP, SEXP adj_row_ptrSEXP, SEXP adj_col_idxSEXP, SEXP n_neighborsSEXP, SEXP n_spatialSEXP, SEXP node_compSEXP, SEXP tauSEXP, SEXP rhoSEXP, SEXP log_det_Q_rhoSEXP, SEXP z_initSEXP, SEXP K_maxSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP) {
@@ -2597,7 +2577,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_ms_occu_spatial_bym2", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_bym2, 19},
     {"_tulpaObs_cpp_ms_occu_spatial_spde", (DL_FUNC) &_tulpaObs_cpp_ms_occu_spatial_spde, 13},
     {"_tulpaObs_cpp_ms_ocs_ploglik", (DL_FUNC) &_tulpaObs_cpp_ms_ocs_ploglik, 21},
-    {"_tulpaObs_cpp_nmix_community_em", (DL_FUNC) &_tulpaObs_cpp_nmix_community_em, 10},
     {"_tulpaObs_cpp_nmix_community_field_solve", (DL_FUNC) &_tulpaObs_cpp_nmix_community_field_solve, 21},
     {"_tulpaObs_cpp_nmix_community_oracle", (DL_FUNC) &_tulpaObs_cpp_nmix_community_oracle, 11},
     {"_tulpaObs_cpp_nmix_community_spatial_icar", (DL_FUNC) &_tulpaObs_cpp_nmix_community_spatial_icar, 23},

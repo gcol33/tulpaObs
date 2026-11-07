@@ -27,8 +27,8 @@
 //
 // The substantive method bodies live in nmix_community_oracle.cpp (declared
 // here): they instantiate a large amount of Eigen template code, and keeping
-// them out-of-line means a TU that only *calls* the oracle (e.g. the EM driver
-// nmix_community_em.cpp) does not re-instantiate the per-site assembly inline,
+// them out-of-line means a TU that only *calls* the oracle (e.g. the spatial
+// driver) does not re-instantiate the per-site assembly inline,
 // which overflows the MinGW g++ compiler under -O2.
 //
 // Poisson OR negative-binomial abundance. Under NB the dispersion is a
