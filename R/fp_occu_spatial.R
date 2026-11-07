@@ -154,21 +154,14 @@
   X_p10 <- model$X_processes[[3]]; X_b   <- model$X_processes[[4]]
 
   if (temporal_only) {
-    ti <- as.integer(temporal$time_idx)
-    if (length(ti) != n_sites)
-      stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
-                          "sites; one time index per site is required for fp_occu ",
-                          "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
-    n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
-           else max(ti, na.rm = TRUE)
-    nl <- .tobs_fit_fp_occu_spatial(model, spatial = NULL, temporal = temporal,
-                                    max_iter = 200L, tol = 1e-8, verbose = FALSE,
-                                    integration = "grid")
-    hyper <- nl$temporal_hyper
-    hv <- function(k) suppressWarnings(as.numeric(hyper[[k]]))
-    fl <- .tobs_nuts_temporal_loading(temporal$type, n_t, tau = hv("tau"), rho = hv("rho"))
-    field_map <- ti
-    n_field_units <- n_t
+    tw <- .tobs_nuts_temporal_warm(temporal, n_sites, "fp_occu",
+      function(max_iter, tol)
+        .tobs_fit_fp_occu_spatial(model, spatial = NULL, temporal = temporal,
+                                  max_iter = max_iter, tol = tol, verbose = FALSE,
+                                  integration = "grid"))
+    nl <- tw$nl; fl <- tw$fl
+    field_map <- tw$field_map
+    n_field_units <- tw$n_field_units
   } else {
     adj <- as.matrix(spatial$graph)
     # Warm coefficients + fixed field hyper (tau, rho) from the nested-Laplace fit.

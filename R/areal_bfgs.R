@@ -120,6 +120,28 @@
   list(field_load = L, tau = tau, rho = rho, n_raw = ncol(L))
 }
 
+# Warm start shared by the temporal-only NUTS paths (removal / distance /
+# fp_occu / dyn_abun): checks one time index per site, runs the family's
+# temporal-only nested-Laplace fit `fit(max_iter, tol)`, and builds the whitened
+# temporal loading at its fitted hyperparameters. A hyperparameter the temporal
+# type does not carry (rho on rw1 / rw2 / iid) reads as NA.
+.tobs_nuts_temporal_warm <- function(temporal, n_sites, family, fit) {
+  ti <- as.integer(temporal$time_idx)
+  if (length(ti) != n_sites)
+    stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
+                        "sites; one time index per site is required for %s ",
+                        "NUTS + temporal."), length(ti), n_sites, family),
+         call. = FALSE)
+  n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
+         else max(ti, na.rm = TRUE)
+  nl <- fit(max_iter = 200L, tol = 1e-8)
+  hyper <- nl$temporal_hyper
+  hv <- function(k) unname(as.numeric(hyper[k]))
+  fl <- .tobs_nuts_temporal_loading(temporal$type, n_t,
+                                    tau = hv("tau"), rho = hv("rho"))
+  list(nl = nl, fl = fl, field_map = ti, n_field_units = n_t)
+}
+
 # ICAR / proper-CAR single-block field (parameter z, length n_sp). An unweighted
 # intercept field loads eta += z[map]; a varying-coefficient (SVC) field carries a
 # per-observation `weight` w and loads eta += w * z[map] (the field z is the
@@ -561,7 +583,7 @@
     if (!any(ok)) return(list(ok = FALSE))
     w[!ok] <- 0; w <- w / sum(w)
     wk    <- w[ok]; ik <- which(ok)
-    modes <- t(vapply(ik, function(k) res[[k]]$mode, numeric(n_fixed)))
+    modes <- .tobs_rows(lapply(ik, function(k) res[[k]]$mode), n_fixed)
     beta_mean  <- as.numeric(crossprod(wk, modes))
     V <- matrix(0, n_fixed, n_fixed)
     for (j in seq_along(wk)) {
@@ -576,17 +598,17 @@
     # `temporal_hyper`.
     n_sp_b <- vapply(blocks, function(b) as.integer(b$n_sp), 0L)
     field_means <- lapply(seq_len(n_blk), function(b) {
-      phis <- t(vapply(ik, function(k) res[[k]]$phi[[b]], numeric(n_sp_b[b])))
+      phis <- .tobs_rows(lapply(ik, function(k) res[[k]]$phi[[b]]), n_sp_b[b])
       as.numeric(crossprod(wk, phis))
     })
     hyper_means <- lapply(seq_len(n_blk), function(b) {
       h1 <- res[[ik[1L]]]$hyper[[b]]
       if (is.null(h1)) return(NULL)
-      Hm <- t(vapply(ik, function(k) res[[k]]$hyper[[b]], numeric(length(h1))))
+      Hm <- .tobs_rows(lapply(ik, function(k) res[[k]]$hyper[[b]]), length(h1))
       hm <- as.numeric(crossprod(wk, Hm)); names(hm) <- names(h1); hm
     })
     n_off <- length(res[[ik[1L]]]$eta_offset)
-    offs  <- t(vapply(ik, function(k) res[[k]]$eta_offset, numeric(n_off)))
+    offs  <- .tobs_rows(lapply(ik, function(k) res[[k]]$eta_offset), n_off)
     out <- list(ok = TRUE, beta_mean = beta_mean,
                 field_mean = field_means[[1L]], hyper = hyper_means[[1L]],
                 eta_offset = as.numeric(crossprod(wk, offs)),

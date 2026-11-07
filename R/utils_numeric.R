@@ -82,3 +82,10 @@
   }
   0.5 * (J + t(J))
 }
+
+# Stack equal-length numeric vectors as the rows of a matrix with `width`
+# columns. Unlike t(vapply(...)), a width of one still gives an n x 1 matrix.
+.tobs_rows <- function(lst, width) {
+  matrix(unlist(lst, use.names = FALSE), nrow = length(lst), ncol = width,
+         byrow = TRUE)
+}

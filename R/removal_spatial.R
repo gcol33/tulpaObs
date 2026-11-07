@@ -407,25 +407,18 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   K_max <- .removal_spatial_K_max(y_long, site_idx, n_sites, K_max)
 
   if (temporal_only) {
-    # Warm coefficients + fixed temporal hyper (tau, rho) from the temporal-only
-    # nested-Laplace areal-BFGS fit; the whitened temporal-field loading is the
-    # eigen-decomposition of tau Q_temporal (rank-deficient for rw1/rw2, so
-    # n_raw < n_t, the same sum-to-zero geometry as an intrinsic areal field).
-    ti <- as.integer(temporal$time_idx)
-    if (length(ti) != n_sites)
-      stop(sprintf(paste0("temporal term has %d time indices but the model has %d ",
-                          "sites; one time index per site is required for removal ",
-                          "NUTS + temporal."), length(ti), n_sites), call. = FALSE)
-    n_t <- if (!is.null(temporal$n_times)) as.integer(temporal$n_times)
-           else max(ti, na.rm = TRUE)
-    nlfit <- .tobs_fit_removal_spatial_bfgs(model, spatial = NULL, temporal = temporal,
-                                            mixture = mix_code, K_max = K_max,
-                                            max_iter = 100L, tol = 1e-6, verbose = FALSE)
-    hyper <- nlfit$temporal_hyper
-    hv <- function(k) suppressWarnings(as.numeric(hyper[[k]]))
-    fl <- .tobs_nuts_temporal_loading(temporal$type, n_t, tau = hv("tau"), rho = hv("rho"))
-    field_map <- ti
-    n_field_units <- n_t
+    # The whitened temporal-field loading is the eigen-decomposition of
+    # tau Q_temporal (rank-deficient for rw1/rw2, so n_raw < n_t, the same
+    # sum-to-zero geometry as an intrinsic areal field).
+    tw <- .tobs_nuts_temporal_warm(temporal, n_sites, "removal",
+      function(max_iter, tol)
+        .tobs_fit_removal_spatial_bfgs(model, spatial = NULL, temporal = temporal,
+                                       mixture = mix_code, K_max = K_max,
+                                       max_iter = max_iter, tol = tol,
+                                       verbose = FALSE))
+    nlfit <- tw$nl; fl <- tw$fl
+    field_map <- tw$field_map
+    n_field_units <- tw$n_field_units
     beta0 <- as.numeric(nlfit$means[seq_len(p_lam + p_p)])
     if (is_nb) beta0 <- c(beta0, log(if (is.finite(nlfit$r %||% NA_real_)) nlfit$r else 2))
   } else {
