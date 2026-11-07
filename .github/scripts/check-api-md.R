@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
-# Assert that the machine-derivable parts of API.md still describe the package.
+# Assert that the machine-derivable parts of notes/API.md still describe the package.
 #
-# README.md calls API.md "the full reference", and the parts of it that go stale
+# README.md calls notes/API.md "the full reference", and the parts of it that go stale
 # mechanically are the ones nothing recomputes: the export list, the simulator
 # table, the `tobs()` signature, and the sampler-control defaults. Each of those
 # has one authority in the package -- NAMESPACE, the exported `simulate_*`
@@ -12,7 +12,7 @@
 # Prose, family notes and worked examples are deliberately not checked: they
 # carry judgement a diff cannot supply.
 
-api <- readLines("API.md", warn = FALSE)
+api <- readLines("notes/API.md", warn = FALSE)
 txt <- paste(api, collapse = "\n")
 fail <- character()
 
@@ -24,7 +24,7 @@ exports <- sort(substr(exports, 8L, nchar(exports) - 1L))
 block <- txt
 start <- regexpr("[*][*]Fitter[*][*]", block)
 if (start < 0) {
-  fail <- c(fail, "API.md has no export list (looked for a **Fitter** group)")
+  fail <- c(fail, "notes/API.md has no export list (looked for a **Fitter** group)")
 } else {
   stop_at <- regexpr("> Structured terms", substring(block, start))
   listing <- substring(block, start,
@@ -83,10 +83,10 @@ if (requireNamespace("tulpaObs", quietly = TRUE)) {
 }
 
 if (length(fail)) {
-  cat("API.md is out of step with the package:\n\n")
+  cat("notes/API.md is out of step with the package:\n\n")
   cat(paste0("  - ", fail), sep = "\n")
   cat("\nRegenerate the affected block, or add the row by hand.\n")
   quit(status = 1L)
 }
-cat(sprintf("API.md matches the package (%d exports, %d simulators).\n",
+cat(sprintf("notes/API.md matches the package (%d exports, %d simulators).\n",
             length(exports), length(sims)))

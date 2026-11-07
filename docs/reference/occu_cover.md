@@ -201,7 +201,7 @@ resolution is the only way to raise this axis, because it does not
 densify when the donor `control$sigma.grid` does: on an informative data
 set the outer grid's quadrature effective sample size saturates on the
 copy amplitude while every other axis tracks the request (measured
-engine-side, `NOTES_measurements.md`). One block takes one of the two;
+engine-side, `notes/NOTES_measurements.md`). One block takes one of the two;
 giving both is an error. `control$alpha.grid[.trend]` and
 `control$alpha.n[.trend]` are the wire format these compile into and are
 refused as user input.
@@ -214,7 +214,7 @@ uniformity p-value is 9.1e-05, against 0.17 at 3 visits – and
 Thirteen slab nodes do not (the field SD still reads 4.5e-03), and the
 price is a 2.3-3x longer fit, since the outer grid is a tensor. Point
 estimates are not affected the way the intervals are; the measurement is
-in `NOTES_measurements.md`.
+in `notes/NOTES_measurements.md`.
 
 ## Coupled fields and spatially-varying trends
 

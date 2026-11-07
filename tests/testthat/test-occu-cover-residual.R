@@ -9,7 +9,7 @@
 # What is asserted here: the syntax resolves, the gates fire, the basis is
 # orthogonal and correctly capped, `residual = "full"` is the SAME fit as the
 # placed-bar spelling, and the rank sweep behaves as measured
-# (NOTES_measurements.md). What is NOT asserted is the plan's original
+# (notes/NOTES_measurements.md). What is NOT asserted is the plan's original
 # expectation that the sweep converges on a BETTER fit as r grows -- it converges
 # on the full-rank one, and in a confounded fixture that one is the degenerate
 # end, which is why the rank floor is a guard here rather than a target.
@@ -290,7 +290,7 @@ test_that("a deviation composes with a psi RE and with a trend field", {
 # neighbouring #299 fixture inverted its own verdict, and this fixture family is
 # exposed to exactly that.
 #
-# The measurement (12 seeds, NOTES_measurements.md) separates two effects that
+# The measurement (12 seeds, notes/NOTES_measurements.md) separates two effects that
 # the plan had bundled together:
 #
 #   * The AMPLITUDE's identification comes from the deviation's SD being pinned,

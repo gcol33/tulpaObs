@@ -480,7 +480,7 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   # The collapse is not cosmetic on the log_r block: at 8 and 36 species with a
   # simulated sigma_logr = 0.5, the fits recovering sigma_log_r >= 0.30 cover
   # mu_log_r 33/34 while those below cover 2/5, with the point estimate 2.2x
-  # further out and the interval 28% narrower (#235, NOTES_measurements.md).
+  # further out and the interval 28% narrower (#235, notes/NOTES_measurements.md).
   # At 18 species that joint movement is absent -- the error is uncorrelated
   # with the recovered SD there and only the interval tracks it -- so the pooled
   # split is not a property of the family at every group count (#280, #250).

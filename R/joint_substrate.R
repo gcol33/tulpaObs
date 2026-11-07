@@ -105,7 +105,7 @@
 # The resolution is the only way to raise this axis: it does not densify when
 # the donor `sigma.grid` does, so on informative data the outer grid's
 # quadrature effective sample size saturates on the copy amplitude while every
-# other axis tracks the request (`NOTES_measurements.md`).
+# other axis tracks the request (`notes/NOTES_measurements.md`).
 #
 # A grid-integrated fit hands the ENGINE the axis rather than its nodes, so a
 # fit raising the resolution never restates the structure: `alpha_n` is resolved
@@ -206,7 +206,7 @@
 #   * MULTI-block driver -- the copy spec STAYS, pinned at 0. That driver offers
 #     the SD parameterization only to a COPIED block; a non-copied one rides its
 #     precision `b<k>.tau` instead. Same implied SDs, different prior MEASURE on
-#     the field's scale, and the shift is measurable (`NOTES_measurements.md`).
+#     the field's scale, and the shift is measurable (`notes/NOTES_measurements.md`).
 #     Dropping the copy to tidy the reporting would re-prior the shared field.
 #
 # Either way `alpha` must not be REPORTED when there is no copy: a pinned axis

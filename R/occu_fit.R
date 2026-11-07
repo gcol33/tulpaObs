@@ -75,7 +75,7 @@
   # .TOBS_COUNT_ROUTES, the occupancy Newton / EM routes below default to 300
   # iterations at tol 1e-4. The EM converges linearly and slowly on the weakly
   # identified psi-p ridge at J = 2, so the budget is set from the slowest
-  # converging fit, not the typical one (NOTES_measurements.md, "EM iterations
+  # converging fit, not the typical one (notes/NOTES_measurements.md, "EM iterations
   # to converge"). A cap only stops fits that have not met `tol`, so a fit
   # converging earlier is unchanged by it. A caller's value reaches every
   # route, so the caller's request is kept apart from the default that fills

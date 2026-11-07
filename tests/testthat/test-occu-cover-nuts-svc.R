@@ -319,7 +319,7 @@ test_that("occu_cover two-field NUTS recovers both surfaces (#214)", {
   #
   # Do NOT take this back to a smaller grid, and do not let a 3-seed subset
   # settle it: seeds 4001-4003 alone put side 10 at 0.857 and passing, which the
-  # full six reverse to 1.422 and failing. Measured in NOTES_measurements.md.
+  # full six reverse to 1.422 and failing. Measured in notes/NOTES_measurements.md.
   pars      <- c("field_sd", "field_sd_trend", "alpha", "alpha_trend")
   truth_amp <- c(0.8, 0.7, 1.0, 0.9)
   fcor <- tcor <- div <- rhat <- rep(NA_real_, n_seeds)

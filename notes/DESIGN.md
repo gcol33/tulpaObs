@@ -1,4 +1,4 @@
-# DESIGN.md
+# notes/DESIGN.md
 
 Where a new thing plugs in. Read this BEFORE adding a family, a prior, a backend,
 or a diagnostic.
@@ -8,9 +8,9 @@ Three repo docs, three jobs. Do not mix them:
 - `CLAUDE.md` = the ROSTER. What each family supports, per backend, at its
   stated 150k budget. `AGENTS.md` is a one-line pointer to it, for agent
   tooling that looks for that filename by convention.
-- `NOTES_measurements.md` = the NUMBERS the roster rests on. Fixtures, seeds,
+- `notes/NOTES_measurements.md` = the NUMBERS the roster rests on. Fixtures, seeds,
   wall times, per-seed recovery.
-- `DESIGN.md` (this file) = the EXTENSION POINTS. Which single object to edit,
+- `notes/DESIGN.md` (this file) = the EXTENSION POINTS. Which single object to edit,
   and which duplication is deliberate.
 
 This file stays short so it gets read in full. It carries no family roster and no

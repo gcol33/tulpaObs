@@ -176,7 +176,7 @@ gives either, per block. The resolution is the only way to raise this axis,
 because it does not densify when the donor \code{control$sigma.grid} does: on an
 informative data set the outer grid's quadrature effective sample size
 saturates on the copy amplitude while every other axis tracks the request
-(measured engine-side, \code{NOTES_measurements.md}). One block takes one of the
+(measured engine-side, \code{notes/NOTES_measurements.md}). One block takes one of the
 two; giving both is an error. \code{control$alpha.grid[.trend]} and
 \code{control$alpha.n[.trend]} are the wire format these compile into and are
 refused as user input.
@@ -188,7 +188,7 @@ the data are informative -- at 10 visits per site its uniformity p-value is
 scored quantity to nominal at both. Thirteen slab nodes do not (the field SD
 still reads 4.5e-03), and the price is a 2.3-3x longer fit, since the outer
 grid is a tensor. Point estimates are not affected the way the intervals are;
-the measurement is in \code{NOTES_measurements.md}.
+the measurement is in \code{notes/NOTES_measurements.md}.
 }
 
 \section{Coupled fields and spatially-varying trends}{

@@ -30,7 +30,7 @@
 # near zero is one WAIC correctly penalises for carrying the offsets: its
 # effective parameter count triples for almost no gain in lppd. At 2.0 the
 # smallest margin over 12 fits on both arms is 2.8x the band it has to clear.
-# See NOTES_measurements.md.
+# See notes/NOTES_measurements.md.
 .ocnl_sim <- function(seed, arm = "p", side = 6L, J = 6L, n_g = 6L,
                       sigma_re = 2.0) {
   adj <- rook_adj(side)

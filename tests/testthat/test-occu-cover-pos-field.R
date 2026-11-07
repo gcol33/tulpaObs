@@ -245,7 +245,7 @@ test_that("occu_cover cover-arm intercept field SD recovers across seeds", {
   # 40 outside this band -- so min / max over six draws holds with probability
   # 0.95^6 ~ 0.735, and the test carried a ~26% failure rate on ANY platform,
   # independent of the estimator. The band is right; the extremes of six draws
-  # are the wrong statistic for it. Numbers in NOTES_measurements.md.
+  # are the wrong statistic for it. Numbers in notes/NOTES_measurements.md.
   expect_gt(stats::median(rec), 0.4)
   expect_lt(stats::median(rec), 0.85)
   # Per-seed gross-regression guard, budgeted as one: wide enough that the

@@ -56,4 +56,4 @@ Ecologists with repeated-visit detection histories, replicated counts, distance 
 - README.Rmd / README.md: claim, relation, installation, first fit, one section per arc, routing, citation.
 - vignettes/tulpaObs.Rmd: Get started.
 - Topic vignettes: one family or structure each; two comparisons with INLA.
-- Help pages and API.md: argument and return-value contracts.
+- Help pages and notes/API.md: argument and return-value contracts.

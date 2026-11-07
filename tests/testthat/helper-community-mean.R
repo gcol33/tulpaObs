@@ -31,7 +31,7 @@
 # for a draw measured on however many seeds the sweep ran, which at ~20 seeds
 # has a 95% range of about +-22% on its own. #280 and #285 read an 18-species
 # block that drew 18-21% wide as a 1.28x-narrow SE; it calibrates against
-# `mu_log_r_real` (NOTES_measurements.md).
+# `mu_log_r_real` (notes/NOTES_measurements.md).
 expect_community_mean <- function(fit, real, tol) {
   est <- unname(fit$means[seq_along(real)])
   stopifnot(length(tol) == length(real))

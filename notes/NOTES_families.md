@@ -1,9 +1,9 @@
-# NOTES_families.md
+# notes/NOTES_families.md
 
 Deep implementation notes moved out of `CLAUDE.md` to keep it inside its
 character budget. `CLAUDE.md` keeps the rules, contracts, gates and pointers;
 this file keeps the mechanics behind them. Same convention as
-`NOTES_measurements.md`: committed alongside, Rbuildignored.
+`notes/NOTES_measurements.md`: committed alongside, Rbuildignored.
 
 ## occu_cover() obs-arm RE: parse, design, blocks, postprocess (#102/#103)
 
@@ -123,7 +123,7 @@ per-block suffixed hypers (`sigma_trend`, `alpha_trend`, `field_sd_trend`, index
 several) in `hyper_draws` / `sampled_hyper` / `fixed_hyper`, and
 `fit$spatial$field_suffix`/`field_weights` so `.tobs_occu_cover_sampled_field()` sums
 every block's loading into the criteria. Both surfaces recover w/ 0 divergences;
-numbers in `NOTES_measurements.md`. `test-occu-cover-nuts-svc.R`. Correlated `|` (one
+numbers in `notes/NOTES_measurements.md`. `test-occu-cover-nuts-svc.R`. Correlated `|` (one
 free-Sigma MCAR block), temporal + RE still gated -> n-L. group.var maps sites>cells;
 predict() needs the joint object (non-spatial laplace AND nuts both error w/ pointer);
 sampled-field (estimated-variance) route = `ms_occu_cover()` factor (tulpa#67).
@@ -148,7 +148,7 @@ sampled-field (estimated-variance) route = `ms_occu_cover()` factor (tulpa#67).
   driver exposes ONE `grad_eta`, so the surfaces would otherwise be fit against the
   detection arm). The N-mixture families (`abun`/`ms_abun`) do NOT get it: their areal
   path is the C++ count-spatial driver, not this one. NUTS still errors everywhere but
-  single-season occu(). Surface cor in `NOTES_measurements.md`.
+  single-season occu(). Surface cor in `notes/NOTES_measurements.md`.
   `test-svc-families-recovery.R`. The driver also returns `res$eta_offset`, the
   marginalised per-observation offset the blocks jointly load; the family wrappers
   read it instead of re-deriving each block's site map, which also fixed the
@@ -196,7 +196,7 @@ everywhere (a detected visit may carry NA cover, missing-at-random); the PPC use
 score that NA and returned `fit.y = NA` for every draw.
 ## community_latent.R: why loadings come from the marginal, not the joint mode (#153/#156)
 
-**Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Factor update holds zeta at its joint mode -> `(zeta, lambda)` is a joint-likelihood estimate with `Ns*Q` incidental params growing with the sample = Neyman-Scott, inconsistent. Site factors' estimation error lands in the fitted co-occurrence and lambda absorbs it, over-fit growing with Q/S. Fix = `.tobs_latent_factor_mmle()`: EM on the SAME joint site marginal over all S*Q loadings (E-step = posterior `p(z_i|y_i)` off `.tobs_latent_joint_grid()`; M-step = per-species Qk-dim weighted Newton, backtracked on expected complete-data ll). Numbers in `NOTES_measurements.md`.
+**Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Factor update holds zeta at its joint mode -> `(zeta, lambda)` is a joint-likelihood estimate with `Ns*Q` incidental params growing with the sample = Neyman-Scott, inconsistent. Site factors' estimation error lands in the fitted co-occurrence and lambda absorbs it, over-fit growing with Q/S. Fix = `.tobs_latent_factor_mmle()`: EM on the SAME joint site marginal over all S*Q loadings (E-step = posterior `p(z_i|y_i)` off `.tobs_latent_joint_grid()`; M-step = per-species Qk-dim weighted Newton, backtracked on expected complete-data ll). Numbers in `notes/NOTES_measurements.md`.
 
 ## ms_abun(negbin): the mu_log_r interval, and the variance-component gate (#235/#250/#280/#285)
 
@@ -209,7 +209,7 @@ measured over ~20 seeds it carries most of the spread, so an ordinary fluctuatio
 DRAW reads as a miscalibrated SE. Put the draw at its expectation AND rebuild the SE at
 the simulated sigma and the interval scale is calibrated at EVERY group count (`S = 8 /
 18 / 36`); the `S = 18` spike #280/#285 filed is that seed block drawing its species
-means ~18.5% wide, not the estimator. Numbers in `NOTES_measurements.md`.
+means ~18.5% wide, not the estimator. Numbers in `notes/NOTES_measurements.md`.
 
 Two readings this replaces, both from the same data. #280's "~24% too narrow, uniformly"
 is wrong: a handful of fits carried a third of `sum(z^2)`. #235's successor reading --
@@ -346,7 +346,7 @@ The alpha axis carries prior structure (atom at 0 + log slab over [0.1, 3]), so
 structure with them; `control$alpha.n[.trend]` states a RESOLUTION -- the engine
 re-reads its OWN axis w/ n SLAB nodes (axis length n+1), atom + bounds unchanged.
 Needed because the alpha axis does NOT densify when the donor `sigma.grid` does, so
-outer-grid quadrature ESS saturates on it (`NOTES_measurements.md`). ONE resolver
+outer-grid quadrature ESS saturates on it (`notes/NOTES_measurements.md`). ONE resolver
 `.tobs_alpha_axis()` (`R/joint_substrate.R`) -> the two engine-facing fields
 (`alpha_grid`, `alpha_n`), shaped by `.tobs_alpha_copy_spec()` (multi-block driver) /
 `.tobs_alpha_field_coef()` (single-block pos arm); EVERY joint route reads it --
@@ -509,7 +509,7 @@ Moved verbatim out of the `CLAUDE.md` "What works (tested)" table, which keeps t
 | Joint occu + cover | Yes | Yes | `occu_cover()` — see below. NUTS non-spatial (in-tree FullGradFn over exact two-state marginal, beta/lognormal; `R/occu_cover_nuts.R`, `src/occu_cover_nuts.cpp`) AND spatial coupled areal field (#74, car_proper recovers; icar/bym2 sample + centre via the #71 sum-to-zero coupled field, #113) with its HYPERS SAMPLED (#204: field SD, bym2/car mixing rho, copy amplitude alpha — fixed basis, no per-step decomposition; `fit$nuts$sampled_hyper`/`$fixed_hyper` report per fit). Community sampled-field (per-species loadings) route = `ms_occu_cover()` factor |
 | occu + cover + areal field + per-group RE | n-L | — | `occu_cover()` + icar/bym2 + `re(g)`/`(1\|g)` on psi; one iid RE block (#56); `sigma_re` + BLUPs; intercept RE only |
 | occu + cover independent cover-arm field (single-arm `to="positive"`) | n-L | — | `occu_cover()` + `spatial(~ 1 + w \|\| cell, graph, to="positive")` on the occurrence formula (#110): NON-copied ICAR block(s) on the cover arm ALONE, decoupled from the occupancy field's alpha copy, so `delta_cover_cond` varies instead of collapsing when `alpha->0` (composes w/ the shared occupancy field, which psi + `delta_cover_exp` keep). Parse via `.occu_cover_spatial_fields` -> `spatial_info$pos_armspec`; the fitter appends the non-copied blocks (`spatial_idx` psi=0/p=0/pos=cell, own `tau_grid`, svc_weight for trend) after the occ fields, before RE blocks, and `ctx$field_specs` labels each block shared-vs-pos. Draw substrate reads `field_specs` (pos block amp_occ=0, amp_pos=1/sqrt(tau)) -> predict/WAIC add it to `field_pos` automatically. Reports `sigma_pos_field`/`sigma_pos_field_<col>` (from `b<k>.tau`), `fit$pos_field`/`pos_field_table(s)`. Per-visit cover (`cover_aggregate="none"`); icar only (bym2/car->icar); NOT w/ MCAR `\|`, latent cover RE, or batch. Static intercept field weakly ID'd vs the alpha copy; time-weighted trend cleanly ID'd. `test-occu-cover-pos-field.R` |
-| occu + cover shared field + arm deviation (`share(residual=)`) | n-L | — | `occu_cover()` + `share(spatial(), residual = "full" | r)` in the positive formula (`R/occu_cover_residual.R`): cover arm carries `alpha*w + delta`. `"full"` = one latent/node, compiles to the SAME blocks as the #110 placed-bar spelling (`expect_identical`); what it adds is the IDENTIFIED alpha = projection of the cover-arm surface onto the occurrence surface, taken on the ETA scale (latents are unit-scale, amplitudes ride the outer grid -- adding them unscaled compares two units). `r` = r weighted `iid` blocks on a basis orthogonalized against the shared field (`.tobs_residual_basis`), latent K+r not 2K, orthogonality exact. Deviation SD PINNED: a free SD is one outer axis PER BLOCK. Forces `integration="grid"` -- the CCD counts pinned axes and builds a 2^(d-1) factorial. Costs one warm fit (reference + pin). **Rank REGULARIZES**: the sweep converges on the full-rank fit and that is a LOSS when the arms are confounded -- 12-seed table + the pinned-SD control separating rank from pin in `NOTES_measurements.md`. Gated: one per fit, not beside a placed cover-arm field, not with `alpha=0`, not with `|` MCAR, n-L only. `test-occu-cover-residual.R` |
+| occu + cover shared field + arm deviation (`share(residual=)`) | n-L | — | `occu_cover()` + `share(spatial(), residual = "full" | r)` in the positive formula (`R/occu_cover_residual.R`): cover arm carries `alpha*w + delta`. `"full"` = one latent/node, compiles to the SAME blocks as the #110 placed-bar spelling (`expect_identical`); what it adds is the IDENTIFIED alpha = projection of the cover-arm surface onto the occurrence surface, taken on the ETA scale (latents are unit-scale, amplitudes ride the outer grid -- adding them unscaled compares two units). `r` = r weighted `iid` blocks on a basis orthogonalized against the shared field (`.tobs_residual_basis`), latent K+r not 2K, orthogonality exact. Deviation SD PINNED: a free SD is one outer axis PER BLOCK. Forces `integration="grid"` -- the CCD counts pinned axes and builds a 2^(d-1) factorial. Costs one warm fit (reference + pin). **Rank REGULARIZES**: the sweep converges on the full-rank fit and that is a LOSS when the arms are confounded -- 12-seed table + the pinned-SD control separating rank from pin in `notes/NOTES_measurements.md`. Gated: one per fit, not beside a placed cover-arm field, not with `alpha=0`, not with `|` MCAR, n-L only. `test-occu-cover-residual.R` |
 | occu + cover independent detection-arm field (single-arm `to="detection"`) | n-L | — | `occu_cover()` + `spatial(~ 0 + time \|\| cell, graph, to="detection")` on the `detection` formula (or lifted `to="detection"`) (tulpa#140): spatially-structured detection prob. Same non-copied arm-specific block machinery as the cover-arm field (#110) -- `arm_field_blocks(af, "p")` sets slot 2 (`spatial_idx` psi=0/p=cell/pos=0). Enters via detection-arm `field_coef=1` (set when `det_armspec` present) so the block scatters onto the p rows; the shared occ field stays off detection by its `spatial_idx=0` sentinel -- identical to the #102 detection-RE mechanism, so NO tulpa engine change. Reports `sigma_p_field`/`sigma_p_field_<col>`. icar only; per-visit cover. `test-occu-cover-pos-field.R` |
 | occu + cover obs-arm RE (detection / pos) | n-L | Yes | `occu_cover()` + RE on `detection=`/`positive=`; per-visit grouping. Intercepts: `(1\|g)`, crossed `(1\|g)+(1\|h)`, nested `(1\|g/h)` = N iid blocks (#102 single, #103 crossed/nested). Slopes (#103, tulpa>=0.0.39): uncorr `(x\|\|g)`/`(0+x\|g)` = weighted iid per coef; corr `(1+x\|g)` = miid free-Sigma block. `sigma_re_p`/`sigma_re_pos` (+`_<coef>`, `cor_re_p_*`) + BLUPs. **NUTS = INTERCEPTS, non-spatial (#205)**: each grouping = one shared `ReBlock` (`src/nuts_re_block.h`, reused not re-derived) trailing the field block, non-centered `b_g=sigma_re*z_g`, group SD SAMPLED (prior `N(0,1.5^2)` on `log sigma_re`, the observation-family width -- written ON the sampled coordinate, so NO change-of-variables term; asserted by reducing the target to the prior at `z=0`). Row-indexed, NOT site-indexed: one `re_group` code per `(site,visit)` row, 0 = padded/unseen level (engine's scatter sentinel). Designs from the SAME `.occu_cover_obs_re_parse`/`_design` as n-L (one dispatch-level call site). `fit$re` keys + `ranef()` match n-L; adds `sigma_median`/`sigma_draws`, `fit$nuts$re_sigma_rhat`. `fit$draws`/`vcov` stay the coefficient block (WAIC reads it -> scores RE at 0, as the sampled field already does). Off-block byte-identity `expect_identical`. Gated -> n-L: slopes, RE+areal field. `test-occu-cover-nuts-re.R` |
 | occu + cover + detection / cover-arm RE | n-L | — | `occu_cover()` + `(1\|g)`/`re(g)` on `detection=` or `positive=` (#102); per-VISIT grouping iid block on that arm, composes w/ psi field; `sigma_re_p`/`sigma_re_pos` + BLUPs; `fit$re` per-arm list; `predict(type="detection")` adds BLUP offset, unseen->pop mean. Detection arm `field_coef=1` (not 0) so the iid block scatters, field still skipped via `spatial_idx=0` sentinel. pos RE needs `cover_aggregate="none"`. Intercept only; slope/correlated/non-spatial/NUTS gated |

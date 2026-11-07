@@ -1271,7 +1271,7 @@
 # its j-th column by (1 - rho lambda_j)^(-1/2): at rho lambda_max = 1 - 1e-4 the
 # field's leading direction carries a scale of 100, so the sampler has a
 # near-intrinsic funnel inside its own support. Measured on the coupled
-# fixture, the difference is in NOTES_measurements.md.
+# fixture, the difference is in notes/NOTES_measurements.md.
 .ochf_rho_support <- function(bounds, lambda) {
   if (is.null(bounds)) return(NULL)
   r  <- sort(as.numeric(bounds))

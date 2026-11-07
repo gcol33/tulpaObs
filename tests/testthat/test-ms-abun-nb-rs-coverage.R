@@ -100,7 +100,7 @@ test_that("ms_abun(negbin) mu_log_r 95% CI covers at the nominal rate", {
   # p = 0.12), which is most of the k = 1.277 that #280 and #285 report.
   #
   # Measured on these 19 fits (dev_notes/_i285_*.R over the 97-fit sweep behind
-  # #285; NOTES_measurements.md):
+  # #285; notes/NOTES_measurements.md):
   #
   #   bias  mean(est) - mu                +0.017  (0.42 SE of the mean)
   #   sd(est)                              0.1733

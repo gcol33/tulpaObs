@@ -531,7 +531,7 @@ test_that("NUTS recovers the community means under the constrained K = 2 path", 
   # sampler seed moves it only 0.009 to 0.049. At 0.99 the two worst draws
   # fall to 0.043 and 0.032, and their community-mean correlation rises
   # (0.915 -> 0.970), so the step size was biasing the posterior and not
-  # merely counting against it. See NOTES_measurements.md.
+  # merely counting against it. See notes/NOTES_measurements.md.
   fit <- tobs(~ occ_cov1 + icar(graph = adj), data = sim$data,
               family = ms_occu_cover("lognormal"), detection = ~ det_cov1,
               positive = ~ pos_cov1, y = sim$y, y.pos = sim$y_pos,
@@ -743,7 +743,7 @@ test_that("Laplace-EM recovers the rank-2 spatial structure (K = 2)", {
   # the threshold sits inside the distribution, not below it, so asserting it on
   # each of two seeds held with probability near 0.67^2 ~ 0.45 whatever the
   # platform. 12 seeds put the mean's standard error at 0.032, which clears 0.6
-  # by ~2 SE. Numbers in NOTES_measurements.md.
+  # by ~2 SE. Numbers in notes/NOTES_measurements.md.
   adj <- .mscs_grid_adj(9L, 9L); N <- nrow(adj); S <- 20L; K <- 2L
   seeds <- c(2024L, 77L, 1L, 2L, 3L, 11L, 42L, 101L, 202L, 303L, 404L, 505L)
   fcor <- numeric(length(seeds))

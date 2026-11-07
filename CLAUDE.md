@@ -8,13 +8,13 @@ file named.)
 instruction files at 150k combined, and the global `~/.claude/CLAUDE.md` (~48k)
 shares that cap. Keep RULES + CONTRACTS
 here; put the MEASUREMENTS they rest on (fixtures, seeds, wall times, per-seed
-recovery numbers, cost ratios) in `NOTES_measurements.md`, committed alongside and
+recovery numbers, cost ratios) in `notes/NOTES_measurements.md`, committed alongside and
 Rbuildignored, and the MECHANICS behind a rule (kernel internals, block layouts,
-derivations) in `NOTES_families.md`, same convention. Adding a paragraph of
+derivations) in `notes/NOTES_families.md`, same convention. Adding a paragraph of
 numbers here costs someone else's context.
 
-**Adding a family / prior / backend / diagnostic -> read `DESIGN.md` FIRST.** This
-file is the ROSTER (what each family supports); `DESIGN.md` is the EXTENSION POINTS
+**Adding a family / prior / backend / diagnostic -> read `notes/DESIGN.md` FIRST.** This
+file is the ROSTER (what each family supports); `notes/DESIGN.md` is the EXTENSION POINTS
 (which single registry to edit, which duplication is deliberate). Short by design;
 read it in full. Do not restate the roster there or the extension points here.
 
@@ -67,14 +67,14 @@ not. Default `re.aghq=TRUE` (`control=list(n.quad=)`) debiases via adaptive GH o
 exact per-group marginal (single grouping factor, one arm, dim<=3; else EM
 fallback). Engine `tulpa::tulpa_re_aghq()`; `R/re_aghq.R` (`.tobs_re_aghq()`)
 wraps, supplies occ/det site marginal as `make_site`. AGHQ removes most of the
-small-cluster sigma bias on both arms (`NOTES_measurements.md`). Det-arm
+small-cluster sigma bias on both arms (`notes/NOTES_measurements.md`). Det-arm
 RE params named for det process (`sigma_p<t>_*`, `re_p<t>_*`). Default LKJ
 (`re.lkj=1.5`) per corr block regularizes weak correlation off +-1 (SDs untouched;
 `re.lkj=1` disables). RE naming + BLUP recon both engines in `R/re_effects.R`
 (`ranef()`/`coef()` in `R/methods.R`); corr off-diag `cor_<g>_<ci>_<cj>`.
 
 Legacy internal: `.tobs_build_model()`, `.tobs_fit_model()`, `.tobs_laplace()`.
-Family roster: `PLAN_tulpaObs.md`; dispatcher `R/obs_families.R` + `R/tobs.R`.
+Family roster: `.tobs_family_methods` (`R/tobs_helpers.R`); dispatcher `R/obs_families.R` + `R/tobs.R`.
 
 ## Common commands
 
@@ -104,7 +104,7 @@ Do NOT run on every edit. Ladder:
 2. **Whole-suite smoke** (plumbing/dispatch/closed-form, no fits) ->
    `Sys.setenv(TULPAOBS_FAST = "1"); devtools::test()`. `skip_if_fast()` gates
    every fitting block; no-op when env var unset. Baseline assertion/skip counts
-   + the #148 fix history: `NOTES_measurements.md`. Wall time NOT measured (box
+   + the #148 fix history: `notes/NOTES_measurements.md`. Wall time NOT measured (box
    shared) -- time it yourself, do NOT trust old figures.
 
    **The switch is `TULPAOBS_FAST`, NOT the engine's `TULPA_FAST`.** Setting the
@@ -157,7 +157,7 @@ Do NOT run on every edit. Ladder:
    decision, NOT an inconsistency to tidy up.
 
    26 of 286 files carry an environment- or outcome-dependent skip; the full
-   partition and the betareg worked example are in `NOTES_measurements.md`. The
+   partition and the betareg worked example are in `notes/NOTES_measurements.md`. The
    rule that has to be here: **4 of those gate on a FIT OUTCOME**
    (`fit$converged` and friends), which a Suggests list does NOT predict and
    two sweeps on one box CANNOT bound -- fixed seeds make them deterministic
@@ -238,7 +238,7 @@ Fixed upstream 2026-08-11 (r-source `a2066dd40`, PR19104); no released R has it
 yet. **Until the next R release: never run the parallel tier while anything is
 BUILDING the package** -- that takes it from rare to common -- or run serially.
 Ruled out by measurement, do not re-chase: binaries, resource exhaustion,
-out-of-range vector/Eigen indexing, file ordering, callr (`NOTES_measurements.md`
+out-of-range vector/Eigen indexing, file ordering, callr (`notes/NOTES_measurements.md`
 for the numbers). The SERIAL route (`TESTTHAT_PARALLEL=false`) is clean; the
 `makeCluster` route is neither implicated nor cleared.
 
@@ -279,11 +279,11 @@ floor, `Remotes` tag, and installed `tulpa`/`tulpaMesh` disagree -> #150 skew
 cannot reopen silently.
 
 `R-CMD-check` also sets `TULPAOBS_FAST=1`: check runs `tests/` itself, ungated
-that = tier 3, blew the job cap. Green baseline counts: `NOTES_measurements.md`.
+that = tier 3, blew the job cap. Green baseline counts: `notes/NOTES_measurements.md`.
 
 **Linux runner != local box; two test classes feel it.** Both surfaced on the
 first CI run, neither reproduces on Windows. Magnitudes + the #153 case history:
-`NOTES_measurements.md`.
+`notes/NOTES_measurements.md`.
 
 - *Exact float equality across two BLAS call shapes.* Batched ploglik
   (`R/diagnostics.R`) builds eta w/ one GEMM; the R oracle builds it per draw as
@@ -304,7 +304,7 @@ first CI run, neither reproduces on Windows. Magnitudes + the #153 case history:
   Two things make that tolerance looser than it reads -- estimand scored
   against the wrong constant, and `tolerance`'s relative/absolute switch --
   take out BOTH before a community recovery number means anything; mechanism +
-  the fix for each: `NOTES_families.md`.
+  the fix for each: `notes/NOTES_families.md`.
 
   One-sided shift = property of the MEAN deviation over seeds, NOT of one fit
   -> assert in a multi-seed loop. Single-seed assertion = gross-regression
@@ -339,7 +339,7 @@ per-obs prob scale `det_prob=q` (scaled-Bernoulli) -> converged Hessian = margin
 curvature, `fitted_eta_var` = calibrated per-cell predictive variance. Per-row eta
 posterior = Gaussian mixture over cells (`.nested_psi_mean()`,
 `.nested_psi_quantiles()`). Calibrated on a 10x10 icar/bym2 fixture
-(`NOTES_measurements.md`). Old tulpa w/o `fitted_eta_var` -> NA intervals.
+(`notes/NOTES_measurements.md`). Old tulpa w/o `fitted_eta_var` -> NA intervals.
 
 **Simplified-Laplace skew correction** (`simplified_laplace.R`, `sla_*` files):
 orthogonal post-fit marginal refine, `approx="simplified_laplace"` (`*_sla` methods).
@@ -361,7 +361,7 @@ closed-form (or exact HMM-forward, dyn_abun) marginal over
 latent N, analytic gradients, in-tree FullGradFn driving tulpa NUTS engine (shared
 `src/nuts_engine.h`), draws -> WAIC/LOO. All filed observation-family issues shipped.
 
-Per-family mechanics (removal / distance / fp_occu / dyn_abun: kernels, arms, RE, areal + detection-arm fields, NUTS scope): `NOTES_families.md` "Observation families: per-family mechanics".
+Per-family mechanics (removal / distance / fp_occu / dyn_abun: kernels, arms, RE, areal + detection-arm fields, NUTS scope): `notes/NOTES_families.md` "Observation families: per-family mechanics".
 
 ### N-mixture abundance (`abun()`)
 
@@ -413,7 +413,7 @@ per-process `pi$link` (logit default, log for lambda). `simulate_abun()` +
   untouched and look identical from outside; assert on the gap itself. What it buys is
   confined to heavy-tailed seeds, so this is a tier-3 fix, NOT a way to shrink
   `test-ms-abun-factor.R` -- its lever is `factor.starts`. Numbers in
-  `NOTES_measurements.md`.
+  `notes/NOTES_measurements.md`.
 - **Areal** (`nested_laplace`): icar/bym2/car_proper on abundance ->
   `.tobs_fit_nmix_spatial()` -> `nmix_laplace_{icar,bym2,car_proper}` (one unit/site).
   Cov grid-integrated (law of total cov): kernels return per-grid `cov_blocks`, wrapper
@@ -515,8 +515,8 @@ S3).
   `?ms_abun`. A coverage floor here CANNOT be a tripwire (the SE at TRUE sigma still
   misses -- draw excess untouched), so `test-ms-abun-nb-rs-coverage.R` asserts
   unbiasedness, normality, a gross floor + a WIDE draw-corrected scale band. Evidence
-  (+ what was refuted en route) + numbers: `NOTES_families.md` /
-  `NOTES_measurements.md`.
+  (+ what was refuted en route) + numbers: `notes/NOTES_families.md` /
+  `notes/NOTES_measurements.md`.
 - **NUTS** (`method="nuts"`, #14; `R/ms_abun_nuts.R`, `src/ms_abun_nuts.cpp`): samples
   EXACT joint posterior over closed-form Royle marginal -> calibrated intervals +
   per-(species,site) WAIC/LOO (`.tobs_ploglik_ms_nmix`). NON-CENTERED: per-species block
@@ -536,7 +536,7 @@ S3).
   `test-ms-abun-nuts.R`. Design note `dev_notes/design_73.md`.
   **Latent-N ceiling PER (species, site) (#233)**: warm-mode-lambda tail
   quantile, an EXCURSION margin re-checked every fit; kernel arity untouched.
-  Contract + numbers in `NOTES_measurements.md`.
+  Contract + numbers in `notes/NOTES_measurements.md`.
 
 #### Areal-spatial community N-mixture (`ms_abun()` + shared field; sfMsNMix)
 
@@ -642,7 +642,7 @@ what the report already computed -> nothing simulated twice (hence
 
 ## What works (tested)
 
-`n-L` = nested_laplace. Support matrix only: per-row detail (mechanics, gates, test files, what recovers) is in `NOTES_families.md` "Feature roster: per-row detail". `.tobs_family_methods` (`R/tobs_helpers.R`) stays the authority on which method a family accepts.
+`n-L` = nested_laplace. Support matrix only: per-row detail (mechanics, gates, test files, what recovers) is in `notes/NOTES_families.md` "Feature roster: per-row detail". `.tobs_family_methods` (`R/tobs_helpers.R`) stays the authority on which method a family accepts.
 
 | Feature | Laplace | NUTS |
 |---|---|---|
@@ -765,7 +765,7 @@ pointer. The grid-integrated (`nested_laplace`) route reaches the same criteria;
 occupancy-arm RE (#56) is per SITE, so its group codes sit on `model$re_psi` and the
 builder adds the per-group draw to `field_occ`.
 **Copy axis (#287):** `control$alpha.n[.trend]` = RESOLUTION of the engine's alpha
-axis; `alpha.grid` STATES nodes. One per block. See `NOTES_families.md`.
+axis; `alpha.grid` STATES nodes. One per block. See `notes/NOTES_families.md`.
 
 **A SECOND (SVC / trend) field samples too (#214)**: the block is a LIST, each field
 carrying its own basis, site->node map, per-site design WEIGHT (`field_weight`; absent
@@ -779,7 +779,7 @@ column), `fit$trend_field_draws`, per-block suffixed hypers (`sigma_trend`,
 `sampled_hyper` / `fixed_hyper`, and `fit$spatial$field_suffix`/`field_weights` so
 `.tobs_occu_cover_sampled_field()` sums every block's loading into the criteria.
 Loading algebra, per-kind bases, validation protocol + grid thinning:
-`NOTES_families.md`. `test-occu-cover-nuts-ic.R` + `test-occu-cover-nuts-svc.R`.
+`notes/NOTES_families.md`. `test-occu-cover-nuts-ic.R` + `test-occu-cover-nuts-svc.R`.
 Correlated `|` (one free-Sigma MCAR block), temporal + RE still gated -> n-L.
 group.var maps sites>cells; predict() needs the joint object (non-spatial laplace AND
 nuts both error w/ pointer); sampled-field (estimated-variance) route =
@@ -795,7 +795,7 @@ SLOPE Wald CI mildly anti-conservative small-N (NUTS non-spatial calibrated). Ou
 field vs the grid's node count). tulpa#118 sped it up (Shamanskii reuse via
 `.K_DIAG_REFRESH` -> grad-only scatter; loosened inner tol `.K_DIAG_TOL`=1e-4;
 near-neighbour batch order), k-hat byte-stable (externally validated ==
-`loo::psis`/`posterior::pareto_khat`). Numbers in `NOTES_measurements.md`. Still
+`loo::psis`/`posterior::pareto_khat`). Numbers in `notes/NOTES_measurements.md`. Still
 OFF by default: reports k-hat only, fit byte-identical on/off, opt-in; matches
 `occu_joint` / `occu_multiscale_cover`. `control$diagnose.k = TRUE` re-enables.
 Same default flip on `occu_multiscale_cover_joint.R`.
@@ -864,7 +864,7 @@ the dense grid instead is what made `cpo()`/`ppc()` error on every compact fit w
 `cpp_occu_cover_ppc_agg` -- aggregation is dense-only by gate. Cover density gates on
 `detected AND finite` everywhere (a detected visit may carry NA cover,
 missing-at-random); the PPC used to score that NA and returned `fit.y = NA` for every
-draw. Kernel/consumer detail: `NOTES_families.md`.
+draw. Kernel/consumer detail: `notes/NOTES_families.md`.
 
 **`group.var` (sites > cells)**: `group.var="<col>"` on icar/bym2 maps each site ->
 field node, so `n_sites` > `n_cells`. Field length `n_cells` while psi/p/cover run over
@@ -906,7 +906,7 @@ correlated MCAR / latent cover / batch. Corr slope / crossed grow the grid ->
 `control$integration="ccd"`. sigma carries binary small-cluster attenuation (lower
 bound); BLUPs recover (cor>0.5). Knobs `re.sigma.grid.p`/`.pos`,
 `re.logchol.grid.p`/`.pos`. Parse / design / block-layout / postprocess mechanics:
-`NOTES_families.md`. `test-occu-cover-obs-re.R`.
+`notes/NOTES_families.md`. `test-occu-cover-obs-re.R`.
 
 ### `ms_occu_cover()` detail
 
@@ -1005,7 +1005,7 @@ ess_bulk/ess_tail` -- plus scalars `fit$max_rhat`/`fit$min_ess`. tulpa owns the
 estimator (`tulpa::diagnostics()`: rank-normalized split-Rhat, bulk ESS, 5%/95%
 tail-indicator ESS, Vehtari 2021); tulpaObs only hands it per-chain matrices +
 names. Wired at shared choke points, one per family group (list:
-`NOTES_families.md`). `convergence$parameter` MUST carry the names `summary()`
+`notes/NOTES_families.md`). `convergence$parameter` MUST carry the names `summary()`
 puts on its rows, else the record is present but unreadable -> the writer takes
 `par_names` (the fit's `fixed_names`) + `cols` (the sampler coordinates those
 name). Most community builders report moment-matched pseudo-draws around the
@@ -1085,14 +1085,14 @@ different coverage -- do not conflate what they fit, only how they are spelled:
   calibration test asserts divergences + phi + sigma and deliberately NOT cor. tulpa
   CANNOT make this measurement: `svc()` is a tulpaObs term and no tulpa-side fit
   reaches the NNGP SVC path -- how #144 survived there. Numbers in
-  `NOTES_measurements.md`.
+  `notes/NOTES_measurements.md`.
   **Laplace backends (#143, `R/occu_svc.R`)**: `occu() + svc()` also fits under
   `method="laplace"` / `"nested_laplace"`. K surfaces = latent field blocks on the psi
   logit riding the SHARED areal-BFGS driver (`.tobs_areal_bfgs_fit`,
   `R/areal_bfgs.R`); the Vecchia precision is assembled in R from the term's OWN
   neighbour structure w/ the compiled kernel's kernels/jitter/variance floor, so both
   backends integrate the SAME density, asserted == tulpa `cpp_test_svc_nngp_twins` to
-  1e-8 (mechanics: `NOTES_families.md`). Hypers (sigma, phi) grid-integrated on both
+  1e-8 (mechanics: `notes/NOTES_families.md`). Hypers (sigma, phi) grid-integrated on both
   routes (`laplace` == `nested_laplace` here) -> `fit$svc_hyper`; surface ->
   `fit$svc_field` (NUTS naming). Surface cor matches the NUTS path on the same truth
   (information-bounded, NOT backend-bounded). `fitted()` adds the surface in-sample via
@@ -1105,14 +1105,14 @@ different coverage -- do not conflate what they fit, only how they are spelled:
   code -- those four already ride `.tobs_areal_bfgs_fit`, and an svc surface IS just
   another latent block on the arm their `eval(theta, offset)` already exposes, so the
   wiring is `.tobs_svc_field_blocks()` + `.tobs_build_field_spec(svc=, X_svc=)` +
-  `.tobs_attach_field_results(svc=, has_spatial=)` (mechanics: `NOTES_families.md`).
+  `.tobs_attach_field_results(svc=, has_spatial=)` (mechanics: `notes/NOTES_families.md`).
   Composes with an areal and/or temporal field on the same arm. Surfaces load on the
   STATE arm only (log lambda / psi); a detection-arm areal field alongside svc errors
   (`.tobs_check_svc_arm()` -- the driver exposes ONE `grad_eta`, so the surfaces would
   otherwise be fit against the detection arm). The N-mixture families
   (`abun`/`ms_abun`) do NOT get it: their areal path is the C++ count-spatial driver,
   not this one. NUTS still errors everywhere but single-season occu(). Surface cor in
-  `NOTES_measurements.md`. `test-svc-families-recovery.R`. The driver also returns
+  `notes/NOTES_measurements.md`. `test-svc-families-recovery.R`. The driver also returns
   `res$eta_offset`, the marginalised per-observation offset the blocks jointly load;
   the family wrappers read it instead of re-deriving each block's site map, which also
   fixed the temporal-only fp_occu path (it indexed a length-`n_t` field by site).
@@ -1121,7 +1121,7 @@ different coverage -- do not conflate what they fit, only how they are spelled:
 
 Penalized EM (`laplace`, default) trades speed to break the psi-p identifiability
 ridge at small J; Gibbs/MI add a Rubin-pooled correction on top. Wall-time comparison
-vs `laplace_gibbs`/`nuts`/inlaocc/spOccupancy: `NOTES_measurements.md`.
+vs `laplace_gibbs`/`nuts`/inlaocc/spOccupancy: `notes/NOTES_measurements.md`.
 
 ## Progress + ETA (all backends, #43)
 
@@ -1163,7 +1163,7 @@ R/
   tobs_helpers.R            — `.tobs_family_methods` (the method-support single source of truth) + shared dispatch helpers. NOT tobs.R
   engine_defaults.R         — `.TOBS_ENGINE_DEFAULTS` / `.TOBS_FAMILY_DEFAULTS` (#183): per-engine SAMPLER defaults, ONE table. `.tobs_control_defaults(control, engine, family)` fills every knob left unset (resolve once per dispatcher branch); `.tobs_default(engine, knob, family)` reads one knob inline. Scope = sampler knobs ONLY -- `max.iter`/`tol` are per-ROUTE Laplace-EM values (`ms_occu_cover()` iterates 30 at 1e-3 on its own EM, warm-starts its sampler at 200/1e-4; `ms_occu()` plain areal C++ EM 100, its latent fitter 200) -> stay at their call sites. Log-link families (`ms_count`/`jsdm`/`ms_abun`) `sigma.beta=10` under nuts, logit-link occupancy families 5 (matches C++ model defaults) -> a `.TOBS_FAMILY_DEFAULTS` row, NOT a uniform "community NUTS" value. `test-engine-defaults.R` pins every resolved profile.
     **Every sampler knob is a `NULL` formal filled by `.tobs_fill_sampler(environment(), engine, ...)` as the fitter's first statement (#188)** -- a fitter restating a literal has a DEAD formal wherever a caller forwards explicit values (`.tobs_fit_model()` does), so its own default never runs. `test-engine-defaults.R` asserts structurally that no fitter carries a literal + each calls the filler -> a new sampler family cannot reopen it.
-    Divergences RECORDED (`.TOBS_SINGLE_SPECIES_NUTS` / `_LAPLACE`, via `.tobs_single_species_defaults(engine)`): the `.tobs_fit_model()` entry keeps its own `sigma.beta` / `adapt.delta` / `seed` -- each the value the single-species recovery/coverage tests were calibrated against, so the override belongs to the ENTRY, not the nine families passing through (values: `NOTES_families.md`).
+    Divergences RECORDED (`.TOBS_SINGLE_SPECIES_NUTS` / `_LAPLACE`, via `.tobs_single_species_defaults(engine)`): the `.tobs_fit_model()` entry keeps its own `sigma.beta` / `adapt.delta` / `seed` -- each the value the single-species recovery/coverage tests were calibrated against, so the override belongs to the ENTRY, not the nine families passing through (values: `notes/NOTES_families.md`).
     **`n.iter` means the OPPOSITE thing under `pg_gibbs`**: TOTAL sweeps, warmup taken out of it (kept = `length(seq.int(n.warmup+1, n.iter, by=n.thin))` = 1500); under `nuts` it is the KEPT count and the run = `n.iter + n.warmup`. Stated in the table's `pg_gibbs` block, pinned by a test recomputing the kept count from the profile.
     **`sd.load` (1.0) + `re.lkj` (1.5) = laplace rows (#189)**; `n.quad` NOT one number, deliberately -- `.TOBS_NQUAD_ROUTES` / `.tobs_n_quad(route)` enumerates seven marginals, `?tobs` lists them per route, and there is no single default most routes do not use.
   occu_categorical.R        — presence + nominal K-class hurdle (#106); Bernoulli presence arm + baseline-category multinomial logit class arm over tulpa `cpp_multinomial_logit_terms`
@@ -1175,9 +1175,9 @@ R/
     **Outer-grid placement promoted (#187)**: `.tobs_promote_outer_grid(jf)` lifts `outer_grid_placement` ("fixed"/"auto_recentered"), `_recenter_attempts`, `_prior_added` and `_recenter_declined` (reason a "fixed" placement stayed fixed, tulpa#293) to `tobs_fit` top level, everywhere `.tobs_promote_pareto_k` is spliced, and `.tobs_glance_outer_grid()` adds two columns to BOTH glance methods. NOT gated on the grid having MOVED -- a declined recenter is exactly the case worth seeing.
   pg_gibbs_shared.R         — shared Polya-Gamma machinery (.tobs_pg_draw_beta, .tobs_pg_community_update, .tobs_pg_finalize_fit) behind EVERY pg_gibbs fitter
   stacking.R                — `tobs_stack()`, LOO-weighted predictive stacking across fitted tobs_fit objects of any family
-  sbc.R                     — `sbc.tobs_fit()` (#207): posterior SBC, the `tobs_fit` method of `tulpa::sbc()`. Registry `.TOBS_SBC_REGISTRY` per family (simulate/refit/draws/+statistic); pooling, group_ids, arms, controls shared. Replicate on FRESH cells (block-diag graph) -> premise VERIFIED. occu_cover registered+verified; field SD not gated (#212). Numbers in NOTES_measurements.md
+  sbc.R                     — `sbc.tobs_fit()` (#207): posterior SBC, the `tobs_fit` method of `tulpa::sbc()`. Registry `.TOBS_SBC_REGISTRY` per family (simulate/refit/draws/+statistic); pooling, group_ids, arms, controls shared. Replicate on FRESH cells (block-diag graph) -> premise VERIFIED. occu_cover registered+verified; field SD not gated (#212). Numbers in notes/NOTES_measurements.md
   aggregation_scan.R        — cell-size / NN-spacing / changepoint scan utilities
-  field_offset.R            — the fitted latent field as a per-ARM eta offset (#254). `model$field_eta_offset` = one entry per process, in THAT process's own design row layout (removal's per-PASS detection arm included), written at the ONE dispatch tail `.tobs_finalize_family_fit()` (`.tobs_attach_model_eta_offset()`) -- after `fit$model <- model` drops whatever the fitter set on its autoscaled copy. EVERY door that rebuilds eta from `X_processes` reads it through `.tobs_eta_offset()` / `.tobs_add_eta_offset()` / `.tobs_sim_arm_block()` -- fitted / residuals / predict / simulate + the ploglik behind WAIC / LOO / DIC / CPO -- so a field cannot be scored at 0 again, and a field-free fit stays byte-identical. `.tobs_nuts_field_loglik()` (same tail) re-evaluates `log_lik`/`log_prob` on a SAMPLED-field fit through that ploglik kernel: the field is not a draw column, so the family's own posterior-mean marginal ran it at offset 0 and `logLik()`/AIC/BIC described a model WAIC did not score (grid-integrated paths already carry the field in their marginal, keep their grid-weighted value). `count()` + the community families keep their own named slots (`count_field_offset`, `occu_field_offset`, ...); the shared field -> per-site contribution reader is `.tobs_spatial_field_offset()` (was `.count_spatial_field_offset`). Writer list + simulate trick: `NOTES_families.md`
+  field_offset.R            — the fitted latent field as a per-ARM eta offset (#254). `model$field_eta_offset` = one entry per process, in THAT process's own design row layout (removal's per-PASS detection arm included), written at the ONE dispatch tail `.tobs_finalize_family_fit()` (`.tobs_attach_model_eta_offset()`) -- after `fit$model <- model` drops whatever the fitter set on its autoscaled copy. EVERY door that rebuilds eta from `X_processes` reads it through `.tobs_eta_offset()` / `.tobs_add_eta_offset()` / `.tobs_sim_arm_block()` -- fitted / residuals / predict / simulate + the ploglik behind WAIC / LOO / DIC / CPO -- so a field cannot be scored at 0 again, and a field-free fit stays byte-identical. `.tobs_nuts_field_loglik()` (same tail) re-evaluates `log_lik`/`log_prob` on a SAMPLED-field fit through that ploglik kernel: the field is not a draw column, so the family's own posterior-mean marginal ran it at offset 0 and `logLik()`/AIC/BIC described a model WAIC did not score (grid-integrated paths already carry the field in their marginal, keep their grid-weighted value). `count()` + the community families keep their own named slots (`count_field_offset`, `occu_field_offset`, ...); the shared field -> per-site contribution reader is `.tobs_spatial_field_offset()` (was `.count_spatial_field_offset`). Writer list + simulate trick: `notes/NOTES_families.md`
   community_em.R            — shared community Laplace-EM .tobs_community_em() (ms_occu/ms_dyn_occu/ms_int_occu/ms_count/jsdm/ms_abun-latent/ms_distance). Three OPTIONAL args, each defaulting to the previous behaviour byte-identically: `sp_info` (analytic per-species observed info; the FD fallback costs 2(P+G) marginal sweeps per species per Newton step -- supply it when the kernel exposes the Louis block), `init_b`/`init_Sigma` (warm start; a block-coordinate caller re-enters the EM once per outer pass, so a cold restart each time dominates)
   ms_{occu,dyn_occu,int_occu}.R      — community single/dynamic/integrated
   abun.R / abun_nuts.R               — nmix family + non-spatial NUTS (#41)
@@ -1185,11 +1185,11 @@ R/
   ms_count.R                — community count / relative-abundance GLMM (msAbund, #117); .tobs_fit_ms_count over shared community_em.R
   ms_count_nuts.R / src/ms_count_nuts.cpp — community count NUTS (msAbund NUTS, #117); in-tree C++ FullGradFn (reduced ms_abun_nuts: no detection/latent-N), R oracle .tobs_ms_count_nuts_logpost, warm-start from Laplace-EM
   ms_count_spatial.R        — community count + shared areal field (sfMsAbund) + SVC bar (svcMsAbund, #117/#118); block coordinate ascent (community EM offset <-> multi-field Poisson-ICAR), pure R
-  community_latent.R        — SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group.var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter. **The measured evidence behind every number below -- fixtures, seeds, wall times, per-family screens -- is in `NOTES_measurements.md`; the rules here are what it concluded.**
+  community_latent.R        — SHARED latent-structure engine for EVERY community family (#119/#120/#121): one block-coordinate ascent (community EM w/ the latent as an offset <-> field / factor updates) + the areal Newton, the factor update, bym2/car_proper/spde hyper grids. A family supplies ONE callback `working(eta) -> list(score, curv)` (per-(site,species) score+curvature wrt an additive offset on the structured arm): Poisson `(y-mu, mu)`, occupancy two-state, Bernoulli `(y-psi, psi(1-psi))`. Field solve is `t(A) diag(w) A + tau Q`, so the site->node map slot takes an areal group.var incidence OR an spde barycentric projector unchanged. Adding a family to every latent route = one callback, not a new fitter. **The measured evidence behind every number below -- fixtures, seeds, wall times, per-family screens -- is in `notes/NOTES_measurements.md`; the rules here are what it concluded.**
 
-**Backtracking + guards.** Factor Newton (`.tobs_latent_factor_update`) backtracks and ridge-bumps singular curvature; non-finite guards are inline, not a named helper, and a non-finite `working()` score/curv `break`s the pass. `.tobs_latent_field_solve` has its OWN local `safe_solve()` (ridge retry for a singular Hessian only, Newton update unconditional) -- do not confuse the two, and there is no `safe_step()` anywhere in the repo. Mechanics: `NOTES_families.md`.
+**Backtracking + guards.** Factor Newton (`.tobs_latent_factor_update`) backtracks and ridge-bumps singular curvature; non-finite guards are inline, not a named helper, and a non-finite `working()` score/curv `break`s the pass. `.tobs_latent_field_solve` has its OWN local `safe_solve()` (ridge retry for a singular Hessian only, Newton update unconditional) -- do not confuse the two, and there is no `safe_step()` anywhere in the repo. Mechanics: `notes/NOTES_families.md`.
 
-**Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Holding zeta at its joint mode makes `(zeta, lambda)` a joint-likelihood estimate with `Ns*Q` incidental params growing with the sample = Neyman-Scott, inconsistent: the site factors' estimation error lands in the fitted co-occurrence, lambda absorbs it, over-fit growing with Q/S. Fix = `.tobs_latent_factor_mmle()`, an EM on the SAME joint site marginal over all S*Q loadings (steps: `NOTES_families.md`; numbers: `NOTES_measurements.md`).
+**Loadings by MARGINAL likelihood, NOT the joint mode (#153 -> #156).** Holding zeta at its joint mode makes `(zeta, lambda)` a joint-likelihood estimate with `Ns*Q` incidental params growing with the sample = Neyman-Scott, inconsistent: the site factors' estimation error lands in the fitted co-occurrence, lambda absorbs it, over-fit growing with Q/S. Fix = `.tobs_latent_factor_mmle()`, an EM on the SAME joint site marginal over all S*Q loadings (steps: `notes/NOTES_families.md`; numbers: `notes/NOTES_measurements.md`).
 
 **ONE estimator, ONE state (#156).** `.tobs_latent_factor_update()` + `.tobs_latent_factor_scale()` run ONCE, outer pass 1, purely to INITIALIZE (the marginal's lambda-gradient vanishes at lambda=0, and the 1-D bracket is a global magnitude search the local EM cannot do). Running the joint-mode update every pass alongside the MMLE diverges both ways, so it never repeats.
 

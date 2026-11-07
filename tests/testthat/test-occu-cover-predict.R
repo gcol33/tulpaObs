@@ -467,7 +467,7 @@ test_that("trend fit errors clearly when time.col is unavailable", {
 # every seed measured (0.53 to 0.97) and so does the change, with the interval
 # coverage in the same block unaffected. Widening the two grids was tried
 # first and rejected: it moved the correlation barely and cost the coverage.
-# See NOTES_measurements.md.
+# See notes/NOTES_measurements.md.
 .ocp_build_trend_fit_truth <- function(N = 120L, J = 10L, seed = 202L) {
     adj <- chain_adj(N)
     sim <- simulate_occu_cover(

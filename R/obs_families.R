@@ -467,7 +467,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' because it does not densify when the donor `control$sigma.grid` does: on an
 #' informative data set the outer grid's quadrature effective sample size
 #' saturates on the copy amplitude while every other axis tracks the request
-#' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
+#' (measured engine-side, `notes/NOTES_measurements.md`). One block takes one of the
 #' two; giving both is an error. `control$alpha.grid[.trend]` and
 #' `control$alpha.n[.trend]` are the wire format these compile into and are
 #' refused as user input.
@@ -479,7 +479,7 @@ count <- function(response = c("poisson", "negbin", "gaussian", "binomial")) {
 #' scored quantity to nominal at both. Thirteen slab nodes do not (the field SD
 #' still reads 4.5e-03), and the price is a 2.3-3x longer fit, since the outer
 #' grid is a tensor. Point estimates are not affected the way the intervals are;
-#' the measurement is in `NOTES_measurements.md`.
+#' the measurement is in `notes/NOTES_measurements.md`.
 #'
 #' @section Coupled fields and spatially-varying trends:
 #' The spatial engines (`method = "nested_laplace"`, default
@@ -1484,7 +1484,7 @@ dyn_int_occu <- function() {
 #' two thirds of the across-seed spread. The 18-species blocks drew theirs
 #' 18-21% wider than `sigma.logr / sqrt(S)`. Put the draw at its expectation and
 #' the scale is 1.077 / 1.101 / 0.977; rebuild the SE at the simulated sigma as
-#' well and it is 0.990 / 1.035 / 0.963 (NOTES_measurements.md). The residual
+#' well and it is 0.990 / 1.035 / 0.963 (notes/NOTES_measurements.md). The residual
 #' there is the attenuation of
 #' `sigma_log_r` itself (0.418 / 0.448 / 0.487 against 0.5), which shrinks as
 #' species are added and which the SE inherits, since
@@ -2184,7 +2184,7 @@ occu_categorical <- function(classes = NULL) {
 #' because it does not densify when the donor `control$sigma.grid` does: on an
 #' informative data set the outer grid's quadrature effective sample size
 #' saturates on the copy amplitude while every other axis tracks the request
-#' (measured engine-side, `NOTES_measurements.md`). One block takes one of the
+#' (measured engine-side, `notes/NOTES_measurements.md`). One block takes one of the
 #' two; giving both is an error. `control$alpha.grid[.trend]` and
 #' `control$alpha.n[.trend]` are the wire format these compile into and are
 #' refused as user input.
@@ -2196,7 +2196,7 @@ occu_categorical <- function(classes = NULL) {
 #' scored quantity to nominal at both. Thirteen slab nodes do not (the field SD
 #' still reads 4.5e-03), and the price is a 2.3-3x longer fit, since the outer
 #' grid is a tensor. Point estimates are not affected the way the intervals are;
-#' the measurement is in `NOTES_measurements.md`.
+#' the measurement is in `notes/NOTES_measurements.md`.
 #'
 #' @section Varying-coefficient spatial bar (the compact single-term form):
 #' The intercept field plus its weighted trend field can also be written as one

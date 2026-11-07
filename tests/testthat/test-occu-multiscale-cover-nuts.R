@@ -146,7 +146,7 @@ test_that("occu_multiscale_cover NUTS recovers the four arms (replicated regime)
   # measured coverages a `min(cover) >= 0.80` form over 8 seeds passes only 46%
   # of the time, so which side of it a run lands on is a property of the draw
   # rather than of the estimator. Pooling is stable at every size tried
-  # (NOTES_measurements.md).
+  # (notes/NOTES_measurements.md).
   cover <- vapply(seq_along(nm), function(j) {
     lo <- est[ok, j] - 1.96 * se[ok, j]
     hi <- est[ok, j] + 1.96 * se[ok, j]

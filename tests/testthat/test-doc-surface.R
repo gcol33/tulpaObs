@@ -1,6 +1,6 @@
 # =============================================================================
 # test-doc-surface.R -- the three behaviour halves of the documentation audit
-# (gcol33 issue on API.md and the diagnostics doors).
+# (gcol33 issue on notes/API.md and the diagnostics doors).
 #
 # Each was a promise the code did not keep: a documented return field that
 # existed on one dispatch branch only, arguments the uniformity test forwards

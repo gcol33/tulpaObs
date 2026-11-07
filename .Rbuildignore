@@ -9,8 +9,8 @@
 ^\.gitignore$
 ^\.gitattributes$
 ^CLAUDE\.md$
+^notes$
 ^AGENTS\.md$
-^DESIGN\.md$
 ^\.claude$
 ^\.code-review-graph$
 ^\.vscode$
@@ -20,14 +20,7 @@
 ^experimental$
 ^.*\.tar\.gz$
 ^src/.*\.gch$
-^API\.md$
-^api\.md$
-^PLAN_tulpaObs\.md$
-^NOTES_measurements\.md$
-^NOTES_families\.md$
-^deliverables\.md$
 ^data-raw$
-^todo\.md$
 ^vignettes/.*\.html$
 ^vignettes/.*_files$
 ^src/.*\.o$

@@ -715,7 +715,7 @@ test_that("occu_cover spatial NUTS recovers betas + field (beta arm, smoke)", {
   # so a 4-seed mean would carry a standard error of 0.18 against a 0.35 band:
   # one standard error of headroom, which a seed set can cross on its own. At 12
   # seeds the standard error is 0.10 and the measured worst coefficient is 0.068.
-  # See NOTES_measurements.md.
+  # See notes/NOTES_measurements.md.
   n_seeds <- 12L
   side <- 8L; J <- 5L
   est <- matrix(NA_real_, n_seeds, 7L)
@@ -833,7 +833,7 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
   # sites -- a single fit's summary ranges 0.34 to 2.68 over 40 seeds, with a
   # per-seed SD of about 0.5 -- so a 12-seed summary carries one standard error
   # of about 0.15 and which side of a band it lands on is partly a property of
-  # the seed set. Measured over 40 seeds in NOTES_measurements.md.
+  # the seed set. Measured over 40 seeds in notes/NOTES_measurements.md.
   n_seeds <- 20L
   side <- 8L; J <- 5L
   sig_true <- 0.7; alpha_true <- 1.0
@@ -884,7 +884,7 @@ test_that("occu_cover spatial NUTS hyper posteriors cover the truth (#204)", {
     #
     # The calibration claim proper is the interval coverage asserted just above,
     # which measures 0.95 (icar) / 0.97 (car_proper) over 40 seeds and is
-    # unaffected by the skew. See NOTES_measurements.md.
+    # unaffected by the skew. See notes/NOTES_measurements.md.
     expect_lt(abs(mean(a_mean[ok]) - alpha_true), 0.35)
     expect_lt(abs(stats::median(fsd_med[ok]) - sig_true), 0.55)
   }

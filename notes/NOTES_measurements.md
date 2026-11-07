@@ -2405,7 +2405,7 @@ setting the engine spelling skips via `skip_on_cran` instead and looks green.
 
 ## `share(residual = )`: what the rank buys, and what the pinned SD buys
 
-Steps 4-6 of the `share()` plan (todo.md). Fixture: `rook_adj(8)` (64 cells),
+Steps 4-6 of the `share()` plan. Fixture: `rook_adj(8)` (64 cells),
 `simulate_occu_cover(J = 6, lognormal, sigma = 0.5, alpha = 1.0,
 pos_field = TRUE, sigma_pos_int = 0.6, sigma_pos_trend = 0)` -- a shared field
 the cover arm copies AND an independent cover-arm field, which is the

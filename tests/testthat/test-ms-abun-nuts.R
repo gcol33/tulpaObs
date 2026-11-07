@@ -139,7 +139,7 @@ test_that("ms_abun NUTS per-cell latent-N ceiling narrows the sum", {
     # not asserted -- it moves with the excursion margin and with how heavy the
     # mixture's own tail is (the NB quantile sits far out, so its ceiling lands
     # near the shared one), and pinning a ratio here would only re-tune whenever
-    # either is retuned. The realised saving is measured in NOTES_measurements.md.
+    # either is retuned. The realised saving is measured in notes/NOTES_measurements.md.
     states_site   <- sum(ks$K - ks$ymax + 1)
     states_shared <- sum(P$K_max - ks$ymax + 1)
     expect_gt(mean(ks$K < P$K_max), 0.25)
