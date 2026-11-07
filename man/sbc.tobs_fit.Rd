@@ -87,10 +87,7 @@ registered family uses.
 \code{int_occu} (full source-site overlap only) pools on the SITE axis and
 leaves the per-source axis alone, since its response is a list of one
 detection matrix per source; the rank statistic is the shared machinery
-unchanged. Registering it surfaced a real bug (since fixed): the detection
-intercept was silently left in standardized-covariate
-units on every fit with an autoscaled detection covariate, independent of
-SBC.
+unchanged.
 
 \code{gdistremoval} pools two response matrices (\code{yDist} band counts, \code{yRem}
 period counts) together on the SITE axis, reusing the same
@@ -120,8 +117,7 @@ shape \code{int_occu()} pools; its \code{simulate()} is custom, since species sh
 one joint multi-species state rather than being independently observed.
 
 \code{dyn_int_occu} is the product of the multi-season and multi-source shapes:
-a named list of S per-source 3D arrays, pooled by a new
-\code{.tobs_sbc_pool_named_3d} that composes both existing pooling rules.
+a named list of S per-source 3D arrays, each stacked on its site axis.
 
 \code{t_occu} is a \code{pg_gibbs} family whose \code{fit$draws} is already the real
 pooled posterior sample; it has no \code{simulate()} handler and no
@@ -138,10 +134,22 @@ dispersion held fixed (no SE is reported for it anywhere in the package).
 two-block one); the exchangeable unit is the CELL rather than the plot, so
 pooling and site labeling track cell indices.
 
-A family is registered by adding one entry to the internal registry -- a
-replicate generator, a refit call and optionally a joint statistic; the
-pooling, the grouping labels, the arm construction and the controls are
-shared.
+The community families \code{ms_occu}, \code{ms_occu_cover} (\code{positive = "lognormal"}), \code{ms_int_occu} (full source-site overlap), \code{ms_count}
+(\code{response = "poisson"}), \code{jsdm}, \code{ms_distance} (\code{key = "halfnorm"},
+\code{mixture = "poisson"}), \code{ms_dyn_occu} and \code{ms_abun} (\code{mixture = "poisson"}) rank a FIXED species set's own realized coefficients (community
+mean plus each species' deviation, drawn jointly), plus any shared
+coefficients such as \code{ms_dyn_occu}'s colonization / extinction and
+\code{ms_occu_cover}'s cover dispersion. The replicate is the family's own
+\code{simulate()} at the drawn coefficients and the rank statistic sums each
+species' exact marginal. Calibration of these Laplace-EM posteriors depends
+on the species count: a small community is measurably non-Gaussian, so they
+are checked at a community size typical of real data.
+
+A family is registered by adding one entry to the internal registry -- its
+fitting call as a map from arm-formula slots to \code{tobs()} arguments, a
+replicate generator where the family's own \code{simulate()} cannot serve, and
+optionally a joint statistic; the pooling, the grouping labels, the arm
+construction and the controls are shared.
 }
 \section{What is scored}{
 
