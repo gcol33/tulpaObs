@@ -206,8 +206,8 @@
   V_occ <- tryCatch(.tobs_spd_inv(object$occ$H_beta), error = function(e) NULL)
   V_pos <- tryCatch(pos_vscale * .tobs_spd_inv(object$pos$H_beta), error = function(e) NULL)
   S <- as.integer(n.draws)
-  B_occ <- .tobs_mvn_draws(mode_occ, V_occ, S)   # [S x p_occ]
-  B_pos <- .tobs_mvn_draws(mode_pos, V_pos, S)   # [S x p_pos]
+  B_occ <- .rmvn(S, mode_occ, V_occ)   # [S x p_occ]
+  B_pos <- .rmvn(S, mode_pos, V_pos)   # [S x p_pos]
   colnames(B_occ) <- colnames(X_occ)
   colnames(B_pos) <- colnames(X_pos)
   sla_b <- .tobs_cover_sla_arms(object, B_occ, B_pos)
@@ -401,17 +401,6 @@
                      identical(fit.stat, "freeman-tukey"))
   list(fit.y = r$fit.y, fit.y.rep = r$fit.y.rep,
        bayesian.p = mean(r$fit.y.rep > r$fit.y))
-}
-# mode (point mass) if V is unavailable, and jitters a near-singular V.
-.tobs_mvn_draws <- function(mu, V, S) {
-  p <- length(mu)
-  if (is.null(V)) return(matrix(mu, S, p, byrow = TRUE))
-  R <- tryCatch(chol(V), error = function(e) {
-    jit <- 1e-8 * (mean(diag(V)) + 1e-8)
-    chol(V + diag(jit, p))
-  })
-  Z <- matrix(stats::rnorm(S * p), S, p)
-  matrix(mu, S, p, byrow = TRUE) + Z %*% R
 }
 
 

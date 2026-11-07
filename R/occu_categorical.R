@@ -234,8 +234,8 @@ print.occu_categorical_fit <- function(x, ...) {
 .tobs_simulate_occu_categorical <- function(object, nsim) {
   enc <- object$encoding
   X <- enc$X_occ; n <- nrow(X); K <- enc$K
-  B_occ <- .tobs_mvn_draws(object$beta_occ, object$vcov_occ, nsim)
-  B_cls <- .tobs_mvn_draws(as.vector(object$beta_class), object$vcov_class, nsim)
+  B_occ <- .rmvn(nsim, object$beta_occ, object$vcov_occ)
+  B_cls <- .rmvn(nsim, as.vector(object$beta_class), object$vcov_class)
   lapply(seq_len(nsim), function(s) {
     present <- stats::rbinom(n, 1L, stats::plogis(as.vector(X %*% B_occ[s, ])))
     E <- exp(pmin(X %*% matrix(B_cls[s, ], ncol(X), K - 1L), 700))

@@ -48,23 +48,26 @@
   m + log1p(exp(pmin(a, b) - m))
 }
 
-# Draw `n` rows from MVN(mu, sigma) via the Cholesky factor of `sigma`.
-#
-# Two degenerate cases, both reachable from a non-converged observed-information
-# Hessian: a `sigma` carrying non-finite entries yields `mu` repeated (a point
-# mass, so downstream draws stay finite), and a finite but non-PD `sigma` falls
-# back to independent normals on its diagonal.
+# Multivariate-normal draws, n x length(mu): mu + Z chol(sigma). The one
+# sampler behind every pseudo-draw builder. `sigma` is symmetrised first; a
+# covariance chol() refuses (numerically singular or indefinite, as a
+# data-sparse refit can produce) is eigen-clipped to the nearest valid one,
+# with a floor far below a well-conditioned matrix's smallest eigenvalue so
+# such a matrix is untouched. A missing or non-finite `sigma` returns `mu` in
+# every row (a point mass).
 .rmvn <- function(n, mu, sigma) {
   p <- length(mu)
-  if (any(!is.finite(sigma))) {
-    return(matrix(rep(mu, each = n), n, p, byrow = FALSE))
+  if (is.null(sigma) || any(!is.finite(sigma))) {
+    return(matrix(mu, n, p, byrow = TRUE))
   }
-  L <- tryCatch(chol(sigma), error = function(e) NULL)
+  Vs <- (sigma + t(sigma)) / 2
+  L <- tryCatch(chol(Vs), error = function(e) {
+    ee <- eigen(Vs, symmetric = TRUE)
+    vals <- pmax(ee$values, max(1e-8, 1e-6 * max(ee$values)))
+    Vpd <- ee$vectors %*% (vals * t(ee$vectors))
+    chol((Vpd + t(Vpd)) / 2)
+  })
   z <- matrix(stats::rnorm(n * p), n, p)
-  if (is.null(L)) {
-    sds <- sqrt(pmax(diag(sigma), 1e-8))
-    return(sweep(z * rep(sds, each = n), 2L, mu, "+"))
-  }
   sweep(z %*% L, 2L, mu, "+")
 }
 

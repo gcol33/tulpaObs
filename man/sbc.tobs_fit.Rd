@@ -50,7 +50,7 @@ experiment, for inspection or for passing to \code{tulpa::sbc()} directly.}
 \item{...}{Unused.}
 }
 \value{
-An object of class \code{sbc} from \pkg{tulpa}, carrying the per-quantity
+An object of class \code{tulpa_sbc} from \pkg{tulpa}, carrying the per-quantity
 rank ECDFs, the exact simultaneous band, and the uniformity tests. When
 \code{model.only = TRUE}, the callback list instead.
 }

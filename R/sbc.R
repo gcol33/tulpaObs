@@ -1352,32 +1352,19 @@
     family, label, fit$method %||% "?", family, family), call. = FALSE)
 }
 
+# SBC draws the posterior from the fit's own covariance, so a missing one is an
+# error here rather than the point mass `.rmvn()` returns. A refit's per-species
+# Cinv/vcov can be numerically singular or genuinely indefinite on a
+# data-sparse replicate (ms_distance's acceptance run at n.sim = 100: "the
+# leading minor of order 3 is not positive" survived a 1e-4-relative ridge
+# retry); `.rmvn()` eigen-clips that to the nearest valid covariance.
 .tobs_sbc_mvn_draws <- function(mean, V, n) {
-  p <- length(mean)
   if (is.null(V) || anyNA(V)) {
     stop("SBC draws the posterior from this fit's own covariance, which is ",
          "missing or non-finite here (a non-converged or rank-deficient fit).",
          call. = FALSE)
   }
-  Vs <- (V + t(V)) / 2
-  # A refit's per-species Cinv/vcov can occasionally be numerically singular
-  # OR genuinely indefinite, not merely ill-conditioned (a community family
-  # fit on a data-sparse simulated replicate -- observed on ms_distance's own
-  # acceptance run at n.sim=100, "the leading minor of order 3 is not
-  # positive" survived even a 1e-4-relative ridge retry), which a bare
-  # chol() has no recourse for. Eigen-clip to the nearest valid covariance
-  # instead of guessing at a ridge scale: a small floor on the eigenvalues
-  # leaves a well-conditioned Vs untouched (floor << its smallest eigenvalue)
-  # and guarantees chol() succeeds regardless of how indefinite the input is.
-  L <- tryCatch(chol(Vs), error = function(e) {
-    ee <- eigen(Vs, symmetric = TRUE)
-    floor_val <- max(1e-8, 1e-6 * max(ee$values))
-    vals <- pmax(ee$values, floor_val)
-    Vpd <- ee$vectors %*% (vals * t(ee$vectors))
-    chol((Vpd + t(Vpd)) / 2)
-  })
-  Z <- matrix(stats::rnorm(n * p), n, p)
-  sweep(Z %*% L, 2L, mean, `+`)
+  .rmvn(n, mean, V)
 }
 
 # Shared by every family whose response is a plain length-N vector (one
@@ -3309,7 +3296,7 @@
 #' pooling, the grouping labels, the arm construction and the controls are
 #' shared.
 #'
-#' @return An object of class `sbc` from \pkg{tulpa}, carrying the per-quantity
+#' @return An object of class `tulpa_sbc` from \pkg{tulpa}, carrying the per-quantity
 #'   rank ECDFs, the exact simultaneous band, and the uniformity tests. When
 #'   `model.only = TRUE`, the callback list instead.
 #'

@@ -53,7 +53,7 @@ test_that("ms_abun posterior SBC: correct fit uniform, mis-scaled is not", {
   res <- sbc(fit, n.sim = 15L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 3.0, seed = 0L)
 
-  expect_s3_class(res, "sbc")
+  expect_s3_class(res, "tulpa_sbc")
   expect_identical(res$premises$pooling, "verified")
   expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
 

@@ -350,7 +350,7 @@ test_that("occu_cover posterior SBC: correct fit uniform, mis-scaled is not", {
                   controls = c("wide", "narrow"),
                   fit.control = .sbc_fit_control(fx), seed = 0L)
 
-  expect_s3_class(res, "sbc")
+  expect_s3_class(res, "tulpa_sbc")
   expect_identical(res$premises$pooling, "verified")
   expect_identical(res$premises$fresh_groups, "verified (disjoint group labels)")
 
@@ -486,5 +486,5 @@ test_that("sbc() runs end to end on a non-joint (field-free) laplace fit", {
   expect_true(all(M[, "disp"] > 0))
 
   res <- sbc(f, n.sim = 2L, n.draws = 50L, n.ref = 20L)
-  expect_s3_class(res, "sbc")
+  expect_s3_class(res, "tulpa_sbc")
 })
