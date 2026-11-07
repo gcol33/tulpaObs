@@ -441,664 +441,302 @@
   .tobs_nuts_logpost_k(theta, ev, arms, lay$total, sigma.beta)
 }
 
-# Full-vector joint log-posterior and its gradient for the community N-mixture.
-# `margs` is the per-species list from .tobs_ms_abun_nuts_marginals(); `lay` the
-# layout. Returns list(lp, grad) over the packed coordinates. Mirrors the C++
-# ms_abun_nuts_eval (src/ms_abun_nuts.cpp).
-#
+# Community NUTS oracles. Each mirrors its family's C++ FullGradFn
+# (src/ms_*_nuts.cpp) and is the value the C++ target is cross-checked against.
 # NON-CENTERED parameterisation: the per-species block holds standard-normal
-# z_s, and the deviation is reconstructed per arm as b_{s,arm} = C_arm z_{s,arm}
-# (C_arm the log-Cholesky factor of Sigma_arm). The community covariance then
-# leaves the b-prior entirely -- z ~ N(0, I), no b' Sigma^{-1} b quadratic and no
-# -0.5 S log|Sigma| normaliser -- and enters ONLY the data term through b = C z.
-# This breaks the centered b<->Sigma funnel that otherwise saturates the NUTS
-# treedepth (mean ~7, eps ~0.025 measured for the centered map); the chol
-# gradient now flows from the data term via b = C z plus the hyperprior.
+# z_s and the deviation is b_{s,arm} = C_arm z_{s,arm}, so the community
+# covariance leaves the b-prior (z ~ N(0, I), no b' Sigma^{-1} b and no
+# -0.5 S log|Sigma|) and enters only the data term through b = C z. This breaks
+# the centered b <-> Sigma funnel that otherwise saturates the NUTS treedepth.
+# The shared skeleton is .community_nc_logpost(); each family supplies its
+# per-species likelihood and gradient.
+
+# Joint log-posterior + gradient of a non-centred community NUTS target: the
+# shared skeleton every community oracle below fills. Each species s carries a
+# standard-normal block z_s (theta[b_idx(s)]); its coefficient vector is
+# b_s = mu + C z_s arm by arm (C_arm the log-Cholesky factor of Sigma_arm,
+# exp() of the coordinate for a scalar arm), so each community covariance
+# enters only the data term. `mu_idx` gives the theta positions of the
+# community means, in species-block order; `arms` lists each arm's positions
+# `idx` within the block, its log-Cholesky coordinates `chol` and dimension
+# `Pa`; `z_idx` all standard-normal coordinates. `sp_llgrad(s, b, grad)`
+# returns the species' data log-likelihood `ll` at b and, when `grad`, its
+# gradient `grad_b` in b and `grad_other` (a full-length vector, or NULL) for
+# any coordinates outside the species blocks (shared globals, per-species
+# nuisances). `mu_prior_sd` is the community-mean prior SD per mean (Inf for
+# none); `extra_prior(theta)` returns list(lp, grad) for the coordinates the
+# skeleton does not price. Returns list(lp, grad).
+.community_nc_logpost <- function(theta, mu_idx, b_idx, arms, z_idx, sp_llgrad,
+                                  n_species, priors, mu_prior_sd,
+                                  extra_prior = NULL, grad = TRUE) {
+  mu <- theta[mu_idx]
+  P  <- length(mu)
+  g    <- numeric(length(theta))
+  g_mu <- numeric(P)
+  lp   <- 0
+  Cs <- lapply(arms, function(a) .ms_ocs_chol_unpack(theta[a$chol], a$Pa))
+  As <- lapply(arms, function(a) matrix(0, a$Pa, a$Pa))
+  for (s in seq_len(n_species)) {
+    bidx <- b_idx(s)
+    z_s  <- theta[bidx]
+    b    <- mu
+    for (k in seq_along(arms)) {
+      ix <- arms[[k]]$idx
+      b[ix] <- mu[ix] + as.numeric(Cs[[k]] %*% z_s[ix])
+    }
+    r  <- sp_llgrad(s, b, grad)
+    lp <- lp + r$ll
+    if (grad) {
+      g_mu <- g_mu + r$grad_b
+      for (k in seq_along(arms)) {
+        ix <- arms[[k]]$idx
+        gk <- r$grad_b[ix]
+        g[bidx[ix]] <- g[bidx[ix]] + as.numeric(crossprod(Cs[[k]], gk))
+        As[[k]] <- As[[k]] + outer(gk, z_s[ix])
+      }
+      if (!is.null(r$grad_other)) g <- g + r$grad_other
+    }
+  }
+  z_all <- theta[z_idx]
+  lp <- lp - 0.5 * sum(z_all^2)
+  if (grad) g[z_idx] <- g[z_idx] - z_all
+  for (k in seq_along(arms)) {
+    a  <- arms[[k]]
+    pr <- .ms_ocs_chol_logprior(theta[a$chol], a$Pa, priors)
+    lp <- lp + pr$lp
+    if (grad) g[a$chol] <- .ms_abun_nuts_chol_data_grad(As[[k]], Cs[[k]], a$Pa) + pr$grad
+  }
+  ip <- ifelse(is.finite(mu_prior_sd), 1 / mu_prior_sd^2, 0)
+  lp <- lp - 0.5 * sum(ip * mu^2)
+  if (grad) g[mu_idx] <- g[mu_idx] + g_mu - ip * mu
+  if (!is.null(extra_prior)) {
+    ep <- extra_prior(theta)
+    lp <- lp + ep$lp
+    if (grad) g <- g + ep$grad
+  }
+  if (!grad) return(list(lp = lp))
+  list(lp = lp, grad = g)
+}
+
 .tobs_ms_abun_nuts_logpost <- function(theta, margs, lay, priors,
                                        sigma.beta = 10, sigma.logr = 1.5,
                                        grad = TRUE) {
-  P <- lay$P; S <- lay$n_species; is_nb <- lay$is_nb
-  mu <- theta[lay$mu]
-  g    <- numeric(lay$total)
-  g_mu <- numeric(P)
-  lp   <- 0
-
-  # Cholesky factors per arm (Sigma_arm = C_arm C_arm'); logr arm is the 1x1
-  # scalar SD = exp(chol_logr).
-  C_lam <- .ms_ocs_chol_unpack(theta[lay$chol_lam], lay$p_lam)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
-  C_lr  <- if (is_nb) exp(theta[lay$chol_logr]) else NULL
-
-  # chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
-  A_lam <- matrix(0, lay$p_lam, lay$p_lam)
-  A_p   <- matrix(0, lay$p_p,   lay$p_p)
-  A_lr  <- 0
-
-  # ---- data log-lik + inner gradient (per species), non-centered b = C z ----
-  for (s in seq_len(S)) {
-    bidx <- .ms_ocs_b_idx(lay, s)
-    z_s  <- theta[bidx]
-    zl <- z_s[lay$lambda]; zp <- z_s[lay$p]
-    bl   <- mu[lay$lambda] + as.numeric(C_lam %*% zl)
-    bp   <- mu[lay$p]      + as.numeric(C_p   %*% zp)
-    if (is_nb) {
-      zr <- z_s[lay$logr]
-      r  <- exp(min(mu[lay$logr] + C_lr * zr, .TOBS_LOG_R_MAX))
-    } else {
-      r <- Inf
-    }
-    ev   <- margs[[s]]$eval_beta(bl, bp, r = r)
-    lp   <- lp + ev$log_lik
-    if (grad) {
-      gl <- as.numeric(crossprod(margs[[s]]$X_lambda, ev$grad_eta_lambda)) # grad_b lambda
-      gp <- as.numeric(crossprod(margs[[s]]$X_p,      ev$grad_eta_p))      # grad_b p
-      g_mu[lay$lambda]    <- g_mu[lay$lambda] + gl
-      g_mu[lay$p]         <- g_mu[lay$p]      + gp
-      # z gradient (data part) = C' grad_b; the -z prior is added below.
-      g[bidx[lay$lambda]] <- g[bidx[lay$lambda]] + as.numeric(crossprod(C_lam, gl))
-      g[bidx[lay$p]]      <- g[bidx[lay$p]]      + as.numeric(crossprod(C_p,   gp))
-      A_lam <- A_lam + outer(gl, zl)
-      A_p   <- A_p   + outer(gp, zp)
-      if (is_nb) {
-        gt <- sum(ev$grad_theta)                                          # grad_b logr
-        g_mu[lay$logr]    <- g_mu[lay$logr] + gt
-        g[bidx[lay$logr]] <- g[bidx[lay$logr]] + C_lr * gt
-        A_lr <- A_lr + gt * zr
-      }
-    }
+  is_nb <- lay$is_nb
+  arms <- c(list(list(idx = lay$lambda, chol = lay$chol_lam, Pa = lay$p_lam),
+                 list(idx = lay$p,      chol = lay$chol_p,   Pa = lay$p_p)),
+            if (is_nb) list(list(idx = lay$logr, chol = lay$chol_logr, Pa = 1L)))
+  sd <- rep(Inf, lay$P)
+  sd[c(lay$lambda, lay$p)] <- sigma.beta
+  if (is_nb) sd[lay$logr] <- sigma.logr
+  sp <- function(s, b, grad) {
+    r  <- if (is_nb) exp(min(b[lay$logr], .TOBS_LOG_R_MAX)) else Inf
+    ev <- margs[[s]]$eval_beta(b[lay$lambda], b[lay$p], r = r)
+    if (!grad) return(list(ll = ev$log_lik))
+    gb <- numeric(lay$P)
+    gb[lay$lambda] <- as.numeric(crossprod(margs[[s]]$X_lambda, ev$grad_eta_lambda))
+    gb[lay$p]      <- as.numeric(crossprod(margs[[s]]$X_p,      ev$grad_eta_p))
+    if (is_nb) gb[lay$logr] <- sum(ev$grad_theta)
+    list(ll = ev$log_lik, grad_b = gb)
   }
-
-  # ---- z prior: standard normal over the entire per-species block ----
-  z_idx <- lay$b_off + seq_len(S * P)
-  z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-
-  # ---- chol coords: data gradient (via b = C z) + hyperprior ----
-  arms <- list(list(chol = lay$chol_lam, A = A_lam, C = C_lam, Pa = lay$p_lam),
-               list(chol = lay$chol_p,   A = A_p,   C = C_p,   Pa = lay$p_p))
-  if (is_nb) arms <- c(arms, list(list(chol = lay$chol_logr,
-                                       A = matrix(A_lr, 1, 1),
-                                       C = matrix(C_lr, 1, 1), Pa = 1L)))
-  for (arm in arms) {
-    Pa <- arm$Pa; if (Pa == 0L) next
-    pr <- .ms_ocs_chol_logprior(theta[arm$chol], Pa, priors)
-    lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, Pa) +
-        pr$grad
-  }
-
-  # ---- community-mean priors ----
-  ib2 <- 1 / sigma.beta^2
-  coef_idx <- c(lay$lambda, lay$p)
-  lp <- lp - 0.5 * ib2 * sum(mu[coef_idx]^2)
-  g_mu[coef_idx] <- g_mu[coef_idx] - ib2 * mu[coef_idx]
-  if (is_nb) {
-    il2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * il2 * mu[lay$logr]^2
-    g_mu[lay$logr] <- g_mu[lay$logr] - il2 * mu[lay$logr]
-  }
-  g[lay$mu] <- g[lay$mu] + g_mu
-
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  .community_nc_logpost(theta, lay$mu, function(s) .ms_ocs_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * lay$P), sp,
+                        lay$n_species, priors, sd, grad = grad)
 }
 
-# Full-vector joint log-posterior + gradient (the NUTS target / oracle). `Y` is
-# the n_sites x n_species response matrix; `X` the site-level design. An NA entry
-# Y[i, s] is a missing site x species observation: that (species, site) is dropped
-# species keeps only its observed sites. Mirrors the C++ ms_count_nuts_eval
-# (src/ms_count_nuts.cpp), including the NA skip.
 .tobs_ms_count_nuts_logpost <- function(theta, X, Y, lay, priors,
                                         sigma.beta = 10, sigma.logr = 1.5,
                                         grad = TRUE) {
-  pb <- lay$p_beta; S <- lay$n_species; P <- lay$P
   is_nb <- lay$is_nb; is_gauss <- lay$is_gauss
   is_bern <- identical(lay$family, "bernoulli")
-  mu     <- theta[lay$mu]
-  C_beta <- .ms_ocs_chol_unpack(theta[lay$chol_beta], pb)
-  C_lr   <- if (is_nb) exp(theta[lay$chol_logr]) else NULL
+  arms <- c(list(list(idx = lay$beta, chol = lay$chol_beta, Pa = lay$p_beta)),
+            if (is_nb) list(list(idx = lay$logr, chol = lay$chol_logr, Pa = 1L)))
+  sd <- rep(Inf, lay$P)
+  sd[lay$beta] <- sigma.beta
+  if (is_nb) sd[lay$logr] <- sigma.logr
   logphi <- if (is_gauss) theta[lay$logphi] else NULL
-
-  g <- numeric(lay$total); g_mu <- numeric(P)
-  A_beta <- matrix(0, pb, pb); A_lr <- 0; lp <- 0
-
-  for (s in seq_len(S)) {
-    bidx <- .ms_ocs_b_idx(lay, s)
-    z_s  <- theta[bidx]; zb <- z_s[lay$beta]
-    b_beta <- mu[lay$beta] + as.numeric(C_beta %*% zb)
-    # Drop missing (NA) site x species observations for this species.
-    ys_all <- Y[, s]
-    obs    <- !is.na(ys_all)
-    Xs     <- X[obs, , drop = FALSE]
-    ys     <- ys_all[obs]
-    eta    <- as.numeric(Xs %*% b_beta)
+  sp <- function(s, b, grad) {
+    # A missing (NA) site x species observation drops out of that species.
+    obs <- !is.na(Y[, s])
+    Xs  <- X[obs, , drop = FALSE]
+    ys  <- Y[obs, s]
+    eta <- as.numeric(Xs %*% b[lay$beta])
+    gb  <- numeric(lay$P); go <- NULL
     if (is_nb) {
-      zr  <- z_s[lay$logr]
-      r   <- exp(min(mu[lay$logr] + C_lr * zr, .TOBS_LOG_R_MAX))
+      r   <- exp(min(b[lay$logr], .TOBS_LOG_R_MAX))
       muv <- pmax(exp(pmin(eta, 700)), 1e-10)
-      lp  <- lp + sum(stats::dnbinom(ys, size = r, mu = muv, log = TRUE))
+      ll  <- sum(stats::dnbinom(ys, size = r, mu = muv, log = TRUE))
       if (grad) {
-        gl     <- as.numeric(crossprod(Xs, r * (ys - muv) / (r + muv)))
-        dLL_dr <- digamma(ys + r) - digamma(r) + log(r / (r + muv)) + 1 -
-                  (ys + r) / (r + muv)
-        g_logr <- r * sum(dLL_dr)
-        g_mu[lay$beta] <- g_mu[lay$beta] + gl
-        g_mu[lay$logr] <- g_mu[lay$logr] + g_logr
-        g[bidx[lay$beta]] <- g[bidx[lay$beta]] + as.numeric(crossprod(C_beta, gl))
-        g[bidx[lay$logr]] <- g[bidx[lay$logr]] + C_lr * g_logr
-        A_beta <- A_beta + outer(gl, zb)
-        A_lr   <- A_lr + g_logr * zr
+        gb[lay$beta] <- as.numeric(crossprod(Xs, r * (ys - muv) / (r + muv)))
+        gb[lay$logr] <- r * sum(digamma(ys + r) - digamma(r) + log(r / (r + muv)) +
+                                  1 - (ys + r) / (r + muv))
       }
     } else if (is_gauss) {
       phi_s <- exp(min(logphi[s], 30))
-      lp    <- lp + sum(stats::dnorm(ys, mean = eta, sd = sqrt(phi_s), log = TRUE))
+      ll <- sum(stats::dnorm(ys, mean = eta, sd = sqrt(phi_s), log = TRUE))
       if (grad) {
-        gl <- as.numeric(crossprod(Xs, (ys - eta) / phi_s))
-        g_mu[lay$beta] <- g_mu[lay$beta] + gl
-        g[bidx[lay$beta]] <- g[bidx[lay$beta]] + as.numeric(crossprod(C_beta, gl))
-        g[lay$logphi[s]]  <- g[lay$logphi[s]] + sum(-0.5 + (ys - eta)^2 / (2 * phi_s))
-        A_beta <- A_beta + outer(gl, zb)
+        gb[lay$beta] <- as.numeric(crossprod(Xs, (ys - eta) / phi_s))
+        go <- numeric(length(theta))
+        go[lay$logphi[s]] <- sum(-0.5 + (ys - eta)^2 / (2 * phi_s))
       }
     } else if (is_bern) {
-      # jsdm(): log p = y eta - log(1 + exp(eta)); d log p / d eta = y - plogis(eta).
-      # Written via plogis(log.p) to match the C++ stable log-sum-exp branch.
-      lp <- lp + sum(ifelse(ys > 0, stats::plogis(eta,  log.p = TRUE),
-                                    stats::plogis(-eta, log.p = TRUE)))
-      if (grad) {
-        gl <- as.numeric(crossprod(Xs, ys - stats::plogis(eta)))
-        g_mu[lay$beta] <- g_mu[lay$beta] + gl
-        g[bidx[lay$beta]] <- g[bidx[lay$beta]] + as.numeric(crossprod(C_beta, gl))
-        A_beta <- A_beta + outer(gl, zb)
-      }
+      # jsdm(): log p = y eta - log(1 + exp(eta)), through plogis(log.p) as the
+      # C++ stable log-sum-exp branch does.
+      ll <- sum(ifelse(ys > 0, stats::plogis(eta,  log.p = TRUE),
+                               stats::plogis(-eta, log.p = TRUE)))
+      if (grad) gb[lay$beta] <- as.numeric(crossprod(Xs, ys - stats::plogis(eta)))
     } else {
       lam <- exp(pmin(eta, 700))
-      lp  <- lp + sum(ys * eta - lam - lgamma(ys + 1))
-      if (grad) {
-        gl <- as.numeric(crossprod(Xs, ys - lam))
-        g_mu[lay$beta] <- g_mu[lay$beta] + gl
-        g[bidx[lay$beta]] <- g[bidx[lay$beta]] + as.numeric(crossprod(C_beta, gl))
-        A_beta <- A_beta + outer(gl, zb)
-      }
+      ll  <- sum(ys * eta - lam - lgamma(ys + 1))
+      if (grad) gb[lay$beta] <- as.numeric(crossprod(Xs, ys - lam))
     }
+    list(ll = ll, grad_b = gb, grad_other = go)
   }
-  # z prior N(0, I)
-  z_idx <- lay$b_off + seq_len(S * P); z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-  # chol_beta coords: data gradient (b = C z) + log-Cholesky hyperprior
-  pr <- .ms_ocs_chol_logprior(theta[lay$chol_beta], pb, priors)
-  lp <- lp + pr$lp
-  if (grad) g[lay$chol_beta] <- .ms_abun_nuts_chol_data_grad(A_beta, C_beta, pb) +
-      pr$grad
-  if (is_nb) {                                # scalar log-dispersion covariance
-    pr_r <- .ms_ocs_chol_logprior(theta[lay$chol_logr], 1L, priors)
-    lp   <- lp + pr_r$lp
-    if (grad) g[lay$chol_logr] <-
-      .ms_abun_nuts_chol_data_grad(matrix(A_lr, 1, 1), matrix(C_lr, 1, 1), 1L) +
-      pr_r$grad
-  }
-  if (is_gauss) {                             # free log_phi prior N(mean, sd^2)
+  extra <- if (is_gauss) function(th) {
     lpm <- priors$logphi_mean; lps <- priors$logphi_sd
-    lp  <- lp - 0.5 * sum(((logphi - lpm) / lps)^2)
-    if (grad) g[lay$logphi] <- g[lay$logphi] - (logphi - lpm) / lps^2
+    gr <- numeric(length(th)); gr[lay$logphi] <- -(logphi - lpm) / lps^2
+    list(lp = -0.5 * sum(((logphi - lpm) / lps)^2), grad = gr)
   }
-  # community-mean priors
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * sum(mu[lay$beta]^2)
-  g_mu[lay$beta] <- g_mu[lay$beta] - ib2 * mu[lay$beta]
-  if (is_nb) {
-    il2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * il2 * mu[lay$logr]^2
-    g_mu[lay$logr] <- g_mu[lay$logr] - il2 * mu[lay$logr]
-  }
-  g[lay$mu] <- g[lay$mu] + g_mu
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  .community_nc_logpost(theta, lay$mu, function(s) .ms_ocs_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * lay$P), sp,
+                        lay$n_species, priors, sd, extra, grad = grad)
 }
 
-# Full-vector joint log-posterior and its gradient for the community dynamic
-# occupancy model. `X_psi1` / `X_p` / `X_gamma` / `X_eps` are the site-level
-# designs; `em_stats` a per-species list of precomputed (nvalid, ndet)
-# [n_sites x n_seasons] detection sufficient statistics (from
-# .ms_dyn_occu_emit_stats). `lay` the layout. Returns list(lp, grad) over the
-# packed coordinates. Mirrors the C++ ms_dyn_occu_nuts_eval.
-#
-# NON-CENTERED: the per-species block holds standard-normal z_s, the deviation is
-# b_{s,arm} = C_arm z_{s,arm}, so the community covariance enters ONLY the data
-# term through b = C z. The gamma / eps globals are shared across species and so
-# accumulate their gradient over the full species loop.
 .tobs_ms_dyn_occu_nuts_logpost <- function(theta, X_psi1, X_p, X_gamma, X_eps,
                                            em_stats, n_sites, n_seasons, lay,
                                            priors, sigma.beta = 5, grad = TRUE) {
-  P <- lay$P; S <- lay$n_species
-  mu     <- theta[lay$mu]
   global <- theta[lay$global]
-  beta_gam <- global[lay$gam]
-  beta_eps <- global[lay$eps]
-  eta_gam0 <- as.numeric(X_gamma %*% beta_gam)
-  eta_eps0 <- as.numeric(X_eps   %*% beta_eps)
-  gamma <- stats::plogis(eta_gam0)
-  eps   <- stats::plogis(eta_eps0)
-
-  g      <- numeric(lay$total)
-  g_mu   <- numeric(P)
-  g_gam  <- numeric(n_sites)         # accumulated d ll / d eta_gam over species
-  g_eps  <- numeric(n_sites)
-  lp     <- 0
-
-  C_psi1 <- .ms_ocs_chol_unpack(theta[lay$chol_psi1], lay$p_psi1)
-  C_p    <- .ms_ocs_chol_unpack(theta[lay$chol_p],    lay$p_p)
-
-  # chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
-  A_psi1 <- matrix(0, lay$p_psi1, lay$p_psi1)
-  A_p    <- matrix(0, lay$p_p,    lay$p_p)
-
-  for (s in seq_len(S)) {
-    bidx <- .ms_ocs_b_idx(lay, s)
-    z_s  <- theta[bidx]
-    zpsi1 <- z_s[lay$psi1]; zp <- z_s[lay$p]
-    bpsi1 <- mu[lay$psi1] + as.numeric(C_psi1 %*% zpsi1)
-    bp    <- mu[lay$p]    + as.numeric(C_p    %*% zp)
-    eta_psi1 <- as.numeric(X_psi1 %*% bpsi1)
-    eta_p    <- as.numeric(X_p    %*% bp)
-    psi1 <- stats::plogis(eta_psi1)
-    p    <- stats::plogis(eta_p)
-
+  beta_gam <- global[lay$gam]; beta_eps <- global[lay$eps]
+  gamma <- stats::plogis(as.numeric(X_gamma %*% beta_gam))
+  eps   <- stats::plogis(as.numeric(X_eps   %*% beta_eps))
+  arms <- list(list(idx = lay$psi1, chol = lay$chol_psi1, Pa = lay$p_psi1),
+               list(idx = lay$p,    chol = lay$chol_p,    Pa = lay$p_p))
+  sp <- function(s, b, grad) {
+    psi1 <- stats::plogis(as.numeric(X_psi1 %*% b[lay$psi1]))
+    p    <- stats::plogis(as.numeric(X_p    %*% b[lay$p]))
     em <- .ms_dyn_occu_emissions(p, em_stats[[s]]$nvalid, em_stats[[s]]$ndet)
-    if (grad) {
-      fb <- .ms_dyn_occu_fb_vec(psi1, p, gamma, eps, em,
-                                em_stats[[s]]$nvalid, em_stats[[s]]$ndet,
-                                n_sites, n_seasons)
-      lp <- lp + fb$ll
-      # per-arm eta scores (Fisher identity).
-      s_psi1 <- fb$w1 - psi1
-      s_p    <- fb$p_score
-      # design-sandwiched b gradients (psi1, p arms).
-      gpsi1 <- as.numeric(crossprod(X_psi1, s_psi1))
-      gp    <- as.numeric(crossprod(X_p,    s_p))
-      g_mu[lay$psi1] <- g_mu[lay$psi1] + gpsi1
-      g_mu[lay$p]    <- g_mu[lay$p]    + gp
-      # z gradient (data part) = C' grad_b.
-      g[bidx[lay$psi1]] <- g[bidx[lay$psi1]] + as.numeric(crossprod(C_psi1, gpsi1))
-      g[bidx[lay$p]]    <- g[bidx[lay$p]]    + as.numeric(crossprod(C_p,    gp))
-      A_psi1 <- A_psi1 + outer(gpsi1, zpsi1)
-      A_p    <- A_p    + outer(gp,    zp)
-      # shared transition eta scores, accumulated across species.
-      g_gam <- g_gam + (fb$col_y - gamma * fb$col_n)
-      g_eps <- g_eps + (fb$ext_y - eps   * fb$ext_n)
-    } else {
-      lp <- lp + .ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em,
-                                         n_sites, n_seasons)
+    if (!grad) {
+      return(list(ll = .ms_dyn_occu_fwd_ll_vec(psi1, gamma, eps, em, n_sites, n_seasons)))
     }
+    fb <- .ms_dyn_occu_fb_vec(psi1, p, gamma, eps, em, em_stats[[s]]$nvalid,
+                              em_stats[[s]]$ndet, n_sites, n_seasons)
+    gb <- numeric(lay$P)
+    gb[lay$psi1] <- as.numeric(crossprod(X_psi1, fb$w1 - psi1))
+    gb[lay$p]    <- as.numeric(crossprod(X_p,    fb$p_score))
+    # The shared transition arms take every species' score.
+    go <- numeric(length(theta)); gg <- numeric(lay$G)
+    gg[lay$gam] <- as.numeric(crossprod(X_gamma, fb$col_y - gamma * fb$col_n))
+    gg[lay$eps] <- as.numeric(crossprod(X_eps,   fb$ext_y - eps   * fb$ext_n))
+    go[lay$global] <- gg
+    list(ll = fb$ll, grad_b = gb, grad_other = go)
   }
-
-  # ---- z prior: standard normal over the entire per-species block ----
-  z_idx <- lay$b_off + seq_len(S * P)
-  z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-
-  # ---- chol coords: data gradient (via b = C z) + hyperprior ----
-  arms <- list(
-    list(chol = lay$chol_psi1, A = A_psi1, C = C_psi1, Pa = lay$p_psi1),
-    list(chol = lay$chol_p,    A = A_p,    C = C_p,    Pa = lay$p_p))
-  for (arm in arms) {
-    pr <- .ms_ocs_chol_logprior(theta[arm$chol], arm$Pa, priors)
-    lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, arm$Pa) +
-        pr$grad
-  }
-
-  # ---- community-mean priors ----
   ib2 <- 1 / sigma.beta^2
-  lp <- lp - 0.5 * ib2 * sum(mu^2)
-  g_mu <- g_mu - ib2 * mu
-  if (grad) g[lay$mu] <- g[lay$mu] + g_mu
-
-  # ---- shared-transition (global) priors + design-sandwiched gradient ----
-  lp <- lp - 0.5 * ib2 * sum(global^2)
-  if (grad) {
-    g_glob <- numeric(lay$G)
-    g_glob[lay$gam] <- as.numeric(crossprod(X_gamma, g_gam)) - ib2 * beta_gam
-    g_glob[lay$eps] <- as.numeric(crossprod(X_eps,   g_eps)) - ib2 * beta_eps
-    g[lay$global] <- g_glob
+  extra <- function(th) {
+    gr <- numeric(length(th)); gr[lay$global] <- -ib2 * global
+    list(lp = -0.5 * ib2 * sum(global^2), grad = gr)
   }
-
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  .community_nc_logpost(theta, lay$mu, function(s) .ms_ocs_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * lay$P), sp,
+                        lay$n_species, priors, rep(sigma.beta, lay$P), extra,
+                        grad = grad)
 }
 
-# Full-vector joint log-posterior and its gradient for the community integrated
-# occupancy model. `X_psi` [n_sites x P_psi]; `X_p` a list of D site-level
-# detection designs; `summaries` the per-species .ms_int_occu_sp_summary list;
-# `lay` the layout. Returns list(lp, grad) over the packed coordinates.
-#
-# NON-CENTERED: the per-species block holds standard-normal z_s, the deviation is
-# b_{s,arm} = C_arm z_{s,arm}, so each community covariance leaves the b-prior
-# (z ~ N(0, I)) and enters ONLY the data term through b = C z.
 .tobs_ms_int_occu_nuts_logpost <- function(theta, X_psi, X_p, summaries, lay,
                                            priors, sigma.beta = 5, grad = TRUE) {
-  P <- lay$P; S <- lay$n_species; D <- lay$D
-  mu <- theta[lay$mu]
-  g    <- numeric(lay$total)
-  g_mu <- numeric(P)
-  lp   <- 0
-
-  # Unpack the per-arm Cholesky factors (psi + D detection).
-  C_psi <- .ms_ocs_chol_unpack(theta[lay$chol_psi], lay$P_psi)
-  C_p   <- lapply(seq_len(D),
-                  function(d) .ms_ocs_chol_unpack(theta[lay$chol_p[[d]]], lay$P_p[d]))
-
-  # chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
-  A_psi <- matrix(0, lay$P_psi, lay$P_psi)
-  A_p   <- lapply(seq_len(D), function(d) matrix(0, lay$P_p[d], lay$P_p[d]))
-
-  for (s in seq_len(S)) {
-    bidx <- .ms_ocs_b_idx(lay, s)
-    z_s  <- theta[bidx]
-    zpsi <- z_s[lay$psi]
-    bpsi <- mu[lay$psi] + as.numeric(C_psi %*% zpsi)
-    eta_psi <- as.numeric(X_psi %*% bpsi)
-    zp   <- vector("list", D); eta_p <- vector("list", D)
-    for (d in seq_len(D)) {
-      zp[[d]]    <- z_s[lay$p[[d]]]
-      bpd        <- mu[lay$p[[d]]] + as.numeric(C_p[[d]] %*% zp[[d]])
-      eta_p[[d]] <- as.numeric(X_p[[d]] %*% bpd)
-    }
-    lp <- lp + .ms_int_occu_sp_ll(eta_psi, eta_p, summaries[[s]])
-    if (grad) {
-      gvec <- .ms_int_occu_sp_grad(eta_psi, eta_p, summaries[[s]], X_psi, X_p)
-      gpsi <- gvec[lay$psi]                       # grad_b psi (coefficient space)
-      g_mu[lay$psi] <- g_mu[lay$psi] + gpsi
-      g[bidx[lay$psi]] <- g[bidx[lay$psi]] + as.numeric(crossprod(C_psi, gpsi))
-      A_psi <- A_psi + outer(gpsi, zpsi)
-      for (d in seq_len(D)) {
-        gpd <- gvec[lay$p[[d]]]
-        g_mu[lay$p[[d]]] <- g_mu[lay$p[[d]]] + gpd
-        g[bidx[lay$p[[d]]]] <- g[bidx[lay$p[[d]]]] +
-          as.numeric(crossprod(C_p[[d]], gpd))
-        A_p[[d]] <- A_p[[d]] + outer(gpd, zp[[d]])
-      }
-    }
-  }
-
-  # ---- z prior: standard normal over the entire per-species block ----
-  z_idx <- lay$b_off + seq_len(S * P)
-  z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-
-  # ---- chol coords: data gradient (via b = C z) + hyperprior, per arm ----
-  arms <- c(list(list(chol = lay$chol_psi, A = A_psi, C = C_psi, Pa = lay$P_psi)),
+  D <- lay$D
+  arms <- c(list(list(idx = lay$psi, chol = lay$chol_psi, Pa = lay$P_psi)),
             lapply(seq_len(D), function(d)
-              list(chol = lay$chol_p[[d]], A = A_p[[d]], C = C_p[[d]], Pa = lay$P_p[d])))
-  for (arm in arms) {
-    pr <- .ms_ocs_chol_logprior(theta[arm$chol], arm$Pa, priors)
-    lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, arm$Pa) +
-        pr$grad
+              list(idx = lay$p[[d]], chol = lay$chol_p[[d]], Pa = lay$P_p[d])))
+  sp <- function(s, b, grad) {
+    eta_psi <- as.numeric(X_psi %*% b[lay$psi])
+    eta_p   <- lapply(seq_len(D), function(d) as.numeric(X_p[[d]] %*% b[lay$p[[d]]]))
+    ll <- .ms_int_occu_sp_ll(eta_psi, eta_p, summaries[[s]])
+    if (!grad) return(list(ll = ll))
+    list(ll = ll, grad_b = .ms_int_occu_sp_grad(eta_psi, eta_p, summaries[[s]],
+                                                X_psi, X_p)[seq_len(lay$P)])
   }
-
-  # ---- community-mean priors ----
-  ib2 <- 1 / sigma.beta^2
-  lp <- lp - 0.5 * ib2 * sum(mu^2)
-  g_mu <- g_mu - ib2 * mu
-  g[lay$mu] <- g[lay$mu] + g_mu
-
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  .community_nc_logpost(theta, lay$mu, function(s) .ms_ocs_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * lay$P), sp,
+                        lay$n_species, priors, rep(sigma.beta, lay$P), grad = grad)
 }
 
-# Full-vector joint log-posterior and its gradient. `views` is the per-species
-# .ms_occu_cover_species_view list (the single-species occu_cover model views the
-# laplace path builds); `lay` the layout. Returns list(lp, grad) over the packed
-# coordinates.
-#
-# NON-CENTERED: the per-species block holds standard-normal z_s, the deviation is
-# b_{s,arm} = C_arm z_{s,arm}, so each community covariance leaves the b-prior and
-# enters ONLY the data term. The shared log_disp carries a weakly-informative
-# Normal prior on the log scale and accumulates its gradient over all species.
 .tobs_ms_occu_cover_nuts_logpost <- function(theta, views, lay, priors,
                                              sigma.beta = 5, grad = TRUE) {
-  P <- lay$P; S <- lay$n_species
-  mu <- theta[lay$mu]
+  P <- lay$P
   log_disp <- theta[lay$log_disp]
-  g    <- numeric(lay$total)
-  g_mu <- numeric(P)
-  g_ld <- 0
-  lp   <- 0
-
-  C_occ <- .ms_ocs_chol_unpack(theta[lay$chol_occ], lay$P_occ)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$P_p)
-  C_pos <- .ms_ocs_chol_unpack(theta[lay$chol_pos], lay$P_pos)
-
-  A_occ <- matrix(0, lay$P_occ, lay$P_occ)
-  A_p   <- matrix(0, lay$P_p,   lay$P_p)
-  A_pos <- matrix(0, lay$P_pos, lay$P_pos)
-
-  for (s in seq_len(S)) {
-    bidx <- .ms_ocs_b_idx(lay, s)
-    z_s  <- theta[bidx]
-    zocc <- z_s[lay$occ]; zp <- z_s[lay$p]; zpos <- z_s[lay$pos]
-    bocc <- mu[lay$occ] + as.numeric(C_occ %*% zocc)
-    bp   <- mu[lay$p]   + as.numeric(C_p   %*% zp)
-    bpos <- mu[lay$pos] + as.numeric(C_pos %*% zpos)
-
-    lp <- lp + .occu_cover_sp_ll(views[[s]], bocc, bp, bpos, log_disp)
-    if (grad) {
-      gvec <- .occu_cover_sp_grad(views[[s]], bocc, bp, bpos, log_disp)
-      gocc <- gvec[lay$occ]; gp <- gvec[lay$p]; gpos <- gvec[lay$pos]
-      g_ld <- g_ld + gvec[P + 1L]
-      g_mu[lay$occ] <- g_mu[lay$occ] + gocc
-      g_mu[lay$p]   <- g_mu[lay$p]   + gp
-      g_mu[lay$pos] <- g_mu[lay$pos] + gpos
-      g[bidx[lay$occ]] <- g[bidx[lay$occ]] + as.numeric(crossprod(C_occ, gocc))
-      g[bidx[lay$p]]   <- g[bidx[lay$p]]   + as.numeric(crossprod(C_p,   gp))
-      g[bidx[lay$pos]] <- g[bidx[lay$pos]] + as.numeric(crossprod(C_pos, gpos))
-      A_occ <- A_occ + outer(gocc, zocc)
-      A_p   <- A_p   + outer(gp,   zp)
-      A_pos <- A_pos + outer(gpos, zpos)
-    }
+  arms <- list(list(idx = lay$occ, chol = lay$chol_occ, Pa = lay$P_occ),
+               list(idx = lay$p,   chol = lay$chol_p,   Pa = lay$P_p),
+               list(idx = lay$pos, chol = lay$chol_pos, Pa = lay$P_pos))
+  sp <- function(s, b, grad) {
+    bo <- b[lay$occ]; bp <- b[lay$p]; bpos <- b[lay$pos]
+    ll <- .occu_cover_sp_ll(views[[s]], bo, bp, bpos, log_disp)
+    if (!grad) return(list(ll = ll))
+    gv <- .occu_cover_sp_grad(views[[s]], bo, bp, bpos, log_disp)
+    go <- numeric(length(theta)); go[lay$log_disp] <- gv[P + 1L]
+    list(ll = ll, grad_b = gv[seq_len(P)], grad_other = go)
   }
-
-  # ---- z prior: standard normal over the entire per-species block ----
-  z_idx <- lay$b_off + seq_len(S * P)
-  z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-
-  # ---- chol coords: data gradient (via b = C z) + hyperprior, per arm ----
-  arms <- list(list(chol = lay$chol_occ, A = A_occ, C = C_occ, Pa = lay$P_occ),
-               list(chol = lay$chol_p,   A = A_p,   C = C_p,   Pa = lay$P_p),
-               list(chol = lay$chol_pos, A = A_pos, C = C_pos, Pa = lay$P_pos))
-  for (arm in arms) {
-    pr <- .ms_ocs_chol_logprior(theta[arm$chol], arm$Pa, priors)
-    lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, arm$Pa) +
-        pr$grad
-  }
-
-  # ---- community-mean priors ----
-  ib2 <- 1 / sigma.beta^2
-  lp <- lp - 0.5 * ib2 * sum(mu^2)
-  g_mu <- g_mu - ib2 * mu
-  g[lay$mu] <- g[lay$mu] + g_mu
-
-  # ---- shared log-dispersion prior (weakly-informative Normal on log scale) ----
+  # The shared log-dispersion: a weakly-informative Normal on the log scale.
   ld_mean <- priors$log_disp_mean %||% log(0.5)
   ld_sd   <- priors$log_disp_sd   %||% 2.0
-  lp <- lp - 0.5 * ((log_disp - ld_mean) / ld_sd)^2
-  g_ld <- g_ld - (log_disp - ld_mean) / ld_sd^2
-  if (grad) g[lay$log_disp] <- g_ld
-
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  extra <- function(th) {
+    gr <- numeric(length(th)); gr[lay$log_disp] <- -(log_disp - ld_mean) / ld_sd^2
+    list(lp = -0.5 * ((log_disp - ld_mean) / ld_sd)^2, grad = gr)
+  }
+  .community_nc_logpost(theta, lay$mu, function(s) .ms_ocs_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * P), sp,
+                        lay$n_species, priors, rep(sigma.beta, P), extra,
+                        grad = grad)
 }
 
-# Joint log-posterior + gradient for the dispersion-RE variant. `views` the
-# per-species occu_cover model views; `lay` the RE layout. Non-centered on all
-# four arms (occ/p/pos coefficients + the 1-D log-dispersion).
 .tobs_ms_occu_cover_re_disp_logpost <- function(theta, views, lay, priors,
                                                 sigma.beta = 5, grad = TRUE) {
-  S <- lay$n_species
-  mu_coef <- theta[lay$mu_coef]
-  mu_ld   <- theta[lay$mu_ld]
-  g    <- numeric(lay$total)
-  g_mc <- numeric(lay$P_coef)
-  g_mld <- 0
-  lp   <- 0
-
-  C_occ <- .ms_ocs_chol_unpack(theta[lay$chol_occ], lay$P_occ)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$P_p)
-  C_pos <- .ms_ocs_chol_unpack(theta[lay$chol_pos], lay$P_pos)
-  sigma_ld <- exp(theta[lay$chol_ld])            # 1x1 Cholesky factor
-
-  A_occ <- matrix(0, lay$P_occ, lay$P_occ)
-  A_p   <- matrix(0, lay$P_p,   lay$P_p)
-  A_pos <- matrix(0, lay$P_pos, lay$P_pos)
-  A_ld  <- 0
-
-  for (s in seq_len(S)) {
-    bidx <- .tobs_ms_occu_cover_re_disp_b_idx(lay, s)
-    z_s  <- theta[bidx]
-    zocc <- z_s[lay$occ]; zp <- z_s[lay$p]; zpos <- z_s[lay$pos]; zld <- z_s[lay$ld]
-    bocc <- mu_coef[lay$occ] + as.numeric(C_occ %*% zocc)
-    bp   <- mu_coef[lay$p]   + as.numeric(C_p   %*% zp)
-    bpos <- mu_coef[lay$pos] + as.numeric(C_pos %*% zpos)
-    log_disp_s <- mu_ld + sigma_ld * zld
-
-    lp <- lp + .occu_cover_sp_ll(views[[s]], bocc, bp, bpos, log_disp_s)
-    if (grad) {
-      gvec <- .occu_cover_sp_grad(views[[s]], bocc, bp, bpos, log_disp_s)
-      gocc <- gvec[lay$occ]; gp <- gvec[lay$p]; gpos <- gvec[lay$pos]
-      g_ld_s <- gvec[lay$P_coef + 1L]
-      g_mc[lay$occ] <- g_mc[lay$occ] + gocc
-      g_mc[lay$p]   <- g_mc[lay$p]   + gp
-      g_mc[lay$pos] <- g_mc[lay$pos] + gpos
-      g_mld <- g_mld + g_ld_s
-      g[bidx[lay$occ]] <- g[bidx[lay$occ]] + as.numeric(crossprod(C_occ, gocc))
-      g[bidx[lay$p]]   <- g[bidx[lay$p]]   + as.numeric(crossprod(C_p,   gp))
-      g[bidx[lay$pos]] <- g[bidx[lay$pos]] + as.numeric(crossprod(C_pos, gpos))
-      g[bidx[lay$ld]]  <- g[bidx[lay$ld]]  + sigma_ld * g_ld_s
-      A_occ <- A_occ + outer(gocc, zocc)
-      A_p   <- A_p   + outer(gp,   zp)
-      A_pos <- A_pos + outer(gpos, zpos)
-      A_ld  <- A_ld  + g_ld_s * zld
-    }
+  Pc <- lay$P_coef
+  arms <- list(list(idx = lay$occ, chol = lay$chol_occ, Pa = lay$P_occ),
+               list(idx = lay$p,   chol = lay$chol_p,   Pa = lay$P_p),
+               list(idx = lay$pos, chol = lay$chol_pos, Pa = lay$P_pos),
+               list(idx = lay$ld,  chol = lay$chol_ld,  Pa = 1L))
+  sp <- function(s, b, grad) {
+    bo <- b[lay$occ]; bp <- b[lay$p]; bpos <- b[lay$pos]; ld <- b[lay$ld]
+    ll <- .occu_cover_sp_ll(views[[s]], bo, bp, bpos, ld)
+    if (!grad) return(list(ll = ll))
+    gv <- .occu_cover_sp_grad(views[[s]], bo, bp, bpos, ld)
+    gb <- numeric(lay$Pz)
+    gb[seq_len(Pc)] <- gv[seq_len(Pc)]
+    gb[lay$ld] <- gv[Pc + 1L]
+    list(ll = ll, grad_b = gb)
   }
-
-  # ---- z prior: standard normal over the whole per-species block ----
-  z_idx <- lay$b_off + seq_len(S * lay$Pz)
-  z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-
-  # ---- chol coords: data gradient (via b = C z) + hyperprior, per arm ----
-  arms <- list(list(chol = lay$chol_occ, A = A_occ, C = C_occ, Pa = lay$P_occ),
-               list(chol = lay$chol_p,   A = A_p,   C = C_p,   Pa = lay$P_p),
-               list(chol = lay$chol_pos, A = A_pos, C = C_pos, Pa = lay$P_pos),
-               list(chol = lay$chol_ld,  A = matrix(A_ld, 1, 1),
-                    C = matrix(sigma_ld, 1, 1), Pa = 1L))
-  for (arm in arms) {
-    pr <- .ms_ocs_chol_logprior(theta[arm$chol], arm$Pa, priors)
-    lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, arm$Pa) +
-        pr$grad
-  }
-
-  # ---- community-mean priors: coefficients ridge + log-dispersion prior ----
-  ib2 <- 1 / sigma.beta^2
-  lp <- lp - 0.5 * ib2 * sum(mu_coef^2)
-  g_mc <- g_mc - ib2 * mu_coef
+  # Coefficient means: the sigma.beta ridge; the log-dispersion mean: a
+  # weakly-informative Normal on the log scale.
   ld_mean <- priors$log_disp_mean %||% log(0.5)
   ld_sd   <- priors$log_disp_sd   %||% 2.0
-  lp <- lp - 0.5 * ((mu_ld - ld_mean) / ld_sd)^2
-  g_mld <- g_mld - (mu_ld - ld_mean) / ld_sd^2
-  if (grad) {
-    g[lay$mu_coef] <- g[lay$mu_coef] + g_mc
-    g[lay$mu_ld]   <- g_mld
+  mu_ld <- theta[lay$mu_ld]
+  extra <- function(th) {
+    gr <- numeric(length(th)); gr[lay$mu_ld] <- -(mu_ld - ld_mean) / ld_sd^2
+    list(lp = -0.5 * ((mu_ld - ld_mean) / ld_sd)^2, grad = gr)
   }
-
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  .community_nc_logpost(theta, c(lay$mu_coef, lay$mu_ld),
+                        function(s) .tobs_ms_occu_cover_re_disp_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * lay$Pz), sp,
+                        lay$n_species, priors, c(rep(sigma.beta, Pc), Inf), extra,
+                        grad = grad)
 }
 
-# Full-vector joint log-posterior and its gradient for the community occupancy
-# model. `X_psi` / `X_p` are the site-level designs; `summaries` the per-species
-# .ms_int_occu_sp_summary list (single-source). `lay` the layout. Returns
-# list(lp, grad) over the packed coordinates. Mirrors the C++ ms_occu_nuts_eval
-# (src/ms_occu_nuts.cpp).
-#
-# NON-CENTERED: the per-species block holds standard-normal z_s, the deviation is
-# b_{s,arm} = C_arm z_{s,arm} (C_arm the log-Cholesky factor of Sigma_arm), so the
-# community covariance leaves the b-prior (z ~ N(0, I)) and enters ONLY the data
-# term through b = C z.
 .tobs_ms_occu_nuts_logpost <- function(theta, X_psi, X_p, summaries, lay, priors,
                                        sigma.beta = 5, grad = TRUE) {
-  P <- lay$P; S <- lay$n_species
-  mu <- theta[lay$mu]
-  g    <- numeric(lay$total)
-  g_mu <- numeric(P)
-  lp   <- 0
-
-  C_psi <- .ms_ocs_chol_unpack(theta[lay$chol_psi], lay$p_psi)
-  C_p   <- .ms_ocs_chol_unpack(theta[lay$chol_p],   lay$p_p)
-
-  # chol data-gradient accumulators A_arm[i,j] = sum_s grad_b_{s,i} z_{s,j}.
-  A_psi <- matrix(0, lay$p_psi, lay$p_psi)
-  A_p   <- matrix(0, lay$p_p,   lay$p_p)
-
-  for (s in seq_len(S)) {
-    bidx <- .ms_ocs_b_idx(lay, s)
-    z_s  <- theta[bidx]
-    zpsi <- z_s[lay$psi]; zp <- z_s[lay$p]
-    bpsi <- mu[lay$psi] + as.numeric(C_psi %*% zpsi)
-    bp   <- mu[lay$p]   + as.numeric(C_p   %*% zp)
-    eta_psi <- as.numeric(X_psi %*% bpsi)
-    eta_p   <- as.numeric(X_p   %*% bp)
-    lp <- lp + .ms_int_occu_sp_ll(eta_psi, list(eta_p), summaries[[s]])
-    if (grad) {
-      gvec <- .ms_int_occu_sp_grad(eta_psi, list(eta_p), summaries[[s]],
-                                   X_psi, list(X_p))
-      gpsi <- gvec[lay$psi]              # grad_b psi
-      gp   <- gvec[lay$p]               # grad_b p
-      g_mu[lay$psi] <- g_mu[lay$psi] + gpsi
-      g_mu[lay$p]   <- g_mu[lay$p]   + gp
-      # z gradient (data part) = C' grad_b.
-      g[bidx[lay$psi]] <- g[bidx[lay$psi]] + as.numeric(crossprod(C_psi, gpsi))
-      g[bidx[lay$p]]   <- g[bidx[lay$p]]   + as.numeric(crossprod(C_p,   gp))
-      A_psi <- A_psi + outer(gpsi, zpsi)
-      A_p   <- A_p   + outer(gp,   zp)
-    }
+  arms <- list(list(idx = lay$psi, chol = lay$chol_psi, Pa = lay$p_psi),
+               list(idx = lay$p,   chol = lay$chol_p,   Pa = lay$p_p))
+  sp <- function(s, b, grad) {
+    eta_psi <- as.numeric(X_psi %*% b[lay$psi])
+    eta_p   <- as.numeric(X_p   %*% b[lay$p])
+    ll <- .ms_int_occu_sp_ll(eta_psi, list(eta_p), summaries[[s]])
+    if (!grad) return(list(ll = ll))
+    gv <- .ms_int_occu_sp_grad(eta_psi, list(eta_p), summaries[[s]], X_psi, list(X_p))
+    gb <- numeric(lay$P); gb[c(lay$psi, lay$p)] <- gv[c(lay$psi, lay$p)]
+    list(ll = ll, grad_b = gb)
   }
-
-  # ---- z prior: standard normal over the entire per-species block ----
-  z_idx <- lay$b_off + seq_len(S * P)
-  z_all <- theta[z_idx]
-  lp <- lp - 0.5 * sum(z_all^2)
-  if (grad) g[z_idx] <- g[z_idx] - z_all
-
-  # ---- chol coords: data gradient (via b = C z) + hyperprior ----
-  arms <- list(list(chol = lay$chol_psi, A = A_psi, C = C_psi, Pa = lay$p_psi),
-               list(chol = lay$chol_p,   A = A_p,   C = C_p,   Pa = lay$p_p))
-  for (arm in arms) {
-    Pa <- arm$Pa
-    pr <- .ms_ocs_chol_logprior(theta[arm$chol], Pa, priors)
-    lp <- lp + pr$lp
-    if (grad) g[arm$chol] <- .ms_abun_nuts_chol_data_grad(arm$A, arm$C, Pa) +
-        pr$grad
-  }
-
-  # ---- community-mean priors ----
-  ib2 <- 1 / sigma.beta^2
-  coef_idx <- c(lay$psi, lay$p)
-  lp <- lp - 0.5 * ib2 * sum(mu[coef_idx]^2)
-  g_mu[coef_idx] <- g_mu[coef_idx] - ib2 * mu[coef_idx]
-  g[lay$mu] <- g[lay$mu] + g_mu
-
-  if (!grad) return(list(lp = lp))
-  list(lp = lp, grad = g)
+  sd <- rep(Inf, lay$P); sd[c(lay$psi, lay$p)] <- sigma.beta
+  .community_nc_logpost(theta, lay$mu, function(s) .ms_ocs_b_idx(lay, s), arms,
+                        lay$b_off + seq_len(lay$n_species * lay$P), sp,
+                        lay$n_species, priors, sd, grad = grad)
 }
 
 # Joint log-posterior + gradient of the non-spatial occu_cover coefficient vector

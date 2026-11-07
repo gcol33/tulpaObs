@@ -34,97 +34,24 @@
        Sigma_p      = diag(0.25, p_p))
 }
 
-# Grid-integrate the per-grid EM results into the community-mean / covariance /
-# field / Sigma / BLUP summaries `build_ms_nmix_fit()` consumes, plus the
-# spatial-field posterior mean and hyperparameter moments.
+# Grid summaries `build_ms_nmix_fit()` consumes (.community_spatial_post()),
+# plus the grid-integrated NB size, the worst boundary mass on K.max and the
+# mixture. `weights` overrides the grid weights (the CCD path's design weights).
 .nmix_community_spatial_post <- function(fit, p_lam, p_p, n_spatial,
                                          prior_type, mixture, theta_cols,
                                          phi_loadings = NULL, weights = NULL) {
-  d <- p_lam + p_p
-  # Default: flat design weights over the fixed tensor grid. The mode-centred CCD
-  # path passes its own corrected R-INLA design weights.
-  if (is.null(weights))
-    weights <- .tobs_grid_weights(fit)
-  ok <- is.finite(weights) & weights > 0
-  if (!any(ok)) {
-    stop("Spatial community N-mixture: every grid point produced a non-finite ",
-         "log-marginal. Check K.max / the adjacency graph / the grids.",
-         call. = FALSE)
-  }
-  w <- weights; w[!ok] <- 0; w <- w / sum(w)
-
-  modes <- fit$modes
-  mu_mat <- modes[, seq_len(d), drop = FALSE]            # n_grid x d
-  mu     <- as.numeric(crossprod(w, mu_mat))             # weighted-mean community means
-
-  # Community-mean covariance: law of total covariance over the grid.
-  V <- .tobs_grid_vcov(mu_mat, w, fit$vcov_mu, center = mu)
-
-  # Sigma + BLUPs: weighted means across the grid.
-  Sl <- matrix(0, p_lam, p_lam); Sp <- matrix(0, p_p, p_p)
-  bl <- matrix(0, fit_n_species(fit), p_lam); bp <- matrix(0, nrow(bl), p_p)
-  for (k in which(ok)) {
-    Sl <- Sl + w[k] * as.matrix(fit$Sigma_lambda[[k]])
-    Sp <- Sp + w[k] * as.matrix(fit$Sigma_p[[k]])
-    bl <- bl + w[k] * as.matrix(fit$b_lambda[[k]])
-    bp <- bp + w[k] * as.matrix(fit$b_p[[k]])
-  }
-  # Per-species Cov(b_s | y) of the stacked [lambda | p] BLUP vector: law of
-  # total covariance over the grid.
-  blup_cov <- .tobs_grid_blup_cov(
-    w, Map(function(a, b) cbind(as.matrix(a), as.matrix(b)), fit$b_lambda, fit$b_p),
-    fit$b_cov, cbind(bl, bp))
-
-  # Field posterior mean. ICAR / CAR: f (n_spatial). BYM2: phi = a v + b w.
-  field_cols <- modes[, d + seq_len(ncol(modes) - d), drop = FALSE]
-  if (identical(prior_type, "bym2")) {
-    phi_grid <- matrix(0, nrow(modes), n_spatial)
-    for (k in seq_len(nrow(modes))) {
-      ab <- phi_loadings(fit$theta_grid[k, ])
-      v <- field_cols[k, seq_len(n_spatial)]
-      wv <- field_cols[k, n_spatial + seq_len(n_spatial)]
-      phi_grid[k, ] <- ab$a * v + ab$b * wv
-    }
-    field_mean <- as.numeric(crossprod(w, phi_grid))
-  } else {
-    field_mean <- as.numeric(crossprod(w, field_cols))
-  }
-
-  # Hyperparameter posterior moments from the theta grid.
-  hyper <- list()
-  for (nm in theta_cols) {
-    if (!(nm %in% colnames(fit$theta_grid))) next
-    hyper[[nm]] <- .tobs_weighted_moment(w, fit$theta_grid[, nm])
-  }
-  r_summary <- if (identical(mixture, "negbin") && "r" %in% colnames(fit$theta_grid)) {
-    list(r = unname(hyper$r["mean"]), log_r = NA_real_, r_sd = unname(hyper$r["sd"]))
+  out <- .community_spatial_post(fit, c("lambda", "p"), c(p_lam, p_p), n_spatial,
+                                 prior_type, theta_cols, phi_loadings,
+                                 weights = weights,
+                                 label = "community N-mixture")
+  out$dispersion <- if (identical(mixture, "negbin") && "r" %in% colnames(fit$theta_grid)) {
+    list(r = unname(out$hyper$r["mean"]), log_r = NA_real_,
+         r_sd = unname(out$hyper$r["sd"]))
   } else NULL
-
-  list(
-    mu_lambda    = mu[seq_len(p_lam)],
-    mu_p         = mu[p_lam + seq_len(p_p)],
-    vcov         = V,
-    Sigma_lambda = Sl,
-    Sigma_p      = Sp,
-    b_lambda     = bl,
-    b_p          = bp,
-    blup_cov_g   = blup_cov,
-    log_lik      = sum(w * fit$log_lik),
-    converged    = any(as.logical(fit$converged)),
-    n_iter       = max(as.integer(fit$n_iter)),
-    spatial_field = field_mean,
-    prior_type   = prior_type,
-    weights      = weights,
-    hyper        = hyper,
-    dispersion   = r_summary,
-    boundary_max = max(fit$boundary_max, na.rm = TRUE),
-    mixture      = mixture,
-    grid_mixture = .tobs_grid_mixture(w, mu_mat, fit$vcov_mu)
-  )
+  out$boundary_max <- max(fit$boundary_max, na.rm = TRUE)
+  out$mixture <- mixture
+  out
 }
-
-# Number of species = nrow of any per-grid BLUP matrix.
-fit_n_species <- function(fit) nrow(as.matrix(fit$b_lambda[[1]]))
 
 # Build the native community oracle (caches per species-site marginal). The
 # spatial driver integrates the NB size r over the grid (Poisson kernel per grid

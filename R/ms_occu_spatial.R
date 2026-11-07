@@ -23,75 +23,12 @@
 # Shared grid post-processing
 # ---------------------------------------------------------------------------
 
-# Grid-integrate the per-grid EM results into the community-mean / covariance /
-# field / Sigma / BLUP summaries build_ms_occu_fit() consumes, plus the spatial
-# field posterior mean and the field-hyperparameter moments.
+# Grid summaries build_ms_occu_fit() consumes (.community_spatial_post()).
 .ms_occu_spatial_post <- function(fit, p_psi, p_p, n_spatial, prior_type,
                                   theta_cols, phi_loadings = NULL) {
-  d <- p_psi + p_p
-  weights <- .tobs_grid_weights(fit)
-  ok <- is.finite(weights) & weights > 0
-  if (!any(ok)) {
-    stop("Spatial community occupancy: every grid point produced a non-finite ",
-         "log-marginal. Check the adjacency graph / the hyperparameter grids.",
-         call. = FALSE)
-  }
-  w <- weights; w[!ok] <- 0; w <- w / sum(w)
-
-  modes  <- fit$modes
-  mu_mat <- modes[, seq_len(d), drop = FALSE]
-  mu     <- as.numeric(crossprod(w, mu_mat))
-
-  # Community-mean covariance: law of total covariance over the grid.
-  V <- .tobs_grid_vcov(mu_mat, w, fit$vcov_mu, center = mu)
-
-  # Sigma + BLUPs: weighted means across the grid.
-  S_n  <- nrow(as.matrix(fit$b_psi[[1L]]))
-  Sps  <- matrix(0, p_psi, p_psi); Sp <- matrix(0, p_p, p_p)
-  bpsi <- matrix(0, S_n, p_psi);   bp <- matrix(0, S_n, p_p)
-  for (k in which(ok)) {
-    Sps  <- Sps  + w[k] * as.matrix(fit$Sigma_psi[[k]])
-    Sp   <- Sp   + w[k] * as.matrix(fit$Sigma_p[[k]])
-    bpsi <- bpsi + w[k] * as.matrix(fit$b_psi[[k]])
-    bp   <- bp   + w[k] * as.matrix(fit$b_p[[k]])
-  }
-  # Per-species Cov(b_s | y) of the stacked [psi | p] BLUP vector: law of total
-  # covariance over the grid.
-  blup_cov <- .tobs_grid_blup_cov(
-    w, Map(function(a, b) cbind(as.matrix(a), as.matrix(b)), fit$b_psi, fit$b_p),
-    fit$b_cov, cbind(bpsi, bp))
-
-  # Field posterior mean. ICAR / CAR: f (n_spatial). BYM2: phi = a v + b w.
-  field_cols <- modes[, d + seq_len(ncol(modes) - d), drop = FALSE]
-  if (identical(prior_type, "bym2")) {
-    phi_grid <- matrix(0, nrow(modes), n_spatial)
-    for (k in seq_len(nrow(modes))) {
-      ab <- phi_loadings(fit$theta_grid[k, ])
-      v  <- field_cols[k, seq_len(n_spatial)]
-      wv <- field_cols[k, n_spatial + seq_len(n_spatial)]
-      phi_grid[k, ] <- ab$a * v + ab$b * wv
-    }
-    field_mean <- as.numeric(crossprod(w, phi_grid))
-  } else {
-    field_mean <- as.numeric(crossprod(w, field_cols))
-  }
-
-  hyper <- list()
-  for (nm in theta_cols) {
-    if (!(nm %in% colnames(fit$theta_grid))) next
-    hyper[[nm]] <- .tobs_weighted_moment(w, fit$theta_grid[, nm])
-  }
-
-  list(
-    mu_psi = mu[seq_len(p_psi)], mu_p = mu[p_psi + seq_len(p_p)],
-    vcov = V, Sigma_psi = Sps, Sigma_p = Sp,
-    b_psi = bpsi, b_p = bp, blup_cov = blup_cov,
-    log_lik = sum(w * fit$log_lik),
-    converged = any(as.logical(fit$converged)),
-    n_iter = max(as.integer(fit$n_iter)),
-    spatial_field = field_mean, prior_type = prior_type,
-    weights = weights, hyper = hyper,
-    grid_mixture = .tobs_grid_mixture(w, mu_mat, fit$vcov_mu))
+  .community_spatial_post(fit, c("psi", "p"), c(p_psi, p_p), n_spatial,
+                          prior_type, theta_cols, phi_loadings,
+                          label = "community occupancy")
 }
 
 # Per-species (n_valid, n_det) integer matrices [n_sites x n_species] for the C++
@@ -323,7 +260,7 @@
     c(fit$b_psi[s, ], fit$b_p[s, ]))
   fit_em <- list(
     mu = c(fit$mu_psi, fit$mu_p), global = numeric(0), b_list = b_list,
-    Cinv = fit$blup_cov,
+    Cinv = fit$blup_cov_g,
     Sigma = list(psi = fit$Sigma_psi, p = fit$Sigma_p),
     Vf = fit$vcov, grid_mixture = fit$grid_mixture, logML = fit$log_lik,
     converged = isTRUE(fit$converged), n_iter = fit$n_iter)

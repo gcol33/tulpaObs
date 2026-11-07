@@ -213,3 +213,79 @@
                 2L, mu_h, "+")
   cbind(lead, tail)
 }
+
+
+# Grid-integrate a community areal driver's per-grid EM results (the occupancy
+# and N-mixture drivers return the same fields, named by arm) into the
+# community means and their law-of-total-covariance vcov, the per-arm Sigma and
+# BLUPs (weighted means), the per-species BLUP covariance (law of total
+# covariance, `.tobs_grid_blup_cov()`), the posterior-mean field (BYM2: the
+# loading phi = a v + b w per grid point, `phi_loadings(theta)`), and the
+# hyperparameter moments of `theta_cols`. `arms` names the two arms in the
+# driver's field names (`Sigma_<arm>`, `b_<arm>`), `p` their widths; `weights`
+# overrides the grid weights (the CCD path's design weights); `label` names the
+# model in the no-usable-grid-point error.
+.community_spatial_post <- function(fit, arms, p, n_spatial, prior_type,
+                                    theta_cols, phi_loadings = NULL,
+                                    weights = NULL, label = "community") {
+  d <- sum(p)
+  if (is.null(weights)) weights <- .tobs_grid_weights(fit)
+  ok <- is.finite(weights) & weights > 0
+  if (!any(ok)) {
+    stop(sprintf(paste0("Spatial %s: every grid point produced a non-finite ",
+                        "log-marginal. Check the adjacency graph / the ",
+                        "hyperparameter grids."), label), call. = FALSE)
+  }
+  w <- weights; w[!ok] <- 0; w <- w / sum(w)
+
+  modes  <- fit$modes
+  mu_mat <- modes[, seq_len(d), drop = FALSE]
+  mu     <- as.numeric(crossprod(w, mu_mat))
+  V <- .tobs_grid_vcov(mu_mat, w, fit$vcov_mu, center = mu)
+
+  off <- c(0L, cumsum(p))
+  wmean <- function(lst) {
+    acc <- 0 * as.matrix(lst[[which(ok)[1L]]])
+    for (k in which(ok)) acc <- acc + w[k] * as.matrix(lst[[k]])
+    acc
+  }
+  out <- list()
+  for (a in seq_along(arms)) {
+    out[[paste0("mu_", arms[a])]] <- mu[off[a] + seq_len(p[a])]
+  }
+  out$vcov <- V
+  for (a in seq_along(arms)) {
+    out[[paste0("Sigma_", arms[a])]] <- wmean(fit[[paste0("Sigma_", arms[a])]])
+  }
+  b_bar <- lapply(arms, function(a) wmean(fit[[paste0("b_", a)]]))
+  for (a in seq_along(arms)) out[[paste0("b_", arms[a])]] <- b_bar[[a]]
+  out$blup_cov_g <- .tobs_grid_blup_cov(
+    w, do.call(Map, c(list(function(...) do.call(cbind, lapply(list(...), as.matrix))),
+                      lapply(arms, function(a) fit[[paste0("b_", a)]]))),
+    fit$b_cov, do.call(cbind, b_bar))
+
+  field_cols <- modes[, d + seq_len(ncol(modes) - d), drop = FALSE]
+  if (identical(prior_type, "bym2")) {
+    phi_grid <- matrix(0, nrow(modes), n_spatial)
+    for (k in seq_len(nrow(modes))) {
+      ab <- phi_loadings(fit$theta_grid[k, ])
+      phi_grid[k, ] <- ab$a * field_cols[k, seq_len(n_spatial)] +
+                       ab$b * field_cols[k, n_spatial + seq_len(n_spatial)]
+    }
+    field_mean <- as.numeric(crossprod(w, phi_grid))
+  } else {
+    field_mean <- as.numeric(crossprod(w, field_cols))
+  }
+  hyper <- list()
+  for (nm in theta_cols) {
+    if (!(nm %in% colnames(fit$theta_grid))) next
+    hyper[[nm]] <- .tobs_weighted_moment(w, fit$theta_grid[, nm])
+  }
+  c(out, list(
+    log_lik = sum(w * fit$log_lik),
+    converged = any(as.logical(fit$converged)),
+    n_iter = max(as.integer(fit$n_iter)),
+    spatial_field = field_mean, prior_type = prior_type,
+    weights = weights, hyper = hyper,
+    grid_mixture = .tobs_grid_mixture(w, mu_mat, fit$vcov_mu)))
+}

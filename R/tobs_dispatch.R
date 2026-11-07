@@ -147,70 +147,8 @@
   # community-spatial fitter (the sfMsAbund analogue) under nested_laplace; a
   # non-areal structured term (temporal / re / svc / latent) or a non-icar field
   # is not yet wired -- error rather than silently drop.
-  structs <- .tobs_structures_from_model(model)
-  if (!is.null(structs$temporal) || !is.null(structs$re) ||
-      !is.null(structs$svc)) {
-    stop("ms_count(): temporal / re / svc terms are not yet wired for the ",
-         "community count family; a shared areal field icar() or a latent() ",
-         "factor term are the structured terms supported.",
-         call. = FALSE)
-  }
-  # A shared latent structure -- a shared areal field icar()/SVC bar (the
-  # sfMsAbund / svcMsAbund analogue), latent() factors (lfMsAbund), or BOTH (the
-  # spatial-factor case) -- routes to the unified community latent fitter. A
-  # shared areal field needs method = "nested_laplace"; a factor-only model uses
-  # method = "laplace". The fitter validates the field kind (icar only), the
-  # one-node-per-site map, and a complete y.
-  if (!is.null(structs$spatial) || !is.null(structs$latent)) {
-    if (!is.null(structs$spatial)) {
-      if (!identical(engine, "nested_laplace")) {
-        stop("ms_count(): a shared areal field needs method = ",
-             "\"nested_laplace\" (drop the icar() term for the non-spatial ",
-             "community fit).", call. = FALSE)
-      }
-    } else if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
-      stop("ms_count(): a latent() factor model uses method = \"laplace\" ",
-           "(the block-coordinate community Laplace-EM).", call. = FALSE)
-    }
-    return(.tobs_fit_ms_count_latent(
-      model, spatial = structs$spatial, latent = structs$latent,
-      max.iter   = control[["max.iter"]] %||% 200L,
-      tol        = control[["tol"]] %||% 1e-4,
-      sigma.beta = control[["sigma.beta"]] %||% .tobs_default("laplace", "sigma.beta"),
-      priors     = priors,
-      max.outer  = control[["max.outer"]],
-      factor.starts = control[["factor.starts"]],
-      n.quad     = control[["n.quad"]],
-      verbose    = isTRUE(control[["verbose"]])))
-  }
-  if (identical(engine, "nested_laplace")) {
-    stop("ms_count(): method = \"nested_laplace\" needs a shared areal field ",
-         "icar() on the formula. For the non-spatial community fit use ",
-         "method = \"laplace\".", call. = FALSE)
-  }
-  if (identical(engine, "nuts")) {
-    control <- .tobs_control_defaults(control, "nuts", "ms_count")
-    # NUTS over the exact joint community count posterior (community means,
-    # per-species deviations, community covariance) via the in-tree C++
-    # FullGradFn, warm-started at the Laplace-EM mode.
-    return(.tobs_fit_ms_count_nuts(
-      model,
-      sigma.beta    = control[["sigma.beta"]],
-      sigma.logr    = control[["sigma.logr"]],
-      n.iter        = as.integer(control[["n.iter"]]),
-      n.warmup      = as.integer(control[["n.warmup"]]),
-      n.chains      = as.integer(control[["n.chains"]]),
-      n.thin        = as.integer(control[["n.thin"]]),
-      n.threads     = as.integer(control[["n.threads"]]),
-      n.threads.grad = as.integer(control[["n.threads.grad"]]),
-      max.treedepth = as.integer(control[["max.treedepth"]]),
-      adapt.delta   = control[["adapt.delta"]],
-      seed          = as.integer(control[["seed"]]),
-      verbose       = isTRUE(control[["verbose"]])))
-  }
-
-  fit_args <- c(list(model = model, priors = priors), control)
-  do.call(.tobs_fit_ms_count, fit_args)
+  .tobs_dispatch_community_glmm(model, engine, priors, control, "ms_count",
+                                field_terms = "icar()")
 }
 
 .dispatch_ms_occu <- function(formula, data, family, detection, y, visits,
@@ -405,26 +343,39 @@
     formula = bind$fe$mu, data = data, y = y, species = dots[["species"]],
     response = "bernoulli", structured_terms = bind$terms)
 
+  .tobs_dispatch_community_glmm(model, engine, priors, control, "jsdm",
+                                field_terms = "icar()/car_proper()/bym2()")
+}
+
+# The routes the community GLMM families (ms_count(), jsdm()) share once the
+# model is bound. A shared areal field, latent() factors, or both route to the
+# community latent driver (a field needs method = "nested_laplace", a
+# factor-only model the block-coordinate laplace); otherwise pg_gibbs, nuts or
+# the community Laplace-EM. Temporal / re / svc terms are not wired and error,
+# as does nested_laplace without a field. `label` is the family constructor
+# (the defaults key and the message prefix), `field_terms` the field
+# constructors it accepts, named in the messages.
+.tobs_dispatch_community_glmm <- function(model, engine, priors, control, label,
+                                          field_terms) {
   structs <- .tobs_structures_from_model(model)
   if (!is.null(structs$temporal) || !is.null(structs$re) ||
       !is.null(structs$svc)) {
-    stop("jsdm(): temporal / re / svc terms are not wired for the JSDM family; ",
-         "a shared areal field (icar()/car_proper()/bym2()) and latent() ",
-         "factors are the structured terms supported.", call. = FALSE)
+    stop(sprintf(paste0("%s(): temporal / re / svc terms are not yet wired for this ",
+                        "family; a shared areal field (%s) and latent() factors ",
+                        "are the structured terms supported."), label, field_terms),
+         call. = FALSE)
   }
-
-  # A shared areal field (sfJSDM), latent() factors (lfJSDM), or BOTH route to
-  # the community latent driver. A field needs nested_laplace; a factor-only
-  # model is the block-coordinate laplace.
   if (!is.null(structs$spatial) || !is.null(structs$latent)) {
     if (!is.null(structs$spatial)) {
       if (!identical(engine, "nested_laplace")) {
-        stop("jsdm(): a shared areal field needs method = \"nested_laplace\" ",
-             "(drop the areal term for the non-spatial JSDM).", call. = FALSE)
+        stop(sprintf(paste0("%s(): a shared areal field needs method = ",
+                            "\"nested_laplace\" (drop the areal term for the ",
+                            "non-spatial community fit)."), label), call. = FALSE)
       }
     } else if (identical(engine, "nested_laplace") || identical(engine, "nuts")) {
-      stop("jsdm(): a latent() factor model uses method = \"laplace\" (the ",
-           "block-coordinate community Laplace-EM).", call. = FALSE)
+      stop(sprintf(paste0("%s(): a latent() factor model uses method = ",
+                          "\"laplace\" (the block-coordinate community ",
+                          "Laplace-EM)."), label), call. = FALSE)
     }
     return(.tobs_fit_ms_count_latent(
       model, spatial = structs$spatial, latent = structs$latent,
@@ -438,16 +389,16 @@
       verbose    = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nested_laplace")) {
-    stop("jsdm(): method = \"nested_laplace\" needs a shared areal field ",
-         "(icar()/car_proper()/bym2()) on the formula. For the non-spatial ",
-         "JSDM use method = \"laplace\".", call. = FALSE)
+    stop(sprintf(paste0("%s(): method = \"nested_laplace\" needs a shared areal ",
+                        "field (%s) on the formula. For the non-spatial ",
+                        "community fit use method = \"laplace\"."),
+                 label, field_terms), call. = FALSE)
   }
-  # Polya-Gamma Gibbs (method = "pg_gibbs", spOccupancy msPGOcc-family; #126): the
-  # community Bernoulli GLMM has no latent state, so the PG sampler is the pure
-  # per-species conjugate update + community mean / Inverse-Gamma variance -- a
-  # calibrated community-variance posterior (the Laplace-EM attenuates it).
+  # Polya-Gamma Gibbs: the community Bernoulli / binomial GLMM has no latent
+  # state, so the sampler is the per-species conjugate update + community mean /
+  # Inverse-Gamma variance, a calibrated community-variance posterior.
   if (identical(engine, "pg_gibbs")) {
-    control <- .tobs_control_defaults(control, "pg_gibbs", "jsdm")
+    control <- .tobs_control_defaults(control, "pg_gibbs", label)
     return(.tobs_fit_ms_count_pg_gibbs(
       model, priors = priors,
       sigma.beta = control[["sigma.beta"]],
@@ -459,10 +410,10 @@
       verbose  = isTRUE(control[["verbose"]])))
   }
   if (identical(engine, "nuts")) {
-    control <- .tobs_control_defaults(control, "nuts", "jsdm")
-    # Samples the exact joint community posterior (community means, per-species
-    # deviations, community covariance) over the Bernoulli response via the
-    # family-aware in-tree C++ FullGradFn, warm-started at the Laplace-EM mode.
+    control <- .tobs_control_defaults(control, "nuts", label)
+    # The exact joint community posterior (community means, per-species
+    # deviations, community covariance) via the in-tree C++ FullGradFn,
+    # warm-started at the Laplace-EM mode.
     return(.tobs_fit_ms_count_nuts(
       model,
       sigma.beta    = control[["sigma.beta"]],
@@ -478,9 +429,7 @@
       seed          = as.integer(control[["seed"]]),
       verbose       = isTRUE(control[["verbose"]])))
   }
-
-  fit_args <- c(list(model = model, priors = priors), control)
-  do.call(.tobs_fit_ms_count, fit_args)
+  do.call(.tobs_fit_ms_count, c(list(model = model, priors = priors), control))
 }
 
 .dispatch_count <- function(formula, data, family, detection, y, visits,
