@@ -435,44 +435,6 @@
   list(psi_eta = comp$eta_psi_all[, d], p_eta = p_eta, ep = ep)
 }
 
-# Compact (ragged) counterpart of .occu_cover_site_ll: the per-site occu-cover
-# marginal from length-V per-visit predictors grouped by `model$site_of_visit`,
-# returned as a length-n_sites vector. Algebraically identical to the dense
-# version (same MacKenzie mixture, same per-visit Beta/lognormal cover term);
-# rowsum() accumulates each site's visits instead of a matrix rowSums. Scoped to
-# cover_aggregate = "none" (the only mode the ragged path builds).
-.occu_cover_site_ll_ragged <- function(model, psi, p_vec, ep_vec, log_disp) {
-  site    <- model$site_of_visit
-  y       <- model$y_det_visit
-  n_sites <- model$n_sites
-  g       <- factor(site, levels = seq_len(n_sites))
-
-  log_p   <- log(p_vec)
-  log_1mp <- log(1 - p_vec)
-  log_h_det <- ifelse(y == 1L, log_p, log_1mp)
-
-  positive <- model$positive %||% "lognormal"
-  pos_ld   <- numeric(length(y))
-  # Cover term at detected visits with an observed cover; a missing (NA) cover
-  # at a detected visit drops out (missing-at-random cover), the detection term
-  # above still counts.
-  cobs    <- (y == 1L) & is.finite(model$y_pos_visit)
-  if (any(cobs)) {
-    pos_ld[cobs] <- .occu_cover_pos_logdens(model$y_pos_visit[cobs], ep_vec[cobs],
-                                            exp(log_disp), positive)
-  }
-
-  sum_log_h  <- as.numeric(rowsum(log_h_det, g))
-  sum_log1mp <- as.numeric(rowsum(log_1mp,   g))
-  cover_term <- as.numeric(rowsum(pos_ld,    g))
-  n_det      <- as.numeric(rowsum(as.numeric(y), g))
-
-  log_psi   <- log(pmax(psi, 1e-300))
-  log_1mpsi <- log(pmax(1 - psi, 1e-300))
-  det_ll    <- log_psi + sum_log_h + cover_term
-  nodet_ll  <- .tobs_logsumexp2(log_psi + sum_log1mp, log_1mpsi)
-  ifelse(n_det > 0, det_ll, nodet_ll)
-}
 
 # Available system RAM in bytes, or NA if it cannot be read without a hard
 # dependency. Linux (the LiSC server) exposes /proc/meminfo MemAvailable; the

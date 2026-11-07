@@ -681,6 +681,8 @@
     # this, where the term carries the Riebler constant.
     out$scale_factor <- if (is.null(spatial$scale_factor)) 1.0 else
       .bym2_engine_scale(as.numeric(spatial$scale_factor))
+    # Per-component scaling on a disconnected graph (diag(node_prec) Q).
+    if (!is.null(spatial$node_prec)) out$node_prec <- as.numeric(spatial$node_prec)
     if (!is.null(grids$sigma)) out$sigma_grid <- grids$sigma
     if (!is.null(grids$rho))   out$rho_grid   <- grids$rho
     if (is.null(out$sigma_grid) && is.null(out$rho_grid)) {

@@ -67,8 +67,8 @@ test_that("analytic gradient matches finite differences (halfnorm, hazard, NB)",
     marg <- tulpaObs:::.tobs_distance_nuts_marginal(model, mixture = cs$mix)
     theta <- c(log(28), 0.25, log(0.45), 0.18,
                if (hazard) log(3), if (is_nb) log(5))
-    f <- function(th) tulpaObs:::.tobs_distance_nuts_logpost(th, marg, lay)$lp
-    g_an <- tulpaObs:::.tobs_distance_nuts_logpost(theta, marg, lay)$grad
+    f <- function(th) .tobs_distance_nuts_logpost(th, marg, lay)$lp
+    g_an <- .tobs_distance_nuts_logpost(theta, marg, lay)$grad
     g_fd <- sapply(seq_along(theta), function(j) {
       h <- 1e-5; tp <- theta; tm <- theta
       tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
@@ -139,7 +139,7 @@ test_that("C++ distance NUTS log-posterior matches the R oracle byte-for-byte", 
                    model$cutpoints, 1L, model$quad_order),
                  key = if (hazard) 1L else 0L,
                  K_max = marg$K_max, is_nb = is_nb)
-    r_out <- tulpaObs:::.tobs_distance_nuts_logpost(theta, marg, lay)
+    r_out <- .tobs_distance_nuts_logpost(theta, marg, lay)
     c_out <- tulpaObs:::cpp_distance_nuts_joint_logpost(spec, theta, 10, 1.5, 1.5)
     expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9, info = paste(cs$key, cs$mix))
     expect_equal(as.numeric(c_out$grad), r_out$grad, tolerance = 1e-9,

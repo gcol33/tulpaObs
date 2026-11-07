@@ -62,6 +62,7 @@ removal_laplace_icar <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     X_lambda_R = X_lambda, X_p_R = X_p,
     adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
     n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial),
+    node_comp = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
     tau_grid = as.numeric(tau_grid), r_grid = as.numeric(pp$r_grid),
     beta_lambda_init = as.numeric(pp$beta_lambda_init),
     beta_p_init = as.numeric(pp$beta_p_init),
@@ -133,7 +134,8 @@ removal_laplace_car_proper <- function(y, site_idx, map_site_to_unit, X_lambda,
 removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
                                  adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
                                  sigma_grid = NULL, rho_grid = NULL,
-                                 scale_factor = NULL, mixture = c("P", "NB"),
+                                 scale_factor = NULL, node_prec = NULL,
+                                 mixture = c("P", "NB"),
                                  r_grid = NULL, beta_lambda_init = NULL,
                                  beta_p_init = NULL, v_init = NULL, w_init = NULL,
                                  K_max = NULL, max_iter = 100L, tol = 1e-6,
@@ -149,14 +151,17 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   if (is.null(rho_grid))   rho_grid   <- .count_spatial_default_grid("rho_bym2")
   sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
   rho_grid   <- .count_spatial_check_grid(rho_grid, "rho_grid", 0, 1, open = FALSE)
-  scale_factor <- .bym2_resolve_scale(scale_factor, adj_row_ptr, adj_col_idx,
-                                      n_spatial)
+  sc <- .bym2_resolve_scaling(scale_factor, node_prec, adj_row_ptr, adj_col_idx,
+                              n_spatial)
+  scale_factor <- sc$scale
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_removal_bym2,
     y = y, site_idx = site_idx, map_site_to_unit_R = map_site_to_unit,
     X_lambda_R = X_lambda, X_p_R = X_p,
     adj_row_ptr = as.integer(adj_row_ptr), adj_col_idx = as.integer(adj_col_idx),
     n_neighbors = as.integer(n_neighbors), n_spatial = as.integer(n_spatial),
+    node_comp = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
+    node_prec = as.numeric(sc$node_prec),
     sigma_grid = as.numeric(sigma_grid), rho_grid = as.numeric(rho_grid),
     r_grid = as.numeric(pp$r_grid), scale_factor = as.numeric(scale_factor),
     beta_lambda_init = as.numeric(pp$beta_lambda_init),
@@ -245,9 +250,7 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
   raw <- switch(spatial$type,
     icar       = do.call(removal_laplace_icar, common),
     car_proper = do.call(removal_laplace_car_proper, common),
-    bym2       = do.call(removal_laplace_bym2, c(common,
-                   list(scale_factor = spatial$scale_factor %||%
-                          .bym2_scale(spatial$graph)))))
+    bym2       = do.call(removal_laplace_bym2, c(common, .bym2_term_args(spatial))))
   fit <- build_nmix_fit(raw, model, spatial = spatial)
   # The field is part of log lambda, so its per-site contribution is recorded for
   # the post-fit readers (the areal-BFGS branches above record theirs through
@@ -438,13 +441,12 @@ removal_laplace_bym2 <- function(y, site_idx, map_site_to_unit, X_lambda, X_p,
     nl <- switch(spatial$type,
       icar       = do.call(removal_laplace_icar, common),
       car_proper = do.call(removal_laplace_car_proper, common),
-      bym2       = do.call(removal_laplace_bym2, c(common,
-                     list(scale_factor = spatial$scale_factor %||%
-                            .bym2_scale(spatial$graph)))))
+      bym2       = do.call(removal_laplace_bym2, c(common, .bym2_term_args(spatial))))
     fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
                                    tau = nl$tau_mean, rho = nl$rho_mean,
                                    sigma = nl$sigma_mean,
-                                   scale_factor = spatial$scale_factor)
+                                   scale_factor = spatial$scale_factor,
+                                   node_prec = spatial$node_prec)
     field_map <- seq_len(n_sites)
     n_field_units <- n_sites
     beta0 <- c(nl$beta_lambda_mean, nl$beta_p_mean)

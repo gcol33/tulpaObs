@@ -1248,8 +1248,12 @@
       components <- geom$components
       Ffield <- matrix(0, geom$n_nodes, geom$K); tau <- rep(1, geom$K)
       if (is_bym2) {
+        # Structured precision scaled per connected component, diag(node_prec)
+        # Q, loaded at the reference component's constant (.bym2_scaling).
+        bsc       <- .bym2_scaling(geom$graph)
         Qic       <- Dg - Wadj
-        bym_scale <- .bym2_scale_from_Q(Qic)
+        if (!is.null(bsc$node_prec)) Qic <- Matrix::Diagonal(x = bsc$node_prec) %*% Qic
+        bym_scale <- bsc$scale
         bym_v <- numeric(Ns); bym_u <- numeric(Ns)
         bym_sigma_grid <- c(0.3, 0.6, 1.0, 1.6)
         bym_rho_grid   <- c(0.25, 0.5, 0.75, 0.9)

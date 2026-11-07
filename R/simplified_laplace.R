@@ -40,26 +40,6 @@
   -as.numeric(n_trials) * p * (1 - p) * (1 - 2 * p)
 }
 
-#' Third derivative of Poisson log-likelihood wrt log(lambda)
-#'
-#' For y_i ~ Poisson(exp(eta_i)),
-#'   d^3 log p / d eta^3 = -lambda_i = -exp(eta_i)
-#'
-#' @keywords internal
-.l3_poisson_log <- function(eta) {
-  -exp(eta)
-}
-
-#' Third derivative of Gaussian log-likelihood (identity link)
-#'
-#' Always zero -- the SLA correction reduces to the Laplace approximation
-#' for Gaussian likelihoods. Required regression test.
-#'
-#' @keywords internal
-.l3_gaussian_identity <- function(eta) {
-  rep(0, length(eta))
-}
-
 
 # ---------------------------------------------------------------------------
 # SLA assembly: gamma_j = sigma_j^{-3} * sum_i l3_i * (X Sigma)_{i,j}^3
@@ -226,49 +206,6 @@
 # order and return the *original* observation log-likelihood (no priors,
 # no pseudo-binomial encoding).
 # ---------------------------------------------------------------------------
-
-#' R-side single-season occupancy log-likelihood
-#'
-#' Computes the marginal observation log-likelihood
-#'   `log P(y | beta) = Sum_i log[ psi_i * P(y_i | z=1) + (1 - psi_i) I(no detections) ]`
-#' with psi_i = plogis(X_occ_i beta_occ), p_i = plogis(X_det_i beta_det).
-#'
-#' Used to cross-check `.sla_gamma_fd()` against the analytical
-#' `.sla_gamma_diag()` on single-season fits.
-#'
-#' @keywords internal
-.loglik_occu_single <- function(beta, model) {
-  pi_list <- model$process_info
-  p_occ <- pi_list[[1]]$p
-  p_det <- pi_list[[2]]$p
-  beta_occ <- beta[seq_len(p_occ)]
-  beta_det <- beta[p_occ + seq_len(p_det)]
-
-  X_occ <- model$X_processes[[1]]
-  X_det <- model$X_processes[[2]]
-  y     <- model$y
-  n_sites <- model$n_sites
-
-  psi <- plogis(as.numeric(X_occ %*% beta_occ))
-  p   <- plogis(as.numeric(X_det %*% beta_det))
-
-  ll <- 0
-  for (i in seq_len(n_sites)) {
-    valid <- y[i, ] >= 0
-    n_v <- sum(valid)
-    if (n_v == 0L) next
-    n_d <- sum(y[i, valid] == 1L)
-    if (n_d > 0L) {
-      # any-detection: z=1 forced
-      ll <- ll + log(psi[i]) + n_d * log(p[i]) + (n_v - n_d) * log1p(-p[i])
-    } else {
-      # all zeros: marginalise over z
-      q_i <- (1 - p[i])^n_v
-      ll <- ll + log(psi[i] * q_i + (1 - psi[i]))
-    }
-  }
-  ll
-}
 
 
 # ---------------------------------------------------------------------------

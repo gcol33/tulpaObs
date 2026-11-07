@@ -29,6 +29,7 @@ Rcpp::List cpp_nested_laplace_removal_icar(
     Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors,
     int n_spatial,
+    Rcpp::IntegerVector node_comp,            // 0-based component per unit; integer(0) = connected
     Rcpp::NumericVector tau_grid,
     Rcpp::NumericVector r_grid,               // NB size grid; c(Inf) for Poisson
     Rcpp::NumericVector beta_lambda_init,
@@ -44,6 +45,7 @@ Rcpp::List cpp_nested_laplace_removal_icar(
     return tulpaObs::run_count_nested_laplace_icar(
         y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R,
         adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
+        tulpaObs::graph_components_from_R(node_comp, Rcpp::NumericVector(0), n_spatial),
         tau_grid, r_grid, beta_lambda_init, beta_p_init,
         tulpaObs::shape::optional_numeric(z_init.get(), "z_init"),
         K_max, max_iter, tol, verbose,
@@ -62,6 +64,8 @@ Rcpp::List cpp_nested_laplace_removal_bym2(
     Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors,
     int n_spatial,
+    Rcpp::IntegerVector node_comp,            // 0-based component per unit; integer(0) = connected
+    Rcpp::NumericVector node_prec,            // per-component precision multiplier; numeric(0) = none
     Rcpp::NumericVector sigma_grid,
     Rcpp::NumericVector rho_grid,
     Rcpp::NumericVector r_grid,               // NB size grid; c(Inf) for Poisson
@@ -80,6 +84,7 @@ Rcpp::List cpp_nested_laplace_removal_bym2(
     return tulpaObs::run_count_nested_laplace_bym2(
         y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R,
         adj_row_ptr, adj_col_idx, n_neighbors, n_spatial,
+        tulpaObs::graph_components_from_R(node_comp, node_prec, n_spatial),
         sigma_grid, rho_grid, r_grid, scale_factor,
         beta_lambda_init, beta_p_init,
         tulpaObs::shape::optional_numeric(v_init.get(), "v_init"),

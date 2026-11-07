@@ -238,7 +238,8 @@
     fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
                                    tau = hv("tau"), rho = hv("rho"),
                                    sigma = hv("sigma"),
-                                   scale_factor = spatial$scale_factor)
+                                   scale_factor = spatial$scale_factor,
+                                   node_prec = spatial$node_prec)
     field_map <- seq_len(n_sites)
     n_field_units <- n_sites
   }

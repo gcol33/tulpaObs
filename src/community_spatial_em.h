@@ -41,6 +41,7 @@
 #define TULPAOBS_COMMUNITY_SPATIAL_EM_H
 
 #include "function_ref.h"
+#include "graph_components.h"
 #include "nmix_progress.h"
 #include <Rcpp.h>
 #include <RcppEigen.h>
@@ -108,7 +109,8 @@ CommSpatialResult community_spatial_em(
     int max_iter_em, double tol_em, int inner_max, double inner_tol,
     bool verbose, const char* verbose_label,
     CommSiteBlockRef site_block_fn,
-    const CommSpdeCtx* spde = nullptr);
+    const CommSpdeCtx* spde = nullptr,
+    const GraphComponents* gc = nullptr);
 
 // Pack the per-grid-point results into the list the R side reads.
 Rcpp::List community_spatial_pack(int d, int field_len, int n_grid,
@@ -151,7 +153,7 @@ Rcpp::List run_community_spatial_grid(
     SiteBlockFactory make_site_block_fn,
     bool progress, int progress_every, double progress_throttle,
     const std::string& progress_file, const char* progress_grid_label,
-    bool report_boundary) {
+    bool report_boundary, const GraphComponents* gc = nullptr) {
 
     const int n_grid = (int)plan.size();
     std::vector<CommSpatialResult> results(n_grid);
@@ -166,7 +168,7 @@ Rcpp::List run_community_spatial_grid(
             g.tau, g.rho, g.log_det_Q_rho, g.a, g.b,
             mu_init, Sigma_state_init, Sigma_p_init,
             max_iter_em, tol_em, inner_max, inner_tol, verbose, verbose_label,
-            CommSiteBlockRef(site_block_fn));
+            CommSiteBlockRef(site_block_fn), /*spde=*/nullptr, gc);
         if (gp) gp->tick();
     }
     if (gp) gp->finish();

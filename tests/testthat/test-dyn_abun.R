@@ -57,8 +57,8 @@ test_that("analytic gradient matches finite differences (forward-mode diff)", {
   lay  <- tulpaObs:::.tobs_dyn_abun_nuts_layout(2L, 1L, 1L, 1L)
   marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
   theta <- c(log(5), 0.2, 0.1, qlogis(0.6), log(1))
-  f <- function(th) tulpaObs:::.tobs_dyn_abun_nuts_logpost(th, marg, lay)$lp
-  g_an <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay)$grad
+  f <- function(th) .tobs_dyn_abun_nuts_logpost(th, marg, lay)$lp
+  g_an <- .tobs_dyn_abun_nuts_logpost(theta, marg, lay)$grad
   g_fd <- sapply(seq_along(theta), function(j) {
     h <- 1e-5; tp <- theta; tm <- theta; tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
     (f(tp) - f(tm)) / (2 * h)
@@ -76,7 +76,7 @@ test_that("C++ dyn_abun NUTS log-posterior matches the R oracle byte-for-byte", 
                n_seasons = model$n_seasons, J = model$max_visits, K_max = model$K_max,
                X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
                X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]])
-  r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10)
+  r_out <- .tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10)
   c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10, 1.5)
   expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9)
   expect_equal(as.numeric(c_out$grad), r_out$grad, tolerance = 1e-9)
@@ -177,8 +177,8 @@ test_that("dyn_abun NB analytic gradient (incl log_r) matches finite differences
   expect_equal(lay$total, 6L)
   marg <- tulpaObs:::.tobs_dyn_abun_nuts_marginal(model)
   theta <- c(log(5), 0.2, 0.1, qlogis(0.6), log(1), log(2))   # last coord = log r
-  f <- function(th) tulpaObs:::.tobs_dyn_abun_nuts_logpost(th, marg, lay)$lp
-  g_an <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay)$grad
+  f <- function(th) .tobs_dyn_abun_nuts_logpost(th, marg, lay)$lp
+  g_an <- .tobs_dyn_abun_nuts_logpost(theta, marg, lay)$grad
   g_fd <- sapply(seq_along(theta), function(j) {
     h <- 1e-5; tp <- theta; tm <- theta; tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
     (f(tp) - f(tm)) / (2 * h)
@@ -200,7 +200,7 @@ test_that("C++ dyn_abun NB NUTS log-posterior matches the R oracle byte-for-byte
                X_omega = model$X_processes[[3]], X_gamma = model$X_processes[[4]],
                use_nb = TRUE)
   # log_r carries its own prior scale, distinct from the coefficient prior.
-  r_out <- tulpaObs:::.tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10,
+  r_out <- .tobs_dyn_abun_nuts_logpost(theta, marg, lay, sigma.beta = 10,
                                                   sigma.logr = 0.7)
   c_out <- tulpaObs:::cpp_dyn_abun_nuts_joint_logpost(spec, theta, 10, 0.7)
   expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9)

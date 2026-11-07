@@ -49,30 +49,6 @@
        use_nb = use_nb, eval_beta = eval_beta)
 }
 
-.tobs_dyn_abun_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10,
-                                        sigma.logr = 1.5) {
-  use_nb <- isTRUE(lay$use_nb)
-  eta_logr <- if (use_nb) min(theta[lay$logr], .TOBS_LOG_R_MAX) else 0
-  ev <- marg$eval_beta(theta[lay$lambda], theta[lay$p], theta[lay$omega],
-                       theta[lay$gamma], eta_logr)
-  arms <- list(
-    list(idx = lay$lambda, X = marg$X_lambda, grad = "grad_eta_lambda"),
-    list(idx = lay$p,      X = marg$X_p,      grad = "grad_eta_p"),
-    list(idx = lay$omega,  X = marg$X_omega,  grad = "grad_eta_omega"),
-    list(idx = lay$gamma,  X = marg$X_gamma,  grad = "grad_eta_gamma"))
-  # The dispersion log r has no design: its gradient is the scalar
-  # grad_eta_logr (already summed over sites), folded in as a 1x1 arm.
-  if (use_nb) {
-    ev$grad_eta_logr <- as.numeric(ev$grad_eta_logr)
-    arms <- c(arms, list(list(idx = lay$logr, X = matrix(1, 1, 1),
-                              grad = "grad_eta_logr")))
-  }
-  # Per-coordinate prior SD: sigma.beta on the coefficients, sigma.logr on log_r.
-  prior_sd <- rep(sigma.beta, lay$total)
-  if (use_nb) prior_sd[lay$logr] <- sigma.logr
-  .tobs_nuts_logpost_k(theta, ev, arms, lay$total, prior_sd)
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door NUTS fitter for the open N-mixture family

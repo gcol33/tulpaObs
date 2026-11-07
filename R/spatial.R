@@ -129,11 +129,62 @@ csr_to_adjacency <- function(csr, n) {
   exp(mean(log(vdiag)))
 }
 
-# Same constant for the fitters that carry only the compressed graph.
-.bym2_scale_csr <- function(row_ptr, col_idx, n) {
-  .bym2_scale(
-    csr_to_adjacency(list(row_ptr = row_ptr, col_idx = col_idx), n))
+# Connected components of an areal graph: `label` (1-based, one per node), the
+# node index set of each component, and their count. An intrinsic field (icar,
+# bym2's structured part) has one constant null direction per component, each
+# identified by its own sum-to-zero.
+.tobs_areal_components <- function(adj) {
+  label <- .tobs_graph_components(as.matrix(adj))
+  sets  <- unname(split(seq_along(label), label))
+  list(label = label, sets = sets, n = length(sets))
 }
+
+# BYM2 scaling per connected component (Freni-Sterrantino, Ventrucci & Rue
+# 2018; gcol33/tulpa#902): each component's structured precision is scaled so
+# its own geometric-mean marginal variance is that of a reference component, the
+# largest. `scale` is the reference component's s (the scalar every loading
+# divides by, `sigma * sqrt(rho / scale)`); `node_prec` is the per-node
+# multiplier on the unscaled ICAR precision, s_c / scale, constant within a
+# component, so the structured prior is diag(node_prec) Q and every component
+# loads at the same unit geometric-mean variance. A connected graph returns
+# `.bym2_scale(adj)` and `node_prec = NULL`. A single-node component carries no
+# ICAR prior (its structured part is pinned at 0 by its own sum-to-zero), so its
+# multiplier is 1.
+.bym2_scaling <- function(adj) {
+  adj  <- as.matrix(adj)
+  comp <- .tobs_areal_components(adj)
+  if (comp$n <= 1L) return(list(scale = .bym2_scale(adj), node_prec = NULL))
+  sizes <- lengths(comp$sets)
+  if (all(sizes < 2L)) .bym2_scale(adj)          # no edges: the same error
+  s_c <- vapply(comp$sets, function(cc)
+    if (length(cc) < 2L) NA_real_ else .bym2_scale(adj[cc, cc, drop = FALSE]),
+    numeric(1))
+  s_ref <- s_c[which.max(sizes)]
+  node_prec <- rep(1, nrow(adj))
+  for (k in seq_along(comp$sets))
+    if (is.finite(s_c[k])) node_prec[comp$sets[[k]]] <- s_c[k] / s_ref
+  list(scale = s_ref,
+       node_prec = if (isTRUE(all.equal(node_prec, rep(1, nrow(adj)),
+                                        tolerance = 1e-12))) NULL else node_prec)
+}
+
+# The scaling a BYM2 term carries: its own `scale_factor` / `node_prec` when the
+# term was built by `bym2()` (a user-supplied `scale.factor` is one scale for the
+# whole graph and carries no multiplier), else derived from its graph.
+.bym2_term_scaling <- function(spatial) {
+  if (!is.null(spatial$scale_factor))
+    return(list(scale = as.numeric(spatial$scale_factor),
+                node_prec = spatial$node_prec))
+  .bym2_scaling(spatial$graph)
+}
+
+# The two arguments a BYM2 fitter takes from a term: list(scale_factor,
+# node_prec), spliced into its argument list.
+.bym2_term_args <- function(spatial) {
+  sc <- .bym2_term_scaling(spatial)
+  list(scale_factor = sc$scale, node_prec = sc$node_prec)
+}
+
 
 # The BYM2 loading, in the two spellings that are live.
 #
@@ -182,19 +233,42 @@ csr_to_adjacency <- function(csr, n) {
   matrix(out, N, as.integer(n_draw))
 }
 
-# Resolve the scale factor at an areal-BYM2 fitter door: compute it from the
-# graph when the caller left it out, validate whatever came in. Both count
-# fitters (nmix, removal) go through here, so a missing argument means the same
-# thing at each door. Returns `s` -- these doors reach tulpaObs's own kernels.
-.bym2_resolve_scale <- function(scale_factor, row_ptr, col_idx, n) {
+# Resolve the BYM2 scaling at an areal-BYM2 fitter door: the per-component
+# scaling of the graph when the caller left `scale_factor` out, else the given
+# scale and multiplier, validated. The count fitters (nmix, removal) go through
+# here, so a missing argument means the same thing at each door. Returns
+# list(scale = s, node_prec) -- these doors reach tulpaObs's own kernels.
+.bym2_resolve_scaling <- function(scale_factor, node_prec, row_ptr, col_idx, n) {
   if (is.null(scale_factor)) {
-    scale_factor <- .bym2_scale_csr(row_ptr, col_idx, n)
+    return(.bym2_scaling(
+      csr_to_adjacency(list(row_ptr = row_ptr, col_idx = col_idx), n)))
   }
   if (!is.numeric(scale_factor) || length(scale_factor) != 1L ||
       !is.finite(scale_factor) || scale_factor <= 0) {
     stop("scale_factor must be a positive scalar.", call. = FALSE)
   }
-  as.numeric(scale_factor)
+  if (!is.null(node_prec) &&
+      (length(node_prec) != n || any(!is.finite(node_prec)) || any(node_prec <= 0))) {
+    stop("node_prec must be one positive value per spatial unit.", call. = FALSE)
+  }
+  list(scale = as.numeric(scale_factor), node_prec = node_prec)
+}
+
+# Centre `x` over each index set in `sets` (one sum-to-zero per set).
+.tobs_center_sets <- function(x, sets) {
+  for (cc in sets) x[cc] <- x[cc] - mean(x[cc])
+  x
+}
+
+# The component labels the C++ areal drivers take: 0-based, one per node, or
+# integer(0) for a connected graph (the drivers' one-component default).
+.tobs_node_comp_arg <- function(adj) {
+  lab <- .tobs_graph_components(as.matrix(adj))
+  if (!length(lab) || max(lab) <= 1L) integer(0) else as.integer(lab - 1L)
+}
+
+.tobs_node_comp_csr <- function(row_ptr, col_idx, n) {
+  .tobs_node_comp_arg(csr_to_adjacency(list(row_ptr = row_ptr, col_idx = col_idx), n))
 }
 
 # Flatten the [N, k, k] neighbour-pair distance array for the NNGP kernels.

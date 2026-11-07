@@ -141,6 +141,7 @@ inline void nmix_assemble_complete_fisher_bym2(
 //   log p(w) = -0.5 * w' w         (iid N(0, I))
 // Score: grad_v -= Q v,   grad_w -= w
 // Hessian: H_{v,v} += Q,   H_{w,w} += I
+// `gc` carries the per-component scaling: v's precision is diag(node_prec) Q.
 inline void nmix_add_bym2_prior_to_grad_and_H(
     int p_lam, int p_p, int n_spatial,
     const Rcpp::IntegerVector& adj_row_ptr,
@@ -149,7 +150,8 @@ inline void nmix_add_bym2_prior_to_grad_and_H(
     const Eigen::VectorXd& v,
     const Eigen::VectorXd& w,
     Eigen::VectorXd& grad /* in/out [n_x] */,
-    Eigen::MatrixXd& H    /* in/out [n_x x n_x] */
+    Eigen::MatrixXd& H    /* in/out [n_x x n_x] */,
+    const GraphComponents* gc = nullptr
 ) {
     const int v_start = p_lam + p_p;
     const int w_start = v_start + n_spatial;
@@ -158,7 +160,7 @@ inline void nmix_add_bym2_prior_to_grad_and_H(
     // z-block starts at p_lam + p_p, which is v_start.
     nmix_add_car_to_spatial_block(p_lam, p_p, n_spatial, /*tau=*/1.0,
                                   /*rho=*/1.0, adj_row_ptr, adj_col_idx,
-                                  n_neighbors, v, grad, H);
+                                  n_neighbors, v, grad, H, gc);
 
     // w block: identity (iid N(0, I)).
     for (int s = 0; s < n_spatial; ++s) {
@@ -174,12 +176,13 @@ inline void nmix_add_bym2_prior_to_H_only(
     const Rcpp::IntegerVector& adj_row_ptr,
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
-    Eigen::MatrixXd& H /* in/out [n_x x n_x] */
+    Eigen::MatrixXd& H /* in/out [n_x x n_x] */,
+    const GraphComponents* gc = nullptr
 ) {
     const int w_start = p_lam + p_p + n_spatial;
 
     nmix_add_car_to_H_only(p_lam, p_p, n_spatial, /*tau=*/1.0, /*rho=*/1.0,
-                           adj_row_ptr, adj_col_idx, n_neighbors, H);
+                           adj_row_ptr, adj_col_idx, n_neighbors, H, gc);
     for (int s = 0; s < n_spatial; ++s) {
         H(w_start + s, w_start + s) += 1.0;
     }
@@ -195,10 +198,11 @@ inline double nmix_bym2_log_prior(
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
     const Eigen::VectorXd& v,
-    const Eigen::VectorXd& w
+    const Eigen::VectorXd& w,
+    const GraphComponents* gc = nullptr
 ) {
     const double quad_v = nmix_car_quadratic_form(
-        n_spatial, 1.0, adj_row_ptr, adj_col_idx, n_neighbors, v);
+        n_spatial, 1.0, adj_row_ptr, adj_col_idx, n_neighbors, v, gc);
     const double quad_w = w.squaredNorm();
     return -0.5 * quad_v - 0.5 * quad_w;
 }

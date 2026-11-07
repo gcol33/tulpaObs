@@ -491,7 +491,9 @@
     # the structured block, so it takes 1 / sqrt(s). The draw substrate and the
     # SLA reconstruction read this same stored value back and mirror the
     # engine's spelling, so they need no conversion.
-    block$scale_factor <- .bym2_engine_scale(.bym2_scale(graph))
+    sc <- .bym2_scaling(graph)
+    block$scale_factor <- .bym2_engine_scale(sc$scale)
+    if (!is.null(sc$node_prec)) block$node_prec <- sc$node_prec
   } else {
     stop(sprintf(paste0(
       "cover() arm-specific field (%s): areal type '%s' is not supported. ",

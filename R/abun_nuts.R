@@ -48,36 +48,6 @@
   out
 }
 
-# Joint log-posterior + gradient of the N-mixture coefficient vector. `marg` is a
-# `nmix_marginal` object (nmix_site_marginal()); `lay` the layout above. Weak
-# Gaussian priors N(0, sigma.beta^2) on every coefficient and N(0, sigma.logr^2)
-# on log_r keep the ridge off the boundary without materially shifting the
-# data-dominated optimum, matching the other Laplace paths. Returns
-# list(lp, grad) over the packed coordinates.
-.tobs_abun_nuts_logpost <- function(theta, marg, lay,
-                                    sigma.beta = 10, sigma.logr = 1.5) {
-  beta_lambda <- theta[lay$lambda]
-  beta_p      <- theta[lay$p]
-  r <- if (lay$is_nb) exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
-  ev <- marg$eval_beta(beta_lambda, beta_p, r = r)
-
-  lp   <- ev$log_lik
-  grad <- c(as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda)),
-            as.numeric(crossprod(marg$X_p,      ev$grad_eta_p)))
-  if (lay$is_nb) grad <- c(grad, sum(ev$grad_theta))
-
-  # Weak Gaussian coefficient priors (data-dominated ridge).
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * (sum(beta_lambda^2) + sum(beta_p^2))
-  grad[lay$lambda] <- grad[lay$lambda] - ib2 * beta_lambda
-  grad[lay$p]      <- grad[lay$p]      - ib2 * beta_p
-  if (lay$is_nb) {
-    lr  <- theta[lay$log_r]; ilr2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * ilr2 * lr^2
-    grad[lay$log_r] <- grad[lay$log_r] - ilr2 * lr
-  }
-  list(lp = lp, grad = grad)
-}
 
 # Build the per-site marginal kernel for a bound nmix model, ready to feed the
 # NUTS target. Mirrors the long form .tobs_build_abun() already produced
@@ -249,14 +219,14 @@
     icar       = do.call(nmix_laplace_icar, common),
     car_proper = do.call(nmix_laplace_car_proper, common),
     bym2       = do.call(nmix_laplace_bym2, c(common,
-                   list(scale_factor = spatial$scale_factor %||%
-                          .bym2_scale(spatial$graph)))))
+                   .bym2_term_args(spatial))))
 
   # Whitened-field loading + fixed hyper (shared single source of truth, #71/#113).
   fl <- .tobs_nuts_field_loading(adj, spatial$type, n_sites,
                                  tau = nl$tau_mean, rho = nl$rho_mean,
                                  sigma = nl$sigma_mean,
-                                 scale_factor = spatial$scale_factor)
+                                 scale_factor = spatial$scale_factor,
+                                   node_prec = spatial$node_prec)
   field_load <- fl$field_load; n_raw <- fl$n_raw
 
   spec <- list(y = as.integer(y_long), site_idx = as.integer(site_idx),

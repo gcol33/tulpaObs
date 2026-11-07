@@ -81,7 +81,8 @@ test_that("the dense, Q and CSR doors return the same value to the bit", {
   for (dim in list(c(4, 4), c(6, 6), c(10, 10))) {
     adj <- rook_adj(dim[1], dim[2])
     csr <- adjacency_to_csr(adj)
-    expect_identical(.bym2_scale_csr(csr$row_ptr, csr$col_idx, nrow(adj)),
+    expect_identical(.bym2_resolve_scaling(NULL, NULL, csr$row_ptr, csr$col_idx,
+                                           nrow(adj))$scale,
                      .bym2_scale(adj))
     expect_identical(.bym2_scale_from_Q(diag(rowSums(adj)) - adj),
                      .bym2_scale(adj))
@@ -137,17 +138,20 @@ test_that("an isolated node is an error, not a floored variance", {
   expect_error(.bym2_scale(adj), "isolated")
 })
 
-test_that(".bym2_resolve_scale computes when absent and validates when given", {
+test_that(".bym2_resolve_scaling computes when absent and validates when given", {
   adj <- rook_adj(5, 5)
   csr <- adjacency_to_csr(adj)
   expect_identical(
-    .bym2_resolve_scale(NULL, csr$row_ptr, csr$col_idx, nrow(adj)),
-    .bym2_scale(adj))
-  expect_identical(.bym2_resolve_scale(2.5, csr$row_ptr, csr$col_idx, nrow(adj)), 2.5)
+    .bym2_resolve_scaling(NULL, NULL, csr$row_ptr, csr$col_idx, nrow(adj)),
+    list(scale = .bym2_scale(adj), node_prec = NULL))
+  expect_identical(
+    .bym2_resolve_scaling(2.5, NULL, csr$row_ptr, csr$col_idx, nrow(adj))$scale, 2.5)
   for (bad in list(0, -1, NA_real_, NaN, c(1, 2), "1")) {
-    expect_error(.bym2_resolve_scale(bad, csr$row_ptr, csr$col_idx, nrow(adj)),
+    expect_error(.bym2_resolve_scaling(bad, NULL, csr$row_ptr, csr$col_idx, nrow(adj)),
                  "positive scalar")
   }
+  expect_error(.bym2_resolve_scaling(1, rep(1, 3), csr$row_ptr, csr$col_idx, nrow(adj)),
+               "node_prec")
 })
 
 test_that("both areal count fitters treat a missing scale_factor the same way", {

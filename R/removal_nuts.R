@@ -41,35 +41,6 @@
        eval_beta = eval_beta)
 }
 
-# Joint log-posterior + gradient of the removal coefficient vector. `marg` is a
-# `.tobs_removal_nuts_marginal()` object; `lay` the shared abun layout. Weak
-# Gaussian priors keep the ridge off the boundary. Returns list(lp, grad). This
-# R version is the oracle the C++ FullGradFn (cpp_removal_nuts_joint_logpost) is
-# cross-checked against.
-.tobs_removal_nuts_logpost <- function(theta, marg, lay,
-                                       sigma.beta = 10, sigma.logr = 1.5) {
-  beta_lambda <- theta[lay$lambda]
-  beta_p      <- theta[lay$p]
-  r <- if (lay$is_nb) exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
-  ev <- marg$eval_beta(beta_lambda, beta_p, r = r)
-
-  lp   <- ev$log_lik
-  grad <- c(as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda)),
-            as.numeric(crossprod(marg$X_p,      ev$grad_eta_p)))
-  if (lay$is_nb) grad <- c(grad, sum(ev$grad_theta))
-
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * (sum(beta_lambda^2) + sum(beta_p^2))
-  grad[lay$lambda] <- grad[lay$lambda] - ib2 * beta_lambda
-  grad[lay$p]      <- grad[lay$p]      - ib2 * beta_p
-  if (lay$is_nb) {
-    lr  <- theta[lay$log_r]; ilr2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * ilr2 * lr^2
-    grad[lay$log_r] <- grad[lay$log_r] - ilr2 * lr
-  }
-  list(lp = lp, grad = grad)
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door NUTS fitter for the removal family

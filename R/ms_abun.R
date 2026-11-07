@@ -298,8 +298,7 @@
     car_proper = do.call(nmix_community_laplace_car_proper,
                          c(common, list(graph = spatial$graph))),
     bym2 = do.call(nmix_community_laplace_bym2,
-                   c(common, list(scale_factor = spatial$scale_factor %||%
-                                    .bym2_scale(spatial$graph))))
+                   c(common, .bym2_term_args(spatial)))
   )
   build_ms_nmix_fit(raw, model, mixture = mixture, spatial = spatial)
 }
@@ -404,6 +403,7 @@
         map_site_to_unit_R = as.integer(map_site_to_unit),
         adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
         n_neighbors = csr$n_neighbors, n_spatial = n_sites,
+        node_comp = .tobs_node_comp_csr(csr$row_ptr, csr$col_idx, n_sites),
         tau = tau, rho = rho, log_det_Q_rho = ldQ, z_init = z,
         K_max = K_max, max_iter = as.integer(max_iter), tol = 1e-6,
         verbose = FALSE)

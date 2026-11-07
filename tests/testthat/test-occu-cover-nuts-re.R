@@ -106,7 +106,7 @@ test_that("occu_cover NUTS RE: C++ target == R oracle, and both == a finite diff
     theta <- c(stats::rnorm(sp$n_par, 0, 0.3), stats::rnorm(sp$n_re, 0, 0.3))
     theta[sp$n_par] <- log(0.4)                       # a sane log-dispersion
 
-    rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+    rr <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                    re = sp$blocks)
     cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(sp$spec, theta, 5, 5)
     expect_equal(rr$lp, cc$lp, tolerance = 1e-10, info = nm)
@@ -118,8 +118,8 @@ test_that("occu_cover NUTS RE: C++ target == R oracle, and both == a finite diff
     for (k in seq_along(theta)) {
       tp <- theta; tp[k] <- tp[k] + h
       tm <- theta; tm[k] <- tm[k] - h
-      fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(tp, model, 5, 5, re = sp$blocks)$lp -
-                tulpaObs:::.tobs_occu_cover_nuts_logpost(tm, model, 5, 5, re = sp$blocks)$lp) / (2 * h)
+      fd[k] <- (.tobs_occu_cover_nuts_logpost(tp, model, 5, 5, re = sp$blocks)$lp -
+                .tobs_occu_cover_nuts_logpost(tm, model, 5, 5, re = sp$blocks)$lp) / (2 * h)
     }
     expect_equal(rr$grad, fd, tolerance = 1e-4, info = nm)
   }
@@ -155,8 +155,8 @@ test_that("occu_cover NUTS RE: an off block leaves the no-RE target bit for bit"
   expect_identical(cce$lp, cc0$lp)
   expect_identical(as.numeric(cce$grad), as.numeric(cc0$grad))
 
-  rr0 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(th0, model, 5, 5)
-  rre <- tulpaObs:::.tobs_occu_cover_nuts_logpost(th0, model, 5, 5, re = list())
+  rr0 <- .tobs_occu_cover_nuts_logpost(th0, model, 5, 5)
+  rre <- .tobs_occu_cover_nuts_logpost(th0, model, 5, 5, re = list())
   expect_identical(rr0, rre)
 })
 

@@ -177,7 +177,8 @@ Rcpp::List run_nmix_spatial_grid(
     int max_iter_em, double tol_em, int inner_max, double inner_tol,
     bool verbose,
     bool progress, int progress_every, double progress_throttle,
-    const std::string& progress_file) {
+    const std::string& progress_file,
+    const tulpaObs::GraphComponents* gc = nullptr) {
 
     const NMixCommunityOracle& orc = as_community_oracle(oracle);
     const int n_sites = X_lambda_R.nrow();
@@ -203,7 +204,7 @@ Rcpp::List run_nmix_spatial_grid(
             return make_nmix_site_block_fn(orc, Xl, p_lam, p_p, r);
         },
         progress, progress_every, progress_throttle, progress_file,
-        "nmix-spatial", /*report_boundary=*/true);
+        "nmix-spatial", /*report_boundary=*/true, gc);
 }
 
 }  // namespace
@@ -226,6 +227,7 @@ Rcpp::List cpp_nmix_community_spatial_icar(
     Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors,
     int n_spatial,
+    Rcpp::IntegerVector node_comp,
     Rcpp::NumericVector tau_grid,
     Rcpp::NumericVector r_grid,
     Rcpp::NumericVector mu_init,
@@ -252,12 +254,14 @@ Rcpp::List cpp_nmix_community_spatial_icar(
                                                /*a=*/0.0, /*b=*/0.0, r_grid[ri] };
         }
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("tau", "r");
+    const tulpaObs::GraphComponents gc =
+        tulpaObs::graph_components_from_R(node_comp, Rcpp::NumericVector(0), n_spatial);
     return run_nmix_spatial_grid(
         tulpaObs::CommFieldKind::ICAR, /*field_len=*/n_spatial, oracle,
         map_site_to_unit_R, X_lambda_R, n_spatial, adj_row_ptr, adj_col_idx,
         n_neighbors, plan, theta_grid_out, mu_init, Sigma_lambda_init, Sigma_p_init,
         max_iter_em, tol_em, inner_max, inner_tol, verbose,
-        progress, progress_every, progress_throttle, progress_file);
+        progress, progress_every, progress_throttle, progress_file, &gc);
 }
 
 // [[Rcpp::export]]
@@ -318,6 +322,8 @@ Rcpp::List cpp_nmix_community_spatial_bym2(
     Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors,
     int n_spatial,
+    Rcpp::IntegerVector node_comp,
+    Rcpp::NumericVector node_prec,
     Rcpp::NumericVector sigma_grid,
     Rcpp::NumericVector rho_grid,
     double scale_factor,
@@ -351,12 +357,14 @@ Rcpp::List cpp_nmix_community_spatial_bym2(
                                                    a, b, r_grid[ri] };
             }
     Rcpp::colnames(theta_grid_out) = Rcpp::CharacterVector::create("sigma", "rho", "r");
+    const tulpaObs::GraphComponents gc =
+        tulpaObs::graph_components_from_R(node_comp, node_prec, n_spatial);
     return run_nmix_spatial_grid(
         tulpaObs::CommFieldKind::BYM2, /*field_len=*/2 * n_spatial, oracle,
         map_site_to_unit_R, X_lambda_R, n_spatial, adj_row_ptr, adj_col_idx,
         n_neighbors, plan, theta_grid_out, mu_init, Sigma_lambda_init, Sigma_p_init,
         max_iter_em, tol_em, inner_max, inner_tol, verbose,
-        progress, progress_every, progress_throttle, progress_file);
+        progress, progress_every, progress_throttle, progress_file, &gc);
 }
 
 // Continuous Matern (SPDE) shared field on the abundance arm. The field lives

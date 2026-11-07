@@ -38,6 +38,19 @@
 * A random-effect fit on the Laplace route warns when given `priors`, which
   that route does not apply (#427).
 
+* Areal fields on a graph with several connected components: `icar()` and
+  `bym2()` carry one sum-to-zero per component and rank `n - components` on
+  every in-tree engine (single-species and community count drivers,
+  community occupancy, the areal-BFGS fields, the spatial-factor JSDM)
+  (#439), and `bym2()` scales each component's structured part to the same
+  unit variance (Freni-Sterrantino, Ventrucci & Rue 2018), passed to tulpa
+  as `node_prec` on the engine routes (#438). Connected graphs are
+  unchanged; a user-supplied `scale.factor` stays one scale for the whole
+  graph.
+
+* `occu_cover()` spatial NUTS samples the copy amplitude again under tulpa
+  0.7.6, whose copy axis now reports its support from 0 (#440).
+
 ## 0.6.2
 
 * `simulate_dyn_abun()`: the number of primary seasons is `n.seasons`

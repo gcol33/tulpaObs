@@ -48,8 +48,8 @@ test_that("analytic gradient matches finite differences", {
   lay  <- tulpaObs:::.tobs_fp_occu_nuts_layout(2L, 1L, 1L, 1L)
   marg <- tulpaObs:::.tobs_fp_occu_nuts_marginal(model)
   theta <- c(0.2, 0.4, 0.3, qlogis(0.06), 0.1)
-  f <- function(th) tulpaObs:::.tobs_fp_occu_nuts_logpost(th, marg, lay)$lp
-  g_an <- tulpaObs:::.tobs_fp_occu_nuts_logpost(theta, marg, lay)$grad
+  f <- function(th) .tobs_fp_occu_nuts_logpost(th, marg, lay)$lp
+  g_an <- .tobs_fp_occu_nuts_logpost(theta, marg, lay)$grad
   g_fd <- sapply(seq_along(theta), function(j) {
     h <- 1e-5; tp <- theta; tm <- theta; tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
     (f(tp) - f(tm)) / (2 * h)
@@ -67,7 +67,7 @@ test_that("C++ fp_occu NUTS log-posterior matches the R oracle byte-for-byte", {
                X_psi = model$X_processes[[1]], X_p11 = model$X_processes[[2]],
                X_p10 = model$X_processes[[3]], X_b = model$X_processes[[4]],
                n_sites = model$n_sites)
-  r_out <- tulpaObs:::.tobs_fp_occu_nuts_logpost(theta, marg, lay, sigma.beta = 10)
+  r_out <- .tobs_fp_occu_nuts_logpost(theta, marg, lay, sigma.beta = 10)
   c_out <- tulpaObs:::cpp_fp_occu_nuts_joint_logpost(spec, theta, 10)
   expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9)
   expect_equal(as.numeric(c_out$grad), r_out$grad, tolerance = 1e-9)

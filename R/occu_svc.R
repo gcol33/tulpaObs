@@ -236,7 +236,7 @@
     prior_grad = function(fp, cell)                    # d(-log p) / d fp
       as.numeric(cell$Q %*% fp) + lambda_mean * mean(fp),
     center = function(fp) fp,
-    constrain = rep(FALSE, n),
+    constrain_sets = list(),
     to_phi = function(fp, cell) fp,
     type = "svc_nngp",
     to_hyper = function(cell) c(sigma = cell$sigma, phi = cell$phi)

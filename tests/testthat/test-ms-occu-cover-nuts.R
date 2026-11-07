@@ -42,15 +42,15 @@ test_that("ms_occu_cover NUTS R oracle gradient matches finite differences", {
   pri <- tulpaObs:::.ms_ocs_nuts_priors()
   set.seed(7); theta <- rnorm(lay$total, 0, 0.4); theta[lay$log_disp] <- log(0.6)
 
-  o  <- tulpaObs:::.tobs_ms_occu_cover_nuts_logpost(theta, views, lay,
+  o  <- .tobs_ms_occu_cover_nuts_logpost(theta, views, lay,
           priors = pri, sigma.beta = 5)
   an <- o$grad; h <- 1e-6; fd <- numeric(lay$total)
   for (j in seq_len(lay$total)) {
     tp <- theta; tp[j] <- tp[j] + h
     tm <- theta; tm[j] <- tm[j] - h
-    lp <- tulpaObs:::.tobs_ms_occu_cover_nuts_logpost(tp, views, lay,
+    lp <- .tobs_ms_occu_cover_nuts_logpost(tp, views, lay,
             priors = pri, sigma.beta = 5, grad = FALSE)$lp
-    lm <- tulpaObs:::.tobs_ms_occu_cover_nuts_logpost(tm, views, lay,
+    lm <- .tobs_ms_occu_cover_nuts_logpost(tm, views, lay,
             priors = pri, sigma.beta = 5, grad = FALSE)$lp
     fd[j] <- (lp - lm) / (2 * h)
   }
@@ -80,7 +80,7 @@ test_that("ms_occu_cover NUTS C++ FullGradFn matches the R oracle byte-for-byte"
   pri <- tulpaObs:::.ms_ocs_nuts_priors()
   set.seed(7); theta <- rnorm(lay$total, 0, 0.4); theta[lay$log_disp] <- log(0.6)
 
-  o_r  <- tulpaObs:::.tobs_ms_occu_cover_nuts_logpost(theta, views, lay,
+  o_r  <- .tobs_ms_occu_cover_nuts_logpost(theta, views, lay,
             priors = pri, sigma.beta = 5)
   spec <- tulpaObs:::.tobs_ms_occu_cover_nuts_spec(model)
   o_c  <- tulpaObs:::cpp_ms_occu_cover_nuts_joint_logpost(spec, theta, pri, 5)
@@ -175,15 +175,15 @@ test_that("ms_occu_cover dispersion-RE oracle gradient matches finite difference
   pri <- tulpaObs:::.ms_ocs_nuts_priors()
   set.seed(7); theta <- rnorm(lay$total, 0, 0.4); theta[lay$mu_ld] <- log(0.6)
 
-  o  <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(theta, views, lay,
+  o  <- .tobs_ms_occu_cover_re_disp_logpost(theta, views, lay,
           priors = pri, sigma.beta = 5)
   an <- o$grad; h <- 1e-6; fd <- numeric(lay$total)
   for (j in seq_len(lay$total)) {
     tp <- theta; tp[j] <- tp[j] + h
     tm <- theta; tm[j] <- tm[j] - h
-    lp <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(tp, views, lay,
+    lp <- .tobs_ms_occu_cover_re_disp_logpost(tp, views, lay,
             priors = pri, sigma.beta = 5, grad = FALSE)$lp
-    lm <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(tm, views, lay,
+    lm <- .tobs_ms_occu_cover_re_disp_logpost(tm, views, lay,
             priors = pri, sigma.beta = 5, grad = FALSE)$lp
     fd[j] <- (lp - lm) / (2 * h)
   }
@@ -209,7 +209,7 @@ test_that("ms_occu_cover dispersion-RE C++ FullGradFn matches the R oracle", {
   layr <- tulpaObs:::.tobs_ms_occu_cover_re_disp_layout(P_occ, P_p, P_pos, S)
   pri <- tulpaObs:::.ms_ocs_nuts_priors()
   set.seed(9); thr <- rnorm(layr$total, 0, 0.4); thr[layr$mu_ld] <- log(0.6)
-  o_r <- tulpaObs:::.tobs_ms_occu_cover_re_disp_logpost(thr, views, layr,
+  o_r <- .tobs_ms_occu_cover_re_disp_logpost(thr, views, layr,
            priors = pri, sigma.beta = 5)
   spec <- c(tulpaObs:::.tobs_ms_occu_cover_nuts_spec(model), list(re_disp = TRUE))
   o_c <- tulpaObs:::cpp_ms_occu_cover_nuts_joint_logpost(spec, thr, pri, 5)

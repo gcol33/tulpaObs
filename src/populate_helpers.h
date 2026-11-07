@@ -62,6 +62,8 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
 
         if (type == "bym2") {
             data.bym2_scale_factor = Rcpp::as<double>(sp["scale_factor"]);
+            if (sp.containsElementNamed("node_prec"))
+                data.bym2_node_prec = Rcpp::as<std::vector<double>>(sp["node_prec"]);
         }
 
     } else if (type == "gp") {

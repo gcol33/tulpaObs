@@ -51,12 +51,16 @@
 # subspace. bym2 (Riebler 2016) scales its structured ICAR block by sigma
 # sqrt(rho / scale_factor) and adds an unstructured iid block sigma sqrt(1 - rho)
 # (full-rank, square); the structured block is the same eigen-loading.
-.tobs_field_load <- function(adj, type, tau, rho, n, ridge = 1e-4, tol = 1e-8) {
+.tobs_field_load <- function(adj, type, tau, rho, n, ridge = 1e-4, tol = 1e-8,
+                             node_prec = NULL) {
   if (identical(type, "car_proper"))
     return(.tobs_field_linv(adj, tau, rho, n, ridge))
   # Intrinsic ICAR precision tau Q (rho = 1); reduced eigen-loading on the
-  # non-null subspace (drop the constant direction).
+  # non-null subspace (drop the constant direction of every connected
+  # component). `node_prec` scales each component's rows (diag(node_prec) Q,
+  # symmetric because the multiplier is constant within a component).
   Q  <- .areal_Q(adj, 1.0)
+  if (!is.null(node_prec)) Q <- node_prec * Q
   ev <- eigen(tau * Q, symmetric = TRUE)
   keep <- ev$values > tol * max(ev$values)             # non-null eigenpairs
   U <- ev$vectors[, keep, drop = FALSE]
@@ -81,13 +85,18 @@
 # scaled by sigma sqrt(rho / scale_factor)) and unstructured (iid sigma
 # sqrt(1 - rho)) blocks columnwise (Riebler 2016).
 .tobs_nuts_field_loading <- function(adj, type, n, tau = NA_real_, rho = NA_real_,
-                                     sigma = NA_real_, scale_factor = NULL) {
+                                     sigma = NA_real_, scale_factor = NULL,
+                                     node_prec = NULL) {
   if (identical(type, "bym2")) {
     sigma <- max(if (is.finite(sigma)) sigma else sqrt(max(tau, 1e-3, na.rm = TRUE)),
                  1e-3)
     rho   <- min(max(if (is.finite(rho)) rho else 0.5, 0.01), 0.99)
-    sf    <- scale_factor %||% .bym2_scale(adj)
-    Lstr  <- .tobs_field_load(adj, "icar", 1, 1, n)      # centred ICAR basis
+    if (is.null(scale_factor)) {
+      sc <- .bym2_scaling(adj); scale_factor <- sc$scale; node_prec <- sc$node_prec
+    }
+    sf    <- scale_factor
+    Lstr  <- .tobs_field_load(adj, "icar", 1, 1, n,      # centred ICAR basis
+                              node_prec = node_prec)
     a <- sigma * sqrt(rho / sf); b <- sigma * sqrt(1 - rho)
     L <- cbind(a * Lstr, b * diag(n))                    # [structured | iid]
     return(list(field_load = L, tau = NA_real_, rho = rho, n_raw = ncol(L)))
@@ -149,6 +158,9 @@
 # unweighted intercept field.
 .areal_field_car <- function(adj, kind, map, n_sp, weight = NULL) {
   wtd <- !is.null(weight)
+  # An intrinsic field carries one constant null direction per connected
+  # component, each pinned by its own sum-to-zero.
+  comp <- if (kind == "icar") .tobs_areal_components(adj)$sets else list()
   tau_grid <- exp(seq(log(0.3), log(30), length.out = 9L))
   rho_grid <- if (kind == "car_proper") seq(0.1, 0.95, length.out = 6L) else 1.0
   # One cell from physical hyperparameters: ICAR -> (tau); proper CAR -> (tau, rho).
@@ -180,12 +192,12 @@
     },
     prior_logp = function(fp, cell) {
       quad <- as.numeric(t(fp) %*% cell$Q %*% fp)
-      if (kind == "icar") -0.5 * cell$tau * quad + 0.5 * (n_sp - 1) * log(cell$tau)
+      if (kind == "icar") -0.5 * cell$tau * quad + 0.5 * (n_sp - length(comp)) * log(cell$tau)
       else 0.5 * cell$ldQ + 0.5 * n_sp * log(cell$tau) - 0.5 * cell$tau * quad
     },
     prior_grad = function(fp, cell) cell$tau * as.numeric(cell$Q %*% fp),  # d(-logp)/dfp
-    center = function(fp) if (kind == "icar") fp - mean(fp) else fp,
-    constrain = if (kind == "icar") rep(TRUE, n_sp) else rep(FALSE, n_sp),
+    center = function(fp) .tobs_center_sets(fp, comp),
+    constrain_sets = comp,
     to_phi = function(fp, cell) fp,
     # Physical field hyperparameters per cell, for fixing the precision tau Q(rho)
     # on the NUTS path. ICAR pins rho = 1.
@@ -198,10 +210,13 @@
 # a = sigma sqrt(rho/scale), b = sigma sqrt(1-rho)). The (v, w) priors are
 # independent of (sigma, rho) (Riebler 2016), so the prior is constant across
 # cells; the hyperparameters enter only the likelihood through (a, b).
-.areal_field_bym2 <- function(adj, scale_factor, map, n_sp) {
+.areal_field_bym2 <- function(adj, scale_factor, map, n_sp, node_prec = NULL) {
   sigma_grid <- exp(seq(log(0.2), log(3), length.out = 5L))
   rho_grid   <- c(0.05, 0.3, 0.5, 0.7, 0.95)
   Q <- .areal_Q(adj, 1.0)                       # ICAR precision for v
+  # Per-component scaling (diag(node_prec) Q) and one sum-to-zero per component.
+  if (!is.null(node_prec)) Q <- node_prec * Q
+  comp <- .tobs_areal_components(adj)$sets
   make_cell <- function(theta) {
     sg <- theta[1L]; rho <- theta[2L]
     list(sigma = sg, rho = rho,
@@ -234,8 +249,10 @@
       v <- fp[seq_len(n_sp)]; w <- fp[n_sp + seq_len(n_sp)]
       c(as.numeric(Q %*% v), w)
     },
-    center = function(fp) { fp[seq_len(n_sp)] <- fp[seq_len(n_sp)] - mean(fp[seq_len(n_sp)]); fp },
-    constrain = c(rep(TRUE, n_sp), rep(FALSE, n_sp)),  # sum-to-zero on v only
+    center = function(fp) {
+      fp[seq_len(n_sp)] <- .tobs_center_sets(fp[seq_len(n_sp)], comp); fp
+    },
+    constrain_sets = comp,                       # sum-to-zero on v only
     to_phi = function(fp, cell) cell$a * fp[seq_len(n_sp)] + cell$b * fp[n_sp + seq_len(n_sp)],
     type = "bym2",
     to_hyper = function(cell) c(sigma = cell$sigma, rho = cell$rho),
@@ -346,7 +363,7 @@
   if (is_ar1 && is.null(rho_grid)) rho_grid <- c(0.4, 0.8)
   deficiency <- switch(type, rw1 = 1L, rw2 = 2L, 0L)
   rank_eff   <- n_t - deficiency
-  constrain  <- rep(deficiency > 0L, n_t)         # sum-to-zero on rw1 / rw2 only
+  constrain_sets <- if (deficiency > 0L) list(seq_len(n_t)) else list()  # rw1 / rw2 only
 
   make_cell <- function(theta) {
     tau <- theta[1L]
@@ -381,8 +398,8 @@
         (if (deficiency > 0L) 0 else 0.5 * cell$ldQ) - 0.5 * cell$tau * quad
     },
     prior_grad = function(fp, cell) cell$tau * as.numeric(cell$Q %*% fp),
-    center = function(fp) if (deficiency > 0L) fp - mean(fp) else fp,
-    constrain = constrain,
+    center = function(fp) .tobs_center_sets(fp, constrain_sets),
+    constrain_sets = constrain_sets,
     to_phi = function(fp, cell) fp,
     type = type,
     to_hyper = function(cell) if (is_ar1) c(tau = cell$tau, rho = cell$rho)
@@ -553,10 +570,11 @@
     ch <- tryCatch(chol(H), error = function(e) NULL); if (is.null(ch)) return(NULL)
     ldH <- 2 * sum(log(diag(ch)))
     Hc <- H
-    cc <- unlist(lapply(seq_len(n_blk),
-                        function(b) blk_off[b] + which(blocks[[b]]$constrain)))
-    if (length(cc)) {                     # sum-to-zero penalty on the constrained field block(s)
-      pen <- 1e6 * mean(abs(diag(H))); idx <- n_fixed + cc
+    # One sum-to-zero penalty per constraint set: each block's own, one per
+    # connected component of an intrinsic areal field.
+    pen <- 1e6 * mean(abs(diag(H)))
+    for (b in seq_len(n_blk)) for (cs in blocks[[b]]$constrain_sets) {
+      idx <- n_fixed + blk_off[b] + cs
       Hc[idx, idx] <- Hc[idx, idx] + pen
     }
     cov_full <- tryCatch(.tobs_spd_inv(Hc), error = function(e) NULL)
@@ -730,8 +748,8 @@
   adj <- if (!is.null(spatial$graph)) as.matrix(spatial$graph) else
     stop(sprintf("%s() spatial term must carry an adjacency graph.", family), call. = FALSE)
   if (identical(spatial$type, "bym2")) {
-    sf <- spatial$scale_factor %||% .bym2_scale(spatial$graph)
-    .areal_field_bym2(adj, sf, map, spatial$n_units)
+    sc <- .bym2_term_scaling(spatial)
+    .areal_field_bym2(adj, sc$scale, map, spatial$n_units, node_prec = sc$node_prec)
   } else {
     .areal_field_car(adj, if (identical(spatial$type, "icar")) "icar" else "car_proper",
                      map, spatial$n_units)

@@ -322,8 +322,8 @@ simulate_ms_occu_cover_spatial <- function(adj,
 
 # Field-structure spec: everything the prior / M-step / evidence need to treat a
 # field generically. `Q` = D - A (ICAR structure, also the simulator base); `A`,
-# `deg` the adjacency / degree; `rank` the GMRF rank (N - 1 improper icar, N
-# otherwise); `has_hyper` / `hyper_name` / `hyper_bounds` the per-factor
+# `deg` the adjacency / degree; `rank` the GMRF rank (N minus the number of
+# connected components for the improper icar, N otherwise); `has_hyper` / `hyper_name` / `hyper_bounds` the per-factor
 # hyperparameter. car_proper precomputes `gamma` (eigenvalues of the normalised
 # adjacency D^{-1/2} A D^{-1/2}, so log|R(rho)| = sum(log deg) + sum(log(1 -
 # rho gamma))); bym2 precomputes the eigenbasis `V` and eigenvalues `s` of the
@@ -351,11 +351,14 @@ simulate_ms_occu_cover_spatial <- function(adj,
     spec$hyper_bounds <- c(0, 1 - 1e-4)
     spec$rank        <- N
   } else if (identical(type, "bym2")) {
-    # Scaled-ICAR covariance Sigma_u = Q^+ / scale_q (Sorbye-Rue): eigenvectors of
-    # Q, eigenvalues s_j = (1/lambda_j)/scale_q on the structured space and 0 on
-    # the constant null direction.
-    scale_q <- .occu_cover_icar_scale(adj)
-    eig <- eigen(Q, symmetric = TRUE)
+    # Scaled-ICAR covariance Sigma_u = Q_s^+ / scale_q (Sorbye-Rue), with Q_s =
+    # diag(node_prec) Q scaled per connected component and scale_q the
+    # reference component's constant (.bym2_scaling): eigenvectors of Q_s,
+    # eigenvalues s_j = (1/lambda_j)/scale_q on the structured space and 0 on the
+    # constant null directions.
+    sc      <- .bym2_scaling(adj)
+    scale_q <- sc$scale
+    eig <- eigen(if (is.null(sc$node_prec)) Q else sc$node_prec * Q, symmetric = TRUE)
     pos <- eig$values > max(eig$values) * 1e-8
     s   <- numeric(N); s[pos] <- (1 / eig$values[pos]) / scale_q
     spec$V           <- eig$vectors
@@ -366,7 +369,7 @@ simulate_ms_occu_cover_spatial <- function(adj,
     spec$rank        <- N
   } else {
     spec$hyper_name <- NA_character_
-    spec$rank       <- N - 1L
+    spec$rank       <- N - .tobs_areal_components(adj)$n
     spec$logpdetQ   <- .ms_ocs_logpdet_from_Q(Q)
   }
   spec

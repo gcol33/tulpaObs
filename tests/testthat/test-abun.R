@@ -393,7 +393,7 @@ test_that("cpp_abun_nuts_joint_logpost matches the R oracle (byte-exact)", {
     theta <- c(sim$truth$beta_lambda, sim$truth$beta_p)
     if (is_nb) theta <- c(theta, log(sim$truth$size))
     theta <- theta + rnorm(length(theta), 0, 0.2)
-    rr <- tulpaObs:::.tobs_abun_nuts_logpost(theta, marg, lay,
+    rr <- .tobs_abun_nuts_logpost(theta, marg, lay,
                                              sigma.beta = 10, sigma.logr = 1.5)
     cc <- tulpaObs:::cpp_abun_nuts_joint_logpost(spec, theta, 10, 1.5)
     expect_equal(rr$lp, cc$lp, tolerance = 1e-7)

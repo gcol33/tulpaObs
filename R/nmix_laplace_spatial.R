@@ -120,6 +120,7 @@ nmix_laplace_icar <- function(y,
     adj_col_idx        = as.integer(adj_col_idx),
     n_neighbors        = as.integer(n_neighbors),
     n_spatial          = as.integer(n_spatial),
+    node_comp          = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
     tau_grid           = as.numeric(tau_grid),
     r_grid             = as.numeric(pp$r_grid),
     beta_lambda_init   = as.numeric(pp$beta_lambda_init),
@@ -330,6 +331,7 @@ nmix_laplace_bym2 <- function(y,
                                     mixture = c("P", "NB"),
                                     r_grid = NULL,
                                     scale_factor = NULL,
+                                    node_prec = NULL,
                                     beta_lambda_init = NULL,
                                     beta_p_init = NULL,
                                     v_init = NULL,
@@ -353,8 +355,9 @@ nmix_laplace_bym2 <- function(y,
   if (is.null(rho_grid))   rho_grid   <- .count_spatial_default_grid("rho_bym2")
   sigma_grid <- .count_spatial_check_grid(sigma_grid, "sigma_grid", 0, Inf)
   rho_grid   <- .count_spatial_check_grid(rho_grid, "rho_grid", 0, 1, open = FALSE)
-  scale_factor <- .bym2_resolve_scale(scale_factor, adj_row_ptr, adj_col_idx,
-                                      n_spatial)
+  sc <- .bym2_resolve_scaling(scale_factor, node_prec, adj_row_ptr, adj_col_idx,
+                              n_spatial)
+  scale_factor <- sc$scale
 
   fit <- .cpp_nmix_progress(cpp_nested_laplace_nmix_bym2,
     y                  = y,
@@ -366,6 +369,8 @@ nmix_laplace_bym2 <- function(y,
     adj_col_idx        = as.integer(adj_col_idx),
     n_neighbors        = as.integer(n_neighbors),
     n_spatial          = as.integer(n_spatial),
+    node_comp          = .tobs_node_comp_csr(adj_row_ptr, adj_col_idx, n_spatial),
+    node_prec          = as.numeric(sc$node_prec),
     sigma_grid         = as.numeric(sigma_grid),
     rho_grid           = as.numeric(rho_grid),
     r_grid             = as.numeric(pp$r_grid),

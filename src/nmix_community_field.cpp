@@ -90,6 +90,7 @@ Rcpp::List cpp_nmix_community_field_solve(
     Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors,
     int n_spatial,
+    Rcpp::IntegerVector node_comp,     // 0-based component per unit; integer(0) = connected
     double tau,
     double rho,
     double log_det_Q_rho,
@@ -105,6 +106,8 @@ Rcpp::List cpp_nmix_community_field_solve(
     const int p_p       = X_p.ncol();
     const int n_species = coef_lambda.nrow();
     const bool is_icar  = (rho >= 1.0 - 1e-12);
+    const tulpaObs::GraphComponents gc =
+        tulpaObs::graph_components_from_R(node_comp, Rcpp::NumericVector(0), n_spatial);
 
     if ((int)y.size() != n_obs) Rcpp::stop("length(y) must equal nrow(X_p).");
     if ((int)site_idx.size() != n_obs) Rcpp::stop("length(site_idx) must equal nrow(X_p).");
@@ -180,7 +183,7 @@ Rcpp::List cpp_nmix_community_field_solve(
         double quad = nmix_car_quadratic_form(
             n_spatial, rho, adj_row_ptr, adj_col_idx, n_neighbors, zz);
         if (is_icar)
-            return -0.5 * tau * quad + 0.5 * (n_spatial - 1) * std::log(tau);
+            return -0.5 * tau * quad + 0.5 * (n_spatial - gc.n_comp) * std::log(tau);
         return 0.5 * log_det_Q_rho + 0.5 * n_spatial * std::log(tau)
                - 0.5 * tau * quad;
     };
@@ -268,10 +271,8 @@ Rcpp::List cpp_nmix_community_field_solve(
             obj_cur,
             [&](double step) {
                 z_try = z + step * delta;
-                if (is_icar) {       // sum-to-zero centering
-                    double mean = z_try.mean();
-                    z_try.array() -= mean;
-                }
+                if (is_icar)         // sum-to-zero centering, per component
+                    tulpaObs::nmix_center_field(0, 0, n_spatial, z_try, &gc);
                 const double ll_try = sweep(z_try, g_dummy, H_dummy, bd_dummy,
                                             false);
                 return ll_try + z_log_prior(z_try);
@@ -288,9 +289,10 @@ Rcpp::List cpp_nmix_community_field_solve(
     tulpaObs::nmix_add_car_to_H_only(
         /*p_lam=*/0, /*p_p=*/0, n_spatial, tau, rho,
         adj_row_ptr, adj_col_idx, n_neighbors, H);
-    // For ICAR, the rank-deficient (constant-z) direction is pinned by the
-    // sum-to-zero constraint; add a large quadratic penalty on (sum z)^2 so the
-    // log|H_zz| is the constrained determinant (the field Laplace normaliser).
+    // For ICAR, the rank-deficient (constant-z) directions, one per connected
+    // component, are pinned by their sum-to-zero constraints; add a large
+    // quadratic penalty on each component's (sum z)^2 so the log|H_zz| is the
+    // constrained determinant (the field Laplace normaliser).
     if (is_icar) {
         double md = 0.0;
         for (int sp = 0; sp < n_spatial; ++sp) md += H(sp, sp);
@@ -299,7 +301,7 @@ Rcpp::List cpp_nmix_community_field_solve(
         const double kappa = 1e6 * md;
         for (int i = 0; i < n_spatial; ++i)
             for (int j = 0; j < n_spatial; ++j)
-                H(i, j) += kappa;
+                if (gc.of(i) == gc.of(j)) H(i, j) += kappa;
     } else {
         double md = 0.0;
         for (int sp = 0; sp < n_spatial; ++sp) md += H(sp, sp);

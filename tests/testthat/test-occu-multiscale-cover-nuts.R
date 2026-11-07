@@ -52,14 +52,14 @@ test_that("occu_multiscale_cover NUTS C++ FullGradFn matches the R oracle", {
     sb  <- 5
     sld <- 5
 
-    lp_R <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb, sld)
+    lp_R <- .tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb, sld)
     cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb, sld)
 
     # Value byte-exact.
     expect_equal(cpp$lp, lp_R, tolerance = 1e-9)
     # C++ analytic gradient vs finite differences of the R oracle.
     f_lp <- function(th)
-      tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(th, model, lay, sb, sld)
+      .tobs_occu_mscale_cover_nuts_logpost(th, model, lay, sb, sld)
     num <- .omcn_fd_grad(f_lp, theta)
     expect_lt(max(abs(cpp$grad - num)), 1e-5)
   }

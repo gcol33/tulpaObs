@@ -9,6 +9,7 @@
 
 #include <RcppEigen.h>
 #include <limits>
+#include "graph_components.h"
 
 namespace tulpaObs {
 
@@ -44,18 +45,21 @@ inline double nmix_logdet_spd(const Eigen::MatrixXd& M) {
 // pinned with a large quadratic penalty kappa (the penalty-method form of the
 // sum-to-zero constraint) before the inverse, so the flat (intercept,
 // field-mean) direction does not blow up the marginal covariance and the
-// intercept variance is the constrained data-precision value. `M` is taken by
-// value so the caller's matrix is untouched. NaN block if M is not PD.
+// intercept variance is the constrained data-precision value. With several
+// connected components in `gc`, one sum per component is penalised. `M` is
+// taken by value so the caller's matrix is untouched. NaN block if M is not PD.
 inline Eigen::MatrixXd nmix_constrained_top_cov(Eigen::MatrixXd M, int n_x,
                                                 int p_top, int field_start,
-                                                int field_len, bool constrain) {
+                                                int field_len, bool constrain,
+                                                const GraphComponents* gc = nullptr) {
     if (constrain && field_len > 0) {
         double md = M.diagonal().head(p_top).cwiseAbs().mean();
         if (!(md > 0)) md = 1.0;
         const double kappa = 1e6 * md;
         for (int i = 0; i < field_len; ++i)
             for (int j = 0; j < field_len; ++j)
-                M(field_start + i, field_start + j) += kappa;
+                if (!gc || gc->of(i) == gc->of(j))
+                    M(field_start + i, field_start + j) += kappa;
     }
     Eigen::LLT<Eigen::MatrixXd> chol(M);
     if (chol.info() != Eigen::Success)

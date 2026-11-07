@@ -52,8 +52,8 @@ test_that("analytic gradient matches finite differences (Poisson + NB)", {
     lay  <- tulpaObs:::.tobs_abun_nuts_layout(2L, 2L, is_nb)
     marg <- tulpaObs:::.tobs_removal_nuts_marginal(model, mixture = mix)
     theta <- c(log(7), 0.3, 0.2, -0.3, if (is_nb) log(3))
-    f <- function(th) tulpaObs:::.tobs_removal_nuts_logpost(th, marg, lay)$lp
-    g_an <- tulpaObs:::.tobs_removal_nuts_logpost(theta, marg, lay)$grad
+    f <- function(th) .tobs_removal_nuts_logpost(th, marg, lay)$lp
+    g_an <- .tobs_removal_nuts_logpost(theta, marg, lay)$grad
     g_fd <- sapply(seq_along(theta), function(j) {
       h <- 1e-5; tp <- theta; tm <- theta
       tp[j] <- tp[j] + h; tm[j] <- tm[j] - h
@@ -78,7 +78,7 @@ test_that("C++ removal NUTS log-posterior matches the R oracle byte-for-byte", {
     spec <- list(y = as.integer(model$y_long), site_idx = as.integer(model$site_idx),
                  X_lambda = model$X_processes[[1]], X_p = model$X_processes[[2]],
                  n_sites = model$n_sites, K_max = as.integer(K_max), is_nb = is_nb)
-    r_out <- tulpaObs:::.tobs_removal_nuts_logpost(theta, marg, lay)
+    r_out <- .tobs_removal_nuts_logpost(theta, marg, lay)
     c_out <- tulpaObs:::cpp_removal_nuts_joint_logpost(spec, theta,
                                                        sigma_beta = 10, sigma_logr = 1.5)
     expect_equal(c_out$lp, r_out$lp, tolerance = 1e-9, info = mix)

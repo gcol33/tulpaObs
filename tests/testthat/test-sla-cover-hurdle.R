@@ -285,8 +285,8 @@ test_that("log-likelihood evaluated at the fitted mode is finite and order-of-ma
   # the centered+scaled design the optimizer saw. Map the natural-scale
   # betas back into the scaled parameterization so the helper sees a
   # matched (beta, X) pair.
-  beta_occ_sc <- tulpaObs:::.scale_beta_vec(fit$beta_occ, enc$scale_occ)
-  beta_pos_sc <- tulpaObs:::.scale_beta_vec(fit$beta_pos, enc$scale_pos)
+  beta_occ_sc <- .scale_beta_vec(fit$beta_occ, enc$scale_occ)
+  beta_pos_sc <- .scale_beta_vec(fit$beta_pos, enc$scale_pos)
   ll_occ <- tulpaObs:::.loglik_cover_occ(beta_occ_sc, enc)
   ll_pos <- tulpaObs:::.loglik_cover_pos_beta(beta_pos_sc, fit$phi_pos, enc)
   expect_true(is.finite(ll_occ))

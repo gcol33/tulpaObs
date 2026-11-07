@@ -37,16 +37,6 @@
        eval_beta = eval_beta)
 }
 
-.tobs_fp_occu_nuts_logpost <- function(theta, marg, lay, sigma.beta = 10) {
-  ev <- marg$eval_beta(theta[lay$psi], theta[lay$p11], theta[lay$p10], theta[lay$b])
-  arms <- list(
-    list(idx = lay$psi, X = marg$X_psi, grad = "grad_eta_psi"),
-    list(idx = lay$p11, X = marg$X_p11, grad = "grad_eta_p11"),
-    list(idx = lay$p10, X = marg$X_p10, grad = "grad_eta_p10"),
-    list(idx = lay$b,   X = marg$X_b,   grad = "grad_eta_b"))
-  .tobs_nuts_logpost_k(theta, ev, arms, lay$total, sigma.beta)
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door NUTS fitter for the false-positive occupancy family

@@ -74,7 +74,7 @@ test_that("cover NUTS C++ FullGradFn matches the R oracle (byte-exact)", {
     theta <- c(stats::rnorm(np - 1L, 0, 0.3),
                if (pos == "beta") log(25) else log(0.4)) + stats::rnorm(np, 0, 0.1)
 
-    rr <- tulpaObs:::.tobs_cover_nuts_logpost(theta, enc, sigma.beta = 5,
+    rr <- .tobs_cover_nuts_logpost(theta, enc, sigma.beta = 5,
                                               sigma.logdisp = 5)
     cc <- tulpaObs:::cpp_cover_nuts_logpost(spec, theta, 5, 5)
     expect_equal(rr$lp, cc$lp, tolerance = 1e-6)
@@ -85,8 +85,8 @@ test_that("cover NUTS C++ FullGradFn matches the R oracle (byte-exact)", {
     for (k in seq_len(np)) {
       tp <- theta; tp[k] <- tp[k] + h
       tm <- theta; tm[k] <- tm[k] - h
-      fd[k] <- (tulpaObs:::.tobs_cover_nuts_logpost(tp, enc, 5, 5)$lp -
-                tulpaObs:::.tobs_cover_nuts_logpost(tm, enc, 5, 5)$lp) / (2 * h)
+      fd[k] <- (.tobs_cover_nuts_logpost(tp, enc, 5, 5)$lp -
+                .tobs_cover_nuts_logpost(tm, enc, 5, 5)$lp) / (2 * h)
     }
     expect_equal(rr$grad, fd, tolerance = 1e-4)
   }

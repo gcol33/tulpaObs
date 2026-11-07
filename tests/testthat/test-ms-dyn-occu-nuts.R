@@ -67,11 +67,11 @@ test_that("ms_dyn_occu NUTS R oracle gradient matches finite differences", {
   set.seed(1)
   theta <- P$theta0 + stats::rnorm(length(P$theta0), 0, 0.05)
   f_lp <- function(th)
-    tulpaObs:::.tobs_ms_dyn_occu_nuts_logpost(
+    .tobs_ms_dyn_occu_nuts_logpost(
       th, P$pieces$X_psi1, P$pieces$X_p, P$pieces$X_gamma, P$pieces$X_eps,
       P$pieces$em_stats, P$pieces$Ns, P$pieces$n_seas, P$lay, P$pri,
       grad = FALSE)$lp
-  ana <- tulpaObs:::.tobs_ms_dyn_occu_nuts_logpost(
+  ana <- .tobs_ms_dyn_occu_nuts_logpost(
     theta, P$pieces$X_psi1, P$pieces$X_p, P$pieces$X_gamma, P$pieces$X_eps,
     P$pieces$em_stats, P$pieces$Ns, P$pieces$n_seas, P$lay, P$pri, grad = TRUE)$grad
   num <- .msdyn_fd_grad(f_lp, theta)
@@ -87,7 +87,7 @@ test_that("ms_dyn_occu NUTS C++ FullGradFn matches the R oracle", {
   set.seed(2)
   theta <- P$theta0 + stats::rnorm(length(P$theta0), 0, 0.05)
   cpp <- cpp_ms_dyn_occu_nuts_joint_logpost(P$spec, theta, P$pri, sigma_beta = 5)
-  r   <- tulpaObs:::.tobs_ms_dyn_occu_nuts_logpost(
+  r   <- .tobs_ms_dyn_occu_nuts_logpost(
     theta, P$pieces$X_psi1, P$pieces$X_p, P$pieces$X_gamma, P$pieces$X_eps,
     P$pieces$em_stats, P$pieces$Ns, P$pieces$n_seas, P$lay, P$pri,
     sigma.beta = 5, grad = TRUE)

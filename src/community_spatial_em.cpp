@@ -94,7 +94,8 @@ inline double comm_field_log_prior(CommFieldKind kind, int n_spatial,
                                    const Rcpp::IntegerVector& adj_col_idx,
                                    const Rcpp::IntegerVector& n_neighbors,
                                    const VectorXd& field,
-                                   const CommSpdeCtx* spde = nullptr) {
+                                   const CommSpdeCtx* spde = nullptr,
+                                   const GraphComponents* gc = nullptr) {
     if (kind == CommFieldKind::SPDE) {
         // 0.5 log|Q| - 0.5 u' Q u (full rank; the (2 pi)^{-n_mesh/2} constant is
         // grid-independent and dropped, as in the single-species SPDE path).
@@ -105,11 +106,11 @@ inline double comm_field_log_prior(CommFieldKind kind, int n_spatial,
         const VectorXd v = field.head(n_spatial);
         const VectorXd w = field.tail(n_spatial);
         return tulpaObs::nmix_bym2_log_prior(n_spatial, adj_row_ptr, adj_col_idx,
-                                             n_neighbors, v, w);
+                                             n_neighbors, v, w, gc);
     }
     if (kind == CommFieldKind::ICAR) {
         return tulpaObs::nmix_icar_log_prior(n_spatial, tau, adj_row_ptr,
-                                             adj_col_idx, n_neighbors, field);
+                                             adj_col_idx, n_neighbors, field, gc);
     }
     return tulpaObs::nmix_car_proper_log_prior(n_spatial, tau, rho, log_det_Q_rho,
                                                adj_row_ptr, adj_col_idx,
@@ -126,7 +127,8 @@ inline void comm_add_field_prior(CommFieldKind kind, int p_state, int p_p,
                                  const Rcpp::IntegerVector& n_neighbors,
                                  const VectorXd& field,
                                  VectorXd& grad_top, MatrixXd& T,
-                                 const CommSpdeCtx* spde = nullptr) {
+                                 const CommSpdeCtx* spde = nullptr,
+                                 const GraphComponents* gc = nullptr) {
     if (kind == CommFieldKind::SPDE) {
         // Field prior -Q u to the score, +Q to the negative-Hessian field block.
         const int d = p_state + p_p;
@@ -138,7 +140,7 @@ inline void comm_add_field_prior(CommFieldKind kind, int p_state, int p_p,
         const VectorXd v = field.head(n_spatial);
         const VectorXd w = field.tail(n_spatial);
         tulpaObs::nmix_add_bym2_prior_to_grad_and_H(p_state, p_p, n_spatial,
-            adj_row_ptr, adj_col_idx, n_neighbors, v, w, grad_top, T);
+            adj_row_ptr, adj_col_idx, n_neighbors, v, w, grad_top, T, gc);
         return;
     }
     const double rho_use = (kind == CommFieldKind::CAR_PROPER) ? rho : 1.0;
@@ -147,17 +149,19 @@ inline void comm_add_field_prior(CommFieldKind kind, int p_state, int p_p,
 }
 
 // Sum-to-zero centering of the (intrinsic) field component against the global
-// state-arm intercept. ICAR centres f; BYM2 centres v only (w is proper);
-// CAR_proper and SPDE are full-rank and need none.
+// state-arm intercept, one mean per connected component of `gc`. ICAR centres
+// f; BYM2 centres v only (w is proper); CAR_proper and SPDE are full-rank and
+// need none.
 inline void comm_center_field(CommFieldKind kind, int p_state, int p_p,
-                              int n_spatial, VectorXd& field) {
+                              int n_spatial, VectorXd& field,
+                              const GraphComponents* gc = nullptr) {
     if (kind == CommFieldKind::CAR_PROPER || kind == CommFieldKind::SPDE ||
         n_spatial <= 0) return;
     const int len = field.size();
     VectorXd holder(p_state + p_p + len);
     holder.setZero();
     holder.segment(p_state + p_p, len) = field;
-    tulpaObs::nmix_center_field(p_state, p_p, n_spatial, holder);
+    tulpaObs::nmix_center_field(p_state, p_p, n_spatial, holder, gc);
     field = holder.segment(p_state + p_p, len);
 }
 
@@ -179,7 +183,8 @@ CommSpatialResult community_spatial_em(
     int max_iter_em, double tol_em, int inner_max, double inner_tol,
     bool verbose, const char* verbose_label,
     CommSiteBlockRef site_block_fn,
-    const CommSpdeCtx* spde) {
+    const CommSpdeCtx* spde,
+    const GraphComponents* gc) {
 
     const int d = p_state + p_p;
     const int nfield = (kind == CommFieldKind::BYM2) ? 2 : 1;
@@ -242,7 +247,8 @@ CommSpatialResult community_spatial_em(
         double obj = data_loglik(mu_, field_, b_);
         if (!R_finite(obj)) return R_NegInf;
         obj += comm_field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
-                                    adj_row_ptr, adj_col_idx, n_neighbors, field_, spde);
+                                    adj_row_ptr, adj_col_idx, n_neighbors, field_, spde,
+                                    gc);
         for (int s = 0; s < S; ++s) obj -= 0.5 * b_[s].dot(P * b_[s]);
         return obj;
     };
@@ -301,7 +307,7 @@ CommSpatialResult community_spatial_em(
         // Field prior on the top block (mu is flat -- see the no-ridge note).
         comm_add_field_prior(kind, p_state, p_p, n_spatial, tau, rho,
                              adj_row_ptr, adj_col_idx, n_neighbors, field_,
-                             grad_top, T, spde);
+                             grad_top, T, spde, gc);
         if (log_lik_out) *log_lik_out = ll;
         if (boundary_out) *boundary_out = bmax;
     };
@@ -343,7 +349,8 @@ CommSpatialResult community_spatial_em(
             // log-lik just assembled (no redundant likelihood pass).
             double obj_cur = ll_cur
                 + comm_field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
-                                       adj_row_ptr, adj_col_idx, n_neighbors, field, spde);
+                                       adj_row_ptr, adj_col_idx, n_neighbors, field, spde,
+                                       gc);
             for (int s = 0; s < S; ++s) obj_cur -= 0.5 * bvec[s].dot(P * bvec[s]);
             VectorXd mu_try, field_try;
             std::vector<VectorXd> b_try(S);
@@ -358,7 +365,7 @@ CommSpatialResult community_spatial_em(
                 },
                 [&](double step) {
                     mu = mu_try; field = field_try; bvec = b_try;
-                    comm_center_field(kind, p_state, p_p, n_spatial, field);
+                    comm_center_field(kind, p_state, p_p, n_spatial, field, gc);
                     double dmax = std::max(dmu.cwiseAbs().maxCoeff(),
                                            dfield.cwiseAbs().maxCoeff());
                     for (int s = 0; s < S; ++s)
@@ -429,20 +436,22 @@ CommSpatialResult community_spatial_em(
 
         // Per-species b-prior normaliser + the b-Schur determinant.
         double lp = comm_field_log_prior(kind, n_spatial, tau, rho, log_det_Q_rho,
-                                         adj_row_ptr, adj_col_idx, n_neighbors, field, spde);
+                                         adj_row_ptr, adj_col_idx, n_neighbors, field, spde,
+                                         gc);
         double bquad = 0.0;
         for (int s = 0; s < S; ++s) bquad += bvec[s].dot(P * bvec[s]);
         loglik_marg = ll + lp
                       + 0.5 * (double)S * logdetP - 0.5 * bquad
                       - 0.5 * sum_logdet_D - 0.5 * ldM;
 
-        // vcov_mu = top-left d-block of M^{-1}, constrained (sum field = 0) for
-        // the rank-deficient intrinsic fields (ICAR / BYM2 v); CAR_proper and
-        // SPDE are full rank.
+        // vcov_mu = top-left d-block of M^{-1}, constrained (sum field = 0 per
+        // connected component) for the rank-deficient intrinsic fields (ICAR f,
+        // BYM2 v -- the block's first n_spatial coordinates; w is proper);
+        // CAR_proper and SPDE are full rank.
         const bool constrain = (kind != CommFieldKind::CAR_PROPER &&
                                 kind != CommFieldKind::SPDE);
         MatrixXd cov_top = nmix_constrained_top_cov(
-            M, m, d, /*field_start=*/d, /*field_len=*/field_len, constrain);
+            M, m, d, /*field_start=*/d, /*field_len=*/n_spatial, constrain, gc);
         if (!cov_top.allFinite()) return false;
         vcov_mu = cov_top;
         return true;

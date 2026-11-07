@@ -265,16 +265,16 @@ cpp_ms_occu_site_cell <- function(eta_psi, eta_p, n_valid, n_det, observed) {
     .Call(`_tulpaObs_cpp_ms_occu_site_cell`, eta_psi, eta_p, n_valid, n_det, observed)
 }
 
-cpp_ms_occu_spatial_icar <- function(X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose) {
-    .Call(`_tulpaObs_cpp_ms_occu_spatial_icar`, X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose)
+cpp_ms_occu_spatial_icar <- function(X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, node_comp, tau_grid, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose) {
+    .Call(`_tulpaObs_cpp_ms_occu_spatial_icar`, X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, node_comp, tau_grid, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose)
 }
 
 cpp_ms_occu_spatial_car_proper <- function(X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, rho_grid, log_det_Q_rho, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose) {
     .Call(`_tulpaObs_cpp_ms_occu_spatial_car_proper`, X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, tau_grid, rho_grid, log_det_Q_rho, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose)
 }
 
-cpp_ms_occu_spatial_bym2 <- function(X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, sigma_grid, rho_grid, scale_factor, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose) {
-    .Call(`_tulpaObs_cpp_ms_occu_spatial_bym2`, X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, sigma_grid, rho_grid, scale_factor, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose)
+cpp_ms_occu_spatial_bym2 <- function(X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, node_comp, node_prec, sigma_grid, rho_grid, scale_factor, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose) {
+    .Call(`_tulpaObs_cpp_ms_occu_spatial_bym2`, X_psi, X_p, n_valid, n_det, map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors, node_comp, node_prec, sigma_grid, rho_grid, scale_factor, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose)
 }
 
 cpp_ms_occu_spatial_spde <- function(X_psi, X_p, n_valid, n_det, A_R, Q_list, log_det_Q, theta_grid_R, mu_init, Sigma_psi_init, Sigma_p_init, max_iter_em, verbose) {
@@ -289,24 +289,24 @@ cpp_nmix_community_em <- function(oracle, mu_init, Sigma_lambda_init, Sigma_p_in
     .Call(`_tulpaObs_cpp_nmix_community_em`, oracle, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter, tol, inner_max, inner_tol, sigma_beta, verbose)
 }
 
-cpp_nmix_community_field_solve <- function(y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau, rho, log_det_Q_rho, z_init, K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE) {
-    .Call(`_tulpaObs_cpp_nmix_community_field_solve`, y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau, rho, log_det_Q_rho, z_init, K_max, max_iter, tol, verbose)
+cpp_nmix_community_field_solve <- function(y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau, rho, log_det_Q_rho, z_init, K_max, max_iter = 100L, tol = 1e-6, verbose = FALSE) {
+    .Call(`_tulpaObs_cpp_nmix_community_field_solve`, y, site_idx, species_idx, X_lambda, X_p, coef_lambda, coef_p, map_site_to_unit_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau, rho, log_det_Q_rho, z_init, K_max, max_iter, tol, verbose)
 }
 
 cpp_nmix_community_oracle <- function(y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb = FALSE, zi = FALSE, headroom = -1L) {
     .Call(`_tulpaObs_cpp_nmix_community_oracle`, y, site_idx, species_idx, X_lambda, X_p, n_sites, n_species, K_max, nb, zi, headroom)
 }
 
-cpp_nmix_community_spatial_icar <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
-    .Call(`_tulpaObs_cpp_nmix_community_spatial_icar`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose, progress, progress_every, progress_throttle, progress_file)
+cpp_nmix_community_spatial_icar <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nmix_community_spatial_icar`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau_grid, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
 cpp_nmix_community_spatial_car_proper <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, log_det_Q_rho, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
     .Call(`_tulpaObs_cpp_nmix_community_spatial_car_proper`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, log_det_Q_rho, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
-cpp_nmix_community_spatial_bym2 <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
-    .Call(`_tulpaObs_cpp_nmix_community_spatial_bym2`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose, progress, progress_every, progress_throttle, progress_file)
+cpp_nmix_community_spatial_bym2 <- function(oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, node_prec, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nmix_community_spatial_bym2`, oracle, map_site_to_unit_R, X_lambda_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, node_prec, sigma_grid, rho_grid, scale_factor, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em, tol_em, inner_max, inner_tol, sigma_beta, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
 cpp_nmix_community_spatial_spde <- function(oracle, X_lambda_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, mu_init, Sigma_lambda_init, Sigma_p_init, max_iter_em = 100L, tol_em = 1e-4, inner_max = 50L, inner_tol = 1e-6, sigma_beta = 100.0, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
@@ -345,16 +345,16 @@ cpp_nmix_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, sit
     .Call(`_tulpaObs_cpp_nmix_grouped_oracle`, arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb, headroom)
 }
 
-cpp_nested_laplace_nmix_icar <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
-    .Call(`_tulpaObs_cpp_nested_laplace_nmix_icar`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+cpp_nested_laplace_nmix_icar <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nested_laplace_nmix_icar`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
 cpp_nested_laplace_nmix_car_proper <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
     .Call(`_tulpaObs_cpp_nested_laplace_nmix_car_proper`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
-cpp_nested_laplace_nmix_bym2 <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init = NULL, w_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
-    .Call(`_tulpaObs_cpp_nested_laplace_nmix_bym2`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init, w_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+cpp_nested_laplace_nmix_bym2 <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, node_prec, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init = NULL, w_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nested_laplace_nmix_bym2`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, node_prec, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init, w_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
 cpp_nested_laplace_nmix_spde <- function(y, site_idx, X_lambda_R, X_p_R, A_R, Q_list, log_det_Q, theta_grid_R, r_grid, beta_lambda_init, beta_p_init, u_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
@@ -445,12 +445,12 @@ cpp_removal_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, 
     .Call(`_tulpaObs_cpp_removal_grouped_oracle`, arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb)
 }
 
-cpp_nested_laplace_removal_icar <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
-    .Call(`_tulpaObs_cpp_nested_laplace_removal_icar`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+cpp_nested_laplace_removal_icar <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nested_laplace_removal_icar`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, tau_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
-cpp_nested_laplace_removal_bym2 <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init = NULL, w_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
-    .Call(`_tulpaObs_cpp_nested_laplace_removal_bym2`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init, w_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
+cpp_nested_laplace_removal_bym2 <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, node_prec, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init = NULL, w_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {
+    .Call(`_tulpaObs_cpp_nested_laplace_removal_bym2`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, node_comp, node_prec, sigma_grid, rho_grid, r_grid, scale_factor, beta_lambda_init, beta_p_init, v_init, w_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
 cpp_nested_laplace_removal_car_proper <- function(y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init = NULL, K_max = -1L, max_iter = 100L, tol = 1e-6, verbose = FALSE, progress = FALSE, progress_every = 0L, progress_throttle = 0.0, progress_file = "") {

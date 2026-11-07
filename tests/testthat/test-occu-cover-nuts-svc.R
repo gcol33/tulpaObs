@@ -125,7 +125,7 @@ test_that("occu_cover two-field NUTS target matches the R oracle and a central F
                stats::rnorm(length(bl[[2L]]$sampled), 0, 0.6))
     expect_length(theta, n_tot)
 
-    rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, fx$model, 5, 5,
+    rr <- .tobs_occu_cover_nuts_logpost(theta, fx$model, 5, 5,
                                                    field = blocks)
     cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
     expect_equal(rr$lp, cc$lp, tolerance = 1e-10)
@@ -135,9 +135,9 @@ test_that("occu_cover two-field NUTS target matches the R oracle and a central F
     for (k in seq_len(n_tot)) {
       tp <- theta; tp[k] <- tp[k] + h
       tm <- theta; tm[k] <- tm[k] - h
-      fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(tp, fx$model, 5, 5,
+      fd[k] <- (.tobs_occu_cover_nuts_logpost(tp, fx$model, 5, 5,
                                                          field = blocks)$lp -
-                tulpaObs:::.tobs_occu_cover_nuts_logpost(tm, fx$model, 5, 5,
+                .tobs_occu_cover_nuts_logpost(tm, fx$model, 5, 5,
                                                          field = blocks)$lp) / (2 * h)
     }
     expect_equal(rr$grad, fd, tolerance = 1e-4)
@@ -213,9 +213,9 @@ test_that("a single field is byte-identical under both block spellings (#214)", 
   expect_identical(c_flat$lp, c_list$lp)
   expect_identical(as.numeric(c_flat$grad), as.numeric(c_list$grad))
 
-  r_flat <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, fx$model, 5, 5,
+  r_flat <- .tobs_occu_cover_nuts_logpost(theta, fx$model, 5, 5,
                                                       field = bl$entries)
-  r_list <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, fx$model, 5, 5,
+  r_list <- .tobs_occu_cover_nuts_logpost(theta, fx$model, 5, 5,
                                                       field = list(bl$entries))
   expect_identical(r_flat$lp, r_list$lp)
   expect_identical(r_flat$grad, r_list$grad)

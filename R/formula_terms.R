@@ -236,7 +236,12 @@
                             weight = NULL, id = NULL) {
   .tobs_check_graph(graph, "bym2")
   csr <- adjacency_to_csr(graph)
-  if (is.null(scale.factor)) scale.factor <- .bym2_scale(graph)
+  # Per-component scaling unless the caller fixed one scale for the whole graph.
+  node_prec <- NULL
+  if (is.null(scale.factor)) {
+    sc <- .bym2_scaling(graph)
+    scale.factor <- sc$scale; node_prec <- sc$node_prec
+  }
   wlabel <- if (is.null(weight)) NULL else deparse(substitute(weight))
   weight <- .tobs_resolve_field_weight(weight, nrow(graph), "bym2",
                                        per_obs = !is.null(group.var))
@@ -244,7 +249,7 @@
     type = "bym2", n_units = nrow(graph), graph = graph, group_var = group.var,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
     n_neighbors = csr$n_neighbors, scale_factor = scale.factor,
-    weight = weight, weight_label = wlabel
+    node_prec = node_prec, weight = weight, weight_label = wlabel
   ), class = "tobs_spatial", id = id, label = "bym2")
 }
 

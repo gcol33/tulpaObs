@@ -96,7 +96,7 @@ test_that("SLA gracefully no-ops when EM has no detections at all", {
 
 test_that("Gaussian likelihood regression: l3_gaussian_identity == 0", {
   eta <- rnorm(10, 0, 2)
-  expect_identical(tulpaObs:::.l3_gaussian_identity(eta), rep(0, 10))
+  expect_identical(.l3_gaussian_identity(eta), rep(0, 10))
 })
 
 test_that("Binomial l3 has expected sign structure", {
@@ -114,8 +114,8 @@ test_that("Poisson l3 equals -lambda = -exp(eta)", {
   # d^3 log p / d eta^3 = -lambda_i = -exp(eta_i); always negative, matches
   # the exact third cumulant of a Poisson on the log-mean scale.
   eta <- rnorm(10, 0, 1)
-  expect_equal(tulpaObs:::.l3_poisson_log(eta), -exp(eta))
-  expect_true(all(tulpaObs:::.l3_poisson_log(eta) < 0))
+  expect_equal(.l3_poisson_log(eta), -exp(eta))
+  expect_true(all(.l3_poisson_log(eta) < 0))
 })
 
 test_that("tulpa::sn_match round-trips for a moderately skewed distribution", {
@@ -225,7 +225,7 @@ test_that("FD gamma matches analytical gamma on a controlled single-season occu"
   gamma_ana <- c(gamma_occ_ana, gamma_det_ana)
 
   # FD gamma against the same Sigma + same likelihood
-  log_lik_fn <- function(beta) tulpaObs:::.loglik_occu_single(beta, model)
+  log_lik_fn <- function(beta) .loglik_occu_single(beta, model)
   gamma_fd   <- tulpaObs:::.sla_gamma_fd(beta_hat, Sigma, log_lik_fn)
 
   # On the same Sigma + likelihood the two paths should agree to FD

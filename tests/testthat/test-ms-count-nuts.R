@@ -35,7 +35,7 @@ test_that("community count NUTS log-posterior + gradient match the R oracle", {
       theta <- stats::rnorm(lay$total, 0, 0.4)
       theta[lay$chol_beta] <- theta[lay$chol_beta] * 0.3   # keep the covariance sane
       if (lay$is_nb) theta[lay$chol_logr] <- theta[lay$chol_logr] * 0.3
-      r_ora <- tulpaObs:::.tobs_ms_count_nuts_logpost(
+      r_ora <- .tobs_ms_count_nuts_logpost(
         theta, model$X, Y, lay, pri, sigma.beta = 10, sigma.logr = 1.5)
       cpp <- cpp_ms_count_nuts_joint_logpost(spec, theta, pri, 10, 1.5)
       expect_equal(cpp$lp, r_ora$lp, tolerance = 1e-8)
@@ -174,7 +174,7 @@ test_that("community count NUTS log-posterior + gradient handle missing (NA) ent
       theta <- stats::rnorm(lay$total, 0, 0.4)
       theta[lay$chol_beta] <- theta[lay$chol_beta] * 0.3
       if (lay$is_nb) theta[lay$chol_logr] <- theta[lay$chol_logr] * 0.3
-      r_ora <- tulpaObs:::.tobs_ms_count_nuts_logpost(
+      r_ora <- .tobs_ms_count_nuts_logpost(
         theta, model$X, Y, lay, pri, sigma.beta = 10, sigma.logr = 1.5)
       cpp <- cpp_ms_count_nuts_joint_logpost(spec, theta, pri, 10, 1.5)
       # A finite target (no NA leaking into the sum) that still matches the oracle

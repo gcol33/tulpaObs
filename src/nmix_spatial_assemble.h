@@ -25,6 +25,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <vector>
+#include "graph_components.h"
 
 namespace tulpaObs {
 
@@ -179,40 +180,53 @@ inline void nmix_assemble_complete_fisher(
 
 // z' Q(rho) z quadratic form. Symmetry of adjacency lets us halve the work
 // by only counting edges with t > s. rho = 1 gives the intrinsic (ICAR) form,
-// which is what the BYM2 structured component uses.
+// which is what the BYM2 structured component uses. `gc`, when given, scales
+// row s by its component's precision multiplier (z' diag(node_prec) Q z; the
+// multiplier is constant within a component and every edge lies inside one).
 inline double nmix_car_quadratic_form(
     int n_spatial, double rho,
     const Rcpp::IntegerVector& adj_row_ptr,
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
-    const Eigen::VectorXd& z
+    const Eigen::VectorXd& z,
+    const GraphComponents* gc = nullptr
 ) {
     double quad = 0.0;
     for (int s = 0; s < n_spatial; ++s) {
-        quad += n_neighbors[s] * z(s) * z(s);
+        double qs = n_neighbors[s] * z(s) * z(s);
         for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
             int t = adj_col_idx[kk];
-            if (t > s) quad -= 2.0 * rho * z(s) * z(t);
+            if (t > s) qs -= 2.0 * rho * z(s) * z(t);
         }
+        quad += (gc ? gc->prec(s) : 1.0) * qs;
     }
     return quad;
 }
 
 // Subtract the mean from the field segment of x, enforcing the sum-to-zero
 // constraint that anchors intrinsic-field identifiability against the global
-// intercept. The field starts right after the two coefficient blocks. Under
-// BYM2 this is applied to the structured component only -- the iid component
-// is identified by its own prior and is not centred.
+// intercept -- one mean per connected component when `gc` carries several. The
+// field starts right after the two coefficient blocks. Under BYM2 this is
+// applied to the structured component only -- the iid component is identified
+// by its own prior and is not centred.
 inline void nmix_center_field(
     int p_lam, int p_p, int n_spatial,
-    Eigen::VectorXd& x
+    Eigen::VectorXd& x,
+    const GraphComponents* gc = nullptr
 ) {
     if (n_spatial <= 0) return;
     const int start = p_lam + p_p;
-    double mean = 0.0;
-    for (int s = 0; s < n_spatial; ++s) mean += x(start + s);
-    mean /= n_spatial;
-    for (int s = 0; s < n_spatial; ++s) x(start + s) -= mean;
+    const int nc = gc ? gc->n_comp : 1;
+    std::vector<double> sum(nc, 0.0);
+    std::vector<int> cnt(nc, 0);
+    for (int s = 0; s < n_spatial; ++s) {
+        const int c = gc ? gc->of(s) : 0;
+        sum[c] += x(start + s); ++cnt[c];
+    }
+    for (int s = 0; s < n_spatial; ++s) {
+        const int c = gc ? gc->of(s) : 0;
+        x(start + s) -= sum[c] / cnt[c];
+    }
 }
 
 }  // namespace tulpaObs

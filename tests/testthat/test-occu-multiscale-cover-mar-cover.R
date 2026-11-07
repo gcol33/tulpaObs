@@ -134,7 +134,7 @@ test_that("multiscale NUTS target drops missing cover and matches the R oracle",
 
     # The oracle runs .occu_mscale_cover_nonspatial_ll, the Laplace path's own
     # marginal, so agreement here pins all three kernels to one gate.
-    lp_R <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb)
+    lp_R <- .tobs_occu_mscale_cover_nuts_logpost(theta, model, lay, sb)
     cpp  <- cpp_occu_mscale_cover_nuts_joint_logpost(spec, theta, sb, sb)
     expect_true(is.finite(lp_R))
     expect_equal(cpp$lp, lp_R, tolerance = 1e-9)
@@ -142,15 +142,15 @@ test_that("multiscale NUTS target drops missing cover and matches the R oracle",
     num <- vapply(seq_along(theta), function(j) {
       tp <- theta; tp[j] <- tp[j] + 1e-6
       tm <- theta; tm[j] <- tm[j] - 1e-6
-      (tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(tp, model, lay, sb) -
-       tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(tm, model, lay, sb)) / 2e-6
+      (.tobs_occu_mscale_cover_nuts_logpost(tp, model, lay, sb) -
+       .tobs_occu_mscale_cover_nuts_logpost(tm, model, lay, sb)) / 2e-6
     }, 0)
     expect_lt(max(abs(cpp$grad - num)), 1e-5)
 
     # The dropped covers, and only those, leave the target: the gap to the
     # full-data target is exactly the sum of their densities.
     full <- .omc_bind_model(sim, positive)
-    lp_full <- tulpaObs:::.tobs_occu_mscale_cover_nuts_logpost(theta, full, lay, sb)
+    lp_full <- .tobs_occu_mscale_cover_nuts_logpost(theta, full, lay, sb)
     eta_pos <- tulpaObs:::.occu_ms_eta_visit(
       model$X_pos_site, theta[lay$pos_site],
       model$X_pos_visit, theta[lay$pos_visit], nrow(sim$y), ncol(sim$y))

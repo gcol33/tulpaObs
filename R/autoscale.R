@@ -110,28 +110,6 @@
   as.numeric(.scale_transform(scale) %*% as.numeric(beta_sc))
 }
 
-# Inverse of `.unscale_beta_vec`: map natural-scale betas back into the
-# centered+scaled parameterization. Used for round-trip tests and for
-# evaluating arm log-likelihoods (`.loglik_cover_*`) at user-facing
-# natural-scale coefficients when the encoded design X is scaled.
-.scale_beta_vec <- function(beta_nat, scale) {
-  if (length(scale$cols) == 0L) return(beta_nat)
-  beta_sc <- beta_nat
-  i0 <- scale$intercept_col
-  for (k in seq_along(scale$cols)) {
-    j <- scale$cols[k]
-    beta_sc[j] <- scale$sds[k] * beta_nat[j]
-  }
-  if (!is.na(i0)) {
-    shift <- 0
-    for (k in seq_along(scale$cols)) {
-      j <- scale$cols[k]
-      shift <- shift + scale$means[k] * beta_nat[j]
-    }
-    beta_sc[i0] <- beta_nat[i0] + shift
-  }
-  beta_sc
-}
 
 # Transform a SINGLE scale-block's scaled-space variance-covariance matrix to
 # natural space: V_natural = T %*% V_sc %*% t(T). (The multi-process,

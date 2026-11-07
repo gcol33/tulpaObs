@@ -310,203 +310,6 @@
 }
 
 
-# Joint log-posterior + gradient of the non-spatial occu_cover coefficient vector
-# theta = c(beta_psi, beta_p, beta_pos, log_disp) (beta_p / beta_pos each packed as
-# the site-level block then the optional visit-level block, exactly as the fitter
-# stacks them). Weak Gaussian priors N(0, sigma.beta^2) on every coefficient and a
-# broad N(0, sigma.logdisp^2) on log_disp keep the ridge / dispersion proper
-# without materially shifting the data-dominated optimum. Returns list(lp, grad)
-# over the packed coordinates. This is the oracle the C++ FullGradFn mirrors.
-.tobs_occu_cover_nuts_logpost <- function(theta, model, sigma.beta = 5,
-                                          sigma.logdisp = 5, field = NULL,
-                                          re = NULL) {
-  pin         <- model$process_info
-  p_occ       <- pin[[1L]]$p
-  p_det_site  <- ncol(model$X_det_site)
-  p_det_visit <- if (!is.null(model$X_det_visit)) ncol(model$X_det_visit) else 0L
-  p_pos_site  <- ncol(model$X_pos_site)
-  p_pos_visit <- if (!is.null(model$X_pos_visit)) ncol(model$X_pos_visit) else 0L
-  p_p   <- p_det_site + p_det_visit
-  p_pos <- p_pos_site + p_pos_visit
-  n_coef <- p_occ + p_p + p_pos
-  total  <- n_coef + 1L
-
-  # Optional coupled field(s): each block's z over its own trailing slice of
-  # theta, entering psi weighted by its per-site design column and the cover arm
-  # scaled by its own copy amplitude alpha. sigma / rho / alpha are sampled
-  # coordinates or pinned, as each block declares. The R oracle mirrors the C++
-  # FullGradFn byte-for-byte; absent, the non-spatial target.
-  fvs       <- .ochf_views(field, total)
-  has_field <- length(fvs) > 0L
-  # Per-block state, the per-site loading on psi, and the coordinates the field
-  # blocks occupy in total (so any trailing block -- the RE blocks -- starts
-  # where the C++ layout starts it).
-  fss     <- lapply(fvs, .ochf_forward, theta = theta)
-  f_site  <- lapply(seq_along(fvs), function(b) .ochf_site_value(fvs[[b]], fss[[b]]))
-  n_field <- sum(vapply(fvs, `[[`, numeric(1), "n_coord"))
-  psi_off <- if (has_field) Reduce(`+`, f_site) else numeric(model$n_sites)
-  pos_off <- if (has_field)
-    Reduce(`+`, lapply(seq_along(fvs),
-                       function(b) fss[[b]]$alpha$value * f_site[[b]]))
-    else numeric(model$n_sites)
-
-  bo         <- theta[seq_len(p_occ)]
-  bp_site    <- theta[p_occ + seq_len(p_det_site)]
-  bp_visit   <- if (p_det_visit > 0L) theta[p_occ + p_det_site + seq_len(p_det_visit)] else numeric(0)
-  bpos_site  <- theta[p_occ + p_p + seq_len(p_pos_site)]
-  bpos_visit <- if (p_pos_visit > 0L) theta[p_occ + p_p + p_pos_site + seq_len(p_pos_visit)] else numeric(0)
-  log_disp   <- theta[total]
-  disp       <- exp(log_disp)
-  pos_code   <- .occu_cover_pos_code(model$positive)
-
-  N <- model$n_sites; J <- model$max_visits
-  sgm <- function(e) 1 / (1 + exp(-e))
-
-  eta_psi <- as.numeric(model$X_occ %*% bo) + psi_off
-  psi     <- sgm(eta_psi)
-
-  eta_p <- matrix(as.numeric(model$X_det_site %*% bp_site), N, J)   # site block broadcast
-  if (p_det_visit > 0L) {
-    eta_p <- eta_p + matrix(as.numeric(model$X_det_visit %*% bp_visit), N, J, byrow = TRUE)
-  }
-  eta_pos <- matrix(as.numeric(model$X_pos_site %*% bpos_site) + pos_off, N, J)
-  if (p_pos_visit > 0L) {
-    eta_pos <- eta_pos + matrix(as.numeric(model$X_pos_visit %*% bpos_visit), N, J, byrow = TRUE)
-  }
-
-  # Observation-arm random intercepts. Each block owns n_groups whitened z
-  # coordinates and its own SAMPLED log_sigma_re, laid out back to back AFTER
-  # the field block, and adds the per-row offset sigma_re * z[code] to its arm.
-  # `codes` is site-major over the padded grid (row (i - 1) * J + v), so
-  # `matrix(..., byrow = TRUE)` puts each code on its own (site, visit); a 0
-  # code carries no effect.
-  re_view <- .ocre_view(re, total + n_field)
-  for (rb in re_view) {
-    off <- matrix(.ocre_offset(rb, theta), N, J, byrow = TRUE)
-    if (rb$arm == 1L) eta_p   <- eta_p   + off
-    else              eta_pos <- eta_pos + off
-  }
-
-  valid <- model$valid; y <- model$y; y_pos <- model$y_pos
-
-  g_eta_psi <- numeric(N)
-  g_eta_p   <- matrix(0, N, J)
-  g_eta_pos <- matrix(0, N, J)
-  g_logdisp <- 0
-  lp_data   <- 0
-
-  for (i in seq_len(N)) {
-    vv <- which(valid[i, ])
-    if (length(vv) == 0L) next
-    any_det <- any(y[i, vv] == 1L)
-    if (any_det) {
-      lp_data <- lp_data + log(psi[i])
-      g_eta_psi[i] <- 1 - psi[i]
-      for (v in vv) {
-        pv <- sgm(eta_p[i, v])
-        if (y[i, v] == 1L) { lp_data <- lp_data + log(pv);     g_eta_p[i, v] <- 1 - pv }
-        else               { lp_data <- lp_data + log(1 - pv); g_eta_p[i, v] <- -pv }
-      }
-      # Cover factor at detected visits with an observed cover; a missing (NA)
-      # cover drops out (missing-at-random cover), the detection loop above still
-      # counts the visit.
-      for (v in vv[y[i, vv] == 1L & is.finite(y_pos[i, vv])]) {
-        ev <- eta_pos[i, v]; yy <- y_pos[i, v]
-        if (pos_code == 3L) {            # beta
-          mu <- sgm(ev); a <- mu * disp; b <- (1 - mu) * disp
-          # `.tobs_log_safe`, matching src/tobs_math.h::log_safe, which the
-          # C++ target this oracle is asserted byte-for-byte against uses. A
-          # raw log() made the two differ by -Inf against a finite value at a
-          # cover of exactly 0 or 1, so an FD gradient check on boundary data
-          # compared a different function than the sampler ran.
-          ly <- .tobs_log_safe(yy); l1my <- .tobs_log_safe(1 - yy)
-          lp_data <- lp_data + lgamma(disp) - lgamma(a) - lgamma(b) +
-                     (a - 1) * ly + (b - 1) * l1my
-          g_eta_pos[i, v] <- disp * mu * (1 - mu) *
-                             (-digamma(a) + digamma(b) + ly - l1my)
-          g_logdisp <- g_logdisp + disp * (digamma(disp) - mu * digamma(a) -
-                       (1 - mu) * digamma(b) + mu * ly + (1 - mu) * l1my)
-        } else if (pos_code == 4L) {     # identity-Gaussian (#112): raw response
-          sig <- disp; r <- (yy - ev) / sig
-          lp_data <- lp_data - .tobs_log_safe(sig) -
-                     0.5 * log(2 * pi) - 0.5 * r * r
-          g_eta_pos[i, v] <- r / sig
-          g_logdisp <- g_logdisp + (r * r - 1)
-        } else {                         # lognormal: Gaussian on log(cover)
-          sig <- disp; lyy <- .tobs_log_safe(yy); r <- (lyy - ev) / sig
-          lp_data <- lp_data - lyy - .tobs_log_safe(sig) -
-                     0.5 * log(2 * pi) - 0.5 * r * r
-          g_eta_pos[i, v] <- r / sig
-          g_logdisp <- g_logdisp + (r * r - 1)
-        }
-      }
-    } else {
-      P0 <- exp(sum(log(1 - sgm(eta_p[i, vv]))))
-      L  <- psi[i] * P0 + (1 - psi[i])
-      lp_data <- lp_data + log(L)
-      g_eta_psi[i] <- -psi[i] * (1 - psi[i]) * (1 - P0) / L
-      for (v in vv) g_eta_p[i, v] <- -psi[i] * P0 * sgm(eta_p[i, v]) / L
-    }
-  }
-
-  # Design-sandwich the eta-gradients onto the coefficient blocks. The visit-level
-  # long vector follows site-major order (row i visit v -> (i-1)*J + v), matching
-  # the byrow = TRUE design broadcast and the C++ row map i * J + v.
-  grad_bo  <- as.numeric(crossprod(model$X_occ, g_eta_psi))
-  grad_bp  <- as.numeric(crossprod(model$X_det_site, rowSums(g_eta_p)))
-  if (p_det_visit > 0L)
-    grad_bp <- c(grad_bp, as.numeric(crossprod(model$X_det_visit, as.numeric(t(g_eta_p)))))
-  grad_bpos <- as.numeric(crossprod(model$X_pos_site, rowSums(g_eta_pos)))
-  if (p_pos_visit > 0L)
-    grad_bpos <- c(grad_bpos, as.numeric(crossprod(model$X_pos_visit, as.numeric(t(g_eta_pos)))))
-  grad <- c(grad_bo, grad_bp, grad_bpos, g_logdisp)
-
-  # Field blocks: per block accumulate the per-cell field score -- the psi-arm
-  # score plus alpha times the cover-arm score, both weighted by that block's own
-  # per-site design column -- and its copy amplitude's own data-score, then hand
-  # both to the field backward pass. Each block's gradient (whitened field, then
-  # any sampled hyper) appends in block order, as the C++ layout lays them out.
-  lp_field <- 0
-  if (has_field) {
-    g_pos_site <- rowSums(g_eta_pos)
-    for (b in seq_along(fvs)) {
-      fv <- fvs[[b]]
-      w  <- fv$weight %||% rep(1, N)
-      g_f_site <- w * (g_eta_psi + fss[[b]]$alpha$value * g_pos_site)
-      g_field  <- numeric(fv$n_units)
-      for (s in seq_len(N)) {
-        cell <- fv$field_map[s]
-        g_field[cell] <- g_field[cell] + g_f_site[s]
-      }
-      bk       <- .ochf_backward(fv, fss[[b]], g_field,
-                                 sum(f_site[[b]] * g_pos_site))
-      grad     <- c(grad, bk$grad)
-      lp_field <- lp_field + bk$lp
-    }
-  }
-
-  # RE blocks trail the field block, each scoring against its own arm's per-row
-  # eta-gradient (site-major, matching `codes`).
-  lp_re <- 0
-  for (rb in re_view) {
-    g_row <- if (rb$arm == 1L) as.numeric(t(g_eta_p)) else as.numeric(t(g_eta_pos))
-    bk    <- .ocre_backward(rb, theta, g_row)
-    grad  <- c(grad, bk$grad)
-    lp_re <- lp_re + bk$lp
-  }
-
-  lp  <- lp_data + lp_field + lp_re
-  ib2 <- 1 / sigma.beta^2
-  nb  <- n_coef
-  bv  <- theta[seq_len(nb)]
-  lp  <- lp - 0.5 * ib2 * sum(bv^2)
-  grad[seq_len(nb)] <- grad[seq_len(nb)] - ib2 * bv
-  ild2 <- 1 / sigma.logdisp^2
-  lp   <- lp - 0.5 * ild2 * log_disp^2
-  grad[total] <- grad[total] - ild2 * log_disp
-  list(lp = lp, grad = grad)
-}
-
 # Resolve the model's observation-arm RE term designs
 # (.occu_cover_obs_re_design, shared with the nested-Laplace path) into the
 # sampler's block descriptions: arm code 1 = detection, 2 = positive cover, one
@@ -1180,7 +983,8 @@
 #                           column weights (1 - rho lambda_j)^{-1/2}: no
 #                           per-leapfrog Cholesky of an irregular graph.
 # D and W follow .areal_Q: W = adj, D = diag(number of non-zero neighbours).
-.occu_cover_nuts_field_basis <- function(adj, type, n, scale_factor = NULL) {
+.occu_cover_nuts_field_basis <- function(adj, type, n, scale_factor = NULL,
+                                         node_prec = NULL) {
   if (identical(type, "car_proper")) {
     deg <- rowSums(adj != 0)
     if (any(deg <= 0))
@@ -1192,11 +996,15 @@
     return(list(B1 = dm12 * ev$vectors, scale1 = .OCHF_CAR, has_iid = FALSE,
                 sf = 1, lambda = ev$values))
   }
-  Lstr <- .tobs_field_load(adj, "icar", 1, 1, n)
-  if (identical(type, "bym2"))
-    return(list(B1 = Lstr, scale1 = .OCHF_BYM2_STR, has_iid = TRUE,
-                sf = scale_factor %||% .bym2_scale(adj),
+  if (identical(type, "bym2")) {
+    if (is.null(scale_factor)) {
+      sc <- .bym2_scaling(adj); scale_factor <- sc$scale; node_prec <- sc$node_prec
+    }
+    return(list(B1 = .tobs_field_load(adj, "icar", 1, 1, n, node_prec = node_prec),
+                scale1 = .OCHF_BYM2_STR, has_iid = TRUE, sf = scale_factor,
                 lambda = numeric(0)))
+  }
+  Lstr <- .tobs_field_load(adj, "icar", 1, 1, n)
   list(B1 = Lstr, scale1 = .OCHF_CONST, has_iid = FALSE, sf = 1,
        lambda = numeric(0))
 }
@@ -1241,6 +1049,16 @@
     }
     if (is.null(r)) return(NULL)
     r <- sort(as.numeric(r))
+    # A copy continuum's lowest cell reaches its atom at zero, so the reported
+    # support can start at 0. The sampled coordinate is log alpha behind a
+    # bounded transform, which cannot reach 0 (and a flat prior on it over
+    # (0, upper] would be improper), so the span stops at the lower edge of the
+    # lowest positive node's cell, half a log step below that node.
+    if (positive_only && is.finite(r[1L]) && r[1L] <= 0) {
+      pos <- sort(unique(v))
+      if (length(pos) < 2L) return(NULL)
+      r[1L] <- pos[1L] * sqrt(pos[1L] / pos[2L])
+    }
     if (!all(is.finite(r)) || r[1L] <= 0 && positive_only) return(NULL)
     if (r[2L] <= r[1L] * (1 + 1e-8)) return(NULL)
     # The node range travels with the span so a bounded axis can fall back to it
@@ -1300,6 +1118,7 @@
 # component of the engine's mixture prior, not the mixture.
 .occu_cover_nuts_field_block <- function(adj, type, n_cells, site_cell, warm,
                                          scale_factor = NULL,
+                                         node_prec = NULL,
                                          sample_hyper = TRUE,
                                          block = 1L, weight = NULL,
                                          copy.slab = NULL) {
@@ -1310,7 +1129,8 @@
     fl <- .tobs_nuts_field_loading(adj, type, n_cells,
                                    tau = 1 / max(wh$sigma, 1e-3)^2,
                                    rho = wh$rho, sigma = wh$sigma,
-                                   scale_factor = scale_factor)
+                                   scale_factor = scale_factor,
+                                   node_prec = node_prec)
     entries <- list(n_field_units = as.integer(n_cells),
                     field_map = as.integer(site_cell),
                     field_load = fl$field_load,
@@ -1323,7 +1143,7 @@
                 tau = fl$tau, rho = fl$rho))
   }
 
-  bas <- .occu_cover_nuts_field_basis(adj, type, n_cells, scale_factor)
+  bas <- .occu_cover_nuts_field_basis(adj, type, n_cells, scale_factor, node_prec)
   bnd <- .occu_cover_nuts_hyper_bounds(warm, type, block = block)
   bnd$rho <- .ochf_rho_support(
     bnd$rho, if (bas$scale1 == .OCHF_CAR) bas$lambda else numeric(0))
@@ -1556,7 +1376,7 @@
   fbs <- lapply(seq_along(weights), function(b)
     .occu_cover_nuts_field_block(
       adj, spatial$type, n_cells, site_cell, warm,
-      scale_factor = spatial$scale_factor,
+      scale_factor = spatial$scale_factor, node_prec = spatial$node_prec,
       sample_hyper = !isTRUE(fixed.hyper), block = b, weight = weights[[b]],
       copy.slab = slab))
   n_raw   <- vapply(fbs, `[[`, numeric(1), "n_raw")

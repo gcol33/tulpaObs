@@ -35,11 +35,12 @@ inline double count_car_log_prior_dispatch(
     const Rcpp::IntegerVector& adj_row_ptr,
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
-    const Eigen::VectorXd& z
+    const Eigen::VectorXd& z,
+    const GraphComponents* gc = nullptr
 ) {
     if (kind == CarPriorKind::ICAR) {
         return nmix_icar_log_prior(
-            n_spatial, tau, adj_row_ptr, adj_col_idx, n_neighbors, z);
+            n_spatial, tau, adj_row_ptr, adj_col_idx, n_neighbors, z, gc);
     }
     return nmix_car_proper_log_prior(
         n_spatial, tau, rho, log_det_Q_rho,
@@ -62,6 +63,9 @@ struct CountFieldSpec {
     CarPriorKind   car  = CarPriorKind::ICAR;      // CAR only
     double tau = 1.0, rho = 1.0, log_det_Q_rho = 0.0;  // CAR only
     double a = 0.0, b = 0.0;                       // BYM2 loadings
+    // Connected components (one sum-to-zero each) and, for BYM2, the
+    // per-component precision multiplier; null = one component, no multiplier.
+    const GraphComponents* gc = nullptr;
 
     int  n_blocks() const { return kind == CountFieldKind::BYM2 ? 2 : 1; }
     // Whether the field carries a flat direction the prior does not pin. Both
@@ -184,7 +188,7 @@ CountSpatialInnerResult inner_newton_count_field(
         if (bym2) {
             nmix_add_bym2_prior_to_grad_and_H(p_lam, p_p, n_spatial,
                 adj_row_ptr, adj_col_idx, n_neighbors,
-                f.head(n_spatial), f.tail(n_spatial), grad, H);
+                f.head(n_spatial), f.tail(n_spatial), grad, H, fs.gc);
         } else {
             nmix_add_car_to_spatial_block(p_lam, p_p, n_spatial, fs.tau, fs.rho,
                 adj_row_ptr, adj_col_idx, n_neighbors, f, grad, H);
@@ -193,7 +197,7 @@ CountSpatialInnerResult inner_newton_count_field(
     auto add_prior_H = [&](MatrixXd& H) {
         if (bym2) {
             nmix_add_bym2_prior_to_H_only(p_lam, p_p, n_spatial,
-                adj_row_ptr, adj_col_idx, n_neighbors, H);
+                adj_row_ptr, adj_col_idx, n_neighbors, H, fs.gc);
         } else {
             nmix_add_car_to_H_only(p_lam, p_p, n_spatial, fs.tau, fs.rho,
                 adj_row_ptr, adj_col_idx, n_neighbors, H);
@@ -202,10 +206,11 @@ CountSpatialInnerResult inner_newton_count_field(
     auto field_log_prior = [&](const VectorXd& f) {
         return bym2
             ? nmix_bym2_log_prior(n_spatial, adj_row_ptr, adj_col_idx,
-                                  n_neighbors, f.head(n_spatial), f.tail(n_spatial))
+                                  n_neighbors, f.head(n_spatial), f.tail(n_spatial),
+                                  fs.gc)
             : count_car_log_prior_dispatch(fs.car, n_spatial, fs.tau, fs.rho,
                                            fs.log_det_Q_rho, adj_row_ptr,
-                                           adj_col_idx, n_neighbors, f);
+                                           adj_col_idx, n_neighbors, f, fs.gc);
     };
     // Pin the flat field direction by centering the structured block, moving
     // its level into the intercept the coefficient block already carries.
@@ -215,7 +220,7 @@ CountSpatialInnerResult inner_newton_count_field(
         x_holder.segment(0, p_lam)   = bl;
         x_holder.segment(p_lam, p_p) = bp;
         x_holder.segment(f_start, n_field) = f;
-        nmix_center_field(p_lam, p_p, n_spatial, x_holder);
+        nmix_center_field(p_lam, p_p, n_spatial, x_holder, fs.gc);
         f.head(n_spatial) = x_holder.segment(f_start, n_spatial);
     };
 
@@ -339,7 +344,7 @@ CountSpatialInnerResult inner_newton_count_field(
         log_det_H = 2.0 * chol.matrixL().toDenseMatrix().diagonal()
                               .array().log().sum();
         res.cov_beta = nmix_constrained_top_cov(H_final, n_x, p_beta, f_start,
-                                                n_spatial, constrain_field);
+                                                n_spatial, constrain_field, fs.gc);
     } else {
         MatrixXd H_f = MatrixXd::Zero(n_x, n_x);
         add_complete_fisher(info_eta_lam, info_eta_p, H_f);
@@ -357,7 +362,7 @@ CountSpatialInnerResult inner_newton_count_field(
         log_det_H = 2.0 * chol_f.matrixL().toDenseMatrix().diagonal()
                                 .array().log().sum();
         res.cov_beta = nmix_constrained_top_cov(H_f, n_x, p_beta, f_start,
-                                                n_spatial, constrain_field);
+                                                n_spatial, constrain_field, fs.gc);
     }
 
     res.log_lik = log_lik_final;
@@ -404,6 +409,7 @@ Rcpp::List run_count_nested_laplace_icar(
     Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R,
     Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors, int n_spatial,
+    const GraphComponents& gc,
     Rcpp::NumericVector tau_grid, Rcpp::NumericVector r_grid,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,
     const std::vector<double>& z_init,
@@ -450,6 +456,7 @@ Rcpp::List run_count_nested_laplace_icar(
         fs.kind = CountFieldKind::CAR;
         fs.car  = CarPriorKind::ICAR;
         fs.tau  = tau_k[k];
+        fs.gc   = &gc;
         CountSpatialInnerResult ir = inner_newton_count_field(
             fs, p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
             Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,
@@ -484,6 +491,7 @@ Rcpp::List run_count_nested_laplace_bym2(
     Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R,
     Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors, int n_spatial,
+    const GraphComponents& gc,
     Rcpp::NumericVector sigma_grid, Rcpp::NumericVector rho_grid,
     Rcpp::NumericVector r_grid, double scale_factor,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,
@@ -544,6 +552,7 @@ Rcpp::List run_count_nested_laplace_bym2(
         fs.kind = CountFieldKind::BYM2;
         fs.a = a_k[k];
         fs.b = b_k[k];
+        fs.gc = &gc;
         CountSpatialInnerResult ir = inner_newton_count_field(
             fs, p_lam, p_p, pp.n_sites, n_spatial, pp.n_obs,
             Xl, Xp, y, pp.obs_by_site, pp.map_site_to_unit,

@@ -323,12 +323,10 @@
     K_max = K_max, max_iter = as.integer(max_iter), tol = as.numeric(tol),
     verbose = isTRUE(verbose)
   )
-  scale_factor <- spatial$scale_factor %||% .bym2_scale(spatial$graph)
   switch(
     spatial$type,
     icar = do.call(nmix_laplace_icar, common),
-    bym2 = do.call(nmix_laplace_bym2,
-                   c(common, list(scale_factor = scale_factor))),
+    bym2 = do.call(nmix_laplace_bym2, c(common, .bym2_term_args(spatial))),
     car_proper = do.call(nmix_laplace_car_proper, common)
   )
 }

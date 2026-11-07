@@ -269,9 +269,9 @@ test_that("joint NUTS log-posterior gradient matches FD (K = 1 unconstrained)", 
   expect_identical(length(theta), lay$total)
   set.seed(1L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
 
-  out <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, constrain = FALSE,
+  out <- .ms_ocs_joint_logpost(model, theta, constrain = FALSE,
                                           grad = TRUE)
-  f <- function(p) tulpaObs:::.ms_ocs_joint_logpost(model, p, constrain = FALSE,
+  f <- function(p) .ms_ocs_joint_logpost(model, p, constrain = FALSE,
                                                     grad = FALSE)$lp
   expect_true(is.finite(out$lp))
   h <- 1e-5; gnum <- numeric(length(theta))
@@ -310,9 +310,9 @@ test_that("joint NUTS log-posterior gradient matches FD (K = 2 constrained + cov
   expect_identical(length(theta), lay$total)
   set.seed(2L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
 
-  out <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, constrain = TRUE,
+  out <- .ms_ocs_joint_logpost(model, theta, constrain = TRUE,
                                           grad = TRUE)
-  f <- function(p) tulpaObs:::.ms_ocs_joint_logpost(model, p, constrain = TRUE,
+  f <- function(p) .ms_ocs_joint_logpost(model, p, constrain = TRUE,
                                                     grad = FALSE)$lp
   expect_true(is.finite(out$lp))
   h <- 1e-5; gnum <- numeric(length(theta))
@@ -355,9 +355,9 @@ test_that("joint NUTS log-posterior gradient matches FD on the field-hyper axis 
     expect_length(lay$logit_h, d$K)
     set.seed(3L); theta <- theta + stats::rnorm(length(theta), 0, 0.05)
 
-    out <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, constrain = FALSE,
+    out <- .ms_ocs_joint_logpost(model, theta, constrain = FALSE,
                                             grad = TRUE)
-    f <- function(p) tulpaObs:::.ms_ocs_joint_logpost(model, p, constrain = FALSE,
+    f <- function(p) .ms_ocs_joint_logpost(model, p, constrain = FALSE,
                                                       grad = FALSE)$lp
     expect_true(is.finite(out$lp))
     h <- 1e-5; gnum <- numeric(length(theta))
@@ -399,7 +399,7 @@ test_that("C++ joint log-posterior + gradient matches the R target", {
     pri  <- tulpaObs:::.ms_ocs_nuts_priors()
     cpp <- tulpaObs:::cpp_ms_ocs_joint_logpost(spec, theta, pri, 5, 1.0,
                                                cfg$constrain)
-    rr  <- tulpaObs:::.ms_ocs_joint_logpost(model, theta, priors = pri,
+    rr  <- .ms_ocs_joint_logpost(model, theta, priors = pri,
                                             constrain = cfg$constrain,
                                             sigma.beta = 5, sd_L = 1.0, grad = TRUE)
     expect_lt(abs(cpp$lp - rr$lp), 1e-8)

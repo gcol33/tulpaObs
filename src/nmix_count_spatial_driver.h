@@ -9,6 +9,7 @@
 #define TULPAOBS_NMIX_COUNT_SPATIAL_DRIVER_H
 
 #include "nmix_kernel.h"   // CountKernelFn
+#include "graph_components.h"
 #include <Rcpp.h>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@ Rcpp::List run_count_nested_laplace_icar(
     Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R,
     Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors, int n_spatial,
+    const GraphComponents& gc,
     Rcpp::NumericVector tau_grid, Rcpp::NumericVector r_grid,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,
     const std::vector<double>& z_init,
@@ -34,6 +36,7 @@ Rcpp::List run_count_nested_laplace_bym2(
     Rcpp::NumericMatrix X_lambda_R, Rcpp::NumericMatrix X_p_R,
     Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx,
     Rcpp::IntegerVector n_neighbors, int n_spatial,
+    const GraphComponents& gc,
     Rcpp::NumericVector sigma_grid, Rcpp::NumericVector rho_grid,
     Rcpp::NumericVector r_grid, double scale_factor,
     Rcpp::NumericVector beta_lambda_init, Rcpp::NumericVector beta_p_init,

@@ -81,9 +81,9 @@ test_that("ms_abun NUTS R oracle gradient matches finite differences", {
     set.seed(1)
     theta <- P$theta0 + stats::rnorm(length(P$theta0), 0, 0.05)
     f_lp <- function(th)
-      tulpaObs:::.tobs_ms_abun_nuts_logpost(th, P$margs, P$lay, P$pri,
+      .tobs_ms_abun_nuts_logpost(th, P$margs, P$lay, P$pri,
                                             grad = FALSE)$lp
-    ana <- tulpaObs:::.tobs_ms_abun_nuts_logpost(theta, P$margs, P$lay, P$pri,
+    ana <- .tobs_ms_abun_nuts_logpost(theta, P$margs, P$lay, P$pri,
                                                  grad = TRUE)$grad
     num <- .msan_fd_grad(f_lp, theta)
     expect_lt(max(abs(ana - num)), 1e-5)
@@ -101,7 +101,7 @@ test_that("ms_abun NUTS C++ FullGradFn matches the R oracle", {
     theta <- P$theta0 + stats::rnorm(length(P$theta0), 0, 0.05)
     cpp <- cpp_ms_abun_nuts_joint_logpost(P$spec, theta, P$pri,
                                           sigma_beta = 10, sigma_logr = 1.5)
-    r   <- tulpaObs:::.tobs_ms_abun_nuts_logpost(
+    r   <- .tobs_ms_abun_nuts_logpost(
       theta, P$margs, P$lay, P$pri, sigma.beta = 10, sigma.logr = 1.5,
       grad = TRUE)
     expect_lt(abs(cpp$lp - r$lp), 1e-9)
@@ -166,7 +166,7 @@ test_that("ms_abun NUTS per-cell ceiling leaves the target unchanged", {
                                                sigma_beta = 10, sigma_logr = 1.5)
     cpp_cap  <- cpp_ms_abun_nuts_joint_logpost(spec_cap, theta, P$pri,
                                                sigma_beta = 10, sigma_logr = 1.5)
-    r_cap <- tulpaObs:::.tobs_ms_abun_nuts_logpost(
+    r_cap <- .tobs_ms_abun_nuts_logpost(
       theta, margs_cap, P$lay, P$pri, sigma.beta = 10, sigma.logr = 1.5,
       grad = TRUE)
 

@@ -158,7 +158,7 @@ Rcpp::List run_occ_spatial_grid(
     const NumericVector& mu_init, const NumericMatrix& Sigma_psi_init,
     const NumericMatrix& Sigma_p_init,
     int max_iter_em, double tol_em, int inner_max, double inner_tol,
-    bool verbose) {
+    bool verbose, const GraphComponents* gc = nullptr) {
 
     OccCommData d_ = build_occ_data(X_psi_R, X_p_R, n_valid_R, n_det_R, map_R, n_spatial);
     const int p_psi = d_.p_psi, p_p = d_.p_p, d = p_psi + p_p;
@@ -180,7 +180,7 @@ Rcpp::List run_occ_spatial_grid(
         verbose, "occ-em", "Sigma_psi", "b_psi", "p_psi",
         [&d_](double /*r*/) { return make_occ_site_block_fn(d_); },
         /*progress=*/false, 0, 0.0, "", "ms-occu-spatial",
-        /*report_boundary=*/false);
+        /*report_boundary=*/false, gc);
 }
 
 // SPDE entry driver: builds OccCommData (no map_site_to_unit -- SPDE reads its
@@ -265,9 +265,12 @@ Rcpp::List cpp_ms_occu_spatial_icar(
     Rcpp::IntegerMatrix n_valid, Rcpp::IntegerMatrix n_det,
     Rcpp::IntegerVector map_site_to_unit, int n_spatial,
     Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx,
-    Rcpp::IntegerVector n_neighbors, Rcpp::NumericVector tau_grid,
+    Rcpp::IntegerVector n_neighbors, Rcpp::IntegerVector node_comp,
+    Rcpp::NumericVector tau_grid,
     Rcpp::NumericVector mu_init, Rcpp::NumericMatrix Sigma_psi_init,
     Rcpp::NumericMatrix Sigma_p_init, int max_iter_em, bool verbose) {
+    const tulpaObs::GraphComponents gc =
+        tulpaObs::graph_components_from_R(node_comp, Rcpp::NumericVector(0), n_spatial);
     std::vector<tulpaObs::CommGridPoint> plan;
     Rcpp::NumericMatrix tg(tau_grid.size(), 1);
     for (int i = 0; i < tau_grid.size(); ++i) {
@@ -279,7 +282,7 @@ Rcpp::List cpp_ms_occu_spatial_icar(
         tulpaObs::CommFieldKind::ICAR, n_spatial, X_psi, X_p, n_valid, n_det,
         map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors,
         plan, tg, mu_init, Sigma_psi_init, Sigma_p_init,
-        max_iter_em, 1e-4, 50, 1e-7, verbose);
+        max_iter_em, 1e-4, 50, 1e-7, verbose, &gc);
 }
 
 // Proper CAR
@@ -317,10 +320,13 @@ Rcpp::List cpp_ms_occu_spatial_bym2(
     Rcpp::IntegerMatrix n_valid, Rcpp::IntegerMatrix n_det,
     Rcpp::IntegerVector map_site_to_unit, int n_spatial,
     Rcpp::IntegerVector adj_row_ptr, Rcpp::IntegerVector adj_col_idx,
-    Rcpp::IntegerVector n_neighbors, Rcpp::NumericVector sigma_grid,
+    Rcpp::IntegerVector n_neighbors, Rcpp::IntegerVector node_comp,
+    Rcpp::NumericVector node_prec, Rcpp::NumericVector sigma_grid,
     Rcpp::NumericVector rho_grid, double scale_factor,
     Rcpp::NumericVector mu_init, Rcpp::NumericMatrix Sigma_psi_init,
     Rcpp::NumericMatrix Sigma_p_init, int max_iter_em, bool verbose) {
+    const tulpaObs::GraphComponents gc =
+        tulpaObs::graph_components_from_R(node_comp, node_prec, n_spatial);
     std::vector<tulpaObs::CommGridPoint> plan;
     std::vector<double> tg_sig, tg_rho;
     for (int ri = 0; ri < rho_grid.size(); ++ri)
@@ -338,7 +344,7 @@ Rcpp::List cpp_ms_occu_spatial_bym2(
         tulpaObs::CommFieldKind::BYM2, 2 * n_spatial, X_psi, X_p, n_valid, n_det,
         map_site_to_unit, n_spatial, adj_row_ptr, adj_col_idx, n_neighbors,
         plan, tg, mu_init, Sigma_psi_init, Sigma_p_init,
-        max_iter_em, 1e-4, 50, 1e-7, verbose);
+        max_iter_em, 1e-4, 50, 1e-7, verbose, &gc);
 }
 
 // Continuous Matern (SPDE) shared field on the occupancy arm. The field lives

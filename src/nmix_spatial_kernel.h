@@ -270,7 +270,9 @@ inline void nmix_assemble_complete_fisher_spatial(
 // Sign convention matches laplace_spatial_priors:
 //   H_zz += tau * Q(rho),    grad_z -= tau * Q(rho) z
 // (grad here is the *score*; the prior contributes -tau Q z to the score and
-//  +tau Q to the negative-Hessian.)
+//  +tau Q to the negative-Hessian.) `gc`, when given, makes the precision
+// tau diag(node_prec) Q(rho): row s carries its component's multiplier, which
+// is the same at both ends of every edge, so the matrix stays symmetric.
 inline void nmix_add_car_to_spatial_block(
     int p_lam, int p_p, int n_spatial,
     double tau, double rho,
@@ -279,25 +281,27 @@ inline void nmix_add_car_to_spatial_block(
     const Rcpp::IntegerVector& n_neighbors,
     const Eigen::VectorXd& z,
     Eigen::VectorXd& grad /* in/out [n_x] */,
-    Eigen::MatrixXd& H    /* in/out [n_x x n_x] */
+    Eigen::MatrixXd& H    /* in/out [n_x x n_x] */,
+    const GraphComponents* gc = nullptr
 ) {
     const int z_start = p_lam + p_p;
     for (int s = 0; s < n_spatial; ++s) {
         const int idx_zs = z_start + s;
+        const double ts = tau * (gc ? gc->prec(s) : 1.0);
         const double q_diag = static_cast<double>(n_neighbors[s]);
         // Diagonal entry of Q at s
-        H(idx_zs, idx_zs) += tau * q_diag;
+        H(idx_zs, idx_zs) += ts * q_diag;
         // Gradient: -tau * (Q z)[s] = -tau (n_s z_s - rho * sum_{s' ~ s} z_{s'})
         double neighbor_sum = 0.0;
         for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
             int t = adj_col_idx[kk];
             neighbor_sum += z(t);
             if (t > s) {
-                H(idx_zs, z_start + t) -= tau * rho;
-                H(z_start + t, idx_zs) -= tau * rho;
+                H(idx_zs, z_start + t) -= ts * rho;
+                H(z_start + t, idx_zs) -= ts * rho;
             }
         }
-        grad(idx_zs) -= tau * (q_diag * z(s) - rho * neighbor_sum);
+        grad(idx_zs) -= ts * (q_diag * z(s) - rho * neighbor_sum);
     }
 }
 
@@ -309,17 +313,19 @@ inline void nmix_add_car_to_H_only(
     const Rcpp::IntegerVector& adj_row_ptr,
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
-    Eigen::MatrixXd& H /* in/out [n_x x n_x] */
+    Eigen::MatrixXd& H /* in/out [n_x x n_x] */,
+    const GraphComponents* gc = nullptr
 ) {
     const int z_start = p_lam + p_p;
     for (int s = 0; s < n_spatial; ++s) {
         const int idx_zs = z_start + s;
-        H(idx_zs, idx_zs) += tau * static_cast<double>(n_neighbors[s]);
+        const double ts = tau * (gc ? gc->prec(s) : 1.0);
+        H(idx_zs, idx_zs) += ts * static_cast<double>(n_neighbors[s]);
         for (int kk = adj_row_ptr[s]; kk < adj_row_ptr[s + 1]; ++kk) {
             int t = adj_col_idx[kk];
             if (t > s) {
-                H(idx_zs, z_start + t) -= tau * rho;
-                H(z_start + t, idx_zs) -= tau * rho;
+                H(idx_zs, z_start + t) -= ts * rho;
+                H(z_start + t, idx_zs) -= ts * rho;
             }
         }
     }
@@ -341,19 +347,22 @@ inline void nmix_add_diagonal_ridge(Eigen::MatrixXd& H, double rel_ridge = 1e-10
     for (int i = 0; i < n; ++i) H(i, i) += ridge;
 }
 
-// log p(z | tau) under ICAR: -0.5 * tau * z' Q z + 0.5 * (n - 1) * log(tau)
-// (rank-deficient by 1; the (2 pi)^{n/2} normalising constant is absorbed by
-// the caller into the Cartesian factor that is tau-independent).
+// log p(z | tau) under ICAR: -0.5 * tau * z' Q z + 0.5 * (n - c) * log(tau)
+// (rank-deficient by the number of connected components c, 1 unless `gc` says
+// otherwise; the (2 pi)^{n/2} normalising constant is absorbed by the caller
+// into the Cartesian factor that is tau-independent).
 inline double nmix_icar_log_prior(
     int n_spatial, double tau,
     const Rcpp::IntegerVector& adj_row_ptr,
     const Rcpp::IntegerVector& adj_col_idx,
     const Rcpp::IntegerVector& n_neighbors,
-    const Eigen::VectorXd& z
+    const Eigen::VectorXd& z,
+    const GraphComponents* gc = nullptr
 ) {
     double quad = nmix_car_quadratic_form(
         n_spatial, /*rho=*/1.0, adj_row_ptr, adj_col_idx, n_neighbors, z);
-    return -0.5 * tau * quad + 0.5 * (n_spatial - 1) * std::log(tau);
+    const int n_comp = gc ? gc->n_comp : 1;
+    return -0.5 * tau * quad + 0.5 * (n_spatial - n_comp) * std::log(tau);
 }
 
 // log p(z | tau, rho) under proper CAR (full rank):

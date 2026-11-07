@@ -237,7 +237,7 @@ test_that("jsdm NUTS log-posterior + gradient match the R oracle", {
   for (rep in 1:4) {
     theta <- stats::rnorm(lay$total, 0, 0.4)
     theta[lay$chol_beta] <- theta[lay$chol_beta] * 0.3
-    r_ora <- tulpaObs:::.tobs_ms_count_nuts_logpost(
+    r_ora <- .tobs_ms_count_nuts_logpost(
       theta, model$X, Y, lay, pri, sigma.beta = 10, sigma.logr = 1.5)
     cpp <- cpp_ms_count_nuts_joint_logpost(spec, theta, pri, 10, 1.5)
     expect_equal(cpp$lp, r_ora$lp, tolerance = 1e-8)

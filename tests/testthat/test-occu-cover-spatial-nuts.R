@@ -112,7 +112,7 @@ test_that("occu_cover spatial NUTS field-block FullGradFn matches the R oracle",
     theta <- c(as.numeric(lap$means) + stats::rnorm(np_coef, 0, 0.1),
                stats::rnorm(N, 0, 0.3))
 
-    rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5, field = field)
+    rr <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5, field = field)
     cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
     expect_equal(rr$lp, cc$lp, tolerance = 1e-8)
     expect_equal(rr$grad, as.numeric(cc$grad), tolerance = 1e-8)
@@ -122,8 +122,8 @@ test_that("occu_cover spatial NUTS field-block FullGradFn matches the R oracle",
     for (k in seq_along(theta)) {
       tp <- theta; tp[k] <- tp[k] + h
       tm <- theta; tm[k] <- tm[k] - h
-      fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(tp, model, 5, 5, field = field)$lp -
-                tulpaObs:::.tobs_occu_cover_nuts_logpost(tm, model, 5, 5, field = field)$lp) /
+      fd[k] <- (.tobs_occu_cover_nuts_logpost(tp, model, 5, 5, field = field)$lp -
+                .tobs_occu_cover_nuts_logpost(tm, model, 5, 5, field = field)$lp) /
                (2 * h)
     }
     expect_equal(rr$grad, fd, tolerance = 1e-4)
@@ -162,7 +162,7 @@ test_that("occu_cover spatial NUTS sampled-hyper block matches the R oracle (#20
                stats::rnorm(fb$n_raw, 0, 0.3),
                stats::rnorm(length(fb$sampled), 0, 0.6))
 
-    rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+    rr <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                   field = fb$entries)
     cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
     expect_equal(rr$lp, cc$lp, tolerance = 1e-8)
@@ -172,9 +172,9 @@ test_that("occu_cover spatial NUTS sampled-hyper block matches the R oracle (#20
     for (k in seq_len(n_tot)) {
       tp <- theta; tp[k] <- tp[k] + h
       tm <- theta; tm[k] <- tm[k] - h
-      fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(tp, model, 5, 5,
+      fd[k] <- (.tobs_occu_cover_nuts_logpost(tp, model, 5, 5,
                                                          field = fb$entries)$lp -
-                tulpaObs:::.tobs_occu_cover_nuts_logpost(tm, model, 5, 5,
+                .tobs_occu_cover_nuts_logpost(tm, model, 5, 5,
                                                          field = fb$entries)$lp) / (2 * h)
     }
     expect_equal(rr$grad, fd, tolerance = 1e-4)
@@ -215,9 +215,9 @@ test_that("occu_cover spatial NUTS pinned hypers reproduce the fixed loading (#2
     set.seed(3)
     theta <- c(as.numeric(lap$means) + stats::rnorm(length(lap$means), 0, 0.1),
                stats::rnorm(fb$n_raw, 0, 0.3))
-    r_new <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+    r_new <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                       field = fb$entries)
-    r_leg <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+    r_leg <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                       field = legacy)
     expect_identical(r_new$lp, r_leg$lp)
     expect_identical(r_new$grad, r_leg$grad)
@@ -316,7 +316,7 @@ test_that("occu_cover spatial NUTS copy slab carries the declared Exponential (#
              stats::rnorm(fb_exp$n_raw, 0, 0.3),
              stats::rnorm(length(fb_exp$sampled), 0, 0.6))
 
-  rr <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+  rr <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                  field = fb_exp$entries)
   cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
   expect_equal(rr$lp, cc$lp, tolerance = 1e-10)
@@ -326,9 +326,9 @@ test_that("occu_cover spatial NUTS copy slab carries the declared Exponential (#
   for (k in seq_len(n_tot)) {
     tp <- theta; tp[k] <- tp[k] + h
     tm <- theta; tm[k] <- tm[k] - h
-    fd[k] <- (tulpaObs:::.tobs_occu_cover_nuts_logpost(
+    fd[k] <- (.tobs_occu_cover_nuts_logpost(
                 tp, model, 5, 5, field = fb_exp$entries)$lp -
-              tulpaObs:::.tobs_occu_cover_nuts_logpost(
+              .tobs_occu_cover_nuts_logpost(
                 tm, model, 5, 5, field = fb_exp$entries)$lp) / (2 * h)
   }
   expect_equal(rr$grad, fd, tolerance = 1e-4)
@@ -342,7 +342,7 @@ test_that("occu_cover spatial NUTS copy slab carries the declared Exponential (#
   k_alpha <- n_base + fb_exp$n_raw + j_alpha
   hv <- tulpaObs:::.ochf_value(
     tulpaObs:::.ochf_views(fb_exp$entries, n_base)[[1L]]$alpha, theta)
-  rf <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+  rf <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                  field = fb_flat$entries)
   span <- fb_exp$entries$field_alpha_hi - fb_exp$entries$field_alpha_lo
   expect_equal(rr$lp - rf$lp,
@@ -421,9 +421,9 @@ test_that("occu_cover spatial NUTS copy slab defaults to the engine's own", {
              stats::rnorm(fb_flat$n_raw, 0, 0.3),
              stats::rnorm(length(fb_flat$sampled), 0, 0.6))
 
-  r0 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+  r0 <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                  field = fb_flat$entries)
-  r1 <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+  r1 <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
                                                  field = ent_code)
   expect_identical(r0$lp, r1$lp)
   expect_identical(r0$grad, r1$grad)
@@ -441,7 +441,7 @@ test_that("occu_cover spatial NUTS copy slab defaults to the engine's own", {
   ent_bad <- c(fb_flat$entries,
                list(field_rho_prior = 1L, field_rho_rate = 1))
   expect_error(
-    tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5, field = ent_bad),
+    .tobs_occu_cover_nuts_logpost(theta, model, 5, 5, field = ent_bad),
     "log-link")
   spec_bad <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
   spec_bad[names(ent_bad)] <- ent_bad
@@ -461,7 +461,7 @@ test_that("occu_cover spatial NUTS field-off path is byte-identical to non-spati
   # The spec without a field block reproduces the non-spatial occu_cover NUTS
   # target exactly (every field branch is guarded by has_field / n_field_units).
   spec0 <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
-  r_off <- tulpaObs:::.tobs_occu_cover_nuts_logpost(theta, model, 5, 5)
+  r_off <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5)
   c_off <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec0, theta, 5, 5)
   expect_equal(r_off$lp, c_off$lp, tolerance = 1e-10)
   expect_equal(r_off$grad, as.numeric(c_off$grad), tolerance = 1e-10)
@@ -1185,10 +1185,21 @@ test_that("occu_cover spatial NUTS bounds are the engine's own declared support"
     a <- pr[1L]; nm <- pr[2L]
     if (is.null(bnd[[a]]) || is.null(sup[[nm]])) next
     seen <- seen + 1L
-    expect_identical(as.numeric(bnd[[a]]), as.numeric(sup[[nm]]))
-    # Strictly wider than the node range, on both ends: the half node step.
     v <- as.numeric(tg[, nm]); v <- v[is.finite(v)]
     if (nm %in% c("sigma", "alpha")) v <- v[v > 0]
+    if (identical(a, "alpha") && sup[[nm]][1L] <= 0) {
+      # The copy continuum's floor cell reaches its atom at 0, which the log
+      # coordinate cannot sample: the lower end is the lowest positive node's
+      # cell edge, half a log step below it (#440); the upper end is the
+      # engine's.
+      pos <- sort(unique(v))
+      expect_equal(bnd[[a]][1L], pos[1L] * sqrt(pos[1L] / pos[2L]))
+      expect_identical(as.numeric(bnd[[a]][2L]), as.numeric(sup[[nm]][2L]))
+      expect_gt(sup[[nm]][2L], max(v))
+      next
+    }
+    expect_identical(as.numeric(bnd[[a]]), as.numeric(sup[[nm]]))
+    # Strictly wider than the node range, on both ends: the half node step.
     expect_lt(sup[[nm]][1L], min(v))
     expect_gt(sup[[nm]][2L], max(v))
   }

@@ -626,63 +626,6 @@ nmix_laplace_re <- function(y, site_idx, species_idx,
   guard(out)
 }
 
-# Per-species community N-mixture oracle for the shared RE integrator. Each
-# species' marginal (nmix_site_marginal) is built once; the oracle
-# evaluates it at the full coefficients coef = (mu + b_s), mapping the RE
-# deviation through the abundance / detection designs. The b-space curvature is
-# the design-sandwiched per-site observed-information block (with the latent-N
-# coupling) -- the covariate generalization of the intercept-only assembly.
-.nmix_re_oracle <- function(y, site_idx, species_idx, X_lambda, X_p,
-                            n_sites, n_species, p_lam, p_p, K_max,
-                            headroom = NULL) {
-  cl <- .tobs_clamp_eta
-  d  <- p_lam + p_p
-  rows_by_sp <- split(seq_len(length(y)), species_idx)
-  marg <- lapply(seq_len(n_species), function(s) {
-    sel <- rows_by_sp[[as.character(s)]]
-    if (is.null(sel)) sel <- integer(0)
-    nmix_site_marginal(
-      y = y[sel], site_idx = site_idx[sel],
-      X_lambda = X_lambda, X_p = X_p[sel, , drop = FALSE],
-      mixture = "P", K_max = K_max, headroom = headroom)
-  })
-
-  eta_of <- function(m, coef) {
-    list(lambda = cl(as.numeric(m$X_lambda %*% coef[seq_len(p_lam)])),
-         p      = cl(as.numeric(m$X_p %*% coef[p_lam + seq_len(p_p)])))
-  }
-
-  list(
-    grad_hess = function(s, coef) {
-      m  <- marg[[s]]
-      e  <- eta_of(m, coef)
-      ev <- m$eval(e$lambda, e$p)
-      grad <- c(as.numeric(crossprod(m$X_lambda, ev$grad_eta_lambda)),
-                as.numeric(crossprod(m$X_p, ev$grad_eta_p)))
-      # negH: marginal observed info (with the Var[N|y] abundance/detection
-      # coupling), used by the Laplace marginal. fisher: complete-data Fisher
-      # (block-diagonal, PSD), supplied for the mode-find Newton -- the observed
-      # info can be indefinite away from the mode (latent-N coupling).
-      negH <- matrix(0, d, d); fisher <- matrix(0, d, d)
-      for (i in seq_len(m$n_sites)) {
-        obs <- m$obs_by_site[[i]]; Ji <- length(obs)
-        Zi  <- matrix(0, 1L + Ji, d)
-        Zi[1L, seq_len(p_lam)] <- m$X_lambda[i, ]
-        if (Ji > 0L) Zi[-1L, p_lam + seq_len(p_p)] <- m$X_p[obs, , drop = FALSE]
-        negH   <- negH + crossprod(Zi, m$obs_info_block(i, ev) %*% Zi)
-        Fdiag  <- c(ev$info_eta_lambda[i], if (Ji > 0L) ev$info_eta_p[obs] else numeric(0))
-        fisher <- fisher + crossprod(Zi, Fdiag * Zi)
-      }
-      list(logL = ev$log_lik, grad = grad, negH = negH, fisher = fisher)
-    },
-    node_ll = function(s, COEF) {
-      m <- marg[[s]]
-      vapply(seq_len(nrow(COEF)), function(k) {
-        e <- eta_of(m, COEF[k, ])
-        m$eval(e$lambda, e$p)$log_lik
-      }, numeric(1))
-    })
-}
 
 # Method-of-moments community covariance seed: the sample covariance of the
 # per-species coefficient estimates, ridge-regularized to PD.

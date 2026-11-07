@@ -148,7 +148,9 @@
     X_psi = X_psi, X_p = X_p, n_valid = mats$n_valid, n_det = mats$n_det,
     map_site_to_unit = as.integer(map_site_to_unit), n_spatial = n_spatial,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
-    n_neighbors = csr$n_neighbors, tau_grid = as.numeric(tau_grid),
+    n_neighbors = csr$n_neighbors,
+    node_comp = .tobs_node_comp_csr(csr$row_ptr, csr$col_idx, n_spatial),
+    tau_grid = as.numeric(tau_grid),
     mu_init = ws$mu, Sigma_psi_init = ws$Sigma_psi, Sigma_p_init = ws$Sigma_p,
     max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
   .ms_occu_spatial_post(raw, p_psi, p_p, n_spatial, "icar", c("tau"))
@@ -187,8 +189,8 @@
 
 # BYM2
 .ms_occu_community_bym2 <- function(model, csr, n_spatial, map_site_to_unit,
-                                    scale_factor, sigma_grid = NULL,
-                                    rho_grid = NULL, max_iter,
+                                    scale_factor, node_prec = NULL,
+                                    sigma_grid = NULL, rho_grid = NULL, max_iter,
                                     verbose = FALSE) {
   X_psi <- model$X_occ; X_p <- model$X_det
   p_psi <- ncol(X_psi); p_p <- ncol(X_p)
@@ -205,7 +207,9 @@
     X_psi = X_psi, X_p = X_p, n_valid = mats$n_valid, n_det = mats$n_det,
     map_site_to_unit = as.integer(map_site_to_unit), n_spatial = n_spatial,
     adj_row_ptr = csr$row_ptr, adj_col_idx = csr$col_idx,
-    n_neighbors = csr$n_neighbors, sigma_grid = as.numeric(sigma_grid),
+    n_neighbors = csr$n_neighbors,
+    node_comp = .tobs_node_comp_csr(csr$row_ptr, csr$col_idx, n_spatial),
+    node_prec = as.numeric(node_prec), sigma_grid = as.numeric(sigma_grid),
     rho_grid = as.numeric(rho_grid), scale_factor = as.numeric(scale_factor),
     mu_init = ws$mu, Sigma_psi_init = ws$Sigma_psi, Sigma_p_init = ws$Sigma_p,
     max_iter_em = as.integer(max_iter), verbose = isTRUE(verbose))
@@ -316,10 +320,10 @@
       car_proper = .ms_occu_community_car_proper(
         model, csr, n_spatial, map_site_to_unit, graph = spatial$graph,
         max_iter = max.iter, verbose = verbose),
-      bym2 = .ms_occu_community_bym2(
-        model, csr, n_spatial, map_site_to_unit,
-        scale_factor = spatial$scale_factor %||% .bym2_scale(spatial$graph),
-        max_iter = max.iter, verbose = verbose))
+      bym2 = do.call(.ms_occu_community_bym2, c(
+        list(model, csr, n_spatial, map_site_to_unit),
+        .bym2_term_args(spatial),
+        list(max_iter = max.iter, verbose = verbose))))
     n_spatial_report <- n_spatial
   }
 

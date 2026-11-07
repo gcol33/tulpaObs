@@ -42,7 +42,7 @@ test_that("unscale / scale round-trip is exact", {
              effort = runif(100, 0.5, 1.5))
   sc <- tulpaObs:::.scale_meta(X)
   beta_nat <- c(-1.5, 0.05, 0.8)
-  beta_sc  <- tulpaObs:::.scale_beta_vec(beta_nat, sc)
+  beta_sc  <- .scale_beta_vec(beta_nat, sc)
   expect_equal(tulpaObs:::.unscale_beta_vec(beta_sc, sc), beta_nat,
                tolerance = 1e-10)
 })

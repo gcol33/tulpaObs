@@ -62,39 +62,6 @@
        headroom = headroom0, eval_beta = eval_beta)
 }
 
-# Joint log-posterior + gradient of the distance coefficient vector (R oracle).
-.tobs_distance_nuts_logpost <- function(theta, marg, lay,
-                                        sigma.beta = 10, sigma.shape = 1.5,
-                                        sigma.logr = 1.5) {
-  beta_lambda <- theta[lay$lambda]
-  beta_sigma  <- theta[lay$sigma]
-  eta_b <- if (lay$hazard) theta[lay$log_shape] else 0
-  r     <- if (lay$is_nb)  exp(min(theta[lay$log_r], .TOBS_LOG_R_MAX)) else Inf
-  ev <- marg$eval_beta(beta_lambda, beta_sigma, eta_b = eta_b, r = r)
-
-  lp   <- ev$log_lik
-  grad <- c(as.numeric(crossprod(marg$X_lambda, ev$grad_eta_lambda)),
-            as.numeric(crossprod(marg$X_sigma,  ev$grad_eta_sigma)))
-  if (lay$hazard) grad <- c(grad, ev$grad_eta_b)
-  if (lay$is_nb)  grad <- c(grad, sum(ev$grad_theta))
-
-  ib2 <- 1 / sigma.beta^2
-  lp  <- lp - 0.5 * ib2 * (sum(beta_lambda^2) + sum(beta_sigma^2))
-  grad[lay$lambda] <- grad[lay$lambda] - ib2 * beta_lambda
-  grad[lay$sigma]  <- grad[lay$sigma]  - ib2 * beta_sigma
-  if (lay$hazard) {
-    is2 <- 1 / sigma.shape^2
-    lp  <- lp - 0.5 * is2 * eta_b^2
-    grad[lay$log_shape] <- grad[lay$log_shape] - is2 * eta_b
-  }
-  if (lay$is_nb) {
-    lr  <- theta[lay$log_r]; ilr2 <- 1 / sigma.logr^2
-    lp  <- lp - 0.5 * ilr2 * lr^2
-    grad[lay$log_r] <- grad[lay$log_r] - ilr2 * lr
-  }
-  list(lp = lp, grad = grad)
-}
-
 
 # ---------------------------------------------------------------------------
 # Front-door NUTS fitter for the distance family

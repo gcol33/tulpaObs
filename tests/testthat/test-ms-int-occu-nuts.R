@@ -26,7 +26,7 @@ test_that("ms_int_occu NUTS R oracle gradient matches finite differences", {
   pri <- tulpaObs:::.ms_ocs_nuts_priors()
   set.seed(7); theta <- rnorm(lay$total, 0, 0.5)
 
-  o  <- tulpaObs:::.tobs_ms_int_occu_nuts_logpost(theta, X_psi, X_p, summaries,
+  o  <- .tobs_ms_int_occu_nuts_logpost(theta, X_psi, X_p, summaries,
                                                   lay, priors = pri, sigma.beta = 5)
   an <- o$grad
   h  <- 1e-6
@@ -34,9 +34,9 @@ test_that("ms_int_occu NUTS R oracle gradient matches finite differences", {
   for (j in seq_len(lay$total)) {
     tp <- theta; tp[j] <- tp[j] + h
     tm <- theta; tm[j] <- tm[j] - h
-    lp <- tulpaObs:::.tobs_ms_int_occu_nuts_logpost(tp, X_psi, X_p, summaries, lay,
+    lp <- .tobs_ms_int_occu_nuts_logpost(tp, X_psi, X_p, summaries, lay,
             priors = pri, sigma.beta = 5, grad = FALSE)$lp
-    lm <- tulpaObs:::.tobs_ms_int_occu_nuts_logpost(tm, X_psi, X_p, summaries, lay,
+    lm <- .tobs_ms_int_occu_nuts_logpost(tm, X_psi, X_p, summaries, lay,
             priors = pri, sigma.beta = 5, grad = FALSE)$lp
     fd[j] <- (lp - lm) / (2 * h)
   }
@@ -64,7 +64,7 @@ test_that("ms_int_occu NUTS C++ FullGradFn matches the R oracle byte-for-byte", 
   pri <- tulpaObs:::.ms_ocs_nuts_priors()
   set.seed(7); theta <- rnorm(lay$total, 0, 0.5)
 
-  o_r <- tulpaObs:::.tobs_ms_int_occu_nuts_logpost(theta, X_psi, X_p, summaries,
+  o_r <- .tobs_ms_int_occu_nuts_logpost(theta, X_psi, X_p, summaries,
            lay, priors = pri, sigma.beta = 5)
   int_mat <- function(m) { storage.mode(m) <- "integer"; m }
   nv_list <- lapply(seq_len(D), function(d)

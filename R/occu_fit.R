@@ -1009,6 +1009,9 @@ build_spatial_params <- function(spatial, n_sites) {
     # carries the Riebler constant itself --.
     if (spatial$type == "bym2") {
       params$scale_factor <- .bym2_engine_scale(spatial$scale_factor)
+      # Per-component scaling on a disconnected graph: the engine's
+      # diag(bym2_node_prec) Q on the structured block.
+      if (!is.null(spatial$node_prec)) params$node_prec <- as.numeric(spatial$node_prec)
     }
 
   } else if (spatial$type == "gp") {

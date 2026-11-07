@@ -38,24 +38,6 @@
   idx
 }
 
-# Byte-exact R oracle for the C++ FullGradFn: the exact three-level marginal
-# log-likelihood plus weak Gaussian coefficient priors, with the same value the
-# kernel returns. Reuses .occu_mscale_cover_nonspatial_ll (the Laplace path's LL) for
-# the log-density and a finite-difference-free analytic gradient is supplied by
-# the C++ side; here we numerically check the value and gradient via the C++
-# joint-logpost cross-check, so the oracle only needs the (penalised) log-density.
-#
-# `sigma.logdisp` keeps log_disp proper, matching the two sibling NUTS targets
-# (occu_cover_nuts.cpp, cover_nuts.cpp), which both sample it under this prior.
-.tobs_occu_mscale_cover_nuts_logpost <- function(theta, model, idx, sigma.beta = 5,
-                                                 sigma.logdisp = 5) {
-  ll  <- .occu_mscale_cover_nonspatial_ll(theta, model, idx)
-  ib2 <- 1 / sigma.beta^2
-  beta_idx <- setdiff(seq_len(idx$total), idx$disp)
-  ild2 <- 1 / sigma.logdisp^2
-  ll - 0.5 * ib2 * sum(theta[beta_idx]^2) - 0.5 * ild2 * theta[idx$disp]^2
-}
-
 
 # Assemble the C++ NUTS spec from a bound multiscale model.
 .tobs_occu_mscale_cover_nuts_spec <- function(model) {
