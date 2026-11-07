@@ -317,12 +317,15 @@
     class = c("tobs_fit", "tulpa_fit"))
 }
 
+# The first `p` coefficients of an M-step fit (or a pooled correction). A fit's
+# coefficient vector can be longer than the block a caller reads -- the
+# detection M-step carries the visit-level columns after the site-level ones --
+# so every source is cut to `p`.
 extract_beta <- function(sub, p) {
   if (is.null(sub)) return(rep(0, p))
-  if (!is.null(sub$beta)) return(sub$beta)
-  if (!is.null(sub$mean)) return(sub$mean)
-  if (!is.null(sub$mode)) return(sub$mode[seq_len(p)])
-  rep(0, p)
+  v <- sub$beta %||% sub$mean %||% sub$mode
+  if (is.null(v)) return(rep(0, p))
+  utils::head(v, p)
 }
 
 # SE for the fixed-effect block of a tulpa_laplace() fit. Reads the
