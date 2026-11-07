@@ -130,78 +130,6 @@
 }
 
 
-# AGHQ variance-component debias, shared by every .tobs_community_em()
-# consumer (generalized from R/ms_occu_cover.R's own bespoke copy). The EM's
-# Sigma/Cinv carry the documented Laplace small-cluster attenuation; this
-# integrates the EXACT per-species RE posterior by adaptive Gauss-Hermite
-# quadrature at the EM's own per-species mode/curvature (b_list, Cinv_list)
-# and recovers the raw second moment E[b b'] the EM's own M-step targets --
-# the quantity Sigma should equal at the true (non-attenuated) posterior.
-# `arm_idx` is an arbitrary NAMED list (not hardcoded arm names): the debiased
-# Sigma comes back keyed the same way, so this serves any family's arm layout.
-# `sp_ll(s, theta, global)` is the SAME per-species callback
-# .tobs_community_em() already threads through.
-.tobs_cem_aghq_sigma <- function(sp_ll, mu, global, b_list, Cinv_list,
-                                 Sinv, arm_idx, P, n_quad = 5L) {
-  S  <- length(b_list)
-  gh <- .ms_gh_quad(as.integer(n_quad))
-  # Tensor grid of z in R^P (P small): rows = nodes, plus the product GH weight.
-  grid <- as.matrix(do.call(expand.grid, rep(list(gh$x), P)))   # (n_quad^P) x P
-  lw   <- as.matrix(do.call(expand.grid, rep(list(log(gh$w)), P)))
-  log_w_gh <- rowSums(lw)                                        # product weight
-  sqrt2 <- sqrt(2)
-
-  Sigma_acc <- matrix(0, P, P)
-  for (s in seq_len(S)) {
-    bhat <- b_list[[s]]
-    C_s  <- (Cinv_list[[s]] + t(Cinv_list[[s]])) / 2
-    L_s  <- tryCatch(t(chol(C_s)),
-                     error = function(e) t(chol(C_s + diag(1e-8, P))))
-    # b_q = bhat + sqrt(2) L z_q ; AGHQ exp(+sum z^2) undoes the e^{-z^2} weight.
-    B_q  <- sweep(grid %*% (sqrt2 * t(L_s)), 2L, bhat, "+")      # n_node x P
-    logp <- numeric(nrow(B_q))
-    for (q in seq_len(nrow(B_q))) {
-      bq <- B_q[q, ]
-      logp[q] <- sp_ll(s, mu + bq, global) -
-                 0.5 * as.numeric(crossprod(bq, Sinv %*% bq)) +
-                 sum(grid[q, ]^2) + log_w_gh[q]
-    }
-    logp <- logp - max(logp)
-    w <- exp(logp); w <- w / sum(w)
-    # Raw second moment about zero E[b b'] = sum_q w_q b_q b_q' (the EM M-step
-    # quantity, since b ~ N(0, Sigma)).
-    M <- matrix(0, P, P)
-    for (q in seq_len(nrow(B_q))) M <- M + w[q] * tcrossprod(B_q[q, ])
-    Sigma_acc <- Sigma_acc + M
-  }
-  Sigma_acc <- Sigma_acc / S
-
-  # Keep the per-arm block-diagonal structure of the community covariance.
-  lapply(arm_idx, function(idx) {
-    blk <- Sigma_acc[idx, idx, drop = FALSE]
-    blk <- (blk + t(blk)) / 2
-    ev  <- eigen(blk, symmetric = TRUE)
-    ev$values <- pmax(ev$values, 1e-4)
-    ev$vectors %*% diag(ev$values, length(idx)) %*% t(ev$vectors)
-  })
-}
-
-# Reproject Cov(b_s|y) at a NEW Sinv without re-deriving the Newton solve.
-# Cinv_s = solve(Htt_s + Sinv); Htt_s is pure likelihood curvature
-# (independent of Sigma) and is recoverable from the EM's own output as
-# solve(Cinv_old_s) - Sinv_old. Exact, no new approximation -- validated to
-# machine precision against a direct construction of the joint (mu, b_s)
-# arrowhead precision (dev_notes probe, 2026-08-12; first applied in
-# R/ms_occu_cover.R, commit `03b87ad`).
-.tobs_cem_reproject_cinv <- function(Cinv_list, Sinv_old, Sinv_new) {
-  lapply(Cinv_list, function(C_s) {
-    Htt_s <- solve(C_s) - Sinv_old
-    tryCatch(solve(Htt_s + Sinv_new),
-             error = function(e) .tobs_cem_ginv(Htt_s + Sinv_new))
-  })
-}
-
-
 # ---------------------------------------------------------------------------
 # Community Laplace-EM engine
 # ---------------------------------------------------------------------------
@@ -232,10 +160,14 @@
 #'   (`b_s = 0`, `Sigma = sigma_init^2 I`). A block-coordinate caller that
 #'   re-enters this EM once per outer pass (R/community_latent.R) passes the
 #'   previous pass's state, so the EM resumes from a near-converged point.
-#' @param re_aghq Debias `Sigma`/`Cinv` by adaptive Gauss-Hermite quadrature of
-#'   the exact per-species RE posterior, gated to `P <= re_aghq_maxdim` (tensor
-#'   AGHQ over the joint b couples the arms). `n_quad` sets the per-dimension
-#'   node count.
+#' @param re_aghq Debias the community covariances by one adaptive
+#'   Gauss-Hermite moment step at the converged mode (tulpa_re_em()'s
+#'   `aghq_debias`), gated to `P <= re_aghq_maxdim` (the tensor grid spans the
+#'   species' whole coefficient vector, coupling the arms). `n_quad` sets the
+#'   per-axis node count. The per-species covariances and the community-mean
+#'   covariance are recomputed at the debiased covariance, so `Sigma`, `Cinv`,
+#'   `Bf` and `Vf` describe one fit (the joint (u, b_s) draw of
+#'   .tobs_sbc_community_b_draws() assumes it).
 .tobs_community_em <- function(S, P, arm_idx, sp_ll, sp_grad = NULL,
                                init_mu, init_global = numeric(0),
                                penalize_global = FALSE, sigma_beta = 5,
@@ -332,6 +264,7 @@
   re_terms <- lapply(arm_idx, function(idx)
     list(n_groups = S, n_coefs = length(idx), correlated = TRUE))
 
+  debias <- isTRUE(re_aghq) && P <= as.integer(re_aghq_maxdim)
   em <- tulpa::tulpa_re_em(
     theta0 = c(as.numeric(init_mu), as.numeric(init_global)),
     re_terms = unname(re_terms), Sigma0 = unname(lapply(Sigma0, as.matrix)),
@@ -341,7 +274,8 @@
     # Eigenvalue floor 1e-4 on each community covariance.
     sigma_floor = 1e-2, tol = as.numeric(tol),
     max_iter = as.integer(max_iter), newton_max = as.integer(newton_max),
-    progress_label = "community-em")
+    progress_label = "community-em",
+    aghq_debias = if (debias) as.integer(n_quad) else 0L)
   if (is.null(em)) {
     stop("community EM: the joint log-density is not finite at the starting ",
          "values.", call. = FALSE)
@@ -373,52 +307,15 @@
   Vf <- tryCatch(solve(Sf), error = function(e) .tobs_cem_ginv(Sf))
   Vf <- (Vf + t(Vf)) / 2
   logML <- em$log_marginal - 0.5 * sum(prec * theta^2)
-
-  blockdiag_inv <- function(Sig) {
-    out <- matrix(0, P, P)
-    for (arm in arm_names) {
-      idx <- arm_idx[[arm]]
-      out[idx, idx] <- .tobs_spd_inv(Sig[[arm]])
-    }
-    out
+  if (debias && !isTRUE(em$aghq_debiased)) {
+    warning("community EM AGHQ variance debias failed (a per-species ",
+            "factorization or quadrature sum); reporting the EM (Laplace) ",
+            "variance components.", call. = FALSE)
   }
-
-  # AGHQ variance-component debias, opt-in. Sigma carries the Laplace
-  # small-cluster attenuation; Cinv is reprojected at the debiased Sinv, and the
-  # community-mean covariance with it: Bf_s is pure likelihood curvature, so
-  # Sf_new = Sf + sum_s Bf_s (Cinv_s_old - Cinv_s_new) Bf_s' keeps Vf, Bf and
-  # Cinv on one Sigma, which the joint (u, b_s) draw of
-  # .tobs_sbc_community_b_draws() assumes.
-  Cinv_out <- Cinv
-  debias_method <- "none"
-  if (isTRUE(re_aghq) && P <= as.integer(re_aghq_maxdim)) {
-    Sinv <- blockdiag_inv(Sigma)
-    aghq_out <- tryCatch({
-      Sd <- .tobs_cem_aghq_sigma(sp_ll, mu, global, b_list, Cinv, Sinv,
-                                 arm_idx, P, n_quad = n_quad)
-      list(Sigma = Sd,
-           Cinv = .tobs_cem_reproject_cinv(Cinv, Sinv, blockdiag_inv(Sd)),
-           ok = TRUE)
-    }, error = function(e) {
-      warning("community EM AGHQ variance debias failed (",
-              conditionMessage(e), "); reporting the EM (Laplace) variance ",
-              "components.", call. = FALSE)
-      list(Sigma = Sigma, Cinv = Cinv, ok = FALSE)
-    })
-    Sigma <- aghq_out$Sigma; Cinv_out <- aghq_out$Cinv
-    if (aghq_out$ok) {
-      debias_method <- "aghq"
-      Sf_new <- Sf
-      for (s in seq_len(S)) {
-        Sf_new <- Sf_new + Bf[[s]] %*% (Cinv[[s]] - Cinv_out[[s]]) %*% t(Bf[[s]])
-      }
-      Vf <- tryCatch(solve(Sf_new), error = function(e) .tobs_cem_ginv(Sf_new))
-      Vf <- (Vf + t(Vf)) / 2
-    }
-  }
+  debias_method <- if (isTRUE(em$aghq_debiased)) "aghq" else "none"
 
   list(mu = mu, global = global, b_list = b_list, Sigma = Sigma,
-       Cinv = Cinv_out, Bf = Bf, Vf = Vf, logML = logML,
+       Cinv = Cinv, Bf = Bf, Vf = Vf, logML = logML,
        converged = converged, n_iter = em$n_iter, debias_method = debias_method)
 }
 

@@ -305,28 +305,11 @@
 # Laplace-EM fitter
 # ---------------------------------------------------------------------------
 
-# Gauss-Hermite nodes/weights (physicists', weight exp(-x^2)) by Golub-Welsch:
-# eigendecomposition of the symmetric Jacobi matrix of the Hermite recurrence.
-# Returns nodes `x` and weights `w` with sum(w) = sqrt(pi).
-.ms_gh_quad <- function(n) {
-  if (n <= 1L) return(list(x = 0, w = sqrt(pi)))
-  i <- seq_len(n - 1L)
-  b <- sqrt(i / 2)
-  J <- matrix(0, n, n)
-  J[cbind(i, i + 1L)] <- b
-  J[cbind(i + 1L, i)] <- b
-  e <- eigen(J, symmetric = TRUE)
-  ord <- order(e$values)
-  list(x = e$values[ord], w = (sqrt(pi) * e$vectors[1L, ]^2)[ord])
-}
-
 # AGHQ debias of the community covariance (the single-arm #47 fix generalised
-# to the joint community RE) lives in R/community_em.R as
-# `.tobs_cem_aghq_sigma()`/`.tobs_cem_reproject_cinv()`, run inside
-# `.tobs_community_em()` for every consumer of the shared engine, this family
-# included (#269). `arm_idx` here is `list(occ=, p=, pos=)`, so the shared
-# function's arm-agnostic `lapply()` returns exactly the `list(occ=, p=,
-# pos=)` this family's callers expect.
+# to the joint community RE) is the shared engine's `re_aghq` step
+# (`.tobs_community_em()` -> tulpa_re_em(aghq_debias =)), run for every
+# consumer of the engine, this family included (#269); it returns the
+# covariances keyed by `arm_idx`, here `list(occ=, p=, pos=)`.
 
 # Fit the community joint occupancy-cover model via the shared community
 # Laplace-EM engine (`.tobs_community_em()`, R/community_em.R): the RE arms

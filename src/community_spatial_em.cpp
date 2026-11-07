@@ -12,12 +12,16 @@
 #include "nmix_linalg.h"
 #include "community_grid_pack.h"
 #include "newton_step.h"
+#include <tulpa/re_cov_update.h>
 #include <Eigen/Cholesky>
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
+
+// Floor on every community standard deviation in the covariance update.
+static constexpr double COMM_SIGMA_FLOOR = 1e-4;
 
 // [[Rcpp::depends(RcppEigen)]]
 
@@ -382,6 +386,8 @@ CommSpatialResult community_spatial_em(
         for (int s = 0; s < S; ++s) Dinv[s] = nmix_safe_inverse(D[s]);
 
         // ---- M-step: EM update of the community covariances ----
+        // tulpa's shared update (symmetrize, eigenvalue floor at
+        // COMM_SIGMA_FLOOR^2) of each arm's species-averaged second moment.
         MatrixXd Sstate_new = MatrixXd::Zero(p_state, p_state);
         MatrixXd Sp_new = MatrixXd::Zero(p_p, p_p);
         for (int s = 0; s < S; ++s) {
@@ -390,8 +396,8 @@ CommSpatialResult community_spatial_em(
             Sstate_new += bst * bst.transpose() + Dinv[s].topLeftCorner(p_state, p_state);
             Sp_new     += bp * bp.transpose()   + Dinv[s].bottomRightCorner(p_p, p_p);
         }
-        Sstate_new /= (double)S;
-        Sp_new /= (double)S;
+        Sstate_new = tulpa::re_cov_update(Sstate_new / (double)S, true, COMM_SIGMA_FLOOR);
+        Sp_new = tulpa::re_cov_update(Sp_new / (double)S, true, COMM_SIGMA_FLOOR);
         const double dSig = std::max((Sstate_new - Sig_state).cwiseAbs().maxCoeff(),
                                      (Sp_new - Sig_p).cwiseAbs().maxCoeff());
         Sig_state = Sstate_new;

@@ -190,11 +190,11 @@
 }
 
 
-# EM/REML variance-component update: Sigma_k <- mean_g [ b_g b_g' + Cov(b_g) ].
-# `cov_nat` is the natural-scale per-group posterior covariance from
-# .tobs_re_cov_natural(). A correlated term keeps the full (off-diagonal)
-# Sigma; an uncorrelated term is projected to its diagonal. Variances are
-# floored so a collapsed block stays positive-definite.
+# EM/REML variance-component update: Sigma_k <- mean_g [ b_g b_g' + Cov(b_g) ],
+# through tulpa's shared update (tulpa_re_cov_update(): a correlated term keeps
+# the full Sigma, an uncorrelated term its diagonal, eigenvalues floored at
+# 1e-6 so a collapsed block stays positive definite). `cov_nat` is the
+# natural-scale per-group posterior covariance from .tobs_re_cov_natural().
 .tobs_re_sigma_update <- function(design, b, cov_nat) {
   Sigma_new <- vector("list", length(design))
   pos <- 0L
@@ -203,10 +203,8 @@
     Bm <- matrix(b[pos + seq_len(ng * nc)], nrow = ng, ncol = nc, byrow = TRUE)
     S <- matrix(0, nc, nc)
     for (g in seq_len(ng)) S <- S + tcrossprod(Bm[g, ]) + cov_nat[[k]][[g]]
-    S <- S / ng
-    if (!isTRUE(d$correlated)) S <- diag(diag(S), nc)  # project to diagonal
-    diag(S) <- pmax(diag(S), 1e-6)                      # floor variances
-    Sigma_new[[k]] <- S
+    Sigma_new[[k]] <- tulpa::tulpa_re_cov_update(
+      S / ng, correlated = isTRUE(d$correlated), sigma_floor = 1e-3)
     pos <- pos + ng * nc
   }
   Sigma_new
