@@ -956,8 +956,11 @@ test_that("occu_cover spatial NUTS honours a share()'s fixed amplitude (#210)", 
   expect_true("alpha" %in% nut$nuts$fixed_hyper)
   expect_false("alpha" %in% nut$nuts$sampled_hyper)
   expect_equal(unname(nut$nuts$fixed_hyper_values[["alpha"]]), 0.35)
-  # Pinned means pinned in every draw, not merely centred there.
-  expect_true(all(nut$hyper_draws[, "alpha"] == 0.35))
+  # Pinned means pinned in every draw, not merely centred there: every draw is
+  # the reported pinned value exactly (the engine stores the node through its
+  # log coordinate, so that value is 0.35 to the last bit or one ulp off).
+  expect_true(all(nut$hyper_draws[, "alpha"] ==
+                  nut$nuts$fixed_hyper_values[["alpha"]]))
 })
 
 test_that("occu_cover spatial NUTS honours a share()'s amplitude grid (#210)", {
