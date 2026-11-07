@@ -142,8 +142,8 @@ test_that("latent-factor count recovers the loading magnitude + mean over seeds"
 # regression guard: seed 215's loading EM settled in a bad DIRECTION basin
 # (1.654x truth, a marginal 31 nats below what the same EM reaches from a
 # better direction -- verified against an EM started at the literal simulated
-# truth, which reaches 1.03x). The fix (.tobs_latent_factor_random_starts() in
-# R/community_latent.R) tries several fixed-seed pseudo-random restarts
+# truth, which reaches 1.03x). The fix (in the first outer pass of
+# tulpa::tulpa_latent_ascent()) tries several fixed-seed pseudo-random restarts
 # alongside the deterministic cosine one at the first outer pass, through the
 # SAME ascent + magnitude search, and keeps whichever the loading EM converges
 # to the higher marginal from -- the "multi-start over directions, selected on

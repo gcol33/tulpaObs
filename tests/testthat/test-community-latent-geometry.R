@@ -20,28 +20,18 @@ test_that("community latent icar field is centred per connected component (#424)
     allow = c("icar", "car_proper"))
   expect_length(geom_car$components, 1L)
 
-  # Poisson working oracle: each island carries its own within-island gradient.
-  set.seed(1)
-  S <- 4L
-  f_true <- c(seq(-1, 1, length.out = 5), seq(1, -1, length.out = 5))
-  y <- matrix(stats::rpois(10 * S, exp(1 + f_true)), 10, S)
-  oracle <- list(working = function(eta) {
-    mu <- exp(eta); list(score = y - mu, curv = mu)
-  }, data_ll = function(eta) sum(stats::dpois(y, exp(eta), log = TRUE)))
-  Q <- Matrix::Diagonal(x = rowSums(A)) - methods::as(A, "CsparseMatrix")
-  fu <- tulpaObs:::.tobs_latent_field_solve(
-    oracle, matrix(1, 10, S), Q, matrix(0, 10, 1), 1, matrix(1, 10, 1),
-    components = geom$components)
-  expect_equal(sum(fu$Fm[1:5, 1]), 0, tolerance = 1e-10)
-  expect_equal(sum(fu$Fm[6:10, 1]), 0, tolerance = 1e-10)
-  expect_gt(stats::cor(fu$Fm[, 1], f_true), 0.9)
-
-  # The BYM2 structured part is centred per component as well.
-  br <- tulpaObs:::.tobs_latent_bym2_solve(
-    oracle, matrix(1, 10, S), Q, numeric(10), numeric(10), a = 0.8, b = 0.3,
-    components = geom$components)
-  expect_equal(sum(br$v[1:5]), 0, tolerance = 1e-10)
-  expect_equal(sum(br$v[6:10]), 0, tolerance = 1e-10)
+  # The geometry handed to tulpa_latent_ascent() carries those constraints and
+  # the intrinsic precision D - W; the proper CAR's precision moves with rho.
+  g_icar <- tulpaObs:::.tobs_latent_geometry(geom)
+  expect_identical(g_icar$components, geom$components)
+  L <- diag(rowSums(A)) - A
+  expect_equal(as.matrix(g_icar$Q(numeric(0))), L, ignore_attr = TRUE)
+  expect_length(g_icar$hyper_grid, 0L)
+  g_car <- tulpaObs:::.tobs_latent_geometry(geom_car)
+  expect_identical(g_car$components, geom_car$components)
+  expect_equal(as.matrix(g_car$Q(c(rho = 0.5))), diag(rowSums(A)) - 0.5 * A,
+               ignore_attr = TRUE)
+  expect_named(g_car$hyper_grid, "rho")
 })
 
 test_that("community latent SPDE precision follows spde(nu =) (#425)", {
@@ -53,16 +43,23 @@ test_that("community latent SPDE precision follows spde(nu =) (#425)", {
   G  <- spec1$G
   Q_closed <- kappa^4 * C0 + 2 * kappa^2 * G +
     G %*% Matrix::Diagonal(x = 1 / spec1$C0_diag) %*% G
-  expect_equal(as.matrix(tulpaObs:::.tobs_latent_spde_Q(spec1, kappa)),
-               as.matrix(Q_closed), tolerance = 1e-10)
+  model <- list(n_sites = 25L)
+  spde_Q <- function(spec, kappa) {
+    geom <- tulpaObs:::.tobs_latent_spde_setup(list(list(tulpa_spec = spec)),
+                                               model, "ms_count()")
+    g <- tulpaObs:::.tobs_latent_geometry(geom)
+    expect_null(g$components)
+    g$Q(c(kappa = kappa))
+  }
+  expect_equal(as.matrix(spde_Q(spec1, kappa)), as.matrix(Q_closed),
+               tolerance = 1e-10)
 
   spec2 <- tulpaObs:::.tobs_term_spde(coords = co, nu = 2)$tulpa_spec
-  Q2 <- tulpaObs:::.tobs_latent_spde_Q(spec2, kappa)
+  Q2 <- spde_Q(spec2, kappa)
   expect_false(isTRUE(all.equal(as.matrix(Q2), as.matrix(Q_closed))))
 
   # A fractional alpha has no precision of this form and is rejected.
   spec_h <- tulpaObs:::.tobs_term_spde(coords = co, nu = 0.5)$tulpa_spec
-  model <- list(n_sites = 25L)
   expect_error(
     tulpaObs:::.tobs_latent_spde_setup(list(list(tulpa_spec = spec_h)), model,
                                        "ms_count()"),

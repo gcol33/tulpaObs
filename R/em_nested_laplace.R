@@ -215,40 +215,20 @@
   isTRUE(b$type %in% c("icar", "car_proper", "rw1", "rw2", "ar1", "iid"))
 }
 
-# Gauss-Hermite nodes / weights (physicists', weight exp(-x^2)) via Golub-Welsch:
-# the nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix
-# (zero diagonal, off-diagonal sqrt(k/2)) and the weights are sqrt(pi) times the
-# squared first eigenvector components. No hardcoded node tables, no external
-# dependency. Used to integrate plogis(eta) over the within-cell Gaussian when
-# marginalising psi.
-.gauss_hermite <- function(n = 15L) {
-  n <- as.integer(n)
-  if (n < 2L) return(list(x = 0, w = sqrt(pi)))
-  k <- seq_len(n - 1L)
-  b <- sqrt(k / 2)
-  J <- matrix(0, n, n)
-  J[cbind(k, k + 1L)] <- b
-  J[cbind(k + 1L, k)] <- b
-  e   <- eigen(J, symmetric = TRUE)
-  ord <- order(e$values)
-  list(x = e$values[ord], w = sqrt(pi) * (e$vectors[1L, ord])^2)
-}
-
 # Posterior MEAN of psi = plogis(eta) at each state row, marginalised over BOTH
 # the hyperparameter grid (weights `w`) and the within-cell Gaussian
 # eta_i ~ N(fe[k, i], fev[k, i]). plogis is integrated over each cell's Gaussian
-# by Gauss-Hermite, then weighted by w -- the marginalise-derived-quantities
+# by the 15-node Gauss-Hermite rule for the standard normal, then weighted by w -- the marginalise-derived-quantities
 # rule (no plug-in of the cell mode). `fev = NULL` collapses to the plug-in mean
 # over cell modes (older tulpa without per-cell variance).
 .nested_psi_mean <- function(fe, fev, w) {
   w <- w / sum(w)
   if (is.null(fev)) return(as.numeric(crossprod(plogis(fe), w)))
   s     <- sqrt(pmax(fev, 0))
-  gh    <- .gauss_hermite(15L)
-  c0    <- 1 / sqrt(pi)
+  gh    <- tulpa::tulpa_gauss_hermite(15L)
   ecell <- matrix(0, nrow(fe), ncol(fe))
-  for (g in seq_along(gh$x)) {
-    ecell <- ecell + (gh$w[g] * c0) * plogis(fe + sqrt(2) * s * gh$x[g])
+  for (g in seq_along(gh$nodes)) {
+    ecell <- ecell + gh$weights[g] * plogis(fe + s * gh$nodes[g])
   }
   as.numeric(crossprod(ecell, w))
 }

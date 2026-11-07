@@ -239,12 +239,11 @@
   if (identical(bundle$positive, "beta")) {
     if (!latent) return(stats::plogis(eta_pos))
     sigma_u <- bundle$disp
-    gh <- .gauss_hermite(15L)
-    c0 <- 1 / sqrt(pi)
+    gh <- tulpa::tulpa_gauss_hermite(15L)
     mu <- matrix(0, nrow(eta_pos), ncol(eta_pos))
-    for (g in seq_along(gh$x)) {
-      shift <- sqrt(2) * sigma_u * gh$x[g]                # per-draw u node
-      mu <- mu + (gh$w[g] * c0) *
+    for (g in seq_along(gh$nodes)) {
+      shift <- sigma_u * gh$nodes[g]                      # per-draw u node
+      mu <- mu + gh$weights[g] *
         stats::plogis(sweep(eta_pos, 2L, shift, "+"))
     }
     return(mu)

@@ -683,19 +683,9 @@
   }, numeric(1))
 }
 
-# Probabilist Gauss-Hermite nodes / weights (weight exp(-x^2/2)/sqrt(2 pi),
-# weights sum to 1) by Golub-Welsch on the symmetric Jacobi matrix. Dependency-
-# free; integrates E_{N(0,1)}[g] ~ sum_k w_k g(z_k).
-.gauss_hermite_prob <- function(n) {
-  if (n <= 1L) return(list(nodes = 0, weights = 1))
-  i <- seq_len(n - 1L)
-  J <- matrix(0, n, n)
-  J[cbind(i, i + 1L)] <- sqrt(i)
-  J[cbind(i + 1L, i)] <- sqrt(i)
-  e   <- eigen(J, symmetric = TRUE)
-  ord <- order(e$values)
-  list(nodes = e$values[ord], weights = (e$vectors[1L, ])[ord]^2)
-}
+# Gauss-Hermite nodes / weights for the standard normal (weights sum to 1):
+# E_{N(0,1)}[g] ~ sum_k w_k g(z_k).
+.gauss_hermite_prob <- function(n) tulpa::tulpa_gauss_hermite(n)
 
 # Per-unit beta latent-cover marginal log M_i = log integral of
 # prod_j Beta(y_ij | sigmoid(eta + u), phi) * N(u; 0, sigma_u^2) du, by

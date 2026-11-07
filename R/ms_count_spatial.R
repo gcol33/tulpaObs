@@ -24,7 +24,7 @@
 .tobs_ms_count_oracle <- function(y_mat, link = "log") {
   dims <- list(n_sites = nrow(y_mat), n_species = ncol(y_mat))
   # `idx` (a subset of site rows) lets the mode-adaptation backtracking line
-  # search (R/community_latent.R) skip already-settled sites; both branches
+  # search (tulpa::tulpa_latent_ascent()) skip already-settled sites; both branches
   # subset `eta` and the closed-over `y_mat` to the same rows up front, so the
   # elementwise math below is unchanged.
   if (identical(link, "logit")) {
