@@ -13,7 +13,7 @@ test_that("ms_distance posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6p). Multi-seed reproducibility probe (seeds
+  # (community group, section 6g). Multi-seed reproducibility probe (seeds
   # 0-1) on this same fixture found a DIFFERENT coefficient dipping
   # moderately low each time (seed 0: sp15_sigma_(Intercept) at 6.3e-4; seed
   # 1: sp19_lambda_abund_cov1 at 2.7e-4), consistent w/ the ~6% expected

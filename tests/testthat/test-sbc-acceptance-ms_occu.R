@@ -13,7 +13,7 @@ test_that("ms_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6j) /. SPECIES-COUNT SCOPED: at S=5 this
+  # (community group, section 6g) /. SPECIES-COUNT SCOPED: at S=5 this
   # family's Laplace-EM posterior is measurably non-Gaussian (validated
   # against method="nuts", the exact reference posterior: Rhat 1.011, ESS
   # 523, 0 divergences -- Vf/Cinv came back 3-15x too narrow and point

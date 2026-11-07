@@ -13,8 +13,8 @@ test_that("dyn_int_occu posterior SBC: correct fit uniform, mis-scaled is not", 
   skip_on_cran()
   skip_if_fast()
 
-  # (the multi-season x multi-source product shape, section 6h). A named
-  # list of S per-source 3D arrays, pooled with `.tobs_sbc_pool_named_3d`;
+  # (the multi-season x multi-source product shape, section 6c). A named
+  # list of S per-source 3D arrays, each stacked on its site axis;
   # simulate() wraps the family's own `.tobs_simulate_dyn_int_occu()`
   # handler. Measured (seed = 0): posterior min p_unif 0.033, narrow max
   # 2.5e-5.

@@ -13,7 +13,7 @@ test_that("ms_int_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6l) /. SPECIES-COUNT SCOPED the same way
+  # (community group, section 6g) /. SPECIES-COUNT SCOPED the same way
   # ms_occu was: a direct probe at three seeds on a small fixture found
   # `sp3_p2_(Intercept)` stuck at p_unif ~0.0029-0.0030 (reproducible,
   # ms_occu's exact failure signature). At S=14 (the

@@ -157,7 +157,7 @@
                           detection = ~ 1, y = sim$y,
                           method = "pg_gibbs", control = .sbc_reg_ctl))
   },
-  # ms_occu: S=20, not a smaller/faster count (R/sbc.R section 6j).
+  # ms_occu: S=20, not a smaller/faster count (R/sbc.R section 6g).
   # At S=5 this family's Laplace-EM posterior is measurably
   # non-Gaussian (validated against method="nuts", the exact reference:
   # Vf/Cinv 3-15x too narrow) and posterior SBC fails hard; at S=20 the
@@ -174,7 +174,7 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   # ms_int_occu: S=14 (matching this family's own recovery-test fixture),
-  # not a smaller/faster count (R/sbc.R section 6l). Shares ms_occu's
+  # not a smaller/faster count (R/sbc.R section 6g). Shares ms_occu's
   # species-count-dependent non-Gaussianity; a smaller fixture silently
   # resurrects the original S~3 failure.
   ms_int_occu = function(N = 140L, n_species = 14L) {
@@ -203,7 +203,7 @@
     suppressWarnings(tobs(~ x, data = sim$data, family = cover("lognormal"),
                           y = sim$y, method = "laplace", control = .sbc_reg_ctl))
   },
-  # ms_int_occu: not registered (R/sbc.R section 6l). Confirmed (not just
+  # ms_int_occu: not registered (R/sbc.R section 6g). Confirmed (not just
   # suspected) to share ms_occu's failure mode.
   occu_multiscale_cover = function(n_cells = 40L) {
     sim <- simulate_occu_multiscale_cover(
@@ -219,7 +219,7 @@
                           method = "laplace", control = .sbc_reg_ctl))
   },
   # ms_count: S=20 (matching ms_occu's resolved scale), not a smaller/faster
-  # count (R/sbc.R section 6n). Multi-seed (0, 1, 2) originally confirmed the same Cov(mu, b_s)-adjacent bias, worse than
+  # count (R/sbc.R section 6g). Multi-seed (0, 1, 2) originally confirmed the same Cov(mu, b_s)-adjacent bias, worse than
   # ms_occu/ms_int_occu on a small fixture; resolved the same species-count
   # way. A smaller fixture silently resurrects that failure.
   ms_count = function(N = 150L, n_species = 20L) {

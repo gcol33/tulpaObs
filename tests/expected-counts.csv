@@ -441,7 +441,7 @@
 "test-sbc-acceptance-t_occu.R","smoke",0,1,0.1
 "test-sbc-gates.R","full",52,0,0.3
 "test-sbc-gates.R","smoke",58,0,0.3
-"test-sbc-registry.R","smoke",282,4,1.8
+"test-sbc-registry.R","smoke",266,4,0.7
 "test-sbc-sampler-control.R","smoke",0,5,0.1
 "test-sbc.R","smoke",58,1,8.8
 "test-share-alpha-resolution.R","full",91,0,5.5

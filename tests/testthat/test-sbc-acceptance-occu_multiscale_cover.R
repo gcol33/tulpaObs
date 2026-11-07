@@ -13,7 +13,7 @@ test_that("occu_multiscale_cover posterior SBC: correct fit uniform, mis-scaled 
   skip_on_cran()
   skip_if_fast()
 
-  # (multiarm-S3 group, section 6m). The standard single-block fit shape
+  # (multiarm-S3 group, section 6f). The standard single-block fit shape
   # (unlike cover()); the exchangeable unit is the CELL, not the plot, so
   # pooling/site track cell indices. Checked at three configurations
   # (n_cells=40 seeds 0/1, n_cells=120 seed 0) before registering -- all

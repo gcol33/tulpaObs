@@ -13,7 +13,7 @@ test_that("ms_abun posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6r). ms_abun() needed TWO upstream tulpa
+  # (community group, section 6g). ms_abun() needed TWO upstream tulpa
   # engine changes before it could even be attempted -- (blup_cross) exposed
   # the mode/theta cross-Hessian, but that alone was not enough:
   # tulpa_re_aghq() also only ever exposed the per-RE-TERM DIAGONAL of a

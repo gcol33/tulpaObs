@@ -13,7 +13,7 @@ test_that("t_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (section 6i). A pg_gibbs family whose fit$draws is already the real
+  # (section 6e). A pg_gibbs family whose fit$draws is already the real
   # pooled posterior sample; loglik_many is a Laplace approximation to the
   # AR1 year effect's marginal (FD-validated gradient and Hessian,
   # brute-force-cross-checked against a dense grid at T = 2). `qs` only

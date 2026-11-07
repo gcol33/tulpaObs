@@ -13,7 +13,7 @@ test_that("ms_dyn_occu posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6q). Shared gamma/eps globals condition each
+  # (community group, section 6g). Shared gamma/eps globals condition each
   # species' psi1/p draw on the FULL (mu, global) vector via the (P+G) x P
   # `Bf[[s]]` cross-Hessian block (verified by inspecting dim(Bf[[1]])
   # directly, not assumed square). Measured (seed = 0): posterior min

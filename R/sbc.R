@@ -47,9 +47,10 @@
 # driver; a family is one entry in `.TOBS_SBC_REGISTRY` naming its replicate
 # generator, its fitting call, its posterior-draw reader, and optionally the
 # joint statistic behind the rank arm. The pooling, the grouping labels, the
-# arm construction, the mis-scaled controls, the fixed-quantity guard and the
-# seed split are written once and shared, so a second family is data entry
-# rather than a second harness.
+# arm construction, the mis-scaled controls and the fixed-quantity guard are
+# written once here and shared, and the fitting call is declared as a slot ->
+# argument map, so a second family is data entry rather than a second harness.
+# The per-simulation seed split is `tulpa::sbc()`'s, not this file's.
 # =============================================================================
 
 
@@ -105,17 +106,23 @@
   out
 }
 
+# One data set, in the shape every refit, pool and `group_ids()` call reads. A
+# family-specific extra (the multiscale family's cell count) rides after the six
+# shared slots.
+.tobs_sbc_dataset <- function(cells, y, site, y_pos = NULL, visits = NULL,
+                              graph = NULL, ...) {
+  c(list(cells = cells, y = y, y_pos = y_pos, visits = visits, graph = graph,
+         site = site), list(...))
+}
+
 # The observed data set, in the shape `refit()` reads.
 .tobs_sbc_data_from_fit <- function(fit) {
   m <- fit$model
   y <- m$y
   if (!is.null(m$valid)) y[!m$valid] <- NA
-  list(cells  = m$data,
-       y      = y,
-       y_pos  = m$y_pos,
-       visits = .tobs_sbc_visit_matrices(m),
-       graph  = fit$spatial$graph,
-       site   = seq_len(m$n_sites))
+  .tobs_sbc_dataset(m$data, y, seq_len(m$n_sites), y_pos = m$y_pos,
+                    visits = .tobs_sbc_visit_matrices(m),
+                    graph = fit$spatial$graph)
 }
 
 # `rbind()` on two ZERO-COLUMN data frames collapses to 0 rows, 0 columns
@@ -127,6 +134,28 @@
     return(data.frame(row.names = seq_len(nrow(a) + nrow(b))))
   }
   rbind(a, b)
+}
+
+# Stack the replicate below the observed data on the SITE axis (axis 1),
+# whatever shape the response takes; every other axis -- visits, seasons,
+# species, distance bins -- is shared design, not something a replicate draws
+# fresh. A vector concatenates, a matrix binds rows, a higher-rank array is
+# filled along axis 1 on the double scale, and a named list (one leaf per source,
+# species or response matrix) stacks leaf by leaf, matched by name, since the
+# leaves need not share a visit count. `NULL` on the observed side means the
+# family carries no such slot.
+.tobs_sbc_stack <- function(a, b) {
+  if (is.null(a)) return(NULL)
+  if (is.list(a) && !is.data.frame(a)) {
+    return(Map(.tobs_sbc_stack, a, b[names(a)]))
+  }
+  d <- dim(a)
+  if (is.null(d)) return(c(a, b))
+  if (length(d) == 2L) return(rbind(a, b))
+  n_o <- d[1L]; n_r <- dim(b)[1L]
+  z <- rbind(matrix(as.double(a), n_o), matrix(as.double(b), n_r))
+  dim(z) <- c(n_o + n_r, d[-1L])
+  z
 }
 
 # Stack two data sets on FRESH sites. The replicate's site labels are offset
@@ -144,15 +173,12 @@
     g[n_o + seq_len(n_r), n_o + seq_len(n_r)] <- as.matrix(rep$graph)
     graph <- g
   }
-  vis <- lapply(names(obs$visits),
-                function(nm) rbind(obs$visits[[nm]], rep$visits[[nm]]))
-  names(vis) <- names(obs$visits)
-  list(cells  = .tobs_sbc_rbind_cells(obs$cells, rep$cells),
-       y      = rbind(obs$y, rep$y),
-       y_pos  = if (is.null(obs$y_pos)) NULL else rbind(obs$y_pos, rep$y_pos),
-       visits = vis,
-       graph  = graph,
-       site   = c(obs$site, rep$site + n_o))
+  .tobs_sbc_dataset(.tobs_sbc_rbind_cells(obs$cells, rep$cells),
+                    .tobs_sbc_stack(obs$y, rep$y),
+                    c(obs$site, rep$site + n_o),
+                    y_pos  = .tobs_sbc_stack(obs$y_pos, rep$y_pos),
+                    visits = .tobs_sbc_stack(obs$visits, rep$visits),
+                    graph  = graph)
 }
 
 .tobs_sbc_groups <- function(data) data$site
@@ -352,9 +378,15 @@
   M
 }
 
-# The sampled route to the same table. `nuts` carries the arm coefficients in
-# `$draws` under the names this table uses and the field scales in
-# `$hyper_draws`, so no grid is involved and every quantity is continuous.
+# The sampled route and the field-free Laplace route to the same table. Both
+# carry the arm coefficients in `fit$draws` under the names this table uses:
+# `nuts` its chain, the plain Laplace fitter (`.tobs_fit_occu_cover()`,
+# `R/occu_cover.R`) its MVN pseudo-draws. What differs is only where the field
+# scales come from. `nuts` samples them into `$hyper_draws`, so no grid is
+# involved and every quantity is continuous; the plain Laplace fitter carries
+# no shared field (that composition is nested-Laplace only) and reports none,
+# so its field columns are the zero the joint route reports for a fit with no
+# copy (#293).
 #
 # The conventions are the joint route's, not new ones. `hyper_draws[, "sigma"]`
 # is the amplitude against the unscaled intrinsic precision, the same quantity
@@ -362,19 +394,16 @@
 # sqrt(scale_q)`), and the dispersion column is already on cover()'s own
 # surface -- `log_phi` is a log beta precision and `log_sigma_pos` a log
 # residual SD -- which is what `.tobs_joint_disp()` converts the grid axis to.
-# So the two routes' tables are read on one scale and a rank from one is
-# comparable with a rank from the other.
-#
-# A model with no copy emits no `alpha` column (#293); the joint route defaults
-# that amplitude to 0, and so does this.
-.tobs_sbc_draws_nuts_occu_cover <- function(fit, n) {
+# So the routes' tables are read on one scale and a rank from one is comparable
+# with a rank from another.
+.tobs_sbc_draws_sampled_occu_cover <- function(fit, n) {
   D <- fit$draws
-  S <- nrow(D)
-  if (is.null(D) || !S)
-    stop("This fit carries no sampled draws to score.", call. = FALSE)
+  if (is.null(D) || !nrow(D))
+    stop("This fit carries no posterior draw matrix to score.", call. = FALSE)
   # SBC asks for an arbitrary number of draws from a sample of fixed size, so
   # the rows are resampled. With replacement only when more are asked for than
-  # the chain holds, which is a property of the request rather than of the fit.
+  # the sample holds, which is a property of the request rather than of the fit.
+  S <- nrow(D)
   take <- sample.int(S, n, replace = n > S)
 
   pi_l <- fit$process_info
@@ -389,16 +418,15 @@
   blocks <- list(occ = cn(1L, "psi"), det = cn(2L, "p"), pos = cn(3L, "pos"))
 
   hd <- fit$hyper_draws
-  hcol <- function(nm, default) {
+  hcol <- function(nm) {
     if (!is.null(hd) && nm %in% colnames(hd)) as.numeric(hd[take, nm])
-    else rep(default, n)
+    else rep(0, n)
   }
-  sigma <- hcol("sigma", 0)
-  alpha <- hcol("alpha", 0)
+  sigma <- hcol("sigma")
+  alpha <- hcol("alpha")
   M <- cbind(M, sigma = sigma, sigma_pos_field = alpha * sigma, alpha = alpha)
 
-  disp_col <- if (identical(fit$model$positive, "beta")) "log_phi"
-              else "log_sigma_pos"
+  disp_col <- .tobs_sbc_disp_name(fit$model)
   if (!disp_col %in% colnames(D))
     stop("This fit's draws carry no `", disp_col, "` column.", call. = FALSE)
   M <- cbind(M, disp = exp(as.numeric(D[take, disp_col])))
@@ -407,39 +435,9 @@
   M
 }
 
-# The non-joint Laplace route to the same table. `.tobs_fit_occu_cover()` (the
-# plain Laplace fitter, `R/occu_cover.R`) carries no shared field -- that
-# composition is nested-Laplace only -- so its MVN pseudo-draws in `fit$draws`
-# already sit on the naming convention the joint / NUTS tables share
-# (`psi_*`/`p_*`/`pos_*` plus a trailing `log_phi`/`log_sigma_pos`), and the
-# field columns are always the zero the other two routes report for a fit with
-# no copy (#293).
-.tobs_sbc_draws_laplace_occu_cover <- function(fit, n) {
-  D <- fit$draws
-  S <- nrow(D)
-  if (is.null(D) || !S)
-    stop("This fit carries no posterior draw matrix to score.", call. = FALSE)
-  take <- sample.int(S, n, replace = n > S)
-
-  pi_l <- fit$process_info
-  cn <- function(k, pre) paste0(pre, "_", pi_l[[k]]$coef_names)
-  nms <- c(cn(1L, "psi"), cn(2L, "p"), cn(3L, "pos"))
-  miss <- setdiff(nms, colnames(D))
-  if (length(miss))
-    stop("This fit's draws carry no column for: ",
-         paste(miss, collapse = ", "), ".", call. = FALSE)
-  M <- D[take, nms, drop = FALSE]
-  blocks <- list(occ = cn(1L, "psi"), det = cn(2L, "p"), pos = cn(3L, "pos"))
-  M <- cbind(M, sigma = 0, sigma_pos_field = 0, alpha = 0)
-
-  disp_col <- if (identical(fit$model$positive, "beta")) "log_phi"
-              else "log_sigma_pos"
-  if (!disp_col %in% colnames(D))
-    stop("This fit's draws carry no `", disp_col, "` column.", call. = FALSE)
-  M <- cbind(M, disp = exp(as.numeric(D[take, disp_col])))
-
-  attr(M, "blocks") <- blocks
-  M
+# The cover arm's dispersion coordinate, named for the positive family.
+.tobs_sbc_disp_name <- function(m) {
+  if (identical(m$positive, "beta")) "log_phi" else "log_sigma_pos"
 }
 
 # One entry in the registry, because the family is one family. Which route a
@@ -447,9 +445,9 @@
 # 11 quantities be scored on the grid-integrated and the sampled posterior and
 # compared.
 .tobs_sbc_draws_occu_cover <- function(fit, n) {
-  if (identical(fit$method, "nuts")) return(.tobs_sbc_draws_nuts_occu_cover(fit, n))
-  if (!is.null(.tobs_joint_fit(fit))) return(.tobs_sbc_draws_joint_occu_cover(fit, n))
-  .tobs_sbc_draws_laplace_occu_cover(fit, n)
+  if (identical(fit$method, "nuts") || is.null(.tobs_joint_fit(fit)))
+    return(.tobs_sbc_draws_sampled_occu_cover(fit, n))
+  .tobs_sbc_draws_joint_occu_cover(fit, n)
 }
 
 
@@ -633,14 +631,11 @@
 # observation design is rebuilt by no family's simulate() kernel, so the refit
 # would score coefficients absent from the data it sees. Either is refused with
 # a pointer rather than scored on the coefficients alone, which would report a
-# calibration the experiment did not measure.
-#
-# Six community specs called the structure gate and not the visit one; on
-# ms_abun(), whose binder stores `X_det_visit` and appends its columns to the
-# detection coefficient names while `formulas$det` keeps only the site-level
-# arm, that omission drew theta from a posterior carrying visit-level
-# coefficients and refit a model that had none, with nothing in the ranks
-# saying so.
+# calibration the experiment did not measure. On ms_abun(), for instance, the
+# binder stores `X_det_visit` and appends its columns to the detection
+# coefficient names while `formulas$det` keeps only the site-level arm, so
+# without the visit half theta would be drawn from a posterior carrying
+# visit-level coefficients and refit under a model that has none.
 .tobs_sbc_reject_unsupported <- function(fit) {
   .tobs_sbc_reject_visit_design(fit)
   st <- fit$model$structured_terms
@@ -686,12 +681,16 @@
          "fit's has ", if (is.data.frame(cells)) nrow(cells) else "none", ".",
          call. = FALSE)
   }
-  list(cells  = cells,
-       y      = y,
-       y_pos  = NULL,
-       visits = .tobs_sbc_visit_matrices(m),
-       graph  = NULL,
-       site   = seq_len(nrow(y)))
+  .tobs_sbc_dataset(cells, y, seq_len(nrow(y)),
+                    visits = .tobs_sbc_visit_matrices(m))
+}
+
+# The observed data set of a family whose response sits on the model under one
+# shared site axis: `y` (a matrix, an array of any rank, or a named list of
+# them) and optionally `y_pos`.
+.tobs_sbc_data_model <- function(fit, y = fit$model$y, y_pos = NULL) {
+  m <- fit$model
+  .tobs_sbc_dataset(m$data, y, seq_len(m$n_sites), y_pos = y_pos)
 }
 
 # A visit-level design on the observation arm is REFUSED, not rebuilt. The
@@ -714,35 +713,88 @@
        call. = FALSE)
 }
 
-.tobs_sbc_spec_simple <- function(fit, fit.control, state, det) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  if (is.null(m$formulas[[state]])) {
-    stop("SBC rebuilds the fitting call from the model's own arm formulas; ",
-         "slot ", sQuote(state), " is absent.", call. = FALSE)
+# A registration covers a declared scope of its family. A fit outside it is
+# refused, naming what it carries, rather than scored under a model the
+# replicate generator or the pooled refit does not reproduce.
+.tobs_sbc_scope <- function(family, ok, scope, got, why = NULL) {
+  if (isTRUE(ok)) return(invisible(NULL))
+  stop("SBC on ", family, "() is registered for ", scope, " only (got ", got,
+       ")", if (!is.null(why)) paste0("; ", why), ".", call. = FALSE)
+}
+
+# Constant-rate scope of a multi-season family: none of the named arms carries
+# a season-varying design (`model$<arm>_season_varying`), which the replicate
+# and the pooled refit do not reproduce.
+.tobs_sbc_constant_rate <- function(family, arms) {
+  function(fit) {
+    sv <- vapply(arms, function(a)
+      isTRUE(fit$model[[paste0(a, "_season_varying")]]), logical(1))
+    .tobs_sbc_scope(family, !any(sv), "constant-rate fits",
+                    paste0("a season-varying (", paste(arms[sv], collapse = ", "),
+                           ") design"))
   }
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       state   = .tobs_sbc_recombine(m$formulas[[state]], NULL),
-       det     = if (is.null(det)) NULL else
-                   .tobs_sbc_recombine(m$formulas[[det]], NULL))
 }
 
-.tobs_sbc_refit_simple <- function(spec, data) {
-  args <- list(formula = spec$state,
-               data    = data$cells,
-               family  = spec$family,
-               y       = if (isTRUE(spec$y_vector)) as.numeric(data$y) else data$y,
-               method  = spec$method,
-               control = spec$control)
-  if (!is.null(spec$det)) args$detection <- spec$det
+# Full-overlap scope of a multi-source family: every source observes every
+# site, which is the only case the exact marginal the rank arm reuses is wired
+# for. `maps` are the per-source row -> site maps, 1-based.
+.tobs_sbc_full_overlap <- function(family, maps, n_sites) {
+  full <- vapply(maps, function(mp)
+    identical(as.integer(mp), seq_len(n_sites)), logical(1))
+  .tobs_sbc_scope(family, all(full),
+                  "full-overlap fits (every source observes every site)",
+                  "partial overlap")
+}
+
+# The fitting call a registered family is refit with, declared as data.
+#
+# `formulas` maps each `tobs()` formula argument to the model's own arm-formula
+# slot -- recombined from the site-level half the binder recorded -- or to a
+# function of the fit building it; the first entry is the state formula and is
+# passed as `formula`. `response(data, spec)` returns the response arguments for
+# a data set. `family` / `method` / `control` override what the observed fit
+# records where a family's front door needs it rebuilt, and `fields(fit)` adds
+# whatever the family's replicate generator reads off the spec. Every spec goes
+# through the one rejection gate first and the family's `scope` check next.
+.tobs_sbc_spec_fn <- function(formulas, response = .tobs_sbc_response_y,
+                              scope = NULL, family = NULL, method = NULL,
+                              control = .tobs_sbc_control, fields = NULL) {
+  function(fit, fit.control) {
+    .tobs_sbc_reject_unsupported(fit)
+    if (!is.null(scope)) scope(fit)
+    m <- fit$model
+    args <- lapply(formulas, function(s)
+      if (is.function(s)) s(fit) else .tobs_sbc_recombine(m$formulas[[s]], NULL))
+    c(list(model    = m,
+           fit_obs  = fit,
+           family   = if (is.null(family)) attr(fit, "tobs_family") else family(fit),
+           method   = method %||% fit$method %||% "laplace",
+           control  = control(fit, fit.control),
+           args     = args,
+           response = response),
+      if (!is.null(fields)) fields(fit))
+  }
+}
+
+.tobs_sbc_response_y <- function(data, spec) list(y = data$y)
+
+.tobs_sbc_response_species <- function(data, spec) {
+  list(y = data$y, species = spec$model$species_names)
+}
+
+# The same `tobs()` call the observed fit came from, on the data set handed in.
+.tobs_sbc_refit <- function(spec, data) {
+  a <- spec$args
+  args <- c(a[1L], list(data = data$cells, family = spec$family), a[-1L],
+            spec$response(data, spec),
+            list(method = spec$method, control = spec$control), spec$extra)
+  names(args)[1L] <- "formula"
   if (length(data$visits)) args$visits <- data$visits
-  suppressWarnings(do.call(tobs, c(args, spec$extra)))
+  suppressWarnings(do.call(tobs, args))
 }
 
+# The replicate at theta: the family's own posterior-predictive kernel on a
+# draw matrix holding the single row theta.
 .tobs_sbc_sim_simple <- function(spec, theta, seed) {
   set.seed(seed)
   f <- spec$fit_obs
@@ -750,12 +802,9 @@
   colnames(D) <- names(theta)
   f$draws <- D
   obs <- spec$data_obs
-  list(cells  = obs$cells,
-       y      = .tobs_sbc_clean_y(spec$replicate(f)),
-       y_pos  = NULL,
-       visits = obs$visits,
-       graph  = NULL,
-       site   = obs$site)
+  .tobs_sbc_dataset(obs$cells,
+                    .tobs_sbc_clean_y(stats::simulate(f, nsim = 1L)[[1L]]),
+                    obs$site, visits = obs$visits)
 }
 
 # The fit's posterior-draw path, read rather than re-sampled: a row of the
@@ -781,28 +830,42 @@
   rowSums(.tobs_pointwise_loglik(f, n.draws = nrow(Theta)))
 }
 
+# One registry row over the shared pieces: the posterior read off `fit$draws`,
+# the family's own `simulate()` kernel as the replicate, the generic refit, the
+# family's `.tobs_pointwise_loglik()` marginal as the rank statistic, and the
+# shared site-axis pool. A family replaces whichever it cannot share.
+.tobs_sbc_entry <- function(spec, data = .tobs_sbc_data_model,
+                            simulate = .tobs_sbc_sim_simple,
+                            draws = .tobs_sbc_draws_fit,
+                            refit = .tobs_sbc_refit,
+                            loglik_many = .tobs_sbc_loglik_many_simple,
+                            pool = NULL) {
+  e <- list(spec = spec, data = data, draws = draws, simulate = simulate,
+            refit = refit, loglik_many = loglik_many)
+  if (!is.null(pool)) e$pool <- pool
+  e
+}
 
-# One registry row. `state` / `det` name the arm formulas in the fitted model,
-# `resp` its response slot, `extra` any further arguments the family's front
-# door takes, `replicate` a generator when the family has no `simulate()`
-# handler.
+# The row of a family whose site marginals multiply. `state` / `det` name the
+# arm formulas in the fitted model, `resp` its response slot, `extra` any
+# further arguments the family's front door takes (a list, or a function of the
+# model), `y_vector` a front door taking the response as a plain vector.
 .tobs_sbc_simple_entry <- function(state, det = NULL, resp = "y",
-                                   extra = NULL, replicate = NULL,
-                                   y_vector = FALSE) {
-  list(
-    spec = function(fit, fit.control) {
-      sp <- .tobs_sbc_spec_simple(fit, fit.control, state = state, det = det)
-      sp$extra <- if (is.function(extra)) extra(fit$model) else extra
-      sp$replicate <- replicate %||%
-        function(f) stats::simulate(f, nsim = 1L)[[1L]]
-      sp$y_vector <- y_vector
-      sp
-    },
-    data        = function(fit) .tobs_sbc_data_simple(fit, resp = resp),
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_simple,
-    refit       = .tobs_sbc_refit_simple,
-    loglik_many = .tobs_sbc_loglik_many_simple)
+                                   extra = NULL, y_vector = FALSE) {
+  .tobs_sbc_entry(
+    spec = .tobs_sbc_spec_fn(
+      formulas = c(formula = state, detection = det),
+      response = if (y_vector) function(data, spec)
+        list(y = as.numeric(data$y)) else .tobs_sbc_response_y,
+      scope = function(fit) {
+        if (is.null(fit$model$formulas[[state]])) {
+          stop("SBC rebuilds the fitting call from the model's own arm ",
+               "formulas; slot ", sQuote(state), " is absent.", call. = FALSE)
+        }
+      },
+      fields = function(fit)
+        list(extra = if (is.function(extra)) extra(fit$model) else extra)),
+    data = function(fit) .tobs_sbc_data_simple(fit, resp = resp))
 }
 
 
@@ -949,10 +1012,8 @@
   }
   rep <- stats::simulate(f, nsim = 1L)[[1L]]
   obs <- spec$data_obs
-  list(cells  = obs$cells,
-       y      = if (y_pos) rep$y else rep,
-       y_pos  = if (y_pos) rep$y_pos else NULL,
-       visits = NULL, graph = NULL, site = obs$site)
+  .tobs_sbc_dataset(obs$cells, if (y_pos) rep$y else rep, obs$site,
+                    y_pos = if (y_pos) rep$y_pos else NULL)
 }
 
 # The exact marginal log-likelihood at each row of `Theta`, summed over
@@ -980,10 +1041,11 @@
 
 # One community registry row. `arms` / `globals` declare the layout; `ll`
 # (+ optional `setup` / `row`) the family's kernel; `y_pos` says the family's
-# `simulate()` returns both response arrays. `spec` / `data` / `pool` / `refit`
-# stay the family's own -- what a community family constructs and how it pools
-# is not shared, and was never claimed to be.
-.tobs_sbc_community_entry <- function(arms, ll, spec, data, refit,
+# `simulate()` returns both response arrays. `spec` is the family's declared
+# fitting call; `data` / `refit` / `pool` default to the shared ones.
+.tobs_sbc_community_entry <- function(arms, ll, spec,
+                                      data = .tobs_sbc_data_model,
+                                      refit = .tobs_sbc_refit,
                                       globals = list(), setup = NULL,
                                       row = NULL, pool = NULL, y_pos = FALSE) {
   nmf <- function(m) .tobs_sbc_community_names(m, arms, globals)
@@ -1006,74 +1068,20 @@
 
 
 # ---------------------------------------------------------------------------
-# 6b. dyn_occu() (multi-season group): pooling on the SITE axis, leaving the
-# season axis alone. `model$y` is a 3D [n_sites x max_visits x n_seasons]
-# array, so the shared simple-family `data`/`pool` (2D `rbind`) cannot be
-# reused; every other piece (draws off `fit$draws`, the `dynamic` pointwise
-# log-likelihood already dispatched by `.tobs_pointwise_loglik`) is.
-# Constant-rate only (season-varying detection / colonization / extinction is
-# a follow-up -- `.tobs_sbc_reject_visit_design` alone does not see those
-# designs, so they are refused explicitly).
+# 6b. Multi-season families: dyn_occu(), dyn_abun(), distsamp_open(),
+# t_occu(). `model$y` is a 3D array whose first axis is the site; the shared
+# pool stacks that axis and leaves the season axis (and its transition
+# structure) alone, so only the fitting call and, where the family has no
+# `simulate()` handler at a given theta, the replicate are their own.
+# Constant-rate only: a season-varying detection / colonization / extinction
+# (dyn_occu) or omega / gamma (dyn_abun) design is not seen by
+# `.tobs_sbc_reject_visit_design()` and is refused explicitly.
 # ---------------------------------------------------------------------------
 
-.tobs_sbc_reject_season_varying <- function(fit) {
-  m <- fit$model
-  sv <- c(det = isTRUE(m$det_season_varying),
-         col = isTRUE(m$col_season_varying),
-         ext = isTRUE(m$ext_season_varying))
-  if (!any(sv)) return(invisible(NULL))
-  stop("SBC on dyn_occu() is registered for constant-rate fits; this fit ",
-       "carries a season-varying (", paste(names(sv)[sv], collapse = ", "),
-       ") design, which the replicate generator does not yet reproduce.",
-       call. = FALSE)
-}
-
-.tobs_sbc_spec_dyn_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  .tobs_sbc_reject_season_varying(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       occ = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det = .tobs_sbc_recombine(m$formulas$det, NULL),
-       col = .tobs_sbc_recombine(m$formulas$col, NULL),
-       ext = .tobs_sbc_recombine(m$formulas$ext, NULL))
-}
-
-# Shared by every multi-season family (dyn_occu, dyn_abun): `model$y` is a 3D
-# [n_sites x max_visits x n_seasons] array under both, and neither `data` nor
-# `pool` reads anything family-specific off it.
-.tobs_sbc_data_3d_season <- function(fit) {
-  m <- fit$model
-  list(cells  = m$data,
-       y      = m$y,
-       y_pos  = NULL,
-       visits = NULL,
-       graph  = NULL,
-       site   = seq_len(m$n_sites))
-}
-
-# Concatenate two 3D [n_sites x max_visits x n_seasons] response arrays on the
-# SITE axis; the season axis (and its transition structure) is shared design,
-# not something a replicate draws fresh.
-.tobs_sbc_pool_3d_season <- function(obs, rep) {
-  n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
-  y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L]))
-  y[seq_len(n_o), , ] <- obs$y
-  y[n_o + seq_len(n_r), , ] <- rep$y
-  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
-       graph = NULL, site = c(obs$site, rep$site + n_o))
-}
-
-.tobs_sbc_refit_dyn_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det, colonization = spec$col, extinction = spec$ext,
-    y = data$y, method = spec$method, control = spec$control)))
-}
+.tobs_sbc_spec_dyn_occu <- .tobs_sbc_spec_fn(
+  c(formula = "occ", detection = "det", colonization = "col",
+    extinction = "ext"),
+  scope = .tobs_sbc_constant_rate("dyn_occu", c("det", "col", "ext")))
 
 # Forward-simulate the HMM: z_1 ~ Bern(psi1), z_t | z_{t-1} ~ colonization /
 # extinction, y_{i,j,t} | z_{i,t} ~ Bern(p_i) over every visit. Missing visits
@@ -1112,66 +1120,50 @@
   }
   y[is.na(m$y)] <- NA_real_
 
-  list(cells = m$data, y = y, y_pos = NULL, visits = NULL, graph = NULL,
-       site = seq_len(n))
+  .tobs_sbc_dataset(m$data, y, seq_len(n))
 }
+
+# dyn_abun(): the Dail-Madsen open N-mixture has a working `simulate()` handler,
+# so its replicate is the family's own kernel.
+.tobs_sbc_spec_dyn_abun <- .tobs_sbc_spec_fn(
+  c(formula = "lambda", detection = "p", omega = "omega", gamma = "gamma"),
+  scope = .tobs_sbc_constant_rate("dyn_abun", c("omega", "gamma")))
+
+# distsamp_open(): the "season" axis is the open-population primary period
+# rather than a revisit season, but the shape and the pooling rule are the
+# same; `fit$draws` and the `.tobs_pointwise_loglik()` dispatch are the
+# standard ones. Constant-dynamics, Poisson only (the alternative dynamics /
+# negbin / zero-inflated layers are not reproduced by the rebuilt front door).
+.tobs_sbc_spec_distsamp_open <- .tobs_sbc_spec_fn(
+  c(formula = "lambda", detection = "sigma", omega = "omega", gamma = "gamma"),
+  family = function(fit)
+    distsamp_open(transect = fit$model$transect,
+                  cutpoints = fit$model$cutpoints,
+                  mixture = "poisson", dynamics = "constant"),
+  scope = function(fit) {
+    dyn <- fit$model$dynamics %||% "constant"
+    mix <- fit$model$mixture %||% "poisson"
+    .tobs_sbc_scope("distsamp_open",
+                    identical(dyn, "constant") && identical(mix, "poisson"),
+                    "constant-dynamics, Poisson fits",
+                    sprintf("dynamics = \"%s\", mixture = \"%s\"", dyn, mix),
+                    "the pooled refit does not yet reproduce it")
+  })
 
 
 # ---------------------------------------------------------------------------
-# 6b2. dyn_abun() (multi-season group): the abundance sibling of dyn_occu -- same
-# 3D [n_sites x max_visits x n_seasons] response, same site-axis pooling
-# (`.tobs_sbc_data_3d_season` / `.tobs_sbc_pool_3d_season` above, shared
-# verbatim). UNLIKE dyn_occu it already has a working `simulate()` handler (the
-# Dail-Madsen forward is not a two-state HMM to hand -write), so the replicate is
-# the family's own kernel via the shared `.tobs_sbc_sim_simple`, exactly the
-# `occu()`-style pattern -- no bespoke forward simulator needed. Constant-rate
-# only (season-varying omega/gamma is a follow-up, same reasoning as dyn_occu's
-# colonization/extinction).
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_reject_dyn_abun_season_varying <- function(fit) {
-  m <- fit$model
-  sv <- c(omega = isTRUE(m$omega_season_varying),
-         gamma = isTRUE(m$gamma_season_varying))
-  if (!any(sv)) return(invisible(NULL))
-  stop("SBC on dyn_abun() is registered for constant-rate fits; this fit ",
-       "carries a season-varying (", paste(names(sv)[sv], collapse = ", "),
-       ") design, which the pooled refit does not yet reproduce.",
-       call. = FALSE)
-}
-
-.tobs_sbc_spec_dyn_abun <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  .tobs_sbc_reject_dyn_abun_season_varying(fit)
-  m <- fit$model
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
-       p         = .tobs_sbc_recombine(m$formulas$p,      NULL),
-       omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
-       gamma     = .tobs_sbc_recombine(m$formulas$gamma,  NULL),
-       replicate = function(f) stats::simulate(f, nsim = 1L)[[1L]])
-}
-
-.tobs_sbc_refit_dyn_abun <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$lambda, data = data$cells, family = spec$family,
-    detection = spec$p, omega = spec$omega, gamma = spec$gamma,
-    y = data$y, method = spec$method, control = spec$control)))
-}
-
-
-# ---------------------------------------------------------------------------
-# 6c. int_occu() (multi-source group): pooling on the SITE axis, leaving the
-# per-source axis alone. `model$y_sources` is a list of one detection matrix
-# per source (`model$site_maps` the row -> site map), so this is a second
-# response shape the shared simple-family `data`/`pool` cannot read.
-# Full-overlap fits only (every source observes every site) --
-# `.tobs_ploglik_integrated`, which `loglik_many` reuses unchanged, is itself
-# only wired for that case.
+# 6c. Multi-source and multi-response families: int_occu(), gdistremoval(),
+# occu_multi(), dyn_int_occu(). `y` is a NAMED list of matrices (or, for
+# dyn_int_occu, of 3D arrays) sharing one site axis -- one per source, per
+# response (yDist / yRem) or per species -- and the shared pool stacks each
+# leaf on that axis, matched by name.
+#
+# The two source-list families store their site maps on different bases, and
+# both checks below are right for their own: int_occu()'s binder writes the
+# 0-based maps its C++ marginal reads (`R/occu.R`, `site_maps <- ... m - 1L`),
+# ms_int_occu()'s writes 1-based ones it indexes R arrays with
+# (`R/ms_int_occu.R`, `yi[md, , s]`). `.tobs_sbc_full_overlap()` takes 1-based
+# maps, so int_occu's are shifted by one before the check.
 # ---------------------------------------------------------------------------
 
 .tobs_sbc_int_occu_src_names <- function(m) {
@@ -1179,54 +1171,22 @@
         character(1))
 }
 
-.tobs_sbc_spec_int_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  full <- vapply(seq_len(m$n_sources), function(s)
-    identical(as.integer(m$site_maps[[s]]), seq_len(m$n_sites) - 1L), logical(1))
-  if (!all(full)) {
-    stop("SBC on int_occu() is registered for full-overlap fits (every ",
-         "source observes every site); this fit has partial overlap.",
-         call. = FALSE)
-  }
-  src_nm <- .tobs_sbc_int_occu_src_names(m)
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det_list  = lapply(src_nm, function(nm) .tobs_sbc_recombine(m$formulas[[nm]], NULL)),
-       src_names = src_nm)
-}
+# Full-overlap fits only: `.tobs_ploglik_integrated`, which `loglik_many`
+# reuses unchanged, is itself only wired for that case.
+.tobs_sbc_spec_int_occu <- .tobs_sbc_spec_fn(
+  list(formula   = "occ",
+       detection = function(fit)
+         lapply(.tobs_sbc_int_occu_src_names(fit$model), function(nm)
+           .tobs_sbc_recombine(fit$model$formulas[[nm]], NULL))),
+  response = function(data, spec)
+    list(y = data$y[.tobs_sbc_int_occu_src_names(spec$model)]),
+  scope = function(fit)
+    .tobs_sbc_full_overlap("int_occu", lapply(fit$model$site_maps, `+`, 1L),
+                           fit$model$n_sites))
 
 .tobs_sbc_data_int_occu <- function(fit) {
-  m <- fit$model
-  list(cells  = m$data,
-       y      = stats::setNames(m$y_sources, .tobs_sbc_int_occu_src_names(m)),
-       y_pos  = NULL,
-       visits = NULL,
-       graph  = NULL,
-       site   = seq_len(m$n_sites))
-}
-
-# Concatenate each source's own matrix on the SITE axis; sources stay
-# separate lists (they need not share a visit count).
-# Generic over any family whose `y` is a NAMED LIST of matrices sharing one
-# site axis -- int_occu()'s per-source detection matrices, gdistremoval()'s
-# yDist/yRem -- so both registry entries below share this one `pool`.
-.tobs_sbc_pool_named_matrices <- function(obs, rep) {
-  n_o <- length(obs$site); n_r <- length(rep$site)
-  y <- Map(function(a, b) rbind(a, b), obs$y, rep$y[names(obs$y)])
-  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
-       graph = NULL, site = c(obs$site, rep$site + n_o))
-}
-
-.tobs_sbc_refit_int_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det_list, y = data$y[spec$src_names],
-    method = spec$method, control = spec$control)))
+  .tobs_sbc_data_model(fit, stats::setNames(
+    fit$model$y_sources, .tobs_sbc_int_occu_src_names(fit$model)))
 }
 
 # Shared latent occupancy z ~ Bern(psi), independently observed through each
@@ -1258,50 +1218,19 @@
     y[[s]] <- ys
   }
   names(y) <- .tobs_sbc_int_occu_src_names(m)
-  list(cells = m$data, y = y, y_pos = NULL, visits = NULL, graph = NULL,
-       site = seq_len(m$n_sites))
+  .tobs_sbc_dataset(m$data, y, seq_len(m$n_sites))
 }
 
-
-# ---------------------------------------------------------------------------
-# 6d. gdistremoval() (multi-response group): a single time-step family
-# whose response is TWO matrices (yDist band counts, yRem period counts)
-# that must stay row-consistent, pooled together on the site axis via the
-# same `.tobs_sbc_pool_named_matrices` int_occu()'s per-source matrices
-# use. Already has a `simulate()` handler returning `list(yDist=, yRem=)`,
-# reused here as the replicate generator the way the occu()-family entries
-# reuse their own `simulate()` handler.
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_spec_gdistremoval <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
-       detection = .tobs_sbc_recombine(m$formulas$sigma,  NULL),
-       removal   = .tobs_sbc_recombine(m$formulas$r,      NULL))
-}
+# gdistremoval(): two response matrices (yDist band counts, yRem period counts)
+# that must stay row-consistent; the family's `simulate()` handler returning
+# `list(yDist =, yRem =)` is the replicate generator.
+.tobs_sbc_spec_gdistremoval <- .tobs_sbc_spec_fn(
+  c(formula = "lambda", detection = "sigma", removal = "r"),
+  response = function(data, spec)
+    list(y = data$y$yDist, y.rem = data$y$yRem))
 
 .tobs_sbc_data_gdistremoval <- function(fit) {
-  m <- fit$model
-  list(cells  = m$data,
-       y      = list(yDist = m$y, yRem = m$y_rem),
-       y_pos  = NULL,
-       visits = NULL,
-       graph  = NULL,
-       site   = seq_len(m$n_sites))
-}
-
-.tobs_sbc_refit_gdistremoval <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$lambda, data = data$cells, family = spec$family,
-    detection = spec$detection, removal = spec$removal,
-    y = data$y$yDist, y.rem = data$y$yRem,
-    method = spec$method, control = spec$control)))
+  .tobs_sbc_data_model(fit, list(yDist = fit$model$y, yRem = fit$model$y_rem))
 }
 
 .tobs_sbc_sim_gdistremoval <- function(spec, theta, seed) {
@@ -1316,20 +1245,73 @@
        site = seq_len(spec$model$n_sites))
 }
 
+# occu_multi(): one detection matrix per species. Species are NOT independent
+# given a shared z -- the joint state is one draw from the log-linear
+# multi-species model, then each species is independently detected given its
+# own z_k -- so the replicate wraps the family's own
+# `.tobs_simulate_occu_multi()` handler. Species names are attached explicitly,
+# since the binder does not always name `model$y`.
+.tobs_sbc_spec_occu_multi <- .tobs_sbc_spec_fn(
+  c(formula = "state", detection = "det"),
+  response = function(data, spec)
+    list(y = data$y[spec$model$species], species = spec$model$species))
+
+.tobs_sbc_data_occu_multi <- function(fit) {
+  .tobs_sbc_data_model(fit, stats::setNames(fit$model$y, fit$model$species))
+}
+
+.tobs_sbc_sim_occu_multi <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  D <- matrix(theta, nrow = 1L)
+  colnames(D) <- names(theta)
+  f$draws <- D
+  rep <- stats::simulate(f, nsim = 1L)[[1L]]
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
+# dyn_int_occu(): the product of the multi-season and multi-source shapes, a
+# named list of per-source 3D [n_sites x max_visits_s x T] arrays. The family's
+# own `.tobs_simulate_dyn_int_occu()` already reproduces each source's own NA
+# pattern, so partial season overlap needs no special-casing. The binder only
+# accepts full SITE overlap across sources and has no season-varying option,
+# so no scope check is needed.
+.tobs_sbc_spec_dyn_int_occu <- .tobs_sbc_spec_fn(
+  c(formula = "psi", colonization = "gamma", extinction = "eps",
+    detection = "p"),
+  response = function(data, spec)
+    list(y = data$y[spec$model$sources], sources = spec$model$sources))
+
+.tobs_sbc_data_dyn_int_occu <- function(fit) {
+  .tobs_sbc_data_model(fit, stats::setNames(fit$model$y, fit$model$sources))
+}
+
+.tobs_sbc_sim_dyn_int_occu <- function(spec, theta, seed) {
+  set.seed(seed)
+  f <- spec$fit_obs
+  D <- matrix(theta, nrow = 1L)
+  colnames(D) <- names(theta)
+  f$draws <- D
+  rep <- stats::simulate(f, nsim = 1L)[[1L]]
+  obs <- spec$data_obs
+  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
+       site = obs$site)
+}
+
 
 # ---------------------------------------------------------------------------
-# 6e. occu_categorical() (multiarm-S3 group): presence + nominal-class hurdle.
-# A `tobs_multiarm_fit` with NO `fit$model` / `fit$draws` -- the two arms are
-# independent Laplace-Gaussian blocks (`beta_occ`/ `vcov_occ`,
-# `beta_class`/`vcov_class`), fit as two separate GLMs, not a joint MVN
-# pseudo-draw matrix off a shared `tulpa_laplace()` postprocessor. `draws()`
-# therefore samples the two blocks independently (they ARE independent by
-# construction) and stacks them into one theta row; `loglik_many()` scores the
-# two-arm likelihood directly off the encoding, since there is no
-# `.tobs_pointwise_loglik` dispatch for this family to reuse. Non-spatial by
-# construction (no spatial/NUTS route exists yet) and takes no `detection`
-# formula, so neither `.tobs_sbc_reject_structure` nor
-# `.tobs_sbc_reject_visit_design` apply here.
+# 6d. Two-block multiarm fits: occu_categorical() and cover(). A
+# `tobs_multiarm_fit` carries NO `fit$draws` -- its two arms (presence + class,
+# presence + positive) are independent Laplace-Gaussian blocks fit as two
+# separate GLMs, not a joint MVN pseudo-draw matrix -- so `draws()` samples the
+# two blocks independently (they ARE independent by construction) and stacks
+# them into one theta row, and `loglik_many()` scores the two-arm likelihood
+# directly, since neither family has a `.tobs_pointwise_loglik` dispatch. The
+# response is a plain length-N vector (one observation per unit, no visit or
+# season axis). Non-spatial by construction; neither takes a `detection`
+# formula, so the visit-design half of the rejection gate never fires on them.
 # ---------------------------------------------------------------------------
 
 # The covariance-based draw (`mu ~ N(means, vcov)`, or an arm's `beta ~
@@ -1339,8 +1321,7 @@
 # extended to structurally never populates that field; that is a property of
 # `fit$method`, not a symptom of a bad fit. Refuse HERE, by name, before the
 # NULL/missing value reaches `.tobs_sbc_mvn_draws()` and is misreported as
-# "non-converged or rank-deficient" -- the message every OTHER registered
-# spec's scope rejection already gives (see `.tobs_sbc_reject_ms_abun_scope`).
+# "non-converged or rank-deficient".
 .tobs_sbc_require_laplace_covariance <- function(fit, family, label, value) {
   if (!is.null(value) && !anyNA(value)) return(invisible(NULL))
   stop(sprintf(paste0(
@@ -1367,42 +1348,42 @@
   .rmvn(n, mean, V)
 }
 
-# Shared by every family whose response is a plain length-N vector (one
-# observation per unit, no visit/season axis) and whose fit stores its
-# encoding at `fit$encoding` with `data`/`y`/`N` fields -- occu_categorical,
-# cover.
+# Independent Gaussian blocks, drawn in order and bound column-wise. Each block
+# is `list(mean, V, names)`.
+.tobs_sbc_draws_blocks <- function(n, blocks) {
+  M <- do.call(cbind, lapply(blocks, function(b)
+    .tobs_sbc_mvn_draws(b$mean, b$V, n)))
+  colnames(M) <- unlist(lapply(blocks, `[[`, "names"), use.names = FALSE)
+  M
+}
+
+# The response vector and the unit count sit on the fit's encoding.
 .tobs_sbc_data_vector <- function(fit) {
   enc <- fit$encoding
-  list(cells = enc$data, y = enc$y, y_pos = NULL, visits = NULL,
-       graph = NULL, site = seq_len(enc$N))
+  .tobs_sbc_dataset(enc$data, enc$y, seq_len(enc$N))
 }
 
-.tobs_sbc_pool_vector <- function(obs, rep) {
-  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = c(obs$y, rep$y),
-       y_pos = NULL, visits = NULL, graph = NULL,
-       site = c(obs$site, rep$site + length(obs$site)))
-}
-
-.tobs_sbc_spec_occu_categorical <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  list(formula = fit$encoding$formula, class_labels = fit$class_labels,
-       control = utils::modifyList(list(), as.list(fit.control)),
-       fit_obs = fit)
-}
+# occu_categorical(): the encoding's own formula, unrecombined, rebuilt through
+# the family's front door on the classes the fit recorded, under the plain
+# Laplace route and the caller's control alone.
+.tobs_sbc_spec_occu_categorical <- .tobs_sbc_spec_fn(
+  list(formula = function(fit) fit$encoding$formula),
+  family  = function(fit) occu_categorical(classes = fit$class_labels),
+  method  = "laplace",
+  control = function(fit, fit.control)
+    utils::modifyList(list(), as.list(fit.control)))
 
 # Columns named `occ_<coef>` / `class_<label>_<coef>`, matching `beta_class`'s
 # column-major `vec()` order so a theta row unpacks back into the same matrix
 # shape it was drawn from.
 .tobs_sbc_draws_occu_categorical <- function(fit, n) {
-  occ_names   <- names(fit$beta_occ)
-  class_names <- as.vector(outer(rownames(fit$beta_class),
+  .tobs_sbc_draws_blocks(n, list(
+    list(mean = fit$beta_occ, V = fit$vcov_occ,
+         names = paste0("occ_", names(fit$beta_occ))),
+    list(mean = as.numeric(fit$beta_class), V = fit$vcov_class,
+         names = as.vector(outer(rownames(fit$beta_class),
                                  colnames(fit$beta_class),
-                                 function(r, cl) paste0("class_", cl, "_", r)))
-  D_occ <- .tobs_sbc_mvn_draws(fit$beta_occ, fit$vcov_occ, n)
-  D_cls <- .tobs_sbc_mvn_draws(as.numeric(fit$beta_class), fit$vcov_class, n)
-  M <- cbind(D_occ, D_cls)
-  colnames(M) <- c(paste0("occ_", occ_names), class_names)
-  M
+                                 function(r, cl) paste0("class_", cl, "_", r))))))
 }
 
 .tobs_sbc_theta_occu_categorical <- function(fit, theta) {
@@ -1420,7 +1401,7 @@
   f <- spec$fit_obs
   th <- .tobs_sbc_theta_occu_categorical(f, theta)
   obs <- spec$data_obs
-  X <- stats::model.matrix(spec$formula, obs$cells)
+  X <- stats::model.matrix(spec$args$formula, obs$cells)
   psi <- stats::plogis(as.numeric(X %*% th$beta_occ))
   present <- stats::rbinom(nrow(X), 1L, psi)
   eta <- X %*% th$Beta
@@ -1429,15 +1410,7 @@
   K <- f$K
   cls <- apply(P, 1L, function(pr) sample.int(K, 1L, prob = pr))
   y <- ifelse(present == 1L, cls, 0L)
-  list(cells = obs$cells, y = as.integer(y), y_pos = NULL, visits = NULL,
-       graph = NULL, site = obs$site)
-}
-
-.tobs_sbc_refit_occu_categorical <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$formula, data = data$cells,
-    family = occu_categorical(classes = spec$class_labels),
-    y = data$y, method = "laplace", control = spec$control)))
+  .tobs_sbc_dataset(obs$cells, as.integer(y), obs$site)
 }
 
 # The two-arm log-likelihood at each reference theta row, read straight off
@@ -1457,210 +1430,108 @@
   }, numeric(1))
 }
 
+# cover(): `encoding$data` / `encoding$y` are the raw fitting inputs the refit
+# call is rebuilt from, and `V_occ` / `V_pos` the full per-arm coefficient
+# covariance beside the diagonal `se_occ` / `se_pos` -- needed to draw an arm's
+# coefficients JOINTLY rather than assume independence across them, which the
+# ms_occu near-miss (#226) is a direct warning against.
+#
+# Scope: the two-Laplace `.dispatch_cover()` routes (`laplace`, `laplace_sla`),
+# the only ones populating `V_occ` / `V_pos`, and `positive = "lognormal"`
+# (`simulate_cover()`'s own generator covers lognormal/gaussian, and
+# lognormal's `log(y_pos) ~ N(eta_pos, sigma_pos)` is simpler to get right than
+# beta's mu/phi -> shape1/shape2 reparameterization). `sigma_pos` is NOT part
+# of theta -- the fitted point estimate carries no SE anywhere in the package
+# (`sigma_pos_sd` is hardcoded NA), so it is held fixed at the observed fit's
+# value for both the replicate and the reference score. `X_occ` / `X_pos` are
+# rebuilt fresh via `model.matrix()` from the arm formula + natural-scale data,
+# NEVER read off `encoding$occ_data$X` / `pos_data$X` -- those are autoscaled
+# design matrices paired with SCALED coefficients internally, while
+# `beta_occ` / `beta_pos` on the fit are already unscaled to natural units
+# (`.unscale_beta_vec`); mixing the two would reproduce the exact class of bug
+# #225 found in `int_occu()`.
+.tobs_sbc_spec_cover <- .tobs_sbc_spec_fn(
+  list(formula  = function(fit) .tobs_sbc_recombine(fit$encoding$fe_occ, NULL),
+       presence = function(fit) .tobs_sbc_recombine(fit$encoding$fe_occ, NULL),
+       positive = function(fit) .tobs_sbc_recombine(fit$encoding$fe_pos, NULL)),
+  scope = function(fit) {
+    .tobs_sbc_scope("cover", identical(fit$positive, "lognormal"),
+                    "positive = \"lognormal\"",
+                    paste0("\"", fit$positive, "\""),
+                    "the beta/beta_oi/lognormal_trunc/ordinal/gaussian arms are follow-ups")
+    .tobs_sbc_scope("cover",
+                    (fit$method %||% "laplace") %in% c("laplace", "laplace_sla"),
+                    "method = \"laplace\"/\"laplace_sla\"",
+                    paste0("\"", fit$method, "\""),
+                    paste0("it draws the posterior from fit$V_occ/V_pos, the ",
+                           "two-Laplace dispatcher's own per-arm covariance, ",
+                           "which the nuts / nested_laplace(_sla) routes do not ",
+                           "populate -- a scope limit of the registered draw ",
+                           "path, not a sign this fit failed to converge"))
+  },
+  fields = function(fit) list(sigma_pos = fit$sigma_pos))
 
-# ---------------------------------------------------------------------------
-# 6f. distsamp_open() (multi-season group): the same 3D [n_sites x n_bins x
-# n_seasons] response shape and site-axis pooling as dyn_abun (section 6b2) --
-# the "season" axis here is the open-population primary period rather than a
-# revisit season, but the shape and the pooling rule (stack on sites, leave
-# the season axis alone) are identical, so
-# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are reused unchanged.
-# `fit$means`/`fit$draws`/`fit$model` are the standard shape too
-# (`.tobs_bfgs_marginal_fit()`), and `.tobs_pointwise_loglik` already
-# dispatches for this model_type, so `draws`/`loglik_many` are also the shared
-# generic ones -- only `spec`/`refit` are custom, to route the family's four
-# arm formulas (`lambda`, `sigma`, `omega`, `gamma`) and rebuild
-# `distsamp_open(cutpoints=, transect=)`. Constant-dynamics, Poisson only
-# (the alternative dynamics / negbin / zero-inflated layers are follow-ups,
-# same reasoning as dyn_abun's season-varying-rate exclusion).
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_reject_distsamp_open_scope <- function(fit) {
-  m <- fit$model
-  dyn <- m$dynamics %||% "constant"
-  mix <- m$mixture %||% "poisson"
-  if (identical(dyn, "constant") && identical(mix, "poisson")) return(invisible(NULL))
-  stop("SBC on distsamp_open() is registered for constant-dynamics, Poisson ",
-       "fits; this fit carries dynamics = ", sQuote(dyn), ", mixture = ",
-       sQuote(mix), ", which the pooled refit does not yet reproduce.",
-       call. = FALSE)
+.tobs_sbc_draws_cover <- function(fit, n) {
+  .tobs_sbc_draws_blocks(n, list(
+    list(mean = fit$beta_occ, V = fit$V_occ,
+         names = paste0("occ_", names(fit$beta_occ))),
+    list(mean = fit$beta_pos, V = fit$V_pos,
+         names = paste0("pos_", names(fit$beta_pos)))))
 }
 
-.tobs_sbc_spec_distsamp_open <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  .tobs_sbc_reject_distsamp_open_scope(fit)
-  m <- fit$model
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
-       sigma     = .tobs_sbc_recombine(m$formulas$sigma,  NULL),
-       omega     = .tobs_sbc_recombine(m$formulas$omega,  NULL),
-       gamma     = .tobs_sbc_recombine(m$formulas$gamma,  NULL),
-       cutpoints = m$cutpoints, transect = m$transect,
-       replicate = function(f) stats::simulate(f, nsim = 1L)[[1L]])
-}
-
-.tobs_sbc_refit_distsamp_open <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$lambda, data = data$cells,
-    family = distsamp_open(transect = spec$transect, cutpoints = spec$cutpoints,
-                           mixture = "poisson", dynamics = "constant"),
-    detection = spec$sigma, omega = spec$omega, gamma = spec$gamma,
-    y = data$y, method = spec$method, control = spec$control)))
-}
-
-
-# ---------------------------------------------------------------------------
-# 6g. occu_multi() (multi-response group): `model$y` is a list of S
-# per-species detection matrices sharing one site axis -- the same shape as
-# int_occu()'s per-source list, so `.tobs_sbc_pool_named_matrices` is reused
-# unchanged for pooling (species names attached explicitly in `data()`, since
-# the binder does not always name `model$y`). `fit$means`/`fit$draws` are the
-# standard `.tobs_bfgs_marginal_fit()` shape and `.tobs_pointwise_loglik`
-# already dispatches for this model_type, so `draws`/`loglik_many` are the
-# shared generic ones. `simulate` is custom (unlike int_occu, species are NOT
-# independent given a shared z -- the joint state is one draw from the
-# log-linear multi-species model, then each species is independently detected
-# given its own z_k), wrapping the family's own `.tobs_simulate_occu_multi()`
-# handler exactly as `.tobs_sbc_sim_gdistremoval()` wraps
-# `simulate_gdistremoval()`'s handler -- `.tobs_sbc_sim_simple`'s cleaning
-# step assumes a single matrix/array response, not a list, so it cannot be
-# reused here either.
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_data_occu_multi <- function(fit) {
-  m <- fit$model
-  list(cells = m$data, y = stats::setNames(m$y, m$species), y_pos = NULL,
-       visits = NULL, graph = NULL, site = seq_len(m$n_sites))
-}
-
-.tobs_sbc_spec_occu_multi <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       state     = .tobs_sbc_recombine(m$formulas$state, NULL),
-       det       = .tobs_sbc_recombine(m$formulas$det,   NULL),
-       species   = m$species)
-}
-
-.tobs_sbc_refit_occu_multi <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$state, data = data$cells, family = spec$family,
-    detection = spec$det, y = data$y[spec$species], species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-.tobs_sbc_sim_occu_multi <- function(spec, theta, seed) {
+.tobs_sbc_sim_cover <- function(spec, theta, seed) {
   set.seed(seed)
-  f <- spec$fit_obs
-  D <- matrix(theta, nrow = 1L)
-  colnames(D) <- names(theta)
-  f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)[[1L]]
   obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
+  X_occ <- stats::model.matrix(spec$args$presence, obs$cells)
+  X_pos <- stats::model.matrix(spec$args$positive, obs$cells)
+  beta_occ <- theta[paste0("occ_", colnames(X_occ))]
+  beta_pos <- theta[paste0("pos_", colnames(X_pos))]
+  eta_occ <- as.vector(X_occ %*% beta_occ)
+  eta_pos <- as.vector(X_pos %*% beta_pos)
+  n <- nrow(X_occ)
+  occur <- stats::rbinom(n, 1L, stats::plogis(eta_occ))
+  log_cover <- stats::rnorm(n, eta_pos, spec$sigma_pos)
+  cover <- ifelse(occur == 1L, pmin(exp(log_cover), 1), 0)
+  .tobs_sbc_dataset(obs$cells, cover, obs$site)
+}
+
+.tobs_sbc_loglik_many_cover <- function(fit, Theta) {
+  enc <- fit$encoding
+  X_occ <- stats::model.matrix(enc$fe_occ, enc$data)
+  X_pos <- stats::model.matrix(enc$fe_pos, enc$data)
+  occur <- as.integer(enc$y > 0)
+  is_pos <- occur == 1L
+  y_pos <- enc$y[is_pos]
+  X_pos_obs <- X_pos[is_pos, , drop = FALSE]
+  sigma_pos <- fit$sigma_pos
+  occ_names <- colnames(X_occ); pos_names <- colnames(X_pos)
+  vapply(seq_len(nrow(Theta)), function(i) {
+    th <- Theta[i, ]
+    beta_occ <- th[paste0("occ_", occ_names)]
+    beta_pos <- th[paste0("pos_", pos_names)]
+    eta_occ <- as.vector(X_occ %*% beta_occ)
+    ll_occ <- sum(stats::dbinom(occur, 1L, stats::plogis(eta_occ), log = TRUE))
+    eta_pos <- as.vector(X_pos_obs %*% beta_pos)
+    ll_occ + sum(stats::dnorm(log(y_pos), eta_pos, sigma_pos, log = TRUE))
+  }, numeric(1))
 }
 
 
 # ---------------------------------------------------------------------------
-# 6h. dyn_int_occu(): the product of the multi-season and multi-source shapes
-# -- `model$y` is a NAMED list of S per-source 3D [n_sites x max_visits_s x
-# T] arrays sharing the site axis. Neither the named-matrices pool (2D
-# `rbind`, int_occu()/gdistremoval()) nor the 3D-season pool (a single array,
-# dyn_occu()/dyn_abun()/distsamp_open()) fits alone, so a new generic
-# `.tobs_sbc_pool_named_3d` composes both: site-axis stack WITHIN each
-# source's own 3D array. `simulate()` is custom, wrapping the family's own
-# `.tobs_simulate_dyn_int_occu()` handler -- which already reproduces each
-# source's own NA/missingness pattern, so partial season overlap needs no
-# special-casing here, it falls out of the family's own simulate().
-# `fit$means`/`fit$draws` are the standard shape and `.tobs_pointwise_loglik`
-# already dispatches for this model_type, so `draws`/`loglik_many` are the
-# shared generic ones. The binder itself only accepts full SITE overlap
-# across sources (every source's array shares `n_sites`), so no extra reject
-# is needed there (unlike int_occu()); the family has no season-varying-rate
-# option to reject either (constant rates are its only mode).
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_pool_named_3d <- function(obs, rep) {
-  n_o <- length(obs$site); n_r <- length(rep$site)
-  y <- Map(function(a, b) {
-    d <- dim(a)
-    z <- array(NA_real_, dim = c(n_o + n_r, d[2L], d[3L]))
-    z[seq_len(n_o), , ] <- a
-    z[n_o + seq_len(n_r), , ] <- b
-    z
-  }, obs$y, rep$y[names(obs$y)])
-  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL, visits = NULL,
-       graph = NULL, site = c(obs$site, rep$site + n_o))
-}
-
-.tobs_sbc_data_dyn_int_occu <- function(fit) {
-  m <- fit$model
-  list(cells = m$data, y = stats::setNames(m$y, m$sources), y_pos = NULL,
-       visits = NULL, graph = NULL, site = seq_len(m$n_sites))
-}
-
-.tobs_sbc_spec_dyn_int_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       state     = .tobs_sbc_recombine(m$formulas$psi,   NULL),
-       col       = .tobs_sbc_recombine(m$formulas$gamma, NULL),
-       ext       = .tobs_sbc_recombine(m$formulas$eps,   NULL),
-       det       = .tobs_sbc_recombine(m$formulas$p,     NULL),
-       sources   = m$sources)
-}
-
-.tobs_sbc_refit_dyn_int_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$state, data = data$cells, family = spec$family,
-    colonization = spec$col, extinction = spec$ext, detection = spec$det,
-    y = data$y[spec$sources], sources = spec$sources,
-    method = spec$method, control = spec$control)))
-}
-
-.tobs_sbc_sim_dyn_int_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  D <- matrix(theta, nrow = 1L)
-  colnames(D) <- names(theta)
-  f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)[[1L]]
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-
-# ---------------------------------------------------------------------------
-# 6i. t_occu(): a Polya-Gamma Gibbs family, but `.tobs_pg_finalize_fit()`
+# 6e. t_occu(): a Polya-Gamma Gibbs family, but `.tobs_pg_finalize_fit()`
 # already reports the pooled cross-chain draws as `fit$draws` in the standard
 # shape (real posterior samples, not a Gaussian pseudo-draw matrix) -- so
 # `.tobs_sbc_draws_fit` reads it unchanged, no Gibbs-aware draws() needed.
 # `model$y` is `[n_sites x n_seasons x max_visits]` (season BEFORE visits --
-# the one family with this axis order), but the 3D-season pool only ever
-# stacks axis 1 and leaves the other two alone, so
-# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` are still exactly
-# right. What genuinely IS custom: the family has no `simulate()` handler at
-# all (`simulate_t_occu()` draws a FRESH truth, not a replicate at a given
-# theta) and no `.tobs_pointwise_loglik` dispatch, so `simulate` is
-# hand-written (drawing a fresh AR1 year-effect sequence at the theta's own
-# (sigma, rho) -- the same generative model `simulate_t_occu()` uses,
-# parameterized by theta instead of drawing its own truth). It is also
-# fully-observed only (no NA-visit masking, matching `simulate_t_occu()`'s
-# own output).
+# the one family with this axis order), but the shared pool only ever stacks
+# axis 1 and leaves the others alone, so it is still exactly right. What
+# genuinely IS custom: the family has no `simulate()` handler at all
+# (`simulate_t_occu()` draws a FRESH truth, not a replicate at a given theta)
+# and no `.tobs_pointwise_loglik` dispatch, so `simulate` is hand-written
+# (drawing a fresh AR1 year-effect sequence at the theta's own (sigma, rho) --
+# the same generative model `simulate_t_occu()` uses, parameterized by theta
+# instead of drawing its own truth). It is also fully-observed only (no
+# NA-visit masking, matching `simulate_t_occu()`'s own output).
 #
 # The log_lik rank arm needs the AR1 year effect eta MARGINALIZED (theta
 # carries only its (sigma, rho) hyperparameters, not eta itself), which is a
@@ -1679,24 +1550,7 @@
 # eta and cross-checked against a brute-force dense-grid sum at T = 2.
 # ---------------------------------------------------------------------------
 
-.tobs_sbc_spec_t_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det     = .tobs_sbc_recombine(m$formulas$det, NULL))
-}
-
-.tobs_sbc_refit_t_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det, y = data$y, method = spec$method,
-    control = spec$control)))
-}
+.tobs_sbc_spec_t_occu <- .tobs_sbc_spec_fn(c(formula = "occ", detection = "det"))
 
 .tobs_sbc_sim_t_occu <- function(spec, theta, seed) {
   set.seed(seed)
@@ -1722,8 +1576,7 @@
   y <- array(0L, dim = c(n, T_s, J))
   for (t in seq_len(T_s)) for (j in seq_len(J))
     y[, t, j] <- ifelse(z[, t] == 1L, stats::rbinom(n, 1L, p_it), 0L)
-  list(cells = obs$cells, y = y, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
+  .tobs_sbc_dataset(obs$cells, y, obs$site)
 }
 
 # Newton mode-finder for the T-dim AR1 year effect at fixed (lin, p_i, rho,
@@ -1790,400 +1643,15 @@
 
 
 # ---------------------------------------------------------------------------
-# 6j. ms_occu() (community group): the design decision the issue asks to
-# state rather than default -- rank a FIXED species set's own coefficients
-# (mu + b_s per species), not the community means with fresh species drawn
-# per replicate. theta is the per-species REALIZED coefficient vector for
-# every species (S x P, column names `<species>_psi_<coef>` /
-# `<species>_p_<coef>`), not the P-length community mean `fit$means` alone.
-#
-# `.tobs_community_em()` (R/community_em.R) computes `Cinv` (per-species
-# posterior covariance Cov(b_s|y), Louis 1982) and `Bf` (the mu-b_s
-# cross-Hessian block from the same Newton solve), both exposed as
-# `fit$ms_community$Cinv`/`Bf` (R/ms_occu.R). `draws()` samples the community
-# mean once per row (`mu ~ N(means, vcov)`) then draws each species'
-# deviation CONDITIONAL on that mu draw via `.tobs_sbc_community_b_draws`
-# (`b_s | mu ~ N(blup_s - Cinv_s t(Bf_s)(mu_draw-means), Cinv_s)`), theta_s =
-# mu + b_s -- NOT independently, which was #226 (drawing mu and b_s as
-# independent ignores their posterior cross-covariance and biases Var(theta_s)
-# on whichever species trades off most against the community mean). See the
-# registry entry below for the species-count scope at which the joint draw
-# registers cleanly (S=20; an S=5 fixture does not).
-#
-# `simulate()` reuses the family's OWN `.tobs_simulate_ms_occu()` handler
-# (the validated `cpp_simulate_ms_occu` kernel, which already respects the
-# observed model's own visit-validity pattern) rather than a hand-written
-# generator -- injecting the candidate theta by overwriting
-# `f$ms_community$coef_psi`/`coef_p` (the per-species coefficient matrices
-# `.tobs_simulate_ms_occu` actually reads), not `f$draws` (which that handler
-# does not consult). `loglik_many()` sums each species' own two-state
-# marginal (`.ms_int_occu_sp_ll`, the exact kernel `.tobs_fit_ms_occu()`
-# already optimizes) at that species' theta slice -- the natural per-species
-# analogue of every other family's marginal rank arm. Pooling/data reuse the
-# generic 3D-season helpers unchanged: `model$y` is `[site x visit x
-# species]`, and stacking axis 1 (sites) while leaving axes 2-3 alone is
-# exactly what they already do, regardless of what those axes mean.
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_spec_ms_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
-       species = m$species_names)
-}
-
-.tobs_sbc_refit_ms_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det, y = data$y, species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-# mu and b_s are NOT independent in the posterior -- conditional on a draw
-# of mu, b_s's mean shifts by -Cinv_s %*% t(Bf_s) %*% (mu_draw - mu_hat)
-# (Bf_s the mu-b_s cross-Hessian block from the community EM's own Newton
-# solve, R/community_em.R), while its covariance is UNCHANGED at Cinv_s.
-# Derived by block-inverting the joint (mu, b_s) arrowhead precision [Sf +
-# Bf_s Cinv_s Bf_s', Bf_s; Bf_s', Cinv_s^-1] and validated to machine
-# precision against a direct construction of that matrix on random SPD inputs
-# (dev_notes probe, 2026-08-12). Drawing mu and each b_s independently --
-# what every affected family did before this -- is exactly the #226 bug: it
-# under-covers on whichever species' deviation most strongly trades off
-# against the community mean.
-.tobs_sbc_community_b_draws <- function(mu_draws, mu_hat, b_hat_s, Bf_s, Cinv_s, n) {
-  eps <- .tobs_sbc_mvn_draws(rep(0, length(b_hat_s)), Cinv_s, n)
-  delta <- sweep(mu_draws, 2L, mu_hat, "-")
-  shift <- (delta %*% Bf_s) %*% Cinv_s
-  sweep(eps - shift, 2L, b_hat_s, "+")
-}
-
-# The community occupancy kernel: the exact per-species two-state marginal the
-# fitter itself optimizes, reached through the shared multi-source form with a
-# single detection arm.
-.tobs_sbc_ll_ms_occu <- function(m, s, b, g, aux, row) {
-  .ms_int_occu_sp_ll(as.numeric(m$X_occ %*% b$psi),
-                     list(as.numeric(m$X_det %*% b$p)), m$summaries[[s]])
-}
-
-
-# ---------------------------------------------------------------------------
-# 6j-bis. ms_occu_cover() (community group): the occ+p+pos analogue of ms_occu --
-# same "rank a fixed species set" design (theta_s = mu_arm + b_s per species, one
-# block per arm, species-major), same joint mu/b_s draw
-# (`.tobs_sbc_community_b_draws`), now safe to attempt because `Cinv` is kept
-# consistent with `Sigma` even under AGHQ debiasing (#226 part 2 fix specific to this
-# family, commit `03b87ad` -- `ms_occu`/`ms_int_occu`/`ms_count` have no AGHQ path at
-# all and stay deferred).
-#
-# `fit$means`/`vcov` carry ONE extra coordinate beyond the three arms' P
-# dimensions: the shared cover-arm dispersion (`log_sigma_pos` for lognormal,
-# `log_phi` for beta), a SINGLE community-level scalar with no per-species
-# deviation (`b_list[[s]]` in `R/ms_occu_cover.R` is P-long, arm coefs only).
-# `.tobs_sbc_community_b_draws(mu_draws, mu_hat, ...)` needs no change for
-# this -- `Bf_s` is `(P+1) x P` (mu+disp -> b_s), so the shift term already
-# reads the disp coordinate; a species' theta gets the disp-informed shift on
-# its arm coefs, while the disp value itself is copied straight off the
-# u=(mu,disp) draw with no per-species addition.
-#
-# Reuses `.occu_cover_sp_ll` (the exact per-species two-state marginal
-# `.tobs_fit_ms_occu_cover()` already optimizes, via
-# `.ms_occu_cover_species_view()`) for `loglik_many` -- same "family's own
-# kernel" pattern as `ms_occu`/`ms_int_occu`. `simulate()` reuses
-# `.tobs_simulate_ms_occu_cover()`, overwriting `f$ms_community$coef_occ`/
-# `coef_p`/`coef_pos` (the field names THAT handler reads -- note these are
-# "occ"/"p"/"pos", not the "psi"/"p"/"pos" prefix `fit$means`'s own
-# coefficient names use) and the last element of `f$means` (the shared
-# log-dispersion `.tobs_simulate_ms_occu_cover` reads via
-# `object$means[[length(object$means)]]`).
-#
-# `y`/`y_pos` are both `[site x visit x species]` -- the 3D-season pool
-# generalizes to carry both response arrays, not just one.
-#
-# Scope: non-spatial `laplace`, `positive = "lognormal"` only (matches
-# `occu_cover`/`cover`'s own scope -- beta's mu/phi reparameterization is a
-# separate correctness question, not attempted here).
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_spec_ms_occu_cover <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  if (!identical(m$positive, "lognormal")) {
-    stop("SBC on ms_occu_cover() is registered for positive = \"lognormal\" ",
-         "only.", call. = FALSE)
-  }
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
-       pos     = .tobs_sbc_recombine(m$formulas$pos, NULL),
-       species = m$species_names)
-}
-
-.tobs_sbc_refit_ms_occu_cover <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det, positive = spec$pos,
-    y = data$y, y.pos = data$y_pos, species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-# The cover arm's shared dispersion coordinate: the LAST entry of `fit$means`
-# (`build_ms_occu_cover_fit()` appends it after the three arms' coefficients),
-# named for the positive family.
-.tobs_sbc_disp_name <- function(m) {
-  if (identical(m$positive, "beta")) "log_phi" else "log_sigma_pos"
-}
-
-.tobs_sbc_data_ms_occu_cover <- function(fit) {
-  m <- fit$model
-  list(cells = m$data, y = m$y, y_pos = m$y_pos, visits = NULL, graph = NULL,
-       site = seq_len(m$n_sites))
-}
-
-.tobs_sbc_pool_ms_occu_cover <- function(obs, rep) {
-  n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
-  y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L]))
-  y[seq_len(n_o), , ] <- obs$y
-  y[n_o + seq_len(n_r), , ] <- rep$y
-  y_pos <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y_pos)[2L], dim(obs$y_pos)[3L]))
-  y_pos[seq_len(n_o), , ] <- obs$y_pos
-  y_pos[n_o + seq_len(n_r), , ] <- rep$y_pos
-  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = y_pos,
-       visits = NULL, graph = NULL, site = c(obs$site, rep$site + n_o))
-}
-
-# The community joint occu+cover kernel: the exact per-species two-state
-# marginal `.tobs_fit_ms_occu_cover()` optimizes, over that species' view.
-.tobs_sbc_setup_ms_occu_cover <- function(fit) {
-  lapply(seq_len(fit$model$n_species),
-         function(s) .ms_occu_cover_species_view(fit$model, s))
-}
-
-.tobs_sbc_ll_ms_occu_cover <- function(m, s, b, g, aux, row) {
-  .occu_cover_sp_ll(aux[[s]], b$occ, b$p, b$pos, g$disp)
-}
-
-
-# ---------------------------------------------------------------------------
-# 6k. cover() (multiarm-S3 group): a `tobs_multiarm_fit` with the same
-# two-independent-Laplace-Gaussian-block shape as occu_categorical (presence,
-# positive), which is why `.tobs_sbc_data_vector`/ `.tobs_sbc_pool_vector`
-# (renamed from the occu_categorical-only spelling, section 6e) are reused
-# unchanged here too. Two things this family did NOT already carry, both now
-# added (small, independently useful, kept regardless of SBC):
-# `encoding$data`/`encoding$y` (the raw fitting inputs, needed to rebuild a
-# refit call -- occu_categorical needed the identical addition) and
-# `V_occ`/`V_pos` (the full per-arm coefficient covariance beside the diagonal
-# `se_occ`/`se_pos` -- needed to draw a JOINT sample
-# of an arm's coefficients rather than assume independence across them, which
-# the ms_occu near-miss (#226) is a direct warning against).
-#
-# Scope: non-spatial `laplace`, `positive = "lognormal"` only
-# (`simulate_cover()`'s own generator only covers lognormal/gaussian, and
-# lognormal's `log(y_pos) ~ N(eta_pos, sigma_pos)` is simpler to get right
-# than beta's mu/phi -> shape1/shape2 reparameterization). `sigma_pos` is
-# NOT part of theta -- the fitted point estimate carries no SE anywhere in
-# the package (`sigma_pos_sd` is hardcoded NA), so it is held fixed at the
-# observed fit's value for both the replicate and the reference score,
-# matching the established `.tobs_sbc_check_fixed_dispersion` convention
-# elsewhere in this codebase. `X_occ`/`X_pos` are rebuilt fresh via
-# `model.matrix()` from the arm formula + natural-scale data, NEVER read off
-# `encoding$occ_data$X`/`pos_data$X` -- those are autoscaled design matrices
-# paired with SCALED coefficients internally, while `beta_occ`/`beta_pos` on
-# the fit are already unscaled to natural units (`.unscale_beta_vec`);
-# mixing the two would reproduce the exact class of bug #225 found in
-# `int_occu()`.
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_spec_cover <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  if (!identical(fit$positive, "lognormal")) {
-    stop("SBC on cover() is registered for positive = \"lognormal\" only ",
-         "(got \"", fit$positive, "\"); the beta/beta_oi/lognormal_trunc/",
-         "ordinal/gaussian arms are follow-ups.", call. = FALSE)
-  }
-  # The scope really is the two-Laplace `.dispatch_cover()` routes (`laplace`
-  # and `laplace_sla`, both of which call `decode_cover_hurdle()` and so both
-  # populate `fit$V_occ`/`V_pos`) -- nothing checked it: a nuts or
-  # nested_laplace(_sla) fit fell through to `.tobs_sbc_draws_cover()`, which
-  # reads those fields, finds them absent (the nested/sampled routes never
-  # compute them), and reported a converged, finite-vcov fit as
-  # "non-converged or rank-deficient". Refuse by method here instead.
-  if (!((fit$method %||% "laplace") %in% c("laplace", "laplace_sla"))) {
-    stop("SBC on cover() is registered for method = \"laplace\"/\"laplace_",
-         "sla\" only (got \"", fit$method, "\"); it draws the posterior ",
-         "from fit$V_occ/V_pos, the two-Laplace dispatcher's own per-arm ",
-         "covariance, which the nuts / nested_laplace(_sla) routes do not ",
-         "populate. This is a scope limit of the registered draw path, not ",
-         "a sign this fit failed to converge.", call. = FALSE)
-  }
-  enc <- fit$encoding
-  list(presence  = .tobs_sbc_recombine(enc$fe_occ, NULL),
-       positive  = .tobs_sbc_recombine(enc$fe_pos, NULL),
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method %||% "laplace",
-       control   = .tobs_sbc_control(fit, fit.control),
-       sigma_pos = fit$sigma_pos,
-       fit_obs   = fit)
-}
-
-.tobs_sbc_refit_cover <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$presence, data = data$cells, family = spec$family,
-    presence = spec$presence, positive = spec$positive, y = data$y,
-    method = spec$method, control = spec$control)))
-}
-
-.tobs_sbc_draws_cover <- function(fit, n) {
-  occ_names <- names(fit$beta_occ)
-  pos_names <- names(fit$beta_pos)
-  D_occ <- .tobs_sbc_mvn_draws(fit$beta_occ, fit$V_occ, n)
-  D_pos <- .tobs_sbc_mvn_draws(fit$beta_pos, fit$V_pos, n)
-  M <- cbind(D_occ, D_pos)
-  colnames(M) <- c(paste0("occ_", occ_names), paste0("pos_", pos_names))
-  M
-}
-
-.tobs_sbc_sim_cover <- function(spec, theta, seed) {
-  set.seed(seed)
-  obs <- spec$data_obs
-  X_occ <- stats::model.matrix(spec$presence, obs$cells)
-  X_pos <- stats::model.matrix(spec$positive, obs$cells)
-  beta_occ <- theta[paste0("occ_", colnames(X_occ))]
-  beta_pos <- theta[paste0("pos_", colnames(X_pos))]
-  eta_occ <- as.vector(X_occ %*% beta_occ)
-  eta_pos <- as.vector(X_pos %*% beta_pos)
-  n <- nrow(X_occ)
-  occur <- stats::rbinom(n, 1L, stats::plogis(eta_occ))
-  log_cover <- stats::rnorm(n, eta_pos, spec$sigma_pos)
-  cover <- ifelse(occur == 1L, pmin(exp(log_cover), 1), 0)
-  list(cells = obs$cells, y = cover, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
-.tobs_sbc_loglik_many_cover <- function(fit, Theta) {
-  enc <- fit$encoding
-  X_occ <- stats::model.matrix(enc$fe_occ, enc$data)
-  X_pos <- stats::model.matrix(enc$fe_pos, enc$data)
-  occur <- as.integer(enc$y > 0)
-  is_pos <- occur == 1L
-  y_pos <- enc$y[is_pos]
-  X_pos_obs <- X_pos[is_pos, , drop = FALSE]
-  sigma_pos <- fit$sigma_pos
-  occ_names <- colnames(X_occ); pos_names <- colnames(X_pos)
-  vapply(seq_len(nrow(Theta)), function(i) {
-    th <- Theta[i, ]
-    beta_occ <- th[paste0("occ_", occ_names)]
-    beta_pos <- th[paste0("pos_", pos_names)]
-    eta_occ <- as.vector(X_occ %*% beta_occ)
-    ll_occ <- sum(stats::dbinom(occur, 1L, stats::plogis(eta_occ), log = TRUE))
-    eta_pos <- as.vector(X_pos_obs %*% beta_pos)
-    ll_occ + sum(stats::dnorm(log(y_pos), eta_pos, sigma_pos, log = TRUE))
-  }, numeric(1))
-}
-
-
-# ---------------------------------------------------------------------------
-# 6l. ms_int_occu() (community group): REGISTERED -- the community analogue
-# of int_occu(): `model$y` is a list of D per-source 3D [n_sites x visits_d x
-# n_species] arrays sharing the site axis (`.tobs_sbc_pool_named_3d` from
-# dyn_int_occu() reused unchanged), ranking the fixed species set's own
-# realized coefficients via the joint mu/b_s draw
-# `.tobs_sbc_community_b_draws` (#226 part 1). Like ms_occu, a small fixture
-# fails on species count, not a bug (a three-seed probe at small S pins
-# `sp3_p2_(Intercept)` at p_unif ~0.0029-0.0030, reproducibly): at S=14
-# (matching this family's own recovery-test fixture) the plain Laplace-EM
-# calibrates cleanly, no debiasing needed (see the registry entry below for
-# the numbers). `simulate()` injects
-# `ms_community$coef_psi`/`coef_p<d>` directly rather than the `f$draws`
-# trick since `.tobs_simulate_ms_int_occu()` doesn't consult `object$draws`;
-# `loglik_many` sums each species' own exact two-state marginal via
-# `.ms_int_occu_sp_ll`. Full site-overlap only (matching int_occu()'s
-# existing gate).
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_data_ms_int_occu <- function(fit) {
-  m <- fit$model
-  # Named by `process_names` ("p1".."pD"), NOT `source_names` -- the family's
-  # own `.tobs_simulate_ms_int_occu()` names its replicate list that way
-  # (`names(srcs) <- model$process_names`), and `source_names` defaults to a
-  # DIFFERENT label ("src1".."srcD") whenever `y` came in unnamed, which would
-  # silently mismatch the two lists' keys at pooling.
-  list(cells = m$data, y = stats::setNames(m$y, m$process_names), y_pos = NULL,
-       visits = NULL, graph = NULL, site = seq_len(m$n_sites))
-}
-
-.tobs_sbc_spec_ms_int_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  full <- vapply(m$site_maps, function(mp)
-    identical(as.integer(mp), seq_len(m$n_sites)), logical(1))
-  if (!all(full)) {
-    stop("SBC on ms_int_occu() is registered for full-overlap fits (every ",
-         "source observes every site); this fit has partial overlap.",
-         call. = FALSE)
-  }
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       occ       = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det_list  = lapply(m$formulas$det, function(f) .tobs_sbc_recombine(f, NULL)),
-       species   = m$species_names,
-       sources   = m$process_names)
-}
-
-.tobs_sbc_refit_ms_int_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det_list, y = data$y[spec$sources], species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-# One occupancy arm plus one detection arm per source. `p<d>` matches
-# `model$process_names`, the SAME labels `ms_community`'s `coef_p<d>` /
-# `blup_p<d>` fields are keyed by (build_ms_int_occu_fit()).
-.tobs_sbc_arms_ms_int_occu <- function(m) {
-  c(list(.tobs_sbc_arm("psi", "psi_", 1L)),
-    lapply(seq_len(m$n_sources), function(d) {
-      nm <- paste0("p", d)
-      .tobs_sbc_arm(nm, paste0(nm, "_"), 1L + d)
-    }))
-}
-
-# The multi-source per-species two-state marginal, the same kernel `ms_occu`
-# reaches with a single detection arm.
-.tobs_sbc_ll_ms_int_occu <- function(m, s, b, g, aux, row) {
-  .ms_int_occu_sp_ll(
-    as.numeric(m$X_psi %*% b$psi),
-    lapply(seq_len(m$n_sources),
-           function(d) as.numeric(m$X_p[[d]] %*% b[[paste0("p", d)]])),
-    m$summaries[[s]])
-}
-
-
-# ---------------------------------------------------------------------------
-# 6m. occu_multiscale_cover() (multiarm-S3 group): a THREE-level hurdle
-# -- cell occupancy psi gates plot availability theta, which gates
-# per-visit detection p and the cover hurdle pos -- fit under `method =
-# "laplace"` (non-spatial: iid cells, field fixed at 0). Unlike
-# `cover()`, this is the STANDARD single-block fit shape: `fit$means`/
-# `fit$draws` are a real joint MVN (dispersion `log_sigma_pos` optimized
-# jointly with the coefficients via BFGS + `optimHess`, so it carries a
-# proper SE, unlike `cover()`'s post-hoc MOM estimate) and
-# `.tobs_pointwise_loglik` already dispatches for this model_type -- so
-# `draws`/`loglik_many` are the shared generic ones, unlike every other
-# family in this section.
+# 6f. occu_multiscale_cover(): a THREE-level hurdle -- cell occupancy psi
+# gates plot availability theta, which gates per-visit detection p and the
+# cover hurdle pos -- fit under `method = "laplace"` (non-spatial: iid cells,
+# field fixed at 0). Unlike `cover()`, this is the STANDARD single-block fit
+# shape: `fit$means`/`fit$draws` are a real joint MVN (dispersion
+# `log_sigma_pos` optimized jointly with the coefficients via BFGS +
+# `optimHess`, so it carries a proper SE, unlike `cover()`'s post-hoc MOM
+# estimate) and `.tobs_pointwise_loglik` already dispatches for this
+# model_type -- so `draws`/`loglik_many` are the shared generic ones.
 #
 # What IS custom, and why: the exchangeable UNIT for this family's SBC
 # premise is the CELL, not the plot -- z_c (cell occupancy) is the top
@@ -2205,76 +1673,55 @@
 # time -- the group_var mapping the refit reads is entirely the SBC
 # adapter's own, decoupled from whatever the original fit used.
 #
-# `simulate()` has no family handler to inject theta into (unlike `cover()`
-# reusing `.tobs_simulate_ms_occu()`-style machinery), so it is a
+# `simulate()` has no family handler to inject theta into, so it is a
 # hand-written three-level generator: z_c ~ Bernoulli(psi_c) per cell,
 # a_j | z_{cell(j)} ~ Bernoulli(theta_j) per plot, y_jv | a_j ~
 # Bernoulli(p_j) per visit, cover | y_jv=1 ~ Lognormal(eta_pos_j,
 # sigma_pos). `positive = "lognormal"` only, matching `cover()`'s scope
-# and reasoning (no beta-arm generator to mirror, and dispersion carries a
-# real SE here so there is no dispersion-fixing complication to work
-# around). No visit-level covariates (`.tobs_sbc_reject_visit_design`
-# rejects them).
+# (no beta-arm generator to mirror, and dispersion carries a real SE here
+# so there is no dispersion-fixing complication to work around). No
+# visit-level covariates (the rejection gate refuses them).
 # ---------------------------------------------------------------------------
 
-.tobs_sbc_reject_occu_mscale_cover_scope <- function(fit) {
-  m <- fit$model
-  if (!identical(m$positive %||% "lognormal", "lognormal")) {
-    stop("SBC on occu_multiscale_cover() is registered for positive = ",
-         "\"lognormal\" only (got \"", m$positive, "\").", call. = FALSE)
-  }
-}
-
-.tobs_sbc_spec_occu_mscale_cover <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  .tobs_sbc_reject_occu_mscale_cover_scope(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method %||% "laplace",
-       control = .tobs_sbc_control(fit, fit.control),
-       psi     = .tobs_sbc_recombine(m$formulas$psi,   NULL),
-       theta   = .tobs_sbc_recombine(m$formulas$theta, NULL),
-       det     = .tobs_sbc_recombine(m$formulas$p,     NULL),
-       pos     = .tobs_sbc_recombine(m$formulas$pos,   NULL))
-}
+.tobs_sbc_spec_occu_mscale_cover <- .tobs_sbc_spec_fn(
+  c(formula = "psi", detection = "p", availability = "theta",
+    positive = "pos"),
+  response = function(data, spec) list(y = data$y, y.pos = data$y_pos),
+  scope = function(fit) {
+    pos <- fit$model$positive %||% "lognormal"
+    .tobs_sbc_scope("occu_multiscale_cover", identical(pos, "lognormal"),
+                    "positive = \"lognormal\"", paste0("\"", pos, "\""))
+  })
 
 .tobs_sbc_data_occu_mscale_cover <- function(fit) {
   m <- fit$model
   cells <- m$data
   cells$.sbc_cell <- m$plot_cell
-  list(cells = cells, y = m$y, y_pos = m$y_pos, visits = NULL, graph = NULL,
-       site = m$plot_cell, n_cells = m$n_cells)
+  .tobs_sbc_dataset(cells, m$y, m$plot_cell, y_pos = m$y_pos,
+                    n_cells = m$n_cells)
 }
 
 .tobs_sbc_pool_occu_mscale_cover <- function(obs, rep) {
   n_c_o <- obs$n_cells
-  rep_cells <- rep$cells
-  rep_cells$.sbc_cell <- rep_cells$.sbc_cell + n_c_o
-  list(cells   = .tobs_sbc_rbind_cells(obs$cells, rep_cells),
-       y       = rbind(obs$y, rep$y),
-       y_pos   = rbind(obs$y_pos, rep$y_pos),
-       visits  = NULL, graph = NULL,
-       site    = c(obs$site, rep$site + n_c_o),
-       n_cells = n_c_o + rep$n_cells)
+  rep$cells$.sbc_cell <- rep$cells$.sbc_cell + n_c_o
+  out <- .tobs_sbc_pool(obs, rep)
+  out$site <- c(obs$site, rep$site + n_c_o)
+  out$n_cells <- n_c_o + rep$n_cells
+  out
 }
 
+# The state formula with the plot -> cell term re-attached on a dummy graph of
+# the pooled cell count; the term is resolved in this frame, which holds it.
 .tobs_sbc_refit_occu_mscale_cover <- function(spec, data) {
   n_cells <- max(data$cells$.sbc_cell)
   dummy_graph <- matrix(0, n_cells, n_cells)
-  fe_labels <- attr(stats::terms(spec$psi), "term.labels")
-  icpt <- attr(stats::terms(spec$psi), "intercept")
-  rhs <- paste(c(fe_labels,
-                'icar(graph = dummy_graph, group.var = ".sbc_cell")'),
-              collapse = " + ")
-  if (!icpt) rhs <- paste(rhs, "- 1")
-  full_formula <- stats::as.formula(paste("~", rhs), env = environment())
-  suppressWarnings(do.call(tobs, list(
-    formula = full_formula, data = data$cells, family = spec$family,
-    detection = spec$det, availability = spec$theta, positive = spec$pos,
-    y = data$y, y.pos = data$y_pos,
-    method = spec$method, control = spec$control)))
+  tt <- stats::terms(spec$args$formula)
+  rhs <- paste(c(attr(tt, "term.labels"),
+                 'icar(graph = dummy_graph, group.var = ".sbc_cell")'),
+               collapse = " + ")
+  if (!attr(tt, "intercept")) rhs <- paste(rhs, "- 1")
+  spec$args$formula <- stats::as.formula(paste("~", rhs), env = environment())
+  .tobs_sbc_refit(spec, data)
 }
 
 .tobs_sbc_sim_occu_mscale_cover <- function(spec, theta, seed) {
@@ -2309,67 +1756,159 @@
   }
 
   obs <- spec$data_obs
-  list(cells = obs$cells, y = y, y_pos = y_pos, visits = NULL, graph = NULL,
-       site = obs$site, n_cells = obs$n_cells)
+  .tobs_sbc_dataset(obs$cells, y, obs$site, y_pos = y_pos,
+                    n_cells = obs$n_cells)
 }
 
 
 # ---------------------------------------------------------------------------
-# 6n. ms_count() (community group): community relative- abundance GLMM, no
-# detection/latent state (the abundance analogue of ms_occu). `model$y` is a
-# plain [n_sites x n_species] matrix (no visit axis), so the SHARED generic
-# `.tobs_sbc_pool` (2D `rbind`) applies unchanged. Ranks the FIXED species
-# set's own realized coefficients (mu + b_s per species), the same design as
-# ms_occu/ms_int_occu -- MULTI-SEED tested (0, 1, 2) before registering, per
-# the lesson #226 and the ms_int_occu near-miss both taught: a single seed
-# clearing the 1e-3 bar is not evidence of calibration. `simulate()` is
-# custom, overwriting `ms_community$coef_mu` directly
-# (`.tobs_simulate_ms_count()` reads that, not `object$draws`, the same
-# mechanism cover()/ms_occu()/ms_int_occu() use for the identical reason).
-# `loglik_many` sums each species' own exact Poisson log-likelihood
-# (`.ms_count_ll_pois`, the same kernel the fitter optimizes) at that
-# species' theta slice. `response = "poisson"` only
-# (negbin/gaussian/bernoulli/binomial carry an extra per-species dispersion
-# arm, a follow-up); `jsdm()` is `ms_count(response = "bernoulli")` under
-# the hood and is NOT covered by this registration -- a different response
-# family with its own calibration to check. A small fixture fails on species
-# count, not a bug (as for ms_occu/ms_int_occu), so the registry entry below
-# uses a fixture at S=20.
+# 6g. The community families: ms_occu(), ms_occu_cover(), ms_int_occu(),
+# ms_count(), jsdm(), ms_distance(), ms_dyn_occu(), ms_abun().
+#
+# Every one ranks a FIXED species set's own coefficients (mu + b_s per
+# species), not the community means with fresh species drawn per replicate:
+# theta is the per-species REALIZED coefficient vector for every species
+# (column names `<species>_<arm>_<coef>`), followed by any shared globals. The
+# draw is the joint mu/b_s draw of `.tobs_sbc_community_b_draws()` (#226: mu
+# and b_s are NOT independent in the posterior), the replicate is the family's
+# own `simulate()` handler with the candidate theta written onto
+# `ms_community`'s coefficient matrices (section 6a-bis), and the rank
+# statistic sums each species' own exact marginal -- the kernel the fitter
+# optimizes. The response is a site-axis-first array or a named list of them,
+# pooled by the shared stacker.
+#
+# SPECIES-COUNT SCOPED. At a small species count the Laplace-Gaussian
+# approximation to a genuinely non-Gaussian community posterior breaks down
+# and posterior SBC fails hard; at a community size typical of real
+# ecological data the same plain Laplace-EM calibrates cleanly. The fixtures
+# (`.SBC_REG_FIXTURES`) are sized on that evidence, per family -- do not shrink
+# them without re-running the investigation behind the registry comment.
 # ---------------------------------------------------------------------------
 
-.tobs_sbc_data_ms_count <- function(fit) {
-  m <- fit$model
-  list(cells = m$data, y = m$y, y_pos = NULL, visits = NULL, graph = NULL,
-       site = seq_len(m$n_sites))
+# mu and b_s are NOT independent in the posterior -- conditional on a draw
+# of mu, b_s's mean shifts by -Cinv_s %*% t(Bf_s) %*% (mu_draw - mu_hat)
+# (Bf_s the mu-b_s cross-Hessian block from the community EM's own Newton
+# solve, R/community_em.R), while its covariance is UNCHANGED at Cinv_s.
+# Derived by block-inverting the joint (mu, b_s) arrowhead precision [Sf +
+# Bf_s Cinv_s Bf_s', Bf_s; Bf_s', Cinv_s^-1] and validated to machine
+# precision against a direct construction of that matrix on random SPD inputs.
+# Drawing mu and each b_s independently under-covers on whichever species'
+# deviation most strongly trades off against the community mean.
+.tobs_sbc_community_b_draws <- function(mu_draws, mu_hat, b_hat_s, Bf_s, Cinv_s, n) {
+  eps <- .tobs_sbc_mvn_draws(rep(0, length(b_hat_s)), Cinv_s, n)
+  delta <- sweep(mu_draws, 2L, mu_hat, "-")
+  shift <- (delta %*% Bf_s) %*% Cinv_s
+  sweep(eps - shift, 2L, b_hat_s, "+")
 }
 
-.tobs_sbc_spec_ms_count <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  if (!identical(m$response, "poisson")) {
-    stop("SBC on ms_count() is registered for response = \"poisson\" only ",
-         "(got \"", m$response, "\"); negbin/gaussian/bernoulli/binomial are ",
-         "follow-ups.", call. = FALSE)
-  }
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       formula = .tobs_sbc_recombine(m$formulas$mu, NULL),
-       species = m$species_names)
+# ms_occu(): the exact per-species two-state marginal the fitter itself
+# optimizes, reached through the shared multi-source form with a single
+# detection arm.
+.tobs_sbc_spec_ms_occu <- .tobs_sbc_spec_fn(
+  c(formula = "occ", detection = "det"),
+  response = .tobs_sbc_response_species)
+
+.tobs_sbc_ll_ms_occu <- function(m, s, b, g, aux, row) {
+  .ms_int_occu_sp_ll(as.numeric(m$X_occ %*% b$psi),
+                     list(as.numeric(m$X_det %*% b$p)), m$summaries[[s]])
 }
 
-.tobs_sbc_refit_ms_count <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$formula, data = data$cells, family = spec$family,
-    y = data$y, species = spec$species,
-    method = spec$method, control = spec$control)))
+# ms_occu_cover(): the occ + p + pos analogue of ms_occu, with ONE extra
+# coordinate in `fit$means` / `vcov` beyond the three arms: the shared
+# cover-arm dispersion (`log_sigma_pos` for lognormal, `log_phi` for beta), a
+# single community-level scalar with no per-species deviation. `Bf_s` is
+# `(P+1) x P` (mu+disp -> b_s), so the conditional shift already reads the
+# disp coordinate, while the disp value itself is copied straight off the
+# (mu, disp) draw. The replicate handler reads `ms_community$coef_occ` /
+# `coef_p` / `coef_pos` (note "occ", not the "psi" prefix of `fit$means`) and
+# the last element of `fit$means`. `y` and `y_pos` are both
+# `[site x visit x species]`. Non-spatial `laplace`, `positive = "lognormal"`
+# only (beta's mu/phi reparameterization is a separate correctness question).
+.tobs_sbc_spec_ms_occu_cover <- .tobs_sbc_spec_fn(
+  c(formula = "occ", detection = "det", positive = "pos"),
+  response = function(data, spec)
+    list(y = data$y, y.pos = data$y_pos, species = spec$model$species_names),
+  scope = function(fit)
+    .tobs_sbc_scope("ms_occu_cover", identical(fit$model$positive, "lognormal"),
+                    "positive = \"lognormal\"",
+                    paste0("\"", fit$model$positive, "\"")))
+
+.tobs_sbc_data_ms_occu_cover <- function(fit) {
+  .tobs_sbc_data_model(fit, y_pos = fit$model$y_pos)
 }
 
-# The community relative-abundance kernels: the per-species GLMM likelihood
-# over that species' precomputed summaries. jsdm() is ms_count() on a Bernoulli
-# response, so only the kernel differs.
+.tobs_sbc_setup_ms_occu_cover <- function(fit) {
+  lapply(seq_len(fit$model$n_species),
+         function(s) .ms_occu_cover_species_view(fit$model, s))
+}
+
+.tobs_sbc_ll_ms_occu_cover <- function(m, s, b, g, aux, row) {
+  .occu_cover_sp_ll(aux[[s]], b$occ, b$p, b$pos, g$disp)
+}
+
+# ms_int_occu(): the community analogue of int_occu(), a list of per-source 3D
+# [n_sites x visits_d x n_species] arrays. Named by `process_names`
+# ("p1".."pD"), NOT `source_names`: the family's own
+# `.tobs_simulate_ms_int_occu()` names its replicate list that way, and
+# `source_names` defaults to a DIFFERENT label ("src1".."srcD") whenever `y`
+# came in unnamed, which would silently mismatch the two lists' keys at
+# pooling. Full site-overlap only, as for int_occu().
+.tobs_sbc_spec_ms_int_occu <- .tobs_sbc_spec_fn(
+  list(formula   = "occ",
+       detection = function(fit)
+         lapply(fit$model$formulas$det, function(f) .tobs_sbc_recombine(f, NULL))),
+  response = function(data, spec)
+    list(y = data$y[spec$model$process_names],
+         species = spec$model$species_names),
+  scope = function(fit)
+    .tobs_sbc_full_overlap("ms_int_occu", fit$model$site_maps, fit$model$n_sites))
+
+.tobs_sbc_data_ms_int_occu <- function(fit) {
+  .tobs_sbc_data_model(fit, stats::setNames(fit$model$y, fit$model$process_names))
+}
+
+# One occupancy arm plus one detection arm per source. `p<d>` matches
+# `model$process_names`, the SAME labels `ms_community`'s `coef_p<d>` /
+# `blup_p<d>` fields are keyed by (build_ms_int_occu_fit()).
+.tobs_sbc_arms_ms_int_occu <- function(m) {
+  c(list(.tobs_sbc_arm("psi", "psi_", 1L)),
+    lapply(seq_len(m$n_sources), function(d) {
+      nm <- paste0("p", d)
+      .tobs_sbc_arm(nm, paste0(nm, "_"), 1L + d)
+    }))
+}
+
+# The multi-source per-species two-state marginal, the same kernel `ms_occu`
+# reaches with a single detection arm.
+.tobs_sbc_ll_ms_int_occu <- function(m, s, b, g, aux, row) {
+  .ms_int_occu_sp_ll(
+    as.numeric(m$X_psi %*% b$psi),
+    lapply(seq_len(m$n_sources),
+           function(d) as.numeric(m$X_p[[d]] %*% b[[paste0("p", d)]])),
+    m$summaries[[s]])
+}
+
+# ms_count(): community relative-abundance GLMM, no detection or latent state;
+# `model$y` is a plain [n_sites x n_species] matrix. `response = "poisson"`
+# only (negbin/gaussian/bernoulli/binomial carry an extra per-species
+# dispersion arm). jsdm() is `ms_count(response = "bernoulli")` under the hood
+# -- the same `fit$model` shape and the same community Laplace-EM -- so its
+# spec is ms_count()'s minus the response check, rebuilt through `jsdm()`, and
+# only the kernel differs.
+.TOBS_SBC_MS_COUNT_FORMULAS <- c(formula = "mu")
+
+.tobs_sbc_spec_ms_count <- .tobs_sbc_spec_fn(
+  .TOBS_SBC_MS_COUNT_FORMULAS, response = .tobs_sbc_response_species,
+  scope = function(fit)
+    .tobs_sbc_scope("ms_count", identical(fit$model$response, "poisson"),
+                    "response = \"poisson\"",
+                    paste0("\"", fit$model$response, "\""),
+                    "negbin/gaussian/bernoulli/binomial are follow-ups"))
+
+.tobs_sbc_spec_jsdm <- .tobs_sbc_spec_fn(
+  .TOBS_SBC_MS_COUNT_FORMULAS, response = .tobs_sbc_response_species,
+  family = function(fit) jsdm())
+
 .tobs_sbc_ll_ms_count_pois <- function(m, s, b, g, aux, row) {
   .ms_count_ll_pois(m$summaries[[s]], b$mu)
 }
@@ -2378,108 +1917,31 @@
   .ms_count_ll_bern(m$summaries[[s]], b$mu)
 }
 
+# ms_distance(): community binned distance sampling (msDS), the two-arm
+# (lambda/sigma) sibling of ms_occu; `model$y` is `[n_sites x n_bins x
+# n_species]`. The replicate handler draws through `cpp_simulate_distance`,
+# the SAME kernel the likelihood integrates against, and the rank statistic
+# sums each species' binned-distance marginal off the family's own sweep.
+# `key = "halfnorm"`, `mixture = "poisson"` only, matching
+# `.tobs_simulate_ms_distance()`'s own restriction (the hazard key's log-shape
+# rides the community EM's `global` slot, not `ms_community`, so neither
+# `simulate()` nor this registration can reach it -- #227).
+.tobs_sbc_spec_ms_distance <- .tobs_sbc_spec_fn(
+  c(formula = "lambda", detection = "sigma"),
+  response = .tobs_sbc_response_species,
+  family = function(fit)
+    ms_distance(key = fit$model$key, transect = fit$model$transect,
+                cutpoints = fit$model$cutpoints, mixture = fit$model$mixture),
+  scope = function(fit) {
+    m <- fit$model
+    .tobs_sbc_scope("ms_distance",
+                    identical(m$key, "halfnorm") && identical(m$mixture, "poisson"),
+                    "key = \"halfnorm\", mixture = \"poisson\"",
+                    sprintf("key = \"%s\", mixture = \"%s\"", m$key, m$mixture),
+                    paste0("the hazard key's log-shape and negbin's dispersion ",
+                           "are not carried by simulate()"))
+  })
 
-# ---------------------------------------------------------------------------
-# 6o. jsdm() (community group): `jsdm()` is `ms_count(response =
-# "bernoulli")` under the hood (`.dispatch_jsdm` calls
-# `.tobs_build_ms_count(..., response = "bernoulli")` and routes through the
-# same community Laplace-EM / latent driver / NUTS target as ms_count() --).
-# The fit object shares ms_count()'s `fit$model` shape byte for byte, so its
-# registry row is ms_count()'s arm declaration unchanged
-# (`.tobs_sbc_data_ms_count` for the data, the shared community
-# draws/simulate). `attr(fit, "tobs_family")` is "jsdm", not "ms_count",
-# though (the family ctor's own name), so the SBC dispatch needs its own
-# registry row regardless. Only `spec` (constructs `jsdm()`, not
-# `ms_count(response=)`) and the kernel (`.ms_count_ll_bern`, not
-# `.ms_count_ll_pois`) are new.
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_spec_jsdm <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       formula = .tobs_sbc_recombine(m$formulas$mu, NULL),
-       species = m$species_names)
-}
-
-.tobs_sbc_refit_jsdm <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$formula, data = data$cells, family = jsdm(),
-    y = data$y, species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-# ---------------------------------------------------------------------------
-# 6p. ms_distance() (community group): community binned distance sampling
-# (the spAbundance msDS analogue), the two-arm (lambda/sigma) sibling of
-# ms_occu -- same "rank a fixed species set" design (theta_s = mu_arm + b_s
-# per species, species-major), same joint mu/b_s draw
-# (`.tobs_sbc_community_b_draws`, #226 part 1). `.tobs_community_em()`
-# already exposes `Cinv`/`Bf` on this family's fit (R/ms_distance.R,
-# `build_ms_distance_fit()` -- added alongside the #226 fix, not something
-# this registration needed to add). `model$y` is a plain 3D `[n_sites x
-# n_bins x n_species]` array, structurally identical to ms_occu()'s `[n_sites
-# x max_visits x n_species]` -- the generic
-# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` pair (stacking axis 1
-# while leaving axes 2-3 alone) applies unchanged, species standing in for
-# season. `simulate()` reuses the family's own `.tobs_simulate_ms_distance()`
-# handler (draws through `cpp_simulate_distance`, the SAME kernel the
-# likelihood integrates against), overwriting `f$ms_community$coef_lambda`/
-# `coef_sigma`. `loglik_many()` sums each species' own exact binned-distance
-# marginal via `.tobs_ms_distance_engine(m)$sweep(s, eta_lam, eta_sig,
-# value_only = TRUE)$log_lik` (the same kernel the fitter and
-# `simulate_ms_distance()` optimize against/simulate through), NOT a
-# hand-rolled likelihood.
-#
-# Registered `key = "halfnorm"`, `mixture = "poisson"` only, matching
-# `.tobs_simulate_ms_distance()`'s own restriction (the hazard key's
-# log-shape rides the community EM's `global` slot, not `ms_community`, so
-# neither `simulate()` nor this registration can reach it yet -- #227);
-# negbin is a second per-species dispersion arm this registration does not
-# cover either.
-# ---------------------------------------------------------------------------
-
-.tobs_sbc_reject_ms_distance_scope <- function(fit) {
-  m <- fit$model
-  if (!identical(m$key, "halfnorm") || !identical(m$mixture, "poisson")) {
-    stop("SBC on ms_distance() is registered for key = \"halfnorm\", ",
-         "mixture = \"poisson\" only (the hazard key's log-shape and negbin's ",
-         "dispersion are not carried by simulate()). Got ",
-         "key = \"", m$key, "\", mixture = \"", m$mixture, "\".", call. = FALSE)
-  }
-}
-
-.tobs_sbc_spec_ms_distance <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  .tobs_sbc_reject_ms_distance_scope(fit)
-  m <- fit$model
-  list(model     = m,
-       fit_obs   = fit,
-       family    = attr(fit, "tobs_family"),
-       method    = fit$method,
-       control   = .tobs_sbc_control(fit, fit.control),
-       lambda    = .tobs_sbc_recombine(m$formulas$lambda, NULL),
-       sigma     = .tobs_sbc_recombine(m$formulas$sigma, NULL),
-       cutpoints = m$cutpoints, key = m$key, transect = m$transect,
-       mixture   = m$mixture,
-       species   = m$species_names)
-}
-
-.tobs_sbc_refit_ms_distance <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$lambda, data = data$cells,
-    family = ms_distance(key = spec$key, transect = spec$transect,
-                         cutpoints = spec$cutpoints, mixture = spec$mixture),
-    detection = spec$sigma, y = data$y, species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-# The community distance kernel: the per-species binned-distance marginal from
-# the family's own sweep, the kernel the fitter reads its score off.
 .tobs_sbc_setup_ms_distance <- function(fit) {
   m <- fit$model
   list(eng = .tobs_ms_distance_engine(m),
@@ -2492,96 +1954,22 @@
   sum(sw$log_lik)
 }
 
+# ms_dyn_occu(): community DYNAMIC occupancy, `model$y` a 4D `[n_sites x
+# max_visits x n_seasons x n_species]` array. Two arms carry a per-species
+# deviation (psi1, p); the season-to-season colonization / extinction
+# coefficients (gamma, eps) are SHARED community globals with no per-species
+# term. `fit$means` / `fit$vcov` carry all four jointly, and
+# `ms_community$Bf[[s]]` is `(P + G) x P` -- the cross-Hessian block against
+# the WHOLE (mu, global) vector, since the community EM's Newton solve finds
+# gamma/eps jointly informative about each species' deviation even though they
+# carry no random effect of their own -- so each b_s conditions on the full
+# draw and the globals copy straight out of it. The rank statistic is each
+# species' exact HMM forward at its psi1/p slice plus the shared gamma/eps.
+.tobs_sbc_spec_ms_dyn_occu <- .tobs_sbc_spec_fn(
+  c(formula = "occ", detection = "det", colonization = "col",
+    extinction = "ext"),
+  response = .tobs_sbc_response_species)
 
-# ---------------------------------------------------------------------------
-# 6q. ms_dyn_occu() (community group): community DYNAMIC (multi-season)
-# occupancy, the HMM-forward analogue of ms_occu. `model$y` is a 4D `[n_sites
-# x max_visits x n_seasons x n_species]` array -- ONE axis past every
-# existing pool helper, so this section adds the generic
-# `.tobs_sbc_data_4d_species`/`.tobs_sbc_pool_4d_species` pair (stack axis 1,
-# leave axes 2-4 alone; the same recipe as `_3d_season`, one more dimension).
-#
-# Two of the four arms carry a per-species deviation (psi1, p -- the "rank a
-# fixed species set" design, same as every other community family); the
-# other two (gamma, eps, season-to-season colonization/extinction) are
-# SHARED community globals with no per-species term at all (`R/ms_dyn_occu.R`
-# section comment: "colonization/extinction coefficients carry no per-species
-# random effect... shared community globals"). `fit$means`/`fit$vcov` already
-# carry all four arms jointly (psi1, p, gamma, eps concatenated, ONE MVN), so
-# `draws()` draws that whole vector once per row and conditions each
-# species' b_s on the FULL draw via `.tobs_sbc_community_b_draws` (#226 part
-# 1) -- `fit$ms_community$Bf[[s]]` is `(P + G) x P` (P = the two RE arms'
-# width, G = gamma + eps), the cross-Hessian block against the WHOLE (mu,
-# global) vector, not just the RE arms: the community EM's Newton solve
-# finds gamma/eps jointly informative about each species' deviation even
-# though they carry no random effect of their own, verified by inspecting
-# `dim(Bf[[1]])` directly rather than assumed from the P x P shape every
-# other community family's `Bf` block has. The shared gamma/eps columns
-# themselves copy straight out of that same draw, UNCHANGED per species
-# (there is nothing to condition -- they are the same shared draw for every
-# species in that row, exactly as they are the same shared FIT for every
-# species).
-#
-# `simulate()` reuses the family's own `.tobs_simulate_ms_dyn_occu()` handler
-# (drives `cpp_simulate_ms_dyn_occu`, the SAME kernel the likelihood
-# integrates against for the RE arms' HMM forward), overwriting
-# `f$ms_community$coef_psi1`/`coef_p` (per-species) AND
-# `f$means[gamma_names]`/`f$means[eps_names]` (the shared globals that
-# handler reads directly off `object$means`, not `ms_community`).
-# `loglik_many()` sums each species' own `.ms_dyn_occu_fwd_ll_vec()` (the
-# exact HMM-forward marginal the fitter's `sp_ll` closure optimizes, the same
-# kernel on every route) at that species' psi1/p slice plus the SAME shared
-# gamma/eps every species uses. `setup` precomputes the per-species detection
-# sufficient statistics once, the way `ms_distance` precomputes its engine.
-# ---------------------------------------------------------------------------
-
-# Concatenate two 4D [n_sites x max_visits x n_seasons x n_species] response
-# arrays on the SITE axis; visits/seasons/species are shared design, not
-# something a replicate draws fresh. The `_3d_season` recipe one axis over.
-.tobs_sbc_data_4d_species <- function(fit) {
-  m <- fit$model
-  list(cells  = m$data,
-       y      = m$y,
-       y_pos  = NULL,
-       visits = NULL,
-       graph  = NULL,
-       site   = seq_len(m$n_sites))
-}
-
-.tobs_sbc_pool_4d_species <- function(obs, rep) {
-  n_o <- dim(obs$y)[1L]; n_r <- dim(rep$y)[1L]
-  y <- array(NA_real_, dim = c(n_o + n_r, dim(obs$y)[2L], dim(obs$y)[3L],
-                               dim(obs$y)[4L]))
-  y[seq_len(n_o), , , ] <- obs$y
-  y[n_o + seq_len(n_r), , , ] <- rep$y
-  list(cells = .tobs_sbc_rbind_cells(obs$cells, rep$cells), y = y, y_pos = NULL,
-       visits = NULL, graph = NULL, site = c(obs$site, rep$site + n_o))
-}
-
-.tobs_sbc_spec_ms_dyn_occu <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  m <- fit$model
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = .tobs_sbc_control(fit, fit.control),
-       occ     = .tobs_sbc_recombine(m$formulas$occ, NULL),
-       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
-       col     = .tobs_sbc_recombine(m$formulas$col, NULL),
-       ext     = .tobs_sbc_recombine(m$formulas$ext, NULL),
-       species = m$species_names)
-}
-
-.tobs_sbc_refit_ms_dyn_occu <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$occ, data = data$cells, family = spec$family,
-    detection = spec$det, colonization = spec$col, extinction = spec$ext,
-    y = data$y, species = spec$species,
-    method = spec$method, control = spec$control)))
-}
-
-# The community dynamic-occupancy kernel: the exact per-species HMM forward.
 # The transition probabilities depend only on the SHARED gamma / eps blocks, so
 # they are built once per theta row rather than once per species.
 .tobs_sbc_row_ms_dyn_occu <- function(m, g, aux) {
@@ -2605,48 +1993,22 @@
     m$n_sites, m$n_seasons)
 }
 
-
-# ---------------------------------------------------------------------------
-# 6r. ms_abun() (community group): community N-mixture (spAbundance msNMix),
-# the abundance-arm sibling of ms_distance/ms_occu -- same "rank a fixed
-# species set" design (theta_s = mu_arm + b_s, species- major), same joint
-# mu/b_s draw (`.tobs_sbc_community_b_draws`, #226 part 1). `model$y` is a
-# plain 3D `[n_sites x max_visits x n_species]` array, structurally
-# identical to ms_occu()'s -- the generic
-# `.tobs_sbc_data_3d_season`/`.tobs_sbc_pool_3d_season` pair applies
-# unchanged. `simulate()` reuses the family's own `.tobs_simulate_ms_nmix()`
-# S3 handler (drives `cpp_simulate_ms_nmix`, the SAME kernel `simulate()`
-# elsewhere in the package uses), overwriting `f$ms_community$coef_lambda`/
-# `coef_p`. `loglik_many()` sums each species' own exact N-mixture marginal
-# via `nmix_site_marginal()$eval()` (the SAME closed-form Royle marginal the
-# fitter optimizes), not a hand-rolled likelihood.
-#
-# UNLIKE every other `.tobs_community_em()`-based family here, this family's
-# engine is `tulpa::tulpa_re_aghq()` (a pure-R Newton solve never enters it),
-# and until that engine exposed only the per-term DIAGONAL of a group's
-# posterior covariance (`blup_var`) -- no cross-covariance between a species'
-# lambda (abundance) deviation and its p (detection) deviation, which
-# N-mixture's own lambda/p identifiability ridge makes genuinely nonzero (the
-# same ridge `tobs()`'s penalized-EM exists to break for occupancy psi/p).
-# #398's `blup_cross`/`blup_cov_g` additions expose exactly that (verified
-# against a closed-form joint-Hessian construction on a toy model with
-# deliberately collinear RE terms). Only reachable when the fit ran the
-# AGHQ/joint path and on the default `n.quad = 1` Laplace-EM
-# (`tulpa::tulpa_re_em()`); `.tobs_sbc_reject_ms_abun_scope()` requires Bf
-# explicitly rather than silently falling back to an independent (mu, b_s)
-# draw (#226's exact bug).
-# Poisson only (negbin/zip/zinb add a further per-species RE arm
-# `.tobs_simulate_ms_nmix()` handles but this registration's `theta` layout
-# does not yet carry).
-# ---------------------------------------------------------------------------
-
+# ms_abun(): community N-mixture (msNMix). Unlike every other community family
+# here, its engine is `tulpa::tulpa_re_aghq()`, which exposes the per-species
+# posterior covariance and the lambda/p cross-covariance (`blup_cross` /
+# `blup_cov_g`) that N-mixture's own lambda/p identifiability ridge makes
+# genuinely nonzero. They are only present when the fit ran the AGHQ/joint path
+# or the default Laplace-EM (`tulpa::tulpa_re_em()`), so the scope check
+# requires them explicitly rather than falling back to an independent
+# (mu, b_s) draw. The refit runs under the ORIGINAL fit's optimizer and
+# quadrature, so every replicate's posterior is the one the observed fit
+# reported. Poisson only (negbin/zip/zinb add a further per-species RE arm
+# this theta layout does not carry).
 .tobs_sbc_reject_ms_abun_scope <- function(fit) {
-  if (!identical(fit$mixture, "poisson")) {
-    stop("SBC on ms_abun() is registered for mixture = \"poisson\" only ",
-         "(negbin/zip/zinb add a further per-species RE arm this ",
-         "registration does not cover). Got mixture = \"", fit$mixture,
-         "\".", call. = FALSE)
-  }
+  .tobs_sbc_scope("ms_abun", identical(fit$mixture, "poisson"),
+                  "mixture = \"poisson\"", paste0("\"", fit$mixture, "\""),
+                  paste0("negbin/zip/zinb add a further per-species RE arm ",
+                         "this registration does not cover"))
   if (is.null(fit$ms_community$Cinv) || is.null(fit$ms_community$Bf)) {
     stop("SBC on ms_abun() needs the per-species posterior covariance and ",
          "mode/theta cross-Hessian (fit$ms_community$Cinv/Bf), which this fit ",
@@ -2657,36 +2019,17 @@
   }
 }
 
-# theta column names: `<species>_lambda_<coef>` / `<species>_p_<coef>`, one
-# block of length P per species, species-major.
-.tobs_sbc_spec_ms_abun <- function(fit, fit.control) {
-  .tobs_sbc_reject_unsupported(fit)
-  .tobs_sbc_reject_ms_abun_scope(fit)
-  m <- fit$model
-  cm <- fit$ms_community
-  # Refit under the ORIGINAL fit's engine, so every replicate's posterior
-  # is the one the observed fit reported.
-  ctl <- .tobs_sbc_control(fit, fit.control)
-  ctl$optimizer <- cm$optimizer
-  ctl[["n.quad"]] <- cm$n_quad
-  list(model   = m,
-       fit_obs = fit,
-       family  = attr(fit, "tobs_family"),
-       method  = fit$method,
-       control = ctl,
-       lambda  = .tobs_sbc_recombine(m$formulas$lambda, NULL),
-       det     = .tobs_sbc_recombine(m$formulas$det, NULL),
-       mixture = fit$mixture,
-       species = m$species_names)
-}
-
-.tobs_sbc_refit_ms_abun <- function(spec, data) {
-  suppressWarnings(do.call(tobs, list(
-    formula = spec$lambda, data = data$cells,
-    family = ms_abun(mixture = spec$mixture),
-    detection = spec$det, y = data$y, species = spec$species,
-    method = spec$method, control = spec$control)))
-}
+.tobs_sbc_spec_ms_abun <- .tobs_sbc_spec_fn(
+  c(formula = "lambda", detection = "det"),
+  response = .tobs_sbc_response_species,
+  family = function(fit) ms_abun(mixture = fit$mixture),
+  scope = .tobs_sbc_reject_ms_abun_scope,
+  control = function(fit, fit.control) {
+    ctl <- .tobs_sbc_control(fit, fit.control)
+    ctl$optimizer <- fit$ms_community$optimizer
+    ctl[["n.quad"]] <- fit$ms_community$n_quad
+    ctl
+  })
 
 # The community N-mixture kernel: each species' own exact closed-form Royle
 # marginal, the SAME `nmix_site_marginal()` the fitter optimizes.
@@ -2711,8 +2054,8 @@
 # 7. The registry
 #
 # A family is one row. Everything not named here -- pooling, the grouping
-# labels, the arm construction, the mis-scaled controls, the seed split -- is
-# the shared driver's.
+# labels, the arm construction, the mis-scaled controls -- is the shared
+# driver's; the per-simulation seed split is `tulpa::sbc()`'s.
 # ---------------------------------------------------------------------------
 
 .TOBS_SBC_REGISTRY <- list(
@@ -2732,167 +2075,76 @@
     "psi", "p11",
     extra = function(m) list(p10 = m$formulas$p10, certainty = m$formulas$b)),
   # `.tobs_simulate_count()` (R/count_methods.R) is registered as count()'s
-  # `simulate()` handler, so the default replicate (`stats::simulate(f, nsim =
-  # 1L)`, .tobs_sbc_simple_entry()'s fallback) already draws at the sampled
+  # `simulate()` handler, so the shared replicate already draws at the sampled
   # theta row the SBC driver writes into `f$draws`.
   count         = .tobs_sbc_simple_entry("occ", resp = "y_count", y_vector = TRUE),
   # Independent-observer double_observer(): both p1/p2 read ONE `detection`
-  # formula slot (`fit$model$formulas$p`), same shape as every other simple
-  # entry's site-level (state, det) pair. The dependent (`type =
+  # formula slot (`fit$model$formulas$p`). The dependent (`type =
   # "dependent"`) protocol additionally carries a fixed per-site `primary`
-  # assignment the front door takes as `...`, which
-  # `.tobs_sbc_refit_simple`'s `spec$extra` threads through unchanged.
+  # assignment the front door takes as `...`, threaded through as `extra`.
   double_observer = .tobs_sbc_simple_entry(
     "lambda", "p",
     extra = function(m) if (!is.null(m$primary)) list(primary = m$primary)
                         else NULL),
-  # Multi-season group: pools on the site axis, leaves the season axis alone
-  # (custom `spec`/`data`/`pool`/`simulate`/`refit` -- see section 6b --
-  # `draws` and `loglik_many` are the shared simple-family ones, since
-  # `fit$draws` and `.tobs_pointwise_loglik` already work for a `dynamic`
-  # fit unchanged). Constant-rate only.
-  dyn_occu = list(
-    spec        = .tobs_sbc_spec_dyn_occu,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_dyn_occu,
-    refit       = .tobs_sbc_refit_dyn_occu,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # dyn_abun(): same 3D response + site-axis pooling as dyn_occu (section
-  # 6b2), but the replicate is the family's OWN simulate() kernel via the
-  # shared simple-family `simulate` (no hand-written forward needed -- the
-  # Dail-Madsen open N-mixture already has a working handler).
-  dyn_abun = list(
-    spec        = .tobs_sbc_spec_dyn_abun,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_simple,
-    refit       = .tobs_sbc_refit_dyn_abun,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # Multi-source group: pools on the site axis, leaves the per-source axis
-  # alone (custom `spec`/`data`/`pool`/`simulate`/`refit` -- see section 6c).
-  # Full-overlap only.
-  int_occu = list(
-    spec        = .tobs_sbc_spec_int_occu,
-    data        = .tobs_sbc_data_int_occu,
-    pool        = .tobs_sbc_pool_named_matrices,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_int_occu,
-    refit       = .tobs_sbc_refit_int_occu,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # Multi-response group: y = (yDist, yRem), two response matrices that must
-  # stay row-consistent -- gdistremoval() already has a simulate() handler
-  # returning list(yDist=, yRem=), reused here as the replicate generator (see
-  # section 6d).
-  gdistremoval = list(
-    spec        = .tobs_sbc_spec_gdistremoval,
-    data        = .tobs_sbc_data_gdistremoval,
-    pool        = .tobs_sbc_pool_named_matrices,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_gdistremoval,
-    refit       = .tobs_sbc_refit_gdistremoval,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # Multiarm-S3 group: a `tobs_multiarm_fit` with two independent
-  # Laplace-Gaussian blocks instead of a joint MVN draw matrix (see section
-  # 6e) -- custom draws()/loglik_many() unpack/repack the two blocks,
-  # everything else is a plain length-N vector response (no visits, no
-  # detection formula).
-  occu_categorical = list(
-    spec        = .tobs_sbc_spec_occu_categorical,
+
+  dyn_occu      = .tobs_sbc_entry(.tobs_sbc_spec_dyn_occu,
+                                  simulate = .tobs_sbc_sim_dyn_occu),
+  dyn_abun      = .tobs_sbc_entry(.tobs_sbc_spec_dyn_abun),
+  distsamp_open = .tobs_sbc_entry(.tobs_sbc_spec_distsamp_open),
+  t_occu        = .tobs_sbc_entry(.tobs_sbc_spec_t_occu,
+                                  simulate = .tobs_sbc_sim_t_occu,
+                                  loglik_many = .tobs_sbc_loglik_many_t_occu),
+
+  int_occu      = .tobs_sbc_entry(.tobs_sbc_spec_int_occu,
+                                  data = .tobs_sbc_data_int_occu,
+                                  simulate = .tobs_sbc_sim_int_occu),
+  gdistremoval  = .tobs_sbc_entry(.tobs_sbc_spec_gdistremoval,
+                                  data = .tobs_sbc_data_gdistremoval,
+                                  simulate = .tobs_sbc_sim_gdistremoval),
+  occu_multi    = .tobs_sbc_entry(.tobs_sbc_spec_occu_multi,
+                                  data = .tobs_sbc_data_occu_multi,
+                                  simulate = .tobs_sbc_sim_occu_multi),
+  dyn_int_occu  = .tobs_sbc_entry(.tobs_sbc_spec_dyn_int_occu,
+                                  data = .tobs_sbc_data_dyn_int_occu,
+                                  simulate = .tobs_sbc_sim_dyn_int_occu),
+
+  occu_categorical = .tobs_sbc_entry(
+    .tobs_sbc_spec_occu_categorical,
     data        = .tobs_sbc_data_vector,
-    pool        = .tobs_sbc_pool_vector,
     draws       = .tobs_sbc_draws_occu_categorical,
     simulate    = .tobs_sbc_sim_occu_categorical,
-    refit       = .tobs_sbc_refit_occu_categorical,
     loglik_many = .tobs_sbc_loglik_many_occu_categorical),
-  # distsamp_open(): shares dyn_abun's 3D response and site-axis pooling
-  # (section 6f) -- constant-dynamics, Poisson only for v1.
-  distsamp_open = list(
-    spec        = .tobs_sbc_spec_distsamp_open,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_simple,
-    refit       = .tobs_sbc_refit_distsamp_open,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # occu_multi(): a list-of-species response, same shape as int_occu()'s
-  # list-of-source one (section 6g) -- pooling is the shared named-matrices
-  # route; simulate() is custom (joint multi-species state, not independent
-  # per-source arms).
-  occu_multi = list(
-    spec        = .tobs_sbc_spec_occu_multi,
-    data        = .tobs_sbc_data_occu_multi,
-    pool        = .tobs_sbc_pool_named_matrices,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_occu_multi,
-    refit       = .tobs_sbc_refit_occu_multi,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # dyn_int_occu(): the product shape (section 6h) -- a named list of S
-  # per-source 3D arrays, pooled with the new `.tobs_sbc_pool_named_3d`;
-  # simulate() is custom (family's own handler).
-  dyn_int_occu = list(
-    spec        = .tobs_sbc_spec_dyn_int_occu,
-    data        = .tobs_sbc_data_dyn_int_occu,
-    pool        = .tobs_sbc_pool_named_3d,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_dyn_int_occu,
-    refit       = .tobs_sbc_refit_dyn_int_occu,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # t_occu() (section 6i): a pg_gibbs family whose fit$draws is already the
-  # real pooled posterior sample (no Gibbs-aware draws() needed); shares
-  # the 3D-season pool despite its different axis order (season before
-  # visits). loglik_many is a Laplace approximation to the AR1 year
-  # effect's marginal (see section 6i).
-  t_occu = list(
-    spec        = .tobs_sbc_spec_t_occu,
-    data        = .tobs_sbc_data_3d_season,
-    pool        = .tobs_sbc_pool_3d_season,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_t_occu,
-    refit       = .tobs_sbc_refit_t_occu,
-    loglik_many = .tobs_sbc_loglik_many_t_occu),
-  # ms_occu() (community group, section 6j): the "rank a fixed species set"
-  # design (theta_s = mu + b_s), joint mu/b_s draw via
-  # `.tobs_sbc_community_b_draws` (#226 part 1: mu and b_s are NOT independent
-  # in the posterior; Cov(mu, b_s) != 0, derivation validated to machine
-  # precision by block-inverting the joint (mu, b_s) arrowhead precision).
-  # SPECIES-COUNT SCOPED: at S=5 (a first, small fixture) this failed
-  # ACCEPTANCE hard (posterior SBC collapsed to p_unif as low as 0, several
-  # quantities below 1e-3). Tried AGHQ variance-component debiasing (the fix
-  # that works for `ms_occu_cover()`) and a from-scratch Vf/Cinv/Bf
-  # consistency fix -- BOTH ruled out as the cause; a direct comparison
-  # against `method="nuts"`'s exact joint posterior (Rhat 1.011, ESS 523, 0
-  # divergences -- a trustworthy reference) showed Laplace's Vf and Cinv were
-  # 3-15x too narrow AND its point estimates measurably off at S=5, not a
-  # subtle attenuation but the Laplace-Gaussian approximation breaking down on
-  # a genuinely non-Gaussian posterior at that few species. At S=20 (a
-  # community size typical of real ecological data), the SAME plain Laplace-EM
-  # -- no debiasing at all -- calibrates cleanly: 5 seeds, every posterior min
-  # p_unif comfortably above 1e-3 (range 0.0017-0.032), 0 quantities below
-  # 1e-3 out of 81 possible across all 5 runs, no reproducible failing
-  # coefficient. Registered on THAT evidence; the `.SBC_REG_FIXTURES$ms_occu`
-  # fixture below is deliberately S=20, not S=5 -- do not shrink it without
-  # re-running this investigation. `ms_int_occu` and `ms_count` (same
-  # `.tobs_community_em()` engine, same original S=5-style failure) are likely
-  # fixable the identical way but each needs its OWN species-count check
-  # before registering, not an assumption this transfers.
+  cover = .tobs_sbc_entry(
+    .tobs_sbc_spec_cover,
+    data        = .tobs_sbc_data_vector,
+    draws       = .tobs_sbc_draws_cover,
+    simulate    = .tobs_sbc_sim_cover,
+    loglik_many = .tobs_sbc_loglik_many_cover),
+
+  occu_multiscale_cover = .tobs_sbc_entry(
+    .tobs_sbc_spec_occu_mscale_cover,
+    data     = .tobs_sbc_data_occu_mscale_cover,
+    pool     = .tobs_sbc_pool_occu_mscale_cover,
+    simulate = .tobs_sbc_sim_occu_mscale_cover,
+    refit    = .tobs_sbc_refit_occu_mscale_cover),
+
+  # ms_occu(): at S=5 posterior SBC collapsed (p_unif as low as 0, several
+  # quantities below 1e-3). AGHQ variance-component debiasing and a
+  # from-scratch Vf/Cinv/Bf consistency fix were BOTH ruled out as the cause; a
+  # direct comparison against `method = "nuts"`'s exact joint posterior (Rhat
+  # 1.011, ESS 523, 0 divergences) showed Laplace's Vf and Cinv 3-15x too
+  # narrow AND its point estimates measurably off at S=5 -- the
+  # Laplace-Gaussian approximation breaking down, not a subtle attenuation. At
+  # S=20 the same plain Laplace-EM calibrates cleanly: 5 seeds, min p_unif
+  # 0.0017-0.032, 0 of 81 quantities below 1e-3, no reproducible failing
+  # coefficient. The fixture is deliberately S=20.
   ms_occu = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("psi", "psi_", 1L),
                  .tobs_sbc_arm("p",   "p_",   2L)),
     ll    = .tobs_sbc_ll_ms_occu,
-    spec  = .tobs_sbc_spec_ms_occu,
-    data  = .tobs_sbc_data_3d_season,
-    pool  = .tobs_sbc_pool_3d_season,
-    refit = .tobs_sbc_refit_ms_occu),
-  #
-  # ms_occu_cover() (community group, section 6j-bis): the occ+p+pos analogue
-  # of ms_occu, safe to attempt because its Cinv is kept consistent with
-  # Sigma even under AGHQ debiasing (#226 part 2 fix specific to this family,
-  # commit `03b87ad`) -- CONTRACT-verified (refit on 0-pooled data reproduces
-  # means exactly, pool/draws/simulate/loglik_many all finite and correctly
-  # shaped); acceptance not yet run.
+    spec  = .tobs_sbc_spec_ms_occu),
+  # ms_occu_cover(): safe to attempt because its Cinv is kept consistent with
+  # Sigma even under AGHQ debiasing (commit `03b87ad`).
   ms_occu_cover = .tobs_sbc_community_entry(
     arms    = list(.tobs_sbc_arm("occ", "psi_", 1L),
                    .tobs_sbc_arm("p",   "p_",   2L),
@@ -2902,96 +2154,36 @@
     setup   = .tobs_sbc_setup_ms_occu_cover,
     y_pos   = TRUE,
     spec    = .tobs_sbc_spec_ms_occu_cover,
-    data    = .tobs_sbc_data_ms_occu_cover,
-    pool    = .tobs_sbc_pool_ms_occu_cover,
-    refit   = .tobs_sbc_refit_ms_occu_cover),
-  #
-  # cover() (multiarm-S3 group, section 6k): the same two-independent-block
-  # shape as occu_categorical, reusing the generalized vector data/pool
-  # helpers; positive = "lognormal" only for v1, dispersion held fixed (no
-  # SE reported anywhere in the package for it).
-  cover = list(
-    spec        = .tobs_sbc_spec_cover,
-    data        = .tobs_sbc_data_vector,
-    pool        = .tobs_sbc_pool_vector,
-    draws       = .tobs_sbc_draws_cover,
-    simulate    = .tobs_sbc_sim_cover,
-    refit       = .tobs_sbc_refit_cover,
-    loglik_many = .tobs_sbc_loglik_many_cover),
-  # ms_int_occu() (community group, section 6l): shared ms_occu's exact
-  # failure mode -- both are `.tobs_community_em()` consumers hitting a
-  # genuinely non-Gaussian posterior at a small species count, not a fixable
-  # bug (verified for ms_occu against method="nuts"'s exact reference).
-  # SPECIES-COUNT SCOPED the same way: at S=14 (matching this family's own
-  # existing recovery-test fixture, N=140, 2 sources), the plain Laplace-EM
-  # (no debiasing) calibrates cleanly -- 5 seeds, min p_unif range
-  # 0.0013-0.052, 0 quantities below 1e-3 out of 43 possible across all 5
-  # runs, no reproducible failing coefficient. Do NOT shrink
-  # `.SBC_REG_FIXTURES$ms_int_occu`'s species count for speed.
+    data    = .tobs_sbc_data_ms_occu_cover),
+  # ms_int_occu(): ms_occu's failure mode at a small species count (a
+  # three-seed probe pins `sp3_p2_(Intercept)` at p_unif ~0.003). At S=14
+  # (this family's own recovery-test fixture, N=140, 2 sources) the plain
+  # Laplace-EM calibrates cleanly: 5 seeds, min p_unif 0.0013-0.052, 0 of 43
+  # quantities below 1e-3.
   ms_int_occu = .tobs_sbc_community_entry(
     arms  = .tobs_sbc_arms_ms_int_occu,
     ll    = .tobs_sbc_ll_ms_int_occu,
     spec  = .tobs_sbc_spec_ms_int_occu,
-    data  = .tobs_sbc_data_ms_int_occu,
-    pool  = .tobs_sbc_pool_named_3d,
-    refit = .tobs_sbc_refit_ms_int_occu),
-  #
-  # occu_multiscale_cover() (multiarm-S3 group, section 6m): the standard
-  # single-block fit shape (unlike cover()), so draws/loglik_many are the
-  # shared generic ones; site is the per-plot CELL index (the exchangeable
-  # unit for this family), not a plot counter.
-  occu_multiscale_cover = list(
-    spec        = .tobs_sbc_spec_occu_mscale_cover,
-    data        = .tobs_sbc_data_occu_mscale_cover,
-    pool        = .tobs_sbc_pool_occu_mscale_cover,
-    draws       = .tobs_sbc_draws_fit,
-    simulate    = .tobs_sbc_sim_occu_mscale_cover,
-    refit       = .tobs_sbc_refit_occu_mscale_cover,
-    loglik_many = .tobs_sbc_loglik_many_simple),
-  # ms_count() (community group, section 6n): like ms_occu/ms_int_occu, a
-  # small fixture fails on species count, not a bug. Multi-seed (0, 1, 2)
-  # posterior SBC on a small fixture pins `sp3_mu_(Intercept)` at p_unif
-  # ~9.6e-7-9.9e-7 every time (several other coefficients also low, e.g.
-  # `sp3_mu_x` ~5e-6) -- worse than ms_occu/ms_int_occu's own small-fixture
-  # failures, plausibly because this family has no detection arm to dilute
-  # it. At S=20 (matching ms_occu's own scale), the plain Laplace-EM
-  # calibrates cleanly: 5 seeds, min p_unif range 0.0016-0.086, 0 quantities
-  # below 1e-3 out of 41 possible across all 5 runs, no reproducible failing
-  # coefficient. No explicit `pool` slot needed -- `y` is a plain 2D `[site x
-  # species]` matrix, so the generic default pooling applies unchanged.
+    data  = .tobs_sbc_data_ms_int_occu),
+  # ms_count(): a small fixture pins `sp3_mu_(Intercept)` at p_unif ~1e-6 on
+  # seeds 0, 1, 2 -- worse than ms_occu / ms_int_occu, plausibly because there
+  # is no detection arm to dilute it. At S=20 it calibrates cleanly: 5 seeds,
+  # min p_unif 0.0016-0.086, 0 of 41 quantities below 1e-3. jsdm() shares the
+  # engine and the S=20 fixture.
   ms_count = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("mu", "mu_", 1L)),
     ll    = .tobs_sbc_ll_ms_count_pois,
-    spec  = .tobs_sbc_spec_ms_count,
-    data  = .tobs_sbc_data_ms_count,
-    refit = .tobs_sbc_refit_ms_count),
-  # jsdm() (community group, section 6o): ms_count()'s generic
-  # data/draws/simulate helpers reused unchanged (see the section comment);
-  # only spec (family = jsdm()) and loglik_many (Bernoulli kernel) are
-  # jsdm-specific.
+    spec  = .tobs_sbc_spec_ms_count),
   jsdm = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("mu", "mu_", 1L)),
     ll    = .tobs_sbc_ll_ms_count_bern,
-    spec  = .tobs_sbc_spec_jsdm,
-    data  = .tobs_sbc_data_ms_count,
-    refit = .tobs_sbc_refit_jsdm),
-  # ms_distance() (community group, section 6p): the two-arm (lambda/sigma)
-  # sibling of ms_occu; `data`/`pool` reuse the generic 3D-season helpers
-  # unchanged (model$y is [site x bin x species], structurally identical to
-  # ms_occu's [site x visit x species]).
+    spec  = .tobs_sbc_spec_jsdm),
   ms_distance = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("lambda", "lambda_", 1L),
                  .tobs_sbc_arm("sigma",  "sigma_",  2L)),
     ll    = .tobs_sbc_ll_ms_distance,
     setup = .tobs_sbc_setup_ms_distance,
-    spec  = .tobs_sbc_spec_ms_distance,
-    data  = .tobs_sbc_data_3d_season,
-    pool  = .tobs_sbc_pool_3d_season,
-    refit = .tobs_sbc_refit_ms_distance),
-  # ms_dyn_occu() (community group, section 6q): the HMM-forward dynamic
-  # analogue of ms_occu, with two SHARED (non-species) transition globals
-  # (gamma, eps) alongside the two per-species RE arms (psi1, p). New 4D
-  # pool (model$y is [site x visit x season x species]).
+    spec  = .tobs_sbc_spec_ms_distance),
   ms_dyn_occu = .tobs_sbc_community_entry(
     arms    = list(.tobs_sbc_arm("psi1", "psi1_", 1L),
                    .tobs_sbc_arm("p",    "p_",    2L)),
@@ -3000,25 +2192,13 @@
     ll      = .tobs_sbc_ll_ms_dyn_occu,
     setup   = .tobs_sbc_setup_ms_dyn_occu,
     row     = .tobs_sbc_row_ms_dyn_occu,
-    spec    = .tobs_sbc_spec_ms_dyn_occu,
-    data    = .tobs_sbc_data_4d_species,
-    pool    = .tobs_sbc_pool_4d_species,
-    refit   = .tobs_sbc_refit_ms_dyn_occu),
-  # ms_abun() (community group, section 6r): the abundance-arm sibling of
-  # ms_occu/ms_distance -- see section 6r for why this family needed a tulpa
-  # engine change before it could register at all. Poisson only, and only
-  # reachable via the AGHQ engine (control = list(optimizer = "joint_fd",
-  # n.quad > 1)); the default n.quad = 1 Laplace-EM path errors with a
-  # pointer rather than drawing an independent (mu, b_s).
+    spec    = .tobs_sbc_spec_ms_dyn_occu),
   ms_abun = .tobs_sbc_community_entry(
     arms  = list(.tobs_sbc_arm("lambda", "lambda_", 1L),
                  .tobs_sbc_arm("p",      "p_",      2L)),
     ll    = .tobs_sbc_ll_ms_abun,
     setup = .tobs_sbc_setup_ms_abun,
-    spec  = .tobs_sbc_spec_ms_abun,
-    data  = .tobs_sbc_data_3d_season,
-    pool  = .tobs_sbc_pool_3d_season,
-    refit = .tobs_sbc_refit_ms_abun)
+    spec  = .tobs_sbc_spec_ms_abun)
 )
 
 # Every entry supplies the callbacks the driver reads. `loglik` / `loglik_many`
@@ -3236,10 +2416,7 @@
 #' `int_occu` (full source-site overlap only) pools on the SITE axis and
 #' leaves the per-source axis alone, since its response is a list of one
 #' detection matrix per source; the rank statistic is the shared machinery
-#' unchanged. Registering it surfaced a real bug (since fixed): the detection
-#' intercept was silently left in standardized-covariate
-#' units on every fit with an autoscaled detection covariate, independent of
-#' SBC.
+#' unchanged.
 #'
 #' `gdistremoval` pools two response matrices (`yDist` band counts, `yRem`
 #' period counts) together on the SITE axis, reusing the same
@@ -3269,8 +2446,7 @@
 #' one joint multi-species state rather than being independently observed.
 #'
 #' `dyn_int_occu` is the product of the multi-season and multi-source shapes:
-#' a named list of S per-source 3D arrays, pooled by a new
-#' `.tobs_sbc_pool_named_3d` that composes both existing pooling rules.
+#' a named list of S per-source 3D arrays, each stacked on its site axis.
 #'
 #' `t_occu` is a `pg_gibbs` family whose `fit$draws` is already the real
 #' pooled posterior sample; it has no `simulate()` handler and no
@@ -3287,10 +2463,24 @@
 #' two-block one); the exchangeable unit is the CELL rather than the plot, so
 #' pooling and site labeling track cell indices.
 #'
-#' A family is registered by adding one entry to the internal registry -- a
-#' replicate generator, a refit call and optionally a joint statistic; the
-#' pooling, the grouping labels, the arm construction and the controls are
-#' shared.
+#' The community families `ms_occu`, `ms_occu_cover` (`positive =
+#' "lognormal"`), `ms_int_occu` (full source-site overlap), `ms_count`
+#' (`response = "poisson"`), `jsdm`, `ms_distance` (`key = "halfnorm"`,
+#' `mixture = "poisson"`), `ms_dyn_occu` and `ms_abun` (`mixture =
+#' "poisson"`) rank a FIXED species set's own realized coefficients (community
+#' mean plus each species' deviation, drawn jointly), plus any shared
+#' coefficients such as `ms_dyn_occu`'s colonization / extinction and
+#' `ms_occu_cover`'s cover dispersion. The replicate is the family's own
+#' `simulate()` at the drawn coefficients and the rank statistic sums each
+#' species' exact marginal. Calibration of these Laplace-EM posteriors depends
+#' on the species count: a small community is measurably non-Gaussian, so they
+#' are checked at a community size typical of real data.
+#'
+#' A family is registered by adding one entry to the internal registry -- its
+#' fitting call as a map from arm-formula slots to `tobs()` arguments, a
+#' replicate generator where the family's own `simulate()` cannot serve, and
+#' optionally a joint statistic; the pooling, the grouping labels, the arm
+#' construction and the controls are shared.
 #'
 #' @return An object of class `tulpa_sbc` from \pkg{tulpa}, carrying the per-quantity
 #'   rank ECDFs, the exact simultaneous band, and the uniformity tests. When

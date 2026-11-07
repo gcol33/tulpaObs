@@ -13,7 +13,7 @@ test_that("jsdm posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6o). jsdm() shares ms_count()'s exact
+  # (community group, section 6g). jsdm() shares ms_count()'s exact
   # community Laplace-EM, so the same S=20 fixture that resolved
   # ms_count's #226 failure mode applies directly -- 3 seeds (0, 1, 2)
   # during development, min p_unif range 0.0093-0.0108, 0 quantities below

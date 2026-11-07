@@ -13,7 +13,7 @@ test_that("ms_count posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6n) /. SPECIES-COUNT SCOPED the same way
+  # (community group, section 6g) /. SPECIES-COUNT SCOPED the same way
   # ms_occu/ms_int_occu were: a multi-seed (0, 1, 2) probe on a small
   # fixture originally found `sp3_mu_(Intercept)` pinned at p_unif
   # ~9.6e-7-9.9e-7 every time (worse than ms_occu/ ms_int_occu's own

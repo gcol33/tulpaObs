@@ -13,7 +13,7 @@ test_that("ms_occu_cover posterior SBC: correct fit uniform, mis-scaled is not",
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6j-bis). The occ+p+pos analogue of ms_occu;
+  # (community group, section 6g). The occ+p+pos analogue of ms_occu;
   # theta is the per-species realized coefficient (S x P, species-major) plus
   # one shared dispersion coordinate, not fit$means alone (a community mean),
   # so the scored quantity names come off the registry's own draws() as
