@@ -1,16 +1,14 @@
 # =============================================================================
-# nuts_chains.R -- Multi-chain orchestration for the NUTS engine.
+# nuts_chains.R -- Multi-chain pooling for the NUTS engine.
 #
-# The C++ entry point `cpp_occu_fit()` runs a single chain. Multiple chains,
-# thinning, and cross-chain convergence diagnostics are assembled here, in R,
-# by running the single-chain sampler `n.chains` times with offset seeds and
-# pooling the draws. This keeps the C++ kernel chain-count agnostic; the
-# pooled result is shaped exactly like one `cpp_occu_fit()` return so the
-# downstream unscaling / parameter-naming code is unchanged.
-#
-# Parallel chains (`n.threads > 1`) use a PSOCK cluster and therefore require
-# tulpaObs to be installed (so workers can load it); the default
-# `n.threads = 1` runs chains sequentially and works under `load_all()` too.
+# Every sampler runs its chains in ONE engine call through tulpa's multi-chain
+# runner (`tulpa::get_nuts_chains_fn()`): the C++ entry takes `n_chains` /
+# `n_threads`, the engine disperses the chains' starts and varies their streams
+# by chain index from one seed, runs them on an OpenMP team of at most
+# `n_threads`, and returns one result list per chain. Thinning, pooling and the
+# cross-chain convergence diagnostics are assembled here; the pooled
+# `cpp_occu_fit()` result keeps the one-chain shape, so the downstream
+# unscaling / parameter-naming code is unchanged.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -32,19 +30,18 @@
 # maps back through `field_load` to the fitted field.
 .tobs_nuts_field_draws <- function(run_chain, n_chains, nms, n_base, n_raw,
                                    field_load, n.thin = 1L, n.threads = 1L) {
-  chains <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
+  chains <- lapply(.tobs_nuts_chains(run_chain, n_chains, n.threads),
                    .tobs_nuts_thin_chain,
                    n.thin = max(1L, as.integer(n.thin %||% 1L)))
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
-  colnames(draws) <- nms
+  pool    <- .tobs_nuts_pool(chains, nms)
+  draws   <- pool$draws
   b_idx   <- seq_len(n_base)
   raw_idx <- n_base + seq_len(n_raw)
-  par     <- colMeans(draws); names(par) <- nms
   list(chains     = chains,
        draws      = draws,
        nms        = nms,
-       par        = par,
-       cov        = stats::cov(draws[, b_idx, drop = FALSE]),
+       par        = pool$par,
+       cov        = pool$cov[b_idx, b_idx, drop = FALSE],
        b_idx      = b_idx,
        n_raw      = n_raw,
        field_mean = as.numeric(
@@ -144,8 +141,8 @@
 # covariance over the base coefficient block, `nms` the base coefficient names,
 # `re_info` the resolved single-intercept RE (NULL for none), `sigma.logr` the
 # prior SD on the RE log-SD, and `sampler` the resolved sampler knobs
-# (`.tobs_sampler_control_snapshot()`). Runs `n.chains` chains with offset
-# seeds and pools them; the warm init, the RE record and the sampler knobs ride
+# (`.tobs_sampler_control_snapshot()`). Runs `n.chains` chains in one sampler
+# call and pools them; the warm init, the RE record and the sampler knobs ride
 # on the result for `.tobs_count_nuts_attach()`.
 .tobs_count_nuts_front_door <- function(target, spec, priors, theta0, V, nms,
                                         re_info, sigma.logr, sampler,
@@ -161,8 +158,9 @@
                  max_treedepth = as.integer(sampler[["max.treedepth"]]),
                  adapt_delta   = sampler[["adapt.delta"]],
                  verbose       = isTRUE(verbose)))
-  run_chain <- function(ch)
-    do.call(target, c(args, list(seed = as.integer(seed0 + ch - 1L))))
+  run_chain <- function(n_chains, n_threads)
+    do.call(target, c(args, list(seed = as.integer(seed0), n_chains = n_chains,
+                                 n_threads = n_threads)))
   run <- .tobs_count_nuts_run(run_chain, sampler[["n.chains"]], nms,
                               n.thin = sampler[["n.thin"]],
                               n.threads = sampler[["n.threads"]])
@@ -172,22 +170,33 @@
   run
 }
 
-# Run `n_chains` chains of a prepared sampler closure, in parallel when asked,
-# and thin every per-iteration series the fit reports by the same stride.
-#
-# `run_chain(ch)` closes over the family's own spec, so a worker gets the whole
-# closure: parallel chains need tulpaObs loaded in the worker and the closure's
-# environment to be serialisable, which is why the cluster is only built when
-# there is more than one chain to spread.
-.tobs_nuts_run_parallel <- function(run_chain, n_chains, n.threads = 1L) {
-  n_chains  <- max(1L, as.integer(n_chains))
-  n.threads <- max(1L, as.integer(n.threads %||% 1L))
-  if (n_chains == 1L || n.threads == 1L)
-    return(lapply(seq_len(n_chains), run_chain))
-  cl <- parallel::makeCluster(min(n.threads, n_chains))
-  on.exit(parallel::stopCluster(cl), add = TRUE)
-  parallel::clusterEvalQ(cl, requireNamespace("tulpaObs", quietly = TRUE))
-  parallel::parLapply(cl, seq_len(n_chains), run_chain)
+# Run `n_chains` chains of a prepared sampler in one engine call.
+# `run_chains(n_chains, n_threads)` calls the family's C++ entry with the chain
+# count and the chain team's thread cap and returns its list of per-chain
+# results (draws plus per-iteration diagnostics).
+.tobs_nuts_chains <- function(run_chains, n_chains, n.threads = 1L) {
+  run_chains(max(1L, as.integer(n_chains)),
+             max(1L, as.integer(n.threads %||% 1L)))
+}
+
+# Pool (thinned) chains: the chain-major stacked draws (columns named `nms`
+# when given), their mean and covariance, the per-iteration sampler
+# diagnostics, the mean step size, and the row -> chain map.
+.tobs_nuts_pool <- function(chains, nms = NULL) {
+  per_chain <- lapply(chains, `[[`, "draws")
+  draws <- do.call(rbind, per_chain)
+  if (!is.null(nms)) colnames(draws) <- nms
+  par <- colMeans(draws)
+  list(draws     = draws,
+       par       = par,
+       cov       = stats::cov(draws),
+       accept    = unlist(lapply(chains, `[[`, "accept_prob")),
+       divergent = as.integer(unlist(lapply(chains, `[[`, "divergent"))),
+       treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
+       epsilon   = mean(vapply(chains, function(ch) ch$epsilon %||% NA_real_,
+                               numeric(1)), na.rm = TRUE),
+       chain_id  = rep(seq_along(per_chain), vapply(per_chain, nrow, integer(1))),
+       per_chain = per_chain)
 }
 
 # Thin one chain's draw matrix and its per-iteration diagnostic vectors.
@@ -203,21 +212,19 @@
 .tobs_count_nuts_run <- function(run_chain, n_chains, nms, n.thin = 1L,
                                  n.threads = 1L) {
   n.thin <- max(1L, as.integer(n.thin %||% 1L))
-  chains <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
+  chains <- lapply(.tobs_nuts_chains(run_chain, n_chains, n.threads),
                    .tobs_nuts_thin_chain, n.thin = n.thin)
-  draws  <- do.call(rbind, lapply(chains, `[[`, "draws"))
-  colnames(draws) <- nms
-  par <- colMeans(draws); names(par) <- nms
+  pool <- .tobs_nuts_pool(chains, nms)
   list(chains    = chains,
-       draws     = draws,
+       draws     = pool$draws,
        nms       = nms,
        n_thin    = n.thin,
-       par       = par,
-       cov       = stats::cov(draws),
-       accept    = unlist(lapply(chains, `[[`, "accept_prob")),
-       divergent = unlist(lapply(chains, `[[`, "divergent")),
-       treedepth = as.integer(unlist(lapply(chains, `[[`, "treedepth"))),
-       epsilon   = chains[[1L]]$epsilon)
+       par       = pool$par,
+       cov       = pool$cov,
+       accept    = pool$accept,
+       divergent = pool$divergent,
+       treedepth = pool$treedepth,
+       epsilon   = pool$epsilon)
 }
 
 # Replace the family builder's moment-matched draws and NA diagnostics with the
@@ -354,53 +361,31 @@
   n.chains  <- max(1L, as.integer(n.chains))
   n.thin    <- max(1L, as.integer(n.thin %||% 1L))
   n.threads <- max(1L, as.integer(n.threads %||% 1L))
-  base_seed <- as.integer(spec$seed %||% 42L)
+  spec$seed      <- as.integer(spec$seed %||% 42L)
+  spec$verbose   <- isTRUE(verbose)
+  spec$n_chains  <- n.chains
+  spec$n_threads <- n.threads
+  res    <- cpp_occu_fit(spec)
+  chains <- lapply(res$chains, function(ch) c(ch, res[setdiff(names(res), names(ch))]))
 
-  run_one <- function(chain_id) {
-    s <- spec
-    s$seed    <- base_seed + chain_id - 1L
-    s$verbose <- isTRUE(verbose) && chain_id == 1L   # avoid interleaved logs
-    cpp_occu_fit(s)
-  }
-
-  if (n.chains == 1L) {
-    chains <- list(run_one(1L))
-  } else if (n.threads > 1L) {
-    cl <- parallel::makeCluster(min(n.threads, n.chains))
-    on.exit(parallel::stopCluster(cl), add = TRUE)
-    parallel::clusterEvalQ(cl, requireNamespace("tulpaObs", quietly = TRUE))
-    parallel::clusterExport(cl, c("spec", "base_seed"), envir = environment())
-    chains <- parallel::parLapply(cl, seq_len(n.chains), function(chain_id) {
-      s <- spec
-      s$seed    <- base_seed + chain_id - 1L
-      s$verbose <- FALSE
-      cpp_occu_fit(s)
-    })
-  } else {
-    chains <- lapply(seq_len(n.chains), run_one)
-  }
-
-  # Per-chain draws (engine scale, thinned) for diagnostics; pooled draws for
-  # the returned fit.
-  per_chain_draws <- lapply(chains, function(ch) .tobs_thin(ch$draws, n.thin))
-  pooled <- do.call(rbind, per_chain_draws)
+  # Engine-scale draws, thinned and pooled chain-major.
+  pool <- .tobs_nuts_pool(lapply(chains, .tobs_nuts_thin_chain, n.thin = n.thin))
 
   out <- chains[[1L]]                       # inherit colnames / extra fields
-  out$draws       <- pooled
-  out$means       <- colMeans(pooled)
-  out$n_samples   <- nrow(pooled)
+  out$draws       <- pool$draws
+  out$means       <- pool$par
+  out$n_samples   <- nrow(pool$draws)
   out$n_chains    <- n.chains
   out$n_thin      <- n.thin
-  out$divergent   <- unlist(lapply(chains, function(ch) .tobs_thin(ch$divergent, n.thin)))
-  out$accept_prob <- unlist(lapply(chains, function(ch) .tobs_thin(ch$accept_prob, n.thin)))
-  out$treedepth   <- unlist(lapply(chains, function(ch) .tobs_thin(ch$treedepth, n.thin)))
-  out$epsilon     <- mean(vapply(chains, function(ch) ch$epsilon %||% NA_real_,
-                                 numeric(1)), na.rm = TRUE)
+  out$divergent   <- pool$divergent
+  out$accept_prob <- pool$accept
+  out$treedepth   <- pool$treedepth
+  out$epsilon     <- pool$epsilon
   # Row -> chain map, aligned with the pooled draws (which stay in chain-major
   # order through per-process unscaling). Convergence diagnostics (Rhat / ESS)
   # are attached downstream from the named, unscaled draws + this chain_id, by
   # .tobs_nuts_attach_convergence(); see .tobs_fit_model().
-  out$chain_id    <- rep(seq_len(n.chains), vapply(per_chain_draws, nrow, integer(1)))
+  out$chain_id    <- pool$chain_id
   out
 }
 

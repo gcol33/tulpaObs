@@ -200,12 +200,13 @@
 #'   * `n.thin` -- keep every `n.thin`-th post-warmup draw (default 1). The
 #'     kept draws and the per-iteration diagnostics (`divergent`,
 #'     `accept_prob`, `treedepth`) are thinned by the same stride.
-#'   * `n.chains` -- number of chains, run with offset seeds and pooled
-#'     (default 1). Split-Rhat / bulk / tail ESS are reported on `$convergence`.
-#'   * `n.threads` -- chains to run in parallel (default 1, sequential). Values
-#'     `> 1` use a PSOCK cluster and require tulpaObs to be installed. This is
-#'     chain parallelism; it does not change the thread count inside a single
-#'     gradient evaluation.
+#'   * `n.chains` -- number of chains, run in one sampler call and pooled
+#'     (default 1); the sampler disperses their starting points and gives each
+#'     chain its own stream from `seed`. Split-Rhat / bulk / tail ESS are
+#'     reported on `$convergence`.
+#'   * `n.threads` -- chains run at once (default 1, one after another), on
+#'     OpenMP threads. The draws do not depend on it, and it does not change
+#'     the thread count inside a single gradient evaluation.
 #'   * `n.threads.grad` -- OpenMP threads inside ONE gradient evaluation of a
 #'     community NUTS target (`ms_occu()`, `ms_count()` / `jsdm()`,
 #'     `ms_abun()`, `ms_dyn_occu()`), whose per-species loop is parallel.
@@ -215,9 +216,9 @@
 #'   * `adapt.delta` -- target acceptance probability (default 0.8 on the
 #'     single-species families, 0.9 on the community samplers).
 #'   * `max.treedepth` -- NUTS maximum tree depth (default 10).
-#'   * `seed` -- base RNG seed; chain `c` uses `seed + c - 1` (default 42 on the
-#'     single-species families, 1 on the community samplers).
-#'     The resolved per-chain seeds are stored on `$seeds`.
+#'   * `seed` -- RNG seed the chains' streams derive from (default 42 on the
+#'     single-species families, 1 on the community samplers), stored on
+#'     `$seeds`.
 #'   * `sigma.beta` -- prior SD on the coefficients (default 10 on the
 #'     single-species families and on the log-link community samplers
 #'     `ms_count()` / `jsdm()` / `ms_abun()`, whose unit change is

@@ -248,8 +248,8 @@ single-species entry differs from the community one, both are given.
 | `n.iter`          | 1000    | Post-warmup draws KEPT per chain; a run is `n.iter + n.warmup` iterations long |
 | `n.warmup`        | 1000    | Warmup / adaptation iterations, discarded |
 | `n.thin`          | 1       | Keep every `n.thin`-th post-warmup draw. Thins the per-iteration `divergent` / `accept_prob` / `treedepth` series by the same stride. |
-| `n.chains`        | 1       | Chains (offset seeds, pooled). Resolved seeds stored on `$seeds`. |
-| `n.threads`       | 1       | Whole chains run in parallel (PSOCK cluster if `> 1`) |
+| `n.chains`        | 1       | Chains, one sampler call (tulpa's multi-chain runner), pooled. Seed stored on `$seeds`. |
+| `n.threads`       | 1       | Chains run at once on OpenMP threads; draws do not depend on it |
 | `n.threads.grad`  | 0       | OpenMP threads inside ONE gradient evaluation of a community target; `0` leaves the count to OpenMP |
 | `adapt.delta`     | 0.8 single-species / 0.9 community | Target acceptance probability |
 | `max.treedepth`   | 10      | NUTS maximum tree depth |

@@ -6,6 +6,7 @@
 #define TULPAOCC_POPULATE_HELPERS_H
 
 #include "tobs_shape.h"
+#include "nuts_engine.h"   // ChainTeamScope
 #include <Rcpp.h>
 #include <vector>
 #include <string>
@@ -599,63 +600,63 @@ inline void add_process(tulpa::ModelData& data, Rcpp::NumericMatrix X_r, int N) 
 }
 
 // ============================================================================
-// Run NUTS and convert results to R list
+// Run NUTS (tulpa's multi-chain runner) and convert each chain to an R list
 // ============================================================================
+// Every chain starts at zero under the default mass adaptation; the engine
+// disperses the starts, varies the stream by chain index from `seed`, and runs
+// the chains on an OpenMP team of at most `n_threads` (deterministic per
+// (seed, chain), so the draws do not depend on the width).
 inline Rcpp::List run_nuts_and_collect(
     tulpa::ModelData& data, tulpa::ParamLayout& layout,
     int n_iter, int n_warmup, int max_treedepth, double adapt_delta,
-    int seed, bool verbose
+    int seed, bool verbose, int n_chains, int n_threads
 ) {
-    int n_params = layout.total_params;
-    std::vector<double> init(n_params, 0.0);
-
-    tulpa::NUTSFn run_nuts = tulpa::get_nuts_fn();
-    tulpa::NUTSResult result = {};
-
-    run_nuts(
-        &data, &layout, init.data(), n_params,
-        n_iter, n_warmup, max_treedepth, adapt_delta,
-        static_cast<unsigned int>(seed),
-        verbose ? 1 : 0,
-        nullptr,            // inv_metric_diag: default mass-adaptation
-        &result
-    );
-
-    int n_samples = result.n_sample;
-
-    Rcpp::NumericMatrix draws(n_samples, n_params);
-    Rcpp::NumericVector lp(n_samples), ap(n_samples);
-    Rcpp::IntegerVector div(n_samples), td(n_samples);
-
-    for (int s = 0; s < n_samples; s++) {
-        for (int j = 0; j < n_params; j++)
-            draws(s, j) = result.samples[s * n_params + j];
-        lp[s] = result.log_prob[s];
-        ap[s] = result.accept_prob[s];
-        div[s] = result.divergent[s];
-        td[s] = result.treedepth[s];
+    const int n_params = layout.total_params;
+    if (n_chains < 1) Rcpp::stop("run_nuts_and_collect: n_chains must be >= 1.");
+    std::vector<double> init((std::size_t) n_chains * n_params, 0.0);
+    std::vector<tulpa::NUTSResult> results(n_chains);
+    {
+        ChainTeamScope team(n_threads);
+        tulpa::NUTSChainsFn run_chains = tulpa::get_nuts_chains_fn();
+        run_chains(&data, &layout, init.data(), n_params, n_chains,
+                   n_iter, n_warmup, max_treedepth, adapt_delta,
+                   static_cast<unsigned int>(seed), verbose ? 1 : 0,
+                   nullptr, results.data());
     }
 
-    double epsilon = result.epsilon;
-    result.free_buffers();
-
-    // Posterior means
-    Rcpp::NumericVector means(n_params, 0.0);
-    for (int s = 0; s < n_samples; s++)
-        for (int j = 0; j < n_params; j++)
-            means[j] += draws(s, j) / n_samples;
-
-    return Rcpp::List::create(
-        Rcpp::Named("draws") = draws,
-        Rcpp::Named("means") = means,
-        Rcpp::Named("n_samples") = n_samples,
-        Rcpp::Named("n_params") = n_params,
-        Rcpp::Named("log_prob") = lp,
-        Rcpp::Named("accept_prob") = ap,
-        Rcpp::Named("divergent") = div,
-        Rcpp::Named("treedepth") = td,
-        Rcpp::Named("epsilon") = epsilon
-    );
+    Rcpp::List chains(n_chains);
+    for (int c = 0; c < n_chains; ++c) {
+        tulpa::NUTSResult& result = results[c];
+        const int n_samples = result.n_sample;
+        Rcpp::NumericMatrix draws(n_samples, n_params);
+        Rcpp::NumericVector lp(n_samples), ap(n_samples);
+        Rcpp::IntegerVector div(n_samples), td(n_samples);
+        for (int s = 0; s < n_samples; s++) {
+            for (int j = 0; j < n_params; j++)
+                draws(s, j) = result.samples[(std::size_t) s * n_params + j];
+            lp[s] = result.log_prob[s];
+            ap[s] = result.accept_prob[s];
+            div[s] = result.divergent[s];
+            td[s] = result.treedepth[s];
+        }
+        const double epsilon = result.epsilon;
+        result.free_buffers();
+        Rcpp::NumericVector means(n_params, 0.0);
+        for (int s = 0; s < n_samples; s++)
+            for (int j = 0; j < n_params; j++)
+                means[j] += draws(s, j) / n_samples;
+        chains[c] = Rcpp::List::create(
+            Rcpp::Named("draws") = draws,
+            Rcpp::Named("means") = means,
+            Rcpp::Named("n_samples") = n_samples,
+            Rcpp::Named("n_params") = n_params,
+            Rcpp::Named("log_prob") = lp,
+            Rcpp::Named("accept_prob") = ap,
+            Rcpp::Named("divergent") = div,
+            Rcpp::Named("treedepth") = td,
+            Rcpp::Named("epsilon") = epsilon);
+    }
+    return chains;
 }
 
 } // namespace tulpaObs

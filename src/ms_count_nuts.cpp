@@ -89,6 +89,10 @@ inline MsCountNutsData ms_count_nuts_build_data(const Rcpp::List& spec) {
     MsCountNutsData d;
     d.n_threads = spec.containsElementNamed("n_threads")
                   ? Rcpp::as<int>(spec["n_threads"]) : 0;
+#ifdef _OPENMP
+    // Resolved here, before a multi-chain run caps the OpenMP default.
+    if (d.n_threads <= 0) d.n_threads = omp_get_max_threads();
+#endif
     d.X = Rcpp::as<NumericMatrix>(spec["X"]);
     NumericMatrix ym = Rcpp::as<NumericMatrix>(spec["y"]);   // n_sites x n_species
     d.n_sites = d.X.nrow(); d.p_beta = d.X.ncol(); d.n_species = ym.ncol();
@@ -309,7 +313,8 @@ Rcpp::List cpp_ms_count_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                              Rcpp::List pri, double sigma_beta, double sigma_logr,
                              Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                              int n_iter, int n_warmup, int max_treedepth,
-                             double adapt_delta, int seed, bool verbose) {
+                             double adapt_delta, int seed, bool verbose,
+                         int n_chains = 1, int n_threads = 1) {
     tulpaObs::MsCountNutsModel m;
     m.d = tulpaObs::ms_count_nuts_build_data(spec);
     m.sigma_beta = sigma_beta; m.sigma_logr = sigma_logr;
@@ -320,6 +325,6 @@ Rcpp::List cpp_ms_count_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_count_nuts_full_grad, &m, m.d.total,
         theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
-        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
+        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads,
         "ms_count", m.d.n_sites);
 }

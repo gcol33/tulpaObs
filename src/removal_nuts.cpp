@@ -32,10 +32,11 @@ Rcpp::List cpp_removal_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                             double sigma_beta, double sigma_logr,
                             Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                             int n_iter, int n_warmup, int max_treedepth,
-                            double adapt_delta, int seed, bool verbose) {
+                            double adapt_delta, int seed, bool verbose,
+                         int n_chains = 1, int n_threads = 1) {
     return tulpaObs::count_nuts_run(
         spec, theta0, sigma_beta, sigma_logr,
         tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
         n_iter, n_warmup,
-        max_treedepth, adapt_delta, seed, verbose, &tulpaObs::compute_removal_site);
+        max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads, &tulpaObs::compute_removal_site);
 }

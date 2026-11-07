@@ -5,8 +5,8 @@ cpp_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logr) {
     .Call(`_tulpaObs_cpp_abun_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logr)
 }
 
-cpp_abun_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_abun_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_abun_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_abun_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_register_occu_cover_lognormal_coupling <- function() {
@@ -113,8 +113,8 @@ cpp_cover_nuts_logpost <- function(spec, theta, sigma_beta, sigma_logdisp) {
     .Call(`_tulpaObs_cpp_cover_nuts_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }
 
-cpp_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_distance_laplace_fixed <- function(y, X_lambda_R, X_sigma_R, quad_xptr, key, beta_lambda_init, beta_sigma_init, eta_b_init, K_max, max_iter, tol, verbose, nb, log_r_init, theta_max, headroom = -1L) {
@@ -133,8 +133,8 @@ cpp_distance_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_shape
     .Call(`_tulpaObs_cpp_distance_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_shape, sigma_logr)
 }
 
-cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_distance_nuts <- function(spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_distance_nuts`, spec, theta0, sigma_beta, sigma_shape, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_distance_ploglik_batch <- function(y, quad_xptr, key, K_max, eta_lambda, eta_sigma, eta_b, r_vec, n_threads, headroom = -1L) {
@@ -173,8 +173,8 @@ cpp_dyn_abun_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logr)
     .Call(`_tulpaObs_cpp_dyn_abun_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logr)
 }
 
-cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_dyn_abun_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_dyn_abun_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_dyn_abun_ploglik_batch <- function(y_flat, n_sites, n_seasons, J, K, eta_lambda, eta_p, eta_omega, eta_gamma, use_nb, eta_logr, n_threads) {
@@ -189,40 +189,40 @@ cpp_fp_occu_nuts_joint_logpost <- function(spec, theta, sigma_beta) {
     .Call(`_tulpaObs_cpp_fp_occu_nuts_joint_logpost`, spec, theta, sigma_beta)
 }
 
-cpp_fp_occu_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_fp_occu_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_fp_occu_nuts <- function(spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_fp_occu_nuts`, spec, theta0, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_abun_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta, sigma_logr) {
     .Call(`_tulpaObs_cpp_ms_abun_nuts_joint_logpost`, spec, theta, pri, sigma_beta, sigma_logr)
 }
 
-cpp_ms_abun_nuts <- function(spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_ms_abun_nuts`, spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_ms_abun_nuts <- function(spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_ms_abun_nuts`, spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_count_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta, sigma_logr) {
     .Call(`_tulpaObs_cpp_ms_count_nuts_joint_logpost`, spec, theta, pri, sigma_beta, sigma_logr)
 }
 
-cpp_ms_count_nuts <- function(spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_ms_count_nuts`, spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_ms_count_nuts <- function(spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_ms_count_nuts`, spec, theta0, pri, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_dyn_occu_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta) {
     .Call(`_tulpaObs_cpp_ms_dyn_occu_nuts_joint_logpost`, spec, theta, pri, sigma_beta)
 }
 
-cpp_ms_dyn_occu_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_ms_dyn_occu_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_ms_dyn_occu_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_ms_dyn_occu_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_int_occu_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta) {
     .Call(`_tulpaObs_cpp_ms_int_occu_nuts_joint_logpost`, spec, theta, pri, sigma_beta)
 }
 
-cpp_ms_int_occu_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_ms_int_occu_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_ms_int_occu_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_ms_int_occu_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_nmix_ploglik_batch <- function(y, species_idx, site_idx, X_p, X_lambda, draws, mu_off, b_off, chol_lam_off, chol_p_off, chol_logr_off, p_lam, p_p, n_species, n_sites, is_nb, K_max, n_threads) {
@@ -233,8 +233,8 @@ cpp_ms_occu_cover_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta) {
     .Call(`_tulpaObs_cpp_ms_occu_cover_nuts_joint_logpost`, spec, theta, pri, sigma_beta)
 }
 
-cpp_ms_occu_cover_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_ms_occu_cover_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_ms_occu_cover_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_ms_occu_cover_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_ocs_marginal_grad <- function(spec, theta_inner) {
@@ -249,16 +249,16 @@ cpp_ms_ocs_joint_logpost <- function(spec, theta, pri, sigma_beta, sd_L, constra
     .Call(`_tulpaObs_cpp_ms_ocs_joint_logpost`, spec, theta, pri, sigma_beta, sd_L, constrain)
 }
 
-cpp_ms_ocs_nuts <- function(spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, constrain = FALSE) {
-    .Call(`_tulpaObs_cpp_ms_ocs_nuts`, spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, constrain)
+cpp_ms_ocs_nuts <- function(spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L, constrain = FALSE) {
+    .Call(`_tulpaObs_cpp_ms_ocs_nuts`, spec, theta0, pri, sigma_beta, sd_L, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads, constrain)
 }
 
 cpp_ms_occu_nuts_joint_logpost <- function(spec, theta, pri, sigma_beta) {
     .Call(`_tulpaObs_cpp_ms_occu_nuts_joint_logpost`, spec, theta, pri, sigma_beta)
 }
 
-cpp_ms_occu_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_ms_occu_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_ms_occu_nuts <- function(spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_ms_occu_nuts`, spec, theta0, pri, sigma_beta, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_ms_occu_site_cell <- function(eta_psi, eta_p, n_valid, n_det, observed) {
@@ -381,8 +381,8 @@ cpp_occu_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_log
     .Call(`_tulpaObs_cpp_occu_cover_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }
 
-cpp_occu_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_occu_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_occu_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_occu_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_occu_cover_ploglik_ragged <- function(X_occ, X_det_site, X_pos_site, X_det_visit, X_pos_visit, site_of_visit, y_det_visit, y_pos_visit, b_occ, b_det, b_pos, disp, field_occ, field_pos, off_det, off_pos, positive, eta_bound, n_threads) {
@@ -413,8 +413,8 @@ cpp_occu_mscale_cover_nuts_joint_logpost <- function(spec, theta, sigma_beta, si
     .Call(`_tulpaObs_cpp_occu_mscale_cover_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logdisp)
 }
 
-cpp_occu_mscale_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_occu_mscale_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_occu_mscale_cover_nuts <- function(spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_occu_mscale_cover_nuts`, spec, theta0, sigma_beta, sigma_logdisp, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_re_chol_factor <- function(raw, n) {
@@ -433,8 +433,8 @@ cpp_removal_nuts_joint_logpost <- function(spec, theta, sigma_beta, sigma_logr) 
     .Call(`_tulpaObs_cpp_removal_nuts_joint_logpost`, spec, theta, sigma_beta, sigma_logr)
 }
 
-cpp_removal_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose) {
-    .Call(`_tulpaObs_cpp_removal_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose)
+cpp_removal_nuts <- function(spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains = 1L, n_threads = 1L) {
+    .Call(`_tulpaObs_cpp_removal_nuts`, spec, theta0, sigma_beta, sigma_logr, inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads)
 }
 
 cpp_removal_grouped_oracle <- function(arm, y, site_idx, X_lambda, X_p, Z_site, site_group, n_sites, n_groups, K_max, nb = FALSE) {

@@ -38,11 +38,11 @@ struct DistNutsModel {
     DistQuad quad;
     int total = 0;
     // Built once in dist_nuts_build() and reused across every leapfrog step:
-    // K_max is fixed for the model, so the O(K_max) combinatorial table and
-    // the per-site derivative scratch would otherwise be rebuilt from scratch
-    // on every one of the thousands of gradient calls a NUTS run makes.
+    // K_max is fixed for the model, so the O(K_max) combinatorial table would
+    // otherwise be rebuilt on every one of the thousands of gradient calls a
+    // NUTS run makes. The per-site derivative scratch is per thread (see
+    // dist_nuts_eval): concurrent chains evaluate one model.
     std::vector<double> comb_table;
-    mutable DistScratch scratch;
     // Optional single intercept random effect on the abundance arm, loaded on
     // eta_lambda (nuts_re_block.h). The flat vector grows by [z_1..z_G,
     // log_sigma_re] at the tail.
@@ -99,6 +99,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
     if (has_field) grad_z.assign(m.field.n_units, 0.0);
 
     std::vector<int> y_site(m.n_bins);
+    thread_local DistScratch scratch;
     double lp = 0.0;
     for (int s = 0; s < m.n_sites; ++s) {
         double eta_lambda = 0.0, eta_sigma = 0.0;
@@ -109,7 +110,7 @@ inline double dist_nuts_eval(const DistNutsModel& m, const double* theta,
         for (int b = 0; b < m.n_bins; ++b) y_site[b] = m.y(s, b);
         const DistSiteResult res = compute_distance_site(
             y_site.data(), m.n_bins, eta_lambda, eta_sigma, eta_b, m.key,
-            m.quad, m.K_max, r, /*value_only=*/false, &m.comb_table, &m.scratch,
+            m.quad, m.K_max, r, /*value_only=*/false, &m.comb_table, &scratch,
             m.headroom);
         lp += res.log_lik;
         for (int k = 0; k < p_lam; ++k) grad[k] += res.grad_eta_lambda * m.X_lambda(s, k);
@@ -177,10 +178,11 @@ Rcpp::List cpp_distance_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                              double sigma_beta, double sigma_shape, double sigma_logr,
                              Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                              int n_iter, int n_warmup, int max_treedepth,
-                             double adapt_delta, int seed, bool verbose) {
+                             double adapt_delta, int seed, bool verbose,
+                         int n_chains = 1, int n_threads = 1) {
     tulpaObs::DistNutsModel m = tulpaObs::dist_nuts_build(spec);
     m.sigma_beta = sigma_beta; m.sigma_shape = sigma_shape; m.sigma_logr = sigma_logr;
     return tulpaObs::run_tulpa_nuts(&tulpaObs::dist_nuts_full_grad, &m, m.total,
                                     theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup,
-                                    max_treedepth, adapt_delta, seed, verbose);
+                                    max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads);
 }

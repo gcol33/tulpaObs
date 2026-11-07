@@ -142,9 +142,11 @@
     sim <- simulate_dyn_abun(N = 25, n.seasons = 2, J = 3, n.abund.covs = 1,
                              beta.lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 14)
+    # The sampler disperses the chains' starts, so the warmup has to carry them
+    # back to the posterior: 80 + 80 left the two chains apart (split-Rhat 1.56,
+    # an undefined tail-indicator ESS).
     tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 12),
-         detection = ~ 1, y = sim$y, method = "nuts",
-         control = .nconv_ctl(n.iter = 80L, n.warmup = 80L))
+         detection = ~ 1, y = sim$y, method = "nuts", control = .nconv_ctl())
   },
   cover = function() {
     sim <- simulate_cover(N = 120, beta.occ = c(-0.4, 0.8),

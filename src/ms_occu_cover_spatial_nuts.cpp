@@ -776,6 +776,7 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                            Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                            int n_iter, int n_warmup, int max_treedepth,
                            double adapt_delta, int seed, bool verbose,
+                           int n_chains = 1, int n_threads = 1,
                            bool constrain = false) {
     tulpaObs::MsOcsNutsModel m;
     m.d = tulpaObs::ms_ocs_build_data(spec);
@@ -790,7 +791,7 @@ Rcpp::List cpp_ms_ocs_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_ocs_full_grad, &m, m.total,
         theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
-        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
+        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads,
         "ms_occu_cover_spatial", m.d.n_sites);
 }
 

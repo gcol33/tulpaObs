@@ -136,15 +136,15 @@
     spec$logphi_sd   <- priors$logphi_sd
   }
 
-  run_chain <- function(ch) {
+  run_chains <- function(n_chains, n_threads) {
     # tulpa's NUTS engine takes n_iter as the TOTAL (warmup + sampling) count and
     # returns n_iter - n_warmup post-warmup draws.
     cpp_ms_count_nuts(spec, theta0, priors, sigma.beta, sigma.logr, NULL,
                       as.integer(n.iter + n.warmup), as.integer(n.warmup),
                       as.integer(max.treedepth), adapt.delta,
-                      as.integer(seed + ch - 1L), isTRUE(verbose))
+                      as.integer(seed), isTRUE(verbose), n_chains, n_threads)
   }
-  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+  rc <- .ms_ocs_run_chains(run_chains, n.chains, n.thin = n.thin,
                            n.threads = n.threads)
   chains    <- rc$chains
   draws_all <- rc$draws                             # (n_chains*n_sample) x total

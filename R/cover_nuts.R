@@ -127,25 +127,26 @@
 
   spec <- .tobs_cover_nuts_spec(enc)
 
-  run_chain <- function(ch) {
+  run_chains <- function(n_chains, n_threads) {
     cpp_cover_nuts(
       spec, theta0 = theta0, sigma_beta = sigma.beta,
       sigma_logdisp = sigma.logdisp, inv_metric = inv_metric,
       n_iter = as.integer(n.iter + n.warmup), n_warmup = as.integer(n.warmup),
       max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
-      seed = as.integer(seed + ch - 1L),
-      verbose = isTRUE(verbose) && ch == 1L)
+      seed = as.integer(seed),
+      verbose = isTRUE(verbose),
+      n_chains = n_chains, n_threads = n_threads)
   }
   n_chains <- max(1L, as.integer(n.chains))
-  chains   <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
-                     .tobs_nuts_thin_chain, n.thin = n.thin)
-  per_chain_draws <- lapply(chains, `[[`, "draws")
-  draws    <- do.call(rbind, per_chain_draws)
-  colnames(draws) <- par_names
+  pool     <- .tobs_nuts_pool(lapply(.tobs_nuts_chains(run_chains, n_chains, n.threads),
+                                     .tobs_nuts_thin_chain, n.thin = n.thin),
+                              par_names)
+  per_chain_draws <- pool$per_chain
+  draws    <- pool$draws
   n_draws  <- nrow(draws)
 
-  means  <- colMeans(draws); names(means) <- par_names
-  V_post <- stats::cov(draws); dimnames(V_post) <- list(par_names, par_names)
+  means  <- pool$par
+  V_post <- pool$cov
   sds    <- .tobs_sds_from_vcov(V_post, par_names)
 
   # Per-arm posterior summaries on the natural coefficient scale, named to match
@@ -168,11 +169,10 @@
     disp_sd   <- stats::sd(exp(log_disp_draws))
   }
 
-  accept    <- unlist(lapply(chains, `[[`, "accept_prob"))
-  divergent <- as.integer(unlist(lapply(chains, `[[`, "divergent")))
-  treedepth <- as.integer(unlist(lapply(chains, `[[`, "treedepth")))
-  epsilon   <- mean(vapply(chains, function(ch) ch$epsilon %||% NA_real_,
-                           numeric(1)), na.rm = TRUE)
+  accept    <- pool$accept
+  divergent <- pool$divergent
+  treedepth <- pool$treedepth
+  epsilon   <- pool$epsilon
 
   nuts <- list(accept_prob = accept, divergent = divergent,
                treedepth = treedepth, epsilon = epsilon, n_chains = n_chains,

@@ -36,6 +36,8 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
     double adapt_delta   = Rcpp::as<double>(spec_r["adapt_delta"]);
     int seed            = Rcpp::as<int>(spec_r["seed"]);
     bool verbose        = Rcpp::as<bool>(spec_r["verbose"]);
+    int n_chains  = spec_r.containsElementNamed("n_chains")  ? Rcpp::as<int>(spec_r["n_chains"])  : 1;
+    int n_threads = spec_r.containsElementNamed("n_threads") ? Rcpp::as<int>(spec_r["n_threads"]) : 1;
 
     // ---- Determine n_processes and build response data ----
     int n_processes;
@@ -278,8 +280,10 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
         tulpaObs::set_visit_re_positions(occ_response, layout.extra_offset);
     }
 
-    Rcpp::List result = tulpaObs::run_nuts_and_collect(
-        data, layout, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose);
+    Rcpp::List chains = tulpaObs::run_nuts_and_collect(
+        data, layout, n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
+        n_chains, n_threads);
+    Rcpp::List result = Rcpp::clone(Rcpp::as<Rcpp::List>(chains[0]));
 
     // ---- Add column names for fixed effects ----
     int n_params = layout.total_params;
@@ -397,6 +401,14 @@ Rcpp::List cpp_occu_fit(Rcpp::List spec_r) {
 
     result["draws"] = draws;
     result["means"] = means;
+    for (int c = 0; c < chains.size(); ++c) {
+        Rcpp::List ch = chains[c];
+        NumericMatrix dc = Rcpp::as<NumericMatrix>(ch["draws"]);
+        Rcpp::colnames(dc) = col_names;
+        ch["draws"] = dc;
+        chains[c] = ch;
+    }
+    result["chains"] = chains;
     result["col_names"] = col_names;
 
     // The SVC block's layout, so R can slice the surface off the draws without

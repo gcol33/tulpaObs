@@ -12,6 +12,7 @@
 #define TULPAOBS_NUTS_ENGINE_H
 
 #include <Rcpp.h>
+#include <algorithm>
 #include <vector>
 #include <tulpa/model_data.h>
 #include <tulpa/param_layout.h>
@@ -43,12 +44,25 @@ inline double full_grad_log_post(
     return lp;
 }
 
+// The chain team of one multi-chain run is min(n_chains, tulpa's OpenMP cap),
+// and tulpa's cap lives in tulpa's own OpenMP runtime, so it is set through
+// tulpa (OmpCapScope) for the run and restored afterwards.
+using ChainTeamScope = tulpa::OmpCapScope;
+
 // Run tulpa NUTS on a full-gradient target. `grad_fn` is the tulpa FullGradFn
 // (it reads its model through ModelData.model_response_data = `model_ptr`);
 // `n_params` the parameter dimension; `inv_metric` an optional diagonal inverse
 // mass matrix, either empty (the engine adapts its own) or of length n_params.
 // The engine reads that pointer for n_params entries without checking how many
-// it was given, so a short one is rejected here. Returns draws + diagnostics.
+// it was given, so a short one is rejected here.
+//
+// The chains run through tulpa's multi-chain runner (get_nuts_chains_fn): every
+// chain starts from `theta0` with the same metric, the engine disperses the
+// starts and varies the stream by chain index from the one `seed`, and the
+// chains share an OpenMP team of at most `n_threads` (each chain is
+// deterministic in (seed, chain), so the draws do not depend on the width). A
+// target is therefore evaluated concurrently from several chains and must not
+// write to its model. Returns one list of draws + diagnostics per chain.
 //
 // The whole parameter vector is the spec's extra-parameter block behind one
 // coefficient-free process, which is the layout tulpa's generic double
@@ -70,7 +84,7 @@ inline Rcpp::List run_tulpa_nuts(
     const Rcpp::NumericVector& theta0, double sigma_beta,
     const std::vector<double>& inv_metric,
     int n_iter, int n_warmup, int max_treedepth, double adapt_delta,
-    int seed, bool verbose,
+    int seed, bool verbose, int n_chains, int n_threads,
     const char* spec_name = "tulpaobs_marginal",
     int data_N = -1
 ) {
@@ -112,32 +126,50 @@ inline Rcpp::List run_tulpa_nuts(
         Rcpp::stop("inv_metric length %d != expected %d",
                    (int) inv_metric.size(), n_params);
 
-    std::vector<double> init(theta0.begin(), theta0.end());
-    const double* im = inv_metric.empty() ? nullptr : inv_metric.data();
-
-    tulpa::NUTSFn run_nuts = tulpa::get_nuts_fn();
-    tulpa::NUTSResult result = {};
-    run_nuts(&data, &layout, init.data(), n_params, n_iter, n_warmup,
-             max_treedepth, adapt_delta, static_cast<unsigned int>(seed),
-             verbose ? 1 : 0, im, &result);
-
-    const int n_samples = result.n_sample, np = n_params;
-    Rcpp::NumericMatrix draws(n_samples, np);
-    Rcpp::NumericVector lp(n_samples), ap(n_samples);
-    Rcpp::IntegerVector div(n_samples), td(n_samples);
-    for (int s = 0; s < n_samples; ++s) {
-        for (int j = 0; j < np; ++j)
-            draws(s, j) = result.samples[(std::size_t) s * np + j];
-        lp[s] = result.log_prob[s]; ap[s] = result.accept_prob[s];
-        div[s] = result.divergent[s]; td[s] = result.treedepth[s];
+    if (n_chains < 1) Rcpp::stop("run_tulpa_nuts: n_chains must be >= 1 (got %d).", n_chains);
+    std::vector<double> init((std::size_t) n_chains * n_params);
+    for (int c = 0; c < n_chains; ++c)
+        std::copy(theta0.begin(), theta0.end(), init.begin() + (std::size_t) c * n_params);
+    std::vector<double> im;
+    if (!inv_metric.empty()) {
+        im.resize((std::size_t) n_chains * n_params);
+        for (int c = 0; c < n_chains; ++c)
+            std::copy(inv_metric.begin(), inv_metric.end(),
+                      im.begin() + (std::size_t) c * n_params);
     }
-    const double epsilon = result.epsilon;
-    result.free_buffers();
-    return Rcpp::List::create(
-        Rcpp::Named("draws") = draws, Rcpp::Named("log_prob") = lp,
-        Rcpp::Named("accept_prob") = ap, Rcpp::Named("divergent") = div,
-        Rcpp::Named("treedepth") = td, Rcpp::Named("epsilon") = epsilon,
-        Rcpp::Named("n_params") = np);
+
+    std::vector<tulpa::NUTSResult> results(n_chains);
+    {
+        ChainTeamScope team(n_threads);
+        tulpa::NUTSChainsFn run_chains = tulpa::get_nuts_chains_fn();
+        run_chains(&data, &layout, init.data(), n_params, n_chains, n_iter, n_warmup,
+                   max_treedepth, adapt_delta, static_cast<unsigned int>(seed),
+                   verbose ? 1 : 0, im.empty() ? nullptr : im.data(), results.data());
+    }
+
+    Rcpp::List chains(n_chains);
+    const int np = n_params;
+    for (int c = 0; c < n_chains; ++c) {
+        tulpa::NUTSResult& result = results[c];
+        const int n_samples = result.n_sample;
+        Rcpp::NumericMatrix draws(n_samples, np);
+        Rcpp::NumericVector lp(n_samples), ap(n_samples);
+        Rcpp::IntegerVector div(n_samples), td(n_samples);
+        for (int s = 0; s < n_samples; ++s) {
+            for (int j = 0; j < np; ++j)
+                draws(s, j) = result.samples[(std::size_t) s * np + j];
+            lp[s] = result.log_prob[s]; ap[s] = result.accept_prob[s];
+            div[s] = result.divergent[s]; td[s] = result.treedepth[s];
+        }
+        const double epsilon = result.epsilon;
+        result.free_buffers();
+        chains[c] = Rcpp::List::create(
+            Rcpp::Named("draws") = draws, Rcpp::Named("log_prob") = lp,
+            Rcpp::Named("accept_prob") = ap, Rcpp::Named("divergent") = div,
+            Rcpp::Named("treedepth") = td, Rcpp::Named("epsilon") = epsilon,
+            Rcpp::Named("n_params") = np);
+    }
+    return chains;
 }
 
 }  // namespace tulpaObs

@@ -196,13 +196,14 @@ inline Rcpp::List count_nuts_run(const Rcpp::List& spec,
                                  const std::vector<double>& inv_metric,
                                  int n_iter, int n_warmup, int max_treedepth,
                                  double adapt_delta, int seed, bool verbose,
+                                 int n_chains, int n_threads,
                                  CountKernelFn kern) {
     CountNutsModel m;
     m.d = count_nuts_build_data(spec);
     m.sigma_beta = sigma_beta; m.sigma_logr = sigma_logr; m.kern = kern;
     return run_tulpa_nuts(&count_nuts_full_grad, &m, m.d.total, theta0, sigma_beta,
                           inv_metric, n_iter, n_warmup, max_treedepth, adapt_delta,
-                          seed, verbose);
+                          seed, verbose, n_chains, n_threads);
 }
 
 }  // namespace tulpaObs

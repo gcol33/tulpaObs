@@ -633,8 +633,8 @@
   # silently absent from everything read off it.
   fit$model$occ_eta_offset <- .tobs_nuts_occ_offset(fit, model)
   fit$latent <- latent
-  # Resolved per-chain seeds (chain c used seed + c - 1) for reproducibility.
-  fit$seeds <- as.integer(seed) + seq_len(as.integer(n.chains)) - 1L
+  # The seed the chains' streams derive from, for reproducibility.
+  fit$seeds <- as.integer(seed)
   # Expose process_info at top level for tulpa generic S3 methods
   fit$process_info <- model$process_info
   # Cross-chain convergence diagnostics (Rhat / bulk + tail ESS), through the

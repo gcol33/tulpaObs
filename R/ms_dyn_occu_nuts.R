@@ -207,7 +207,7 @@
     function(th) cpp_ms_dyn_occu_nuts_joint_logpost(spec, th, pri, sigma.beta)$grad,
     theta0)
 
-  run_chain <- function(ch) {
+  run_chains <- function(n_chains, n_threads) {
     cpp_ms_dyn_occu_nuts(
       spec, theta0 = theta0, pri = pri, sigma_beta = sigma.beta,
       inv_metric = inv_metric,
@@ -215,10 +215,11 @@
       n_warmup = as.integer(n.warmup),
       max_treedepth = as.integer(max.treedepth),
       adapt_delta = adapt.delta,
-      seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
+      seed = as.integer(seed), verbose = isTRUE(verbose),
+      n_chains = n_chains, n_threads = n_threads)
   }
 
-  rc <- .ms_ocs_run_chains(run_chain, n.chains, n.thin = n.thin,
+  rc <- .ms_ocs_run_chains(run_chains, n.chains, n.thin = n.thin,
                            n.threads = n.threads)
   draws <- rc$draws
 

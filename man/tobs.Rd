@@ -221,12 +221,13 @@ the total run per chain is \code{n.iter + n.warmup}.
 \item \code{n.thin} -- keep every \code{n.thin}-th post-warmup draw (default 1). The
 kept draws and the per-iteration diagnostics (\code{divergent},
 \code{accept_prob}, \code{treedepth}) are thinned by the same stride.
-\item \code{n.chains} -- number of chains, run with offset seeds and pooled
-(default 1). Split-Rhat / bulk / tail ESS are reported on \verb{$convergence}.
-\item \code{n.threads} -- chains to run in parallel (default 1, sequential). Values
-\verb{> 1} use a PSOCK cluster and require tulpaObs to be installed. This is
-chain parallelism; it does not change the thread count inside a single
-gradient evaluation.
+\item \code{n.chains} -- number of chains, run in one sampler call and pooled
+(default 1); the sampler disperses their starting points and gives each
+chain its own stream from \code{seed}. Split-Rhat / bulk / tail ESS are
+reported on \verb{$convergence}.
+\item \code{n.threads} -- chains run at once (default 1, one after another), on
+OpenMP threads. The draws do not depend on it, and it does not change
+the thread count inside a single gradient evaluation.
 \item \code{n.threads.grad} -- OpenMP threads inside ONE gradient evaluation of a
 community NUTS target (\code{ms_occu()}, \code{ms_count()} / \code{jsdm()},
 \code{ms_abun()}, \code{ms_dyn_occu()}), whose per-species loop is parallel.
@@ -236,9 +237,9 @@ Rejected on the other families.
 \item \code{adapt.delta} -- target acceptance probability (default 0.8 on the
 single-species families, 0.9 on the community samplers).
 \item \code{max.treedepth} -- NUTS maximum tree depth (default 10).
-\item \code{seed} -- base RNG seed; chain \code{c} uses \code{seed + c - 1} (default 42 on the
-single-species families, 1 on the community samplers).
-The resolved per-chain seeds are stored on \verb{$seeds}.
+\item \code{seed} -- RNG seed the chains' streams derive from (default 42 on the
+single-species families, 1 on the community samplers), stored on
+\verb{$seeds}.
 \item \code{sigma.beta} -- prior SD on the coefficients (default 10 on the
 single-species families and on the log-link community samplers
 \code{ms_count()} / \code{jsdm()} / \code{ms_abun()}, whose unit change is

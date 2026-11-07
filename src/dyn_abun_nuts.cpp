@@ -174,11 +174,12 @@ Rcpp::List cpp_dyn_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                              double sigma_beta, double sigma_logr,
                              Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                              int n_iter, int n_warmup, int max_treedepth,
-                             double adapt_delta, int seed, bool verbose) {
+                             double adapt_delta, int seed, bool verbose,
+                         int n_chains = 1, int n_threads = 1) {
     tulpaObs::DynNutsModel m = tulpaObs::dyn_nuts_build(spec);
     m.sigma_beta = sigma_beta;
     m.sigma_logr = sigma_logr;
     return tulpaObs::run_tulpa_nuts(&tulpaObs::dyn_nuts_full_grad, &m, m.total,
                                     theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"), n_iter, n_warmup,
-                                    max_treedepth, adapt_delta, seed, verbose);
+                                    max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads);
 }

@@ -438,7 +438,7 @@ test_that("NUTS samples the spatial-factor community target and recovers the mea
   res <- tulpaObs:::cpp_ms_ocs_nuts(spec, theta0, pri, 5, 1.1, inv_metric,
                                     n_iter = 500L, n_warmup = 250L,
                                     max_treedepth = 10L, adapt_delta = 0.95,
-                                    seed = 42L, verbose = FALSE, constrain = FALSE)
+                                    seed = 42L, verbose = FALSE, constrain = FALSE)[[1L]]
   expect_identical(nrow(res$draws), 250L)
   expect_true(all(is.finite(res$draws)))
   mu_post <- colMeans(res$draws[, seq_len(d$P)])

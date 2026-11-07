@@ -366,9 +366,7 @@
 
 # Split-R-hat and bulk ESS from per-chain draw matrices. The algorithm is
 # family-agnostic and shared with the other in-tree FullGradFn samplers, so it
-# lives once in nuts_chains.R (.tobs_nuts_rhat_ess); this name is retained for the
-# community call site.
-.ms_ocs_rhat_ess <- function(chains) .tobs_nuts_rhat_ess(chains)
+# lives once in nuts_chains.R (.tobs_nuts_rhat_ess).
 
 # ---------------------------------------------------------------------------
 # Shared community-NUTS R epilogue helpers
@@ -498,13 +496,7 @@
 # analytic gradient of the joint log-posterior (the per-family C++ oracle); only
 # that closure differs across families.
 .ms_ocs_fd_metric <- function(grad_fn, theta, h = 1e-4) {
-  np <- length(theta); md <- numeric(np)
-  for (j in seq_len(np)) {
-    tp <- theta; tp[j] <- tp[j] + h
-    tm <- theta; tm[j] <- tm[j] - h
-    md[j] <- -(grad_fn(tp)[j] - grad_fn(tm)[j]) / (2 * h)
-  }
-  1 / pmax(md, 1e-3)
+  1 / pmax(-diag(.tobs_fd_jacobian(grad_fn, theta, h)), 1e-3)
 }
 
 # Posterior mean of a community covariance from the packed log-Cholesky draws:
@@ -517,29 +509,27 @@
   acc <- acc / nrow(draws); (acc + t(acc)) / 2
 }
 
-# Multi-chain harness: run `run_chain(ch)` for ch = 1..n_chains and assemble the
+# Multi-chain harness: run the chains (`.tobs_nuts_chains()`) and assemble the
 # combined draws + per-iteration diagnostics. A single chain returns its draws
 # untouched (rhat_ess = NULL); >1 chain stacks the draw matrices and computes
-# split-R-hat / bulk-ESS. `run_chain` returns one C++ sampler result list with
+# split-R-hat / bulk-ESS. Each chain is one C++ sampler result list with
 # `draws`, `accept_prob`, `divergent`, `treedepth`, `epsilon`. `chains` (the list
 # of per-chain draw matrices) is also returned so a caller that reports diagnostics
 # unconditionally (single chain included) can recompute them.
-.ms_ocs_run_chains <- function(run_chain, n_chains, n.thin = 1L,
+.ms_ocs_run_chains <- function(run_chains, n_chains, n.thin = 1L,
                                n.threads = 1L) {
   n_chains <- max(1L, as.integer(n_chains))
   n.thin   <- max(1L, as.integer(n.thin %||% 1L))
-  rcs      <- lapply(.tobs_nuts_run_parallel(run_chain, n_chains, n.threads),
-                     .tobs_nuts_thin_chain, n.thin = n.thin)
-  chains   <- lapply(rcs, `[[`, "draws")
-  list(draws     = if (n_chains > 1L) do.call(rbind, chains) else chains[[1L]],
-       accept    = unlist(lapply(rcs, `[[`, "accept_prob")),
-       divergent = unlist(lapply(rcs, `[[`, "divergent")),
-       treedepth = as.integer(unlist(lapply(rcs, `[[`, "treedepth"))),
-       epsilon   = mean(vapply(rcs, function(r) r$epsilon %||% NA_real_,
-                               numeric(1)), na.rm = TRUE),
-       chains    = chains,
+  pool <- .tobs_nuts_pool(lapply(.tobs_nuts_chains(run_chains, n_chains, n.threads),
+                                 .tobs_nuts_thin_chain, n.thin = n.thin))
+  list(draws     = pool$draws,
+       accept    = pool$accept,
+       divergent = pool$divergent,
+       treedepth = pool$treedepth,
+       epsilon   = pool$epsilon,
+       chains    = pool$per_chain,
        n_thin    = n.thin,
-       rhat_ess  = if (n_chains > 1L) .ms_ocs_rhat_ess(chains) else NULL)
+       rhat_ess  = if (n_chains > 1L) .tobs_nuts_rhat_ess(pool$per_chain) else NULL)
 }
 
 # Attach the `$nuts` slot to a reconstructed community-NUTS fit from a
@@ -619,31 +609,23 @@
   seed <- as.integer(control[["seed"]])
   verbose <- isTRUE(control[["verbose"]])
 
-  run_chain <- function(s) cpp_ms_ocs_nuts(
+  n_threads <- as.integer(control[["n.threads"]] %||% 1L)
+  rcs <- cpp_ms_ocs_nuts(
     spec, theta0, pri, sigma.beta, sd_L, inv_metric,
     n_iter = n_warmup + n_sample, n_warmup = n_warmup, max_treedepth = md,
-    adapt_delta = ad, seed = s, verbose = verbose, constrain = constrain)
+    adapt_delta = ad, seed = seed, verbose = verbose, n_chains = n_chains,
+    n_threads = max(1L, n_threads), constrain = constrain)
 
   rhat_ess <- NULL
   if (n_chains > 1L) {
-    # Independent chains from the shared warm start under offset seeds, via the
-    # single-chain engine. (tulpa's across-chain OpenMP runner ignores the
-    # caller's ParamLayout and recomputes it from the minimal ModelData, so it
-    # segfaults on the FullGradFn pathway --. The per-chain loop is robust and
-    # the warm-started chains are short, so the sequential cost is acceptable;
-    # switch to the native runner once #70 lands.)
-    rcs <- lapply(seq_len(n_chains), function(c) run_chain(seed + c - 1L))
-    chains <- lapply(rcs, function(r) r$draws)
-    rhat_ess <- .ms_ocs_rhat_ess(chains)
-    res <- list(draws = do.call(rbind, chains),
-                accept_prob = unlist(lapply(rcs, `[[`, "accept_prob")),
-                divergent   = unlist(lapply(rcs, `[[`, "divergent")),
-                treedepth   = unlist(lapply(rcs, `[[`, "treedepth")),
-                epsilon = mean(vapply(rcs, `[[`, 0, "epsilon")),
-                divergent_total = sum(vapply(rcs, function(r) sum(r$divergent), 0L)),
+    pool <- .tobs_nuts_pool(rcs)
+    rhat_ess <- .tobs_nuts_rhat_ess(pool$per_chain)
+    res <- list(draws = pool$draws, accept_prob = pool$accept,
+                divergent = pool$divergent, treedepth = pool$treedepth,
+                epsilon = pool$epsilon, divergent_total = sum(pool$divergent),
                 n_chains = n_chains)
   } else {
-    res <- run_chain(seed)
+    res <- rcs[[1L]]
   }
 
   fit <- .ms_ocs_nuts_fit_from_draws(model, res, em, constrain)

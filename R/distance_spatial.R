@@ -277,19 +277,20 @@
                n_field_units = n_field_units, field_map = field_map,
                field_load = field_load)
 
-  run_chain <- function(ch)
+  run_chains <- function(n_chains, n_threads)
     cpp_distance_nuts(spec, theta0 = theta0, sigma_beta = sigma.beta,
                       sigma_shape = sigma.shape, sigma_logr = sigma.logr,
                       inv_metric = inv_metric, n_iter = as.integer(n.iter + n.warmup),
                       n_warmup = as.integer(n.warmup),
                       max_treedepth = as.integer(max.treedepth),
-                      adapt_delta = adapt.delta, seed = as.integer(seed + ch - 1L),
-                      verbose = isTRUE(verbose))
+                      adapt_delta = adapt.delta, seed = as.integer(seed),
+                      verbose = isTRUE(verbose),
+      n_chains = n_chains, n_threads = n_threads)
   nms <- c(paste0("lambda_", model$process_info[[1]]$coef_names),
            paste0("sigma_",  model$process_info[[2]]$coef_names),
            if (hazard) "log_shape", if (is_nb) "log_r",
            paste0("raw_", seq_len(n_raw)))
-  run <- .tobs_nuts_field_draws(run_chain, n.chains, nms, n_base, n_raw,
+  run <- .tobs_nuts_field_draws(run_chains, n.chains, nms, n_base, n_raw,
                                 field_load, n.thin = n.thin,
                                 n.threads = n.threads)
   par <- run$par; cov <- run$cov

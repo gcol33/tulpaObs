@@ -130,6 +130,10 @@ inline MsNmixNutsData ms_abun_nuts_build_data(const Rcpp::List& spec) {
     MsNmixNutsData d;
     d.n_threads = spec.containsElementNamed("n_threads")
                   ? Rcpp::as<int>(spec["n_threads"]) : 0;
+#ifdef _OPENMP
+    // Resolved here, before a multi-chain run caps the OpenMP default.
+    if (d.n_threads <= 0) d.n_threads = omp_get_max_threads();
+#endif
     IntegerVector y        = spec["y"];
     IntegerVector site_idx = spec["site_idx"];        // 1-based, into X_lambda rows
     IntegerVector sp_idx   = spec["species_idx"];     // 1-based
@@ -483,7 +487,8 @@ Rcpp::List cpp_ms_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
                             Rcpp::List pri, double sigma_beta, double sigma_logr,
                             Rcpp::Nullable<Rcpp::NumericVector> inv_metric,
                             int n_iter, int n_warmup, int max_treedepth,
-                            double adapt_delta, int seed, bool verbose) {
+                            double adapt_delta, int seed, bool verbose,
+                         int n_chains = 1, int n_threads = 1) {
     tulpaObs::MsNmixNutsModel m;
     m.d = tulpaObs::ms_abun_nuts_build_data(spec);
     m.sigma_beta = sigma_beta; m.sigma_logr = sigma_logr;
@@ -494,6 +499,6 @@ Rcpp::List cpp_ms_abun_nuts(Rcpp::List spec, Rcpp::NumericVector theta0,
     return tulpaObs::run_tulpa_nuts(
         &tulpaObs::ms_abun_nuts_full_grad, &m, m.d.total,
         theta0, sigma_beta, tulpaObs::shape::optional_numeric(inv_metric.get(), "inv_metric"),
-        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose,
+        n_iter, n_warmup, max_treedepth, adapt_delta, seed, verbose, n_chains, n_threads,
         "ms_abun_nmix", m.d.n_sites);
 }

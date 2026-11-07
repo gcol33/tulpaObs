@@ -106,27 +106,28 @@
 
   spec <- .tobs_occu_mscale_cover_nuts_spec(model)
 
-  run_chain <- function(ch) {
+  run_chains <- function(n_chains, n_threads) {
     cpp_occu_mscale_cover_nuts(
       spec, theta0 = theta0, sigma_beta = sigma.beta, sigma_logdisp = sigma.logdisp,
       inv_metric = inv_metric,
       n_iter = as.integer(n.iter + n.warmup), n_warmup = as.integer(n.warmup),
       max_treedepth = as.integer(max.treedepth), adapt_delta = adapt.delta,
-      seed = as.integer(seed + ch - 1L), verbose = isTRUE(verbose))
+      seed = as.integer(seed), verbose = isTRUE(verbose),
+      n_chains = n_chains, n_threads = n_threads)
   }
-  chains <- .tobs_nuts_run_parallel(run_chain, n.chains, n.threads)
-  per_chain <- lapply(chains, function(ch) .tobs_thin(ch$draws, n.thin))
-  draws <- do.call(rbind, per_chain)
-  colnames(draws) <- par_names
-  chain_id  <- rep(seq_len(length(chains)), vapply(per_chain, nrow, integer(1)))
-  accept    <- unlist(lapply(chains, function(ch) .tobs_thin(ch$accept_prob, n.thin)))
-  divergent <- unlist(lapply(chains, function(ch) .tobs_thin(ch$divergent, n.thin)))
-  treedepth <- as.integer(unlist(lapply(chains,
-                                        function(ch) .tobs_thin(ch$treedepth, n.thin))))
-  epsilon   <- chains[[1L]]$epsilon
+  pool <- .tobs_nuts_pool(lapply(.tobs_nuts_chains(run_chains, n.chains, n.threads),
+                                 .tobs_nuts_thin_chain, n.thin = n.thin),
+                          par_names)
+  per_chain <- pool$per_chain
+  draws     <- pool$draws
+  chain_id  <- pool$chain_id
+  accept    <- pool$accept
+  divergent <- pool$divergent
+  treedepth <- pool$treedepth
+  epsilon   <- pool$epsilon
 
-  par   <- colMeans(draws); names(par) <- par_names
-  V_out <- stats::cov(draws); dimnames(V_out) <- list(par_names, par_names)
+  par   <- pool$par
+  V_out <- pool$cov
   sds   <- sqrt(pmax(diag(V_out), 0)); names(sds) <- par_names
   ll_mean <- .occu_mscale_cover_nonspatial_ll(par, model, lay)
   n_draws <- nrow(draws)
