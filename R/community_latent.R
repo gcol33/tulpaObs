@@ -562,20 +562,15 @@
 # Field geometry
 # ---------------------------------------------------------------------------
 
-# SPDE (continuous Matern) precision on the mesh at unit scale, for the
-# stationary Matern with alpha = nu + d/2 = 2 (nu = 1, d = 2):
-#
-#   Q(kappa) = kappa^4 C0 + 2 kappa^2 G1 + G1 C0^-1 G1
-#
-# with C0 the lumped FEM mass diagonal and G1 the stiffness matrix (Lindgren,
-# Rue & Lindstrom 2011). The driver's per-field `tau` carries the overall scale
-# (the SPDE tau^2), so the field prior is tau Q(kappa) exactly as an areal field's
-# is tau Q; kappa is the extra hyperparameter, gridded like proper-CAR's rho.
+# SPDE (continuous Matern) precision on the mesh at unit scale for the term's
+# own smoothness nu, alpha = nu + d/2 (Lindgren, Rue & Lindstrom 2011), built by
+# tulpa's `tulpa_spde_precision_Q()` (integer alpha; nodes with zero lumped mass
+# guarded). nu = 1 in 2-D is kappa^4 C0 + 2 kappa^2 G1 + G1 C0^-1 G1. The
+# driver's per-field `tau` carries the overall scale (the SPDE tau^2), so the
+# field prior is tau Q(kappa) exactly as an areal field's is tau Q; kappa is the
+# extra hyperparameter, gridded like proper-CAR's rho.
 .tobs_latent_spde_Q <- function(spec, kappa) {
-  C0    <- Matrix::Diagonal(x = spec$C0_diag)
-  C0inv <- Matrix::Diagonal(x = 1 / spec$C0_diag)
-  G1    <- spec$G
-  kappa^4 * C0 + 2 * kappa^2 * G1 + G1 %*% C0inv %*% G1
+  tulpa::tulpa_spde_precision_Q(spec, kappa, tau_spde = 1)
 }
 
 # Candidate kappa grid from the observed-coordinate extent. The Matern range is
@@ -609,6 +604,13 @@
       is.null(spec$C0_diag)) {
     stop(what, " spde() needs the tulpa mesh spec (the projector + FEM ",
          "matrices).", call. = FALSE)
+  }
+  alpha <- (spec$nu %||% 1) + 1
+  if (abs(alpha - round(alpha)) > 1e-8) {
+    stop(sprintf(paste0("%s spde(nu = %g): the community latent field builds the ",
+                        "integer-alpha SPDE precision (alpha = nu + 1 in 2-D), so ",
+                        "nu must be a whole number (nu = 1 is the default)."),
+                 what, spec$nu), call. = FALSE)
   }
   Ns <- model$n_sites
   if (nrow(spec$A) != Ns) {
@@ -700,8 +702,14 @@
     }
   }
 
+  # An intrinsic field (icar, bym2's structured part) has one constant null
+  # direction per connected component of the graph, each identified by its own
+  # sum-to-zero; a proper CAR is constrained over the whole graph.
+  label <- .tobs_graph_components(as.matrix(A))
+  components <- if (ptype %in% c("icar", "bym2"))
+    unname(split(seq_len(n_nodes), label)) else list(seq_len(n_nodes))
   list(graph = A, n_nodes = n_nodes, M = Mmap, type = ptype, K = K, W = W,
-       field_labels = field_labels)
+       field_labels = field_labels, components = components)
 }
 
 
@@ -716,8 +724,11 @@
 # field the score aggregates the working residual over species, weighted by
 # W[,k]. Joint Newton over the K*n_nodes field vector (a K x K block system, each
 # (k,l) block M diag(W[,k] W[,l] curv) M' + (k==l) tau_k Q), then a per-field
-# closed-form tau M-step. Each field is demeaned: the intrinsic null space is the
-# constant and the fixed effects own the level.
+# closed-form tau M-step. Each field is centred over every node set in
+# `components` (one sum-to-zero each: the intrinsic null space is one constant
+# per connected component, and the fixed effects own the level); `components =
+# NULL` leaves a proper (full-rank) field unconstrained. `rankdef` defaults to the
+# number of constraints.
 # One ridge ladder for every singular-Hessian retry in this file: the field
 # Newton, the field covariance and the factor Newton -- one ridge scale, one
 # tier count and one failure value, with the mean diagonal guarded so a
@@ -743,9 +754,19 @@
   if (is.null(g)) NULL else rep(NA_real_, length(g))
 }
 
+# Centre each column of `Fm` over every node set in `components` (NULL: none).
+.tobs_center_components <- function(Fm, components) {
+  for (cc in components) {
+    Fm[cc, ] <- sweep(Fm[cc, , drop = FALSE], 2L,
+                      colMeans(Fm[cc, , drop = FALSE]), "-")
+  }
+  Fm
+}
+
 .tobs_latent_field_solve <- function(oracle, eta_base, Q, Fm, tau, W, M = NULL,
                                      max_iter = 50L, tol = 1e-8,
-                                     constrain_mean = TRUE, rankdef = 1L) {
+                                     components = list(seq_len(nrow(Fm))),
+                                     rankdef = length(components)) {
   Ns <- nrow(eta_base); K <- ncol(W); Nn <- nrow(Fm)
   if (is.null(M)) M <- Matrix::Diagonal(Ns)
   Mt <- Matrix::t(M)
@@ -778,9 +799,7 @@
     # the same way.
     if (!all(is.finite(step))) break
     Fm <- Fm + matrix(step, Nn, K)
-    if (isTRUE(constrain_mean)) {
-      for (k in seq_len(K)) Fm[, k] <- Fm[, k] - mean(Fm[, k])
-    }
+    Fm <- .tobs_center_components(Fm, components)
     if (max(abs(step)) < tol) break
   }
 
@@ -847,11 +866,13 @@
 # b = sigma sqrt(1 - rho). Joint Newton over (v, u) at fixed (sigma, rho); the
 # hyperparameters are chosen over a grid by the returned field marginal `m`.
 .tobs_latent_bym2_solve <- function(oracle, eta_base, Qic, v, u, a, b,
-                                    max_iter = 50L, tol = 1e-8) {
+                                    max_iter = 50L, tol = 1e-8,
+                                    components = list(seq_along(v))) {
   Ns <- nrow(eta_base); Imat <- Matrix::Diagonal(Ns)
-  # A tiny ridge regularises the ICAR null direction (a rank-n-1 Qic makes the v
-  # block singular when the structured weight a is small); v is demeaned each
-  # step, so the ridged constant direction is removed anyway.
+  # A tiny ridge regularises the ICAR null directions (Qic has one per connected
+  # component, which makes the v block singular when the structured weight a is
+  # small); v is centred per component each step, so the ridged constant
+  # directions are removed anyway.
   ridge <- Matrix::Diagonal(2L * Ns, 1e-6)
   build_H <- function(cw, a, b) {
     Dw <- Matrix::Diagonal(x = cw)
@@ -870,7 +891,7 @@
                        as.numeric(Matrix::solve(
                          H + Matrix::Diagonal(2L * Ns, 1e-3), c(gv, gu))))
     v <- v + step[seq_len(Ns)]; u <- u + step[Ns + seq_len(Ns)]
-    v <- v - mean(v)
+    v <- as.numeric(.tobs_center_components(matrix(v), components))
     if (max(abs(step)) < tol) break
   }
   # Laplace marginal at the mode (drop constant normalisers): the data
@@ -1190,7 +1211,7 @@
   geom <- NULL; Ffield <- NULL; tau <- NULL; Q <- NULL
   is_bym2 <- FALSE; is_car <- FALSE; is_spde <- FALSE
   rho <- NA_real_; kappa <- NA_real_
-  constrain_mean <- TRUE; rankdef <- 1L
+  components <- NULL
   if (has_field) {
     geom <- .tobs_latent_field_setup(spatial, model, what = what, allow = allow)
     is_bym2 <- identical(geom$type, "bym2")
@@ -1205,7 +1226,6 @@
       kappa_grid <- .tobs_latent_spde_kappa_grid(geom$spec)
       kappa <- stats::median(kappa_grid)
       Q <- .tobs_latent_spde_Q(geom$spec, kappa)
-      constrain_mean <- FALSE; rankdef <- 0L
       Ffield <- matrix(0, geom$n_nodes, geom$K); tau <- rep(1, geom$K)
     } else {
       Dg   <- Matrix::Diagonal(x = rowSums(geom$graph))
@@ -1225,6 +1245,7 @@
       # strength rho over a small grid (Q(rho) = D - rho W) by the field
       # marginal likelihood.
       Q <- if (is_car) Dg - rho * Wadj else Dg - Wadj
+      components <- geom$components
       Ffield <- matrix(0, geom$n_nodes, geom$K); tau <- rep(1, geom$K)
       if (is_bym2) {
         Qic       <- Dg - Wadj
@@ -1288,15 +1309,15 @@
     if (has_field && is_bym2) {
       a  <- bym_sigma * sqrt(bym_rho / bym_scale); b <- bym_sigma * sqrt(1 - bym_rho)
       br <- .tobs_latent_bym2_solve(oracle, eta_coef + fac_off, Qic,
-                                    bym_v, bym_u, a, b)
+                                    bym_v, bym_u, a, b,
+                                    components = components)
       phi_new <- a * br$v + b * br$u
       delta <- max(delta, max(abs(phi_new - bym_phi)))
       bym_v <- br$v; bym_u <- br$u; bym_phi <- phi_new
     } else if (has_field) {
       fu <- .tobs_latent_field_solve(oracle, eta_coef + fac_off, Q, Ffield, tau,
                                      geom$W, M = geom$M,
-                                     constrain_mean = constrain_mean,
-                                     rankdef = rankdef)
+                                     components = components)
       delta <- max(delta, max(abs(fu$Fm - Ffield))); Ffield <- fu$Fm; tau <- fu$tau
     }
     # (c) factor update (its base holds the coefficients + the field part).
@@ -1418,8 +1439,7 @@
         Qr <- Dg - rr * Wadj
         ld <- .tobs_latent_car_logdet(Qr)
         fr <- .tobs_latent_field_solve(oracle, base_f, Qr, Ffield, tau, geom$W,
-                                       M = geom$M, constrain_mean = TRUE,
-                                       rankdef = 1L)
+                                       M = geom$M, components = components)
         mm <- .tobs_latent_field_marginal(oracle, base_f, Qr, fr$Fm, fr$tau,
                                           geom$W, ld, rankdef = 1L, M = geom$M)
         if (is.finite(mm) && mm > best$m) {
@@ -1438,18 +1458,17 @@
         ld <- .tobs_latent_spde_logdet(Qk)
         fr <- tryCatch(
           .tobs_latent_field_solve(oracle, base_f, Qk, Ffield, tau, geom$W,
-                                   M = geom$M, constrain_mean = FALSE,
-                                   rankdef = 0L),
+                                   M = geom$M, components = NULL),
           error = function(e) NULL)
         if (is.null(fr)) next
         mm <- .tobs_latent_field_marginal(oracle, base_f, Qk, fr$Fm, fr$tau,
                                           geom$W, ld, rankdef = 0L, M = geom$M)
         if (is.finite(mm) && mm > best$m) {
-          best <- list(m = mm, kappa = kk, Fm = fr$Fm, tau = fr$tau)
+          best <- list(m = mm, kappa = kk, Fm = fr$Fm, tau = fr$tau, Q = Qk)
         }
       }
       if (is.finite(best$m)) {
-        kappa <- best$kappa; Ffield <- best$Fm; tau <- best$tau; Q <- Qk
+        kappa <- best$kappa; Ffield <- best$Fm; tau <- best$tau; Q <- best$Q
       }
     }
     if (is_bym2) {
@@ -1457,7 +1476,7 @@
       for (sg in bym_sigma_grid) for (rr in bym_rho_grid) {
         a  <- sg * sqrt(rr / bym_scale); b <- sg * sqrt(1 - rr)
         br <- tryCatch(.tobs_latent_bym2_solve(oracle, base_f, Qic, bym_v, bym_u,
-                                               a, b),
+                                               a, b, components = components),
                        error = function(e) NULL)
         if (!is.null(br) && is.finite(br$m) && br$m > best$m) {
           best <- c(br, list(sigma = sg, rho = rr, a = a, b = b))
