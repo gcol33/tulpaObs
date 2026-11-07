@@ -1,48 +1,6 @@
-# Mode-centred CCD for the outer field-hyperparameter integration. The helper
-# reuses tulpa's exported CCD primitives; these tests pin its moment-recovery
-# and decline behaviour (fast, no model fitting), plus an end-to-end
-# engage/decline check on an areal family (slow).
-
-test_that(".tobs_ccd_outer_grid reproduces the Gaussian outer moments", {
-  # Known outer posterior in u = (log tau, rho) ~ N(mu, S): the CCD design must
-  # recover the mode and the analytic integral moments exactly.
-  mu <- c(log(5), 0.6)
-  S  <- matrix(c(0.25, 0.05, 0.05, 0.02), 2, 2)
-  Q  <- solve(S)
-  eval_logm <- function(theta) {
-    u <- c(log(theta[1]), theta[2]); d <- u - mu
-    as.numeric(-0.5 * t(d) %*% Q %*% d)
-  }
-  axes <- list(
-    tulpaObs:::.tobs_ccd_axis("tau", "log",      lower = 0.3, upper = 30,   start = 3),
-    tulpaObs:::.tobs_ccd_axis("rho", "identity", lower = 0.1, upper = 0.95, start = 0.5))
-
-  set.seed(1)
-  cc <- tulpaObs:::.tobs_ccd_outer_grid(eval_logm, axes, k_samples = 200L)
-  expect_false(is.null(cc))
-  expect_equal(unname(cc$u_hat), mu, tolerance = 1e-3)        # mode
-
-  lm <- apply(cc$nodes, 1L, eval_logm)
-  w  <- cc$dnode * exp(lm - max(lm)); w <- w / sum(w)
-  expect_equal(sum(w * log(cc$nodes[, 1])), mu[1], tolerance = 1e-2)   # E[log tau]
-  expect_equal(sum(w * cc$nodes[, 2]),      mu[2], tolerance = 1e-2)   # E[rho]
-  # E[tau] = exp(mu1 + 0.5 S11) for a log-normal margin.
-  expect_equal(sum(w * cc$nodes[, 1]), exp(mu[1] + 0.5 * S[1, 1]), tolerance = 0.2)
-  expect_true(is.finite(cc$pareto_k))                         # diagnosed
-})
-
-test_that(".tobs_ccd_outer_grid declines on a flat or single-axis problem", {
-  axes2 <- list(
-    tulpaObs:::.tobs_ccd_axis("tau", "log",      lower = 0.3, upper = 30,   start = 3),
-    tulpaObs:::.tobs_ccd_axis("rho", "identity", lower = 0.1, upper = 0.95, start = 0.5))
-  # Uninformative (flat) outer log-marginal -> no usable curvature -> decline.
-  expect_null(tulpaObs:::.tobs_ccd_outer_grid(function(theta) 0, axes2,
-                                              diagnose_k = FALSE))
-  # A single positive axis is left to the 1D grid (CCD declines by design).
-  axes1 <- list(tulpaObs:::.tobs_ccd_axis("tau", "log", lower = 0.3, upper = 30, start = 3))
-  expect_null(tulpaObs:::.tobs_ccd_outer_grid(function(theta) -(log(theta[1]))^2,
-                                              axes1, diagnose_k = FALSE))
-})
+# Mode-centred CCD for the outer field-hyperparameter integration of the
+# areal-BFGS families (tulpa_hyper_grid(design = "ccd"); the design itself is
+# tested in tulpa): an end-to-end engage/decline check on an areal family.
 
 test_that("areal fit: default grid and opt-in CCD both recover the field + slope", {
   skip_if_fast()

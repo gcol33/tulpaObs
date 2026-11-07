@@ -464,15 +464,15 @@
   # declining to the fixed tensor grid.
   packed <- NULL; integration_used <- "grid"; pareto_k <- NA_real_
   if (identical(integration, "ccd")) {
-    axes <- c(list(.tobs_ccd_axis("tau", "log", lower = 0.3, upper = 30, start = 3.16)),
+    axes <- c(list(list(name = "tau", log_scale = TRUE, lower = 0.3, upper = 30, start = 3.16)),
               if (is_car)
-                list(.tobs_ccd_axis("rho", "identity", lower = 0.05, upper = 0.95, start = 0.5)))
+                list(list(name = "rho", log_scale = FALSE, lower = 0.05, upper = 0.95, start = 0.5)))
     eval_logm <- function(theta) {
       r <- eval_node(theta[1L], if (is_car) theta[2L] else 1.0)
       if (is.null(r) || !is.finite(r$log_marg)) NA_real_ else r$log_marg
     }
-    cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, axes), error = function(e) NULL)
-    if (!is.null(cc)) {
+    cc <- tryCatch(tulpa::tulpa_ccd_outer_grid(eval_logm, axes), error = function(e) NULL)
+    if (isTRUE(cc$ok)) {
       nn <- nrow(cc$nodes); recs <- vector("list", nn); lm <- rep(-Inf, nn)
       for (k in seq_len(nn)) {
         r <- eval_node(cc$nodes[k, 1L], if (is_car) cc$nodes[k, 2L] else 1.0)

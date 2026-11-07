@@ -331,36 +331,29 @@
   modes_pos <- modes[, bpos_idx, drop = FALSE] %*% t(T_pos)
   beta_occ <- as.numeric(crossprod(w, modes_occ))
   beta_pos <- as.numeric(crossprod(w, modes_pos))
-  var_of_means_occ <- as.numeric(crossprod(w, modes_occ^2)) - beta_occ^2
-  var_of_means_pos <- as.numeric(crossprod(w, modes_pos^2)) - beta_pos^2
 
+  # Law of total covariance per arm on the natural scale (.tobs_grid_vcov()):
+  # each cell's inner block is transformed before pooling; a cell without one
+  # contributes its between-cell spread only.
   inner_blocks <- .joint_inner_vcov_block(fit, c(bocc_idx, bpos_idx))
-  if (is.null(inner_blocks)) {
-    mean_of_var_occ <- rep(0, p_occ); mean_of_var_pos <- rep(0, p_pos)
-  } else {
-    occ_rows <- seq_along(bocc_idx)
-    pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
-    inner_blocks_ok <- inner_blocks[ok_cells]
-    n_grid_eff <- length(inner_blocks_ok)
-    diag_occ <- matrix(0, n_grid_eff, p_occ)
-    diag_pos <- matrix(0, n_grid_eff, p_pos)
-    for (k in seq_len(n_grid_eff)) {
-      V_block <- inner_blocks_ok[[k]]
-      if (is.null(V_block)) next
-      V_occ_nat <- T_occ %*% V_block[occ_rows, occ_rows, drop = FALSE] %*% t(T_occ)
-      V_pos_nat <- T_pos %*% V_block[pos_rows, pos_rows, drop = FALSE] %*% t(T_pos)
-      diag_occ[k, ] <- pmax(diag(V_occ_nat), 0)
-      diag_pos[k, ] <- pmax(diag(V_pos_nat), 0)
-    }
-    mean_of_var_occ <- as.numeric(crossprod(w, diag_occ))
-    mean_of_var_pos <- as.numeric(crossprod(w, diag_pos))
+  inner_ok <- if (is.null(inner_blocks)) NULL else inner_blocks[ok_cells]
+  occ_rows <- seq_along(bocc_idx)
+  pos_rows <- length(bocc_idx) + seq_along(bpos_idx)
+  arm_blocks <- function(rows, Tm) {
+    if (is.null(inner_ok)) return(NULL)
+    lapply(inner_ok, function(V) if (is.null(V)) NULL else
+      Tm %*% V[rows, rows, drop = FALSE] %*% t(Tm))
   }
+  V_occ <- .tobs_grid_vcov(modes_occ, w, arm_blocks(occ_rows, T_occ),
+                           center = beta_occ, on_missing = "zero")
+  V_pos <- .tobs_grid_vcov(modes_pos, w, arm_blocks(pos_rows, T_pos),
+                           center = beta_pos, on_missing = "zero")
 
   list(p_occ = p_occ, p_pos = p_pos, bocc_idx = bocc_idx, bpos_idx = bpos_idx,
        T_occ = T_occ, T_pos = T_pos,
        beta_occ = beta_occ, beta_pos = beta_pos,
-       se_occ = sqrt(pmax(0, var_of_means_occ + mean_of_var_occ)),
-       se_pos = sqrt(pmax(0, var_of_means_pos + mean_of_var_pos)),
+       se_occ = sqrt(pmax(0, diag(V_occ))),
+       se_pos = sqrt(pmax(0, diag(V_pos))),
        converged = oc$n_bad == 0L,
        ok_cells = ok_cells, w = w,
        fit = fit)

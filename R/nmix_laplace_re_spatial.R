@@ -338,18 +338,18 @@ nmix_community_laplace_spde <- function(lf, X_lambda, n_sites, n_species,
   if (identical(integration, "ccd")) {
     rm0 <- prior_range[1]; sm0 <- prior_sigma[1]
     axes <- list(
-      .tobs_ccd_axis("range", "log", lower = rm0 * 0.05, upper = rm0 * 20, start = rm0),
-      .tobs_ccd_axis("sigma", "log", lower = sm0 * 0.05, upper = sm0 * 20, start = sm0))
+      list(name = "range", log_scale = TRUE, lower = rm0 * 0.05, upper = rm0 * 20, start = rm0),
+      list(name = "sigma", log_scale = TRUE, lower = sm0 * 0.05, upper = sm0 * 20, start = sm0))
     if (is_nb)
-      axes <- c(axes, list(.tobs_ccd_axis("r", "log", lower = 0.5, upper = 40,
+      axes <- c(axes, list(list(name = "r", log_scale = TRUE, lower = 0.5, upper = 40,
                                           start = exp(mean(log(c(0.5, 40)))))))
     eval_logm <- function(theta) {
       r_val <- if (is_nb) theta[3L] else Inf
       lm <- run_driver(matrix(c(theta[1L], theta[2L], r_val), 1L, 3L))$log_marginal[1L]
       if (is.finite(lm)) lm else NA_real_
     }
-    cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, axes), error = function(e) NULL)
-    if (!is.null(cc)) {
+    cc <- tryCatch(tulpa::tulpa_ccd_outer_grid(eval_logm, axes), error = function(e) NULL)
+    if (isTRUE(cc$ok)) {
       r_col <- if (is_nb) cc$nodes[, "r"] else rep(Inf, nrow(cc$nodes))
       node_grid <- cbind(cc$nodes[, "range"], cc$nodes[, "sigma"], r_col)
       raw <- run_driver(node_grid)

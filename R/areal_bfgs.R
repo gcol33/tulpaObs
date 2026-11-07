@@ -176,9 +176,9 @@
   cells <- list()
   for (rho in rho_grid) for (tau in tau_grid)
     cells[[length(cells) + 1L]] <- make_cell(if (kind == "car_proper") c(tau, rho) else tau)
-  axes <- c(list(.tobs_ccd_axis("tau", "log", lower = 0.3, upper = 30, start = 3)),
+  axes <- c(list(list(name = "tau", log_scale = TRUE, lower = 0.3, upper = 30, start = 3)),
             if (kind == "car_proper")
-              list(.tobs_ccd_axis("rho", "identity", lower = 0.1, upper = 0.95, start = 0.5)))
+              list(list(name = "rho", log_scale = FALSE, lower = 0.1, upper = 0.95, start = 0.5)))
   list(
     n_field = n_sp, n_sp = n_sp, cells = cells, axes = axes, make_cell = make_cell,
     valid = function(cell) is.finite(cell$ldQ),
@@ -226,8 +226,8 @@
   for (sg in sigma_grid) for (rho in rho_grid)
     cells[[length(cells) + 1L]] <- make_cell(c(sg, rho))
   axes <- list(
-    .tobs_ccd_axis("sigma", "log",      lower = 0.2,  upper = 3,    start = 0.77),
-    .tobs_ccd_axis("rho",   "identity", lower = 0.05, upper = 0.95, start = 0.5))
+    list(name = "sigma", log_scale = TRUE,      lower = 0.2,  upper = 3,    start = 0.77),
+    list(name = "rho", log_scale = FALSE, lower = 0.05, upper = 0.95, start = 0.5))
   scat1 <- function(grad_eta) {
     g <- numeric(n_sp); for (s in seq_along(map)) g[map[s]] <- g[map[s]] + grad_eta[s]; g
   }
@@ -595,109 +595,73 @@
          cov  = cov_full[seq_len(n_fixed), seq_len(n_fixed), drop = FALSE])
   }
 
-  # Weighted (marginalised) summaries from a set of evaluated cells + weights.
-  summarise <- function(res, w, method, pareto_k = NA_real_) {
-    ok  <- vapply(res, Negate(is.null), TRUE) & is.finite(w) & w > 0
-    if (!any(ok)) return(list(ok = FALSE))
-    w[!ok] <- 0; w <- w / sum(w)
-    wk    <- w[ok]; ik <- which(ok)
-    modes <- .tobs_rows(lapply(ik, function(k) res[[k]]$mode), n_fixed)
-    beta_mean  <- as.numeric(crossprod(wk, modes))
-    V <- matrix(0, n_fixed, n_fixed)
-    for (j in seq_along(wk)) {
-      dk <- modes[j, ] - beta_mean
-      V <- V + wk[j] * (res[[ik[j]]]$cov + outer(dk, dk))
-    }
-    logm <- vapply(ik, function(k) res[[k]]$logm, numeric(1))
-    # Posterior-mean field + field hyperparameters, per block (tau / rho or sigma
-    # / rho), for reporting and for fixing the field precision on the NUTS path.
-    # Block 1 is the spatial field (reported on the scalar slots `field_mean`
-    # / `hyper`); a temporal block 2 is reported under `temporal_field` /
-    # `temporal_hyper`.
-    n_sp_b <- vapply(blocks, function(b) as.integer(b$n_sp), 0L)
-    field_means <- lapply(seq_len(n_blk), function(b) {
-      phis <- .tobs_rows(lapply(ik, function(k) res[[k]]$phi[[b]]), n_sp_b[b])
-      as.numeric(crossprod(wk, phis))
-    })
-    hyper_means <- lapply(seq_len(n_blk), function(b) {
-      h1 <- res[[ik[1L]]]$hyper[[b]]
-      if (is.null(h1)) return(NULL)
-      Hm <- .tobs_rows(lapply(ik, function(k) res[[k]]$hyper[[b]]), length(h1))
-      hm <- as.numeric(crossprod(wk, Hm)); names(hm) <- names(h1); hm
-    })
-    n_off <- length(res[[ik[1L]]]$eta_offset)
-    offs  <- .tobs_rows(lapply(ik, function(k) res[[k]]$eta_offset), n_off)
-    out <- list(ok = TRUE, beta_mean = beta_mean,
-                field_mean = field_means[[1L]], hyper = hyper_means[[1L]],
-                eta_offset = as.numeric(crossprod(wk, offs)),
-                vcov = V, log_lik = sum(wk * logm),
-                integration = method, pareto_k = pareto_k,
-                # The grid itself, for draws from the mixture rather than from
-                # the one Gaussian `vcov` collapses it to.
-                mixture = list(weights = wk, modes = modes,
-                               covs = lapply(ik, function(k) res[[k]]$cov)))
-    if (n_blk >= 2L) {
-      out$temporal_field <- field_means[[2L]]
-      out$temporal_hyper <- hyper_means[[2L]]
-    }
-    # Full per-block posterior-mean fields + hyperparameters, in block order, for
-    # a multi-field consumer (an intercept field plus weighted SVC fields, e.g.
-    # svcTIntPGOcc). Block 1 also stays on the scalar slots.
-    out$field_means <- field_means
-    out$hyper_means <- hyper_means
-    out
+  # The outer integration is tulpa_hyper_grid() over the blocks' hyperparameter
+  # axes: one inner solve per cell (`solve_cell`), the cell weights from the
+  # axes' quadrature measure (or the CCD design weights), the fixed-parameter
+  # posterior by the law of total covariance, and the reported fields /
+  # hyperparameters / eta offset / log marginal as `extras` under the same
+  # weights. A multi-block grid prefixes each axis with its block (`b<k>.`).
+  cell_grid  <- .tobs_block_cell_product(blocks)
+  theta_grid <- .tobs_block_hyper_grid(blocks, cell_grid)
+  blk_cols <- lapply(seq_len(n_blk), function(b) {
+    nm <- names(blocks[[b]]$to_hyper(blocks[[b]]$cells[[1L]]))
+    if (n_blk > 1L) paste0("b", b, ".", nm) else nm
+  })
+  hyper_names <- lapply(seq_len(n_blk), function(b)
+    names(blocks[[b]]$to_hyper(blocks[[b]]$cells[[1L]])))
+  prog <- tulpa::tulpa_iter_progress(label, length(cell_grid), unit = "cells")
+  inner_fit <- function(hypers) {
+    on.exit(prog$tick(), add = TRUE)
+    cells_b <- lapply(seq_len(n_blk), function(b)
+      blocks[[b]]$make_cell(as.numeric(hypers[blk_cols[[b]]])))
+    r <- solve_cell(cells_b)
+    if (is.null(r) || !is.finite(r$logm)) return(NULL)
+    ex <- c(stats::setNames(r$phi, paste0("phi", seq_len(n_blk))),
+            stats::setNames(r$hyper, paste0("hyper", seq_len(n_blk))),
+            list(eta_offset = r$eta_offset, logm = r$logm))
+    list(log_marginal = r$logm, beta_mean = r$mode, beta_cov = r$cov,
+         extras = Filter(Negate(is.null), ex))
   }
-
-  # ---- outer integration: opt-in mode-centred CCD (single-block only,
-  # ), silently declining to the fixed tensor grid when the outer curvature is
-  # ill-conditioned. A multi-block fit uses the product grid.
-  if (n_blk == 1L && identical(integration, "ccd") && !is.null(field$axes)) {
-    eval_logm <- function(theta_phys) {
-      r <- solve_cell(list(field$make_cell(theta_phys)))
-      if (is.null(r) || !is.finite(r$logm)) NA_real_ else r$logm
-    }
-    cc <- tryCatch(.tobs_ccd_outer_grid(eval_logm, field$axes),
-                   error = function(e) NULL)
-    if (!is.null(cc)) {
-      nn  <- nrow(cc$nodes)
-      prog <- tulpa::tulpa_iter_progress(label, nn, unit = "cells")
-      res <- vector("list", nn); logm <- rep(-Inf, nn)
-      for (k in seq_len(nn)) {
-        r <- solve_cell(list(field$make_cell(cc$nodes[k, ])))
-        if (!is.null(r) && is.finite(r$logm)) { res[[k]] <- r; logm[k] <- r$logm }
-        prog$tick()
-      }
-      prog$finish()
-      if (any(is.finite(logm))) {
-        w <- cc$dnode * exp(logm - max(logm[is.finite(logm)]))
-        out <- summarise(res, w, "ccd", cc$pareto_k)
-        if (isTRUE(out$ok)) return(out)
-      }
-    }
-  }
-
-  # Product grid over the blocks' per-cell grids.
-  cell_grid <- .tobs_block_cell_product(blocks)
-  n_grid <- length(cell_grid)
-  prog <- tulpa::tulpa_iter_progress(label, n_grid, unit = "cells")
-  res <- vector("list", n_grid); logm <- rep(-Inf, n_grid)
-  for (k in seq_len(n_grid)) {
-    r <- solve_cell(cell_grid[[k]])
-    if (!is.null(r) && is.finite(r$logm)) { res[[k]] <- r; logm[k] <- r$logm }
-    prog$tick()
-  }
+  # Opt-in mode-centred CCD (single-block, the areal specs carrying their
+  # axes), declining to the tensor grid when the outer curvature is
+  # ill-conditioned.
+  ccd <- n_blk == 1L && identical(integration, "ccd") && !is.null(field$axes)
+  hg <- tulpa::tulpa_hyper_grid(
+    tulpa::tulpa_joint_axis_specs_from_grid(theta_grid), inner_fit,
+    n_draws = 0L, design = if (ccd) "ccd" else "grid",
+    ccd_start = if (ccd) stats::setNames(
+      lapply(field$axes, `[[`, "start"),
+      vapply(field$axes, `[[`, "", "name")) else NULL)
   prog$finish()
-  # Terminal grid path: unlike the CCD branch (which declines to the grid on a
-  # bad cell), a failure here means no usable grid point at all -- raise once,
-  # centrally, so every family wrapper drops its own identical guard (#136).
-  if (!any(is.finite(logm)))
+  # A failure here means no usable grid point at all; raised once, centrally,
+  # so every family wrapper drops its own guard (#136).
+  if (is.null(hg$beta) || is.null(hg$mixture))
     stop(sprintf("%s: fit produced no usable grid point.", label), call. = FALSE)
-  w <- .tobs_grid_weights(
-    list(theta_grid = .tobs_block_hyper_grid(blocks, cell_grid)),
-    "tau_grid / data", log_marginal = logm)
-  out <- summarise(res, w, "grid")
-  if (!isTRUE(out$ok))
-    stop(sprintf("%s: fit produced no usable grid point.", label), call. = FALSE)
+  em <- hg$extras_mean
+  field_means <- lapply(seq_len(n_blk), function(b) em[[paste0("phi", b)]])
+  hyper_means <- lapply(seq_len(n_blk), function(b) {
+    hm <- em[[paste0("hyper", b)]]
+    if (is.null(hm)) NULL else stats::setNames(hm, hyper_names[[b]])
+  })
+  out <- list(ok = TRUE, beta_mean = unname(hg$beta),
+              field_mean = field_means[[1L]], hyper = hyper_means[[1L]],
+              eta_offset = em$eta_offset,
+              vcov = unname(hg$beta_cov), log_lik = em$logm,
+              integration = hg$design, pareto_k = hg$pareto_k,
+              # The grid itself, for draws from the mixture rather than from
+              # the one Gaussian `vcov` collapses it to.
+              mixture = list(weights = hg$mixture$weights,
+                             modes = unname(hg$mixture$modes),
+                             covs = lapply(hg$mixture$covs, unname)))
+  if (n_blk >= 2L) {
+    out$temporal_field <- field_means[[2L]]
+    out$temporal_hyper <- hyper_means[[2L]]
+  }
+  # Full per-block posterior-mean fields + hyperparameters, in block order, for
+  # a multi-field consumer (an intercept field plus weighted SVC fields, e.g.
+  # svcTIntPGOcc). Block 1 also stays on the scalar slots.
+  out$field_means <- field_means
+  out$hyper_means <- hyper_means
   out
 }
 
