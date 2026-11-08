@@ -10,13 +10,15 @@ test_that("ms_occu two-state marginal matches the C++ single-season kernel", {
               y = sim$y, species = paste0("sp", 1:6),
               method = "laplace", control = list(verbose = FALSE))
 
-  ll_comm <- .tobs_ploglik_community(fit, fit$draws)
+  jd <- .tobs_community_joint_draws(fit)
+  ll_comm <- .tobs_ploglik_community(fit, jd$draws, jd$b)
   m  <- fit$model; cm <- fit$ms_community
   p_occ <- m$process_info[[1]]$p; p_p <- m$process_info[[2]]$p
   # Rebuild species 1 as a single-season shim and score with the C++ kernel.
+  b1 <- jd$b[[1]]
   draws_s <- cbind(
-    sweep(fit$draws[, seq_len(p_occ), drop = FALSE], 2, cm$blup_psi[1, ], "+"),
-    sweep(fit$draws[, p_occ + seq_len(p_p), drop = FALSE], 2, cm$blup_p[1, ], "+"))
+    jd$draws[, seq_len(p_occ), drop = FALSE] + b1[, cm$blup_idx$blup_psi, drop = FALSE],
+    jd$draws[, p_occ + seq_len(p_p), drop = FALSE] + b1[, cm$blup_idx$blup_p, drop = FALSE])
   colnames(draws_s) <- colnames(fit$draws)
   ys <- m$y[, , 1]; ys[!m$valid[, , 1]] <- -1L
   shim <- list(model_type = "single", X_processes = list(m$X_occ, m$X_det),

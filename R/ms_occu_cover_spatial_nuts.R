@@ -558,6 +558,7 @@
   fit$nuts <- c(list(
     draws           = rc$draws,
     layout          = lay,
+    par_cols        = par_cols,
     accept_prob     = rc$accept,
     divergent       = rc$divergent,
     treedepth       = rc$treedepth,

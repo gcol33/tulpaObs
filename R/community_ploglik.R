@@ -5,11 +5,9 @@
 # The observation unit is the (species, site) pair: for each species the latent
 # occupancy at a site is integrated out over that site's visits / seasons /
 # sources using the species' own coefficients (community mean + per-species
-# BLUP deviation). The community-mean posterior uncertainty comes from the
-# stored community-mean pseudo-draws (object$draws); the per-species deviations
-# enter at their BLUPs (the shared arms -- dynamic gamma / eps -- carry no
-# deviation). This is the community generalisation of the single-family Laplace
-# WAIC, which likewise scores over the fixed-effect pseudo-draws.
+# deviation). Each draw pairs a community-mean draw with per-species deviation
+# draws taken jointly with it (.tobs_community_joint_draws(); the shared arms --
+# dynamic gamma / eps -- carry no deviation).
 #
 # Two marginals cover the three families:
 #   * two-state (ms_occu, ms_int_occu): psi * P(data | occupied) + (1 - psi) *
@@ -32,13 +30,102 @@
   off + seq_len(pinfo[[k]]$p)
 }
 
-# Per-species eta draws for a process: [n_draws x n_units]. `blup_s` (length p,
-# or NULL for a shared arm) is added to the community-mean draw before the design
-# multiply, so each species sees mu + b_s.
-.tobs_community_eta <- function(draws, cols, X, blup_s = NULL) {
+# Per-species eta draws for a process: [n_draws x n_units]. `b_s` ([n_draws x p]
+# deviation draws paired row for row with `draws`, or NULL for a shared arm) is
+# added to the community-mean draw before the design multiply, so each species
+# sees mu + b_s.
+.tobs_community_eta <- function(draws, cols, X, b_s = NULL) {
   beta <- draws[, cols, drop = FALSE]
-  if (!is.null(blup_s)) beta <- sweep(beta, 2L, blup_s, "+")
+  if (!is.null(b_s)) beta <- beta + b_s
   beta %*% t(X)
+}
+
+# Per-species deviation draws paired row for row with community-mean draws.
+#
+# A species' coefficients are mu + b_s, and mu and b_s are not independent in
+# the posterior: the data pin each species' own coefficients more tightly than
+# the community mean, so a draw of mu moves b_s the other way. Holding b_s at
+# its BLUP while mu varies spreads every species' coefficients by the full
+# community-mean uncertainty, wider than that species' posterior, which
+# inflates p_waic and p_D and puts WAIC and DIC apart by more than the model
+# size explains (#451). The joint draw comes from what the fit carries:
+#   * Laplace-EM fits carry Bf_s, the (mu, global) x b_s cross-Hessian block,
+#     and Cinv_s = Cov(b_s | mu, y), so
+#     b_s | mu ~ N(b_hat_s - Cinv_s Bf_s' (mu - mu_hat), Cinv_s)
+#     (.tobs_sbc_community_b_draws()); the noise is drawn on a fixed stream so
+#     a criterion is reproducible and the caller's stream is left untouched.
+#   * NUTS fits carry the sampled chain, and mu and b_s are read off the same
+#     draw (`fit$nuts$par_cols` names the community columns in it).
+#   * A fit carrying neither holds b_s at its BLUP.
+# `at_mean = TRUE` returns the one-row posterior mean of the same joint draw
+# (the DIC plug-in): the conditional mean of b_s at the mean of mu.
+# Returns list(draws = [M x K], b = list over species of [M x P]), b's columns
+# laid out as `ms_community$blup_idx`.
+.tobs_community_joint_draws <- function(object, n.draws = 1000L,
+                                        at_mean = FALSE) {
+  cm <- object$ms_community
+  S  <- object$model$n_species
+  bidx <- cm$blup_idx
+  P  <- max(unlist(bidx))
+  blup_row <- function(s) {
+    b <- numeric(P)
+    for (k in names(bidx)) b[bidx[[k]]] <- cm[[k]][s, ]
+    b
+  }
+  rep_rows <- function(v, M) matrix(v, M, length(v), byrow = TRUE)
+
+  nd <- object$nuts
+  if (!is.null(nd$draws) && !is.null(nd$layout) && !is.null(nd$par_cols)) {
+    mu_all <- nd$draws[, nd$par_cols, drop = FALSE]
+    colnames(mu_all) <- colnames(object$draws)
+    if (at_mean) {
+      return(list(draws = matrix(colMeans(mu_all), 1L,
+                                 dimnames = list(NULL, colnames(mu_all))),
+                  b = lapply(seq_len(S), function(s) rep_rows(blup_row(s), 1L))))
+    }
+    M <- nrow(mu_all)
+    rows <- if (is.null(n.draws) || as.integer(n.draws) >= M) seq_len(M) else
+      unique(round(seq(1, M, length.out = as.integer(n.draws))))
+    b <- replicate(S, matrix(0, length(rows), P), simplify = FALSE)
+    for (r in seq_along(rows)) {
+      B <- .ms_ocs_b_from_z(nd$draws[rows[r], ], nd$layout)
+      for (s in seq_len(S)) b[[s]][r, ] <- B[s, seq_len(P)]
+    }
+    return(list(draws = mu_all[rows, , drop = FALSE], b = b))
+  }
+
+  draws <- object$draws
+  if (at_mean) {
+    draws <- matrix(colMeans(draws), 1L, dimnames = list(NULL, colnames(draws)))
+  } else {
+    draws <- .tobs_subset_draws(draws, n.draws)
+  }
+  M <- nrow(draws)
+  if (is.null(cm$Bf) || is.null(cm$Cinv)) {
+    return(list(draws = draws,
+                b = lapply(seq_len(S), function(s) rep_rows(blup_row(s), M))))
+  }
+  mu_hat <- as.numeric(object$means)
+  delta  <- sweep(draws, 2L, mu_hat, "-")
+  b <- .tobs_with_seed(1L, lapply(seq_len(S), function(s) {
+    Bf_s <- cm$Bf[[s]]; Cinv_s <- cm$Cinv[[s]]
+    if (nrow(Bf_s) != ncol(draws)) {
+      stop(sprintf(paste0("The cross-Hessian block of species %d has %d rows ",
+                          "for %d community-mean draw columns."),
+                   s, nrow(Bf_s), ncol(draws)), call. = FALSE)
+    }
+    if (at_mean) {
+      sweep(-(delta %*% Bf_s) %*% Cinv_s, 2L, blup_row(s), "+")
+    } else {
+      .tobs_sbc_community_b_draws(draws, mu_hat, blup_row(s), Bf_s, Cinv_s, M)
+    }
+  }))
+  list(draws = draws, b = b)
+}
+
+# Species s's deviation draws on one arm, `key` naming its `blup_idx` block.
+.tobs_community_b_arm <- function(object, b, s, key) {
+  b[[s]][, object$ms_community$blup_idx[[key]], drop = FALSE]
 }
 
 # Per-(source, species) site-level detection counts from a community detection
@@ -60,7 +147,6 @@
 # per-species BLUP, and per-(site, species) detection counts.
 .tobs_community_twostate_spec <- function(object) {
   model <- object$model
-  cm    <- object$ms_community
   mt    <- model$model_type
 
   # A shared areal field and/or latent factors on the occupancy arm enter every
@@ -76,7 +162,7 @@
   factor_off <- model$occu_factor_offset
   psi <- list(cols = .tobs_community_proc_cols(object, 1L),
               X    = model$X_psi %||% model$X_occ,
-              blup = cm$blup_psi,
+              key  = "blup_psi",
               offset = function(s) {
                 o <- if (is.null(field_off)) NULL else as.numeric(field_off)
                 if (!is.null(factor_off)) o <- (o %||% 0) + factor_off[, s]
@@ -86,7 +172,7 @@
   if (identical(mt, "ms_occu")) {
     src <- list(list(cols = .tobs_community_proc_cols(object, 2L),
                      X    = model$X_det,
-                     blup = cm$blup_p,
+                     key  = "blup_p",
                      cnt  = .tobs_community_det_counts(model$y, model$valid)))
   } else {                                    # ms_int_occu
     D    <- model$n_sources
@@ -94,7 +180,7 @@
     src  <- lapply(seq_len(D), function(d) {
       list(cols = .tobs_community_proc_cols(object, 1L + d),
            X    = model$X_p[[d]],
-           blup = cm[[paste0("blup_", pn[d])]],
+           key  = paste0("blup_", pn[d]),
            cnt  = .tobs_community_det_counts(model$y[[d]], model$valid[[d]]))
     })
   }
@@ -104,12 +190,13 @@
 
 # Two-state pointwise log-likelihood, columns species-major:
 # [n_draws x (n_species * n_sites)]. Shared by ms_occu and ms_int_occu.
-.tobs_ploglik_community_twostate <- function(object, draws) {
+.tobs_ploglik_community_twostate <- function(object, draws, b) {
   sp <- .tobs_community_twostate_spec(object)
   n_sites <- sp$n_sites
   cols <- vector("list", sp$n_species)
   for (s in seq_len(sp$n_species)) {
-    eta_psi  <- .tobs_community_eta(draws, sp$psi$cols, sp$psi$X, sp$psi$blup[s, ])
+    eta_psi  <- .tobs_community_eta(draws, sp$psi$cols, sp$psi$X,
+                                    .tobs_community_b_arm(object, b, s, sp$psi$key))
     psi_off  <- sp$psi$offset(s)
     if (!is.null(psi_off)) eta_psi <- sweep(eta_psi, 2L, psi_off, "+")
     log_psi  <- stats::plogis(eta_psi,  log.p = TRUE)   # [M x n_sites]
@@ -119,7 +206,8 @@
     det_any  <- integer(n_sites)                        # detections across sources
     for (d in seq_along(sp$sources)) {
       sd_    <- sp$sources[[d]]
-      eta_p  <- .tobs_community_eta(draws, sd_$cols, sd_$X, sd_$blup[s, ])
+      eta_p  <- .tobs_community_eta(draws, sd_$cols, sd_$X,
+                                    .tobs_community_b_arm(object, b, s, sd_$key))
       lp     <- stats::plogis(eta_p,  log.p = TRUE)
       l1mp   <- stats::plogis(-eta_p, log.p = TRUE)
       k1     <- sd_$cnt$k1[, s]; k0 <- sd_$cnt$k0[, s]
@@ -139,9 +227,8 @@
 # Dynamic community: per-species shim into the single-family HMM-forward kernel
 # (cpp_occu_dynamic_ploglik via .tobs_ploglik_dynamic). psi1 / p carry the
 # per-species BLUP; gamma / eps are shared community coefficients.
-.tobs_ploglik_community_dynamic <- function(object, draws, n.threads = 1L) {
+.tobs_ploglik_community_dynamic <- function(object, draws, b, n.threads = 1L) {
   model <- object$model
-  cm    <- object$ms_community
   n_sites <- model$n_sites; n_seasons <- model$n_seasons
   p_psi1  <- model$process_info[[1L]]$p
   p_p     <- model$process_info[[2L]]$p
@@ -164,10 +251,10 @@
     }
 
     draws_s <- draws
-    draws_s[, psi1_cols] <- sweep(draws[, psi1_cols, drop = FALSE], 2L,
-                                  cm$blup_psi1[s, ], "+")
-    draws_s[, p_cols]    <- sweep(draws[, p_cols, drop = FALSE], 2L,
-                                  cm$blup_p[s, ], "+")
+    draws_s[, psi1_cols] <- draws[, psi1_cols, drop = FALSE] +
+      .tobs_community_b_arm(object, b, s, "blup_psi1")
+    draws_s[, p_cols]    <- draws[, p_cols, drop = FALSE] +
+      .tobs_community_b_arm(object, b, s, "blup_p")
 
     shim <- list(model_type = "dynamic",
                  y = ys, n_visits = n_visits, any_detected = any_detected,
@@ -186,9 +273,8 @@
 # negative-log-posterior uses) is scored over the community-mean pseudo-draws with
 # the per-species BLUP deviation plugged into each arm; the shared positive density
 # handles beta / lognormal / gaussian.
-.tobs_ploglik_community_occu_cover <- function(object, draws) {
+.tobs_ploglik_community_occu_cover <- function(object, draws, b) {
   model <- object$model
-  cm    <- object$ms_community
   n_sites <- model$n_sites; n_species <- model$n_species
   mv      <- model$max_visits
   pil <- model$process_info
@@ -206,10 +292,13 @@
     model_s$valid <- matrix(model$valid[, , s], n_sites, mv)
     model_s$y_pos <- matrix(model$y_pos[, , s], n_sites, mv)
     ll_s <- matrix(0, M, n_sites)
+    b_occ <- .tobs_community_b_arm(object, b, s, "blup_occ")
+    b_p   <- .tobs_community_b_arm(object, b, s, "blup_p")
+    b_pos <- .tobs_community_b_arm(object, b, s, "blup_pos")
     for (m in seq_len(M)) {
-      bo   <- draws[m, occ_cols] + cm$blup_occ[s, ]
-      bp   <- draws[m, p_cols]   + cm$blup_p[s, ]
-      bpos <- draws[m, pos_cols] + cm$blup_pos[s, ]
+      bo   <- draws[m, occ_cols] + b_occ[m, ]
+      bp   <- draws[m, p_cols]   + b_p[m, ]
+      bpos <- draws[m, pos_cols] + b_pos[m, ]
       eta  <- .occu_cover_eta_from_par(model_s, bo, bp, bpos)
       ll_s[m, ] <- .occu_cover_site_ll(model_s, eta$psi, eta$p_mat, eta$ep_mat,
                                        draws[m, disp_col])
@@ -226,9 +315,8 @@
 # R/ms_distance.R), so `sweep(..., value_only = TRUE)$log_lik` already returns
 # the per-site value. Half-normal key only; under the hazard key the shared
 # log-shape is a community `global` and rides the trailing `log_b` draw column.
-.tobs_ploglik_community_ms_distance <- function(object, draws) {
+.tobs_ploglik_community_ms_distance <- function(object, draws, b) {
   model <- object$model
-  cm    <- object$ms_community
   n_sites <- model$n_sites; n_species <- model$n_species
   eng <- .tobs_ms_distance_engine(model)
   lam_cols <- .tobs_community_proc_cols(object, 1L)
@@ -240,13 +328,14 @@
   M <- nrow(draws)
   cols <- vector("list", n_species)
   for (s in seq_len(n_species)) {
-    bl <- cm$blup_lambda[s, ]; bs <- cm$blup_sigma[s, ]
+    bl <- .tobs_community_b_arm(object, b, s, "blup_lambda")
+    bs <- .tobs_community_b_arm(object, b, s, "blup_sigma")
     ll_s <- matrix(0, M, n_sites)
     for (m in seq_len(M)) {
-      eta_lam <- as.numeric(model$X_processes[[1L]] %*% (draws[m, lam_cols] + bl))
+      eta_lam <- as.numeric(model$X_processes[[1L]] %*% (draws[m, lam_cols] + bl[m, ]))
       if (!is.null(field))      eta_lam <- eta_lam + as.numeric(field)
       if (!is.null(factor_off)) eta_lam <- eta_lam + factor_off[, s]
-      eta_sig <- as.numeric(model$X_processes[[2L]] %*% (draws[m, sig_cols] + bs))
+      eta_sig <- as.numeric(model$X_processes[[2L]] %*% (draws[m, sig_cols] + bs[m, ]))
       eta_b   <- if (hazard) draws[m, b_col] else 0
       ll_s[m, ] <- eng$sweep(s, eta_lam, eta_sig, eta_b, value_only = TRUE)$log_lik
     }
@@ -255,32 +344,33 @@
   do.call(cbind, cols)
 }
 
-# Dispatch: community pointwise log-likelihood given an explicit draw matrix.
-.tobs_ploglik_community <- function(object, draws, n.threads = 1L) {
+# Dispatch: community pointwise log-likelihood given community-mean draws and
+# the per-species deviation draws paired with them
+# (.tobs_community_joint_draws()).
+.tobs_ploglik_community <- function(object, draws, b, n.threads = 1L) {
   switch(object$model$model_type,
-    ms_occu       = .tobs_ploglik_community_twostate(object, draws),
-    ms_int_occu   = .tobs_ploglik_community_twostate(object, draws),
-    ms_dyn_occu   = .tobs_ploglik_community_dynamic(object, draws, n.threads),
-    ms_occu_cover = .tobs_ploglik_community_occu_cover(object, draws),
-    ms_distance   = .tobs_ploglik_community_ms_distance(object, draws),
+    ms_occu       = .tobs_ploglik_community_twostate(object, draws, b),
+    ms_int_occu   = .tobs_ploglik_community_twostate(object, draws, b),
+    ms_dyn_occu   = .tobs_ploglik_community_dynamic(object, draws, b, n.threads),
+    ms_occu_cover = .tobs_ploglik_community_occu_cover(object, draws, b),
+    ms_distance   = .tobs_ploglik_community_ms_distance(object, draws, b),
     stop("No community pointwise log-likelihood for model_type = '",
          object$model$model_type, "'.", call. = FALSE))
 }
 
-# Subsample the community-mean draws to n.draws and score (WAIC / LOO path).
+# Score n.draws joint (community mean, per-species deviation) draws (WAIC / LOO
+# path).
 .tobs_ploglik_ms_community <- function(object, n.draws = 1000L, n.threads = 1L) {
-  draws <- object$draws
-  if (is.null(draws) || !is.matrix(draws)) {
+  if (is.null(object$draws) || !is.matrix(object$draws)) {
     stop("Community WAIC / LOO needs the community-mean pseudo-draw matrix; ",
          "`object$draws` is missing.", call. = FALSE)
   }
-  draws <- .tobs_subset_draws(draws, n.draws)
-  .tobs_ploglik_community(object, draws, n.threads)
+  jd <- .tobs_community_joint_draws(object, n.draws)
+  .tobs_ploglik_community(object, jd$draws, jd$b, n.threads)
 }
 
 # Pointwise log-likelihood at the community-mean posterior mean (DIC plug-in).
 .tobs_community_loglik_at_mean <- function(object) {
-  mean_draw <- matrix(colMeans(object$draws), nrow = 1L,
-                      dimnames = list(NULL, colnames(object$draws)))
-  as.numeric(.tobs_ploglik_community(object, mean_draw, 1L))
+  jd <- .tobs_community_joint_draws(object, at_mean = TRUE)
+  as.numeric(.tobs_ploglik_community(object, jd$draws, jd$b, 1L))
 }

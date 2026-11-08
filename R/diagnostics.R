@@ -427,7 +427,7 @@ pointwise_loglik.tobs_fit <- function(object, ndraws = NULL, ...) {
     return(.tobs_occu_cover_loglik_at_mean(object, n.draws))
   }
   if ((object$model$model_type %||% "NULL") %in%
-      c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover")) {
+      c("ms_occu", "ms_dyn_occu", "ms_int_occu", "ms_occu_cover", "ms_distance")) {
     return(.tobs_community_loglik_at_mean(object))
   }
   # Families whose pointwise kernel takes the FIT (not a raw draw matrix):

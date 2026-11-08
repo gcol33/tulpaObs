@@ -356,6 +356,15 @@ test_that("ms_occu_cover() has WAIC / DIC / CPO (per-species cell marginal, #116
   expect_true(is.finite(cp$lpml))
   # WAIC and the DIC plug-in agree to within a few units on a well-constrained fit.
   expect_lt(abs(w$estimates["waic", "Estimate"] - d$dic), 0.05 * abs(w$estimates["waic", "Estimate"]))
+  # The effective number of parameters stays below the model's coefficient
+  # count (community means + dispersion + every species' deviation). Scoring
+  # the community-mean draws with each species' deviation held at its BLUP
+  # spreads every species by the full community-mean uncertainty and gave
+  # p_waic = 65 against 37 coefficients here (#451).
+  cm <- fit$ms_community
+  n_coef <- length(fit$means) +
+    5L * (ncol(cm$blup_occ) + ncol(cm$blup_p) + ncol(cm$blup_pos))
+  expect_lt(w$estimates["p_waic", "Estimate"], n_coef)
 })
 
 test_that("ms_occu_cover(\"gaussian\") WAIC uses the gaussian density (#116/#127)", {
