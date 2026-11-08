@@ -213,12 +213,6 @@ simulate_occu_cover <- function(N             = 200L,
   occ_covs <- data.frame(matrix(stats::rnorm(N * n.occ.covs), N, n.occ.covs))
   names(occ_covs) <- paste0("occ_cov", seq_len(n.occ.covs))
   X_occ <- stats::model.matrix(~ ., occ_covs)
-  eta_psi <- as.vector(X_occ %*% beta.occ) + sigma * f
-  if (!is.null(adj) && isTRUE(trend)) {
-    eta_psi <- eta_psi + sigma.trend * time_cov * f2
-  }
-  psi <- stats::plogis(eta_psi)
-  z_state <- stats::rbinom(N, 1L, psi)
 
   # Visit-level covariates (p and cover predictors). Same draw used for both
   # arms, mirroring how `tobs_data()`'s `det.covs` matrices feed both formulas.
@@ -230,8 +224,9 @@ simulate_occu_cover <- function(N             = 200L,
 
   X_p   <- stats::model.matrix(~ ., det_covs)
   X_pos <- stats::model.matrix(~ ., pos_covs)
-  eta_p   <- as.vector(X_p   %*% beta.p)
-  eta_pos_base <- as.vector(X_pos %*% beta.pos)
+  site  <- rep(seq_len(N), each = J)
+  off_det <- numeric(N * J)
+  off_pos <- numeric(N * J)
 
   # Optional per-visit detection random effects. Each grouping is a categorical
   # visit-level factor (e.g. an EUNIS habitat class) with a random intercept b_g ~
@@ -292,7 +287,7 @@ simulate_occu_cover <- function(N             = 200L,
       # Random intercept.
       b <- stats::rnorm(length(labels), 0, s$sigma); b <- b - mean(b)
       names(b) <- labels
-      eta_p <- eta_p + b[code]
+      off_det <- off_det + b[code]
       re_truth[[nm]] <- list(b = b, sigma = s$sigma, levels = labels,
                              kind = "intercept")
       if (identical(nm, "habitat")) {                    # back-compat truth slots
@@ -308,7 +303,7 @@ simulate_occu_cover <- function(N             = 200L,
         # Slope-only uncorrelated block (0 + x | g).
         b1 <- stats::rnorm(length(labels), 0, s$sigma); b1 <- b1 - mean(b1)
         names(b1) <- labels
-        eta_p <- eta_p + xv * b1[code]
+        off_det <- off_det + xv * b1[code]
         re_truth[[nm]] <- list(b_slope = b1, sigma = s$sigma, levels = labels,
                                cov = s$slope_cov, kind = "slope")
       } else {
@@ -319,7 +314,7 @@ simulate_occu_cover <- function(N             = 200L,
         B2  <- matrix(stats::rnorm(2L * length(labels)), length(labels), 2L) %*% t(L)
         B2  <- sweep(B2, 2L, colMeans(B2))               # centre each coef
         rownames(B2) <- labels; colnames(B2) <- c("(Intercept)", s$slope_cov)
-        eta_p <- eta_p + B2[code, 1L] + xv * B2[code, 2L]
+        off_det <- off_det + B2[code, 1L] + xv * B2[code, 2L]
         re_truth[[nm]] <- list(B = B2, s0 = s0, s1 = s1, rho = rho,
                                levels = labels, cov = s$slope_cov, kind = "corr")
       }
@@ -344,48 +339,43 @@ simulate_occu_cover <- function(N             = 200L,
                                       levels = re_pos_levels)
     b_pos <- stats::rnorm(Kp, 0, sigma.re.pos); b_pos <- b_pos - mean(b_pos)
     names(b_pos)  <- re_pos_levels
-    eta_pos_base  <- eta_pos_base + b_pos[sub_pos]
+    off_pos       <- off_pos + b_pos[sub_pos]
     b_pos_re      <- b_pos
   }
 
-  y     <- matrix(0L, N, J)
-  y_pos <- matrix(NA_real_, N, J)
-
-  for (i in seq_len(N)) {
-    for (j in seq_len(J)) {
-      idx <- (i - 1L) * J + j
-      if (z_state[i] == 1L) {
-        eta_p_ij <- eta_p[idx]
-        if (!is.null(adj) && isTRUE(det.field)) {
-          eta_p_ij <- eta_p_ij + sigma.p.int * h0[i] +
-                      sigma.p.trend * time_cov[i] * h1[i]
-        }
-        p_ij <- stats::plogis(eta_p_ij)
-        d <- stats::rbinom(1L, 1L, p_ij)
-        y[i, j] <- d
-        if (d == 1L) {
-          eta_pos_ij <- eta_pos_base[idx] + alpha * sigma * f[i]
-          if (!is.null(adj) && isTRUE(trend)) {
-            eta_pos_ij <- eta_pos_ij + alpha.trend * sigma.trend * time_cov[i] * f2[i]
-          }
-          if (!is.null(adj) && isTRUE(pos.field)) {
-            eta_pos_ij <- eta_pos_ij +
-              sigma.pos.int * g0[i] + sigma.pos.trend * time_cov[i] * g1[i]
-          }
-          if (positive == "beta") {
-            mu <- stats::plogis(eta_pos_ij)
-            y_pos[i, j] <- stats::rbeta(1L, mu * phi, (1 - mu) * phi)
-          } else if (positive == "gaussian") {
-            # Identity-Gaussian arm: the cover magnitude is a plain Gaussian on
-            # the raw response (no log transform).
-            y_pos[i, j] <- stats::rnorm(1L, eta_pos_ij, sigma.pos)
-          } else {
-            y_pos[i, j] <- exp(stats::rnorm(1L, eta_pos_ij, sigma.pos))
-          }
-        }
-      }
-    }
+  # Realised field offsets: the shared field (and trend) on the occupancy arm
+  # and its alpha copy on the cover arm, the arm-specific cover and detection
+  # fields on their own arm only.
+  field_occ <- sigma * f
+  field_pos <- alpha * sigma * f
+  if (!is.null(adj) && isTRUE(trend)) {
+    field_occ <- field_occ + sigma.trend * time_cov * f2
+    field_pos <- field_pos + alpha.trend * sigma.trend * time_cov * f2
   }
+  if (!is.null(adj) && isTRUE(pos.field)) {
+    field_pos <- field_pos + sigma.pos.int * g0 + sigma.pos.trend * time_cov * g1
+  }
+  if (!is.null(adj) && isTRUE(det.field)) {
+    off_det <- off_det + sigma.p.int * h0[site] +
+      sigma.p.trend * time_cov[site] * h1[site]
+  }
+
+  layout <- list(n_sites = N, max_visits = J, ragged = FALSE,
+                 valid = matrix(TRUE, N, J), site_of_visit = site, V = N * J,
+                 X_occ = X_occ, X_det_site = matrix(0, N, 0L),
+                 X_pos_site = matrix(0, N, 0L), X_det_visit = X_p,
+                 X_pos_visit = X_pos, positive = positive,
+                 cover_aggregate = "none", cover_latent_disp2 = 0)
+  rep <- .tobs_gen_occu_cover(layout, list(
+    b_occ = beta.occ, b_det = beta.p, b_pos = beta.pos,
+    disp = if (positive == "beta") phi else sigma.pos,
+    field_occ = field_occ, field_pos = field_pos,
+    off_det = off_det, off_pos = off_pos))
+  grid  <- .occu_cover_gen_shape(layout, rep)
+  y     <- grid$y
+  y_pos <- grid$y_pos
+  z_state <- attr(rep, "latent")
+  psi <- stats::plogis(as.vector(X_occ %*% beta.occ) + field_occ)
 
   occ_out <- occ_covs
   has_trend    <- !is.null(adj) && isTRUE(trend)

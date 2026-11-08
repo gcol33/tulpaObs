@@ -521,9 +521,9 @@
 # the replicate is a second realization of the same survey rather than a second
 # observation of the same cells.
 #
-# The linear predictors come from `.occu_cover_eta_from_par()`, the function the
-# fitter and every diagnostic assemble eta with, so a generator cannot drift
-# from the convention the likelihood is written in.
+# The replicate is the family generator `.tobs_gen_occu_cover()` -- the one
+# `simulate_occu_cover()` and `simulate(fit)` draw through -- at theta and a
+# freshly drawn field.
 #
 # THE FIELD'S SCALE IS THE ENGINE'S, NOT THE SIMULATOR'S. The joint
 # nested-Laplace path hands the ICAR block the RAW graph precision Q = D - W at
@@ -555,38 +555,39 @@
   s
 }
 
-.tobs_sbc_sim_occu_cover <- function(spec, theta, seed) {
-  set.seed(seed)
+# theta for the occu_cover generator at a candidate parameter vector: the arm
+# blocks, the dispersion (the fit's held value when theta carries none), and a
+# FRESH field on the replicate's cells at the engine's scale, copied onto the
+# cover arm with alpha.
+.tobs_sbc_gen_theta_occu_cover <- function(spec, theta, lt) {
   m  <- spec$model
   bl <- attr(theta, "blocks")
-  n <- m$n_sites; J <- m$max_visits
   sigma <- if ("sigma" %in% names(theta)) theta[["sigma"]] else 0
   alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0
   disp  <- if ("disp" %in% names(theta)) theta[["disp"]] else
              .tobs_sbc_held_disp(m)
-
   f_cell <- if (spec$has_field)
     (spec$field_scale %||% 1) *
       as.numeric(.occu_cover_draw_icar_field(spec$model_graph, 1L)) else
     rep(0, max(spec$site_cell))
   f <- f_cell[spec$site_cell]
+  list(b_occ = theta[bl$occ], b_det = theta[bl$det], b_pos = theta[bl$pos],
+       disp = disp, field_occ = sigma * f, field_pos = alpha * sigma * f,
+       off_det = NULL, off_pos = NULL)
+}
 
-  e <- .occu_cover_eta_from_par(m, theta[bl$occ], theta[bl$det], theta[bl$pos],
-                               off_occ = sigma * f, off_pos = alpha * sigma * f)
-  z <- stats::rbinom(n, 1L, e$psi)
-  det <- matrix(stats::rbinom(n * J, 1L, as.numeric(e$p_mat)), n, J)
-  y <- det * z
-  y_pos <- matrix(0, n, J)
-  hit <- which(y == 1L)
-  if (length(hit)) {
-    y_pos[hit] <- .tobs_draw_positive_cover(e$ep_mat[hit], disp, spec$positive)
-  }
-  if (!is.null(m$valid)) { y[!m$valid] <- NA; y_pos[!m$valid] <- NA }
+.tobs_sbc_layout_occu_cover <- function(spec) {
+  lt <- .occu_cover_gen_layout(spec$model)
+  lt$positive <- spec$positive %||% lt$positive
+  lt
+}
 
+.tobs_sbc_shape_occu_cover <- function(rep, spec) {
+  g <- .occu_cover_gen_shape(.occu_cover_gen_layout(spec$model), rep)
   obs <- spec$data_obs
   list(cells  = obs$cells,
-       y      = y,
-       y_pos  = y_pos,
+       y      = g$y,
+       y_pos  = g$y_pos,
        visits = obs$visits,
        graph  = spec$model_graph,
        site   = obs$site)
@@ -1083,45 +1084,14 @@
     extinction = "ext"),
   scope = .tobs_sbc_constant_rate("dyn_occu", c("det", "col", "ext")))
 
-# Forward-simulate the HMM: z_1 ~ Bern(psi1), z_t | z_{t-1} ~ colonization /
-# extinction, y_{i,j,t} | z_{i,t} ~ Bern(p_i) over every visit. Missing visits
-# in the fitted model's OWN design (its own `NA` pattern, not the pooled
-# data's) are masked back to `NA` so the replicate's visit design matches the
-# one it will be pooled against.
-.tobs_sbc_sim_dyn_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  m <- spec$model
-  pi_list <- m$process_info
-  off <- 0L
-  get_beta <- function(k) {
-    b <- theta[off + seq_len(pi_list[[k]]$p)]
-    off <<- off + pi_list[[k]]$p
-    b
-  }
-  beta_psi1 <- get_beta(1L); beta_p <- get_beta(2L)
-  beta_gam  <- get_beta(3L); beta_eps <- get_beta(4L)
-
-  psi1 <- plogis(as.vector(m$X_processes[[1L]] %*% beta_psi1))
-  p    <- plogis(as.vector(m$X_processes[[2L]] %*% beta_p))
-  gam  <- plogis(as.vector(m$X_processes[[3L]] %*% beta_gam))
-  eps  <- plogis(as.vector(m$X_processes[[4L]] %*% beta_eps))
-
-  n <- m$n_sites; Tn <- m$n_seasons; J <- dim(m$y)[2L]
-  z <- matrix(0L, n, Tn)
-  z[, 1L] <- stats::rbinom(n, 1L, psi1)
-  for (t in 2:Tn) {
-    z[, t] <- ifelse(z[, t - 1L] == 1L,
-                     stats::rbinom(n, 1L, 1 - eps),
-                     stats::rbinom(n, 1L, gam))
-  }
-  y <- array(NA_real_, dim = c(n, J, Tn))
-  for (t in seq_len(Tn)) {
-    y[, , t] <- z[, t] * matrix(stats::rbinom(n * J, 1L, rep(p, J)), n, J)
-  }
-  y[is.na(m$y)] <- NA_real_
-
-  .tobs_sbc_dataset(m$data, y, seq_len(n))
-}
+# The replicate is the dyn_occu() generator at theta, on the fitted model's
+# own visit pattern (its own `NA` marks, not the pooled data's), so the
+# replicate's visit design matches the one it will be pooled against.
+.tobs_sbc_sim_dyn_occu <- .tobs_sbc_sim_gen(
+  "dynamic",
+  shape = function(rep, spec)
+    .tobs_sbc_dataset(spec$model$data, rep, seq_len(spec$model$n_sites)),
+  theta = function(spec, th, lt) .tobs_dynamic_theta(lt, .tobs_theta_row(th), 1L))
 
 # dyn_abun(): the Dail-Madsen open N-mixture has a working `simulate()` handler,
 # so its replicate is the family's own kernel.
@@ -1189,41 +1159,22 @@
     fit$model$y_sources, .tobs_sbc_int_occu_src_names(fit$model)))
 }
 
-# Shared latent occupancy z ~ Bern(psi), independently observed through each
-# source's own detection process (per-visit Bernoulli(p_s)); the ordered
-# detected/all-zero event per source stays consistent with the same z draw,
-# matching what the exact marginal (`.tobs_ploglik_integrated`) integrates
-# over.
-.tobs_sbc_sim_int_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  m <- spec$model
-  pi_list <- m$process_info
-  n_src <- m$n_sources
-
-  beta_psi <- theta[seq_len(pi_list[[1L]]$p)]
-  psi <- plogis(as.vector(m$X_processes[[1L]] %*% beta_psi))
-  z <- stats::rbinom(m$n_sites, 1L, psi)
-
-  off <- pi_list[[1L]]$p
-  y <- vector("list", n_src)
-  for (s in seq_len(n_src)) {
-    pp <- pi_list[[1L + s]]
-    beta_s <- theta[off + seq_len(pp$p)]
-    off <- off + pp$p
-    p_s <- plogis(as.vector(m$X_processes[[1L + s]] %*% beta_s))
-    J_s <- ncol(m$y_sources[[s]])
-    ys <- z * matrix(stats::rbinom(m$n_sites * J_s, 1L, rep(p_s, J_s)),
-                     m$n_sites, J_s)
-    ys[m$y_sources[[s]] < 0] <- -1
-    y[[s]] <- ys
-  }
-  names(y) <- .tobs_sbc_int_occu_src_names(m)
-  .tobs_sbc_dataset(m$data, y, seq_len(m$n_sites))
-}
+# The replicate is the int_occu() generator at theta: a shared latent
+# occupancy observed through each source's own detection process, at each
+# source's own visit pattern -- the event the exact marginal
+# (`.tobs_ploglik_integrated`) integrates over.
+.tobs_sbc_sim_int_occu <- .tobs_sbc_sim_gen(
+  "integrated",
+  shape = function(rep, spec) {
+    m <- spec$model
+    names(rep) <- .tobs_sbc_int_occu_src_names(m)
+    .tobs_sbc_dataset(m$data, rep, seq_len(m$n_sites))
+  },
+  theta = function(spec, th, lt) .tobs_integrated_theta(lt, .tobs_theta_row(th), 1L))
 
 # gdistremoval(): two response matrices (yDist band counts, yRem period counts)
-# that must stay row-consistent; the family's `simulate()` handler returning
-# `list(yDist =, yRem =)` is the replicate generator.
+# that must stay row-consistent; the family generator returning
+# `list(yDist =, yRem =)` is the replicate.
 .tobs_sbc_spec_gdistremoval <- .tobs_sbc_spec_fn(
   c(formula = "lambda", detection = "sigma", removal = "r"),
   response = function(data, spec)
@@ -1233,23 +1184,17 @@
   .tobs_sbc_data_model(fit, list(yDist = fit$model$y, yRem = fit$model$y_rem))
 }
 
-.tobs_sbc_sim_gdistremoval <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  D <- matrix(theta, nrow = 1L)
-  colnames(D) <- names(theta)
-  f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)[[1L]]
-  list(cells = spec$model$data, y = list(yDist = rep$yDist, yRem = rep$yRem),
-       y_pos = NULL, visits = NULL, graph = NULL,
-       site = seq_len(spec$model$n_sites))
-}
+.tobs_sbc_sim_gdistremoval <- .tobs_sbc_sim_gen(
+  "gdistremoval",
+  shape = function(rep, spec)
+    .tobs_sbc_dataset(spec$model$data, list(yDist = rep$yDist, yRem = rep$yRem),
+                      seq_len(spec$model$n_sites)))
 
 # occu_multi(): one detection matrix per species. Species are NOT independent
 # given a shared z -- the joint state is one draw from the log-linear
 # multi-species model, then each species is independently detected given its
-# own z_k -- so the replicate wraps the family's own
-# `.tobs_simulate_occu_multi()` handler. Species names are attached explicitly,
+# own z_k -- so the replicate is the family generator
+# `.tobs_gen_occu_multi()`. Species names are attached explicitly,
 # since the binder does not always name `model$y`.
 .tobs_sbc_spec_occu_multi <- .tobs_sbc_spec_fn(
   c(formula = "state", detection = "det"),
@@ -1260,21 +1205,11 @@
   .tobs_sbc_data_model(fit, stats::setNames(fit$model$y, fit$model$species))
 }
 
-.tobs_sbc_sim_occu_multi <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  D <- matrix(theta, nrow = 1L)
-  colnames(D) <- names(theta)
-  f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)[[1L]]
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
+.tobs_sbc_sim_occu_multi <- .tobs_sbc_sim_gen("occu_multi")
 
 # dyn_int_occu(): the product of the multi-season and multi-source shapes, a
 # named list of per-source 3D [n_sites x max_visits_s x T] arrays. The family's
-# own `.tobs_simulate_dyn_int_occu()` already reproduces each source's own NA
+# generator `.tobs_gen_dyn_int_occu()` already reproduces each source's own NA
 # pattern, so partial season overlap needs no special-casing. The binder only
 # accepts full SITE overlap across sources and has no season-varying option,
 # so no scope check is needed.
@@ -1288,18 +1223,8 @@
   .tobs_sbc_data_model(fit, stats::setNames(fit$model$y, fit$model$sources))
 }
 
-.tobs_sbc_sim_dyn_int_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  D <- matrix(theta, nrow = 1L)
-  colnames(D) <- names(theta)
-  f$draws <- D
-  rep <- stats::simulate(f, nsim = 1L)[[1L]]
-  obs <- spec$data_obs
-  list(cells = obs$cells, y = rep, y_pos = NULL, visits = NULL, graph = NULL,
-       site = obs$site)
-}
-
+.tobs_sbc_sim_dyn_int_occu <- .tobs_sbc_sim_gen(
+  "dyn_int_occu", theta = function(spec, th, lt) list(beta = th))
 
 # ---------------------------------------------------------------------------
 # 6d. Two-block multiarm fits: occu_categorical() and cover(). A
@@ -1396,22 +1321,12 @@
   list(beta_occ = beta_occ, Beta = Beta)
 }
 
-.tobs_sbc_sim_occu_categorical <- function(spec, theta, seed) {
-  set.seed(seed)
-  f <- spec$fit_obs
-  th <- .tobs_sbc_theta_occu_categorical(f, theta)
-  obs <- spec$data_obs
-  X <- stats::model.matrix(spec$args$formula, obs$cells)
-  psi <- stats::plogis(as.numeric(X %*% th$beta_occ))
-  present <- stats::rbinom(nrow(X), 1L, psi)
-  eta <- X %*% th$Beta
-  E <- exp(pmin(eta, 700)); denom <- 1 + rowSums(E)
-  P <- cbind(E / denom, 1 / denom)
-  K <- f$K
-  cls <- apply(P, 1L, function(pr) sample.int(K, 1L, prob = pr))
-  y <- ifelse(present == 1L, cls, 0L)
-  .tobs_sbc_dataset(obs$cells, as.integer(y), obs$site)
-}
+.tobs_sbc_sim_occu_categorical <- .tobs_sbc_sim_gen(
+  "occu_categorical",
+  layout = function(spec)
+    list(X = stats::model.matrix(spec$args$formula, spec$data_obs$cells),
+         K = spec$fit_obs$K),
+  theta = function(spec, th, lt) .tobs_sbc_theta_occu_categorical(spec$fit_obs, th))
 
 # The two-arm log-likelihood at each reference theta row, read straight off
 # the encoding the refit already carries -- the same closed forms
@@ -1479,21 +1394,18 @@
          names = paste0("pos_", names(fit$beta_pos)))))
 }
 
-.tobs_sbc_sim_cover <- function(spec, theta, seed) {
-  set.seed(seed)
-  obs <- spec$data_obs
-  X_occ <- stats::model.matrix(spec$args$presence, obs$cells)
-  X_pos <- stats::model.matrix(spec$args$positive, obs$cells)
-  beta_occ <- theta[paste0("occ_", colnames(X_occ))]
-  beta_pos <- theta[paste0("pos_", colnames(X_pos))]
-  eta_occ <- as.vector(X_occ %*% beta_occ)
-  eta_pos <- as.vector(X_pos %*% beta_pos)
-  n <- nrow(X_occ)
-  occur <- stats::rbinom(n, 1L, stats::plogis(eta_occ))
-  log_cover <- stats::rnorm(n, eta_pos, spec$sigma_pos)
-  cover <- ifelse(occur == 1L, pmin(exp(log_cover), 1), 0)
-  .tobs_sbc_dataset(obs$cells, cover, obs$site)
-}
+.tobs_sbc_sim_cover <- .tobs_sbc_sim_gen(
+  "cover",
+  layout = function(spec) {
+    cells <- spec$data_obs$cells
+    list(X_occ = stats::model.matrix(spec$args$presence, cells),
+         X_pos = stats::model.matrix(spec$args$positive, cells),
+         positive = "lognormal")
+  },
+  theta = function(spec, th, lt)
+    list(b_occ = th[paste0("occ_", colnames(lt$X_occ))],
+         b_pos = th[paste0("pos_", colnames(lt$X_pos))],
+         disp = spec$sigma_pos))
 
 .tobs_sbc_loglik_many_cover <- function(fit, Theta) {
   enc <- fit$encoding
@@ -1525,13 +1437,11 @@
 # `model$y` is `[n_sites x n_seasons x max_visits]` (season BEFORE visits --
 # the one family with this axis order), but the shared pool only ever stacks
 # axis 1 and leaves the others alone, so it is still exactly right. What
-# genuinely IS custom: the family has no `simulate()` handler at all
-# (`simulate_t_occu()` draws a FRESH truth, not a replicate at a given theta)
-# and no `.tobs_pointwise_loglik` dispatch, so `simulate` is hand-written
-# (drawing a fresh AR1 year-effect sequence at the theta's own (sigma, rho) --
-# the same generative model `simulate_t_occu()` uses, parameterized by theta
-# instead of drawing its own truth). It is also fully-observed only (no
-# NA-visit masking, matching `simulate_t_occu()`'s own output).
+# genuinely IS custom: theta carries the AR1 hyperparameters, not the year
+# effect, so the replicate draws a fresh AR1 year-effect sequence at the
+# theta's own (sigma, rho) and hands it to the family generator
+# `.tobs_gen_t_occu()` -- the one `simulate_t_occu()` draws through -- and the
+# family has no `.tobs_pointwise_loglik` dispatch.
 #
 # The log_lik rank arm needs the AR1 year effect eta MARGINALIZED (theta
 # carries only its (sigma, rho) hyperparameters, not eta itself), which is a
@@ -1552,32 +1462,16 @@
 
 .tobs_sbc_spec_t_occu <- .tobs_sbc_spec_fn(c(formula = "occ", detection = "det"))
 
-.tobs_sbc_sim_t_occu <- function(spec, theta, seed) {
-  set.seed(seed)
-  m <- spec$model
-  occ_names <- m$process_info[[1L]]$coef_names
-  det_names <- m$process_info[[2L]]$coef_names
-  beta_psi <- theta[paste0("psi_", occ_names)]
-  beta_p   <- theta[paste0("p_",   det_names)]
-  sigma <- exp(theta[["log_sigma_ar1"]]); rho <- theta[["rho_ar1"]]
-
-  T_s <- m$n_seasons; n <- m$n_sites; J <- m$max_visits
-  eta <- numeric(T_s)
-  eta[1L] <- stats::rnorm(1, 0, sigma / sqrt(pmax(1 - rho^2, 1e-6)))
-  for (t in 2:T_s) eta[t] <- rho * eta[t - 1L] + stats::rnorm(1, 0, sigma)
-  eta <- eta - mean(eta)
-
-  lin  <- as.vector(m$X_occ %*% beta_psi)
-  p_it <- stats::plogis(as.vector(m$X_det %*% beta_p))
-  z <- matrix(0L, n, T_s)
-  for (t in seq_len(T_s)) z[, t] <- stats::rbinom(n, 1L, stats::plogis(lin + eta[t]))
-
-  obs <- spec$data_obs
-  y <- array(0L, dim = c(n, T_s, J))
-  for (t in seq_len(T_s)) for (j in seq_len(J))
-    y[, t, j] <- ifelse(z[, t] == 1L, stats::rbinom(n, 1L, p_it), 0L)
-  .tobs_sbc_dataset(obs$cells, y, obs$site)
-}
+.tobs_sbc_sim_t_occu <- .tobs_sbc_sim_gen(
+  "t_occu",
+  theta = function(spec, th, lt) {
+    occ_names <- lt$process_info[[1L]]$coef_names
+    det_names <- lt$process_info[[2L]]$coef_names
+    list(beta_psi = th[paste0("psi_", occ_names)],
+         beta_p   = th[paste0("p_",   det_names)],
+         eta = .t_occu_draw_ar1(lt$n_seasons, exp(th[["log_sigma_ar1"]]),
+                                th[["rho_ar1"]]))
+  })
 
 # Newton mode-finder for the T-dim AR1 year effect at fixed (lin, p_i, rho,
 # sigma). `nvis`/`kdet` are the model's own [n_sites x T] detection
@@ -1673,13 +1567,11 @@
 # time -- the group_var mapping the refit reads is entirely the SBC
 # adapter's own, decoupled from whatever the original fit used.
 #
-# `simulate()` has no family handler to inject theta into, so it is a
-# hand-written three-level generator: z_c ~ Bernoulli(psi_c) per cell,
-# a_j | z_{cell(j)} ~ Bernoulli(theta_j) per plot, y_jv | a_j ~
-# Bernoulli(p_j) per visit, cover | y_jv=1 ~ Lognormal(eta_pos_j,
-# sigma_pos). `positive = "lognormal"` only, matching `cover()`'s scope
-# (no beta-arm generator to mirror, and dispersion carries a real SE here
-# so there is no dispersion-fixing complication to work around). No
+# The replicate is the family generator `.tobs_gen_occu_multiscale_cover()`
+# at theta with the field off (the non-spatial engine fixes it at 0): z_c ~
+# Bernoulli(psi_c) per cell, a_j | z_{cell(j)} ~ Bernoulli(theta_j) per plot,
+# y_jv | a_j ~ Bernoulli(p_j) per visit, cover | y_jv=1 ~ Lognormal(eta_pos_j,
+# sigma_pos). `positive = "lognormal"` only, matching `cover()`'s scope. No
 # visit-level covariates (the rejection gate refuses them).
 # ---------------------------------------------------------------------------
 
@@ -1724,42 +1616,19 @@
   .tobs_sbc_refit(spec, data)
 }
 
-.tobs_sbc_sim_occu_mscale_cover <- function(spec, theta, seed) {
-  set.seed(seed)
-  m <- spec$model
-  psi_names   <- m$process_info[[1L]]$coef_names
-  theta_names <- m$process_info[[2L]]$coef_names
-  det_names   <- m$process_info[[3L]]$coef_names
-  pos_names   <- m$process_info[[4L]]$coef_names
-  beta_psi   <- theta[paste0("psi_",   psi_names)]
-  beta_theta <- theta[paste0("theta_", theta_names)]
-  beta_p     <- theta[paste0("p_",     det_names)]
-  beta_pos   <- theta[paste0("pos_",   pos_names)]
-  sigma_pos  <- exp(theta[["log_sigma_pos"]])
-
-  n_cells <- m$n_cells; n_plots <- m$n_plots; J <- m$max_visits
-  psi_c   <- stats::plogis(as.vector(m$X_psi %*% beta_psi))
-  z_c     <- stats::rbinom(n_cells, 1L, psi_c)
-
-  theta_j <- stats::plogis(as.vector(m$X_theta %*% beta_theta))
-  a_j     <- stats::rbinom(n_plots, 1L, theta_j) * z_c[m$plot_cell]
-
-  p_j <- stats::plogis(as.vector(m$X_p_site %*% beta_p))
-  eta_pos_j <- as.vector(m$X_pos_site %*% beta_pos)
-
-  y <- matrix(0L, n_plots, J)
-  y_pos <- matrix(0, n_plots, J)
-  for (v in seq_len(J)) {
-    y[, v] <- ifelse(a_j == 1L, stats::rbinom(n_plots, 1L, p_j), 0L)
-    cov_draw <- exp(stats::rnorm(n_plots, eta_pos_j, sigma_pos))
-    y_pos[, v] <- ifelse(y[, v] == 1L, pmin(cov_draw, 1), 0)
-  }
-
-  obs <- spec$data_obs
-  .tobs_sbc_dataset(obs$cells, y, obs$site, y_pos = y_pos,
-                    n_cells = obs$n_cells)
-}
-
+.tobs_sbc_sim_occu_mscale_cover <- .tobs_sbc_sim_gen(
+  "occu_multiscale_cover",
+  shape = function(rep, spec) {
+    obs <- spec$data_obs
+    .tobs_sbc_dataset(obs$cells, rep$y, obs$site, y_pos = rep$y_pos,
+                      n_cells = obs$n_cells)
+  },
+  theta = function(spec, th, lt) {
+    idx <- .tobs_occu_mscale_cover_nuts_layout(lt)
+    .occu_mscale_theta(lt, th, idx,
+                       on_log = startsWith(names(th)[idx$disp] %||% "log_", "log_"),
+                       field = rep(0, lt$n_cells), alpha = 0)
+  })
 
 # ---------------------------------------------------------------------------
 # 6g. The community families: ms_occu(), ms_occu_cover(), ms_int_occu(),
@@ -2061,7 +1930,10 @@
 .TOBS_SBC_REGISTRY <- list(
   occu_cover = list(
     draws    = .tobs_sbc_draws_occu_cover,
-    simulate = .tobs_sbc_sim_occu_cover,
+    simulate = .tobs_sbc_sim_gen("occu_cover",
+                                 shape  = .tobs_sbc_shape_occu_cover,
+                                 theta  = .tobs_sbc_gen_theta_occu_cover,
+                                 layout = .tobs_sbc_layout_occu_cover),
     refit    = .tobs_sbc_refit_occu_cover,
     loglik   = .tobs_sbc_loglik_occu_cover),
 

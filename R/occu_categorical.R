@@ -227,23 +227,32 @@ print.occu_categorical_fit <- function(x, ...) {
   invisible(x)
 }
 
+# The occu_categorical() generator: presence at every row of the shared design
+# `model$X`, and where present a class from the baseline-category softmax over
+# `model$K` classes (baseline last). theta = list(beta_occ, Beta), `Beta` the
+# p x (K - 1) class-coefficient matrix. The response codes as `y` does: 0
+# absent, k class k.
+.tobs_gen_occu_categorical <- function(model, theta) {
+  X <- model$X; n <- nrow(X); K <- model$K
+  present <- stats::rbinom(n, 1L, stats::plogis(as.vector(X %*% theta$beta_occ)))
+  E <- exp(pmin(X %*% theta$Beta, 700))
+  P <- cbind(E, 1) / (1 + rowSums(E))
+  cls <- vapply(seq_len(n), function(i) sample.int(K, 1L, prob = P[i, ]),
+                integer(1))
+  as.integer(ifelse(present == 1L, cls, 0L))
+}
+
 # simulate() for occu_categorical(): per replicate, both arms' coefficients are
-# drawn from their Laplace Gaussians (independent arms), then presence at every
-# row and, where present, a class from the baseline-category softmax on the
-# shared design. The response codes as `y` does: 0 absent, k class k.
+# drawn from their Laplace Gaussians (independent arms), then the family
+# generator on the fitted shared design.
 .tobs_simulate_occu_categorical <- function(object, nsim) {
   enc <- object$encoding
-  X <- enc$X_occ; n <- nrow(X); K <- enc$K
+  K <- enc$K; p <- ncol(enc$X_occ)
   B_occ <- .rmvn(nsim, object$beta_occ, object$vcov_occ)
   B_cls <- .rmvn(nsim, as.vector(object$beta_class), object$vcov_class)
-  lapply(seq_len(nsim), function(s) {
-    present <- stats::rbinom(n, 1L, stats::plogis(as.vector(X %*% B_occ[s, ])))
-    E <- exp(pmin(X %*% matrix(B_cls[s, ], ncol(X), K - 1L), 700))
-    P <- cbind(E, 1) / (1 + rowSums(E))
-    cls <- vapply(seq_len(n), function(i) sample.int(K, 1L, prob = P[i, ]),
-                  integer(1))
-    as.integer(ifelse(present == 1L, cls, 0L))
-  })
+  .tobs_gen_replicates(list(X = enc$X_occ, K = K), nsim, function(i)
+    list(beta_occ = B_occ[i, ], Beta = matrix(B_cls[i, ], p, K - 1L)),
+    .tobs_gen_occu_categorical)
 }
 
 #' Predict from an occu_categorical fit
@@ -307,15 +316,9 @@ simulate_occu_categorical <- function(N = 500L, beta.occ = c(0.2, 0.8),
   }
   K <- ncol(beta.class) + 1L
   x <- stats::rnorm(N)
-  X <- cbind(1, x)
-  psi   <- stats::plogis(as.numeric(X %*% beta.occ))
-  present <- stats::rbinom(N, 1L, psi)
-  eta <- X %*% beta.class
-  E   <- exp(eta); denom <- 1 + rowSums(E)
-  P   <- cbind(E / denom, 1 / denom)                       # N x K
-  cls <- apply(P, 1L, function(pr) sample.int(K, 1L, prob = pr))
-  y   <- ifelse(present == 1L, cls, 0L)
-  list(data = data.frame(x = x), y = as.integer(y),
+  y <- .tobs_gen_occu_categorical(list(X = cbind(1, x), K = K),
+                                  list(beta_occ = beta.occ, Beta = beta.class))
+  list(data = data.frame(x = x), y = y,
        truth = list(beta_occ = beta.occ, beta_class = beta.class, K = K))
 }
 

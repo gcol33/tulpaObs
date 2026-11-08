@@ -1169,53 +1169,91 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   out
 }
 
-# dyn_occu(): season-1 occupancy, then the colonization / extinction chain, then
-# per-visit detections. A season- or interval-varying arm's long-form design is
-# site-major, period-minor (`.tobs_period_arm_design()`), so it reshapes byrow;
-# a per-site arm is constant over periods.
-.tobs_simulate_dynamic <- function(object, nsim) {
-  model <- object$model
-  n <- model$n_sites; Tn <- model$n_seasons; J <- dim(model$y)[2L]
-  d <- .tobs_simulate_draw_rows(object, nsim)
-  arm <- function(k, n_per, sv) {
-    pr <- stats::plogis(.tobs_eta_draws(model, d, k))
-    lapply(seq_len(nsim), function(s) matrix(pr[s, ], n, n_per, byrow = isTRUE(sv)))
+# The dyn_occu() generator: season-1 occupancy, then the colonization /
+# extinction chain (each interval draws an extinction and a colonization event
+# at every site, the site's state picking which applies), then per-visit
+# detections site by site and season by season at the visit pattern of
+# `model$y` (NA / -1 = no visit, kept as marked). theta = list(psi1, p, gam,
+# eps): the season-1 occupancy per site, the detection probability per
+# (site, season), and the colonization / extinction probability per
+# (site, interval).
+.tobs_gen_dynamic <- function(model, theta) {
+  y <- model$y
+  n <- dim(y)[1L]; J <- dim(y)[2L]; Tn <- dim(y)[3L]
+  z <- matrix(0L, n, Tn)
+  z[, 1L] <- stats::rbinom(n, 1L, theta$psi1)
+  for (t in seq_len(Tn - 1L)) {
+    ext <- stats::rbinom(n, 1L, theta$eps[, t])
+    col <- stats::rbinom(n, 1L, theta$gam[, t])
+    z[, t + 1L] <- z[, t] * (1L - ext) + (1L - z[, t]) * col
   }
-  psi1 <- arm(1L, 1L, FALSE)
-  p    <- arm(2L, Tn, model$det_season_varying)
-  gam  <- arm(3L, Tn - 1L, model$col_season_varying)
-  eps  <- arm(4L, Tn - 1L, model$ext_season_varying)
-  lapply(seq_len(nsim), function(s) {
-    z <- matrix(0L, n, Tn)
-    z[, 1L] <- stats::rbinom(n, 1L, psi1[[s]][, 1L])
-    for (t in seq_len(Tn - 1L)) {
-      stay <- 1 - eps[[s]][, t]
-      z[, t + 1L] <- stats::rbinom(n, 1L, ifelse(z[, t] == 1L, stay, gam[[s]][, t]))
-    }
-    prob <- aperm(array(z * p[[s]], c(n, Tn, J)), c(1L, 3L, 2L))
-    .tobs_simulate_detections(model$y, prob)
-  })
+  out <- y
+  for (i in seq_len(n)) for (t in seq_len(Tn)) {
+    seen <- which(!is.na(y[i, , t]) & y[i, , t] >= 0)
+    if (length(seen))
+      out[i, seen, t] <- stats::rbinom(length(seen), 1L, z[i, t] * theta$p[i, t])
+  }
+  storage.mode(out) <- "integer"
+  structure(out, latent = z)
 }
 
-# int_occu(): one shared occupancy state per site, detected by every source
-# through that source's own design, at the rows its site map places there.
-.tobs_simulate_integrated <- function(object, nsim) {
-  model <- object$model
+# dyn_occu() theta from row `s` of a draw matrix `D`. A season- or
+# interval-varying arm's long-form design is site-major, period-minor
+# (`.tobs_period_arm_design()`), so it reshapes byrow; a per-site arm is
+# constant over periods.
+.tobs_dynamic_theta <- function(model, D, s) {
+  n <- model$n_sites; Tn <- model$n_seasons
+  arm <- function(k, n_per, sv)
+    matrix(stats::plogis(.tobs_eta_draws(model, D[s, , drop = FALSE], k)),
+           n, n_per, byrow = isTRUE(sv))
+  list(psi1 = arm(1L, 1L, FALSE)[, 1L],
+       p    = arm(2L, Tn, model$det_season_varying),
+       gam  = arm(3L, Tn - 1L, model$col_season_varying),
+       eps  = arm(4L, Tn - 1L, model$ext_season_varying))
+}
+
+.tobs_simulate_dynamic <- function(object, nsim) {
   d <- .tobs_simulate_draw_rows(object, nsim)
-  psi <- stats::plogis(.tobs_eta_draws(model, d, 1L))
-  p_src <- lapply(seq_len(model$n_sources), function(s)
-    stats::plogis(.tobs_eta_draws(model, d, 1L + s)))
-  lapply(seq_len(nsim), function(s) {
-    z <- stats::rbinom(model$n_sites, 1L, psi[s, ])
-    out <- lapply(seq_len(model$n_sources), function(k) {
-      ys   <- model$y_sources[[k]]
-      site <- model$site_maps[[k]] + 1L
-      .tobs_simulate_detections(ys, matrix(z[site] * p_src[[k]][s, site],
-                                           nrow(ys), ncol(ys)))
-    })
-    names(out) <- names(model$y_sources)
-    out
+  .tobs_gen_replicates(object$model, nsim, function(s)
+    .tobs_dynamic_theta(object$model, d, s), .tobs_gen_dynamic)
+}
+
+# The int_occu() generator: one shared occupancy state per site, detected by
+# every source through its own detection probability at the rows its 0-based
+# site map places there, row by row at the visit pattern of that source's
+# `y_sources` matrix (NA / -1 = no visit, kept as marked). theta = list(psi,
+# p): the occupancy per site and a per-source list of per-site detection
+# probabilities.
+.tobs_gen_integrated <- function(model, theta) {
+  z <- stats::rbinom(model$n_sites, 1L, theta$psi)
+  out <- lapply(seq_len(model$n_sources), function(k) {
+    ys   <- model$y_sources[[k]]
+    site <- model$site_maps[[k]] + 1L
+    pr   <- z[site] * theta$p[[k]][site]
+    o <- ys
+    for (i in seq_len(nrow(ys))) {
+      seen <- which(!is.na(ys[i, ]) & ys[i, ] >= 0)
+      if (length(seen)) o[i, seen] <- stats::rbinom(length(seen), 1L, pr[i])
+    }
+    storage.mode(o) <- "integer"
+    o
   })
+  names(out) <- names(model$y_sources)
+  structure(out, latent = z)
+}
+
+# int_occu() theta from row `s` of a draw matrix `D`.
+.tobs_integrated_theta <- function(model, D, s) {
+  Ds <- D[s, , drop = FALSE]
+  list(psi = stats::plogis(as.vector(.tobs_eta_draws(model, Ds, 1L))),
+       p = lapply(seq_len(model$n_sources), function(k)
+         stats::plogis(as.vector(.tobs_eta_draws(model, Ds, 1L + k)))))
+}
+
+.tobs_simulate_integrated <- function(object, nsim) {
+  d <- .tobs_simulate_draw_rows(object, nsim)
+  .tobs_gen_replicates(object$model, nsim, function(s)
+    .tobs_integrated_theta(object$model, d, s), .tobs_gen_integrated)
 }
 
 .tobs_simulate_single <- function(object, nsim) {

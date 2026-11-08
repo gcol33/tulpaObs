@@ -1053,20 +1053,11 @@ simulate_dyn_occu <- function(N = 100, J = 4, n.seasons = 5,
     data$eps_cov <- eps_cov
   }
 
-  z <- matrix(NA_integer_, N, n.seasons)
-  z[, 1] <- rbinom(N, 1, psi1)
-  for (t in 2:n.seasons) {
-    iv <- t - 1L
-    z[, t] <- z[, t-1] * (1 - rbinom(N, 1, eps_it[, iv])) +
-              (1 - z[, t-1]) * rbinom(N, 1, gam_it[, iv])
-  }
-
-  y <- array(NA_integer_, dim = c(N, J, n.seasons))
-  for (i in seq_len(N)) {
-    for (t in seq_len(n.seasons)) {
-      y[i, , t] <- rbinom(J, 1, z[i, t] * p_mat[i, t])
-    }
-  }
+  y <- .tobs_gen_dynamic(list(y = array(0L, dim = c(N, J, n.seasons))),
+                         list(psi1 = rep(psi1, N), p = p_mat, gam = gam_it,
+                              eps = eps_it))
+  z <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
 
   list(
     y = y,
@@ -1109,33 +1100,32 @@ simulate_int_occu <- function(N.total = 150, n.data = 2, J = c(4, 3),
   data <- data.frame(x = rnorm(N.total))
   X_occ <- model.matrix(~ x, data)
   psi <- plogis(as.vector(X_occ %*% beta.occ))
-  z <- rbinom(N.total, 1, psi)
 
   # Assign sites to sources
   shared <- seq_len(n.shared)
   remaining <- setdiff(seq_len(N.total), shared)
   n_per_source <- (N.total - n.shared) %/% n.data
   site_maps <- vector("list", n.data)
-  y_list <- vector("list", n.data)
+  y_tmpl <- vector("list", n.data)
 
   for (s in seq_len(n.data)) {
     start <- (s - 1) * n_per_source + 1
     end <- min(s * n_per_source, length(remaining))
     source_sites <- sort(c(shared, remaining[start:end]))
     site_maps[[s]] <- source_sites
-
-    ns <- length(source_sites)
-    p_s <- plogis(beta.det[[s]][1])
-    y_s <- matrix(NA_integer_, ns, J[s])
-    for (i in seq_len(ns)) {
-      y_s[i, ] <- rbinom(J[s], 1, z[source_sites[i]] * p_s)
-    }
     # A source covers a non-contiguous subset of the sites from source 2 on, so
     # its rows carry the names of the sites they measure: the key tobs() joins
     # each source to `data` on.
-    rownames(y_s) <- rownames(data)[source_sites]
-    y_list[[s]] <- y_s
+    y_tmpl[[s]] <- matrix(0L, length(source_sites), J[s],
+                          dimnames = list(rownames(data)[source_sites], NULL))
   }
+  y_list <- .tobs_gen_integrated(
+    list(n_sites = N.total, n_sources = n.data, y_sources = y_tmpl,
+         site_maps = lapply(site_maps, function(m) m - 1L)),
+    list(psi = psi, p = lapply(seq_len(n.data), function(s)
+      rep(plogis(beta.det[[s]][1]), N.total))))
+  z <- attr(y_list, "latent")
+  y_list <- .tobs_gen_strip(y_list)
 
   list(
     y = y_list,

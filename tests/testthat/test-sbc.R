@@ -283,7 +283,7 @@ test_that("the replicate generator draws from the law the likelihood scores", {
   # 0.01 band is about four standard errors, while the relative 3% this used to
   # assert was under three and failed on a high draw.
   reps <- lapply(seq_len(600L), function(i)
-    tulpaObs:::.tobs_sbc_sim_occu_cover(spec, th, 90000L + i))
+    m$simulate(th, 90000L + i))
   det_rate <- mean(vapply(reps, function(r) mean(r$y), numeric(1)))
   # E[y] = psi * p, averaged over the design.
   expect_lt(abs(det_rate - mean(e$psi * e$p_mat)), 0.01)

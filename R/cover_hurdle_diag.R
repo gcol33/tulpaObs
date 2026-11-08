@@ -256,28 +256,49 @@
     exp(stats::rnorm(n, eta, disp)))
 }
 
-# simulate() for cover(): per replicate one posterior draw of both arms at every
-# plot, presence from the occurrence probability and, where present, a cover
-# value from the positive arm. The response is laid out as `y`: 0 where absent,
-# NA on a row the fit dropped.
+# The cover() generator: presence from the occurrence probability at every
+# unit, and a cover value from the positive arm, drawn at every unit and kept
+# where present. The bounded-cover arms keep the [0, 1] cover-fraction
+# contract the family's response obeys, so a draw above full cover is full
+# cover. Each arm's predictor is `X %*% b + off`, the design part dropped when
+# the layout carries no design (`off` is then the whole realised predictor).
+# The response is laid out as `y`: 0 where absent, NA on a unit `model$keep`
+# drops. theta = list(b_occ, b_pos, off_occ, off_pos, disp).
+.tobs_gen_cover <- function(model, theta) {
+  arm <- function(X, b, off) {
+    if (is.null(X)) return(off)
+    eta <- as.vector(X %*% b)
+    if (is.null(off)) eta else eta + off
+  }
+  eta_occ <- arm(model$X_occ, theta$b_occ, theta$off_occ)
+  eta_pos <- arm(model$X_pos, theta$b_pos, theta$off_pos)
+  positive <- model$positive %||% "lognormal"
+  present <- stats::rbinom(length(eta_occ), 1L, stats::plogis(eta_occ))
+  draw <- .tobs_draw_positive_cover(eta_pos, theta$disp, positive,
+                                    model$pi_one %||% 0)
+  if (!identical(positive, "gaussian")) draw <- pmin(draw, 1)
+  v <- ifelse(present == 1L, draw, 0)
+  keep <- model$keep %||% rep(TRUE, length(v))
+  out <- rep(NA_real_, length(keep))
+  out[keep] <- v
+  structure(out, latent = present)
+}
+
+# simulate() for cover(): per replicate one posterior draw of both arms' linear
+# predictors at every plot, then the family generator.
 .tobs_simulate_cover <- function(object, nsim) {
   enc <- object$encoding
-  positive <- object$positive %||% "lognormal"
   e <- .tobs_cover_eta_draws(object, nsim, rows = "all")
   S <- nrow(e$eta_occ)
   idx <- if (S == nsim) seq_len(nsim) else sample.int(S, nsim, replace = TRUE)
   disp <- if (length(e$disp) == 1L) rep(e$disp, S) else e$disp
-  keep <- enc$obs_keep %||% rep(TRUE, ncol(e$eta_occ))
-  lapply(idx, function(s) {
-    present <- stats::rbinom(ncol(e$eta_occ), 1L, stats::plogis(e$eta_occ[s, ]))
-    v <- numeric(length(present))
-    on <- present == 1L
-    v[on] <- .tobs_draw_positive_cover(e$eta_pos[s, on], disp[s], positive,
-                                       object$pi_one %||% 0)
-    out <- rep(NA_real_, length(keep))
-    out[keep] <- v
-    out
-  })
+  model <- list(positive = object$positive %||% "lognormal",
+                pi_one = object$pi_one %||% 0,
+                keep = enc$obs_keep %||% rep(TRUE, ncol(e$eta_occ)))
+  .tobs_gen_replicates(model, nsim, function(i) {
+    s <- idx[i]
+    list(off_occ = e$eta_occ[s, ], off_pos = e$eta_pos[s, ], disp = disp[s])
+  }, .tobs_gen_cover)
 }
 
 # Pointwise log-likelihood [n_draws x N] for a cover hurdle fit (separate-Laplace

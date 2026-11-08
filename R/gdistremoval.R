@@ -314,17 +314,20 @@
   }, numeric(model$n_sites)))
 }
 
-# Posterior replicate counts: draw a coefficient vector, then per site draw N,
-# the detected total, and the distance-band + removal-period allocations.
+# The gdistremoval() generator: per site N, the detected total, and the
+# distance-band + removal-period allocations at the arm predictors theta
+# implies.
+.tobs_gen_gdistremoval <- function(model, theta) {
+  up <- .gdr_unpack(theta, model)
+  .gdr_draw(up$lambda, up$sigma, up$r, model$cutpoints, model$transect,
+            model$n_periods)
+}
+
+# Posterior replicate counts: one coefficient draw per replicate, then the
+# family generator.
 .tobs_simulate_gdistremoval <- function(object, nsim = 1) {
-  model <- object$model
-  draw_one <- function() {
-    idx <- sample.int(nrow(object$draws), 1L)
-    up  <- .gdr_unpack(object$draws[idx, ], model)
-    .gdr_draw(up$lambda, up$sigma, up$r, model$cutpoints, model$transect,
-              model$n_periods)
-  }
-  lapply(seq_len(nsim), function(s) draw_one())
+  .tobs_gen_replicates(object$model, nsim, function(i)
+    object$draws[sample.int(nrow(object$draws), 1L), ], .tobs_gen_gdistremoval)
 }
 
 # Core draw: per site N ~ Pois(lambda), detected ~ Binom(N, pdist*prem), then the
@@ -388,23 +391,35 @@ simulate_gdistremoval <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
   if (is.null(beta.r))
     beta.r <- c(stats::qlogis(0.4), stats::runif(n.rem.covs, -0.3, 0.3))
 
+  lt <- .tobs_sim_layout_gdistremoval(N, cutpoints, n.periods, transect,
+                                       n.abund.covs, n.det.covs, n.rem.covs,
+                                       beta.lambda, beta.sigma, beta.r)
+  dr <- .tobs_gen_gdistremoval(lt$model, lt$theta)
+  colnames(dr$yDist) <- paste0("band", seq_len(ncol(dr$yDist)))
+  colnames(dr$yRem)  <- paste0("period", seq_len(n.periods))
+  up <- .gdr_unpack(lt$theta, lt$model)
+  list(y = dr$yDist, y_rem = dr$yRem, data = lt$data,
+       truth = list(beta_lambda = beta.lambda, beta_sigma = beta.sigma,
+                    beta_r = beta.r, lambda = up$lambda, sigma = up$sigma,
+                    r = up$r))
+}
+
+# The model layout + theta simulate_gdistremoval() hands the generator: the
+# three arm designs on freshly drawn covariates and the stacked coefficients.
+.tobs_sim_layout_gdistremoval <- function(N, cutpoints, n.periods, transect,
+                                          n.abund.covs, n.det.covs, n.rem.covs,
+                                          beta.lambda, beta.sigma, beta.r) {
   mk <- function(k, tag) {
     d <- data.frame(matrix(stats::rnorm(N * k), N, k))
     names(d) <- paste0(tag, seq_len(k)); d
   }
   ac <- mk(n.abund.covs, "abund_cov"); dc <- mk(n.det.covs, "det_cov")
   rc <- mk(n.rem.covs, "rem_cov")
-  data <- cbind(ac, dc, rc)
-
-  lambda <- exp(as.vector(stats::model.matrix(~ ., ac) %*% beta.lambda))
-  sigma  <- exp(as.vector(stats::model.matrix(~ ., dc) %*% beta.sigma))
-  r      <- plogis(as.vector(stats::model.matrix(~ ., rc) %*% beta.r))
-
-  dr <- .gdr_draw(lambda, sigma, r, as.numeric(cutpoints), transect,
-                  as.integer(n.periods))
-  colnames(dr$yDist) <- paste0("band", seq_len(ncol(dr$yDist)))
-  colnames(dr$yRem)  <- paste0("period", seq_len(n.periods))
-  list(y = dr$yDist, y_rem = dr$yRem, data = data,
-       truth = list(beta_lambda = beta.lambda, beta_sigma = beta.sigma,
-                    beta_r = beta.r, lambda = lambda, sigma = sigma, r = r))
+  list(model = list(X_processes = list(stats::model.matrix(~ ., ac),
+                                       stats::model.matrix(~ ., dc),
+                                       stats::model.matrix(~ ., rc)),
+                    cutpoints = as.numeric(cutpoints), transect = transect,
+                    n_periods = as.integer(n.periods), n_sites = N),
+       theta = c(beta.lambda, beta.sigma, beta.r),
+       data = cbind(ac, dc, rc))
 }

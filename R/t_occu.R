@@ -274,23 +274,47 @@ t_occu <- function() {
   }, numeric(length(obs))))
 }
 
-# simulate() for t_occu(): per (site, season) an independent occupancy draw on
-# the site's predictor plus the season's year effect, then per-visit detections.
-# The year effect is the posterior mean `fit$temporal_field`, as the pointwise
+# The t_occu() generator: per (site, season) an independent occupancy draw on
+# the site's predictor plus that season's year effect, then per-visit
+# detections at the visit pattern of `model$y` (NA / -1 = no visit), drawn
+# season by season and visit by visit at every surveyed site. theta =
+# list(beta_psi, beta_p, eta), `eta` the length-T year effect.
+.tobs_gen_t_occu <- function(model, theta) {
+  n <- model$n_sites; Tn <- model$n_seasons; J <- model$max_visits
+  eta_psi <- as.vector(model$X_occ %*% theta$beta_psi)
+  p <- stats::plogis(as.vector(model$X_det %*% theta$beta_p))
+  psi <- stats::plogis(outer(eta_psi, theta$eta, `+`))
+  z <- matrix(stats::rbinom(n * Tn, 1L, psi), n, Tn)
+  y <- model$y
+  out <- y
+  for (t in seq_len(Tn)) for (j in seq_len(J)) {
+    seen <- !is.na(y[, t, j]) & y[, t, j] >= 0
+    out[seen, t, j] <- stats::rbinom(sum(seen), 1L, p[seen]) * z[seen, t]
+  }
+  storage.mode(out) <- "integer"
+  structure(out, latent = z)
+}
+
+# A stationary AR1 year effect of innovation SD `sigma` and correlation `rho`
+# over `T_s` seasons, centred to mean zero (the identification the fit uses).
+.t_occu_draw_ar1 <- function(T_s, sigma, rho) {
+  eta <- numeric(T_s)
+  eta[1L] <- stats::rnorm(1, 0, sigma / sqrt(pmax(1 - rho^2, 1e-6)))
+  for (t in 2:T_s) eta[t] <- rho * eta[t - 1L] + stats::rnorm(1, 0, sigma)
+  eta - mean(eta)
+}
+
+# simulate() for t_occu(): one coefficient draw per replicate, with the year
+# effect at the posterior mean `fit$temporal_field`, as the pointwise
 # log-likelihood above scores it.
 .tobs_simulate_t_occu <- function(object, nsim) {
   model <- object$model
   d <- .tobs_simulate_draw_rows(object, nsim)
   p_psi <- model$process_info[[1L]]$p; p_p <- model$process_info[[2L]]$p
-  n <- model$n_sites; Tn <- model$n_seasons; J <- model$max_visits
-  eta_t <- object$temporal_field %||% rep(0, Tn)
-  lapply(seq_len(nsim), function(s) {
-    eta_psi <- as.vector(model$X_occ %*% d[s, seq_len(p_psi)])
-    p <- stats::plogis(as.vector(model$X_det %*% d[s, p_psi + seq_len(p_p)]))
-    psi <- stats::plogis(outer(eta_psi, eta_t, `+`))
-    z <- matrix(stats::rbinom(n * Tn, 1L, psi), n, Tn)
-    .tobs_simulate_detections(model$y, array(z * p, c(n, Tn, J)))
-  })
+  eta_t <- object$temporal_field %||% rep(0, model$n_seasons)
+  .tobs_gen_replicates(model, nsim, function(s)
+    list(beta_psi = d[s, seq_len(p_psi)], beta_p = d[s, p_psi + seq_len(p_p)],
+         eta = eta_t), .tobs_gen_t_occu)
 }
 
 # residuals() for t_occu(): the per-(site, season) smoothed state posterior
@@ -394,19 +418,13 @@ simulate_t_occu <- function(N = 150, T.seasons = 8, J = 3, beta.occ = c(0.2),
   data <- data.frame(x = stats::rnorm(N))
   X_occ <- if (length(beta.occ) > 1L) stats::model.matrix(~ x, data)
            else stats::model.matrix(~ 1, data)
-  # AR1 year effect (stationary start).
-  eta <- numeric(T.seasons)
-  eta[1L] <- stats::rnorm(1, 0, sigma / sqrt(1 - rho^2))
-  for (t in 2:T.seasons) eta[t] <- rho * eta[t - 1L] + stats::rnorm(1, 0, sigma)
-  eta <- eta - mean(eta)
-  lin <- as.vector(X_occ %*% beta.occ)
-  z <- matrix(0L, N, T.seasons)
-  for (t in seq_len(T.seasons))
-    z[, t] <- stats::rbinom(N, 1L, stats::plogis(lin + eta[t]))
-  y <- array(0L, dim = c(N, T.seasons, J))
-  for (t in seq_len(T.seasons)) for (j in seq_len(J))
-    y[, t, j] <- ifelse(z[, t] == 1L, stats::rbinom(N, 1L, p), 0L)
-  list(y = y, data = data,
+  eta <- .t_occu_draw_ar1(T.seasons, sigma, rho)
+  model <- list(n_sites = N, n_seasons = T.seasons, max_visits = J,
+                X_occ = X_occ, X_det = stats::model.matrix(~ 1, data),
+                y = array(0L, dim = c(N, T.seasons, J)))
+  y <- .tobs_gen_t_occu(model, list(beta_psi = beta.occ,
+                                    beta_p = stats::qlogis(p), eta = eta))
+  list(y = .tobs_gen_strip(y), data = data,
        truth = list(beta_occ = beta.occ, p = p, rho = rho, sigma = sigma,
-                    eta = eta, z = z))
+                    eta = eta, z = attr(y, "latent")))
 }

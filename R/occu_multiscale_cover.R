@@ -193,46 +193,64 @@
   0
 }
 
+# The occu_multiscale_cover() generator: cell occupancy, plot availability
+# given an occupied cell, per-visit detection given an available plot at the
+# visits `model$valid` marks, and cover at the detected visits. theta = list of
+# the arm coefficients (`b_psi`, `b_theta`, `b_p_site`, `b_p_visit`,
+# `b_pos_site`, `b_pos_visit`), the cover dispersion `disp`, and the realised
+# field offsets `field_psi` (per cell) and `field_pos` (per plot). Returns
+# list(y, y_pos) on the [plots x visits] grid, NA where no visit was made and
+# y_pos NA off the detected visits.
+.tobs_gen_occu_multiscale_cover <- function(model, theta) {
+  np <- model$n_plots; J <- model$max_visits; pc <- model$plot_cell
+  psi <- stats::plogis(as.numeric(model$X_psi %*% theta$b_psi) + theta$field_psi)
+  th  <- stats::plogis(as.numeric(model$X_theta %*% theta$b_theta))
+  p <- stats::plogis(.occu_ms_eta_visit(model$X_p_site, theta$b_p_site,
+                                        model$X_p_visit, theta$b_p_visit, np, J))
+  ep <- .occu_ms_eta_visit(model$X_pos_site, theta$b_pos_site,
+                           model$X_pos_visit, theta$b_pos_visit, np, J) +
+    theta$field_pos
+  z <- stats::rbinom(model$n_cells, 1L, psi)
+  a <- stats::rbinom(np, 1L, th * z[pc])
+  y <- matrix(NA_integer_, np, J); y_pos <- matrix(NA_real_, np, J)
+  v <- model$valid
+  y[v] <- stats::rbinom(sum(v), 1L, (a * p)[v])
+  hit <- v & y == 1L
+  if (any(hit)) {
+    y_pos[hit] <- .tobs_draw_positive_cover(ep[hit], theta$disp,
+                                            model$positive %||% "lognormal")
+  }
+  structure(list(y = y, y_pos = y_pos), latent = list(z = z, a = a))
+}
+
+# theta from one packed parameter row `par` (the fit's draw layout): the arm
+# blocks by the layout's indices, the dispersion on its natural scale (`on_log`
+# when the row carries it as a log), and the field `field` (per cell) with its
+# cover-arm copy `alpha * field` at each plot's cell.
+.occu_mscale_theta <- function(model, par, idx, on_log, field, alpha) {
+  list(b_psi = par[idx$psi], b_theta = par[idx$theta],
+       b_p_site = par[idx$p_site], b_p_visit = par[idx$p_visit],
+       b_pos_site = par[idx$pos_site], b_pos_visit = par[idx$pos_visit],
+       disp = if (on_log) exp(par[[idx$disp]]) else par[[idx$disp]],
+       field_psi = field, field_pos = alpha * field[model$plot_cell])
+}
+
 # simulate() for occu_multiscale_cover(): per replicate one posterior draw, then
-# the three levels in turn -- cell occupancy, plot availability given an
-# occupied cell, per-visit detection given an available plot -- and cover at the
-# detected visits. The field and its copy amplitude enter as the point values
-# fitted() uses, since a draw carries no field realization. Returns list(y,
-# y_pos) on the [plots x visits] grid, NA where no visit was made and y_pos NA
-# off the detected visits.
+# the family generator. The field and its copy amplitude enter as the point
+# values fitted() uses, since a draw carries no field realization.
 .tobs_simulate_occu_multiscale_cover <- function(object, nsim) {
   model <- object$model
   idx <- .tobs_occu_mscale_cover_nuts_layout(model)
-  np <- model$n_plots; J <- model$max_visits; pc <- model$plot_cell
   field <- as.numeric(object$spatial_field %||% rep(0, model$n_cells))
   alpha <- unname(object$means["alpha"]); if (!is.finite(alpha)) alpha <- 0
-  positive <- model$positive %||% "lognormal"
   d <- .tobs_simulate_draw_rows(object, nsim)
   # The spatial route reports the dispersion on its natural scale (`phi_pos`),
   # the non-spatial routes on the log scale (`log_*`), as
   # .occu_mscale_cover_sigma_pos() reads them.
   on_log <- startsWith(colnames(d)[idx$disp] %||% "log_", "log_")
-  lapply(seq_len(nsim), function(s) {
-    par <- d[s, ]
-    disp <- if (on_log) exp(par[[idx$disp]]) else par[[idx$disp]]
-    psi   <- stats::plogis(as.numeric(model$X_psi %*% par[idx$psi]) + field)
-    theta <- stats::plogis(as.numeric(model$X_theta %*% par[idx$theta]))
-    p <- stats::plogis(.occu_ms_eta_visit(model$X_p_site, par[idx$p_site],
-                                          model$X_p_visit, par[idx$p_visit], np, J))
-    ep <- .occu_ms_eta_visit(model$X_pos_site, par[idx$pos_site],
-                             model$X_pos_visit, par[idx$pos_visit], np, J) +
-      alpha * field[pc]
-    z <- stats::rbinom(model$n_cells, 1L, psi)
-    a <- stats::rbinom(np, 1L, theta * z[pc])
-    y <- matrix(NA_integer_, np, J); y_pos <- matrix(NA_real_, np, J)
-    v <- model$valid
-    y[v] <- stats::rbinom(sum(v), 1L, (a * p)[v])
-    hit <- v & y == 1L
-    if (any(hit)) {
-      y_pos[hit] <- .tobs_draw_positive_cover(ep[hit], disp, positive)
-    }
-    list(y = y, y_pos = y_pos)
-  })
+  .tobs_gen_replicates(model, nsim, function(s)
+    .occu_mscale_theta(model, d[s, ], idx, on_log, field, alpha),
+    .tobs_gen_occu_multiscale_cover)
 }
 
 # residuals() for occu_multiscale_cover(): the CELL-level residual of the
@@ -807,44 +825,27 @@ simulate_occu_multiscale_cover <- function(n.cells = 60L,
   x_pdet  <- stats::rnorm(n_plots)
   x_cov   <- stats::rnorm(n_plots)
 
-  # Cell occupancy (intercept field + optional cell-level SVC trend).
-  eta_psi <- beta.psi[1L] + beta.psi[2L] * x_cell + sigma * f
-  if (isTRUE(trend)) eta_psi <- eta_psi + tcov * sigma.trend * f_trend
-  psi     <- stats::plogis(eta_psi)
-  z       <- stats::rbinom(n.cells, 1L, psi)
-
-  # Plot availability (only meaningful where the cell is occupied).
-  eta_theta <- beta.theta[1L] + beta.theta[2L] * x_plot
-  theta     <- stats::plogis(eta_theta)
-  a         <- stats::rbinom(n_plots, 1L, theta) * z[plot_cell]
-
-  # Detection + cover per visit.
-  y     <- matrix(0L, n_plots, J)
-  y_pos <- matrix(NA_real_, n_plots, J)
-  eta_p   <- beta.p[1L]   + beta.p[2L]   * x_pdet
-  p_plot  <- stats::plogis(eta_p)
-  eta_pos <- beta.pos[1L] + beta.pos[2L] * x_cov + alpha * sigma * f[plot_cell]
+  field_psi <- sigma * f
+  field_pos <- alpha * sigma * f[plot_cell]
   if (isTRUE(trend)) {
-    eta_pos <- eta_pos +
+    field_psi <- field_psi + tcov * sigma.trend * f_trend
+    field_pos <- field_pos +
       tcov[plot_cell] * alpha.trend * sigma.trend * f_trend[plot_cell]
   }
-  for (i in seq_len(n_plots)) {
-    if (a[i] == 1L) {
-      yi <- stats::rbinom(J, 1L, p_plot[i])
-      y[i, ] <- yi
-      det <- which(yi == 1L)
-      if (length(det)) {
-        if (positive == "beta") {
-          mu <- stats::plogis(eta_pos[i])
-          y_pos[i, det] <- stats::rbeta(length(det), mu * phi, (1 - mu) * phi)
-        } else if (positive == "gaussian") {
-          y_pos[i, det] <- stats::rnorm(length(det), eta_pos[i], phi)
-        } else {
-          y_pos[i, det] <- stats::rlnorm(length(det), eta_pos[i], phi)
-        }
-      }
-    }
-  }
+  model <- list(n_cells = n.cells, n_plots = n_plots, max_visits = J,
+                plot_cell = plot_cell, positive = positive,
+                valid = matrix(TRUE, n_plots, J),
+                X_psi = cbind(1, x_cell), X_theta = cbind(1, x_plot),
+                X_p_site = cbind(1, x_pdet), X_p_visit = NULL,
+                X_pos_site = cbind(1, x_cov), X_pos_visit = NULL)
+  rep <- .tobs_gen_occu_multiscale_cover(model, list(
+    b_psi = beta.psi, b_theta = beta.theta, b_p_site = beta.p,
+    b_p_visit = numeric(0), b_pos_site = beta.pos, b_pos_visit = numeric(0),
+    disp = phi, field_psi = field_psi, field_pos = field_pos))
+  y <- rep$y; y_pos <- rep$y_pos
+  z <- attr(rep, "latent")$z; a <- attr(rep, "latent")$a
+  psi   <- stats::plogis(as.numeric(model$X_psi %*% beta.psi) + field_psi)
+  theta <- stats::plogis(as.numeric(model$X_theta %*% beta.theta))
 
   data <- data.frame(cell = plot_cell, x_cell = x_cell[plot_cell],
                      x_plot = x_plot, x_pdet = x_pdet, x_cov = x_cov)

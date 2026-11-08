@@ -81,22 +81,15 @@ simulate_cover <- function(N             = 200L,
     eta_pos <- eta_pos + spatial_pos
   }
 
-  p     <- stats::plogis(eta_occ)
-  occur <- stats::rbinom(N, 1L, p)
-
-  if (identical(response, "gaussian")) {
-    # Delta-normal hurdle: the positive magnitude is a plain Gaussian on the raw
-    # response (no log, no [0, 1] clamp); absence is the 0 sentinel. mu on the
-    # response scale is eta_pos.
-    mag   <- stats::rnorm(N, eta_pos, sigma.pos)
-    cover <- ifelse(occur == 1L, mag, 0)
-    mu_truth <- eta_pos
-  } else {
-    log_cover <- stats::rnorm(N, eta_pos, sigma.pos)
-    cover     <- ifelse(occur == 1L, exp(log_cover), 0)
-    cover     <- pmin(cover, 1)
-    mu_truth  <- exp(eta_pos + sigma.pos^2 / 2)
-  }
+  cover <- .tobs_gen_cover(
+    list(X_occ = X, X_pos = X, positive = response),
+    list(b_occ = beta.occ, b_pos = beta.pos, off_occ = spatial_occ,
+         off_pos = spatial_pos, disp = sigma.pos))
+  occur <- attr(cover, "latent")
+  cover <- .tobs_gen_strip(cover)
+  p <- stats::plogis(eta_occ)
+  mu_truth <- if (identical(response, "gaussian")) eta_pos
+              else exp(eta_pos + sigma.pos^2 / 2)
 
   data <- data.frame(
     cover = cover,
@@ -229,28 +222,13 @@ simulate_cover_joint <- function(N               = 300L,
   theta_f <- stats::rnorm(n_s, 0, 1); theta_f <- theta_f - mean(theta_f)
   w_s     <- sigma * (sqrt(rho) * phi_f + sqrt(1 - rho) * theta_f)
 
-  x       <- stats::rnorm(N)
-  eta_occ <- beta.occ[1] + beta.occ[2] * x + w_s[region]
-  occur   <- stats::rbinom(N, 1L, stats::plogis(eta_occ))
-  eta_pos <- beta.pos[1] + beta.pos[2] * x + alpha * w_s[region]
-  is_pos  <- occur == 1L
-
-  y <- numeric(N)
-  if (positive == "beta") {
-    mu_pos <- stats::plogis(eta_pos)
-    y[is_pos] <- stats::rbeta(sum(is_pos),
-                              mu_pos[is_pos] * phi,
-                              (1 - mu_pos[is_pos]) * phi)
-    y <- pmin(pmax(y, 0), 1 - 1e-6)
-  } else if (positive == "gaussian") {
-    # Identity-Gaussian arm: raw magnitude, no log, no clamp.
-    mag       <- stats::rnorm(N, eta_pos, sigma.pos.resid)
-    y[is_pos] <- mag[is_pos]
-  } else {
-    log_y     <- stats::rnorm(N, eta_pos, sigma.pos.resid)
-    y[is_pos] <- exp(log_y[is_pos])
-    y         <- pmin(y, 1 - 1e-6)
-  }
+  x <- stats::rnorm(N)
+  X <- cbind(1, x)
+  y <- .tobs_gen_strip(.tobs_gen_cover(
+    list(X_occ = X, X_pos = X, positive = positive),
+    list(b_occ = beta.occ, b_pos = beta.pos, off_occ = w_s[region],
+         off_pos = alpha * w_s[region],
+         disp = if (positive == "beta") phi else sigma.pos.resid)))
 
   list(
     data  = data.frame(x = x, region = factor(region)),

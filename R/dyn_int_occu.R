@@ -513,34 +513,43 @@
   }, numeric(model$n_sites)))
 }
 
-.tobs_simulate_dyn_int_occu <- function(object, nsim = 1) {
-  model <- object$model; S <- model$S; T_s <- model$n_seasons
-  valid <- lapply(model$y, function(a) !is.na(a))
-  draw_one <- function() {
-    idx <- sample.int(nrow(object$draws), 1L)
-    up  <- .dio_unpack(object$draws[idx, ], model)
-    z <- matrix(0L, model$n_sites, T_s)
-    z[, 1L] <- stats::rbinom(model$n_sites, 1L, up$psi1)
-    for (t in 2:T_s) {
-      surv <- stats::rbinom(model$n_sites, 1L, 1 - up$eps)
-      col  <- stats::rbinom(model$n_sites, 1L, up$gamma)
-      z[, t] <- ifelse(z[, t - 1L] == 1L, surv, col)
-    }
-    out <- lapply(seq_len(S), function(s) array(NA_integer_, dim(model$y[[s]])))
-    for (s in seq_len(S)) {
-      for (t in seq_len(T_s)) {
-        for (j in seq_len(dim(model$y[[s]])[2L])) {
-          vv <- valid[[s]][, j, t]
-          det <- (z[, t] == 1L) & vv
-          out[[s]][, j, t][vv] <- 0L
-          out[[s]][, j, t][det] <- stats::rbinom(sum(det), 1L, up$p_site[[s]][det])
-        }
-      }
-    }
-    names(out) <- model$sources
-    out
+# The dyn_int_occu() generator: season-1 occupancy, the colonization /
+# extinction chain, then every source's per-visit detections, season by season
+# and visit by visit, drawn at every site and masked to that source's visit
+# pattern in `model$y` (NA = not surveyed). theta = list(beta, off_psi1):
+# `beta` the coefficient vector in the fit's draw layout, `off_psi1` an
+# optional per-site offset on the season-1 occupancy logit (a realised field).
+.tobs_gen_dyn_int_occu <- function(model, theta) {
+  S <- model$S; T_s <- model$n_seasons; n <- model$n_sites
+  up <- .dio_unpack(theta$beta, model)
+  if (!is.null(theta$off_psi1)) {
+    up$psi1 <- stats::plogis(
+      as.vector(model$X_psi %*% theta$beta[seq_len(ncol(model$X_psi))]) +
+        theta$off_psi1)
   }
-  lapply(seq_len(nsim), function(s) draw_one())
+  z <- matrix(0L, n, T_s)
+  z[, 1L] <- stats::rbinom(n, 1L, up$psi1)
+  for (t in 2:T_s) {
+    surv <- stats::rbinom(n, 1L, 1 - up$eps)
+    col  <- stats::rbinom(n, 1L, up$gamma)
+    z[, t] <- ifelse(z[, t - 1L] == 1L, surv, col)
+  }
+  out <- lapply(seq_len(S), function(s) {
+    tmpl <- model$y[[s]]
+    arr <- array(0L, dim(tmpl))
+    for (t in seq_len(T_s)) for (j in seq_len(dim(tmpl)[2L]))
+      arr[, j, t] <- stats::rbinom(n, 1L, up$p_site[[s]]) * z[, t]
+    arr[is.na(tmpl)] <- NA_integer_
+    arr
+  })
+  names(out) <- model$sources
+  structure(out, latent = z)
+}
+
+.tobs_simulate_dyn_int_occu <- function(object, nsim = 1) {
+  .tobs_gen_replicates(object$model, nsim, function(i)
+    list(beta = object$draws[sample.int(nrow(object$draws), 1L), ]),
+    .tobs_gen_dyn_int_occu)
 }
 
 # ---------------------------------------------------------------------------
@@ -600,44 +609,33 @@ simulate_dyn_int_occu <- function(N = 200, T.seasons = 4, S = 2, J = 3,
            call. = FALSE)
   }
   data <- data.frame(row.names = seq_len(N))
-  z <- matrix(0L, N, T.seasons)
-  # Season-1 occupancy carries the optional shared field + a varying-coefficient
-  # field (weighted by a covariate w) on the logit scale. No field and no trend
-  # keeps the exact constant-psi1 path (byte-identical to the pre-SVC simulator).
   w <- NULL
-  if (is.null(field) && is.null(trend)) {
-    psi1_i <- rep(psi1, N)
-  } else {
-    eta1 <- stats::qlogis(psi1)
-    if (!is.null(field)) eta1 <- eta1 + field
+  off <- NULL
+  if (!is.null(field) || !is.null(trend)) {
+    off <- if (is.null(field)) rep(0, N) else field
     if (!is.null(trend)) {
       w <- stats::rnorm(N)
       data$cell <- seq_len(N); data$w <- w
-      eta1 <- eta1 + w * trend
+      off <- off + w * trend
     }
-    psi1_i <- stats::plogis(eta1)
   }
-  z[, 1L] <- stats::rbinom(N, 1L, psi1_i)
-  for (t in 2:T.seasons) {
-    surv <- stats::rbinom(N, 1L, 1 - eps); col <- stats::rbinom(N, 1L, gamma)
-    z[, t] <- ifelse(z[, t - 1L] == 1L, surv, col)
-  }
-  y <- lapply(seq_len(S), function(s) {
+  sources <- paste0("src", seq_len(S))
+  y_tmpl <- lapply(seq_len(S), function(s) {
     arr <- array(0L, c(N, J[s], T.seasons))
-    for (t in seq_len(T.seasons)) for (j in seq_len(J[s]))
-      arr[, j, t] <- ifelse(z[, t] == 1L, stats::rbinom(N, 1L, p[s]), 0L)
-    # Partial season overlap: source s observes only source_seasons[[s]]; the
-    # seasons it does not cover are NA (absent), the per-source-season-map form
-    # of a staggered survey where sources rarely share the full season grid.
     if (!is.null(source.seasons)) {
       miss <- setdiff(seq_len(T.seasons), source.seasons[[s]])
       if (length(miss)) arr[, , miss] <- NA_integer_
     }
     arr
   })
-  names(y) <- paste0("src", seq_len(S))
-  list(y = y, data = data, sources = names(y),
-       truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p, z = z,
-                    field = field, trend = trend, w = w,
+  X1 <- matrix(1, N, 1L, dimnames = list(NULL, "(Intercept)"))
+  model <- list(S = S, n_sites = N, n_seasons = T.seasons, sources = sources,
+                y = stats::setNames(y_tmpl, sources),
+                X_psi = X1, X_gam = X1, X_eps = X1, X_det = X1)
+  y <- .tobs_gen_dyn_int_occu(model, list(
+    beta = stats::qlogis(c(psi1, gamma, eps, p)), off_psi1 = off))
+  list(y = .tobs_gen_strip(y), data = data, sources = sources,
+       truth = list(psi1 = psi1, gamma = gamma, eps = eps, p = p,
+                    z = attr(y, "latent"), field = field, trend = trend, w = w,
                     source_seasons = source.seasons))
 }

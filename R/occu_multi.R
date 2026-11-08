@@ -324,36 +324,40 @@
   }, numeric(model$n_sites)))
 }
 
-# Posterior replicate detection histories: draw a coefficient vector, a joint
-# occupancy state per site from P(z), then per-species detections at the observed
-# visit pattern. Returns a list of S matrices (or a list of those for nsim > 1).
-.tobs_simulate_occu_multi <- function(object, nsim = 1) {
-  model <- object$model; S <- model$S; Z <- model$Z; pairs <- model$pairs
-  valid <- lapply(model$y, function(m) !is.na(m))
-  draw_one <- function() {
-    idx <- sample.int(nrow(object$draws), 1L)
-    up  <- .occu_multi_unpack(object$draws[idx, ], model)
-    Zpair <- matrix(0, nrow(Z), length(pairs))
-    for (m in seq_along(pairs)) Zpair[, m] <- Z[, pairs[[m]][1L]] * Z[, pairs[[m]][2L]]
-    Fmat <- up$natpar1 %*% t(Z)
-    if (length(pairs) > 0L) Fmat <- Fmat + up$natpar2 %*% t(Zpair)
-    W <- exp(Fmat - apply(Fmat, 1L, max)); W <- W / rowSums(W)
-    out <- lapply(seq_len(S), function(s)
-      matrix(NA_integer_, model$n_sites, model$max_visits))
-    for (i in seq_len(model$n_sites)) {
-      st <- sample.int(nrow(Z), 1L, prob = W[i, ])
-      z  <- Z[st, ]
-      for (s in seq_len(S)) {
-        vj <- which(valid[[s]][i, ])
-        if (!length(vj)) next
-        out[[s]][i, vj] <- if (z[s] == 1L)
-          stats::rbinom(length(vj), 1L, up$p_mat[i, s]) else 0L
-      }
+# The occu_multi() generator: a joint occupancy state per site from the
+# log-linear P(z) at theta, then per-species detections at the visit pattern
+# of `model$y` (NA = no visit). Returns a length-S list of detection matrices,
+# the realised joint state on its "latent" attribute.
+.tobs_gen_occu_multi <- function(model, theta) {
+  S <- model$S; Z <- model$Z; pairs <- model$pairs
+  up <- .occu_multi_unpack(theta, model)
+  Zpair <- matrix(0, nrow(Z), length(pairs))
+  for (m in seq_along(pairs)) Zpair[, m] <- Z[, pairs[[m]][1L]] * Z[, pairs[[m]][2L]]
+  Fmat <- up$natpar1 %*% t(Z)
+  if (length(pairs) > 0L) Fmat <- Fmat + up$natpar2 %*% t(Zpair)
+  W <- exp(Fmat - apply(Fmat, 1L, max)); W <- W / rowSums(W)
+  out <- lapply(seq_len(S), function(s)
+    matrix(NA_integer_, model$n_sites, model$max_visits))
+  z_all <- matrix(0L, model$n_sites, S)
+  for (i in seq_len(model$n_sites)) {
+    st <- sample.int(nrow(Z), 1L, prob = W[i, ])
+    z  <- Z[st, ]; z_all[i, ] <- z
+    for (s in seq_len(S)) {
+      vj <- which(!is.na(model$y[[s]][i, ]))
+      if (!length(vj)) next
+      out[[s]][i, vj] <- if (z[s] == 1L)
+        stats::rbinom(length(vj), 1L, up$p_mat[i, s]) else 0L
     }
-    names(out) <- model$species
-    out
   }
-  lapply(seq_len(nsim), function(s) draw_one())
+  names(out) <- model$species
+  structure(out, latent = z_all)
+}
+
+# Posterior replicate detection histories: one coefficient draw per replicate,
+# then the family generator.
+.tobs_simulate_occu_multi <- function(object, nsim = 1) {
+  .tobs_gen_replicates(object$model, nsim, function(i)
+    object$draws[sample.int(nrow(object$draws), 1L), ], .tobs_gen_occu_multi)
 }
 
 # ---------------------------------------------------------------------------
@@ -398,6 +402,21 @@ simulate_occu_multi <- function(S = 2, N = 300, J = 4, n.state.covs = 1,
   if (is.null(beta.p))
     beta.p <- lapply(seq_len(S), function(s) c(stats::qlogis(0.5)))
 
+  lt <- .tobs_sim_layout_occu_multi(S, N, J, n.state.covs, beta.first,
+                                     beta.second, beta.p)
+  y <- .tobs_gen_occu_multi(lt$model, lt$theta)
+  list(y = .tobs_gen_strip(y), data = lt$data, species = lt$model$species,
+       truth = list(beta_first = beta.first, beta_second = beta.second,
+                    beta_p = beta.p, z = attr(y, "latent"),
+                    pairs = lt$model$pairs))
+}
+
+# The model layout + theta simulate_occu_multi() hands the generator: the
+# shared state design on freshly drawn covariates, an intercept-only detection
+# design, every visit made, and the coefficients stacked first-order,
+# second-order, detection.
+.tobs_sim_layout_occu_multi <- function(S, N, J, n.state.covs, beta.first,
+                                        beta.second, beta.p) {
   if (n.state.covs > 0L) {
     state_covs <- data.frame(matrix(stats::rnorm(N * n.state.covs), N, n.state.covs))
     names(state_covs) <- paste0("scov", seq_len(n.state.covs))
@@ -407,35 +426,14 @@ simulate_occu_multi <- function(S = 2, N = 300, J = 4, n.state.covs = 1,
     data    <- data.frame(row.names = seq_len(N))
     X_state <- stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
   }
-  X_det   <- stats::model.matrix(~ 1, data.frame(row.names = seq_len(N)))
-
-  natpar1 <- vapply(seq_len(S), function(s)
-    as.vector(X_state %*% beta.first[[s]]), numeric(N))            # [N x S]
-  natpar2 <- if (length(pairs))
-    vapply(seq_along(pairs), function(m)
-      as.vector(X_state %*% beta.second[[m]]), numeric(N)) else matrix(0, N, 0)
-  p_mat <- vapply(seq_len(S), function(s)
-    plogis(as.vector(X_det %*% beta.p[[s]])), numeric(N))          # [N x S]
-
-  Z <- .occu_multi_states(S)
-  Zpair <- matrix(0, nrow(Z), length(pairs))
-  for (m in seq_along(pairs)) Zpair[, m] <- Z[, pairs[[m]][1L]] * Z[, pairs[[m]][2L]]
-
   species <- paste0("sp", seq_len(S))
-  y <- lapply(seq_len(S), function(s) matrix(0L, N, J))
-  z_all <- matrix(0L, N, S)
-  for (i in seq_len(N)) {
-    f <- as.numeric(natpar1[i, ] %*% t(Z))
-    if (length(pairs)) f <- f + as.numeric(natpar2[i, ] %*% t(Zpair))
-    w  <- exp(f - max(f)); w <- w / sum(w)
-    st <- sample.int(nrow(Z), 1L, prob = w)
-    z  <- Z[st, ]; z_all[i, ] <- z
-    for (s in seq_len(S)) {
-      y[[s]][i, ] <- if (z[s] == 1L) stats::rbinom(J, 1L, p_mat[i, s]) else 0L
-    }
-  }
-  names(y) <- species
-  list(y = y, data = data, species = species,
-       truth = list(beta_first = beta.first, beta_second = beta.second,
-                    beta_p = beta.p, z = z_all, pairs = pairs))
+  list(model = list(S = S, n_sites = N, max_visits = J,
+                    X_state = X_state,
+                    X_det = stats::model.matrix(~ 1, data.frame(row.names = seq_len(N))),
+                    Z = .occu_multi_states(S), pairs = .occu_multi_pairs(S),
+                    species = species,
+                    y = stats::setNames(lapply(seq_len(S), function(s)
+                      matrix(0L, N, J)), species)),
+       theta = c(unlist(beta.first), unlist(beta.second), unlist(beta.p)),
+       data = data)
 }
