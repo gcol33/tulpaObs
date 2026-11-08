@@ -107,15 +107,16 @@
 # Gaussian-Markov precision of the NNGP (Vecchia) approximation at one
 # (sigma2, phi), plus its log-determinant.
 #
-# In the neighbour ordering the field factorises as w_(1) ~ N(0, sigma2) and
+# In the neighbour ordering the field factorises as w_(1) ~ N(0, sigma2 + j) and
 # w_(i) | w_(N(i)) ~ N(a_i' w_(N(i)), d_i) with kriging weights a_i =
-# C(N(i), N(i))^-1 c(i, N(i)) and conditional variance d_i = sigma2 - c' a. That
-# is exactly Q = (I - A)' D^-1 (I - A) with log|Q| = -sum log d_i, so the
-# quadratic form below reproduces the compiled kernel's sum of conditional
-# log-densities term for term -- including its jitter on the neighbour
-# covariance diagonal and its blended conditional-variance floor, which are
-# arguments there rather than defaults precisely so a second consumer can match
-# them (tulpa src/nngp_cond.h).
+# C(N(i), N(i))^-1 c(i, N(i)) and conditional variance d_i = sigma2 + j - c' a,
+# the nugget j on every diagonal entry, the location's own included. That is
+# exactly Q = (I - A)' D^-1 (I - A) with log|Q| = -sum log d_i, so the quadratic
+# form below reproduces the compiled kernel's sum of conditional log-densities
+# term for term -- its nugget, and its blended conditional-variance floor (a raw
+# variance strictly below the floor becomes 0.99 floor + 0.01 d when positive,
+# 0.99 floor otherwise), which are arguments there rather than defaults
+# precisely so a second consumer can match them (tulpa src/nngp_cond.h).
 #
 # `co` is the n x 2 coordinate matrix in the ORIGINAL row order; `nn_idx` /
 # `nn_dist` are the n x nn neighbour structure indexed by ORDERING POSITION
@@ -129,7 +130,7 @@
   n <- nrow(co)
   co_ord <- co[ord, , drop = FALSE]
   A <- matrix(0, n, n)
-  D <- rep(sigma2, n)
+  D <- rep(sigma2 + jitter, n)
   for (i in seq_len(n)[-1L]) {
     nb <- nn_idx[i, ]
     nb <- nb[nb > 0L]
@@ -142,10 +143,10 @@
     diag(C) <- sigma2 + jitter
     a <- tryCatch(solve(C, cvec), error = function(e) NULL)
     if (is.null(a) || any(!is.finite(a))) return(NULL)
-    v <- sigma2 - sum(cvec * a)
+    v <- sigma2 + jitter - sum(cvec * a)
     # The compiled kernel BLENDS at the floor rather than clamping, so a mode
     # that grazes it keeps a little gradient instead of hitting a flat spot.
-    if (v <= var_floor) v <- 0.99 * var_floor + 0.01 * v
+    if (v < var_floor) v <- 0.99 * var_floor + if (v > 0) 0.01 * v else 0
     D[i] <- v
     A[i, nb] <- a
   }
