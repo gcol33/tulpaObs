@@ -256,8 +256,9 @@
 # likelihood gradient IS that information, and computing it by finite difference
 # of an analytic gradient costs 2p cheap gradient calls, far less than optim's
 # numeric Hessian of the value. Without `gr`, optim's own Hessian is used. A
-# singular information matrix yields an all-NA covariance rather than an error,
-# so the fit still returns with its SEs reading as unavailable.
+# singular or indefinite information goes through .tobs_vcov_identified(): the
+# coefficients on the unresolved direction read NA and are named in a warning,
+# the rest keep their SEs.
 #
 # `extra` is a function of the fitted `means` returning the family-specific
 # slots to splice in (an intercept list, a mixture label, a dispersion, ...).
@@ -274,9 +275,9 @@
   means <- opt$par; names(means) <- par_names
   info <- if (is.null(gr)) opt$hessian
           else tryCatch(.tobs_fd_jacobian(gr, opt$par), error = function(e) NULL)
-  V <- tryCatch(.tobs_spd_inv(info), error = function(e) diag(NA_real_, length(means)))
+  V <- .tobs_vcov_identified(info, par_names,
+                             paste0(model$model_type %||% "marginal", " fit"))$vcov
   V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
   sds <- .tobs_sds_from_vcov(V, par_names)
 
   draws <- .tobs_gaussian_draws(n_draws, means, V)
@@ -558,6 +559,7 @@ extract_beta <- function(sub, p) {
 # along the unresolved directions, where the posterior is the prior.
 .tobs_vcov_identified <- function(H, names = rownames(H), what = "fit",
                                   prior_var = 0, tol = 1e-8, load = 1e-2) {
+  if (is.null(H)) H <- matrix(NA_real_, length(names), length(names))
   H <- as.matrix(H)
   p <- nrow(H)
   dn <- list(names, names)

@@ -53,12 +53,21 @@
 # covariance chol() refuses (numerically singular or indefinite, as a
 # data-sparse refit can produce) is eigen-clipped to the nearest valid one,
 # with a floor far below a well-conditioned matrix's smallest eigenvalue so
-# such a matrix is untouched. A missing or non-finite `sigma` returns `mu` in
-# every row (a point mass).
+# such a matrix is untouched. A missing `sigma` returns `mu` in every row (a
+# point mass); a coordinate whose variance is not finite (no covariance for
+# it) is held at its `mu` and the others are drawn from their block, which
+# must itself be finite, else every row is `mu`.
 .rmvn <- function(n, mu, sigma) {
   p <- length(mu)
-  if (is.null(sigma) || any(!is.finite(sigma))) {
+  if (is.null(sigma)) return(matrix(mu, n, p, byrow = TRUE))
+  sigma <- as.matrix(sigma)
+  bad <- !is.finite(diag(sigma))
+  if (all(bad) || !all(is.finite(sigma[!bad, !bad])))
     return(matrix(mu, n, p, byrow = TRUE))
+  if (any(bad)) {
+    out <- matrix(mu, n, p, byrow = TRUE)
+    out[, !bad] <- .rmvn(n, mu[!bad], sigma[!bad, !bad, drop = FALSE])
+    return(out)
   }
   Vs <- (sigma + t(sigma)) / 2
   L <- tryCatch(chol(Vs), error = function(e) {

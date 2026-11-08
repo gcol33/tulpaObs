@@ -84,11 +84,10 @@
                       control = list(maxit = max_iter, factr = 1e7),
                       hessian = TRUE)
 
-  p_tot <- length(theta0)
-  vcov  <- tryCatch(.tobs_spd_inv(opt$hessian), error = function(e) {
-    d <- diag(opt$hessian); d[d <= 0] <- NA_real_
-    diag(1 / d, p_tot)
-  })
+  nm <- c(paste0("lambda_", model$process_info[[1L]]$coef_names),
+          paste0("p_", model$process_info[[2L]]$coef_names), "logit_omega",
+          if (is_nb) "log_r")
+  vcov <- .tobs_vcov_identified(opt$hessian, nm, if (is_nb) "abun(mixture = \"zinb\")" else "abun(mixture = \"zip\")")$vcov
 
   est <- opt$par
   raw <- list(

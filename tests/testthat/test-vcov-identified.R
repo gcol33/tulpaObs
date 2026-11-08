@@ -49,3 +49,13 @@ test_that("a non-finite information reports every SE as NA, with a warning", {
   expect_warning(vc <- tulpaObs:::.tobs_vcov_identified(H), "loading on a, b")
   expect_true(all(is.na(vc$vcov)))
 })
+
+test_that(".rmvn() holds a coordinate without covariance at its mean, draws the rest", {
+  V <- matrix(c(1, 0.5, NA, 0.5, 2, NA, NA, NA, NA), 3L)
+  set.seed(1)
+  d <- tulpaObs:::.rmvn(4000L, c(1, 2, 3), V)
+  expect_true(all(d[, 3] == 3))
+  expect_equal(stats::var(d[, 1:2]), V[1:2, 1:2], tolerance = 0.1)
+  expect_true(all(tulpaObs:::.rmvn(5L, c(1, 2), matrix(NA_real_, 2, 2)) ==
+                    matrix(c(1, 2), 5L, 2L, byrow = TRUE)))
+})

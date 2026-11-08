@@ -262,10 +262,8 @@
   par_names <- unlist(lapply(model$process_info, function(pp)
     paste0(pp$name, "_", pp$coef_names)))
   means <- opt$par; names(means) <- par_names
-  V <- tryCatch(.tobs_spd_inv(opt$hessian),
-                error = function(e) diag(NA_real_, length(means)))
+  V <- .tobs_vcov_identified(opt$hessian, par_names, "dyn_int_occu()")$vcov
   V <- (V + t(V)) / 2
-  dimnames(V) <- list(par_names, par_names)
   sds <- .tobs_sds_from_vcov(V, par_names)
 
   n_draws <- 1000L

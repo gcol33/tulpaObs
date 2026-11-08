@@ -859,21 +859,17 @@
                        control = list(maxit = max.iter, reltol = tol,
                                       trace = if (isTRUE(verbose)) 1L else 0L))
 
-  V <- tryCatch(.tobs_spd_inv(opt$hessian), error = function(e) NULL)
-  if (is.null(V)) {
-    warning("occu_cover: observed-Fisher Hessian not invertible; SEs unreliable.",
-            call. = FALSE)
-    V <- matrix(NA_real_, n_par, n_par)
-  }
+  vc <- .tobs_vcov_identified(opt$hessian, par_names, "occu_cover()",
+                              prior_var = if (any(pprec > 0)) sigma.beta^2 else 0)
+  V  <- vc$vcov
   se <- sqrt(pmax(diag(V), 0))
 
   means <- opt$par
   names(means) <- par_names
   names(se)    <- par_names
-  dimnames(V)  <- list(par_names, par_names)
 
   n_draws <- 1000L
-  draws <- .tobs_gaussian_draws(n_draws, means, V)
+  draws <- .tobs_gaussian_draws(n_draws, means, vc$vcov_draws)
   colnames(draws) <- par_names
 
   structure(c(list(

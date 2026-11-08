@@ -328,14 +328,11 @@
   # at the mode (O(p) marginal evals, not the O(p^2) numeric Hessian).
   Hobs <- tryCatch(-.tobs_fd_jacobian(function(th) -neg_grad(th), est),
                    error = function(e) NULL)
-  vcov <- tryCatch(.tobs_spd_inv(Hobs), error = function(e) {
-    d <- if (!is.null(Hobs)) diag(Hobs) else rep(NA_real_, length(est))
-    d[d <= 0] <- NA_real_; diag(1 / d, length(est)) })
   nm <- c(paste0("lambda_", colnames(X_lambda)), paste0("p_", colnames(X_p)),
           paste0("omega_", colnames(X_omega)), paste0("gamma_", colnames(X_gamma)),
           "zi_logit")
   if (is_nb) nm <- c(nm, "log_r")
-  dimnames(vcov) <- list(nm, nm)
+  vcov <- .tobs_vcov_identified(Hobs, nm, "dyn_abun()")$vcov
 
   raw <- list(
     beta_lambda = est[idx$lambda], beta_p = est[idx$p],
@@ -735,13 +732,11 @@ dyn_abun_laplace <- function(y_flat, n_sites, n_seasons, J, K_max,
   converged <- opt$convergence == 0L
   out <- eval_cpp(theta)
   Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th)), theta)
-  vcov <- tryCatch(.tobs_spd_inv(Hobs), error = function(e)
-    matrix(NA_real_, length(theta), length(theta)))
-
   nm <- c(paste0("lambda_", colnames(X_lambda)), paste0("p_", colnames(X_p)),
           paste0("omega_", colnames(X_omega)), paste0("gamma_", colnames(X_gamma)))
   if (is_nb) nm <- c(nm, "log_r")
-  dimnames(vcov) <- list(nm, nm); dimnames(Hobs) <- list(nm, nm)
+  vcov <- .tobs_vcov_identified(Hobs, nm, "dyn_abun()")$vcov
+  dimnames(Hobs) <- list(nm, nm)
 
   log_r <- if (is_nb) as.numeric(theta[ir]) else NA_real_
   structure(list(

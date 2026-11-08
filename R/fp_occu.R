@@ -191,11 +191,11 @@ fp_occu_laplace <- function(y, site_idx, X_psi, X_p11, X_p10, X_b,
 
   out  <- eval_cpp(theta)
   Hobs <- -.tobs_fd_jacobian(function(th) grad_design(eval_cpp(th), th), theta)
-  vcov <- tryCatch(.tobs_spd_inv(Hobs), error = function(e) matrix(NA_real_, length(theta), length(theta)))
-
   nm <- c(paste0("psi_", colnames(X_psi)), paste0("p11_", colnames(X_p11)),
           paste0("p10_", colnames(X_p10)), paste0("b_", colnames(X_b)))
-  dimnames(vcov) <- list(nm, nm); dimnames(Hobs) <- list(nm, nm)
+  vcov <- .tobs_vcov_identified(Hobs, nm, "fp_occu()",
+                                prior_var = if (ridge > 0) 1 / ridge else 0)$vcov
+  dimnames(Hobs) <- list(nm, nm)
 
   structure(list(
     beta_psi = theta[idx$psi], beta_p11 = theta[idx$p11],
