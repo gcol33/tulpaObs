@@ -55,9 +55,7 @@
 
 
 test_that("the R NNGP precision reproduces tulpa's compiled SVC kernel", {
-  skip_if_not(exists("cpp_test_svc_nngp_twins", envir = asNamespace("tulpa"),
-                     inherits = FALSE),
-              "installed tulpa has no SVC NNGP twin probe")
+  twin <- tulpa_fixture("nngp_twin")$cpp_test_svc_nngp_twins
   set.seed(11)
   N <- 40L
   co <- cbind(stats::runif(N), stats::runif(N))
@@ -68,7 +66,6 @@ test_that("the R NNGP precision reproduces tulpa's compiled SVC kernel", {
   nn_dist <- matrix(as.numeric(tm$nn_dist),  nrow = N,   byrow = TRUE)
   ord     <- as.integer(tm$nn_order)
 
-  twin <- get("cpp_test_svc_nngp_twins", envir = asNamespace("tulpa"))
   z <- stats::rnorm(N)
   for (cov_code in c(0L, 1L, 2L)) {
     for (par in list(c(1.7, 0.3), c(0.4, 0.8))) {

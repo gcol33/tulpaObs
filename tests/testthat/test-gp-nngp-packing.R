@@ -34,9 +34,7 @@
 
 
 test_that("gp() packs the neighbour-pair distances in the kernel's order", {
-  skip_if_not(exists("cpp_test_gp_nngp_twins", envir = asNamespace("tulpa"),
-                     inherits = FALSE),
-              "installed tulpa has no GP NNGP twin probe")
+  twin <- tulpa_fixture("nngp_twin")$cpp_test_gp_nngp_twins
   N <- 50L; k <- 8L
   g  <- .gpp_term(N, k)
   tm <- g$tm
@@ -44,7 +42,6 @@ test_that("gp() packs the neighbour-pair distances in the kernel's order", {
   nn_dist <- matrix(as.numeric(tm$nn_dist), nrow = N, byrow = TRUE)
   ord     <- as.integer(tm$nn_order)
 
-  twin <- get("cpp_test_gp_nngp_twins", envir = asNamespace("tulpa"))
   set.seed(3)
   w <- as.numeric(scale(stats::rnorm(N)))
   sigma2 <- 1.4; phi <- 0.35

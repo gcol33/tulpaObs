@@ -123,13 +123,11 @@ test_that("a single-node component shows in the sizes and is not pinned to zero"
   # Where such a node IS accepted it keeps a proper N(0, 1/tau) effect: the
   # identification augments the precision, so the charge for value v on a size-1
   # component is -0.5 * tau * v^2. A hard sum-to-zero would pin it to exactly 0.
-  skip_if_not(exists("cpp_test_log_prior_icar", envir = asNamespace("tulpa"),
-                     mode = "function"),
-             "tulpa::cpp_test_log_prior_icar not available")
+  log_prior_icar <- tulpa_fixture("helpers")$cpp_test_log_prior_icar
   csr <- tulpaObs:::adjacency_to_csr(adj)
   lp <- function(x, tau) {
-    tulpa:::cpp_test_log_prior_icar(x, nrow(adj), tau, csr$row_ptr,
-                                    csr$col_idx, csr$n_neighbors)
+    log_prior_icar(x, nrow(adj), tau, csr$row_ptr, csr$col_idx,
+                   csr$n_neighbors)
   }
   tau <- 1.3
   x0 <- c(0, 0, 0, 0, 0, 0)
@@ -138,9 +136,7 @@ test_that("a single-node component shows in the sizes and is not pinned to zero"
 })
 
 test_that("the engine pins one sum-to-zero per component, not one globally", {
-  skip_if_not(exists("cpp_test_log_prior_icar", envir = asNamespace("tulpa"),
-                     mode = "function"),
-             "tulpa::cpp_test_log_prior_icar not available")
+  log_prior_icar <- tulpa_fixture("helpers")$cpp_test_log_prior_icar
   chain <- function(n) {
     a <- matrix(0L, n, n)
     for (s in seq_len(n)) {
@@ -157,8 +153,8 @@ test_that("the engine pins one sum-to-zero per component, not one globally", {
 
   lp <- function(x, A, tau) {
     csr <- tulpaObs:::adjacency_to_csr(A)
-    tulpa:::cpp_test_log_prior_icar(x, nrow(A), tau, csr$row_ptr,
-                                    csr$col_idx, csr$n_neighbors)
+    log_prior_icar(x, nrow(A), tau, csr$row_ptr, csr$col_idx,
+                   csr$n_neighbors)
   }
   tau <- 1.3
   set.seed(21)
