@@ -393,7 +393,7 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   draws <- .ms_ocs_nuts_inner(fit, n_draws, idx)
   if (is.null(draws)) {
     V <- fit$cov[idx, idx, drop = FALSE]; V <- (V + t(V)) / 2
-    draws <- .rmvn(n_draws, mode, V)
+    draws <- .tobs_gaussian_draws(n_draws, mode, V)
   }
   n_draws <- nrow(draws)
 

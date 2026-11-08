@@ -452,7 +452,7 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
   colnames(coef_sigma)  <- colnames(blup_sigma)  <- sig_nm
 
   n_pseudo <- 1000L
-  draws <- .rmvn(n_pseudo, means, vcov)
+  draws <- .tobs_gaussian_draws(n_pseudo, means, vcov)
   colnames(draws) <- nms
 
   structure(list(

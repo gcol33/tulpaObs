@@ -133,7 +133,7 @@
     }
     return(.tobs_grid_draw_tail(lead, means, V, ncol(lead), n))
   }
-  if (is.null(covs)) return(.rmvn(n, means, V))
+  if (is.null(covs)) return(.tobs_gaussian_draws(n, means, V))
   modes <- as.matrix(modes)
   if (!is.null(means) && ncol(modes) > length(means)) {
     keep  <- seq_along(means)
@@ -161,6 +161,38 @@
   out <- .tobs_grid_draw_tail(lead, means, V, p, n)
   attr(out, "grid_mixture") <- list(weights = w, modes = modes, covs = covs)
   out
+}
+
+# Pseudo-draws from the Gaussian at (`means`, `V`), tagged as the one-cell
+# mixture they were sampled from, so the fixed-effect accessors (coef, vcov,
+# confint, summary, tidy) read the exact moments and Gaussian quantiles instead
+# of the Monte Carlo ones of the draws.
+.tobs_gaussian_draws <- function(n, means, V) {
+  out <- .rmvn(n, means, V)
+  attr(out, "grid_mixture") <- list(weights = 1, modes = matrix(means, 1L),
+                                    covs = list(as.matrix(V)))
+  out
+}
+
+# Redraw columns `cols` of a draw matrix from the Gaussian at (`mean`, `V`),
+# independent of the other columns, and keep a one-cell mixture tag in step
+# (its mode and covariance for those columns, zero cross-covariance).
+.tobs_gaussian_redraw <- function(draws, cols, mean, V) {
+  draws[, cols] <- .rmvn(nrow(draws), mean, V)
+  gm <- attr(draws, "grid_mixture")
+  if (is.null(gm)) return(draws)
+  idx <- match(cols, colnames(draws))
+  if (length(gm$covs) != 1L || max(idx) > ncol(gm$modes)) {
+    # A multi-cell grid (or one not covering these columns) no longer
+    # describes the redrawn columns.
+    attr(draws, "grid_mixture") <- NULL
+  } else {
+    C <- as.matrix(gm$covs[[1L]])
+    C[idx, ] <- 0; C[, idx] <- 0; C[idx, idx] <- V
+    gm$modes[1L, idx] <- mean; gm$covs <- list(C)
+    attr(draws, "grid_mixture") <- gm
+  }
+  draws
 }
 
 # The grid mixture a draw matrix was sampled from, as the nested-Laplace fit

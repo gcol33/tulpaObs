@@ -279,7 +279,7 @@
   dimnames(V) <- list(par_names, par_names)
   sds <- .tobs_sds_from_vcov(V, par_names)
 
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_gaussian_draws(n_draws, means, V)
   colnames(draws) <- par_names
 
   structure(c(list(
@@ -850,7 +850,7 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     V_draw[jj, jj] <- V_joint
   }
   dimnames(V_draw) <- list(nms, nms)
-  draws <- .rmvn(n_pseudo, means, V_draw)
+  draws <- .tobs_gaussian_draws(n_pseudo, means, V_draw)
   colnames(draws) <- nms
 
   # Simplified-Laplace skewness correction

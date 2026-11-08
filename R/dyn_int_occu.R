@@ -269,7 +269,7 @@
   sds <- .tobs_sds_from_vcov(V, par_names)
 
   n_draws <- 1000L
-  draws <- .rmvn(n_draws, means, V)
+  draws <- .tobs_gaussian_draws(n_draws, means, V)
   colnames(draws) <- par_names
 
   structure(c(list(

@@ -458,6 +458,9 @@
     # ordering: exact SN marginal, joint rank-correlation preserved.
     sn_samp <- .sn_sample(n_pseudo, sn)
     draws[order(draws[, j]), j] <- sort(sn_samp)
+    # The skewed column no longer follows the Gaussian the draws were tagged
+    # with, so the accessors read the draws themselves.
+    attr(draws, "grid_mixture") <- NULL
   }
   if (length(clipped))  attr(draws, "sla_clipped")  <- clipped
   if (length(fallback)) attr(draws, "sla_fallback") <- fallback

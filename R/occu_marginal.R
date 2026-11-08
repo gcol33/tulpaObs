@@ -91,7 +91,7 @@
     fit$sds[all_nm]   <- se
     if (!is.null(fit$draws) && all(all_nm %in% colnames(fit$draws))) {
       Vsym <- (V + t(V)) / 2
-      fit$draws[, all_nm] <- .rmvn(nrow(fit$draws), opt$par, Vsym)
+      fit$draws <- .tobs_gaussian_redraw(fit$draws, all_nm, opt$par, Vsym)
       # Keep the reported Gaussian (`fit$cov`, read by coef()/confint()/
       # summary() on a `reported_posterior = "gaussian"` fit) in step with the
       # refined means/sds it now overwrites -- else the estimate moves to the
