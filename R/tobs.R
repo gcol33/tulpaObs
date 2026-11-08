@@ -305,8 +305,9 @@
 #'   * `max.outer` -- for a community family whose `latent()` factors or shared
 #'     areal field are fit by block coordinate ascent, the cap on the outer
 #'     alternation between the community EM and the field / factor update. A field
-#'     block reaches `tol` and stops early, so its default 25 is only a cap; a
-#'     factor block does not, and each family sets its own budget from a measured
+#'     run stops at `tol`, so its default 400 is only a cap (a BYM2 field, whose
+#'     iid part overlaps a site covariate's effect, takes tens to a few hundred
+#'     passes); a factor block does not stop early, and each family sets its own budget from a measured
 #'     bias curve (150 on `ms_count()` / `jsdm()` / `ms_occu()`, 25 elsewhere).
 #'   * `factor.starts` -- candidate starting directions the first factor pass
 #'     selects over, on the joint marginal. Each costs a full loading EM against

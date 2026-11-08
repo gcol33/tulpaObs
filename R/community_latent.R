@@ -269,10 +269,11 @@
 # given offsets; `offset_of(em)` returns the arm's [n_sites x n_species]
 # coefficient predictor.
 #
-# The outer budget is resolved per model. A field block reaches `tol` and stops
-# early; the factor block alternates with the coefficient block along a slow
-# mode (the per-cell offset change decays about 2% per pass, so `tol` 1e-4
-# would need roughly 300 passes), so a factor model takes `factor.outer`, which
+# The outer budget is resolved per model. A field run stops at `tol` (tulpa's
+# field budget, 400, is a cap); the factor block alternates with the
+# coefficient block along a slow mode (the per-cell offset change decays
+# about 2% per pass, so `tol` 1e-4 would need roughly 300 passes), so a
+# factor model takes `factor.outer`, which
 # each family sets from its OWN measurement (ms_count's curve: community
 # intercept bias +0.0613 / +0.0237 / +0.0001 / -0.0038 at 25 / 60 / 150 / 400
 # passes), and an explicit `control$max.outer` wins over both. `factor.starts`

@@ -124,8 +124,8 @@ test_that("the reported settings carry each family's own resolved defaults", {
 
   # A field-only fit has no factor block, so the factor knobs read NA rather than
   # the number they would have taken -- reporting one would claim an effect the
-  # fit does not carry. A field block DOES reach `tol` and break early, so its
-  # budget is a cap and the default 25 is cheap.
+  # fit does not carry. A field run breaks at `tol`, so its default budget of
+  # 400 is a cap that costs nothing once the ascent has converged.
   A <- matrix(0L, 16L, 16L)
   for (i in 1:15) { A[i, i + 1L] <- 1L; A[i + 1L, i] <- 1L }
   cell <- rep(seq_len(16L), length.out = nrow(d$data))
@@ -134,7 +134,7 @@ test_that("the reported settings carry each family's own resolved defaults", {
              family = ms_count(), y = d$y_pois, species = colnames(d$y_pois),
              method = "nested_laplace",
              control = list(verbose = FALSE, progress = FALSE))
-  expect_identical(ff$latent_control$max.outer, 25L)
+  expect_identical(ff$latent_control$max.outer, 400L)
   expect_true(is.na(ff$latent_control$factor.starts))
   expect_true(is.na(ff$latent_control$factor.outer))
   expect_true(is.na(ff$latent_control$n.quad))

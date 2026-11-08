@@ -1197,7 +1197,7 @@ R/
 
 **Block-coordinate callers MUST warm-start `init_b`/`init_Sigma`.** Omitting cold-restarts every per-species deviation and both community covariances on every outer pass.
 
-**`max.outer`: factor path 150, field path 25 by default.** Field reaches `tol` and breaks early; factor does NOT (alternates with the coefficient block along a slow mode) -- 25 leaves real community-mean bias. `factor.outer` is per-family, set from that family's own measurement: ms_count/jsdm/ms_occu 150, everything else 25 until measured. Do NOT globalize -- cost is not transferable.
+**`max.outer`: factor path 150, field path 400 (a cap) by default.** Field breaks at `tol`, but how many passes it takes grows with its overlap with the coefficient block: BYM2's iid part overlaps a site covariate, 45-200 passes, and 25 left a +0.035 slope bias (#444); icar/car_proper 20-55; factor does NOT (alternates with the coefficient block along a slow mode) -- 25 leaves real community-mean bias. `factor.outer` is per-family, set from that family's own measurement: ms_count/jsdm/ms_occu 150, everything else 25 until measured. Do NOT globalize -- cost is not transferable.
 
 **`factor.starts` (multi-start width) dominates a latent-N fit, NOT `max.outer`.** #157's basin escape runs K candidate starting directions on the first factor pass, each a full loading-EM to convergence. Per family, measured from that family's OWN recovery suite (a random seed screen alone is not enough -- the committed regression test #157 was built for caught a value ms_count's own screen missed): ms_abun 1, ms_occu 1, ms_count/jsdm + ms_distance at the driver default 8. NEVER copy a family's value -- cost and benefit both scale with how expensive one oracle eval is.
 

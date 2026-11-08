@@ -330,8 +330,9 @@ against 21 nodes).
 \item \code{max.outer} -- for a community family whose \code{latent()} factors or shared
 areal field are fit by block coordinate ascent, the cap on the outer
 alternation between the community EM and the field / factor update. A field
-block reaches \code{tol} and stops early, so its default 25 is only a cap; a
-factor block does not, and each family sets its own budget from a measured
+run stops at \code{tol}, so its default 400 is only a cap (a BYM2 field, whose
+iid part overlaps a site covariate's effect, takes tens to a few hundred
+passes); a factor block does not stop early, and each family sets its own budget from a measured
 bias curve (150 on \code{ms_count()} / \code{jsdm()} / \code{ms_occu()}, 25 elsewhere).
 \item \code{factor.starts} -- candidate starting directions the first factor pass
 selects over, on the joint marginal. Each costs a full loading EM against
