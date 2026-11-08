@@ -1,4 +1,4 @@
-# Tests for nmix_laplace_bym2() -- nested-Laplace fit of the spatial
+# Tests for .count_spatial_fit("nmix", "bym2") -- nested-Laplace fit of the spatial
 # Royle (2004) N-mixture model with a BYM2 (Riebler et al. 2016) prior on the
 # abundance-arm spatial offset.
 
@@ -112,7 +112,7 @@ simulate_nmix_bym2 <- function(seed,
 
 test_that("BYM2 nested Laplace runs end-to-end", {
   dat <- simulate_nmix_bym2(seed = 21)
-  fit <- suppressWarnings(nmix_laplace_bym2(
+  fit <- suppressWarnings(.count_spatial_fit("nmix", "bym2",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -143,7 +143,7 @@ test_that("BYM2 recovers slopes and total offset on simulated data", {
   skip_if_fast()
   dat <- simulate_nmix_bym2(seed = 23, n_row = 8, n_col = 8,
                             sigma_true = 1.0, rho_true = 0.7)
-  fit <- nmix_laplace_bym2(
+  fit <- .count_spatial_fit("nmix", "bym2",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -197,7 +197,7 @@ test_that("BYM2 at small sigma collapses to a non-spatial fit", {
 
   # Tiny sigma_grid drives the spatial offset to ~0; estimates should agree
   # closely with a non-spatial fit on the same data.
-  fit_sp <- nmix_laplace_bym2(
+  fit_sp <- .count_spatial_fit("nmix", "bym2",
     y = y_long, site_idx = site_idx,
     map_site_to_unit = seq_len(n_sites),
     X_lambda = X_lambda, X_p = X_p,
@@ -221,7 +221,7 @@ test_that("BYM2 at small sigma collapses to a non-spatial fit", {
 
 test_that("Print method runs for BYM2 fit", {
   dat <- simulate_nmix_bym2(seed = 29, n_row = 4, n_col = 4)
-  fit <- nmix_laplace_bym2(
+  fit <- .count_spatial_fit("nmix", "bym2",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -242,7 +242,7 @@ test_that("BYM2 NB integrates r as a third grid axis", {
   skip_on_cran()
   skip_if_fast()
   dat <- simulate_nmix_bym2(seed = 31, n_row = 6, n_col = 6, J = 5, r = 2)
-  fit <- suppressWarnings(nmix_laplace_bym2(
+  fit <- suppressWarnings(.count_spatial_fit("nmix", "bym2",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,

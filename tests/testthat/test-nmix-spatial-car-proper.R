@@ -1,4 +1,4 @@
-# Tests for nmix_laplace_car_proper() -- nested-Laplace fit of the
+# Tests for .count_spatial_fit("nmix", "car_proper") -- nested-Laplace fit of the
 # spatial Royle (2004) N-mixture model with a proper CAR(rho) prior on
 # log lambda.
 
@@ -92,7 +92,7 @@ simulate_nmix_car_proper <- function(seed,
 
 test_that("Spatial N-mix CAR_proper nested Laplace runs end-to-end", {
   dat <- simulate_nmix_car_proper(seed = 11)
-  fit <- suppressWarnings(nmix_laplace_car_proper(
+  fit <- suppressWarnings(.count_spatial_fit("nmix", "car_proper",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -121,7 +121,7 @@ test_that("CAR_proper recovers rho near truth on simulated data", {
   skip_if_fast()
   dat <- simulate_nmix_car_proper(seed = 13, n_row = 8, n_col = 8,
                                   rho_true = 0.85, tau_true = 1.0)
-  fit <- nmix_laplace_car_proper(
+  fit <- .count_spatial_fit("nmix", "car_proper",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -169,7 +169,7 @@ test_that("CAR_proper at low rho is close to non-spatial fit", {
   y_long <- as.integer(as.vector(t(y_mat)))
 
   # Strict low-rho high-tau grid drives the CAR field toward zero.
-  fit_sp <- nmix_laplace_car_proper(
+  fit_sp <- .count_spatial_fit("nmix", "car_proper",
     y = y_long, site_idx = site_idx,
     map_site_to_unit = seq_len(n_sites),
     X_lambda = X_lambda, X_p = X_p,
@@ -193,7 +193,7 @@ test_that("CAR_proper at low rho is close to non-spatial fit", {
 
 test_that("Print method runs for CAR_proper fit", {
   dat <- simulate_nmix_car_proper(seed = 19, n_row = 4, n_col = 4)
-  fit <- nmix_laplace_car_proper(
+  fit <- .count_spatial_fit("nmix", "car_proper",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -213,7 +213,7 @@ test_that("CAR_proper NB integrates r as a third grid axis", {
   skip_on_cran()
   skip_if_fast()
   dat <- simulate_nmix_car_proper(seed = 24, n_row = 6, n_col = 6, J = 5, r = 2)
-  fit <- suppressWarnings(nmix_laplace_car_proper(
+  fit <- suppressWarnings(.count_spatial_fit("nmix", "car_proper",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,

@@ -18,7 +18,7 @@
 "test-car-logdet.R","full",7,0,0.1
 "test-car-logdet.R","smoke",7,0,0.1
 "test-ccd-outer.R","full",7,0,60.4
-"test-ccd-outer.R","smoke",1,1,0
+"test-ccd-outer.R","smoke",0,1,0
 "test-community-diagnostics.R","full",13,0,4.9
 "test-community-diagnostics.R","smoke",7,4,1.2
 "test-community-latent-control.R","full",26,0,36.6

@@ -1,4 +1,4 @@
-# Tests for nmix_laplace_icar() -- nested-Laplace fit of the spatial
+# Tests for .count_spatial_fit("nmix", "icar") -- nested-Laplace fit of the spatial
 # Royle (2004) N-mixture model with an ICAR prior on log lambda.
 
 # Build CSR adjacency for an n_row x n_col rook (4-neighbour) grid.
@@ -89,7 +89,7 @@ simulate_nmix_spatial <- function(seed,
 
 test_that("Spatial N-mix nested Laplace runs end-to-end", {
   dat <- simulate_nmix_spatial(seed = 11)
-  fit <- suppressWarnings(nmix_laplace_icar(
+  fit <- suppressWarnings(.count_spatial_fit("nmix", "icar",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -114,7 +114,7 @@ test_that("Spatial N-mix slopes are near truth on simulated data", {
   skip_on_cran()
   skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 13, n_row = 8, n_col = 8)
-  fit <- nmix_laplace_icar(
+  fit <- .count_spatial_fit("nmix", "icar",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -140,7 +140,7 @@ test_that("High-tau spatial fit collapses to non-spatial fit", {
   skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 17, z_scale = 0)   # truth has no field
   # Use a strict, high-only tau grid that drives z toward zero.
-  fit_sp <- nmix_laplace_icar(
+  fit_sp <- .count_spatial_fit("nmix", "icar",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -163,7 +163,7 @@ test_that("High-tau spatial fit collapses to non-spatial fit", {
 
 test_that("Print method runs", {
   dat <- simulate_nmix_spatial(seed = 19, n_row = 4, n_col = 4)
-  fit <- nmix_laplace_icar(
+  fit <- .count_spatial_fit("nmix", "icar",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -185,7 +185,7 @@ test_that("Spatial ICAR NB integrates r and recovers slopes / dispersion", {
   skip_on_cran()
   skip_if_fast()
   dat <- simulate_nmix_spatial(seed = 21, n_row = 7, n_col = 7, J = 5, r = 2)
-  fit <- suppressWarnings(nmix_laplace_icar(
+  fit <- suppressWarnings(.count_spatial_fit("nmix", "icar",
     y = dat$y, site_idx = dat$site_idx,
     map_site_to_unit = dat$map_site_to_unit,
     X_lambda = dat$X_lambda, X_p = dat$X_p,
@@ -229,8 +229,8 @@ test_that("Spatial NB log-marginal beats Poisson on overdispersed data", {
     tau_grid = exp(seq(log(0.5), log(20), length.out = 5L)),
     max_iter = 100L, tol = 1e-6
   )
-  fit_nb <- suppressWarnings(do.call(nmix_laplace_icar, c(args, list(mixture = "NB"))))
-  fit_p  <- suppressWarnings(do.call(nmix_laplace_icar, c(args, list(mixture = "P"))))
+  fit_nb <- suppressWarnings(do.call(.count_spatial_fit, c(list("nmix", "icar"), args, list(mixture = "NB"))))
+  fit_p  <- suppressWarnings(do.call(.count_spatial_fit, c(list("nmix", "icar"), args, list(mixture = "P"))))
   expect_gt(max(fit_nb$log_marginal), max(fit_p$log_marginal) - 1)
   expect_true(is.na(fit_p$r_mean))
   # Poisson grid shape unchanged (no r axis).
