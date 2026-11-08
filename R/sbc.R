@@ -488,7 +488,7 @@
 .tobs_sbc_loglik_occu_cover <- function(fit, theta, n_quad = 15L) {
   m  <- fit$model
   bl <- attr(theta, "blocks")
-  gh <- .gauss_hermite_prob(as.integer(n_quad))
+  gh <- tulpa::tulpa_gauss_hermite(as.integer(n_quad))
   sigma <- if ("sigma" %in% names(theta)) theta[["sigma"]] else 0
   sigma <- sigma * .tobs_sbc_field_scale(fit$spatial$graph)
   alpha <- if ("alpha" %in% names(theta)) theta[["alpha"]] else 0

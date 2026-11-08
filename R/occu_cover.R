@@ -683,17 +683,13 @@
   }, numeric(1))
 }
 
-# Gauss-Hermite nodes / weights for the standard normal (weights sum to 1):
-# E_{N(0,1)}[g] ~ sum_k w_k g(z_k).
-.gauss_hermite_prob <- function(n) tulpa::tulpa_gauss_hermite(n)
-
 # Per-unit beta latent-cover marginal log M_i = log integral of
 # prod_j Beta(y_ij | sigmoid(eta + u), phi) * N(u; 0, sigma_u^2) du, by
 # Gauss-Hermite against the cover-RE prior. Same marginal as
 # src/occu_cover_latent.h::BetaLatent (non-adaptive quadrature of the same
 # integral). `eta` is the unit-level predictor.
 .occu_cover_latent_beta_logm <- function(vals, eta, phi, sigma_u, n_quad) {
-  gh <- .gauss_hermite_prob(max(as.integer(n_quad), 15L))
+  gh <- tulpa::tulpa_gauss_hermite(max(as.integer(n_quad), 15L))
   z  <- gh$nodes
   lw <- log(gh$weights)
   vapply(seq_along(vals), function(i) {
