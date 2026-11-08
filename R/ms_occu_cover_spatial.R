@@ -236,31 +236,28 @@ simulate_ms_occu_cover_spatial <- function(adj,
   }
 
   species_names <- paste0("sp", seq_len(n.species))
-  y     <- array(NA_integer_, dim = c(N, J, n.species),
-                 dimnames = list(NULL, NULL, species_names))
-  y_pos <- array(NA_real_,    dim = c(N, J, n.species),
-                 dimnames = list(NULL, NULL, species_names))
-  psi   <- matrix(NA_real_, N, n.species, dimnames = list(NULL, species_names))
-  zmat  <- matrix(NA_integer_, N, n.species, dimnames = list(NULL, species_names))
-
-  for (s in seq_len(n.species)) {
-    eta_psi <- as.vector(X_occ %*% (mu.occ + b_occ[s, ])) +
-               as.numeric(W %*% L[s, ])
-    ps      <- stats::plogis(eta_psi)
-    z       <- stats::rbinom(N, 1L, ps)
-    pp      <- stats::plogis(as.vector(X_p %*% (mu.p + b_p[s, ])))
-    eta_pos <- as.vector(X_pos %*% (mu.pos + b_pos[s, ]))
-    if (!is.null(Lpos)) eta_pos <- eta_pos + as.numeric(W %*% Lpos[s, ])
-    for (i in seq_len(N)) {
-      det_ij <- stats::rbinom(J, 1L, z[i] * pp[i])
-      y[i, , s] <- det_ij
-      hit <- det_ij == 1L
-      if (any(hit)) {
-        y_pos[i, hit, s] <- exp(eta_pos[i] + stats::rnorm(sum(hit), 0, sigma.pos))
-      }
-    }
-    psi[, s] <- ps; zmat[, s] <- z
-  }
+  sp <- seq_len(n.species)
+  psi <- vapply(sp, function(s) stats::plogis(
+    as.vector(X_occ %*% (mu.occ + b_occ[s, ])) + as.numeric(W %*% L[s, ])),
+    numeric(N))
+  pp  <- vapply(sp, function(s)
+    stats::plogis(as.vector(X_p %*% (mu.p + b_p[s, ]))), numeric(N))
+  eta_pos <- vapply(sp, function(s) {
+    e <- as.vector(X_pos %*% (mu.pos + b_pos[s, ]))
+    if (!is.null(Lpos)) e + as.numeric(W %*% Lpos[s, ]) else e
+  }, numeric(N))
+  rep_ <- .tobs_gen_ms_occu_cover(
+    list(valid = array(TRUE, c(N, J, n.species)), n_sites = N, max_visits = J,
+         n_species = n.species, species_names = species_names,
+         positive = "lognormal"),
+    list(psi = psi,
+         p_mat  = array(pp[, rep(sp, each = J)], c(N, J, n.species)),
+         ep_mat = array(eta_pos[, rep(sp, each = J)], c(N, J, n.species)),
+         disp = sigma.pos))
+  y <- rep_$y; y_pos <- rep_$y_pos
+  dimnames(psi) <- list(NULL, species_names)
+  zmat <- attr(rep_, "latent")
+  dimnames(zmat) <- list(NULL, species_names)
 
   data <- data.frame(row.names = seq_len(N))
   for (df in list(occ_covs, det_covs, pos_covs)) if (ncol(df)) data <- cbind(data, df)

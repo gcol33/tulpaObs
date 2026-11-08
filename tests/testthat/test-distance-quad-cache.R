@@ -130,10 +130,11 @@ test_that("the simulator's quadrature order is an argument, and it bites", {
   X1 <- matrix(1, n, 1L)
   sim <- function(order, seed = 5L) {
     set.seed(seed)
-    tulpaObs:::cpp_simulate_distance(X1, X1, .qsim_draws, as.numeric(.qsim_cuts),
+    tulpaObs:::cpp_simulate_distance(X1, X1, as.numeric(.qsim_draws),
+                                     numeric(0), numeric(0), as.numeric(.qsim_cuts),
                                      tulpaObs:::.dist_key_code("halfnorm"), 0L,
                                      as.integer(order), 0,
-                                     n, B, 1L, 1L, FALSE, NA_real_, 1L)[[1L]]
+                                     n, B, 1L, 1L, FALSE, NA_real_)
   }
   # Same order, same rule, same stream: byte-identical.
   expect_identical(sim(64L), sim(64L))
@@ -150,9 +151,10 @@ test_that("the simulator refuses a quadrature order below one", {
   X1 <- matrix(1, 4L, 1L)
   dr <- matrix(c(log(10), log(40)), nrow = 1L)
   expect_error(
-    tulpaObs:::cpp_simulate_distance(X1, X1, dr, as.numeric(cuts),
+    tulpaObs:::cpp_simulate_distance(X1, X1, as.numeric(dr), numeric(0),
+                                     numeric(0), as.numeric(cuts),
                                      tulpaObs:::.dist_key_code("halfnorm"), 0L,
-                                     0L, 0, 4L, 4L, 1L, 1L, FALSE, NA_real_, 1L),
+                                     0L, 0, 4L, 4L, 1L, 1L, FALSE, NA_real_),
     "quad_order")
 })
 
@@ -170,12 +172,17 @@ test_that("simulate() on a distance fit uses that fit's quad_order", {
     draws = .qsim_draws,
     nmix_dispersion = list(r = NULL), distance_shape = list(shape = NULL)),
     class = c("tobs_fit", "tulpa_fit"))
+  # The handler picks its posterior draw (here the only one) before the
+  # generator runs, so the direct call takes the same draw first.
   direct <- function(order, seed = 5L) {
     set.seed(seed)
-    tulpaObs:::cpp_simulate_distance(X1, X1, .qsim_draws, as.numeric(cuts),
-                                     tulpaObs:::.dist_key_code("halfnorm"), 0L,
-                                     as.integer(order), 0,
-                                     n, B, 1L, 1L, FALSE, NA_real_, 1L)[[1L]]
+    sample.int(nrow(.qsim_draws), 1L)
+    tulpaObs:::.tobs_gen_strip(
+      tulpaObs:::cpp_simulate_distance(X1, X1, as.numeric(.qsim_draws),
+                                       numeric(0), numeric(0), as.numeric(cuts),
+                                       tulpaObs:::.dist_key_code("halfnorm"), 0L,
+                                       as.integer(order), 0,
+                                       n, B, 1L, 1L, FALSE, NA_real_))
   }
   for (order in c(2L, 64L)) {
     set.seed(5L)

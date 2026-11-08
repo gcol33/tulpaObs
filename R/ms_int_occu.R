@@ -522,39 +522,41 @@ build_ms_int_occu_fit <- function(model, fit, arm_idx) {
   list(psi = psi, p = p_list, z = z)
 }
 
-# Draw community integrated data under the fitted per-species coefficients, at
-# the observed per-source visit pattern (one z per species-site shared across
-# sources, then per-source detection). Returns a list of per-source 3D arrays
-# matching the input y.
+# The ms_int_occu() generator, `cpp_simulate_ms_int_occu()`: per species the
+# site occupancy states, then every source's detections at its own visits
+# (`model$valid[[d]]`), site by site. theta = list(psi, pd): the [n_sites x
+# n_species] occupancy probabilities and a per-source list of detection
+# probability matrices of the same shape.
+.tobs_gen_ms_int_occu <- function(model, theta) {
+  D <- model$n_sources
+  srcs <- cpp_simulate_ms_int_occu(theta$psi, theta$pd,
+    lapply(seq_len(D), function(d) as.integer(model$valid[[d]])),
+    as.integer(model$n_visits), model$n_sites, model$n_species, D)
+  z <- attr(srcs, "latent")
+  names(srcs) <- model$process_names
+  srcs <- lapply(srcs, function(a) {
+    dimnames(a) <- list(NULL, NULL, model$species_names); a
+  })
+  structure(srcs, latent = z)
+}
+
+# simulate() for ms_int_occu(): the per-species fitted psi and per-source
+# detection (community means) handed to the family generator once per
+# replicate.
 .tobs_simulate_ms_int_occu <- function(object, nsim = 1) {
   model <- object$model
   cm    <- object$ms_community
-  D     <- model$n_sources
-  n_sites <- model$n_sites
-  n_species <- model$n_species
-  J_d <- model$n_visits
-
-  # Per-species psi + per-source detection (community means, deterministic); the
-  # z + per-source detections run in cpp_simulate_ms_int_occu from R's RNG stream
-  # in a fixed order (seed-reproducible).
-  psi <- vapply(seq_len(n_species),
-                function(s) stats::plogis(as.numeric(model$X_psi %*% cm$coef_psi[s, ])),
-                numeric(n_sites))
-  pd_list <- lapply(seq_len(D), function(d) {
-    arm <- model$process_names[d]
-    vapply(seq_len(n_species),
-           function(s) stats::plogis(as.numeric(model$X_p[[d]] %*% cm[[paste0("coef_", arm)]][s, ])),
-           numeric(n_sites))
-  })
-  valid_list <- lapply(seq_len(D), function(d) as.integer(model$valid[[d]]))
-  res <- cpp_simulate_ms_int_occu(psi, pd_list, valid_list, as.integer(J_d),
-                                  n_sites, n_species, D, as.integer(nsim))
-  add_names <- function(srcs) {
-    names(srcs) <- model$process_names
-    lapply(srcs, function(a) { dimnames(a) <- list(NULL, NULL, model$species_names); a })
-  }
-  res <- lapply(res, add_names)
-  res
+  sp <- seq_len(model$n_species)
+  theta <- list(
+    psi = vapply(sp, function(s) stats::plogis(as.numeric(model$X_psi %*% cm$coef_psi[s, ])),
+                 numeric(model$n_sites)),
+    pd  = lapply(seq_len(model$n_sources), function(d) {
+      arm <- model$process_names[d]
+      vapply(sp, function(s)
+        stats::plogis(as.numeric(model$X_p[[d]] %*% cm[[paste0("coef_", arm)]][s, ])),
+        numeric(model$n_sites))
+    }))
+  .tobs_gen_replicates(model, nsim, function(i) theta, .tobs_gen_ms_int_occu)
 }
 
 

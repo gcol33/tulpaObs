@@ -254,27 +254,26 @@ removal_laplace <- function(y, site_idx, X_lambda, X_p,
   p * surv
 }
 
-# simulate() for removal: draw N_i from the abundance mixing distribution, then
-# deplete across passes (pass k removes Binom(remaining, p_ik)).
-.tobs_simulate_removal <- function(object, nsim = 1) {
-  model    <- object$model
-  draws    <- object$draws
-  n_draws  <- nrow(draws)
-  n_sites  <- model$n_sites
-  n_pass   <- model$n_passes
-  site_idx <- model$site_idx
-  visit_idx <- model$visit_idx
-  r_size   <- object$nmix_dispersion$r
+# The removal() generator, `cpp_simulate_removal()`: latent N per site, then
+# each site's passes in turn, every pass removing a binomial share of the
+# individuals not yet removed. theta = list(beta, off, r): the coefficient
+# vector in the fit's draw layout, each arm's realised offset (or NULL), and
+# the NB size (NA for Poisson).
+.tobs_gen_removal <- function(model, theta) {
+  p <- .tobs_arm_p(model, 2L)
+  r <- theta$r %||% NA_real_
+  cpp_simulate_removal(model$X_processes[[1L]], model$X_processes[[2L]],
+    as.numeric(theta$beta), .tobs_off_arg(theta$off[[1L]]),
+    .tobs_off_arg(theta$off[[2L]]),
+    as.integer(model$site_idx), as.integer(model$visit_idx),
+    model$n_sites, model$n_passes, p[1L], p[2L], is.finite(r), as.numeric(r))
+}
 
-  is_nb <- !is.null(r_size) && is.finite(r_size)
-  # Draw selection + latent N + depleting-binomial pass removals run in
-  # cpp_simulate_removal from R's RNG stream in a fixed order (seed-reproducible).
-  ab <- .tobs_sim_arm_block(model, draws, 2L)
-  p_lam <- ab$p[1L]; p_p <- ab$p[2L]
-  res <- cpp_simulate_removal(ab$X[[1L]], ab$X[[2L]], ab$draws,
-    as.integer(site_idx), as.integer(visit_idx), n_sites, n_pass, p_lam, p_p,
-    is_nb, if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
-  res
+.tobs_simulate_removal <- function(object, nsim = 1) {
+  r_size <- object$nmix_dispersion$r
+  .tobs_simulate_draw_gen(object, nsim, .tobs_gen_removal, 2L,
+    list(r = if (!is.null(r_size) && is.finite(r_size)) as.numeric(r_size)
+             else NA_real_))
 }
 
 # residuals() for removal. Under Poisson abundance the pass-k removal is
@@ -361,19 +360,16 @@ simulate_removal <- function(N = 100, K = 4,
   X_det    <- stats::model.matrix(~ ., det_covs)
   lambda <- exp(as.vector(X_lambda %*% beta.lambda))
   p      <- plogis(as.vector(X_det %*% beta.p))
-  Nlat   <- if (identical(mixture, "negbin")) {
-    stats::rnbinom(N, size = size, mu = lambda)
-  } else stats::rpois(N, lambda)
-
-  y <- matrix(0L, N, K)
-  for (i in seq_len(N)) {
-    remaining <- Nlat[i]
-    for (k in seq_len(K)) {
-      yk <- stats::rbinom(1L, remaining, p[i])
-      y[i, k] <- yk
-      remaining <- remaining - yk
-    }
-  }
+  model <- list(X_processes = list(X_lambda, X_det[rep(seq_len(N), each = K), ,
+                                                   drop = FALSE]),
+                process_info = list(list(p = ncol(X_lambda)), list(p = ncol(X_det))),
+                site_idx = rep(seq_len(N), each = K), visit_idx = rep(seq_len(K), N),
+                n_sites = N, n_passes = K)
+  y <- .tobs_gen_removal(model, list(
+    beta = c(beta.lambda, beta.p), off = list(NULL, NULL),
+    r = if (identical(mixture, "negbin")) size else NA_real_))
+  Nlat <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
 
   list(
     y = y, data = data,

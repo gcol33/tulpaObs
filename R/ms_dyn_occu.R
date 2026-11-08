@@ -365,36 +365,38 @@ build_ms_dyn_occu_fit <- function(model, res, arm_idx, gam_idx, eps_idx) {
   list(psi1 = psi1, p = p, gamma = gamma, eps = eps)
 }
 
-# Draw community dynamic occupancy data under the fitted per-species first-season
-# / detection coefficients and the shared transition coefficients, at the
-# observed season / visit pattern. Returns a 4D array matching the input y.
+# The ms_dyn_occu() generator, `cpp_simulate_ms_dyn_occu()`: per species the
+# season-1 states, the interval-by-interval extinction / colonisation draws,
+# then the detections site by site and season by season at the visits
+# `model$valid` marks. theta = list(psi1, p, gamma, eps): the [n_sites x
+# n_species] season-1 occupancy and detection probabilities and the per-site
+# colonisation / extinction probabilities.
+.tobs_gen_ms_dyn_occu <- function(model, theta) {
+  a <- cpp_simulate_ms_dyn_occu(theta$psi1, theta$p, as.numeric(theta$gamma),
+    as.numeric(theta$eps), as.integer(model$valid), model$n_sites,
+    model$max_visits, model$n_seasons, model$n_species)
+  dimnames(a) <- list(NULL, NULL, NULL, model$species_names)
+  a
+}
+
+# simulate() for ms_dyn_occu(): the per-species fitted psi1 / p (community
+# means) and the per-site gamma / eps at the fitted transition coefficients,
+# handed to the family generator once per replicate.
 .tobs_simulate_ms_dyn_occu <- function(object, nsim = 1) {
   model <- object$model
   cm    <- object$ms_community
-  n_sites    <- model$n_sites
-  max_visits <- model$max_visits
-  n_seasons  <- model$n_seasons
-  n_species  <- model$n_species
   pi_list <- model$process_info
-
   beta_gam <- object$means[paste0("gamma_", pi_list[[3L]]$coef_names)]
   beta_eps <- object$means[paste0("eps_",   pi_list[[4L]]$coef_names)]
-  gamma <- as.numeric(stats::plogis(model$X_gamma %*% beta_gam))
-  eps   <- as.numeric(stats::plogis(model$X_eps   %*% beta_eps))
-
-  # Per-species psi1 / p (community means) + per-site gamma / eps (above); the
-  # season-1 state, transitions, and detections run in cpp_simulate_ms_dyn_occu
-  # from R's RNG stream in a fixed order (seed-reproducible).
-  psi1 <- vapply(seq_len(n_species),
-                 function(s) as.numeric(stats::plogis(model$X_psi1 %*% cm$coef_psi1[s, ])),
-                 numeric(n_sites))
-  p <- vapply(seq_len(n_species),
-              function(s) as.numeric(stats::plogis(model$X_p %*% cm$coef_p[s, ])),
-              numeric(n_sites))
-  res <- cpp_simulate_ms_dyn_occu(psi1, p, gamma, eps, as.integer(model$valid),
-    n_sites, max_visits, n_seasons, n_species, as.integer(nsim))
-  dn <- list(NULL, NULL, NULL, model$species_names)
-  lapply(seq_len(nsim), function(s) { a <- array(res[, , , , s], dim = dim(res)[1:4]); dimnames(a) <- dn; a })
+  sp <- seq_len(model$n_species)
+  theta <- list(
+    psi1  = vapply(sp, function(s) as.numeric(stats::plogis(model$X_psi1 %*% cm$coef_psi1[s, ])),
+                   numeric(model$n_sites)),
+    p     = vapply(sp, function(s) as.numeric(stats::plogis(model$X_p %*% cm$coef_p[s, ])),
+                   numeric(model$n_sites)),
+    gamma = as.numeric(stats::plogis(model$X_gamma %*% beta_gam)),
+    eps   = as.numeric(stats::plogis(model$X_eps   %*% beta_eps)))
+  .tobs_gen_replicates(model, nsim, function(i) theta, .tobs_gen_ms_dyn_occu)
 }
 
 

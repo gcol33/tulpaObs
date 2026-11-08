@@ -94,15 +94,10 @@ test_that("abun() areal field enters fitted() and the pointwise log-likelihood (
   blind <- fit; blind$model$field_eta_offset <- NULL
   expect_gt(elpd(fit), elpd(blind))
 
-  # simulate() reaches the kernel through the same offset, as a design column
-  # whose coefficient is pinned at 1.
-  ab <- tulpaObs:::.tobs_sim_arm_block(fit$model, fit$draws, 2L)
-  expect_identical(as.integer(ab$p[1L]),
-                   as.integer(fit$model$process_info[[1L]]$p + 1L))
-  expect_equal(as.numeric(ab$X[[1L]][, ncol(ab$X[[1L]])]), off[[1L]])
-  expect_true(all(ab$draws[, ab$p[1L]] == 1))
-  expect_identical(as.integer(ab$p[2L]),
-                   as.integer(fit$model$process_info[[2L]]$p))
+  # simulate() hands the generator the same offset as the arm's realised field.
+  off_sim <- tulpaObs:::.tobs_arm_offsets(fit$model, 2L)
+  expect_equal(as.numeric(off_sim[[1L]]), off[[1L]])
+  expect_null(off_sim[[2L]])
 })
 
 
@@ -258,13 +253,7 @@ test_that("a fit with no field carries no offset and is unchanged (#254)", {
   expect_identical(log(fitted(fit)$lambda),
                    as.vector(cbind(1, d$x_ab) %*% fit$means[1:2]))
 
-  # The simulation kernels take a field as a design COLUMN with its coefficient
-  # pinned at 1, so with no field the arm block is exactly what they were handed
-  # before and simulate() runs the same stream.
-  pk <- vapply(fit$model$process_info, function(pp) pp$p, integer(1))
-  ab <- tulpaObs:::.tobs_sim_arm_block(fit$model, fit$draws, 2L)
-  expect_identical(ab$X[[1L]], fit$model$X_processes[[1L]])
-  expect_identical(ab$X[[2L]], fit$model$X_processes[[2L]])
-  expect_identical(ab$draws, fit$draws[, seq_len(sum(pk)), drop = FALSE])
-  expect_identical(as.integer(ab$p), as.integer(pk))
+  # With no field no arm carries an offset, so simulate() hands the generator
+  # the coefficients alone.
+  expect_identical(tulpaObs:::.tobs_arm_offsets(fit$model, 2L), list(NULL, NULL))
 })

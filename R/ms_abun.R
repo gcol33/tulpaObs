@@ -803,35 +803,42 @@ build_ms_nmix_fit <- function(raw, model, mixture = "poisson", spatial = NULL) {
   list(occ = NULL, det = out)
 }
 
-# simulate(): draw counts under the fitted per-species coefficients. Each draw
-# samples N_{s,i} ~ Poisson(lambda_{s,i}) (or NegBin(mu = lambda, size = r_s)
-# under mixture = "negbin") then y ~ Binomial(N, p) at the observed visit
-# pattern, returning a 3D array matching the input y. Under NB the per-species
-# size is the fitted r_s (non-spatial, per-species log_r RE) or the grid-
-# integrated community size r (spatial); a non-finite size is the Poisson limit.
+# The ms_abun() generator, `cpp_simulate_ms_nmix()`: per species the latent
+# abundances, the structural zeros of a zero-inflated species, then the
+# binomial detections site by site at the observed visits (non-NA cells of
+# `model$y`). theta = list(lambda, p, size, omega): the [n_sites x n_species]
+# abundance and detection, and the per-species NB size and structural-zero
+# share (NA for Poisson / not zero-inflated).
+.tobs_gen_ms_nmix <- function(model, theta) {
+  S <- model$n_species
+  a <- cpp_simulate_ms_nmix(theta$lambda, theta$p,
+    as.numeric(theta$size %||% rep(NA_real_, S)),
+    as.numeric(theta$omega %||% rep(NA_real_, S)),
+    as.integer(!is.na(model$y)), model$n_sites, model$max_visits, S)
+  dimnames(a) <- list(NULL, NULL, model$species_names)
+  a
+}
+
+# simulate() for ms_abun(): the posterior-mean fitted lambda / p (field and
+# factor offsets included), the per-species NB size (r_s if present, else the
+# community r, recycled across species) and, on a zero-inflated fit, the
+# per-species structural-zero share, handed to the family generator once per
+# replicate.
 .tobs_simulate_ms_nmix <- function(object, nsim = 1) {
   model <- object$model
   fit   <- .tobs_fitted_ms_nmix(object)
-  n_sites <- model$n_sites; max_visits <- model$max_visits
-  n_species <- model$n_species
-  obs_mask <- !is.na(model$y)
-  # Per-species NB size: r_s if present (non-spatial NB), else the community r
-  # (spatial NB), recycled across species; NA -> Poisson.
-  size_s <- rep(NA_real_, n_species)
-  if (identical(object$mixture, "negbin") && !is.null(object$ms_dispersion)) {
+  S <- model$n_species
+  size_s <- rep(NA_real_, S)
+  if (isTRUE(object$mixture %in% c("negbin", "zinb")) &&
+      !is.null(object$ms_dispersion)) {
     rs <- object$ms_dispersion$r_s
-    size_s <- if (!is.null(rs) && length(rs) == n_species) as.numeric(rs)
-              else rep(as.numeric(object$ms_dispersion$r %||% NA_real_), n_species)
+    size_s <- if (!is.null(rs) && length(rs) == S) as.numeric(rs)
+              else rep(as.numeric(object$ms_dispersion$r %||% NA_real_), S)
   }
-  # The community simulator draws from the posterior-MEAN fitted values (no draw
-  # selection), so the per-species latent N and detection draws run in
-  # cpp_simulate_ms_nmix from R's RNG stream in a fixed order (seed-reproducible).
-  res <- cpp_simulate_ms_nmix(fit$lambda, fit$p, size_s, as.integer(obs_mask),
-                              n_sites, max_visits, n_species, as.integer(nsim))
-  res <- lapply(res, function(a) {
-    dimnames(a) <- list(NULL, NULL, model$species_names); a
-  })
-  res
+  omega_s <- object$ms_zi$omega_s
+  theta <- list(lambda = fit$lambda, p = fit$p, size = size_s,
+                omega = if (length(omega_s) == S) as.numeric(omega_s) else NULL)
+  .tobs_gen_replicates(model, nsim, function(i) theta, .tobs_gen_ms_nmix)
 }
 
 
@@ -992,20 +999,17 @@ simulate_ms_abun <- function(n.species = 12, N = 80, J = 4,
   }
 
   species_names <- paste0("sp", seq_len(n.species))
-  y <- array(NA_integer_, dim = c(N, J, n.species),
-             dimnames = list(NULL, NULL, species_names))
-  lambda <- matrix(NA_real_, N, n.species); p_arr <- matrix(NA_real_, N, n.species)
-  Nlat   <- matrix(NA_integer_, N, n.species)
-  for (s in seq_len(n.species)) {
-    lam <- exp(as.vector(X_lambda %*% beta_lambda[s, ]) + field)
-    pp  <- plogis(as.vector(X_det %*% beta_p[s, ]))
-    Ns  <- if (is_nb) stats::rnbinom(N, size = r_s[s], mu = lam)
-           else stats::rpois(N, lam)
-    # Structural zeros: a share omega_s of sites is never occupied (N = 0).
-    if (is_zi) Ns[stats::rbinom(N, 1L, omega_s[s]) == 1L] <- 0L
-    for (i in seq_len(N)) y[i, , s] <- stats::rbinom(J, Ns[i], pp[i])
-    lambda[, s] <- lam; p_arr[, s] <- pp; Nlat[, s] <- Ns
-  }
+  lambda <- vapply(seq_len(n.species), function(s)
+    exp(as.vector(X_lambda %*% beta_lambda[s, ]) + field), numeric(N))
+  p_arr  <- vapply(seq_len(n.species), function(s)
+    plogis(as.vector(X_det %*% beta_p[s, ])), numeric(N))
+  y <- .tobs_gen_ms_nmix(
+    list(y = array(0L, c(N, J, n.species)), n_sites = N, max_visits = J,
+         n_species = n.species, species_names = species_names),
+    list(lambda = lambda, p = p_arr, size = r_s,
+         omega = if (is_zi) omega_s else NULL))
+  Nlat <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
   names(r_s) <- names(b_logr) <- species_names
   names(omega_s) <- names(b_omega) <- species_names
 

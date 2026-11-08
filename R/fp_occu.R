@@ -579,17 +579,22 @@ build_fp_occu_fit <- function(raw, model, re_post = NULL) {
   list(psi = lp(1), p11 = lp(2), p10 = lp(3), b = lp(4), z = object$w1)
 }
 
-# simulate() for fp_occu: draw z, then per visit emit a multistate detection.
+# The fp_occu() generator, `cpp_simulate_fp_occu()`: the site state, then the
+# per-site multistate detection history (occupied: detections and their
+# certainty, 2 certain / 1 uncertain / 0 missed; unoccupied: false-positive
+# detections). theta = list(beta, off): the coefficient vector in the fit's
+# draw layout and each of the four arms' realised offset (or NULL).
+.tobs_gen_fp_occu <- function(model, theta) {
+  p <- .tobs_arm_p(model, 4L)
+  X <- model$X_processes
+  cpp_simulate_fp_occu(X[[1L]], X[[2L]], X[[3L]], X[[4L]], as.numeric(theta$beta),
+    .tobs_off_arg(theta$off[[1L]]), .tobs_off_arg(theta$off[[2L]]),
+    .tobs_off_arg(theta$off[[3L]]), .tobs_off_arg(theta$off[[4L]]),
+    model$n_sites, model$max_visits, p[1L], p[2L], p[3L], p[4L])
+}
+
 .tobs_simulate_fp_occu <- function(object, nsim = 1) {
-  model <- object$model; draws <- object$draws; n_draws <- nrow(draws)
-  n_sites <- model$n_sites; J <- model$max_visits
-  # Draw selection + z + per-site multistate detection replicate run in
-  # cpp_simulate_fp_occu from R's RNG stream in a fixed order (seed-reproducible).
-  ab <- .tobs_sim_arm_block(model, draws, 4L)
-  p <- ab$p
-  res <- cpp_simulate_fp_occu(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],
-    ab$draws, n_sites, J, p[1], p[2], p[3], p[4], as.integer(nsim))
-  res
+  .tobs_simulate_draw_gen(object, nsim, .tobs_gen_fp_occu, 4L)
 }
 
 # residuals() for fp_occu, on the marginal probability of any detection
@@ -661,16 +666,16 @@ simulate_fp_occu <- function(N = 300, J = 5, n.occ.covs = 1, beta.psi = NULL,
   names(occ_covs) <- paste0("occ_cov", seq_len(n.occ.covs))
   X_psi <- stats::model.matrix(~ ., occ_covs)
   psi <- stats::plogis(as.vector(X_psi %*% beta.psi))
-  z <- stats::rbinom(N, 1L, psi)
-  y <- matrix(0L, N, J)
-  for (i in seq_len(N)) {
-    if (z[i] == 1L) {
-      det <- stats::rbinom(J, 1L, p11); cert <- stats::rbinom(J, 1L, b)
-      y[i, ] <- ifelse(det == 1L, ifelse(cert == 1L, 2L, 1L), 0L)
-    } else {
-      y[i, ] <- stats::rbinom(J, 1L, p10)
-    }
-  }
+  X1 <- matrix(1, N, 1L, dimnames = list(NULL, "(Intercept)"))
+  model <- list(X_processes = list(X_psi, X1, X1, X1),
+                process_info = list(list(p = ncol(X_psi)), list(p = 1L),
+                                    list(p = 1L), list(p = 1L)),
+                n_sites = N, max_visits = J)
+  y <- .tobs_gen_fp_occu(model, list(
+    beta = c(beta.psi, stats::qlogis(c(p11, p10, b))),
+    off = list(NULL, NULL, NULL, NULL)))
+  z <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
   list(y = y, data = occ_covs,
        truth = list(beta_psi = beta.psi, psi = psi, p11 = p11, p10 = p10,
                     b = b, z = z))

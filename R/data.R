@@ -623,18 +623,26 @@ simulate_occu <- function(N = 100, J = 4,
   psi <- plogis(as.vector(X_occ %*% beta.occ))
   eta_det <- as.vector(X_det %*% beta.det)
   p <- plogis(eta_det)
-  z <- rbinom(N, 1, psi)
 
-  truth <- list(beta_occ = beta.occ, beta_det = beta.det, psi = psi, p = p, z = z)
-  y <- matrix(NA_integer_, N, J)
+  # Optional per-visit detection group effect: each (site, visit) belongs to
+  # one of `n.visit.groups` groups whose effect b_g ~ N(0, sigma.visit^2) offsets
+  # that visit's detection logit.
+  group <- NULL; off_det <- NULL
   if (n.visit.groups > 0L) {
     group <- sample.int(n.visit.groups, N * J, replace = TRUE)
     b_visit <- rnorm(n.visit.groups, 0, sigma.visit)
-    p_ij <- matrix(plogis(rep(eta_det, each = J) + b_visit[group]),
-                   N, J, byrow = TRUE)
-    for (i in seq_len(N)) {
-      y[i, ] <- rbinom(J, 1, z[i] * p_ij[i, ])
-    }
+    off_det <- matrix(b_visit[group], N, J, byrow = TRUE)
+  }
+  model <- list(X_processes = list(X_occ, X_det),
+                process_info = list(list(p = ncol(X_occ)), list(p = ncol(X_det))),
+                y = matrix(0L, N, J))
+  y <- .tobs_gen_single(model, list(beta = c(beta.occ, beta.det),
+                                    off_occ = NULL, off_det = off_det))
+  z <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
+
+  truth <- list(beta_occ = beta.occ, beta_det = beta.det, psi = psi, p = p, z = z)
+  if (n.visit.groups > 0L) {
     truth$b_visit <- b_visit
     truth$sigma_visit <- sigma.visit
     return(list(
@@ -644,9 +652,6 @@ simulate_occu <- function(N = 100, J = 4,
                                                levels = seq_len(n.visit.groups))),
       truth = truth
     ))
-  }
-  for (i in seq_len(N)) {
-    y[i, ] <- rbinom(J, 1, z[i] * p[i])
   }
 
   list(y = y, data = data, truth = truth)
@@ -695,16 +700,15 @@ simulate_ms_occu <- function(N = 100, J = 4, n.species = 10,
     alpha_species[, j] <- rnorm(n.species, alpha.comm.mean[j], alpha.comm.sd[j])
   }
 
-  y <- array(NA_integer_, dim = c(N, J, n.species))
-  z <- matrix(NA_integer_, N, n.species)
-  for (s in seq_len(n.species)) {
-    psi_s <- plogis(as.vector(X_occ %*% beta_species[s, ]))
-    p_s <- plogis(alpha_species[s, 1])
-    z[, s] <- rbinom(N, 1, psi_s)
-    for (i in seq_len(N)) {
-      y[i, , s] <- rbinom(J, 1, z[i, s] * p_s)
-    }
-  }
+  sp <- seq_len(n.species)
+  y <- .tobs_gen_ms_occu(
+    list(valid = array(TRUE, c(N, J, n.species)), n_sites = N, max_visits = J,
+         n_species = n.species, species_names = NULL),
+    list(psi = vapply(sp, function(s) plogis(as.vector(X_occ %*% beta_species[s, ])),
+                      numeric(N)),
+         p = vapply(sp, function(s) rep(plogis(alpha_species[s, 1]), N), numeric(N))))
+  z <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
 
   list(
     y = y,
@@ -1178,24 +1182,19 @@ simulate_ms_dyn_occu <- function(N = 50, J = 3, n.species = 5, n.seasons = 4,
   }
   trend_off <- if (is.null(trend)) rep(0, N) else trend * data$x
 
-  z <- array(NA_integer_, dim = c(N, n.seasons, n.species))
-  y <- array(NA_integer_, dim = c(N, J, n.seasons, n.species))
-
-  for (sp in seq_len(n.species)) {
-    psi1_i <- if (is.null(field) && is.null(trend)) rep(psi1_species[sp], N)
-              else plogis(logit_psi1_species[sp] +
-                          (if (is.null(field)) 0 else field) + trend_off)
-    z[, 1, sp] <- rbinom(N, 1, psi1_i)
-    for (t in 2:n.seasons) {
-      z[, t, sp] <- z[, t-1, sp] * (1 - rbinom(N, 1, epsilon)) +
-                    (1 - z[, t-1, sp]) * rbinom(N, 1, gamma)
-    }
-    for (i in seq_len(N)) {
-      for (t in seq_len(n.seasons)) {
-        y[i, , t, sp] <- rbinom(J, 1, z[i, t, sp] * p_species[sp])
-      }
-    }
-  }
+  sp <- seq_len(n.species)
+  psi1 <- vapply(sp, function(s)
+    if (is.null(field) && is.null(trend)) rep(psi1_species[s], N)
+    else plogis(logit_psi1_species[s] + (if (is.null(field)) 0 else field) +
+                trend_off), numeric(N))
+  y <- .tobs_gen_ms_dyn_occu(
+    list(valid = array(TRUE, c(N, J, n.seasons, n.species)), n_sites = N,
+         max_visits = J, n_seasons = n.seasons, n_species = n.species,
+         species_names = NULL),
+    list(psi1 = psi1, p = vapply(sp, function(s) rep(p_species[s], N), numeric(N)),
+         gamma = rep(gamma, N), eps = rep(epsilon, N)))
+  z <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
 
   list(
     y = y,
@@ -1227,22 +1226,17 @@ simulate_ms_int_occu <- function(N = 100, J = c(3, 4), n.species = 5,
 
   data <- data.frame(x = rnorm(N))
   psi_species <- plogis(rnorm(n.species, 0, 0.5))
-  z <- matrix(NA_integer_, N, n.species)
-  for (sp in seq_len(n.species)) z[, sp] <- rbinom(N, 1, psi_species[sp])
-
-  y_list <- vector("list", n.data)
-  p_det <- vector("list", n.data)
-  for (s in seq_len(n.data)) {
-    p_s <- plogis(rnorm(n.species, 0, 0.3))
-    p_det[[s]] <- p_s
-    y_s <- array(NA_integer_, dim = c(N, J[s], n.species))
-    for (sp in seq_len(n.species)) {
-      for (i in seq_len(N)) {
-        y_s[i, , sp] <- rbinom(J[s], 1, z[i, sp] * p_s[sp])
-      }
-    }
-    y_list[[s]] <- y_s
-  }
+  p_det <- lapply(seq_len(n.data), function(s) plogis(rnorm(n.species, 0, 0.3)))
+  sp <- seq_len(n.species)
+  y_list <- .tobs_gen_ms_int_occu(
+    list(n_sources = n.data, n_visits = J, n_sites = N, n_species = n.species,
+         valid = lapply(seq_len(n.data), function(s) array(TRUE, c(N, J[s], n.species))),
+         process_names = NULL, species_names = NULL),
+    list(psi = vapply(sp, function(s) rep(psi_species[s], N), numeric(N)),
+         pd = lapply(p_det, function(p_s)
+           vapply(sp, function(s) rep(p_s[s], N), numeric(N)))))
+  z <- attr(y_list, "latent")
+  y_list <- .tobs_gen_strip(y_list)
 
   list(
     y = y_list,

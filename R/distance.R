@@ -555,37 +555,34 @@ build_distance_fit <- function(raw, model, re_post = NULL) {
   list(lambda = lambda, sigma = sigma, p = p)
 }
 
-# simulate() for distance: draw N_i, then assign each individual to a distance
-# bin (or "undetected") by the multinomial cell probabilities.
-.tobs_simulate_distance <- function(object, nsim = 1) {
-  model   <- object$model
-  draws   <- object$draws
-  n_draws <- nrow(draws)
-  n_sites <- model$n_sites
-  n_bins  <- model$n_bins
-  r_size  <- object$nmix_dispersion$r
-  shape   <- object$distance_shape$shape
-
-  # The draw selection (R_unif_index), latent N (rpois / rnbinom), and the
-  # multinomial bin counts run in cpp_simulate_distance. The per-bin detection
-  # probabilities reuse the SAME Gauss-Legendre quadrature the distance
-  # likelihood integrates against (src/distance_quad.h), not a separate
-  # stats::integrate path, so the simulator draws from exactly the pi the model
-  # was fit against (one source of truth). That rule is
-  # (cutpoints, transect, quad_order), so the fit's own `quad_order` is passed
-  # rather than a constant.
-  is_nb <- !is.null(r_size) && is.finite(r_size)
-  transect_code <- if (identical(model$transect, "point")) 1L else 0L
-  ab <- .tobs_sim_arm_block(model, draws, 2L)
-  p_lam <- ab$p[1L]; p_sig <- ab$p[2L]
-  res <- cpp_simulate_distance(ab$X[[1L]], ab$X[[2L]],
-    ab$draws, as.numeric(model$cutpoints),
-    .dist_key_code(model$key), transect_code,
+# The distance() generator, `cpp_simulate_distance()`: latent N per site and
+# the multinomial bin counts of the detected birds. The per-bin detection
+# probabilities reuse the SAME Gauss-Legendre quadrature the distance
+# likelihood integrates against (src/distance_quad.h), so the generator draws
+# from exactly the pi the model is fit against; that rule is
+# (cutpoints, transect, quad_order), read off the model. theta = list(beta,
+# off, r, shape): the coefficient vector in the fit's draw layout, each arm's
+# realised offset (or NULL), the NB size (NA for Poisson) and the hazard-key
+# shape (NULL for the half-normal key).
+.tobs_gen_distance <- function(model, theta) {
+  p <- .tobs_arm_p(model, 2L)
+  r <- theta$r %||% NA_real_
+  cpp_simulate_distance(model$X_processes[[1L]], model$X_processes[[2L]],
+    as.numeric(theta$beta), .tobs_off_arg(theta$off[[1L]]),
+    .tobs_off_arg(theta$off[[2L]]), as.numeric(model$cutpoints),
+    .dist_key_code(model$key),
+    if (identical(model$transect, "point")) 1L else 0L,
     as.integer(model$quad_order %||% 64L),
-    if (is.null(shape)) 0 else as.numeric(shape),
-    n_sites, n_bins, p_lam, p_sig, is_nb,
-    if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim))
-  res
+    if (is.null(theta$shape)) 0 else as.numeric(theta$shape),
+    model$n_sites, model$n_bins, p[1L], p[2L], is.finite(r), as.numeric(r))
+}
+
+.tobs_simulate_distance <- function(object, nsim = 1) {
+  r_size <- object$nmix_dispersion$r
+  .tobs_simulate_draw_gen(object, nsim, .tobs_gen_distance, 2L,
+    list(r = if (!is.null(r_size) && is.finite(r_size)) as.numeric(r_size)
+             else NA_real_,
+         shape = object$distance_shape$shape))
 }
 
 # residuals() for distance. The bin-b count is marginally
@@ -683,19 +680,16 @@ simulate_distance <- function(N = 200, cutpoints = seq(0, 1, length.out = 6),
   X_sigma  <- stats::model.matrix(~ ., sigma_covs)
   lambda <- exp(as.vector(X_lambda %*% beta.lambda))
   sigma  <- exp(as.vector(X_sigma  %*% beta.sigma))
-  Nlat <- if (identical(mixture, "negbin"))
-    stats::rnbinom(N, size = size, mu = lambda) else stats::rpois(N, lambda)
-
-  sh <- if (identical(key, "hazard")) shape else NULL
-  y <- matrix(0L, N, n_bins)
-  for (i in seq_len(N)) {
-    pi_b <- .distance_pi(sigma[i], cutpoints, key, transect, sh)
-    probs <- c(pi_b, max(1 - sum(pi_b), 0))
-    if (Nlat[i] > 0) {
-      counts <- stats::rmultinom(1L, Nlat[i], probs)
-      y[i, ] <- counts[seq_len(n_bins)]
-    }
-  }
+  model <- list(X_processes = list(X_lambda, X_sigma),
+                process_info = list(list(p = ncol(X_lambda)), list(p = ncol(X_sigma))),
+                cutpoints = cutpoints, key = key, transect = transect,
+                n_sites = N, n_bins = n_bins)
+  y <- .tobs_gen_distance(model, list(
+    beta = c(beta.lambda, beta.sigma), off = list(NULL, NULL),
+    r = if (identical(mixture, "negbin")) size else NA_real_,
+    shape = if (identical(key, "hazard")) shape else NULL))
+  Nlat <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
 
   list(
     y = y, data = data, cutpoints = cutpoints,

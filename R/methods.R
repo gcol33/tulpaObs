@@ -1151,9 +1151,6 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
   object$model$model_type %||% NA_character_
 }
 
-# The posterior-draw selection (R_unif_index, the sample.int primitive) and the
-# z / y_rep Bernoulli draws run in cpp_simulate_single from R's RNG stream in
-# the same order, so the simulation is byte-identical under a fixed seed.
 # One posterior draw per replicate, sampled with replacement.
 .tobs_simulate_draw_rows <- function(object, nsim) {
   object$draws[sample.int(nrow(object$draws), nsim, replace = TRUE), , drop = FALSE]
@@ -1256,14 +1253,35 @@ simulate.tobs_fit <- function(object, nsim = 1, seed = NULL, ...) {
     .tobs_integrated_theta(object$model, d, s), .tobs_gen_integrated)
 }
 
+# The occu() generator, `cpp_simulate_single()`: the site occupancy states,
+# then the detections site by site at the visit pattern of `model$y` (< 0 / NA
+# = no visit). theta = list(beta, off_occ, off_det): the coefficient vector in
+# the fit's draw layout (occupancy block, then detection block), the realised
+# per-site offset on occupancy and the per-(site, visit) offset matrix on
+# detection (NULL for none).
+.tobs_gen_single <- function(model, theta) {
+  p <- .tobs_arm_p(model, 2L)
+  yint <- model$y
+  yint[is.na(yint)] <- -1L
+  storage.mode(yint) <- "integer"
+  cpp_simulate_single(model$X_processes[[1L]], model$X_processes[[2L]],
+                      as.numeric(theta$beta), .tobs_off_arg(theta$off_occ),
+                      if (is.null(theta$off_det)) matrix(0, 0L, 0L)
+                      else as.matrix(theta$off_det),
+                      yint, p[1L], p[2L])
+}
+
+# simulate() for occu(): one posterior draw per replicate (the draw
+# sample.int(n, 1) picks) with the fitted field offsets, then the family
+# generator. A per-site detection offset applies at every visit of the site.
 .tobs_simulate_single <- function(object, nsim) {
   model <- object$model
-  pi_list <- model$process_info
-  p_occ <- pi_list[[1]]$p; p_det <- pi_list[[2]]$p
-  yint <- model$y; storage.mode(yint) <- "integer"
-  cpp_simulate_single(model$X_processes[[1]], model$X_processes[[2]],
-                      object$draws[, seq_len(p_occ + p_det), drop = FALSE],
-                      yint, p_occ, p_det, nsim)
+  off <- .tobs_arm_offsets(model, 2L)
+  off_det <- if (!is.null(off[[2L]]))
+    matrix(as.numeric(off[[2L]]), model$n_sites %||% nrow(model$y), ncol(model$y))
+  .tobs_gen_replicates(model, nsim, function(i)
+    list(beta = object$draws[sample.int(nrow(object$draws), 1L), ],
+         off_occ = off[[1L]], off_det = off_det), .tobs_gen_single)
 }
 
 # `quantiles` states the credible levels a predictor reports, and it drives both

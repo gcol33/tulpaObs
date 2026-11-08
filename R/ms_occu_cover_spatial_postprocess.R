@@ -295,44 +295,20 @@ build_ms_occu_cover_spatial_fit <- function(model, fit) {
   list(psi = maps$psi$mean, p = p, cover = maps$cover_cond$mean)
 }
 
-# Plug-in (posterior-mean) data simulation for the spatial-factor community fit:
-# per species, draw z ~ Bernoulli(psi) with the field-augmented psi, the visit
-# detections, and the cover hurdle at the observed visit pattern. Mirrors the
-# non-spatial community simulate, adding the shared field on psi (and, with a
-# cover-arm factor, on the cover predictor). Returns 3D arrays matching y / y_pos.
+# simulate() for the spatial-factor ms_occu_cover(): the per-species
+# community-mean predictors with the shared-factor field offset (W L[s, ] on
+# the occupancy logit, W Lpos[s, ] on the cover predictor), handed to the
+# family generator `.tobs_gen_ms_occu_cover()` once per replicate.
 .tobs_simulate_ms_occu_cover_spatial <- function(object, nsim = 1) {
-  model <- object$model; cm <- object$ms_community; sp <- object$spatial
+  sp <- object$spatial
   asK <- function(M) if (is.null(dim(M))) matrix(M, ncol = 1L) else M
-  W    <- asK(sp$field); L <- asK(sp$loadings)
+  W <- asK(sp$field); L <- asK(sp$loadings)
   Lpos <- if (is.null(sp$loadings_cover)) NULL else asK(sp$loadings_cover)
-  n_sites <- model$n_sites; max_visits <- model$max_visits
-  n_species <- model$n_species
-  is_beta <- identical(model$positive, "beta")
-  disp <- exp(object$means[[length(object$means)]])
-  cl <- .tobs_clamp_eta
-
-  # Per-species predictors with the shared-factor field offset (W L[s,] on psi,
-  # W Lpos[s,] on cover) computed here; the z + detection + cover draws run in
-  # cpp_simulate_ms_occu_cover from R's RNG stream in a fixed order.
-  psi <- matrix(0, n_sites, n_species)
-  p_mat <- array(0, c(n_sites, max_visits, n_species))
-  ep_mat <- array(0, c(n_sites, max_visits, n_species))
-  for (s in seq_len(n_species)) {
-    eta <- .occu_cover_eta_from_par(model, cm$coef_occ[s, ], cm$coef_p[s, ],
-                                    cm$coef_pos[s, ])
-    psi[, s] <- stats::plogis(cl(as.numeric(model$X_occ %*% cm$coef_occ[s, ]) +
-                                   as.numeric(W %*% L[s, ])))
-    if (!is.null(Lpos)) eta$ep_mat <- eta$ep_mat + as.numeric(W %*% Lpos[s, ])
-    p_mat[, , s] <- eta$p_mat; ep_mat[, , s] <- eta$ep_mat
-  }
-  res <- cpp_simulate_ms_occu_cover(psi, as.numeric(p_mat), as.numeric(ep_mat),
-    as.integer(model$valid), as.numeric(disp), is_beta,
-    n_sites, max_visits, n_species, as.integer(nsim))
-  res <- lapply(res, function(r) {
-    dn <- list(NULL, NULL, model$species_names)
-    dimnames(r$y) <- dn; dimnames(r$y_pos) <- dn; r
-  })
-  res
+  theta <- .ms_occu_cover_gen_theta(
+    object, off_occ = W %*% t(L),
+    off_pos = if (!is.null(Lpos)) W %*% t(Lpos))
+  .tobs_gen_replicates(object$model, nsim, function(i) theta,
+                       .tobs_gen_ms_occu_cover)
 }
 
 

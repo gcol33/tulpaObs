@@ -177,6 +177,9 @@ test_that("constant-rate dyn_abun fit is unchanged (no-regression at fit level)"
 # [beta_lambda | beta_p | beta_omega | beta_gamma].
 .sim_dyn_draws <- function(bl, bp, bo, bg) matrix(c(bl, bp, bo, bg), nrow = 1L)
 
+# No arm carries a realised offset.
+e0 <- numeric(0)
+
 test_that("simulator: a constant-rate long design equals the per-site one", {
   # The two shapes carry the SAME rates, so they must produce the identical
   # array under one seed -- which pins the long-form row index at every
@@ -189,11 +192,13 @@ test_that("simulator: a constant-rate long design equals the per-site one", {
   dr <- .sim_dyn_draws(bl, bp, bo, bg)
 
   set.seed(42)
-  a <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, X1, dr, n, n_seas, J,
-                                        1L, 1L, 1L, 1L, FALSE, NA_real_, 1L)
+  a <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, X1, as.numeric(dr),
+                                        e0, e0, e0, e0, n, n_seas, J,
+                                        1L, 1L, 1L, 1L, FALSE, NA_real_)
   set.seed(42)
-  b <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, Xlong, Xlong, dr, n, n_seas, J,
-                                        1L, 1L, 1L, 1L, FALSE, NA_real_, 1L)
+  b <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, Xlong, Xlong, as.numeric(dr),
+                                        e0, e0, e0, e0, n, n_seas, J,
+                                        1L, 1L, 1L, 1L, FALSE, NA_real_)
   expect_identical(as.integer(a), as.integer(b))
 })
 
@@ -209,8 +214,9 @@ test_that("simulator: a season-varying omega drives the dynamics", {
   dr <- .sim_dyn_draws(log(20), qlogis(1 - 1e-12), c(-25, 50), log(1e-10))
 
   set.seed(11)
-  y <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X_om, X1, dr, n, n_seas, J,
-                                        1L, 1L, 2L, 1L, FALSE, NA_real_, 1L)
+  y <- tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X_om, X1, as.numeric(dr),
+                                        e0, e0, e0, e0, n, n_seas, J,
+                                        1L, 1L, 2L, 1L, FALSE, NA_real_)
   dim(y) <- c(n, J, n_seas)
   expect_identical(y[, , 1L], y[, , 2L])       # interval 1: every individual survives
   expect_true(all(y[, , 3L] == 0L))            # interval 2: none does
@@ -224,25 +230,29 @@ test_that("simulator: an arm design of neither shape is refused", {
   dr <- .sim_dyn_draws(log(5), qlogis(0.5), qlogis(0.5), log(1))
   bad <- matrix(1, n * 2L, 1L)                 # neither n_sites nor n_sites*(T-1)
   expect_error(
-    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, bad, X1, dr, n, n_seas, J,
-                                     1L, 1L, 1L, 1L, FALSE, NA_real_, 1L),
+    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, bad, X1, as.numeric(dr),
+                                     e0, e0, e0, e0, n, n_seas, J,
+                                     1L, 1L, 1L, 1L, FALSE, NA_real_),
     "X_omega")
   expect_error(
-    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, bad, dr, n, n_seas, J,
-                                     1L, 1L, 1L, 1L, FALSE, NA_real_, 1L),
+    tulpaObs:::cpp_simulate_dyn_abun(X1, X1, X1, bad, as.numeric(dr),
+                                     e0, e0, e0, e0, n, n_seas, J,
+                                     1L, 1L, 1L, 1L, FALSE, NA_real_),
     "X_gamma")
 })
 
 test_that("simulate() hands the long-form arm designs to the simulator", {
-  # The R side passes model$X_processes[[3]] / [[4]] straight through, so what
+  # The generator reads model$X_processes[[3]] / [[4]] straight through, so what
   # reaches the kernel is whatever shape the binder built.
   sim <- simulate_dyn_abun(N = 20, n.seasons = 4, J = 2, n.abund.covs = 1,
                            beta.lambda = c(log(5), 0.3), p = 0.5, gamma = 1,
                            beta.omega = c(qlogis(0.6), 0.5), seed = 9)
   m <- tulpaObs:::.tobs_build_dyn_abun(~ abund_cov1, ~ 1, sim$data, sim$y,
                                        omega_formula = ~ season_cov, K_max = 20)
-  draws <- matrix(0, 1L, sum(vapply(m$process_info, function(pp) pp$p, integer(1))))
-  ab <- tulpaObs:::.tobs_sim_arm_block(m, draws, 4L)
-  expect_equal(nrow(ab$X[[3L]]), 20L * 3L)
-  expect_equal(nrow(ab$X[[4L]]), 20L)
+  expect_equal(nrow(m$X_processes[[3L]]), 20L * 3L)
+  expect_equal(nrow(m$X_processes[[4L]]), 20L)
+  p <- sum(vapply(m$process_info, function(pp) pp$p, integer(1)))
+  y <- tulpaObs:::.tobs_gen_dyn_abun(m, list(beta = rep(0, p),
+                                              off = list(NULL, NULL, NULL, NULL)))
+  expect_identical(dim(y), c(20L, 2L, 4L))
 })

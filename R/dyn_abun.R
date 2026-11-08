@@ -869,28 +869,43 @@ build_dyn_abun_fit <- function(raw, model, re_post = NULL, zi_logit = NULL) {
   list(lambda = lambda, p = pdet, omega = omega, gamma = gamma, EN = EN)
 }
 
-# simulate() for dyn_abun: draw the abundance trajectory and emit counts.
+# The dyn_abun() generator, `cpp_simulate_dyn_abun()`: per site the initial
+# abundance and the survival + recruitment chain across seasons, observed by
+# binomial detection; under zero-inflation a structural-zero share `zi` of
+# sites stays at zero throughout. lambda / p are site-level arms; omega / gamma
+# are interval-level, their designs at whichever of the two shapes
+# .tobs_interval_arm_design() built (n_sites rows under constant rates,
+# n_sites * (T - 1) site-major rows with a season-varying covariate), read as
+# the likelihood reads them. theta = list(beta, off, r, zi): the coefficient
+# vector in the fit's draw layout, each arm's realised offset (or NULL), the NB
+# size (NA for Poisson) and the structural-zero share (0 for none).
+.tobs_gen_dyn_abun <- function(model, theta) {
+  p <- .tobs_arm_p(model, 4L)
+  X <- model$X_processes
+  r <- theta$r %||% NA_real_
+  cpp_simulate_dyn_abun(X[[1L]], X[[2L]], X[[3L]], X[[4L]], as.numeric(theta$beta),
+    .tobs_off_arg(theta$off[[1L]]), .tobs_off_arg(theta$off[[2L]]),
+    .tobs_off_arg(theta$off[[3L]]), .tobs_off_arg(theta$off[[4L]]),
+    model$n_sites, model$n_seasons, model$max_visits, p[1L], p[2L], p[3L], p[4L],
+    is.finite(r), as.numeric(r), as.numeric(theta$zi %||% 0))
+}
+
+# simulate() for dyn_abun(): one posterior draw per replicate with the fitted
+# offsets and NB size; a zero-inflated fit's structural-zero share is read off
+# the same draw (its `zi_logit` coordinate).
 .tobs_simulate_dyn_abun <- function(object, nsim = 1) {
-  model <- object$model; draws <- object$draws; n_draws <- nrow(draws)
-  n_sites <- model$n_sites; n_seas <- model$n_seasons; J <- model$max_visits
-  is_nb <- identical(object$mixture %||% "poisson", "negbin")
+  model <- object$model; draws <- object$draws
+  mix   <- object$mixture %||% model$mixture %||% "poisson"
   r_disp <- object$dispersion$r %||% NA_real_
-  # lambda / p are site-level arms; omega / gamma are interval-level, and their
-  # designs reach the simulator at whichever of the two shapes
-  # .tobs_interval_arm_design() built -- n_sites rows under constant rates,
-  # n_sites * (T-1) site-major rows with a season-varying covariate. The
-  # simulator reads both exactly as the likelihood does. The draw selection
-  # (R_unif_index), latent N (rpois; NB via rpois(rgamma)), and the survival /
-  # recruitment / detection draws run in cpp_simulate_dyn_abun from R's RNG
-  # stream in site-major order (seed-reproducible).
-  ab <- .tobs_sim_arm_block(model, draws, 4L)
-  p <- ab$p
-  res <- cpp_simulate_dyn_abun(ab$X[[1L]], ab$X[[2L]], ab$X[[3L]], ab$X[[4L]],
-    ab$draws, n_sites, n_seas, J,
-    p[1], p[2], p[3], p[4], is_nb,
-    if (is_nb && is.finite(r_disp)) as.numeric(r_disp) else NA_real_,
-    as.integer(nsim))
-  lapply(seq_len(nsim), function(s) array(res[, , , s], dim = c(n_sites, J, n_seas)))
+  r <- if (mix %in% c("negbin", "zinb") && is.finite(r_disp)) as.numeric(r_disp)
+       else NA_real_
+  izi <- match("zi_logit", colnames(draws))
+  off <- .tobs_arm_offsets(model, 4L)
+  .tobs_gen_replicates(model, nsim, function(i) {
+    par <- draws[sample.int(nrow(draws), 1L), ]
+    list(beta = par, off = off, r = r,
+         zi = if (is.na(izi)) 0 else stats::plogis(par[[izi]]))
+  }, .tobs_gen_dyn_abun)
 }
 
 # residuals() for dyn_abun, on the marginal expected count mu_itj = E[N_t] * p.
@@ -1046,24 +1061,25 @@ simulate_dyn_abun <- function(N = 150, n.seasons = 4, J = 3, n.abund.covs = 1,
                  exp(beta.gamma[1] + beta.gamma[2] * season_cov)
                else matrix(gamma, N, nIv)
 
-  # Structural zeros (zip / zinb): a site is never occupied (N_t = 0 for all t)
-  # with probability zi, so every count at that site is zero. The remaining sites
-  # follow the ordinary Dail-Madsen trajectory.
-  struct_zero <- if (zi > 0) stats::rbinom(N, 1L, zi) == 1L else rep(FALSE, N)
-
-  y <- array(0L, dim = c(N, J, n.seasons))
-  Nmat <- matrix(0L, N, n.seasons)
-  for (i in seq_len(N)) {
-    if (struct_zero[i]) next               # all counts stay 0
-    Ni <- if (is_nb) stats::rnbinom(1L, mu = lambda[i], size = r)
-          else stats::rpois(1L, lambda[i])
-    for (t in seq_len(n.seasons)) {
-      if (t > 1L) Ni <- stats::rbinom(1L, Ni, omega_mat[i, t - 1L]) +
-                        stats::rpois(1L, gamma_mat[i, t - 1L])
-      Nmat[i, t] <- Ni
-      y[i, , t] <- stats::rbinom(J, Ni, p)
-    }
+  # Interval arms in the site-major long form the fitter builds: row
+  # (i - 1) * (n.seasons - 1) + iv is interval iv of site i.
+  X1 <- matrix(1, N, 1L, dimnames = list(NULL, "(Intercept)"))
+  arm <- function(beta, const, link) {
+    if (is.null(beta)) return(list(X = X1, b = link(const)))
+    list(X = cbind(1, as.vector(t(season_cov))), b = beta)
   }
+  om <- arm(beta.omega, omega, stats::qlogis)
+  gm <- arm(beta.gamma, gamma, log)
+  model <- list(X_processes = list(X_lambda, X1, om$X, gm$X),
+                process_info = list(list(p = ncol(X_lambda)), list(p = 1L),
+                                    list(p = ncol(om$X)), list(p = ncol(gm$X))),
+                n_sites = N, n_seasons = as.integer(n.seasons), max_visits = J)
+  y <- .tobs_gen_dyn_abun(model, list(
+    beta = c(beta.lambda, stats::qlogis(p), om$b, gm$b),
+    off = list(NULL, NULL, NULL, NULL), r = if (is_nb) r else NA_real_, zi = zi))
+  struct_zero <- attr(y, "latent")$zero == 1L
+  Nmat <- attr(y, "latent")$N
+  y <- .tobs_gen_strip(y)
   data <- abund_covs
   if (!is.null(season_cov)) data$season_cov <- season_cov
   list(y = y, data = data,

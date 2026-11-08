@@ -2275,14 +2275,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_simulate_nmix
-Rcpp::List cpp_simulate_nmix(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix draws, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx, int n_sites, int max_visits, int p_lam, int p_p, bool is_nb, double r_size, int nsim, double zi_omega);
-RcppExport SEXP _tulpaObs_cpp_simulate_nmix(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP drawsSEXP, SEXP site_idxSEXP, SEXP visit_idxSEXP, SEXP n_sitesSEXP, SEXP max_visitsSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP, SEXP nsimSEXP, SEXP zi_omegaSEXP) {
+Rcpp::IntegerMatrix cpp_simulate_nmix(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericVector theta, Rcpp::NumericVector off_lambda, Rcpp::NumericVector off_p, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx, int n_sites, int max_visits, int p_lam, int p_p, bool is_nb, double r_size, double zi_omega);
+RcppExport SEXP _tulpaObs_cpp_simulate_nmix(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP thetaSEXP, SEXP off_lambdaSEXP, SEXP off_pSEXP, SEXP site_idxSEXP, SEXP visit_idxSEXP, SEXP n_sitesSEXP, SEXP max_visitsSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP, SEXP zi_omegaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_lambda(off_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_p(off_pSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type visit_idx(visit_idxSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
@@ -2291,21 +2293,22 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type p_p(p_pSEXP);
     Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
     Rcpp::traits::input_parameter< double >::type r_size(r_sizeSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
     Rcpp::traits::input_parameter< double >::type zi_omega(zi_omegaSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_nmix(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim, zi_omega));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_nmix(X_lambda, X_p, theta, off_lambda, off_p, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, zi_omega));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_removal
-Rcpp::List cpp_simulate_removal(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix draws, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx, int n_sites, int n_pass, int p_lam, int p_p, bool is_nb, double r_size, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_removal(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP drawsSEXP, SEXP site_idxSEXP, SEXP visit_idxSEXP, SEXP n_sitesSEXP, SEXP n_passSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerMatrix cpp_simulate_removal(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericVector theta, Rcpp::NumericVector off_lambda, Rcpp::NumericVector off_p, Rcpp::IntegerVector site_idx, Rcpp::IntegerVector visit_idx, int n_sites, int n_pass, int p_lam, int p_p, bool is_nb, double r_size);
+RcppExport SEXP _tulpaObs_cpp_simulate_removal(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP thetaSEXP, SEXP off_lambdaSEXP, SEXP off_pSEXP, SEXP site_idxSEXP, SEXP visit_idxSEXP, SEXP n_sitesSEXP, SEXP n_passSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_lambda(off_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_p(off_pSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type site_idx(site_idxSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type visit_idx(visit_idxSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
@@ -2314,14 +2317,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type p_p(p_pSEXP);
     Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
     Rcpp::traits::input_parameter< double >::type r_size(r_sizeSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_removal(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_removal(X_lambda, X_p, theta, off_lambda, off_p, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_dyn_abun
-Rcpp::IntegerVector cpp_simulate_dyn_abun(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma, Rcpp::NumericMatrix draws, int n_sites, int n_seasons, int J, int p_lam, int p_p, int p_om, int p_gm, bool is_nb, double r_disp, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_dyn_abun(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP X_omegaSEXP, SEXP X_gammaSEXP, SEXP drawsSEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP p_omSEXP, SEXP p_gmSEXP, SEXP is_nbSEXP, SEXP r_dispSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerVector cpp_simulate_dyn_abun(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_p, Rcpp::NumericMatrix X_omega, Rcpp::NumericMatrix X_gamma, Rcpp::NumericVector theta, Rcpp::NumericVector off_lambda, Rcpp::NumericVector off_p, Rcpp::NumericVector off_omega, Rcpp::NumericVector off_gamma, int n_sites, int n_seasons, int J, int p_lam, int p_p, int p_om, int p_gm, bool is_nb, double r_disp, double zi);
+RcppExport SEXP _tulpaObs_cpp_simulate_dyn_abun(SEXP X_lambdaSEXP, SEXP X_pSEXP, SEXP X_omegaSEXP, SEXP X_gammaSEXP, SEXP thetaSEXP, SEXP off_lambdaSEXP, SEXP off_pSEXP, SEXP off_omegaSEXP, SEXP off_gammaSEXP, SEXP n_sitesSEXP, SEXP n_seasonsSEXP, SEXP JSEXP, SEXP p_lamSEXP, SEXP p_pSEXP, SEXP p_omSEXP, SEXP p_gmSEXP, SEXP is_nbSEXP, SEXP r_dispSEXP, SEXP ziSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2329,7 +2331,11 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p(X_pSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_omega(X_omegaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_gamma(X_gammaSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_lambda(off_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_p(off_pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_omega(off_omegaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_gamma(off_gammaSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
@@ -2339,14 +2345,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type p_gm(p_gmSEXP);
     Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
     Rcpp::traits::input_parameter< double >::type r_disp(r_dispSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_dyn_abun(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim));
+    Rcpp::traits::input_parameter< double >::type zi(ziSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_dyn_abun(X_lambda, X_p, X_omega, X_gamma, theta, off_lambda, off_p, off_omega, off_gamma, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, zi));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_fp_occu
-Rcpp::List cpp_simulate_fp_occu(Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_p11, Rcpp::NumericMatrix X_p10, Rcpp::NumericMatrix X_b, Rcpp::NumericMatrix draws, int n_sites, int J, int p_psi, int p_p11, int p_p10, int p_b, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_fp_occu(SEXP X_psiSEXP, SEXP X_p11SEXP, SEXP X_p10SEXP, SEXP X_bSEXP, SEXP drawsSEXP, SEXP n_sitesSEXP, SEXP JSEXP, SEXP p_psiSEXP, SEXP p_p11SEXP, SEXP p_p10SEXP, SEXP p_bSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerMatrix cpp_simulate_fp_occu(Rcpp::NumericMatrix X_psi, Rcpp::NumericMatrix X_p11, Rcpp::NumericMatrix X_p10, Rcpp::NumericMatrix X_b, Rcpp::NumericVector theta, Rcpp::NumericVector off_psi, Rcpp::NumericVector off_p11, Rcpp::NumericVector off_p10, Rcpp::NumericVector off_b, int n_sites, int J, int p_psi, int p_p11, int p_p10, int p_b);
+RcppExport SEXP _tulpaObs_cpp_simulate_fp_occu(SEXP X_psiSEXP, SEXP X_p11SEXP, SEXP X_p10SEXP, SEXP X_bSEXP, SEXP thetaSEXP, SEXP off_psiSEXP, SEXP off_p11SEXP, SEXP off_p10SEXP, SEXP off_bSEXP, SEXP n_sitesSEXP, SEXP JSEXP, SEXP p_psiSEXP, SEXP p_p11SEXP, SEXP p_p10SEXP, SEXP p_bSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2354,27 +2360,32 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p11(X_p11SEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_p10(X_p10SEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_b(X_bSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_psi(off_psiSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_p11(off_p11SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_p10(off_p10SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_b(off_bSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< int >::type p_psi(p_psiSEXP);
     Rcpp::traits::input_parameter< int >::type p_p11(p_p11SEXP);
     Rcpp::traits::input_parameter< int >::type p_p10(p_p10SEXP);
     Rcpp::traits::input_parameter< int >::type p_b(p_bSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_fp_occu(X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_fp_occu(X_psi, X_p11, X_p10, X_b, theta, off_psi, off_p11, off_p10, off_b, n_sites, J, p_psi, p_p11, p_p10, p_b));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_distance
-Rcpp::List cpp_simulate_distance(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericMatrix draws, Rcpp::NumericVector cutpoints, int key, int transect, int quad_order, double b_shape, int n_sites, int n_bins, int p_lam, int p_sig, bool is_nb, double r_size, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_distance(SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP drawsSEXP, SEXP cutpointsSEXP, SEXP keySEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP b_shapeSEXP, SEXP n_sitesSEXP, SEXP n_binsSEXP, SEXP p_lamSEXP, SEXP p_sigSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerMatrix cpp_simulate_distance(Rcpp::NumericMatrix X_lambda, Rcpp::NumericMatrix X_sigma, Rcpp::NumericVector theta, Rcpp::NumericVector off_lambda, Rcpp::NumericVector off_sigma, Rcpp::NumericVector cutpoints, int key, int transect, int quad_order, double b_shape, int n_sites, int n_bins, int p_lam, int p_sig, bool is_nb, double r_size);
+RcppExport SEXP _tulpaObs_cpp_simulate_distance(SEXP X_lambdaSEXP, SEXP X_sigmaSEXP, SEXP thetaSEXP, SEXP off_lambdaSEXP, SEXP off_sigmaSEXP, SEXP cutpointsSEXP, SEXP keySEXP, SEXP transectSEXP, SEXP quad_orderSEXP, SEXP b_shapeSEXP, SEXP n_sitesSEXP, SEXP n_binsSEXP, SEXP p_lamSEXP, SEXP p_sigSEXP, SEXP is_nbSEXP, SEXP r_sizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_lambda(X_lambdaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_sigma(X_sigmaSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_lambda(off_lambdaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_sigma(off_sigmaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type cutpoints(cutpointsSEXP);
     Rcpp::traits::input_parameter< int >::type key(keySEXP);
     Rcpp::traits::input_parameter< int >::type transect(transectSEXP);
@@ -2386,32 +2397,31 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type p_sig(p_sigSEXP);
     Rcpp::traits::input_parameter< bool >::type is_nb(is_nbSEXP);
     Rcpp::traits::input_parameter< double >::type r_size(r_sizeSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_distance(X_lambda, X_sigma, draws, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_distance(X_lambda, X_sigma, theta, off_lambda, off_sigma, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_ms_nmix
-Rcpp::List cpp_simulate_ms_nmix(Rcpp::NumericMatrix lambda, Rcpp::NumericMatrix p, Rcpp::NumericVector size_s, Rcpp::IntegerVector obs_mask, int n_sites, int max_v, int n_species, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_ms_nmix(SEXP lambdaSEXP, SEXP pSEXP, SEXP size_sSEXP, SEXP obs_maskSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerVector cpp_simulate_ms_nmix(Rcpp::NumericMatrix lambda, Rcpp::NumericMatrix p, Rcpp::NumericVector size_s, Rcpp::NumericVector omega_s, Rcpp::IntegerVector obs_mask, int n_sites, int max_v, int n_species);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_nmix(SEXP lambdaSEXP, SEXP pSEXP, SEXP size_sSEXP, SEXP omega_sSEXP, SEXP obs_maskSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type lambda(lambdaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type p(pSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type size_s(size_sSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type omega_s(omega_sSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type obs_mask(obs_maskSEXP);
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_nmix(lambda, p, size_s, obs_mask, n_sites, max_v, n_species, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_nmix(lambda, p, size_s, omega_s, obs_mask, n_sites, max_v, n_species));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_ms_occu
-Rcpp::List cpp_simulate_ms_occu(Rcpp::NumericMatrix psi, Rcpp::NumericMatrix p, Rcpp::IntegerVector valid, int n_sites, int max_v, int n_species, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu(SEXP psiSEXP, SEXP pSEXP, SEXP validSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerVector cpp_simulate_ms_occu(Rcpp::NumericMatrix psi, Rcpp::NumericMatrix p, Rcpp::IntegerVector valid, int n_sites, int max_v, int n_species);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu(SEXP psiSEXP, SEXP pSEXP, SEXP validSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2421,14 +2431,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu(psi, p, valid, n_sites, max_v, n_species, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu(psi, p, valid, n_sites, max_v, n_species));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_ms_occu_cover
-Rcpp::List cpp_simulate_ms_occu_cover(Rcpp::NumericMatrix psi, Rcpp::NumericVector p_mat, Rcpp::NumericVector ep_mat, Rcpp::IntegerVector valid, Rcpp::NumericVector disp, int positive, int n_sites, int max_v, int n_species, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu_cover(SEXP psiSEXP, SEXP p_matSEXP, SEXP ep_matSEXP, SEXP validSEXP, SEXP dispSEXP, SEXP positiveSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+Rcpp::List cpp_simulate_ms_occu_cover(Rcpp::NumericMatrix psi, Rcpp::NumericVector p_mat, Rcpp::NumericVector ep_mat, Rcpp::IntegerVector valid, Rcpp::NumericVector disp, int positive, int n_sites, int max_v, int n_species);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_occu_cover(SEXP psiSEXP, SEXP p_matSEXP, SEXP ep_matSEXP, SEXP validSEXP, SEXP dispSEXP, SEXP positiveSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_speciesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2441,14 +2450,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu_cover(psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_occu_cover(psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_ms_dyn_occu
-Rcpp::IntegerVector cpp_simulate_ms_dyn_occu(Rcpp::NumericMatrix psi1, Rcpp::NumericMatrix p, Rcpp::NumericVector gamma, Rcpp::NumericVector eps, Rcpp::IntegerVector valid, int n_sites, int max_v, int n_seasons, int n_species, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_ms_dyn_occu(SEXP psi1SEXP, SEXP pSEXP, SEXP gammaSEXP, SEXP epsSEXP, SEXP validSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_seasonsSEXP, SEXP n_speciesSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerVector cpp_simulate_ms_dyn_occu(Rcpp::NumericMatrix psi1, Rcpp::NumericMatrix p, Rcpp::NumericVector gamma, Rcpp::NumericVector eps, Rcpp::IntegerVector valid, int n_sites, int max_v, int n_seasons, int n_species);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_dyn_occu(SEXP psi1SEXP, SEXP pSEXP, SEXP gammaSEXP, SEXP epsSEXP, SEXP validSEXP, SEXP n_sitesSEXP, SEXP max_vSEXP, SEXP n_seasonsSEXP, SEXP n_speciesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2461,14 +2469,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type max_v(max_vSEXP);
     Rcpp::traits::input_parameter< int >::type n_seasons(n_seasonsSEXP);
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_dyn_occu(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_dyn_occu(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_ms_int_occu
-Rcpp::List cpp_simulate_ms_int_occu(Rcpp::NumericMatrix psi, Rcpp::List pd, Rcpp::List valid, Rcpp::IntegerVector J_d, int n_sites, int n_species, int D, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_ms_int_occu(SEXP psiSEXP, SEXP pdSEXP, SEXP validSEXP, SEXP J_dSEXP, SEXP n_sitesSEXP, SEXP n_speciesSEXP, SEXP DSEXP, SEXP nsimSEXP) {
+Rcpp::List cpp_simulate_ms_int_occu(Rcpp::NumericMatrix psi, Rcpp::List pd, Rcpp::List valid, Rcpp::IntegerVector J_d, int n_sites, int n_species, int D);
+RcppExport SEXP _tulpaObs_cpp_simulate_ms_int_occu(SEXP psiSEXP, SEXP pdSEXP, SEXP validSEXP, SEXP J_dSEXP, SEXP n_sitesSEXP, SEXP n_speciesSEXP, SEXP DSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -2479,25 +2486,25 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_sites(n_sitesSEXP);
     Rcpp::traits::input_parameter< int >::type n_species(n_speciesSEXP);
     Rcpp::traits::input_parameter< int >::type D(DSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_int_occu(psi, pd, valid, J_d, n_sites, n_species, D, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_ms_int_occu(psi, pd, valid, J_d, n_sites, n_species, D));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_simulate_single
-Rcpp::List cpp_simulate_single(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det, Rcpp::NumericMatrix draws, Rcpp::IntegerMatrix y, int p_occ, int p_det, int nsim);
-RcppExport SEXP _tulpaObs_cpp_simulate_single(SEXP X_occSEXP, SEXP X_detSEXP, SEXP drawsSEXP, SEXP ySEXP, SEXP p_occSEXP, SEXP p_detSEXP, SEXP nsimSEXP) {
+Rcpp::IntegerMatrix cpp_simulate_single(Rcpp::NumericMatrix X_occ, Rcpp::NumericMatrix X_det, Rcpp::NumericVector theta, Rcpp::NumericVector off_occ, Rcpp::NumericMatrix off_det, Rcpp::IntegerMatrix y, int p_occ, int p_det);
+RcppExport SEXP _tulpaObs_cpp_simulate_single(SEXP X_occSEXP, SEXP X_detSEXP, SEXP thetaSEXP, SEXP off_occSEXP, SEXP off_detSEXP, SEXP ySEXP, SEXP p_occSEXP, SEXP p_detSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_occ(X_occSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X_det(X_detSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type draws(drawsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type off_occ(off_occSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type off_det(off_detSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type y(ySEXP);
     Rcpp::traits::input_parameter< int >::type p_occ(p_occSEXP);
     Rcpp::traits::input_parameter< int >::type p_det(p_detSEXP);
-    Rcpp::traits::input_parameter< int >::type nsim(nsimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_simulate_single(X_occ, X_det, draws, y, p_occ, p_det, nsim));
+    rcpp_result_gen = Rcpp::wrap(cpp_simulate_single(X_occ, X_det, theta, off_occ, off_det, y, p_occ, p_det));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2649,17 +2656,17 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tulpaObs_cpp_nested_laplace_removal_icar", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_icar, 23},
     {"_tulpaObs_cpp_nested_laplace_removal_bym2", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_bym2, 27},
     {"_tulpaObs_cpp_nested_laplace_removal_car_proper", (DL_FUNC) &_tulpaObs_cpp_nested_laplace_removal_car_proper, 23},
-    {"_tulpaObs_cpp_simulate_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_nmix, 13},
-    {"_tulpaObs_cpp_simulate_removal", (DL_FUNC) &_tulpaObs_cpp_simulate_removal, 12},
-    {"_tulpaObs_cpp_simulate_dyn_abun", (DL_FUNC) &_tulpaObs_cpp_simulate_dyn_abun, 15},
-    {"_tulpaObs_cpp_simulate_fp_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_fp_occu, 12},
-    {"_tulpaObs_cpp_simulate_distance", (DL_FUNC) &_tulpaObs_cpp_simulate_distance, 15},
+    {"_tulpaObs_cpp_simulate_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_nmix, 14},
+    {"_tulpaObs_cpp_simulate_removal", (DL_FUNC) &_tulpaObs_cpp_simulate_removal, 13},
+    {"_tulpaObs_cpp_simulate_dyn_abun", (DL_FUNC) &_tulpaObs_cpp_simulate_dyn_abun, 19},
+    {"_tulpaObs_cpp_simulate_fp_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_fp_occu, 15},
+    {"_tulpaObs_cpp_simulate_distance", (DL_FUNC) &_tulpaObs_cpp_simulate_distance, 16},
     {"_tulpaObs_cpp_simulate_ms_nmix", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_nmix, 8},
-    {"_tulpaObs_cpp_simulate_ms_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu, 7},
-    {"_tulpaObs_cpp_simulate_ms_occu_cover", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu_cover, 10},
-    {"_tulpaObs_cpp_simulate_ms_dyn_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_dyn_occu, 10},
-    {"_tulpaObs_cpp_simulate_ms_int_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_int_occu, 8},
-    {"_tulpaObs_cpp_simulate_single", (DL_FUNC) &_tulpaObs_cpp_simulate_single, 7},
+    {"_tulpaObs_cpp_simulate_ms_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu, 6},
+    {"_tulpaObs_cpp_simulate_ms_occu_cover", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_occu_cover, 9},
+    {"_tulpaObs_cpp_simulate_ms_dyn_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_dyn_occu, 9},
+    {"_tulpaObs_cpp_simulate_ms_int_occu", (DL_FUNC) &_tulpaObs_cpp_simulate_ms_int_occu, 7},
+    {"_tulpaObs_cpp_simulate_single", (DL_FUNC) &_tulpaObs_cpp_simulate_single, 8},
     {"_tulpaObs_cpp_single_ppc", (DL_FUNC) &_tulpaObs_cpp_single_ppc, 8},
     {"_tulpaObs_cpp_single_pit_cdf", (DL_FUNC) &_tulpaObs_cpp_single_pit_cdf, 5},
     {NULL, NULL, 0}

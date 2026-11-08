@@ -453,48 +453,48 @@ cpp_nested_laplace_removal_car_proper <- function(y, site_idx, map_site_to_unit_
     .Call(`_tulpaObs_cpp_nested_laplace_removal_car_proper`, y, site_idx, map_site_to_unit_R, X_lambda_R, X_p_R, adj_row_ptr, adj_col_idx, n_neighbors, n_spatial, tau_grid, rho_grid, r_grid, beta_lambda_init, beta_p_init, z_init, K_max, max_iter, tol, verbose, progress, progress_every, progress_throttle, progress_file)
 }
 
-cpp_simulate_nmix <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim, zi_omega = NA_real_) {
-    .Call(`_tulpaObs_cpp_simulate_nmix`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, nsim, zi_omega)
+cpp_simulate_nmix <- function(X_lambda, X_p, theta, off_lambda, off_p, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, zi_omega = NA_real_) {
+    .Call(`_tulpaObs_cpp_simulate_nmix`, X_lambda, X_p, theta, off_lambda, off_p, site_idx, visit_idx, n_sites, max_visits, p_lam, p_p, is_nb, r_size, zi_omega)
 }
 
-cpp_simulate_removal <- function(X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_removal`, X_lambda, X_p, draws, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size, nsim)
+cpp_simulate_removal <- function(X_lambda, X_p, theta, off_lambda, off_p, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size) {
+    .Call(`_tulpaObs_cpp_simulate_removal`, X_lambda, X_p, theta, off_lambda, off_p, site_idx, visit_idx, n_sites, n_pass, p_lam, p_p, is_nb, r_size)
 }
 
-cpp_simulate_dyn_abun <- function(X_lambda, X_p, X_omega, X_gamma, draws, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_dyn_abun`, X_lambda, X_p, X_omega, X_gamma, draws, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, nsim)
+cpp_simulate_dyn_abun <- function(X_lambda, X_p, X_omega, X_gamma, theta, off_lambda, off_p, off_omega, off_gamma, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, zi = 0.0) {
+    .Call(`_tulpaObs_cpp_simulate_dyn_abun`, X_lambda, X_p, X_omega, X_gamma, theta, off_lambda, off_p, off_omega, off_gamma, n_sites, n_seasons, J, p_lam, p_p, p_om, p_gm, is_nb, r_disp, zi)
 }
 
-cpp_simulate_fp_occu <- function(X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_fp_occu`, X_psi, X_p11, X_p10, X_b, draws, n_sites, J, p_psi, p_p11, p_p10, p_b, nsim)
+cpp_simulate_fp_occu <- function(X_psi, X_p11, X_p10, X_b, theta, off_psi, off_p11, off_p10, off_b, n_sites, J, p_psi, p_p11, p_p10, p_b) {
+    .Call(`_tulpaObs_cpp_simulate_fp_occu`, X_psi, X_p11, X_p10, X_b, theta, off_psi, off_p11, off_p10, off_b, n_sites, J, p_psi, p_p11, p_p10, p_b)
 }
 
-cpp_simulate_distance <- function(X_lambda, X_sigma, draws, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_distance`, X_lambda, X_sigma, draws, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size, nsim)
+cpp_simulate_distance <- function(X_lambda, X_sigma, theta, off_lambda, off_sigma, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size) {
+    .Call(`_tulpaObs_cpp_simulate_distance`, X_lambda, X_sigma, theta, off_lambda, off_sigma, cutpoints, key, transect, quad_order, b_shape, n_sites, n_bins, p_lam, p_sig, is_nb, r_size)
 }
 
-cpp_simulate_ms_nmix <- function(lambda, p, size_s, obs_mask, n_sites, max_v, n_species, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_ms_nmix`, lambda, p, size_s, obs_mask, n_sites, max_v, n_species, nsim)
+cpp_simulate_ms_nmix <- function(lambda, p, size_s, omega_s, obs_mask, n_sites, max_v, n_species) {
+    .Call(`_tulpaObs_cpp_simulate_ms_nmix`, lambda, p, size_s, omega_s, obs_mask, n_sites, max_v, n_species)
 }
 
-cpp_simulate_ms_occu <- function(psi, p, valid, n_sites, max_v, n_species, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_ms_occu`, psi, p, valid, n_sites, max_v, n_species, nsim)
+cpp_simulate_ms_occu <- function(psi, p, valid, n_sites, max_v, n_species) {
+    .Call(`_tulpaObs_cpp_simulate_ms_occu`, psi, p, valid, n_sites, max_v, n_species)
 }
 
-cpp_simulate_ms_occu_cover <- function(psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_ms_occu_cover`, psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species, nsim)
+cpp_simulate_ms_occu_cover <- function(psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species) {
+    .Call(`_tulpaObs_cpp_simulate_ms_occu_cover`, psi, p_mat, ep_mat, valid, disp, positive, n_sites, max_v, n_species)
 }
 
-cpp_simulate_ms_dyn_occu <- function(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_ms_dyn_occu`, psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species, nsim)
+cpp_simulate_ms_dyn_occu <- function(psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species) {
+    .Call(`_tulpaObs_cpp_simulate_ms_dyn_occu`, psi1, p, gamma, eps, valid, n_sites, max_v, n_seasons, n_species)
 }
 
-cpp_simulate_ms_int_occu <- function(psi, pd, valid, J_d, n_sites, n_species, D, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_ms_int_occu`, psi, pd, valid, J_d, n_sites, n_species, D, nsim)
+cpp_simulate_ms_int_occu <- function(psi, pd, valid, J_d, n_sites, n_species, D) {
+    .Call(`_tulpaObs_cpp_simulate_ms_int_occu`, psi, pd, valid, J_d, n_sites, n_species, D)
 }
 
-cpp_simulate_single <- function(X_occ, X_det, draws, y, p_occ, p_det, nsim) {
-    .Call(`_tulpaObs_cpp_simulate_single`, X_occ, X_det, draws, y, p_occ, p_det, nsim)
+cpp_simulate_single <- function(X_occ, X_det, theta, off_occ, off_det, y, p_occ, p_det) {
+    .Call(`_tulpaObs_cpp_simulate_single`, X_occ, X_det, theta, off_occ, off_det, y, p_occ, p_det)
 }
 
 cpp_single_ppc <- function(X_occ, X_det, draws, draw_idx, y, n_valid, any_det, freeman) {

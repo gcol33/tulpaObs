@@ -512,3 +512,298 @@ test_that("ms_count / jsdm: the routes draw through one generator", {
   storage.mode(rep_a) <- "integer"
   expect_identical(a$value$y, rep_a)
 })
+
+
+# The count / multistate families: the generator is a C++ kernel taking theta;
+# simulate(fit) picks the posterior draw on the R side and hands it over.
+
+test_that("abun: the three routes draw through one generator", {
+  for (mix in c("poisson", "zip")) {
+    a <- gen_calls("nmix", simulate_abun(N = 15, J = 3, mixture = mix, seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(a$value$y, gen_replay("nmix", ca))
+
+    zi <- identical(mix, "zip")
+    fit <- as_tobs_fit(ca$model, "nmix",
+                       draws = tulpaObs:::.tobs_theta_row(ca$theta$beta),
+                       nmix_dispersion = list(r = NULL), zero_inflated = zi,
+                       zi_omega = if (zi) 0.3 else NA_real_)
+    set.seed(5)
+    b <- gen_calls("nmix", tulpaObs:::.tobs_simulate_nmix(fit, 1L)[[1L]])
+    expect_route("nmix", b, ca$theta)
+
+    c_ <- sbc_simple_route("nmix", "abun", fit, ca$theta$beta)
+    expect_route("nmix", c_, ca$theta, sbc_counts)
+  }
+})
+
+
+test_that("removal: the three routes draw through one generator", {
+  a <- gen_calls("removal", simulate_removal(N = 15, K = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("removal", ca))
+
+  fit <- as_tobs_fit(ca$model, "removal",
+                     draws = tulpaObs:::.tobs_theta_row(ca$theta$beta),
+                     nmix_dispersion = list(r = NULL))
+  set.seed(5)
+  b <- gen_calls("removal", tulpaObs:::.tobs_simulate_removal(fit, 1L)[[1L]])
+  expect_route("removal", b, ca$theta)
+
+  c_ <- sbc_simple_route("removal", "removal", fit, ca$theta$beta)
+  expect_route("removal", c_, ca$theta, sbc_counts)
+})
+
+
+test_that("distance: the three routes draw through one generator", {
+  for (key in c("halfnorm", "hazard")) {
+    a <- gen_calls("distance", simulate_distance(N = 15, key = key, seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(a$value$y, gen_replay("distance", ca))
+
+    fit <- as_tobs_fit(ca$model, "distance",
+                       draws = tulpaObs:::.tobs_theta_row(ca$theta$beta),
+                       nmix_dispersion = list(r = NULL),
+                       distance_shape = list(shape = ca$theta$shape))
+    set.seed(5)
+    b <- gen_calls("distance", tulpaObs:::.tobs_simulate_distance(fit, 1L)[[1L]])
+    expect_route("distance", b, ca$theta)
+
+    c_ <- sbc_simple_route("distance", "distance", fit, ca$theta$beta)
+    expect_route("distance", c_, ca$theta, sbc_counts)
+  }
+})
+
+
+test_that("fp_occu: the three routes draw through one generator", {
+  a <- gen_calls("fp_occu", simulate_fp_occu(N = 20, J = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("fp_occu", ca))
+
+  fit <- as_tobs_fit(ca$model, "fp_occu",
+                     draws = tulpaObs:::.tobs_theta_row(ca$theta$beta))
+  set.seed(5)
+  b <- gen_calls("fp_occu", tulpaObs:::.tobs_simulate_fp_occu(fit, 1L)[[1L]])
+  expect_route("fp_occu", b, ca$theta)
+
+  c_ <- sbc_simple_route("fp_occu", "fp_occu", fit, ca$theta$beta)
+  expect_route("fp_occu", c_, ca$theta, sbc_counts)
+})
+
+
+test_that("dyn_abun: the three routes draw through one generator", {
+  a <- gen_calls("dyn_abun", simulate_dyn_abun(N = 12, n.seasons = 3, J = 2,
+                                               seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("dyn_abun", ca))
+
+  fit <- as_tobs_fit(ca$model, "dyn_abun",
+                     draws = tulpaObs:::.tobs_theta_row(ca$theta$beta),
+                     mixture = "poisson")
+  set.seed(5)
+  b <- gen_calls("dyn_abun", tulpaObs:::.tobs_simulate_dyn_abun(fit, 1L)[[1L]])
+  expect_route("dyn_abun", b, ca$theta)
+
+  c_ <- sbc_simple_route("dyn_abun", "dyn_abun", fit, ca$theta$beta)
+  expect_route("dyn_abun", c_, ca$theta, sbc_counts)
+
+  # A zero-inflated draw reaches the generator as its structural-zero share.
+  zfit <- fit
+  zfit$draws <- tulpaObs:::.tobs_theta_row(c(ca$theta$beta, zi_logit = 0.4))
+  zfit$mixture <- "zip"
+  set.seed(5)
+  z <- gen_calls("dyn_abun", tulpaObs:::.tobs_simulate_dyn_abun(zfit, 1L)[[1L]])
+  expect_equal(z$calls[[1L]]$theta$zi, stats::plogis(0.4))
+})
+
+
+test_that("occu: the three routes draw through one generator", {
+  a <- gen_calls("single", simulate_occu(N = 20, J = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("single", ca))
+
+  fit <- as_tobs_fit(c(ca$model, list(n_sites = 20L)), "single",
+                     draws = tulpaObs:::.tobs_theta_row(ca$theta$beta))
+  set.seed(5)
+  b <- gen_calls("single", tulpaObs:::.tobs_simulate_single(fit, 1L)[[1L]])
+  expect_route("single", b, ca$theta)
+
+  c_ <- sbc_simple_route("single", "occu", fit, ca$theta$beta)
+  expect_route("single", c_, ca$theta, sbc_counts)
+
+  # The per-visit detection group effect is the generator's detection offset.
+  g <- gen_calls("single", simulate_occu(N = 20, J = 3, n.visit.groups = 4,
+                                         seed = 1))
+  cg <- g$calls[[1L]]
+  expect_identical(g$value$y, gen_replay("single", cg))
+  grp <- as.integer(g$value$visits$visit_group)
+  expect_equal(cg$theta$off_det,
+               matrix(g$value$truth$b_visit[grp], 20L, 3L, byrow = TRUE))
+})
+
+
+# The community families: the generator is a C++ kernel taking per-species,
+# per-site parameters; simulate(fit) hands it the fitted community values.
+
+test_that("ms_occu: the three routes draw through one generator", {
+  a <- gen_calls("ms_occu", simulate_ms_occu(N = 20, J = 3, n.species = 3,
+                                             seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("ms_occu", ca))
+
+  tr <- a$value$truth
+  X1 <- matrix(1, 20, 1L, dimnames = list(NULL, "(Intercept)"))
+  sp <- paste0("sp", 1:3)
+  model <- list(n_sites = 20L, max_visits = 3L, n_species = 3L,
+                species_names = sp, valid = ca$model$valid,
+                X_occ = stats::model.matrix(~ x, a$value$data), X_det = X1,
+                process_info = list(list(p = 2L, coef_names = c("(Intercept)", "x")),
+                                    list(p = 1L, coef_names = "(Intercept)")))
+  fit <- as_tobs_fit(model, "ms_occu",
+                     ms_community = list(coef_psi = tr$beta_species,
+                                         coef_p = tr$alpha_species))
+  set.seed(5)
+  b <- gen_calls("ms_occu", tulpaObs:::.tobs_simulate_ms_occu(fit, 1L)[[1L]])
+  expect_route("ms_occu", b, ca$theta)
+
+  th <- stats::setNames(
+    as.vector(rbind(t(tr$beta_species), t(tr$alpha_species))),
+    as.vector(outer(c("psi_(Intercept)", "psi_x", "p_(Intercept)"), sp,
+                    function(p, s) paste0(s, "_", p))))
+  spec <- list(model = fit$model, fit_obs = fit,
+               data_obs = list(cells = a$value$data, site = seq_len(20)))
+  c_ <- gen_calls("ms_occu",
+                  tulpaObs:::.TOBS_SBC_REGISTRY$ms_occu$simulate(spec, th, 9L))
+  expect_route("ms_occu", c_, ca$theta, function(d) d$y)
+})
+
+
+test_that("ms_abun: the exported and fit routes draw through one generator", {
+  for (mix in c("negbin", "zip")) {
+    a <- gen_calls("ms_nmix", simulate_ms_abun(n.species = 3, N = 15, J = 3,
+                                               mixture = mix, seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(a$value$y, gen_replay("ms_nmix", ca))
+
+    tr <- a$value$truth
+    model <- list(n_sites = 15L, max_visits = 3L, n_species = 3L,
+                  species_names = a$value$species, y = ca$model$y,
+                  X_processes = list(
+                    stats::model.matrix(~ abund_cov1, a$value$data),
+                    stats::model.matrix(~ det_cov1, a$value$data)))
+    fit <- as_tobs_fit(model, "ms_nmix", mixture = mix,
+                       ms_community = list(coef_lambda = tr$beta_lambda,
+                                           coef_p = tr$beta_p),
+                       ms_dispersion = if (mix == "negbin") list(r_s = tr$r_s),
+                       ms_zi = if (mix == "zip") list(omega_s = tr$omega_s))
+    set.seed(5)
+    b <- gen_calls("ms_nmix", tulpaObs:::.tobs_simulate_ms_nmix(fit, 1L)[[1L]])
+    expect_route("ms_nmix", b, ca$theta)
+  }
+})
+
+
+test_that("ms_dyn_occu: the exported and fit routes draw through one generator", {
+  a <- gen_calls("ms_dyn_occu", simulate_ms_dyn_occu(N = 12, J = 2, n.species = 3,
+                                                     n.seasons = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("ms_dyn_occu", ca))
+
+  tr <- a$value$truth
+  X1 <- matrix(1, 12, 1L, dimnames = list(NULL, "(Intercept)"))
+  model <- list(n_sites = 12L, max_visits = 2L, n_seasons = 3L, n_species = 3L,
+                species_names = NULL, valid = ca$model$valid,
+                X_psi1 = X1, X_p = X1, X_gamma = X1, X_eps = X1,
+                process_info = list(NULL, NULL,
+                                    list(coef_names = "(Intercept)"),
+                                    list(coef_names = "(Intercept)")))
+  fit <- as_tobs_fit(model, "ms_dyn_occu",
+                     means = c(`gamma_(Intercept)` = stats::qlogis(tr$gamma),
+                               `eps_(Intercept)` = stats::qlogis(tr$epsilon)),
+                     ms_community = list(
+                       coef_psi1 = matrix(stats::qlogis(tr$psi1_species), ncol = 1L),
+                       coef_p = matrix(stats::qlogis(tr$p_species), ncol = 1L)))
+  set.seed(5)
+  b <- gen_calls("ms_dyn_occu",
+                 tulpaObs:::.tobs_simulate_ms_dyn_occu(fit, 1L)[[1L]])
+  expect_route("ms_dyn_occu", b, ca$theta)
+})
+
+
+test_that("ms_int_occu: the exported and fit routes draw through one generator", {
+  a <- gen_calls("ms_int_occu", simulate_ms_int_occu(N = 12, n.species = 3,
+                                                     seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("ms_int_occu", ca))
+
+  tr <- a$value$truth
+  X1 <- matrix(1, 12, 1L, dimnames = list(NULL, "(Intercept)"))
+  model <- c(ca$model[c("n_sources", "n_visits", "n_sites", "n_species", "valid")],
+             list(process_names = c("a", "b"), species_names = NULL,
+                  X_psi = X1, X_p = list(X1, X1)))
+  fit <- as_tobs_fit(model, "ms_int_occu", ms_community = list(
+    coef_psi = matrix(stats::qlogis(tr$psi_species), ncol = 1L),
+    coef_a = matrix(stats::qlogis(tr$p_det[[1L]]), ncol = 1L),
+    coef_b = matrix(stats::qlogis(tr$p_det[[2L]]), ncol = 1L)))
+  set.seed(5)
+  b <- gen_calls("ms_int_occu",
+                 tulpaObs:::.tobs_simulate_ms_int_occu(fit, 1L)[[1L]])
+  expect_route("ms_int_occu", b, ca$theta)
+})
+
+
+test_that("ms_occu_cover: the exported and fit routes draw through one generator", {
+  a <- gen_calls("ms_occu_cover", simulate_ms_occu_cover(n.species = 3, N = 12,
+                                                         J = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  rep_a <- gen_replay("ms_occu_cover", ca)
+  expect_identical(a$value$y, rep_a$y)
+  expect_identical(a$value$y_pos, rep_a$y_pos)
+
+  tr <- a$value$truth; vd <- a$value$visit_data
+  model <- list(n_sites = 12L, max_visits = 3L, n_species = 3L,
+                species_names = a$value$species, positive = "lognormal",
+                valid = array(TRUE, c(12L, 3L, 3L)),
+                X_occ = stats::model.matrix(~ occ_cov1, a$value$data),
+                X_det_site = matrix(0, 12L, 0L), X_pos_site = matrix(0, 12L, 0L),
+                X_det_visit = stats::model.matrix(~ det_cov1, vd),
+                X_pos_visit = stats::model.matrix(~ pos_cov1, vd))
+  fit <- as_tobs_fit(model, "ms_occu_cover", means = c(log_sigma_pos = log(0.4)),
+                     ms_community = list(coef_occ = tr$beta_occ,
+                                         coef_p = tr$beta_p,
+                                         coef_pos = tr$beta_pos))
+  set.seed(5)
+  b <- gen_calls("ms_occu_cover",
+                 tulpaObs:::.tobs_simulate_ms_occu_cover(fit, 1L)[[1L]])
+  expect_length(b$calls, 1L)
+  expect_equal(b$calls[[1L]]$theta, ca$theta, ignore_attr = TRUE,
+               tolerance = 1e-12)
+  expect_identical(b$value, gen_replay("ms_occu_cover", b$calls[[1L]]))
+})
+
+
+test_that("ms_occu_cover_spatial: the exported route draws through the generator", {
+  adj <- (abs(outer(1:10, 1:10, "-")) == 1) * 1
+  a <- gen_calls("ms_occu_cover",
+                 simulate_ms_occu_cover_spatial(adj, n.species = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  rep_a <- gen_replay("ms_occu_cover", ca)
+  expect_identical(a$value$y, rep_a$y)
+  expect_identical(a$value$y_pos, rep_a$y_pos)
+})
+
+
+test_that("ms_distance: the exported and fit routes draw through one generator", {
+  a <- gen_calls("ms_distance", simulate_ms_distance(n.species = 3, N = 12,
+                                                     seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("ms_distance", ca))
+
+  tr <- a$value$truth
+  fit <- as_tobs_fit(ca$model, "ms_distance", ms_community = list(
+    coef_lambda = tr$beta_lambda, coef_sigma = tr$beta_sigma))
+  set.seed(5)
+  b <- gen_calls("ms_distance",
+                 tulpaObs:::.tobs_simulate_ms_distance(fit, 1L)[[1L]])
+  expect_route("ms_distance", b, ca$theta)
+})

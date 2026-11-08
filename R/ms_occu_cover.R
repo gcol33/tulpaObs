@@ -561,37 +561,54 @@ build_ms_occu_cover_fit <- function(model, mu, ld, b_list, Sigma, Cinv_list,
        det = NULL)
 }
 
-# Draw community joint occupancy-cover data under the fitted per-species
-# coefficients, at the observed visit pattern. Returns 3D arrays matching the
-# input y / y_pos.
-.tobs_simulate_ms_occu_cover <- function(object, nsim = 1) {
+# The ms_occu_cover() generator (and its spatial-factor variant's),
+# `cpp_simulate_ms_occu_cover()`: per species the site occupancy states, then
+# at each occupied site the detections at the visits `model$valid` marks and
+# the cover values at its detected visits, drawn as
+# `.tobs_draw_positive_cover()` draws them. theta = list(psi, p_mat, ep_mat,
+# disp): the [n_sites x n_species] occupancy, the [n_sites x max_visits x
+# n_species] detection probabilities and cover predictors, and the cover
+# dispersion (one value or one per species).
+.tobs_gen_ms_occu_cover <- function(model, theta) {
+  r <- cpp_simulate_ms_occu_cover(theta$psi, as.numeric(theta$p_mat),
+    as.numeric(theta$ep_mat), as.integer(model$valid), as.numeric(theta$disp),
+    .occu_cover_pos_code(model$positive %||% "lognormal"),
+    model$n_sites, model$max_visits, model$n_species)
+  dn <- list(NULL, NULL, model$species_names)
+  dimnames(r$y) <- dn; dimnames(r$y_pos) <- dn
+  r
+}
+
+# The per-species community-mean predictors of an ms_occu_cover() fit, as the
+# generator's theta: each species' arm coefficients through
+# `.occu_cover_eta_from_par()`, plus a per-species offset on the occupancy and
+# cover logits/predictors (`off_occ` / `off_pos`, [n_sites x n_species]) when
+# the fit carries a shared spatial factor.
+.ms_occu_cover_gen_theta <- function(object, off_occ = NULL, off_pos = NULL) {
   model <- object$model
   cm    <- object$ms_community
-  n_sites <- model$n_sites; max_visits <- model$max_visits
-  n_species <- model$n_species
-  pos_code <- .occu_cover_pos_code(model$positive)
-  disp <- exp(object$means[[length(object$means)]])
+  n_sites <- model$n_sites; J <- model$max_visits; S <- model$n_species
   cl <- .tobs_clamp_eta
-
-  # Per-species predictors (community means, deterministic); the z + detection +
-  # cover draws run in cpp_simulate_ms_occu_cover from R's RNG stream in a
-  # fixed order (seed-reproducible).
-  psi <- matrix(0, n_sites, n_species)
-  p_mat <- array(0, c(n_sites, max_visits, n_species))
-  ep_mat <- array(0, c(n_sites, max_visits, n_species))
-  for (s in seq_len(n_species)) {
+  psi <- matrix(0, n_sites, S)
+  p_mat <- array(0, c(n_sites, J, S)); ep_mat <- array(0, c(n_sites, J, S))
+  for (s in seq_len(S)) {
     eta <- .occu_cover_eta_from_par(model, cm$coef_occ[s, ], cm$coef_p[s, ],
                                     cm$coef_pos[s, ])
-    psi[, s] <- eta$psi; p_mat[, , s] <- eta$p_mat; ep_mat[, , s] <- eta$ep_mat
+    psi[, s] <- if (is.null(off_occ)) eta$psi else
+      stats::plogis(cl(as.numeric(model$X_occ %*% cm$coef_occ[s, ]) + off_occ[, s]))
+    p_mat[, , s] <- eta$p_mat
+    ep_mat[, , s] <- if (is.null(off_pos)) eta$ep_mat else eta$ep_mat + off_pos[, s]
   }
-  res <- cpp_simulate_ms_occu_cover(psi, as.numeric(p_mat), as.numeric(ep_mat),
-    as.integer(model$valid), as.numeric(disp), pos_code,
-    n_sites, max_visits, n_species, as.integer(nsim))
-  res <- lapply(res, function(r) {
-    dn <- list(NULL, NULL, model$species_names)
-    dimnames(r$y) <- dn; dimnames(r$y_pos) <- dn; r
-  })
-  res
+  list(psi = psi, p_mat = p_mat, ep_mat = ep_mat,
+       disp = exp(object$means[[length(object$means)]]))
+}
+
+# simulate() for ms_occu_cover(): the per-species community-mean predictors
+# handed to the family generator once per replicate.
+.tobs_simulate_ms_occu_cover <- function(object, nsim = 1) {
+  theta <- .ms_occu_cover_gen_theta(object)
+  .tobs_gen_replicates(object$model, nsim, function(i) theta,
+                       .tobs_gen_ms_occu_cover)
 }
 
 
@@ -696,33 +713,23 @@ simulate_ms_occu_cover <- function(n.species = 12, N = 120, J = 5,
            else stats::model.matrix(~ ., pos_covs)
 
   species_names <- paste0("sp", seq_len(n.species))
-  y     <- array(NA_integer_, dim = c(N, J, n.species),
-                 dimnames = list(NULL, NULL, species_names))
-  y_pos <- array(NA_real_,    dim = c(N, J, n.species),
-                 dimnames = list(NULL, NULL, species_names))
-  z_all <- matrix(NA_integer_, N, n.species)
-
-  for (s in seq_len(n.species)) {
-    psi <- stats::plogis(as.numeric(X_occ %*% beta_occ[s, ]))
-    eta_p   <- as.numeric(X_p   %*% beta_p[s, ])
-    eta_pos <- as.numeric(X_pos %*% beta_pos[s, ])
-    z <- stats::rbinom(N, 1L, psi); z_all[, s] <- z
-    for (i in seq_len(N)) {
-      if (z[i] == 0L) { y[i, , s] <- 0L; next }
-      for (j in seq_len(J)) {
-        idx <- (i - 1L) * J + j
-        d <- stats::rbinom(1L, 1L, stats::plogis(eta_p[idx]))
-        y[i, j, s] <- d
-        if (d == 1L) {
-          y_pos[i, j, s] <- if (is_beta) {
-            mu <- stats::plogis(eta_pos[idx]); stats::rbeta(1L, mu * phi, (1 - mu) * phi)
-          } else if (is_gauss) {
-            stats::rnorm(1L, eta_pos[idx], sigma.pos)
-          } else exp(stats::rnorm(1L, eta_pos[idx], sigma.pos))
-        }
-      }
-    }
-  }
+  sp <- seq_len(n.species)
+  site_major <- function(v) matrix(v, N, J, byrow = TRUE)
+  rep_ <- .tobs_gen_ms_occu_cover(
+    list(valid = array(TRUE, c(N, J, n.species)), n_sites = N, max_visits = J,
+         n_species = n.species, species_names = species_names,
+         positive = positive),
+    list(psi = vapply(sp, function(s)
+           stats::plogis(as.numeric(X_occ %*% beta_occ[s, ])), numeric(N)),
+         p_mat = array(vapply(sp, function(s)
+           site_major(stats::plogis(as.numeric(X_p %*% beta_p[s, ]))),
+           matrix(0, N, J)), c(N, J, n.species)),
+         ep_mat = array(vapply(sp, function(s)
+           site_major(as.numeric(X_pos %*% beta_pos[s, ])),
+           matrix(0, N, J)), c(N, J, n.species)),
+         disp = if (is_beta) phi else sigma.pos))
+  y <- rep_$y; y_pos <- rep_$y_pos
+  z_all <- attr(rep_, "latent")
 
   list(
     y = y, y_pos = y_pos, data = data, visit_data = visit_data,

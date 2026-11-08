@@ -640,30 +640,35 @@ build_nmix_fit <- function(raw, model, spatial = NULL, re_post = NULL) {
   )
 }
 
-# simulate() for N-mixture: draw N_i from the abundance mixing distribution
-# (Poisson, or NegBin(mu = lambda_i, size = r) under mixture = "negbin"), then
-# y_ij ~ Binomial(N_i, p_ij) at the observed visits, respecting the NA pattern.
-# Under zero-inflation (mixture = "zip" / "zinb") a structural-zero share
-# `zi_omega` of sites is forced to N = 0 before the binomial detection step, so
-# the posterior replicates carry the same excess-zero structure as the fit.
+# The abun() generator, `cpp_simulate_nmix()`: N_i from the abundance mixing
+# distribution (Poisson, or NegBin(mu = lambda_i, size = r) when theta carries a
+# finite `r`), a structural-zero share `zi` of sites forced to N = 0 under
+# zero-inflation, then y_ij ~ Binomial(N_i, p_ij) at the observed visits of the
+# long-form design. theta = list(beta, off, r, zi): the coefficient vector in
+# the fit's draw layout, each arm's realised offset (or NULL), the NB size and
+# the structural-zero share (NA / NULL for none).
+.tobs_gen_nmix <- function(model, theta) {
+  p <- .tobs_arm_p(model, 2L)
+  r <- theta$r %||% NA_real_
+  cpp_simulate_nmix(model$X_processes[[1L]], model$X_processes[[2L]],
+    as.numeric(theta$beta), .tobs_off_arg(theta$off[[1L]]),
+    .tobs_off_arg(theta$off[[2L]]),
+    as.integer(model$site_idx), as.integer(model$visit_idx),
+    model$n_sites, model$max_visits, p[1L], p[2L], is.finite(r),
+    as.numeric(r), as.numeric(theta$zi %||% NA_real_))
+}
+
+# simulate() for N-mixture: one posterior draw per replicate with the fitted
+# offsets, the fitted NB size and (zero-inflated fits) structural-zero share,
+# then the family generator.
 .tobs_simulate_nmix <- function(object, nsim = 1) {
-  model  <- object$model; draws <- object$draws
   r_size <- object$nmix_dispersion$r
-  is_nb  <- !is.null(r_size) && is.finite(r_size)
   zi_om  <- if (isTRUE(object$zero_inflated) && is.finite(object$zi_omega %||% NA_real_))
               as.numeric(object$zi_omega) else NA_real_
-  # Draw selection (R_unif_index) + latent N (rpois / rnbinom) + (ZI) the
-  # structural-zero Bernoulli + per-visit binomial detections run in
-  # cpp_simulate_nmix from R's RNG stream in a fixed order,
-  # so the simulation is reproducible under a seed (the ZI draw is skipped when
-  # zi_omega is NA, leaving the plain stream unchanged).
-  ab <- .tobs_sim_arm_block(model, draws, 2L)
-  p_lam <- ab$p[1L]; p_p <- ab$p[2L]
-  res <- cpp_simulate_nmix(ab$X[[1L]], ab$X[[2L]], ab$draws,
-    as.integer(model$site_idx), as.integer(model$visit_idx),
-    model$n_sites, model$max_visits, p_lam, p_p, is_nb,
-    if (is_nb) as.numeric(r_size) else NA_real_, as.integer(nsim), zi_om)
-  res
+  .tobs_simulate_draw_gen(object, nsim, .tobs_gen_nmix, 2L,
+    list(r = if (!is.null(r_size) && is.finite(r_size)) as.numeric(r_size)
+             else NA_real_,
+         zi = zi_om))
 }
 
 # residuals() for N-mixture. A single visit of a Poisson-thinned count is
@@ -757,26 +762,27 @@ simulate_abun <- function(N = 100, J = 4,
   p      <- plogis(as.vector(X_det %*% beta.p))
   is_nb  <- mixture %in% c("negbin", "zinb")
   is_zi  <- mixture %in% c("zip", "zinb")
-  Nlat   <- if (is_nb) stats::rnbinom(N, size = size, mu = lambda)
-            else       stats::rpois(N, lambda)
-  # Structural zeros: with probability omega the site is a structural zero
-  # (N = 0), independent of lambda.
-  struct0 <- if (is_zi) stats::rbinom(N, 1L, omega) == 1L else rep(FALSE, N)
-  Nlat[struct0] <- 0L
+  # Detection rows in the long form site-major: row (i - 1) * J + j is visit j
+  # of site i.
+  model <- list(X_processes = list(X_lambda, X_det[rep(seq_len(N), each = J), ,
+                                                   drop = FALSE]),
+                process_info = list(list(p = ncol(X_lambda)), list(p = ncol(X_det))),
+                site_idx = rep(seq_len(N), each = J), visit_idx = rep(seq_len(J), N),
+                n_sites = N, max_visits = J)
+  y <- .tobs_gen_nmix(model, list(beta = c(beta.lambda, beta.p), off = list(NULL, NULL),
+                                  r = if (is_nb) size else NA_real_,
+                                  zi = if (is_zi) omega else NA_real_))
 
-  y <- matrix(NA_integer_, N, J)
-  for (i in seq_len(N)) {
-    y[i, ] <- stats::rbinom(J, Nlat[i], p[i])
-  }
-
+  truth_latent <- attr(y, "latent")
+  y <- .tobs_gen_strip(y)
   list(
     y = y,
     data = data,
     truth = list(beta_lambda = beta.lambda, beta_p = beta.p,
-                 lambda = lambda, p = p, N = Nlat,
+                 lambda = lambda, p = p, N = truth_latent$N,
                  mixture = mixture,
                  size  = if (is_nb) size else NA_real_,
                  omega = if (is_zi) omega else NA_real_,
-                 struct0 = struct0)
+                 struct0 = truth_latent$zero == 1L)
   )
 }

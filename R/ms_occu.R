@@ -321,28 +321,29 @@ build_ms_occu_fit <- function(model, fit, arm_idx) {
   list(psi = psi, p = p, z = z)
 }
 
-# Draw community single-season data under the fitted per-species coefficients,
-# at the observed visit pattern. Returns a 3D array matching the input y.
+# The ms_occu() generator, `cpp_simulate_ms_occu()`: per species the site
+# occupancy states, then the detections site by site at the visits `model$valid`
+# marks. theta = list(psi, p): the [n_sites x n_species] occupancy and
+# detection probabilities.
+.tobs_gen_ms_occu <- function(model, theta) {
+  a <- cpp_simulate_ms_occu(theta$psi, theta$p, as.integer(model$valid),
+                            model$n_sites, model$max_visits, model$n_species)
+  dimnames(a) <- list(NULL, NULL, model$species_names)
+  a
+}
+
+# simulate() for ms_occu(): the per-species fitted psi / p (community means,
+# deterministic) handed to the family generator once per replicate.
 .tobs_simulate_ms_occu <- function(object, nsim = 1) {
   model <- object$model
   cm    <- object$ms_community
-  n_sites <- model$n_sites; max_visits <- model$max_visits
-  n_species <- model$n_species
-
-  # Per-species fitted psi / p (community means, deterministic); the z + detection
-  # draws run in cpp_simulate_ms_occu from R's RNG stream in a fixed order.
-  psi <- vapply(seq_len(n_species),
-                function(s) stats::plogis(as.numeric(model$X_occ %*% cm$coef_psi[s, ])),
-                numeric(n_sites))
-  p <- vapply(seq_len(n_species),
-              function(s) stats::plogis(as.numeric(model$X_det %*% cm$coef_p[s, ])),
-              numeric(n_sites))
-  res <- cpp_simulate_ms_occu(psi, p, as.integer(model$valid),
-                              n_sites, max_visits, n_species, as.integer(nsim))
-  res <- lapply(res, function(a) {
-    dimnames(a) <- list(NULL, NULL, model$species_names); a
-  })
-  res
+  sp <- seq_len(model$n_species)
+  theta <- list(
+    psi = vapply(sp, function(s) stats::plogis(as.numeric(model$X_occ %*% cm$coef_psi[s, ])),
+                 numeric(model$n_sites)),
+    p   = vapply(sp, function(s) stats::plogis(as.numeric(model$X_det %*% cm$coef_p[s, ])),
+                 numeric(model$n_sites)))
+  .tobs_gen_replicates(model, nsim, function(i) theta, .tobs_gen_ms_occu)
 }
 
 

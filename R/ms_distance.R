@@ -581,15 +581,42 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
   list(occ = NULL, det = out)
 }
 
-# Posterior replicate binned-count arrays: per species, draw the latent N and
-# allocate detections to distance bins through `cpp_simulate_distance` -- the
-# SAME kernel the likelihood integrates against (as `simulate_ms_distance()`'s
-# own docstring notes: a separate R-side quadrature would simulate from a pi
-# the model is not fit against). Reads `ms_community$coef_lambda`/`coef_sigma`
-# (deterministic per-species matrices), not `object$draws`, matching
-# ms_occu()/ms_count()'s own `simulate()` handlers. `key = "halfnorm"` only --
-# the hazard key's log-shape is a community `global` scalar not carried by
-# `ms_community`, a documented follow-up.
+# The ms_distance() generator: per species, the distance() generator
+# `.tobs_gen_distance()` -- latent N and the bins through
+# `cpp_simulate_distance`, the SAME kernel the likelihood integrates against --
+# on that species' coefficients. theta = list(B_lambda, B_sigma, off, shape):
+# the species x coefficient matrices of the two arms, an [n_sites x n_species]
+# realised offset on the abundance logit (NULL for none), and the hazard-key
+# shape.
+.tobs_gen_ms_distance <- function(model, theta) {
+  X <- model$X_processes
+  arm_model <- list(X_processes = X,
+                    process_info = list(list(p = ncol(X[[1L]])),
+                                        list(p = ncol(X[[2L]]))),
+                    cutpoints = model$cutpoints, key = model$key,
+                    transect = model$transect, quad_order = model$quad_order,
+                    n_sites = model$n_sites, n_bins = model$n_bins)
+  S <- model$n_species
+  y <- array(0L, dim = c(model$n_sites, model$n_bins, S),
+             dimnames = list(NULL, NULL, model$species_names))
+  Nlat <- matrix(0L, model$n_sites, S)
+  for (s in seq_len(S)) {
+    rep_s <- .tobs_gen_distance(arm_model, list(
+      beta = c(theta$B_lambda[s, ], theta$B_sigma[s, ]),
+      off = list(if (!is.null(theta$off)) theta$off[, s], NULL),
+      r = NA_real_, shape = theta$shape))
+    y[, , s] <- rep_s
+    Nlat[, s] <- attr(rep_s, "latent")
+  }
+  structure(y, latent = Nlat)
+}
+
+# Posterior replicate binned-count arrays: the per-species coefficient
+# matrices `ms_community$coef_lambda` / `coef_sigma` (deterministic, not
+# `object$draws`, matching ms_occu()/ms_count()'s own `simulate()` handlers)
+# handed to the family generator once per replicate. `key = "halfnorm"` only
+# -- the hazard key's log-shape is a community `global` scalar not carried by
+# `ms_community`.
 .tobs_simulate_ms_distance <- function(object, nsim = 1) {
   model <- object$model
   if (!identical(model$key, "halfnorm")) {
@@ -598,27 +625,9 @@ build_ms_distance_fit <- function(em, model, lam_idx, sig_idx, hazard = FALSE) {
          "carried by ms_community).", call. = FALSE)
   }
   cm <- object$ms_community
-  n_sites <- model$n_sites; n_bins <- model$n_bins; n_species <- model$n_species
-  X_lambda <- model$X_processes[[1L]]; X_sigma <- model$X_processes[[2L]]
-  p_lam <- ncol(X_lambda); p_sig <- ncol(X_sigma)
-  kc <- .dist_key_code(model$key)
-  tc <- .dist_transect_code(model$transect)
-  one <- function() {
-    y <- array(0L, dim = c(n_sites, n_bins, n_species),
-              dimnames = list(NULL, NULL, model$species_names))
-    for (s in seq_len(n_species)) {
-      res <- cpp_simulate_distance(
-        X_lambda, X_sigma,
-        matrix(c(cm$coef_lambda[s, ], cm$coef_sigma[s, ]), nrow = 1L),
-        as.numeric(model$cutpoints), kc, tc,
-        as.integer(model$quad_order %||% 64L), 0,
-        n_sites, n_bins, p_lam, p_sig,
-        FALSE, NA_real_, 1L)
-      y[, , s] <- res[[1L]]
-    }
-    y
-  }
-  lapply(seq_len(nsim), function(i) one())
+  theta <- list(B_lambda = cm$coef_lambda, B_sigma = cm$coef_sigma, off = NULL,
+                shape = 0)
+  .tobs_gen_replicates(model, nsim, function(i) theta, .tobs_gen_ms_distance)
 }
 
 
@@ -730,34 +739,18 @@ simulate_ms_distance <- function(n.species = 10, N = 100,
 
   B <- length(cutpoints) - 1L
   species_names <- paste0("sp", seq_len(n.species))
-  y <- array(0L, dim = c(N, B, n.species),
-             dimnames = list(NULL, NULL, species_names))
-  lambda <- matrix(NA_real_, N, n.species)
-  sigma  <- matrix(NA_real_, N, n.species)
-  # Draw through cpp_simulate_distance, the same kernel the likelihood
-  # integrates against (src/distance_quad.h): a separate R-side quadrature for
-  # the per-bin probabilities would simulate from a pi the model is not fit
-  # against, and bias every recovery check. The shared field / factor offset is
-  # folded into the abundance design as a column with coefficient 1, so
-  # log lambda = X beta_s + f + sum_q l_{s,q} z_{q,i} without touching the
-  # kernel. A one-row `draws` matrix pins the coefficients (no draw selection).
-  tc <- if (identical(transect, "point")) 1L else 0L
-  kc <- .dist_key_code(key)
-  for (s in seq_len(n.species)) {
-    off_s  <- f + fac_off[, s]
-    has_off <- any(off_s != 0)
-    Xl_s   <- if (has_off) cbind(X_lambda, .offset = off_s) else X_lambda
-    beta_s <- if (has_off) c(beta_lambda[s, ], 1) else beta_lambda[s, ]
-    res <- cpp_simulate_distance(
-      Xl_s, X_sigma,
-      matrix(c(beta_s, beta_sigma[s, ]), nrow = 1L),
-      as.numeric(cutpoints), kc, tc, as.integer(quad.order),
-      as.numeric(shape),
-      N, B, ncol(Xl_s), p_sig, FALSE, NA_real_, 1L)
-    y[, , s] <- res[[1L]]
-    lambda[, s] <- exp(as.numeric(X_lambda %*% beta_lambda[s, ]) + off_s)
-    sigma[, s]  <- exp(as.numeric(X_sigma %*% beta_sigma[s, ]))
-  }
+  off <- f + fac_off
+  y <- .tobs_gen_strip(.tobs_gen_ms_distance(
+    list(X_processes = list(X_lambda, X_sigma), cutpoints = as.numeric(cutpoints),
+         key = key, transect = transect, quad_order = as.integer(quad.order),
+         n_sites = N, n_bins = B, n_species = n.species,
+         species_names = species_names),
+    list(B_lambda = beta_lambda, B_sigma = beta_sigma,
+         off = if (any(off != 0)) off, shape = as.numeric(shape))))
+  lambda <- vapply(seq_len(n.species), function(s)
+    exp(as.numeric(X_lambda %*% beta_lambda[s, ]) + off[, s]), numeric(N))
+  sigma  <- vapply(seq_len(n.species), function(s)
+    exp(as.numeric(X_sigma %*% beta_sigma[s, ])), numeric(N))
 
   list(
     y = y, data = data, species = species_names, cutpoints = cutpoints,

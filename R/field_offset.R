@@ -206,33 +206,6 @@
   eta + matrix(off, nrow(eta), ncol(eta), byrow = TRUE)
 }
 
-# The simulation kernels take each arm's design plus one contiguous leading block
-# of draw columns, and build eta by row. A fitted field is carried into them as a
-# design COLUMN whose coefficient is pinned at 1 -- eta = X beta + f is
-# [X | f] %*% c(beta, 1), the device an `offset()` term is in a GLM -- so the
-# kernels stay untouched and an arm with no field is handed back exactly what it
-# was given (a field-free fit simulates byte-identically). `n_arms` is how many
-# leading processes the kernel reads; returns the augmented designs, the
-# augmented draw block, and the per-arm column counts to pass alongside them.
-.tobs_sim_arm_block <- function(model, draws, n_arms) {
-  p <- vapply(model$process_info[seq_len(n_arms)], function(pp) pp$p, integer(1))
-  X <- model$X_processes[seq_len(n_arms)]
-  blk  <- vector("list", n_arms)
-  base <- 0L
-  for (k in seq_len(n_arms)) {
-    cols     <- base + seq_len(p[k])
-    base     <- base + p[k]
-    blk[[k]] <- draws[, cols, drop = FALSE]
-    off      <- .tobs_eta_offset(model, k)
-    if (!is.null(off)) {
-      X[[k]]   <- cbind(X[[k]], as.numeric(off))
-      blk[[k]] <- cbind(blk[[k]], 1)
-      p[k]     <- p[k] + 1L
-    }
-  }
-  list(X = X, draws = do.call(cbind, blk), p = p)
-}
-
 # A posterior interval for one arm's response-scale predictor at a NEW design,
 # shared by the observation families whose per-cell marginal thins a Poisson /
 # NegBin abundance (distance / fp_occu / dyn_abun -- R/distance.R,

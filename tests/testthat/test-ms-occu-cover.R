@@ -388,8 +388,13 @@ test_that("ms_occu_cover() AGHQ debias reduces variance-component attenuation (#
 
   # Intercept-only per arm -> total RE dim P = 3, so the AGHQ debias is active by
   # default. Small per-species n is the attenuation regime the debias targets.
+  # The debias moves each SD up by about 0.01 (0.007 on detection), while one
+  # seed's SD estimate spreads by about 0.15, so whether AGHQ lands nearer the
+  # truth is a property of the mean over seeds: at 40 seeds the EM bias of
+  # about -0.06 sits two to three standard errors below zero, which is what lets
+  # an upward move read as a move toward the truth.
   sd_occ_t <- 0.7; sd_p_t <- 0.6
-  n_seeds <- 6L
+  n_seeds <- 40L
   em <- aghq <- matrix(NA_real_, n_seeds, 2L)   # cols: sd_occ, sd_p
   for (s in seq_len(n_seeds)) {
     sim <- simulate_ms_occu_cover(

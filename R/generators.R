@@ -78,3 +78,30 @@
 .tobs_theta_row <- function(theta) {
   matrix(theta, nrow = 1L, dimnames = list(NULL, names(theta)))
 }
+
+# The realised offset of each of a model's first `n_arms` arms: the fitted
+# field the arm's predictor carries, NULL where it carries none.
+.tobs_arm_offsets <- function(model, n_arms) {
+  lapply(seq_len(n_arms), function(k) .tobs_eta_offset(model, k))
+}
+
+# An arm offset as a C++ generator takes it: the offset, or an empty vector
+# for an arm that carries none.
+.tobs_off_arg <- function(off) if (is.null(off)) numeric(0) else as.numeric(off)
+
+# The fit route of a family whose theta is one posterior draw row (selected
+# per replicate, the draw sample.int(n, 1) picks), the fitted offsets of its
+# first `n_arms` arms, and the fixed nuisance values in `extra`.
+.tobs_simulate_draw_gen <- function(object, nsim, gen, n_arms, extra = list()) {
+  model <- object$model
+  draws <- object$draws
+  off   <- .tobs_arm_offsets(model, n_arms)
+  .tobs_gen_replicates(model, nsim, function(i)
+    c(list(beta = draws[sample.int(nrow(draws), 1L), ], off = off), extra), gen)
+}
+
+# The coefficient count of each of a model's first `n_arms` arms.
+.tobs_arm_p <- function(model, n_arms) {
+  vapply(model$process_info[seq_len(n_arms)], function(pp) as.integer(pp$p),
+         integer(1))
+}
