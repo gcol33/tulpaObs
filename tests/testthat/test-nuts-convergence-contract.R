@@ -139,12 +139,13 @@
   dyn_abun = function() {
     # The forward recursion is cubic in K_max, so the truncation (not the site
     # count) sets this fixture's cost.
-    sim <- simulate_dyn_abun(N = 25, n.seasons = 2, J = 3, n.abund.covs = 1,
+    # Recruitment gamma is identified only through transitions between seasons:
+    # with two seasons its log posterior runs down the prior tail (mean -8, SD
+    # 6), the dispersed chains never meet and the tail-indicator ESS is
+    # undefined. Four seasons pin it.
+    sim <- simulate_dyn_abun(N = 25, n.seasons = 4, J = 3, n.abund.covs = 1,
                              beta.lambda = c(log(3), 0.4), p = 0.5, omega = 0.6,
                              gamma = 1.2, seed = 14)
-    # The sampler disperses the chains' starts, so the warmup has to carry them
-    # back to the posterior: 80 + 80 left the two chains apart (split-Rhat 1.56,
-    # an undefined tail-indicator ESS).
     tobs(~ abund_cov1, data = sim$data, family = dyn_abun(K.max = 12),
          detection = ~ 1, y = sim$y, method = "nuts", control = .nconv_ctl())
   },
