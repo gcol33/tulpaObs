@@ -514,31 +514,40 @@ build_ms_count_fit <- function(model, fit, arm_idx, disp = NULL) {
   list(occ = r, det = NULL)
 }
 
+# The ms_count() generator: per species one response per site at the mean
+# the link maps that species' predictor to, from the family's response
+# distribution, species by species. theta = list(B, disp): `B` the
+# species x coefficient matrix, `disp` the per-species negbin size or
+# gaussian SD (unused by the other responses).
+.tobs_gen_ms_count <- function(model, theta) {
+  n_sites <- model$n_sites; n_species <- model$n_species
+  response <- model$response %||% "poisson"
+  out <- matrix(NA_real_, n_sites, n_species,
+                dimnames = list(NULL, model$species_names))
+  for (s in seq_len(n_species)) {
+    mu  <- .ms_count_linkinv(model, as.numeric(model$X %*% theta$B[s, ]))
+    nts <- if (identical(response, "binomial") && !is.null(model$n_trials))
+             as.integer(round(model$n_trials[, s])) else NULL
+    out[, s] <- switch(response,
+      poisson   = stats::rpois(n_sites, mu),
+      bernoulli = stats::rbinom(n_sites, 1L, mu),
+      binomial  = stats::rbinom(n_sites, size = nts, prob = mu),
+      negbin    = stats::rnbinom(n_sites, size = theta$disp[s], mu = mu),
+      gaussian  = stats::rnorm(n_sites, mu, theta$disp[s]))
+  }
+  out
+}
+
 # Draw community count data under the fitted per-species coefficients.
 .tobs_simulate_ms_count <- function(object, nsim = 1) {
   model <- object$model
-  cm    <- object$ms_community
-  n_sites <- model$n_sites; n_species <- model$n_species
-  response <- model$response %||% "poisson"
-  disp <- object$ms_dispersion
-  one <- function() {
-    out <- matrix(NA_real_, n_sites, n_species,
-                  dimnames = list(NULL, model$species_names))
-    for (s in seq_len(n_species)) {
-      eta <- as.numeric(model$X %*% cm$coef_mu[s, ])
-      mu  <- .ms_count_linkinv(model, eta)
-      nts <- if (identical(response, "binomial") && !is.null(model$n_trials))
-               as.integer(round(model$n_trials[, s])) else NULL
-      out[, s] <- switch(response,
-        poisson   = stats::rpois(n_sites, mu),
-        bernoulli = stats::rbinom(n_sites, 1L, mu),
-        binomial  = stats::rbinom(n_sites, size = nts, prob = mu),
-        negbin    = stats::rnbinom(n_sites, size = disp$r_s[s], mu = mu),
-        gaussian  = stats::rnorm(n_sites, mu, sqrt(disp$variance[s])))
-    }
-    out
-  }
-  lapply(seq_len(nsim), function(i) one())
+  disp  <- object$ms_dispersion
+  sp_disp <- switch(model$response %||% "poisson",
+                    negbin   = disp$r_s,
+                    gaussian = sqrt(disp$variance),
+                    NULL)
+  .tobs_gen_replicates(model, nsim, function(i)
+    list(B = object$ms_community$coef_mu, disp = sp_disp), .tobs_gen_ms_count)
 }
 
 

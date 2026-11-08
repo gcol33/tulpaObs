@@ -148,7 +148,7 @@
 "test-gate-messages.R","smoke",17,0,3
 "test-gdistremoval.R","full",28,0,7.1
 "test-gdistremoval.R","smoke",25,1,1.5
-"test-generators.R","smoke",76,0,0.3
+"test-generators.R","smoke",141,0,0.9
 "test-gof-sim-args.R","smoke",13,1,0.1
 "test-gp-nngp-packing.R","smoke",17,1,0.1
 "test-graph-components.R","smoke",27,2,0.2

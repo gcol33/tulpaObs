@@ -18,10 +18,17 @@
   beta <- beta %||% object$means[seq_len(object$model$process_info[[1L]]$p)]
   eta  <- as.numeric(X %*% beta)
   if (isTRUE(add_field)) {
-    fld <- object$model$count_field_offset %||% object$spatial_field
-    if (!is.null(fld) && length(fld) == length(eta)) eta <- eta + as.numeric(fld)
+    fld <- .tobs_count_field_offset(object, length(eta))
+    if (!is.null(fld)) eta <- eta + fld
   }
   eta
+}
+
+# The fitted field a count() fit adds to a length-`n` predictor, or NULL when
+# it carries none of that length.
+.tobs_count_field_offset <- function(object, n) {
+  fld <- object$model$count_field_offset %||% object$spatial_field
+  if (is.null(fld) || length(fld) != n) NULL else as.numeric(fld)
 }
 
 # Response-scale mean from eta, per the family link. For the log link this is the
@@ -128,6 +135,27 @@
   list(occ = r, det = NULL)
 }
 
+# The count() generator: one response per site at the mean the link maps the
+# predictor `X %*% beta + off` to, from the family's response distribution.
+# theta = list(beta, off, disp): `off` a realised per-site offset (a field) or
+# NULL, `disp` the negbin size or the gaussian SD.
+.tobs_gen_count <- function(model, theta) {
+  response <- model$response %||% "poisson"
+  eta <- as.numeric(model$X_occ %*% theta$beta)
+  if (!is.null(theta$off)) eta <- eta + theta$off
+  mu <- .tobs_count_mu(list(model = model), eta)
+  n  <- length(mu)
+  switch(response,
+    poisson  = stats::rpois(n, mu),
+    negbin   = stats::rnbinom(n, mu = mu, size = theta$disp),
+    gaussian = stats::rnorm(n, mu, theta$disp),
+    binomial = stats::rbinom(n, size = as.integer(round(model$n_trials %||%
+                                                         rep(1L, n))),
+                             prob = mu),
+    stop("simulate() for count() is not wired for response = '", response,
+         "'.", call. = FALSE))
+}
+
 # Posterior replicate response vectors, one draw row per replicate (as
 # .tobs_simulate_nmix() and its siblings do): a random row of `object$draws`
 # stands in for a sampled coefficient vector, so under SBC -- which overwrites
@@ -140,20 +168,11 @@
   response <- model$response %||% "poisson"
   draws    <- object$draws
   p        <- model$process_info[[1L]]$p
-  n        <- nrow(model$X_occ)
   phi      <- object$count_dispersion$phi %||% NA_real_
-  nt       <- as.integer(round(model$n_trials %||% rep(1L, n)))
-  one <- function() {
-    beta <- draws[sample.int(nrow(draws), 1L), seq_len(p)]
-    eta  <- .tobs_count_eta(object, model$X_occ, add_field = TRUE, beta = beta)
-    mu   <- .tobs_count_mu(object, eta)
-    switch(response,
-      poisson  = stats::rpois(n, mu),
-      negbin   = stats::rnbinom(n, mu = mu, size = phi),
-      gaussian = stats::rnorm(n, mu, sqrt(phi)),
-      binomial = stats::rbinom(n, size = nt, prob = mu),
-      stop("simulate() for count() is not wired for response = '", response,
-           "'.", call. = FALSE))
-  }
-  lapply(seq_len(nsim), function(i) one())
+  disp     <- if (identical(response, "gaussian")) sqrt(phi) else phi
+  fld      <- .tobs_count_field_offset(object, nrow(model$X_occ))
+  .tobs_gen_replicates(model, nsim, function(i)
+    list(beta = draws[sample.int(nrow(draws), 1L), seq_len(p)], off = fld,
+         disp = disp),
+    .tobs_gen_count)
 }

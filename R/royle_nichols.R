@@ -350,41 +350,39 @@
   list(occ = res, det = NULL)
 }
 
-# Posterior replicate detection histories: draw a coefficient vector, then per
-# site N ~ Poisson(lambda) and y_ij ~ Bernoulli(1 - (1 - r_ij)^N) at the observed
-# visit pattern. Returns an n_sites x max_visits matrix (or a list for nsim > 1).
-.tobs_simulate_royle_nichols <- function(object, nsim = 1) {
-  model <- object$model
+# The royle_nichols() generator: site abundance N ~ Poisson(lambda), then per
+# visit a detection with probability 1 - (1 - r)^N, site by site at the visit
+# pattern of `model$y` (NA = no visit). The per-individual detection r is per
+# site, or per (site, visit) under a visit-level design (`model$visit_varying`,
+# the visit rows `model$X_r_visit` site-major via `model$site_of_cell`). theta
+# is the coefficient vector in the fit's draw layout.
+.tobs_gen_royle_nichols <- function(model, theta) {
   p_lam <- model$process_info[[1L]]$p; p_rs <- model$process_info[[2L]]$p
-  Xl <- model$X_processes[[1L]]; Xr <- model$X_processes[[2L]]
+  n <- model$n_sites; J <- model$max_visits
+  lambda <- exp(as.vector(model$X_processes[[1L]] %*% theta[seq_len(p_lam)]))
+  eta_s  <- as.vector(model$X_processes[[2L]] %*% theta[p_lam + seq_len(p_rs)])
+  Ni <- stats::rpois(n, lambda)
+  r_mat <- if (isTRUE(model$visit_varying)) {
+    eta_c <- eta_s[model$site_of_cell] +
+      as.vector(model$X_r_visit %*%
+                  theta[p_lam + p_rs + seq_len(model$process_info[[2L]]$p_visit)])
+    matrix(stats::plogis(eta_c), n, J, byrow = TRUE)
+  } else matrix(stats::plogis(eta_s), n, J)
   valid <- !is.na(model$y)
-  draw_one <- function() {
-    idx    <- sample.int(nrow(object$draws), 1L)
-    beta   <- object$draws[idx, ]
-    lambda <- exp(as.vector(Xl %*% beta[seq_len(p_lam)]))
-    Ni     <- stats::rpois(model$n_sites, lambda)
-    if (isTRUE(model$visit_varying)) {
-      eta_s <- as.vector(Xr %*% beta[p_lam + seq_len(p_rs)])
-      eta_c <- eta_s[model$site_of_cell] +
-        as.vector(model$X_r_visit %*%
-                    beta[p_lam + p_rs + seq_len(model$process_info[[2L]]$p_visit)])
-      r_mat <- matrix(stats::plogis(eta_c), model$n_sites, model$max_visits,
-                      byrow = TRUE)
-      p_mat <- 1 - (1 - r_mat)^Ni
-      yy    <- matrix(stats::rbinom(length(p_mat), 1L, as.vector(p_mat)),
-                      model$n_sites, model$max_visits)
-    } else {
-      r   <- stats::plogis(as.vector(Xr %*% beta[p_lam + seq_len(p_rs)]))
-      p_i <- 1 - (1 - r)^Ni
-      yy  <- matrix(0L, model$n_sites, model$max_visits)
-      for (i in seq_len(model$n_sites)) {
-        yy[i, ] <- stats::rbinom(model$max_visits, 1L, p_i[i])
-      }
-    }
-    yy[!valid] <- NA_integer_
-    yy
+  yy <- matrix(NA_integer_, n, J)
+  for (i in seq_len(n)) {
+    vj <- which(valid[i, ])
+    if (length(vj))
+      yy[i, vj] <- stats::rbinom(length(vj), 1L, 1 - (1 - r_mat[i, vj])^Ni[i])
   }
-  lapply(seq_len(nsim), function(s) draw_one())
+  structure(yy, latent = Ni)
+}
+
+# Posterior replicate detection histories: one coefficient draw per replicate,
+# then the family generator.
+.tobs_simulate_royle_nichols <- function(object, nsim = 1) {
+  .tobs_gen_replicates(object$model, nsim, function(i)
+    object$draws[sample.int(nrow(object$draws), 1L), ], .tobs_gen_royle_nichols)
 }
 
 # Pointwise log-likelihood [n_draws x n_sites] over the posterior draws, the

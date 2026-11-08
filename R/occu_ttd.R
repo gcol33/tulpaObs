@@ -241,31 +241,33 @@
   list(occ = res, det = NULL)
 }
 
-# Posterior replicate TTD histories: draw a coefficient vector, z ~ Bern(psi),
-# and per surveyed visit an exponential time (censored at Tmax) when occupied.
-.tobs_simulate_occu_ttd <- function(object, nsim = 1) {
-  model <- object$model
+# The occu_ttd() generator: a site occupancy state, then per surveyed visit
+# (the non-NA cells of `model$y`) a detection time, exponential at the site's
+# rate when occupied and censored at the visit's `Tmax` otherwise or when the
+# draw runs past it. theta is the coefficient vector in the fit's draw layout.
+.tobs_gen_occu_ttd <- function(model, theta) {
   p_psi <- model$process_info[[1L]]$p; p_rate <- model$process_info[[2L]]$p
-  Xp <- model$X_processes[[1L]]; Xr <- model$X_processes[[2L]]
+  psi    <- stats::plogis(as.vector(model$X_processes[[1L]] %*% theta[seq_len(p_psi)]))
+  lambda <- exp(as.vector(model$X_processes[[2L]] %*% theta[p_psi + seq_len(p_rate)]))
   surveyed <- !is.na(model$y); Tmax <- model$Tmax
-  draw_one <- function() {
-    idx    <- sample.int(nrow(object$draws), 1L)
-    beta   <- object$draws[idx, ]
-    psi    <- stats::plogis(as.vector(Xp %*% beta[seq_len(p_psi)]))
-    lambda <- exp(as.vector(Xr %*% beta[p_psi + seq_len(p_rate)]))
-    z      <- stats::rbinom(model$n_sites, 1L, psi)
-    yy     <- matrix(NA_real_, model$n_sites, model$max_visits)
-    for (i in seq_len(model$n_sites)) {
-      for (j in seq_len(model$max_visits)) {
-        if (!surveyed[i, j]) next
-        if (z[i] == 0L) { yy[i, j] <- Tmax[i, j]; next }   # unoccupied: censored
-        t <- stats::rexp(1L, lambda[i])
-        yy[i, j] <- if (t < Tmax[i, j]) t else Tmax[i, j]
-      }
+  z  <- stats::rbinom(model$n_sites, 1L, psi)
+  yy <- matrix(NA_real_, model$n_sites, model$max_visits)
+  for (i in seq_len(model$n_sites)) {
+    for (j in seq_len(model$max_visits)) {
+      if (!surveyed[i, j]) next
+      if (z[i] == 0L) { yy[i, j] <- Tmax[i, j]; next }
+      t <- stats::rexp(1L, lambda[i])
+      yy[i, j] <- if (t < Tmax[i, j]) t else Tmax[i, j]
     }
-    yy
   }
-  lapply(seq_len(nsim), function(s) draw_one())
+  structure(yy, latent = z)
+}
+
+# Posterior replicate detection times: one coefficient draw per replicate,
+# then the family generator.
+.tobs_simulate_occu_ttd <- function(object, nsim = 1) {
+  .tobs_gen_replicates(object$model, nsim, function(i)
+    object$draws[sample.int(nrow(object$draws), 1L), ], .tobs_gen_occu_ttd)
 }
 
 # Pointwise log-likelihood [n_draws x n_sites] over the posterior draws.
@@ -323,22 +325,17 @@ simulate_occu_ttd <- function(N = 200, J = 4, n.psi.covs = 1, n.rate.covs = 1,
   names(rate_covs) <- paste0("rate_cov", seq_len(n.rate.covs))
   data <- cbind(psi_covs, rate_covs)
 
-  X_psi  <- stats::model.matrix(~ ., psi_covs)
-  X_rate <- stats::model.matrix(~ ., rate_covs)
-  psi    <- plogis(as.vector(X_psi  %*% beta.psi))
-  lambda <- exp(as.vector(X_rate %*% beta.rate))
-  z      <- stats::rbinom(N, 1L, psi)
+  model <- list(n_sites = N, max_visits = J, y = matrix(0, N, J),
+                Tmax = matrix(Tmax, N, J),
+                X_processes = list(stats::model.matrix(~ ., psi_covs),
+                                   stats::model.matrix(~ ., rate_covs)),
+                process_info = list(list(p = length(beta.psi)),
+                                    list(p = length(beta.rate))))
+  y <- .tobs_gen_occu_ttd(model, c(beta.psi, beta.rate))
+  psi    <- plogis(as.vector(model$X_processes[[1L]] %*% beta.psi))
+  lambda <- exp(as.vector(model$X_processes[[2L]] %*% beta.rate))
 
-  y <- matrix(NA_real_, N, J)
-  for (i in seq_len(N)) {
-    for (j in seq_len(J)) {
-      if (z[i] == 0L) { y[i, j] <- Tmax; next }
-      t <- stats::rexp(1L, lambda[i])
-      y[i, j] <- if (t < Tmax) t else Tmax
-    }
-  }
-
-  list(y = y, data = data, Tmax = Tmax,
+  list(y = .tobs_gen_strip(y), data = data, Tmax = Tmax,
        truth = list(beta_psi = beta.psi, beta_rate = beta.rate,
-                    psi = psi, rate = lambda, z = z, Tmax = Tmax))
+                    psi = psi, rate = lambda, z = attr(y, "latent"), Tmax = Tmax))
 }

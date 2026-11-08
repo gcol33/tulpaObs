@@ -300,27 +300,47 @@
   }, numeric(model$n_sites)))
 }
 
-# Posterior replicate cell counts: draw a coefficient vector, then per site the
-# independent Poisson cell counts (three cells independent protocol, two cells
-# following the per-site primary observer for the dependent protocol).
-.tobs_simulate_double_observer <- function(object, nsim = 1) {
-  model <- object$model
-  dependent <- identical(model$type, "dependent")
-  draw_one <- function() {
-    idx <- sample.int(nrow(object$draws), 1L)
-    up  <- .dobs_unpack(object$draws[idx, ], model)
-    if (dependent) {
-      ppri <- ifelse(model$primary == 1L, up$p1, up$p2)
-      psec <- ifelse(model$primary == 1L, up$p2, up$p1)
-      cbind(stats::rpois(model$n_sites, up$lambda * ppri),
-            stats::rpois(model$n_sites, up$lambda * (1 - ppri) * psec))
-    } else {
-      cbind(stats::rpois(model$n_sites, up$lambda * up$p1 * (1 - up$p2)),
-            stats::rpois(model$n_sites, up$lambda * (1 - up$p1) * up$p2),
-            stats::rpois(model$n_sites, up$lambda * up$p1 * up$p2))
+# The double_observer() generator: site abundance N ~ Poisson(lambda), then
+# each individual's detection by the two observers. Independent observers
+# classify every individual into seen by 1 only / by 2 only / by both; under
+# the dependent (removal-style) protocol the site's primary observer
+# (`model$primary`) records what it detects and the secondary records only
+# what the primary missed. theta is the coefficient vector in the fit's draw
+# layout. Returns the site x category count matrix; N rides the "latent"
+# attribute.
+.tobs_gen_double_observer <- function(model, theta) {
+  up <- .dobs_unpack(theta, model)
+  n  <- model$n_sites
+  N_lat <- stats::rpois(n, up$lambda)
+  if (identical(model$type, "dependent")) {
+    y <- matrix(0L, n, 2L)
+    for (i in seq_len(n)) {
+      if (N_lat[i] == 0L) next
+      ppri <- if (model$primary[i] == 1L) up$p1[i] else up$p2[i]
+      psec <- if (model$primary[i] == 1L) up$p2[i] else up$p1[i]
+      d1 <- stats::rbinom(N_lat[i], 1L, ppri)
+      d2 <- stats::rbinom(sum(d1 == 0L), 1L, psec)
+      y[i, 1L] <- sum(d1); y[i, 2L] <- sum(d2)
+    }
+  } else {
+    y <- matrix(0L, n, 3L)
+    for (i in seq_len(n)) {
+      if (N_lat[i] == 0L) next
+      d1 <- stats::rbinom(N_lat[i], 1L, up$p1[i])
+      d2 <- stats::rbinom(N_lat[i], 1L, up$p2[i])
+      y[i, 1L] <- sum(d1 == 1L & d2 == 0L)
+      y[i, 2L] <- sum(d1 == 0L & d2 == 1L)
+      y[i, 3L] <- sum(d1 == 1L & d2 == 1L)
     }
   }
-  lapply(seq_len(nsim), function(s) draw_one())
+  structure(y, latent = N_lat)
+}
+
+# Posterior replicate counts: one coefficient draw per replicate, then the
+# family generator.
+.tobs_simulate_double_observer <- function(object, nsim = 1) {
+  .tobs_gen_replicates(object$model, nsim, function(i)
+    object$draws[sample.int(nrow(object$draws), 1L), ], .tobs_gen_double_observer)
 }
 
 # ---------------------------------------------------------------------------
@@ -375,41 +395,20 @@ simulate_double_observer <- function(N = 200,
 
   X_lambda <- stats::model.matrix(~ ., abund_covs)
   X_det    <- stats::model.matrix(~ ., det_covs)
-  lambda <- exp(as.vector(X_lambda %*% beta.lambda))
-  p1 <- plogis(as.vector(X_det %*% beta.p1))
-  p2 <- plogis(as.vector(X_det %*% beta.p2))
-  N_lat <- stats::rpois(N, lambda)
-
+  primary <- if (identical(type, "dependent")) rep(1:2, length.out = N)
+  model <- list(n_sites = N, type = type, primary = primary,
+                X_processes = list(X_lambda, X_det))
+  theta <- c(beta.lambda, beta.p1, beta.p2)
+  y <- .tobs_gen_double_observer(model, theta)
+  up <- .dobs_unpack(theta, model)
+  truth <- list(beta_lambda = beta.lambda, beta_p1 = beta.p1,
+                beta_p2 = beta.p2, lambda = up$lambda, p1 = up$p1, p2 = up$p2,
+                N = attr(y, "latent"), type = type)
+  y <- .tobs_gen_strip(y)
   if (identical(type, "dependent")) {
-    primary <- rep(1:2, length.out = N)                 # alternating primary
-    y <- matrix(0L, N, 2L)
-    for (i in seq_len(N)) {
-      if (N_lat[i] == 0L) next
-      ppri <- if (primary[i] == 1L) p1[i] else p2[i]
-      psec <- if (primary[i] == 1L) p2[i] else p1[i]
-      d1 <- stats::rbinom(N_lat[i], 1L, ppri)           # primary detections
-      d2 <- stats::rbinom(sum(d1 == 0L), 1L, psec)      # secondary among misses
-      y[i, 1L] <- sum(d1); y[i, 2L] <- sum(d2)
-    }
     colnames(y) <- c("primary", "secondary_only")
-    return(list(y = y, data = data, primary = primary,
-                truth = list(beta_lambda = beta.lambda, beta_p1 = beta.p1,
-                             beta_p2 = beta.p2, lambda = lambda, p1 = p1, p2 = p2,
-                             N = N_lat, type = type)))
-  }
-
-  y <- matrix(0L, N, 3L)
-  for (i in seq_len(N)) {
-    if (N_lat[i] == 0L) next
-    d1 <- stats::rbinom(N_lat[i], 1L, p1[i])   # seen by observer 1
-    d2 <- stats::rbinom(N_lat[i], 1L, p2[i])   # seen by observer 2
-    y[i, 1L] <- sum(d1 == 1L & d2 == 0L)
-    y[i, 2L] <- sum(d1 == 0L & d2 == 1L)
-    y[i, 3L] <- sum(d1 == 1L & d2 == 1L)
+    return(list(y = y, data = data, primary = primary, truth = truth))
   }
   colnames(y) <- c("obs1_only", "obs2_only", "both")
-  list(y = y, data = data,
-       truth = list(beta_lambda = beta.lambda, beta_p1 = beta.p1,
-                    beta_p2 = beta.p2, lambda = lambda, p1 = p1, p2 = p2,
-                    N = N_lat, type = type))
+  list(y = y, data = data, truth = truth)
 }

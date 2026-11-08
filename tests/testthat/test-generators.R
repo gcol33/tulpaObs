@@ -363,3 +363,152 @@ test_that("int_occu: the three routes draw through one generator", {
   expect_route("integrated", c_, ca$theta,
                function(d) stats::setNames(d$y, NULL))
 })
+
+
+# A fit object for the families SBC reaches through `simulate(fit)`: the
+# replicate at theta is that fit's own simulate() handler on a one-row draw
+# matrix holding theta.
+as_tobs_fit <- function(model, type, ...) {
+  structure(c(list(model = c(model, list(model_type = type))), list(...)),
+            class = "tobs_fit")
+}
+
+# The shared SBC replicate stores a count response as double; the counts
+# themselves are what the generator drew.
+sbc_counts <- function(d) {
+  y <- d$y
+  storage.mode(y) <- "integer"
+  y
+}
+
+# The SBC route of a family registered on `.tobs_sbc_simple_entry()` or the
+# shared default replicate.
+sbc_simple_route <- function(key, family, fit, theta, seed = 9L) {
+  spec <- list(fit_obs = fit,
+               data_obs = list(cells = data.frame(row.names = seq_len(
+                 fit$model$n_sites)), site = seq_len(fit$model$n_sites)))
+  gen_calls(key, tulpaObs:::.TOBS_SBC_REGISTRY[[family]]$simulate(
+    spec, theta, seed))
+}
+
+
+test_that("occu_ttd: the three routes draw through one generator", {
+  a <- gen_calls("occu_ttd", simulate_occu_ttd(N = 15, J = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(a$value$y, gen_replay("occu_ttd", ca))
+
+  fit <- as_tobs_fit(ca$model, "occu_ttd",
+                     draws = tulpaObs:::.tobs_theta_row(ca$theta))
+  set.seed(5)
+  b <- gen_calls("occu_ttd", tulpaObs:::.tobs_simulate_occu_ttd(fit, 1L)[[1L]])
+  expect_route("occu_ttd", b, ca$theta)
+
+  c_ <- sbc_simple_route("occu_ttd", "occu_ttd", fit, ca$theta)
+  expect_route("occu_ttd", c_, ca$theta, function(d) d$y)
+})
+
+
+test_that("royle_nichols: the three routes draw through one generator", {
+  for (rv in list(NULL, 0.6)) {
+    a <- gen_calls("royle_nichols",
+                   simulate_royle_nichols(N = 20, J = 4, beta.r.visit = rv,
+                                          seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(a$value$y, gen_replay("royle_nichols", ca))
+
+    fit <- as_tobs_fit(ca$model, "royle_nichols",
+                       draws = tulpaObs:::.tobs_theta_row(ca$theta))
+    set.seed(5)
+    b <- gen_calls("royle_nichols",
+                   tulpaObs:::.tobs_simulate_royle_nichols(fit, 1L)[[1L]])
+    expect_route("royle_nichols", b, ca$theta)
+    if (is.null(rv)) {
+      c_ <- sbc_simple_route("royle_nichols", "royle_nichols", fit, ca$theta)
+      expect_route("royle_nichols", c_, ca$theta, sbc_counts)
+    }
+  }
+})
+
+
+test_that("double_observer: the three routes draw through one generator", {
+  for (type in c("independent", "dependent")) {
+    a <- gen_calls("double_observer",
+                   simulate_double_observer(N = 20, type = type, seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(unname(a$value$y), gen_replay("double_observer", ca))
+
+    fit <- as_tobs_fit(ca$model, "double_observer",
+                       draws = tulpaObs:::.tobs_theta_row(ca$theta))
+    set.seed(5)
+    b <- gen_calls("double_observer",
+                   tulpaObs:::.tobs_simulate_double_observer(fit, 1L)[[1L]])
+    expect_route("double_observer", b, ca$theta)
+
+    c_ <- sbc_simple_route("double_observer", "double_observer", fit, ca$theta)
+    expect_route("double_observer", c_, ca$theta, sbc_counts)
+  }
+})
+
+
+test_that("distsamp_open: the three routes draw through one generator", {
+  a <- gen_calls("distsamp_open",
+                 simulate_distsamp_open(N = 15, n.seasons = 3, seed = 1))
+  ca <- a$calls[[1L]]
+  expect_identical(unname(a$value$y), gen_replay("distsamp_open", ca))
+
+  X_l <- stats::model.matrix(~ abund_cov1, a$value$data)
+  X_s <- stats::model.matrix(~ det_cov1, a$value$data)
+  testthat::local_mocked_bindings(
+    .dso_unpack = function(theta, model) {
+      list(lambda = exp(as.vector(X_l %*% theta[1:2])),
+           sigma = exp(as.vector(X_s %*% theta[3:4])),
+           omega = ca$theta$omega, gamma = ca$theta$gamma)
+    }, .package = "tulpaObs")
+  par <- c(a$value$truth$beta_lambda, a$value$truth$beta_sigma)
+  fit <- as_tobs_fit(c(ca$model, list(n_sites = 15L)), "distsamp_open",
+                     draws = tulpaObs:::.tobs_theta_row(par))
+  set.seed(5)
+  b <- gen_calls("distsamp_open",
+                 tulpaObs:::.tobs_simulate_distsamp_open(fit, 1L)[[1L]])
+  expect_route("distsamp_open", b, ca$theta)
+})
+
+
+test_that("count: the three routes draw through one generator", {
+  for (resp in c("poisson", "negbin", "gaussian", "binomial")) {
+    a <- gen_calls("count", simulate_count(N = 30, response = resp, seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(a$value$y, gen_replay("count", ca))
+
+    phi <- if (identical(resp, "gaussian")) ca$theta$disp^2 else ca$theta$disp
+    fit <- as_tobs_fit(c(ca$model, list(process_info = list(list(p = 2L)))),
+                       "count", draws = tulpaObs:::.tobs_theta_row(ca$theta$beta),
+                       count_dispersion = list(phi = phi))
+    set.seed(5)
+    b <- gen_calls("count", tulpaObs:::.tobs_simulate_count(fit, 1L)[[1L]])
+    expect_route("count", b, ca$theta)
+  }
+})
+
+
+test_that("ms_count / jsdm: the routes draw through one generator", {
+  for (resp in c("poisson", "negbin", "gaussian")) {
+    a <- gen_calls("ms_count", simulate_ms_count(N = 25, n.species = 4,
+                                                 response = resp, seed = 1))
+    ca <- a$calls[[1L]]
+    expect_identical(a$value$y, gen_replay("ms_count", ca))
+
+    disp <- switch(resp, negbin = list(r_s = ca$theta$disp),
+                   gaussian = list(variance = ca$theta$disp^2), list())
+    fit <- list(model = ca$model,
+                ms_community = list(coef_mu = ca$theta$B), ms_dispersion = disp)
+    set.seed(5)
+    b <- gen_calls("ms_count", tulpaObs:::.tobs_simulate_ms_count(fit, 1L)[[1L]])
+    expect_route("ms_count", b, ca$theta)
+  }
+  a <- gen_calls("ms_count", simulate_jsdm(N = 25, n.species = 4, seed = 1))
+  ca <- a$calls[[1L]]
+  rep_a <- gen_replay("ms_count", ca)
+  storage.mode(rep_a) <- "integer"
+  expect_identical(a$value$y, rep_a)
+})

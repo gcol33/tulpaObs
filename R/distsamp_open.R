@@ -757,25 +757,38 @@
   llr
 }
 
-# Posterior replicate distance-bin arrays: draw a coefficient vector, then per
-# site draw the open-population N sequence and the per-period distance obs.
+# The distsamp_open() generator: per site the open-population abundance chain
+# over the primary periods and the distance-band counts of the detected birds,
+# under the model's dynamics. theta holds the per-site rates the chain runs at:
+# lambda, sigma, omega, gamma, and (as the dynamics / mixture use them) K, r,
+# and the zero-inflation share zi.
+.tobs_gen_distsamp_open <- function(model, theta) {
+  dyn <- model$dynamics %||% "constant"
+  if (!identical(dyn, "constant")) {
+    return(.dso_draw_dyn(theta, dyn, model$cutpoints, model$transect,
+                         model$n_seasons))
+  }
+  .dso_draw(theta$lambda, theta$sigma, theta$omega, theta$gamma,
+            model$cutpoints, model$transect, model$n_seasons,
+            r = theta$r, zi = theta$zi %||% 0)
+}
+
+# Posterior replicate counts: one coefficient draw per replicate, mapped to the
+# per-site rates (the fitted values for a non-constant dynamics, the unpacked
+# arms otherwise), then the family generator.
 .tobs_simulate_distsamp_open <- function(object, nsim = 1) {
   model <- object$model
   dyn   <- model$dynamics %||% "constant"
-  draw_one <- function() {
-    idx <- sample.int(nrow(object$draws), 1L)
+  .tobs_gen_replicates(model, nsim, function(i) {
+    par <- object$draws[sample.int(nrow(object$draws), 1L), ]
     if (!identical(dyn, "constant")) {
-      fv <- .tobs_fitted_distsamp_open(
-        utils::modifyList(object, list(means = object$draws[idx, ])))
-      return(.dso_draw_dyn(fv, dyn, model$cutpoints, model$transect,
-                           model$n_seasons))
+      return(.tobs_fitted_distsamp_open(utils::modifyList(object,
+                                                          list(means = par))))
     }
-    up  <- .dso_unpack(object$draws[idx, ], model)
-    .dso_draw(up$lambda, up$sigma, up$omega, up$gamma, model$cutpoints,
-              model$transect, model$n_seasons, r = up$r %||% NULL,
-              zi = up$zi_omega %||% 0)
-  }
-  lapply(seq_len(nsim), function(s) draw_one())
+    up <- .dso_unpack(par, model)
+    list(lambda = up$lambda, sigma = up$sigma, omega = up$omega,
+         gamma = up$gamma, r = up$r, zi = up$zi_omega %||% 0)
+  }, .tobs_gen_distsamp_open)
 }
 
 # Core draw for the alternative dynamics: per site the N sequence under the
@@ -901,13 +914,14 @@ simulate_distsamp_open <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
   data <- cbind(ac, dc)
   lambda <- exp(as.vector(stats::model.matrix(~ ., ac) %*% beta.lambda))
   sigma  <- exp(as.vector(stats::model.matrix(~ ., dc) %*% beta.sigma))
+  model <- list(dynamics = dynamics, cutpoints = as.numeric(cutpoints),
+                transect = transect, n_seasons = as.integer(n.seasons))
 
   if (!identical(dynamics, "constant")) {
     if (is.null(K)) K <- 4 * exp(beta.lambda[1])
     fv <- list(lambda = lambda, sigma = sigma, omega = rep(omega, N),
                gamma = rep(gamma, N), K = rep(K, N), r = rep(r, N))
-    y <- .dso_draw_dyn(fv, dynamics, as.numeric(cutpoints), transect,
-                       as.integer(n.seasons))
+    y <- .tobs_gen_distsamp_open(model, fv)
     dimnames(y) <- list(NULL, paste0("band", seq_len(dim(y)[2])),
                         paste0("period", seq_len(n.seasons)))
     return(list(y = y, data = data,
@@ -918,9 +932,9 @@ simulate_distsamp_open <- function(N = 200, cutpoints = c(0, 10, 20, 30, 40),
 
   use_nb <- mixture %in% c("negbin", "zinb")
   is_zi  <- mixture %in% c("zip", "zinb")
-  y <- .dso_draw(lambda, sigma, rep(omega, N), rep(gamma, N),
-                 as.numeric(cutpoints), transect, as.integer(n.seasons),
-                 r = if (use_nb) size else NULL, zi = if (is_zi) zi else 0)
+  y <- .tobs_gen_distsamp_open(model, list(
+    lambda = lambda, sigma = sigma, omega = rep(omega, N), gamma = rep(gamma, N),
+    r = if (use_nb) size else NULL, zi = if (is_zi) zi else 0))
   dimnames(y) <- list(NULL, paste0("band", seq_len(dim(y)[2])),
                       paste0("period", seq_len(n.seasons)))
   list(y = y, data = data,

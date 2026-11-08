@@ -777,19 +777,14 @@ simulate_ms_count <- function(N = 120, n.species = 10,
     n_trials <- matrix(nt, N, n.species)
   }
 
-  is_gauss <- identical(response, "gaussian")
-  y <- matrix(NA_real_, N, n.species,
-              dimnames = list(NULL, paste0("sp", seq_len(n.species))))
-  for (s in seq_len(n.species)) {
-    eta <- as.numeric(X %*% beta_species[s, ])
-    mu  <- switch(response, gaussian = eta, binomial = stats::plogis(eta),
-                  exp(eta))
-    y[, s] <- switch(response,
-      poisson  = stats::rpois(N, mu),
-      negbin   = stats::rnbinom(N, size = r_s[s], mu = mu),
-      gaussian = stats::rnorm(N, mu, sd),
-      binomial = stats::rbinom(N, size = n_trials[, s], prob = mu))
-  }
+  y <- .tobs_gen_ms_count(
+    list(n_sites = N, n_species = n.species, X = X, response = response,
+         n_trials = n_trials, species_names = paste0("sp", seq_len(n.species)),
+         link = switch(response, gaussian = "identity", binomial = "logit",
+                       "log")),
+    list(B = beta_species,
+         disp = switch(response, negbin = r_s, gaussian = rep(sd, n.species),
+                       NULL)))
 
   list(y = y, data = data,
        truth = list(beta_species = beta_species,
@@ -838,11 +833,11 @@ simulate_jsdm <- function(N = 100, n.species = 10,
     beta_species[, j] <- rnorm(n.species, beta.comm.mean[j], beta.comm.sd[j])
   }
 
-  y <- matrix(NA_integer_, N, n.species)
-  for (s in seq_len(n.species)) {
-    y[, s] <- rbinom(N, 1, plogis(as.vector(X_occ %*% beta_species[s, ])))
-  }
-  colnames(y) <- paste0("sp", seq_len(n.species))
+  y <- .tobs_gen_ms_count(
+    list(n_sites = N, n_species = n.species, X = X_occ, response = "bernoulli",
+         species_names = paste0("sp", seq_len(n.species)), link = "logit"),
+    list(B = beta_species))
+  storage.mode(y) <- "integer"
 
   list(y = y, data = data,
        truth = list(beta_species   = beta_species,
@@ -905,11 +900,12 @@ simulate_count <- function(N = 200, beta = c(1, 0.5),
     }
   }
 
-  y <- switch(response,
-    poisson  = stats::rpois(N, mu),
-    negbin   = stats::rnbinom(N, size = size, mu = mu),
-    gaussian = stats::rnorm(N, mu, sd),
-    binomial = stats::rbinom(N, size = n_trials, prob = mu))
+  y <- .tobs_gen_count(
+    list(X_occ = X, response = response, n_trials = n_trials,
+         link = switch(response, gaussian = "identity", binomial = "logit",
+                       "log"), n_sites = N),
+    list(beta = beta, off = NULL,
+         disp = switch(response, negbin = size, gaussian = sd, NA_real_)))
 
   list(y = y, data = data,
        truth = list(beta = beta, response = response,
@@ -954,31 +950,30 @@ simulate_royle_nichols <- function(N = 200, J = 5,
   data   <- data.frame(x = rnorm(N))
   X_l    <- model.matrix(~ x, data)
   lambda <- exp(as.vector(X_l %*% beta.lambda))
-  Ni     <- rpois(N, lambda)
+  X1     <- matrix(1, N, 1L, dimnames = list(NULL, "(Intercept)"))
+  model  <- list(n_sites = N, max_visits = J, y = matrix(0L, N, J),
+                 X_processes = list(X_l, X1),
+                 process_info = list(list(p = 2L), list(p = 1L)))
 
   if (is.null(beta.r.visit)) {
-    r <- plogis(rep(beta.r[1], N))
-    y <- matrix(0L, N, J)
-    for (i in seq_len(N)) {
-      p_i <- 1 - (1 - r[i])^Ni[i]
-      y[i, ] <- rbinom(J, 1, p_i)
-    }
-    return(list(y = y, data = data,
+    y <- .tobs_gen_royle_nichols(model, c(beta.lambda, beta.r[1]))
+    return(list(y = .tobs_gen_strip(y), data = data,
                 truth = list(beta_lambda = beta.lambda, beta_r = beta.r,
-                             beta_r_visit = NULL, N = Ni, lambda = lambda, r = r)))
+                             beta_r_visit = NULL, N = attr(y, "latent"),
+                             lambda = lambda, r = plogis(rep(beta.r[1], N)))))
   }
 
-  w     <- matrix(rnorm(N * J), N, J)
-  r_mat <- plogis(beta.r[1] + beta.r.visit[1] * w)
-  y     <- matrix(0L, N, J)
-  for (i in seq_len(N)) {
-    p_ij   <- 1 - (1 - r_mat[i, ])^Ni[i]
-    y[i, ] <- rbinom(J, 1, p_ij)
-  }
-  list(y = y, data = data, visits = list(w = w),
+  w <- matrix(rnorm(N * J), N, J)
+  model$visit_varying <- TRUE
+  model$site_of_cell  <- rep(seq_len(N), each = J)
+  model$X_r_visit     <- matrix(as.vector(t(w)), ncol = 1L)
+  model$process_info[[2L]]$p_visit <- 1L
+  y <- .tobs_gen_royle_nichols(model, c(beta.lambda, beta.r[1], beta.r.visit[1]))
+  list(y = .tobs_gen_strip(y), data = data, visits = list(w = w),
        truth = list(beta_lambda = beta.lambda, beta_r = beta.r,
-                    beta_r_visit = beta.r.visit, N = Ni, lambda = lambda,
-                    r = r_mat, w = w))
+                    beta_r_visit = beta.r.visit, N = attr(y, "latent"),
+                    lambda = lambda, r = plogis(beta.r[1] + beta.r.visit[1] * w),
+                    w = w))
 }
 
 #' Simulate temporal (multi-season) occupancy data

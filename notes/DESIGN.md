@@ -30,6 +30,7 @@ every open issue in the repo got filed.
 | family x backend support | `.tobs_family_methods` | `R/tobs_helpers.R:146`, validated `:427` |
 | sampler default (`n.iter`, `adapt.delta`, `sigma.beta`, ...) | `.TOBS_ENGINE_DEFAULTS` | `R/engine_defaults.R:25`, filled `:237` / `:251` |
 | SBC coverage for a family | `.TOBS_SBC_REGISTRY` | `R/sbc.R:2788`, single-species shortcut `:625` |
+| a family's generative process | `.tobs_gen_<key>(model, theta)`, called by `simulate_<family>()`, `.tobs_simulate_<key>()` and the SBC `simulate` slot (`.tobs_sbc_sim_gen()`) | `R/generators.R` header; `test-generators.R` holds one block per family |
 
 Each of those already states its own contract at the definition. `.TOBS_SBC_REGISTRY`
 (`R/sbc.R:2783-2785`) is the clearest: *"A family is one row. Everything not named
@@ -155,3 +156,7 @@ Recorded, so the next refactor does not have to re-argue it:
    without a case.
 7. Row in `.TOBS_SBC_REGISTRY` (`R/sbc.R:2788`); single-species families take
    `.tobs_sbc_simple_entry()`.
+8. The generative process once, as `.tobs_gen_<key>(model, theta)`: the
+   exported `simulate_<family>()` builds a layout + theta and calls it, the
+   fit route maps each draw to theta, the SBC replicate reaches it through
+   the registry. A block in `test-generators.R` asserts the routes agree.
