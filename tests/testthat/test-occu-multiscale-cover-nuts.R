@@ -203,9 +203,12 @@ test_that("occu_multiscale_cover NUTS S3 + WAIC", {
   expect_equal(nrow(pr_psi), fit$model$n_cells)
   expect_true(all(c("cell", "mean", "sd", "lwr", "upr") %in% names(pr_psi)))
   # predict()'s mean is E[psi] over the coefficient draws, fitted()'s the
-  # plug-in psi at the mean eta -- Jensen's inequality separates the two
-  # slightly under the logit link, so track them loosely, not to noise alone.
-  expect_true(cor(pr_psi$mean, fv$psi) > 0.9)
+  # plug-in psi at the mean eta; under the logit link Jensen's inequality
+  # separates them by at most var(eta) * max|psi''| / 2, about 0.01 at these
+  # posterior widths. Compared in absolute terms: with 50 cells the x_cell
+  # slope can sit near zero on a given draw of the data, psi is then nearly
+  # flat across cells, and a correlation of two flat vectors reads noise.
+  expect_lt(max(abs(pr_psi$mean - fv$psi)), 0.05)
 
   # Calibrated WAIC from the per-cell draws (the point of the NUTS path).
   w <- waic(fit)
