@@ -341,12 +341,14 @@ test_that("occu_multiscale_cover() surfaces + reduces without within-plot replic
   expect_false(any(grepl("within-plot replication", msg2)))
 
   # 2) Reduction: across seeds the cell occupancy psi and the product theta * p
-  #    recover, even though theta and p separately do not.
+  #    recover, even though theta and p separately do not. One fit's psi
+  #    intercept has SD about 0.27 here, so the seed mean is read over 20 seeds
+  #    (SE about 0.06; measured -0.03 off over seeds 811-830).
   skip_on_cran()
   skip_if_fast()
   b_psi <- c(0.2, 0.6); b_theta <- c(0.5, 0.0); b_p <- c(0.3, 0.0)
   prod_true <- stats::plogis(b_theta[1]) * stats::plogis(b_p[1])
-  n_seed <- 6L
+  n_seed <- 20L
   psi_int <- psi_x <- prod_hat <- rep(NA_real_, n_seed)
   for (s in seq_len(n_seed)) {
     sim <- simulate_occu_multiscale_cover(
@@ -366,7 +368,7 @@ test_that("occu_multiscale_cover() surfaces + reduces without within-plot replic
     prod_hat[s] <- stats::plogis(th) * stats::plogis(pp)
   }
   ok <- is.finite(prod_hat)
-  expect_gte(sum(ok), 4L)
+  expect_gte(sum(ok), 16L)
   # psi (cell occupancy) and the identified product theta * p recover.
   expect_lt(abs(mean(psi_int[ok]) - b_psi[1]), 0.15)
   expect_lt(abs(mean(psi_x[ok])   - b_psi[2]), 0.20)

@@ -18,15 +18,18 @@
 # Two reads that do NOT depend on the per-seed level are used instead:
 #
 #   - the RATIO across two truths at one seed. Everything but the dispersion is
-#     shared, so the level cancels: measured 1.757 / 1.775 / 1.806 against
-#     0.70 / 0.40 = 1.75, where the variance scale would give 3.06.
+#     shared, so the level cancels: measured 1.709 (lognormal) and 1.726
+#     (gaussian) against 0.70 / 0.40 = 1.75, where the variance scale would
+#     give 3.06.
 #   - the estimate is nearer its truth than its truth SQUARED, which needs no
 #     tolerance at all and is exactly the claim.
 #
 # The beta arm is the control: its phi is a precision on BOTH levels and must
 # pass through unconverted, so applying the gaussian conversion to it would be
-# the mirror defect. Its ratio is measured 3.888 / 4.331 / 4.894 against a true
-# 20 / 5 = 4, where a square root would give 2.
+# the mirror defect. Against a true 20 / 5 = 4, where a square root would give
+# 2, one seed's ratio is a noisy read (2.48 to 3.89 over seeds 101-105; a
+# precision is estimated less well than an SD on 20 cells), so that block reads
+# the mean over five seeds: 3.34 there, 3.29 over seeds 106-110.
 #
 # Cheap on purpose: every fit here is a 20-cell / 3-visit joint fit taking well
 # under a second, so this runs at the smoke tier rather than only in the tier
@@ -109,17 +112,18 @@ test_that("occu_cover() joint reports the gaussian cover SD, not its square", {
 
 test_that("occu_cover() joint leaves the beta precision unconverted", {
   skip_on_cran()
-  lo <- .phi_of(.phi_scale_fit("beta", 5, 101L))
-  hi <- .phi_of(.phi_scale_fit("beta", 20, 101L))
+  seeds <- 101:105
+  lo <- vapply(seeds, function(s) .phi_of(.phi_scale_fit("beta", 5, s)), 0)
+  hi <- vapply(seeds, function(s) .phi_of(.phi_scale_fit("beta", 20, s)), 0)
 
   # The mirror defect: a precision is an SD on both levels, so the gaussian
   # conversion applied here would report its square root.
-  expect_on_scale(lo, 5, sqrt(5), "beta phi = 5")
-  expect_on_scale(hi, 20, sqrt(20), "beta phi = 20")
+  expect_on_scale(lo[1L], 5, sqrt(5), "beta phi = 5")
+  expect_on_scale(hi[1L], 20, sqrt(20), "beta phi = 20")
 
-  # 4 unconverted, 2 if square-rooted.
-  expect_gt(hi / lo, 2.80)
-  expect_lt(hi / lo, 6.50)
+  # 4 unconverted, 2 if square-rooted; the cut sits at their geometric middle.
+  expect_gt(mean(hi / lo), 2.80)
+  expect_lt(mean(hi / lo), 6.50)
 })
 
 
