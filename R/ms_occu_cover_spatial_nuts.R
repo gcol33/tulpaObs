@@ -492,11 +492,24 @@
 
 # Inverse-mass diagonal for the NUTS warm start: the posterior variance per
 # coordinate from the finite-difference diagonal of the joint log-posterior
-# Hessian at the mode (the Laplace metric). `grad_fn(theta)` returns the full
-# analytic gradient of the joint log-posterior (the per-family C++ oracle); only
-# that closure differs across families.
+# Hessian at the warm start (the Laplace metric). `grad_fn(theta)` returns the
+# full analytic gradient of the joint log-posterior (the per-family C++ oracle);
+# only that closure differs across families.
+#
+# The variance is capped at 1. Every coordinate of these targets sits on a
+# unit-scale unconstrained parameterization (whitened z ~ N(0, 1), log-Cholesky
+# entries, link-scale coefficients), the scale tulpa's multi-chain runner
+# assumes when no metric is given. The warm start is the Laplace-EM mode mapped
+# into non-centered coordinates, which is not a mode along every log-Cholesky
+# direction, so the curvature there can be near zero or negative: that is a
+# direction with no curvature information, not one with a posterior SD in the
+# tens. The runner disperses each later chain's start by Uniform(-2, 2) times
+# sqrt(inv_metric), so a variance of 1e3 there can start a log-Cholesky diagonal
+# beyond the exp() clamp (chol_diag_exp()), where its data gradient vanishes and
+# the z gradients overflow: that chain diverges on every transition and never
+# moves. Warmup adapts the metric from here.
 .ms_ocs_fd_metric <- function(grad_fn, theta, h = 1e-4) {
-  1 / pmax(-diag(.tobs_fd_jacobian(grad_fn, theta, h)), 1e-3)
+  1 / pmax(-diag(.tobs_fd_jacobian(grad_fn, theta, h)), 1)
 }
 
 # Posterior mean of a community covariance from the packed log-Cholesky draws:

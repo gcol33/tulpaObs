@@ -107,3 +107,15 @@ test_that("each family exposes the names its own logpost reads", {
   expect_identical(lg$total, max(lg$logphi))
   expect_identical(.tobs_ms_count_nuts_layout(2L, S, "poisson")$logphi, integer(0))
 })
+
+test_that("the warm-start metric caps a direction without curvature at unit variance", {
+  # A log-posterior curved along the first coordinate, flat along the second
+  # and convex along the third: only the first carries a curvature to invert.
+  # The other two take the unit scale, so the multi-chain runner's dispersed
+  # starts (Uniform(-2, 2) times sqrt(inv_metric)) stay within a few units of
+  # the warm start instead of past the log-Cholesky clamp (#452).
+  grad <- function(th) c(-4 * th[1], 0, 0.3 * th[3])
+  m <- tulpaObs:::.ms_ocs_fd_metric(grad, c(0.2, -1.5, 0.4))
+  expect_equal(m[1], 1 / 4, tolerance = 1e-6)
+  expect_equal(m[2:3], c(1, 1))
+})
