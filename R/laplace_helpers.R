@@ -544,6 +544,58 @@ extract_beta <- function(sub, p) {
   V
 }
 
+# Covariance of a fit from the observed information `H` of its (penalized)
+# negative log posterior, for a fit whose information may be singular or
+# indefinite along some direction: a ridge the data do not resolve (the product
+# of two detection levels), or an optimizer stop off the maximum along it.
+# Positive-definite `H` -> its inverse, unchanged. Otherwise the eigenvectors
+# whose eigenvalue falls at or below `tol` times the largest span the
+# unresolved directions; a coefficient loading on them (squared loading above
+# `load^2`) has no standard error from this information and reads NA in
+# `vcov`, every other coefficient keeps the inverse over the resolved subspace.
+# One warning names the unresolved coefficients. `prior_var` (the coefficient
+# prior's variance, 0 for none) spreads the draws' covariance `vcov_draws`
+# along the unresolved directions, where the posterior is the prior.
+.tobs_vcov_identified <- function(H, names = rownames(H), what = "fit",
+                                  prior_var = 0, tol = 1e-8, load = 1e-2) {
+  H <- as.matrix(H)
+  p <- nrow(H)
+  dn <- list(names, names)
+  ok <- list(vcov = NULL, vcov_draws = NULL, unidentified = character(0))
+  if (all(is.finite(H))) {
+    # The eigenvalues decide, not chol(): rounding leaves an exactly singular
+    # information a tiny positive last pivot, which chol() accepts.
+    e <- eigen((H + t(H)) / 2, symmetric = TRUE)
+    top <- max(e$values)
+    keep <- if (top > 0) e$values > top * tol else rep(FALSE, p)
+    if (all(keep)) {
+      V <- .tobs_spd_inv(H)
+      dimnames(V) <- dn
+      ok$vcov <- ok$vcov_draws <- V
+      return(ok)
+    }
+  } else {
+    keep <- rep(FALSE, p)
+    e <- list(vectors = diag(p), values = rep(0, p))
+  }
+  U1 <- e$vectors[, keep, drop = FALSE]
+  U0 <- e$vectors[, !keep, drop = FALSE]
+  V_id <- U1 %*% (t(U1) / e$values[keep])
+  bad <- rowSums(U0^2) > load^2
+  V <- V_id
+  V[bad, ] <- NA_real_
+  V[, bad] <- NA_real_
+  Vd <- V_id + U0 %*% t(U0) * prior_var
+  dimnames(V) <- dimnames(Vd) <- dn
+  lab <- if (is.null(names)) as.character(which(bad)) else names[bad]
+  warning(sprintf(paste0(
+    "%s: the observed information is singular or indefinite along a ",
+    "direction loading on %s; their standard errors are NA, the other ",
+    "coefficients' come from the information on the resolved subspace."),
+    what, paste(lab, collapse = ", ")), call. = FALSE)
+  list(vcov = V, vcov_draws = Vd, unidentified = lab)
+}
+
 # SE vector from an observed-info matrix; returns NA of length p on failure.
 .se_from_info <- function(I, p) {
   if (is.null(I)) return(rep(NA_real_, p))

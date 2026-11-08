@@ -544,14 +544,15 @@
   .prog$finish()
   par <- opt$par
   H   <- stats::optimHess(par, neg_pen)
-  V   <- tryCatch(.tobs_spd_inv(H), error = function(e)
-                  matrix(NA_real_, n_par, n_par))
-  dimnames(V) <- list(par_names, par_names)
+  vc  <- .tobs_vcov_identified(H, par_names, "occu_multiscale_cover()",
+                               prior_var = if (isFALSE(priors)) 0 else sigma.beta^2)
+  V   <- vc$vcov
   means <- par; names(means) <- par_names
   sds   <- sqrt(pmax(diag(V), 0)); names(sds) <- par_names
 
   n_draws <- 1000L
-  draws <- .tobs_gaussian_draws(n_draws, means, V); colnames(draws) <- par_names
+  draws <- .tobs_gaussian_draws(n_draws, means, vc$vcov_draws)
+  colnames(draws) <- par_names
   ll_val <- .occu_mscale_cover_nonspatial_ll(par, model, idx)
 
   structure(c(list(
@@ -574,6 +575,7 @@
     spatial_field = NULL,
     method       = "laplace",
     positive     = model$positive,
+    unidentified = vc$unidentified,
     convergence  = list(converged = opt$convergence == 0L,
                         n_iter = unname(opt$counts[[1L]]))
   )), class = c("tobs_fit", "tulpa_fit"))
