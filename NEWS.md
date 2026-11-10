@@ -2,13 +2,15 @@
 
 ## development version
 
-* Requires tulpa >= 0.7.7 (Imports and LinkingTo), which builds against
-  tulpa's ABI 57. tulpa 0.7.6 as tagged does not export
+* Requires tulpa >= 0.7.8 (Imports and LinkingTo), which builds against
+  tulpa's ABI 58. tulpa 0.7.6 as tagged does not export
   tulpa_gauss_hermite(), tulpa_latent_ascent(), tulpa_re_em(),
   tulpa_re_cov_update(), tulpa_ccd_outer_grid() or tulpa_car_precision_Q(),
   which tulpaObs calls (#454). The in-tree NUTS drivers pass tulpa's new
   sampler-control argument as `nullptr`, which keeps NUTS with a diagonal
-  metric (#455).
+  metric (#455). The NUTS drivers pass tulpa's initial step-size argument
+  (`epsilon_init`) as `nullptr`, which keeps the engine's own step-size
+  initialisation (#460).
 
 * `svc(sigma2.prior.U, sigma2.prior.alpha)` set the PC prior on each surface's
   marginal SD, `P(sigma > U) = alpha` (default `P(sigma > 1) = 0.01`), on the

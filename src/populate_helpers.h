@@ -621,7 +621,7 @@ inline Rcpp::List run_nuts_and_collect(
         run_chains(&data, &layout, init.data(), n_params, n_chains,
                    n_iter, n_warmup, max_treedepth, adapt_delta,
                    static_cast<unsigned int>(seed), verbose ? 1 : 0, nullptr,
-                   nullptr, results.data());
+                   nullptr, nullptr, results.data());
     }
 
     Rcpp::List chains(n_chains);
