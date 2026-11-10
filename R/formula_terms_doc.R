@@ -119,8 +119,10 @@
 #'     15, capped at \code{n - 1}.}
 #'   \item{\code{prior.range}}{Required, no default: \code{c(r0, alpha)} with
 #'     \code{P(range < r0) = alpha}.}
-#'   \item{\code{sigma2.prior.scale}}{Scale of the prior on the surface's
-#'     marginal variance.}
+#'   \item{\code{sigma2.prior.U, sigma2.prior.alpha}}{Penalized-complexity
+#'     prior on each surface's marginal SD,
+#'     \code{P(sigma > sigma2.prior.U) = sigma2.prior.alpha}; default
+#'     \code{P(sigma > 1) = 0.01}.}
 #' }
 #'
 #' \code{svc(lon, lat, coefficients = )} is the direct constructor and stays

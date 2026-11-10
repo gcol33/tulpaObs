@@ -213,6 +213,20 @@
   pr
 }
 
+.tobs_check_pc_sigma <- function(U, alpha, term) {
+  if (!is.numeric(U) || is.complex(U) || length(U) != 1L ||
+      !is.finite(U) || U <= 0) {
+    stop(sprintf("%s(): `sigma2.prior.U` must be a single finite number > 0.",
+                 term), call. = FALSE)
+  }
+  if (!is.numeric(alpha) || is.complex(alpha) || length(alpha) != 1L ||
+      !is.finite(alpha) || alpha <= 0 || alpha >= 1) {
+    stop(sprintf("%s(): `sigma2.prior.alpha` must be a single number in (0, 1).",
+                 term), call. = FALSE)
+  }
+  c(as.numeric(U), as.numeric(alpha))
+}
+
 # icar(graph)              — intrinsic CAR over an adjacency graph
 #
 # `weight` (optional) is a per-node numeric column that makes this a
@@ -317,6 +331,7 @@
   coords <- .tobs_collect_coords(list(...), coords, "gp")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian", "spherical"))
   prior_range <- .tobs_check_prior_range(prior.range, "gp")
+  prior_sigma <- .tobs_check_pc_sigma(sigma2.prior.U, sigma2.prior.alpha, "gp")
   nb <- .tobs_build_nngp_block(coords, nn)
   .tobs_term(list(
     type = "gp", n_obs = nb$n_obs, nn = nb$nn,
@@ -326,7 +341,7 @@
     nn_neighbor_dist = nb$nn_neighbor_dist,
     nn_order = nb$nn_order, nn_order_inv = nb$nn_order_inv,
     cov_type = cov, nu = nu,
-    sigma2_prior_U = sigma2.prior.U, sigma2_prior_alpha = sigma2.prior.alpha,
+    sigma2_prior_U = prior_sigma[1L], sigma2_prior_alpha = prior_sigma[2L],
     prior_range = prior_range
   ), class = "tobs_spatial", id = id, label = "gp")
 }
@@ -463,11 +478,13 @@
 # coefficients are.
 .tobs_term_svc <- function(..., coefficients = NULL, indices = NULL,
                            coords = NULL, cov = "exponential",
-                           nn = 15, id = NULL, sigma2.prior.scale = 1,
+                           nn = 15, id = NULL, sigma2.prior.U = 1,
+                           sigma2.prior.alpha = 0.01,
                            prior.range = NULL) {
   coords <- .tobs_collect_coords(list(...), coords, "svc")
   cov <- match.arg(cov, c("exponential", "matern", "gaussian"))
   prior_range <- .tobs_check_prior_range(prior.range, "svc")
+  prior_sigma <- .tobs_check_pc_sigma(sigma2.prior.U, sigma2.prior.alpha, "svc")
   sel <- .tobs_svc_check_selector(coefficients, indices)
   nb  <- .tobs_build_nngp_block(coords, nn, pair_dist = FALSE)
   .tobs_term(list(
@@ -475,7 +492,8 @@
     n_obs = nb$n_obs, nn = nb$nn, coords = as.vector(t(coords)),
     nn_idx = nb$nn_idx, nn_dist = nb$nn_dist,
     nn_order = nb$nn_order, nn_order_inv = nb$nn_order_inv,
-    cov_type = cov, sigma2_prior_scale = sigma2.prior.scale,
+    cov_type = cov,
+    sigma2_prior_U = prior_sigma[1L], sigma2_prior_alpha = prior_sigma[2L],
     prior_range = prior_range
   ), class = "tobs_svc", id = id, label = "svc")
 }

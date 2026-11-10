@@ -170,15 +170,17 @@
 #
 # The same two densities the sampler carries (tulpa src/tulpa_priors_svc.h): a
 # PC prior on the range (Fuglstad et al. 2019, d = 2, calibrated to
-# P(range < U) = alpha from the term's `prior_range`) and a half-Cauchy on the
-# marginal SD (scale from `sigma2_prior_scale`). The outer grid is log-spaced in
+# P(range < U) = alpha from the term's `prior_range`) and a PC prior on the
+# marginal SD, P(sigma > U) = alpha, from the term's
+# `sigma2.prior.U` / `sigma2.prior.alpha`. The outer grid is log-spaced in
 # both coordinates, so each density is taken to the log scale by its Jacobian --
 # omitting that would weight the grid by an implicit uniform on the natural
 # scale instead of the prior the term declares.
-.tobs_svc_log_hyperprior <- function(sigma, phi, prior_range, sigma_scale) {
+.tobs_svc_log_hyperprior <- function(sigma, phi, prior_range, prior_sigma) {
   lambda <- -log(prior_range[2L]) * prior_range[1L]
   lp_phi <- log(lambda) - 2 * log(phi) - lambda / phi + log(phi)
-  lp_sig <- -log1p(sigma^2 / sigma_scale^2) + log(sigma)
+  lam_s <- -log(prior_sigma[2L]) / prior_sigma[1L]
+  lp_sig <- log(lam_s) - lam_s * sigma + log(sigma)
   lp_phi + lp_sig
 }
 
@@ -201,7 +203,7 @@
 # path targets the moderate-n regime the recovery tests measure, not an EVA-scale
 # site count.
 .tobs_svc_nngp_field <- function(co, nn_idx, nn_dist, ord, cov_code,
-                                 prior_range, sigma_scale = 1,
+                                 prior_range, prior_sigma = c(1, 0.01),
                                  weight = NULL, sigma_grid = NULL,
                                  phi_grid = NULL, lambda_mean = 1) {
   n <- nrow(co)
@@ -217,7 +219,7 @@
     list(sigma = sigma, phi = phi,
          Q = if (is.null(pr)) NULL else pr$Q,
          ldQ = if (is.null(pr)) -Inf else pr$log_det,
-         lp_hyper = .tobs_svc_log_hyperprior(sigma, phi, prior_range, sigma_scale))
+         lp_hyper = .tobs_svc_log_hyperprior(sigma, phi, prior_range, prior_sigma))
   }
   cells <- list()
   for (phi in phi_grid) for (sg in sigma_grid)
@@ -295,7 +297,8 @@
     .tobs_svc_nngp_field(
       co, nn_idx, nn_dist, ord, cov_code,
       prior_range = as.numeric(svc$prior_range),
-      sigma_scale = as.numeric(svc$sigma2_prior_scale %||% 1),
+      prior_sigma = c(as.numeric(svc$sigma2_prior_U %||% 1),
+                      as.numeric(svc$sigma2_prior_alpha %||% 0.01)),
       weight = if (isTRUE(all(w == 1))) NULL else w,
       sigma_grid = sigma_grid, phi_grid = phi_grid)
   })

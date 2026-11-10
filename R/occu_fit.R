@@ -504,7 +504,8 @@
       nn_idx = svc$nn_idx, nn_dist = svc$nn_dist,
       nn_order = svc$nn_order, nn_order_inv = svc$nn_order_inv,
       cov_type = svc$cov_type, shared = svc$shared,
-      sigma2_prior_scale = svc$sigma2_prior_scale,
+      sigma_prior_U = svc$sigma2_prior_U,
+      sigma_prior_alpha = svc$sigma2_prior_alpha,
       phi_prior_U = svc$prior_range[1],
       phi_prior_alpha = svc$prior_range[2]
     )

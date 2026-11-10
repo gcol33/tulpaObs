@@ -2,8 +2,23 @@
 
 ## development version
 
-* Requires tulpa >= 0.7.6 (Imports and LinkingTo), which builds against
-  tulpa's ABI 52.
+* Requires tulpa >= 0.7.7 (Imports and LinkingTo), which builds against
+  tulpa's ABI 57. tulpa 0.7.6 as tagged does not export
+  tulpa_gauss_hermite(), tulpa_latent_ascent(), tulpa_re_em(),
+  tulpa_re_cov_update(), tulpa_ccd_outer_grid() or tulpa_car_precision_Q(),
+  which tulpaObs calls (#454). The in-tree NUTS drivers pass tulpa's new
+  sampler-control argument as `nullptr`, which keeps NUTS with a diagonal
+  metric (#455).
+
+* `svc(sigma2.prior.U, sigma2.prior.alpha)` set the PC prior on each surface's
+  marginal SD, `P(sigma > U) = alpha` (default `P(sigma > 1) = 0.01`), on the
+  NUTS and the Laplace routes alike. This replaces `sigma2.prior.scale`, the
+  Half-Cauchy scale that tulpa 0.7.7 no longer accepts. `gp()` validates the
+  same two anchors (#457).
+
+* Windows: a `pkgbuild::compile_dll()` debug build (the `devtools::load_all()`
+  path) keeps `-Wa,-mbig-obj` again. The test now reads the last `-O` flag,
+  which the debug build sets to `-O0` (#456).
 
 * `temporal(prior.sigma = c(U, alpha))` sets the PC prior on the temporal
   field SD, `P(sigma > U) = alpha`, read by the sampled occupancy route.

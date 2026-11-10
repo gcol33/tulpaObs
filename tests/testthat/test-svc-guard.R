@@ -10,6 +10,29 @@
 # it svc() errors in its own constructor, and that message also matches the regex
 # below -- the tests would pass while never reaching the family guard.
 
+test_that("svc() validates the PC SD prior and uses its log-sigma density", {
+  co <- cbind(seq_len(4), seq_len(4))
+  expect_error(
+    .tobs_term_svc(coords = co, indices = 1L, prior.range = c(0.1, 0.05),
+                   sigma2.prior.U = 0),
+    "sigma2.prior.U", fixed = TRUE)
+  expect_error(
+    .tobs_term_svc(coords = co, indices = 1L, prior.range = c(0.1, 0.05),
+                   sigma2.prior.alpha = 1),
+    "sigma2.prior.alpha", fixed = TRUE)
+
+  U <- 2
+  a <- 0.05
+  s1 <- 0.5
+  s2 <- 1.5
+  lam <- -log(a) / U
+  expect_equal(
+    .tobs_svc_log_hyperprior(s1, 1, c(0.1, 0.05), c(U, a)) -
+      .tobs_svc_log_hyperprior(s2, 1, c(0.1, 0.05), c(U, a)),
+    (-lam * s1 + log(s1)) - (-lam * s2 + log(s2)),
+    tolerance = 1e-12)
+})
+
 test_that("svc() on abun() errors instead of silently dropping", {
   set.seed(1)
   y  <- matrix(stats::rpois(30 * 3, 3), 30, 3)
