@@ -144,7 +144,7 @@ inline Rcpp::List run_tulpa_nuts(
         tulpa::NUTSChainsFn run_chains = tulpa::get_nuts_chains_fn();
         run_chains(&data, &layout, init.data(), n_params, n_chains, n_iter, n_warmup,
                    max_treedepth, adapt_delta, static_cast<unsigned int>(seed),
-                   verbose ? 1 : 0, im.empty() ? nullptr : im.data(), results.data());
+                   verbose ? 1 : 0, nullptr, im.empty() ? nullptr : im.data(), results.data());
     }
 
     Rcpp::List chains(n_chains);

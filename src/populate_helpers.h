@@ -394,8 +394,8 @@ inline void populate_svc(tulpa::ModelData& data, Rcpp::List svc_spec) {
     else data.svc_data.cov_type = tulpa::CovType::EXPONENTIAL;
 
     // Priors
-    if (svc_spec.containsElementNamed("sigma2_prior_scale"))
-        data.svc_sigma2_prior_scale = Rcpp::as<double>(svc_spec["sigma2_prior_scale"]);
+    data.svc_sigma_prior_U = Rcpp::as<double>(svc_spec["sigma_prior_U"]);
+    data.svc_sigma_prior_alpha = Rcpp::as<double>(svc_spec["sigma_prior_alpha"]);
     // Unconditional: svc() requires prior_range, so the spec always carries the
     // anchors. Leaving them at the -1.0 sentinel instead would defer the failure
     // to tulpa's layout gate, which cannot name the term argument.
@@ -620,7 +620,7 @@ inline Rcpp::List run_nuts_and_collect(
         tulpa::NUTSChainsFn run_chains = tulpa::get_nuts_chains_fn();
         run_chains(&data, &layout, init.data(), n_params, n_chains,
                    n_iter, n_warmup, max_treedepth, adapt_delta,
-                   static_cast<unsigned int>(seed), verbose ? 1 : 0,
+                   static_cast<unsigned int>(seed), verbose ? 1 : 0, nullptr,
                    nullptr, results.data());
     }
 
