@@ -1,14 +1,13 @@
 # =============================================================================
-# test-cover-hurdle-aggregate-pos.R - control$aggregate.pos: exact grouped-beta
-# sufficient-statistic reduction of the positive (cover) arm.
+# test-cover-hurdle-aggregate-pos.R - control$aggregate.pos: grouping raw beta
+# responses of the positive (cover) arm.
 #
-# Beta is not a count family, so there is no single-row collapse. Plots sharing
-# the positive design row AND every per-observation latent component (cell, trend
-# weight) are exchangeable Beta(mu*phi, (1-mu)*phi) draws; the beta log-density
-# is linear in log(y) and log(1-y), so one row carrying (n, sum log y,
-# sum log(1-y)) reproduces the log-likelihood, gradient and Fisher Hessian
-# exactly. tulpa's built-in beta spec reads those sufficient statistics
-# (slog_y / slog_1my on the arm). Default ON for the beta arm; the recovery
+# Rows sharing the positive design row AND every per-observation latent component
+# (cell, trend weight) are exchangeable Beta(mu*phi, (1-mu)*phi) draws, so the
+# group's log-likelihood, gradient and Fisher Hessian are the sum over its members.
+# The arm carries each group's raw responses in beta_y plus the count in n_trials.
+# tulpa's built-in grouped beta spec reads these fields and evaluates the
+# stabilised density per response. Default ON for the beta arm; the recovery
 # sign-off behind the default lives in test-cover-hurdle-aggregate-recovery.R.
 # =============================================================================
 
@@ -69,9 +68,8 @@
 }
 
 
-test_that(".cover_aggregate_pos collapses exchangeable beta rows to exact sufficient stats", {
-  # Three groups by (X row, idx, weight); the beta sufficient statistics are
-  # the per-group counts and sums of log(y) / log(1-y).
+test_that(".cover_aggregate_pos collapses exchangeable beta rows to their raw grouped responses", {
+  # Three groups by (X row, idx), each carrying its count and raw responses.
   y   <- c(0.2, 0.5, 0.8, 0.3, 0.6, 0.1)
   X   <- rbind(c(1, 2), c(1, 2), c(1, 2), c(3, 4), c(3, 4), c(1, 2))
   idx <- c(5L, 5L, 5L, 7L, 7L, 6L)
@@ -83,13 +81,12 @@ test_that(".cover_aggregate_pos collapses exchangeable beta rows to exact suffic
   expect_equal(ag$n, c(3L, 1L, 2L))
   expect_equal(ag$X, rbind(c(1, 2), c(1, 2), c(3, 4)))
   expect_equal(ag$keys$idx, c(5L, 6L, 7L))
-  expect_equal(ag$slog_y,   c(sum(log(y[1:3])),       log(y[6]),       sum(log(y[4:5]))))
-  expect_equal(ag$slog_1my, c(sum(log1p(-y[1:3])), log1p(-y[6]), sum(log1p(-y[4:5]))))
+  expect_equal(ag$beta_y, list(y[1:3], y[6], y[4:5]))
 
-  # Sufficiency invariants: counts and the two log-sums are conserved.
+  # Counts and raw responses are conserved, with one response per trial.
   expect_equal(sum(ag$n), length(y))
-  expect_equal(sum(ag$slog_y),   sum(log(y)))
-  expect_equal(sum(ag$slog_1my), sum(log1p(-y)))
+  expect_equal(sort(unlist(ag$beta_y)), sort(y))
+  expect_equal(lengths(ag$beta_y), ag$n)
 
   # Same (X, idx) but a different weight must NOT merge.
   ag2 <- tulpaObs:::.cover_aggregate_pos(

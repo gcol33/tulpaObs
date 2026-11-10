@@ -51,44 +51,38 @@
   list(arm_occ = arm_occ, keys = og$keys, lconst = og$lconst)
 }
 
-# Collapse the positive (beta) arm to its exact grouped sufficient statistics.
-# Beta is not a count family, so there is no single-row collapse: a group of
-# plots sharing the positive design row AND every per-observation component of
-# its linear predictor (cell, trend weight, RE/time index) are exchangeable
-# Beta(mu*phi, (1-mu)*phi) draws, and the beta log-density is linear in log(y)
-# and log(1-y). One row carrying (n = count, slog_y = sum log(y), slog_1my = sum
-# log(1-y)) therefore leaves the log-likelihood, gradient and (Fisher) Hessian
-# pointwise unchanged -- the per-arm `n_trials`, `slog_y`, `slog_1my` are read by
-# tulpa's built-in beta spec. `keys` is the named list of per-observation latent
-# components; the X-row plus every key forms the grouping key.
+# Group the positive (beta) arm by exchangeable responses. Rows sharing the
+# positive design row AND every per-observation latent component (cell, trend
+# weight, RE/time index) are exchangeable Beta(mu*phi, (1-mu)*phi) draws, so the
+# group's log-likelihood, gradient and Fisher Hessian are the sum over its members.
+# The arm carries each group's raw responses in `beta_y` plus the count in
+# `n_trials`, read by tulpa's built-in grouped beta spec, which evaluates the
+# stabilised density per response. `keys` is the named list of per-observation
+# latent components; the X-row plus every key forms the grouping key.
 .cover_aggregate_pos <- function(y, X, keys) {
   parts <- c(as.data.frame(X, stringsAsFactors = FALSE), keys)
   gid   <- as.integer(factor(do.call(paste, c(parts, list(sep = "\r")))))
   ord   <- order(gid)
   rep_i <- ord[!duplicated(gid[ord])]               # first row per group, group order
-  ly    <- log(y)
-  l1my  <- log1p(-y)
   list(
-    y        = as.numeric(y[rep_i]),                  # representative (length only;
-    n        = as.integer(tabulate(gid, nbins = max(gid))),  # the grouped beta spec
-    slog_y   = as.numeric(rowsum(ly,   gid)),         # reads n/slog_y/slog_1my, not y)
-    slog_1my = as.numeric(rowsum(l1my, gid)),
+    y        = as.numeric(y[rep_i]),                  # representative (length only)
+    n        = as.integer(tabulate(gid, nbins = max(gid))),  # grouped beta spec reads n and beta_y, not y
+    beta_y   = unname(lapply(split(as.numeric(y), gid), as.numeric)),
     X        = X[rep_i, , drop = FALSE],
     keys     = lapply(keys, function(v) v[rep_i]),
     rep_i    = rep_i
   )
 }
 
-# Aggregate the positive arm in place against `keys`, attaching the grouped beta
-# sufficient statistics and resetting trial / RE bookkeeping. Returns the updated
+# Aggregate the positive arm in place against `keys`, attaching each group's raw
+# responses and resetting trial / RE bookkeeping. Returns the updated
 # arm plus the per-group key representatives for the caller to scatter back onto
 # the latent blocks' positive slot.
 .cover_apply_pos_agg <- function(arm_pos, keys) {
   ag <- .cover_aggregate_pos(arm_pos$y, arm_pos$X, keys)
   arm_pos$y        <- ag$y
   arm_pos$n_trials <- ag$n
-  arm_pos$slog_y   <- ag$slog_y
-  arm_pos$slog_1my <- ag$slog_1my
+  arm_pos$beta_y   <- ag$beta_y
   arm_pos$X        <- ag$X
   arm_pos$re_idx   <- rep(0, length(ag$y))
   list(arm_pos = arm_pos, keys = ag$keys)
