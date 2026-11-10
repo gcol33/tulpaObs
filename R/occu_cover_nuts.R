@@ -1105,7 +1105,8 @@
 # Assemble the field spec entries the C++ block (and the R oracle) read, plus the
 # warm-start values of the sampled hyper coordinates. `sample_hyper = FALSE`
 # reproduces the fixed-hyper block: the loading built at the warm estimate, with
-# sigma and rho baked into its columns and alpha a constant.
+# sigma and rho baked into its columns and alpha a constant. Without a copy that
+# constant is 0, the decoupled model, as in the sampled branch.
 #
 # `block` names which of the warm fit's coupled fields this is, so its hypers and
 # its outer-grid axes are read off that block; `weight` is the per-site design
@@ -1134,7 +1135,7 @@
     entries <- list(n_field_units = as.integer(n_cells),
                     field_map = as.integer(site_cell),
                     field_load = fl$field_load,
-                    field_alpha = as.numeric(wh$alpha))
+                    field_alpha = if (.ochf_has_copy(wh$alpha)) as.numeric(wh$alpha) else 0)
     if (!is.null(wt)) entries$field_weight <- wt
     return(list(entries = entries, n_raw = fl$n_raw, theta0_hyper = numeric(0),
                 sampled = character(0),

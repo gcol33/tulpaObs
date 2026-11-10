@@ -225,6 +225,51 @@ test_that("occu_cover spatial NUTS pinned hypers reproduce the fixed loading (#2
 })
 
 
+test_that("occu_cover spatial NUTS pinned hypers without a copy give a finite target", {
+  inp   <- .ocsn_inputs(side = 5L, J = 4L, seed = 11L)
+  N     <- inp$N; adj <- inp$adj
+  lap   <- .ocsn_fit(inp, "laplace", spatial = FALSE,
+                     control = list(verbose = FALSE, max.iter = 60L))
+  model <- lap$model
+  model$site_cell <- seq_len(N)
+
+  warm <- tulpaObs:::.tobs_occu_cover_nuts_carproper_warm(
+    model, adj, NULL, type = "car_proper", max.iter = 60L)
+  # A field with no cover-arm copy carries no amplitude: the warm fit reports
+  # alpha as NA on the fit and on its block.
+  warm$alpha <- NA_real_
+  warm$blocks <- lapply(warm$blocks, function(b) { b$alpha <- NA_real_; b })
+  fb <- tulpaObs:::.occu_cover_nuts_field_block(
+    adj, "car_proper", N, seq_len(N), warm, sample_hyper = FALSE)
+  expect_equal(fb$entries$field_alpha, 0)
+
+  spec <- tulpaObs:::.tobs_occu_cover_nuts_spec(model)
+  spec[names(fb$entries)] <- fb$entries
+  set.seed(3)
+  theta <- c(as.numeric(lap$means) + stats::rnorm(length(lap$means), 0, 0.1),
+             stats::rnorm(fb$n_raw, 0, 0.3))
+
+  rr <- .tobs_occu_cover_nuts_logpost(theta, model, 5, 5,
+                                    field = fb$entries)
+  cc <- tulpaObs:::cpp_occu_cover_nuts_joint_logpost(spec, theta, 5, 5)
+  expect_true(is.finite(cc$lp))
+  expect_true(all(is.finite(cc$grad)))
+  expect_equal(rr$lp, cc$lp, tolerance = 1e-8)
+  expect_equal(rr$grad, as.numeric(cc$grad), tolerance = 1e-8)
+
+  fd <- numeric(length(theta)); h <- 1e-5
+  for (k in seq_along(theta)) {
+    tp <- theta; tp[k] <- tp[k] + h
+    tm <- theta; tm[k] <- tm[k] - h
+    fd[k] <- (.tobs_occu_cover_nuts_logpost(tp, model, 5, 5,
+                                         field = fb$entries)$lp -
+              .tobs_occu_cover_nuts_logpost(tm, model, 5, 5,
+                                          field = fb$entries)$lp) / (2 * h)
+  }
+  expect_equal(as.numeric(cc$grad), fd, tolerance = 1e-4)
+})
+
+
 test_that("occu_cover spatial NUTS hyper prior is flat on the grid's axis (#204)", {
   # At raw = 0 the field is identically zero whatever the hypers are, so the data
   # term drops out and the target reduces to the hyper prior alone. Transformed
