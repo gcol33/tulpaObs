@@ -152,7 +152,7 @@ csr_to_adjacency <- function(csr, n) {
 }
 
 # BYM2 scaling per connected component (Freni-Sterrantino, Ventrucci & Rue
-# 2018; gcol33/tulpa#902): each component's structured precision is scaled so
+# 2018): each component's structured precision is scaled so
 # its own geometric-mean marginal variance is that of a reference component, the
 # largest. `scale` is the reference component's s (the scalar every loading
 # divides by, `sigma * sqrt(rho / scale)`); `node_prec` is the per-node
