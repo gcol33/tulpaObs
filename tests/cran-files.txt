@@ -1,15 +1,18 @@
 # Test files run on CRAN; written by .github/scripts/cran-test-subset.R.
-# Budget 15 s local, 13 of 213 asserting files, 14.6 s, 2248 assertions measured.
+# Budget 8 s local, 16 of 213 asserting files, 7.8 s, 2463 assertions measured.
+test-auto-grid-provenance.R
+test-community-latent-subset-oracle.R
 test-community-methods.R
 test-control-nuts-family-knobs.R
 test-control-validation.R
+test-count-spatial-prep.R
 test-engine-defaults.R
 test-exports.R
 test-family-method-coverage.R
 test-format-ms.R
 test-ms-nuts-layout.R
 test-nested-outer-grid.R
+test-nngp-neighbors.R
 test-occu-cover-coupling.R
 test-occu-multiscale-cover-coupling.R
 test-sbc-gates.R
-test-within-between.R
