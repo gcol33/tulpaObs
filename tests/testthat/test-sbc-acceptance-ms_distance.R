@@ -13,18 +13,16 @@ test_that("ms_distance posterior SBC: correct fit uniform, mis-scaled is not", {
   skip_on_cran()
   skip_if_fast()
 
-  # (community group, section 6g). Multi-seed reproducibility probe (seeds
-  # 0-1) on this same fixture found a DIFFERENT coefficient dipping
-  # moderately low each time (seed 0: sp15_sigma_(Intercept) at 6.3e-4; seed
-  # 1: sp19_lambda_abund_cov1 at 2.7e-4), consistent w/ the ~6% expected
-  # false-positive rate across 60 tested quantities per run, NOT a
-  # reproducible calibration bug (that signature is the SAME coefficient
-  # pinned at ~1e-6-1e-7 on every seed). bad.factor=1.75's posterior arm
-  # matched bad.factor=3's exactly (min_post=0.0006338732 at
-  # sp15_sigma_(Intercept), 1/60 below 1e-3) -- expected, bad.factor only
-  # rescales the narrow control arm, not the well-specified posterior.
-  # Measured (seed = 0, bad.factor = 3): posterior min p_unif 6.3e-4 (1/60
-  # below 1e-3), narrow max p_unif 3.0e-15.
+  # (community group, section 6g). Simulation i draws theta at seed + i, so
+  # runs at neighbouring seeds share all but one replicate and are NOT
+  # independent evidence about calibration. A single replicate whose refit
+  # stalls one species far from its truth pins that coefficient's rank at the
+  # extreme and fails the posterior arm on its own: the community EM's joint
+  # Newton step accepted a direction that descended a species whose block was
+  # indefinite at the start, and the species then never moved. The engine's
+  # modified Newton step (absolute-eigenvalue modification of each species
+  # block) removes that. bad.factor only rescales the narrow control arm, so
+  # it leaves the posterior arm unchanged.
   fit <- .SBC_REG_FIXTURES$ms_distance()
   res <- sbc(fit, n.sim = 100L, n.draws = 1000L, n.ref = 200L,
                   controls = "narrow", bad.factor = 3.0, seed = 0L)
