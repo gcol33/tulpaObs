@@ -29,30 +29,40 @@
 )
 }
 \arguments{
+\item{sp_grad}{Optional \verb{function(s, theta, global)} returning the gradient
+of \code{sp_ll} in \code{c(theta, global)}; \code{NULL} central-differences \code{sp_ll}.}
+
 \item{sp_info}{Optional \verb{function(s, theta, global)} returning species \code{s}'s
 \verb{(P + G) x (P + G)} marginal observed information at \code{c(theta, global)}.
-Defaults to \code{NULL}, which finite-differences \code{sp_grad} -- passing neither
-leaves a fit byte-identical. Supply it when the family's kernel already
-exposes the per-site marginal observed information (the N-mixture / distance
-Louis block): the FD path spends \code{2 (P + G)} full marginal sweeps per species
-per Newton step to rediscover it.}
+\code{NULL} central-differences the gradient, which costs \code{2 (P + G)} gradient
+evaluations per species per Newton step; supply it when the family's
+kernel already exposes the per-site marginal observed information (the
+N-mixture / distance Louis block).}
 
 \item{init_b, init_Sigma}{Optional warm starts for the per-species deviations
-and the per-arm community covariances. Both default to \code{NULL}, which is the
-cold start (\code{b_s = 0}, \verb{Sigma = sigma_init^2 I}) -- passing neither leaves a
-fit byte-identical. A block-coordinate caller that re-enters this EM once per
-outer pass (R/community_latent.R) passes the previous pass's state, so the
-EM resumes from a near-converged point instead of rediscovering it; it is the
-dominant cost when the per-species likelihood is expensive (an N-mixture /
-distance marginal sums over the latent count).}
+and the per-arm community covariances; \code{NULL} is the cold start
+(\code{b_s = 0}, \verb{Sigma = sigma_init^2 I}). A block-coordinate caller that
+re-enters this EM once per outer pass (R/community_latent.R) passes the
+previous pass's state, so the EM resumes from a near-converged point.}
 
-\item{re_aghq}{Debias \code{Sigma}/\code{Cinv} by adaptive Gauss-Hermite quadrature of
-the exact per-species RE posterior, gated to
-\code{P <= re_aghq_maxdim} (tensor AGHQ over the joint b couples the arms).
-Defaults \code{FALSE} -- every existing caller is byte-identical unless it
-opts in. \code{n_quad} sets the per-dimension node count.}
+\item{re_aghq}{Debias the community covariances by one adaptive
+Gauss-Hermite moment step at the converged mode (tulpa_re_em()'s
+\code{aghq_debias}), gated to \code{P <= re_aghq_maxdim} (the tensor grid spans the
+species' whole coefficient vector, coupling the arms). \code{n_quad} sets the
+per-axis node count. The per-species covariances and the community-mean
+covariance are recomputed at the debiased covariance, so \code{Sigma}, \code{Cinv},
+\code{Bf} and \code{Vf} describe one fit (the joint (u, b_s) draw of
+.tobs_sbc_community_b_draws() assumes it).}
 }
 \description{
-Generic community Laplace-EM engine
+A community model's per-species coefficients are \code{theta_s = mu + b_s}, with
+\code{b_s ~ N(0, Sigma)} block-diagonal over the arms in \code{arm_idx} and the
+community means \code{mu} (and any \code{global} parameters) shared. The fit is
+tulpa's Laplace-EM on the per-species oracle (\code{tulpa::tulpa_re_em()},
+\code{theta_update = "latent"}): \verb{(mu, global)} and every \code{b_s} solved jointly by
+a damped Newton on the penalized joint log-density, the closed-form
+covariance update per arm, and the community-mean covariance from the Schur
+complement of the species blocks. This function supplies the oracle: species
+\code{s}'s log-likelihood \code{sp_ll(s, theta, global)} with its derivatives.
 }
 \keyword{internal}

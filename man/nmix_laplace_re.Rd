@@ -31,6 +31,7 @@ nmix_laplace_re(
   sigma_beta = 100,
   omega_sigma_prior = c(1, 0.05),
   logr_sigma_prior = NULL,
+  n_threads = 1L,
   verbose = FALSE
 )
 }
