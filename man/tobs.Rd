@@ -172,8 +172,10 @@ fit; \verb{$draws} is that chain (with \code{Rhat} / \code{ESS}), \verb{$latent_
 paired latent states. Non-spatial models only.
 \item \code{"laplace_mi"} -- Laplace with a multiple-imputation correction:
 Rubin-pooled complete-data refits.
-Both use the same weakly-informative default prior as \code{"laplace"}; pass
-\code{priors = FALSE} to drop it. \code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}.
+Both use the same weakly-informative default prior as \code{"laplace"}.
+\code{priors = FALSE} drops it under \code{"laplace_mi"}; the Gibbs chain needs a
+proper prior, so there it falls back to tulpa's default normal prior.
+\code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}.
 \item \code{"pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact occupancy
 posterior (the spOccupancy \code{PGOcc} engines). A real MCMC chain
 (with \code{Rhat} / \code{ESS} diagnostics) that augments with Polya-Gamma

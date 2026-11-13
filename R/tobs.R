@@ -155,8 +155,10 @@
 #'     paired latent states. Non-spatial models only.
 #'   * `"laplace_mi"` -- Laplace with a multiple-imputation correction:
 #'     Rubin-pooled complete-data refits.
-#'   Both use the same weakly-informative default prior as `"laplace"`; pass
-#'   `priors = FALSE` to drop it. [occu()], [dyn_occu()], [int_occu()].
+#'   Both use the same weakly-informative default prior as `"laplace"`.
+#'   `priors = FALSE` drops it under `"laplace_mi"`; the Gibbs chain needs a
+#'   proper prior, so there it falls back to tulpa's default normal prior.
+#'   [occu()], [dyn_occu()], [int_occu()].
 #'   * `"pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact occupancy
 #'     posterior (the spOccupancy `PGOcc` engines). A real MCMC chain
 #'     (with `Rhat` / `ESS` diagnostics) that augments with Polya-Gamma
