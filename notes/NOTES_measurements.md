@@ -143,6 +143,14 @@ stating P(sigma > 1) = 0.5, seeds 1/2/3/11 on Windows: divergences 0/0/0/0,
 cor 0.77/0.60/0.80/0.78, sigma 1.21/1.56/3.37/1.33, phi 0.76/0.61/0.34/0.38.
 phi now sits above its truth on every seed (was 0.14-0.23).
 
+Seeds 1-20 under the same stated prior (Windows): divergences 0 on 18, <= 1.3%
+on 2; cor 0.33-0.81 (median 0.71); posterior-mean sigma 0.30-3.37 (median ~1.5),
+90% interval covers 1.3 on 17/20; phi 0.20-1.18 (median ~0.32), interval covers
+0.25 on 20/20. The same seed 11 gave sigma 1.33 on Windows and 2.62 on Linux, so a
+single-seed point band on sigma is a platform lottery; the test asserts interval
+coverage on >= 2 of seeds 1/2/3/11 instead. phi's upward shift on 1/2/3/11 was
+largely those seeds.
+
 Laplace backends (#143) on the same truth at N=150, J=6, p=0.6: surface cor
 0.78 / 0.60 / 0.83 on seeds 1/2/3, matching the NUTS path's 0.76 / 0.60 / 0.81.
 Measured surface cor for the observation families (#144): `removal()` ~0.97,

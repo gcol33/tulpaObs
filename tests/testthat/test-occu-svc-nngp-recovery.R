@@ -107,28 +107,43 @@ test_that("the svc() surface is exposed, named, and correctly shaped", {
   expect_s3_class(fit$svc, "tobs_svc")
 })
 
+# Seeds 1/2/3/11 at N = 150, J = 6, p = 0.6, fitted once and shared by the two
+# blocks below.
+.svc_cal_seeds <- c(1L, 2L, 3L, 11L)
+.svc_cal <- local({
+  cache <- NULL
+  function() {
+    if (is.null(cache)) {
+      cache <<- lapply(.svc_cal_seeds, function(s) {
+        sim <- .svc_sim(N = 150L, J = 6L, seed = s)
+        fit <- try(.svc_fit(sim, seed = s), silent = TRUE)
+        if (inherits(fit, "try-error")) return(NULL)
+        sg <- exp(0.5 * fit$draws[, "log_sigma2_svc[1]"])
+        ph <- exp(fit$draws[, "log_phi_svc[1]"])
+        list(cor = stats::cor(as.numeric(fit$svc_field), sim$f),
+             div = mean(fit$divergent),
+             sigma_q = stats::quantile(sg, c(0.05, 0.95), names = FALSE),
+             phi_q = stats::quantile(ph, c(0.05, 0.95), names = FALSE))
+      })
+      names(cache) <<- .svc_cal_seeds
+    }
+    cache
+  }
+})
+
 test_that("occu() + svc() recovers the shape of a known varying-intercept surface", {
   skip_on_cran()
   skip_if_fast()
 
-  seeds <- 1:3
-  cr <- rep(NA_real_, length(seeds))
-  for (i in seq_along(seeds)) {
-    sim <- .svc_sim(N = 150L, J = 6L, seed = seeds[i])
-    fit <- try(.svc_fit(sim, seed = seeds[i]), silent = TRUE)
-    if (inherits(fit, "try-error")) next
-    cr[i] <- stats::cor(as.numeric(fit$svc_field), sim$f)
-  }
+  res <- .svc_cal()[c("1", "2", "3")]
+  cr <- vapply(res, function(r) if (is.null(r)) NA_real_ else r$cor, 0)
   ok <- !is.na(cr)
   expect_gt(sum(ok), 1L)
 
-  # This asserts the surface carries real spatial signal, NOT that the fit is
-  # calibrated -- the hyperparameters are scored in the test below. Measured
-  # 0.76 / 0.60 / 0.81 (mean 0.73) with the range and marginal-SD priors fixed,
-  # against 0.49 / 0.72 / 0.78 beforehand. The floor is raised off the old 0.4
-  # on those numbers rather than by tuning the simulation, and stays clear of
-  # the 0.60 seed: what moved was the sampler, and the surface correlation is
-  # bounded by the information at N = 150, J = 6, p = 0.6 either way.
+  # The surface carries real spatial signal; the hyperparameters are scored in
+  # the block below. Measured 0.77 / 0.60 / 0.80 on seeds 1/2/3, and 0.33-0.81
+  # (median 0.71) over seeds 1-20. The correlation is bounded by the
+  # information at N = 150, J = 6, p = 0.6, not by the sampler.
   expect_gt(mean(cr[ok]), 0.55)
 })
 
@@ -136,32 +151,22 @@ test_that("occu() + svc() is calibrated and identifies its NNGP hyperparameters"
   skip_on_cran()
   skip_if_fast()
 
-  sim <- .svc_sim(N = 150L, J = 6L, seed = 11L, sigma_f = 1.3, phi_f = 0.25)
-  fit <- .svc_fit(sim, seed = 11L)
+  res <- Filter(Negate(is.null), .svc_cal())
+  expect_gte(length(res), 3L)
 
-  # Divergences are now rare rather than the norm: 0 of 300 post-warmup draws
-  # on every seed measured (1, 2, 3, 11), against 72-83% before.
-  expect_lt(mean(fit$divergent), 0.05)
+  # Divergences on every seed. Over seeds 1-20 the rate was 0 on 18 and at
+  # most 1.3% on the other two.
+  expect_true(all(vapply(res, function(r) r$div, 0) < 0.05))
 
-  # The range finds its truth instead of the old Uniform prior's mean.
-  # Measured 0.34-0.76 over those seeds under the unit-median SD prior (seed 11
-  # 0.38) against a truth of 0.25; it sat at ~4.
-  phi_hat <- exp(as.numeric(fit$means[["log_phi_svc[1]"]]))
-  expect_gt(phi_hat, 0.1); expect_lt(phi_hat, 0.8)
-
-  # The marginal SD is the weakly identified end of the GP ridge -- it trades
-  # off against the range, and spreads 1.21-3.37 over seeds (seed 11 1.33)
-  # against a truth of 1.3. The band is wide because that spread belongs to the model at N = 150,
-  # not to the sampler.
-  sigma_hat <- exp(0.5 * as.numeric(fit$means[["log_sigma2_svc[1]"]]))
-  expect_gt(sigma_hat, 0.7); expect_lt(sigma_hat, 2.2)
-
-  # No assertion on cor(surface, truth) here. This test used to close with
-  # `expect_gt(cor, 0.75)` on the reasoning that the surface would track the
-  # truth tightly "once the geometry is sane". Measuring it once the geometry
-  # WAS sane refuted that: correlation barely moved across either fix (seeds
-  # 1/2/3 went 0.49/0.72/0.78 -> 0.76/0.60/0.81, and seed 11 sits at 0.73), so
-  # sampler health and surface accuracy are separate axes -- the latter is set
-  # by how much the data says at N = 150, J = 6, p = 0.6. The surface is scored
-  # by the recovery test above, which is where that claim belongs.
+  # sigma and phi sit on the GP ridge: a single seed's point estimate spreads
+  # 0.30-3.37 (sigma, truth 1.3) and 0.20-1.18 (phi, truth 0.25) over seeds
+  # 1-20, and which value a seed lands on moves with platform and BLAS. What
+  # holds across seeds is the posterior interval: the 90% interval covered
+  # sigma on 17 of 20 seeds and phi on 20 of 20. Requiring coverage on at least
+  # 2 of the 4 seeds fails a calibrated fit with probability ~1% at 85%
+  # per-seed coverage, and fails a fit whose SD collapses onto its prior on
+  # every seed.
+  covers <- function(q, truth) q[1L] <= truth && truth <= q[2L]
+  expect_gte(sum(vapply(res, function(r) covers(r$sigma_q, 1.3), TRUE)), 2L)
+  expect_gte(sum(vapply(res, function(r) covers(r$phi_q, 0.25), TRUE)), 2L)
 })
