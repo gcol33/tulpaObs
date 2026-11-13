@@ -135,6 +135,14 @@ phi=0.25 / sigma=1.3:
 - surface cor 0.66 -> 0.73 mean (did NOT move materially; information-bounded at
   these settings, not sampler-bounded)
 
+Re-measured 2026-11-13 (#462, tulpa 0.7.8 at ABI 60) after tulpa #1162 /
+tulpaObs #457 replaced the half-Cauchy SD prior with a PC prior defaulting to
+P(sigma > 1) = 0.01 (median ~0.15). Under that default the test failed: seed 11
+sigma 0.18 on Linux CI, 0.71 with 9.7% divergences on Windows. With the test
+stating P(sigma > 1) = 0.5, seeds 1/2/3/11 on Windows: divergences 0/0/0/0,
+cor 0.77/0.60/0.80/0.78, sigma 1.21/1.56/3.37/1.33, phi 0.76/0.61/0.34/0.38.
+phi now sits above its truth on every seed (was 0.14-0.23).
+
 Laplace backends (#143) on the same truth at N=150, J=6, p=0.6: surface cor
 0.78 / 0.60 / 0.83 on seeds 1/2/3, matching the NUTS path's 0.76 / 0.60 / 0.81.
 Measured surface cor for the observation families (#144): `removal()` ~0.97,

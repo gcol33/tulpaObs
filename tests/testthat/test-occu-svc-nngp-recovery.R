@@ -55,9 +55,16 @@
 # .unscale_fit_per_process() rewrites only the leading per-process beta slices,
 # never the SVC block -- so for any other `indices` the returned weights are on
 # the scaled-column scale and truth would need rescaling before scoring.
+#
+# The marginal-SD prior is stated, at a unit median (P(sigma > 1) = 0.5). The
+# default P(sigma > 1) = 0.01 has median ~0.15 and puts 0.25% of its mass above
+# the simulated sigma_f = 1.3, so under it the fit reports the prior: seed 11
+# landed at sigma 0.18 on Linux and 0.71 on Windows, with phi pushed up the
+# ridge. A recovery test needs a prior that does not exclude its own truth.
 .svc_fit <- function(sim, seed, n_iter = 600L, n_warmup = 300L) {
   suppressWarnings(tobs(
-    ~ svc(lon, lat, indices = 1L, nn = 12, prior.range = c(0.1, 0.05)),
+    ~ svc(lon, lat, indices = 1L, nn = 12, prior.range = c(0.1, 0.05),
+          sigma2.prior.U = 1, sigma2.prior.alpha = 0.5),
     data = sim$data,
     family = occu(), detection = ~ 1, y = sim$y,
     method = "nuts",
@@ -137,13 +144,14 @@ test_that("occu() + svc() is calibrated and identifies its NNGP hyperparameters"
   expect_lt(mean(fit$divergent), 0.05)
 
   # The range finds its truth instead of the old Uniform prior's mean.
-  # Measured 0.14-0.23 over those seeds against a truth of 0.25; it sat at ~4.
+  # Measured 0.34-0.76 over those seeds under the unit-median SD prior (seed 11
+  # 0.38) against a truth of 0.25; it sat at ~4.
   phi_hat <- exp(as.numeric(fit$means[["log_phi_svc[1]"]]))
   expect_gt(phi_hat, 0.1); expect_lt(phi_hat, 0.8)
 
   # The marginal SD is the weakly identified end of the GP ridge -- it trades
-  # off against the range, and spreads 1.06-2.31 over seeds against a truth of
-  # 1.3. The band is wide because that spread belongs to the model at N = 150,
+  # off against the range, and spreads 1.21-3.37 over seeds (seed 11 1.33)
+  # against a truth of 1.3. The band is wide because that spread belongs to the model at N = 150,
   # not to the sampler.
   sigma_hat <- exp(0.5 * as.numeric(fit$means[["log_sigma2_svc[1]"]]))
   expect_gt(sigma_hat, 0.7); expect_lt(sigma_hat, 2.2)
