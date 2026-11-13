@@ -81,12 +81,14 @@
 # `tobs()` tail and read by tulpa's chain-vs-iid diagnostic gate. A sampler route
 # keeps an autocorrelated chain, so Rhat / ESS describe it. Every Laplace route
 # reports i.i.d. draws from its Gaussian (or grid-mixture) approximation, the
-# MI correction included (its draws come from the Rubin-pooled normal). The
-# Gibbs correction reports tulpa's exact MH-within-Gibbs chain itself.
+# MI correction included (its draws come from the Rubin-pooled normal). A
+# Gibbs fit that received tulpa's exact MH-within-Gibbs chain stamps
+# `draws_kind = "chain"` itself in build_laplace_fit(); the table holds the
+# route default, which an engine returning the pooled summary keeps.
 .tobs_method_table <- list(
   laplace            = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "none",  draws = "iid"),
   laplace_sla        = list(engine = "laplace",        approx = "simplified_laplace", correction = "none",  draws = "iid"),
-  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs", draws = "chain"),
+  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs", draws = "iid"),
   laplace_mi         = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "mi",    draws = "iid"),
   pg_gibbs           = list(engine = "pg_gibbs",       approx = "gaussian_laplace",   correction = "none",  draws = "chain"),
   nested_laplace     = list(engine = "nested_laplace", approx = "gaussian_laplace",   correction = "none",  draws = "iid"),
