@@ -27,8 +27,10 @@ terms belong on the state arm.
 marginal, the default.
 \item \code{method = "laplace_sla"} -- the Laplace fit with simplified-Laplace
 skew-corrected marginals.
-\item \code{method = "laplace_gibbs"} / \code{method = "laplace_mi"} -- the Laplace fit
-with a post-EM Gibbs / multiple-imputation variance correction.
+\item \code{method = "laplace_gibbs"} -- an exact Gibbs chain over the joint
+posterior of the coefficients and latent states, started at the EM fit.
+\item \code{method = "laplace_mi"} -- the Laplace fit with a multiple-imputation
+correction (Rubin-pooled refits).
 \item \code{method = "nested_laplace"} -- an areal field on the state arm through the
 nested-Laplace EM, its hyperparameters integrated on an outer grid.
 \item \code{method = "nuts"} -- the unified C++ NUTS sampler over the same marginal.

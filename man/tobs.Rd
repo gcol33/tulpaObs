@@ -166,15 +166,19 @@ help page.
 Every family except \code{\link[=t_occu]{t_occu()}}.
 \item \code{"laplace_sla"} -- Laplace with skew-corrected (simplified-Laplace)
 marginals. \code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}, \code{\link[=cover]{cover()}}.
-\item \code{"laplace_gibbs"} / \code{"laplace_mi"} -- Laplace with a post-EM Gibbs /
-multiple-imputation correction. The fixed-effect prior threads into the
-correction refits, so these use the same
-weakly-informative default prior as \code{"laplace"}; pass \code{priors = FALSE}
-for the unpenalised correction. \code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}.
+\item \code{"laplace_gibbs"} -- an exact MH-within-Gibbs chain over the joint
+posterior of the coefficients and the latent states, started at the EM
+fit; \verb{$draws} is that chain (with \code{Rhat} / \code{ESS}), \verb{$latent_draws} the
+paired latent states. Non-spatial models only.
+\item \code{"laplace_mi"} -- Laplace with a multiple-imputation correction:
+Rubin-pooled complete-data refits.
+Both use the same weakly-informative default prior as \code{"laplace"}; pass
+\code{priors = FALSE} to drop it. \code{\link[=occu]{occu()}}, \code{\link[=dyn_occu]{dyn_occu()}}, \code{\link[=int_occu]{int_occu()}}.
 \item \code{"pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact occupancy
 posterior (the spOccupancy \code{PGOcc} engines). A real MCMC chain
-(with \code{Rhat} / \code{ESS} diagnostics), distinct from \code{"laplace_gibbs"} (a
-stochastic-EM variance correction). Sampler controls (\code{n.iter},
+(with \code{Rhat} / \code{ESS} diagnostics) that augments with Polya-Gamma
+variables, where \code{"laplace_gibbs"} proposes coefficients from
+complete-data Laplace fits. Sampler controls (\code{n.iter},
 \code{n.warmup}, \code{n.chains}, \code{n.thin}, \code{seed}, \code{sigma.beta}). \code{\link[=occu]{occu()}}
 (site-level detection; an \code{icar()} field on occupancy), \code{\link[=ms_occu]{ms_occu()}},
 \code{\link[=ms_dyn_occu]{ms_dyn_occu()}}, \code{\link[=ms_int_occu]{ms_int_occu()}}, \code{\link[=jsdm]{jsdm()}}, \code{\link[=ms_count]{ms_count()}}, and
@@ -415,8 +419,11 @@ posterior collapses the integration grid -- or \code{"grid_moment"} when it came
 from the grid-weighted node covariance, the regime to watch as the grid
 concentrates.
 Stochastic-correction controls (\code{"laplace_gibbs"} / \code{"laplace_mi"}):
-\code{n.gibbs} / \code{n.imputations} (Rubin-pooled draw count) and \code{seed} (stored
-on \verb{$seed}).
+\code{n.gibbs} (total Gibbs sweeps, warmup included; default 2000),
+\code{gibbs.warmup} (default \code{n.gibbs \%/\% 2}), \code{gibbs.thin} (default 1),
+\code{gibbs.mh.steps} (MH steps per sweep, default 1), \code{gibbs.scale} (proposal
+scale, default 1), \code{n.imputations} (MI draw count) and \code{seed} (stored on
+\verb{$seed}).
 }
 
 Progress controls (every method): \code{progress} toggles the console

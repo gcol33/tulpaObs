@@ -15,7 +15,8 @@
   damping = 0.3,
   correction = c("auto", "mi", "gibbs", "none"),
   n_imputations = 20L,
-  n_gibbs = 10L,
+  n_gibbs = 2000L,
+  gibbs_control = list(),
   seed = NULL,
   approx = c("gaussian_laplace", "simplified_laplace"),
   re_aghq = TRUE,
@@ -42,12 +43,19 @@ by the EM-Laplace path.}
 
 \item{max_iter, tol, damping}{EM controls.}
 
-\item{correction}{Post-EM correction (\code{"none"}, \code{"mi"}, \code{"gibbs"}). MI /
-Gibbs run tulpa's post-EM Rubin-pooled correction; the fixed-effect prior
-(when active) threads into the correction refits, so the corrected fit is
-penalised the same way as the EM point estimate.}
+\item{correction}{Post-EM correction (\code{"none"}, \code{"mi"}, \code{"gibbs"}). MI runs
+tulpa's Rubin-pooled complete-data refits; Gibbs runs tulpa's exact
+MH-within-Gibbs chain over the joint posterior of the coefficients and the
+latent states, and the fit reports that chain. The fixed-effect prior
+(when active) enters both.}
 
 \item{n_imputations}{Number of MI draws when \code{correction = "mi"}.}
+
+\item{n_gibbs}{Total Gibbs sweeps, warmup included, when
+\code{correction = "gibbs"}.}
+
+\item{gibbs_control}{Engine chain settings (\code{warmup}, \code{thin}, \code{mh_steps},
+\code{scale}); \code{NULL} entries take the engine defaults.}
 
 \item{verbose}{Print per-iteration progress.}
 }

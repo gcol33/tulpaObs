@@ -20,9 +20,10 @@ MacKenzie et al. (2002) single-season model.
 default.
 \item \code{method = "laplace_sla"} -- the Laplace fit with simplified-Laplace
 skew-corrected marginals.
-\item \code{method = "laplace_gibbs"} / \code{method = "laplace_mi"} -- the Laplace fit
-with a post-EM Gibbs / multiple-imputation variance correction
-(Rubin-pooled refits, not an MCMC chain).
+\item \code{method = "laplace_gibbs"} -- an exact Gibbs chain over the joint
+posterior of the coefficients and latent states, started at the EM fit.
+\item \code{method = "laplace_mi"} -- the Laplace fit with a multiple-imputation
+correction (Rubin-pooled refits).
 \item \code{method = "pg_gibbs"} -- a Polya-Gamma Gibbs sampler over the exact
 posterior (the spOccupancy \code{PGOcc} engine): site-level detection, an areal
 \code{icar()} field is accepted; a \code{temporal()} / \code{re()} / \code{latent()} / \code{svc()}

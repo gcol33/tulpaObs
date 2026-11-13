@@ -173,7 +173,7 @@
 "test-jsdm-spatial.R","smoke",4,3,0.1
 "test-loglik-reported.R","smoke",4,3,0.1
 "test-louis-joint-single.R","smoke",2,1,0
-"test-method-gibbs-recovery.R","smoke",0,8,0.1
+"test-method-gibbs-recovery.R","smoke",1,9,0.2
 "test-methods.R","smoke",162,2,3.3
 "test-ms-abun-factor.R","full",27,0,3807.5
 "test-ms-abun-factor.R","smoke",8,3,0.2

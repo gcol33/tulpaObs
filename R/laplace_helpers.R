@@ -727,10 +727,22 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   nms <- character()
   cov_blocks <- list()
 
+  # correction = "gibbs" returns tulpa's exact MH-within-Gibbs chain over the
+  # joint posterior p(theta, Z | y): `draws` columns are named "<block>:<coef>"
+  # in block order, fixed coefficients first within each block. The reported
+  # posterior is that chain, so each arm reads its columns from it and nothing
+  # is approximated as Gaussian.
+  gibbs_chain <- identical(em_result$inference_mode, "exact") &&
+                 is.matrix(em_result$draws)
+  chain_cols <- integer()
+  gibbs_block_cols <- function(block) {
+    which(startsWith(colnames(em_result$draws), paste0(block, ":")))
+  }
+
   # Joint Louis covariance of (beta_psi, beta_det) on the single-season path
   # with a site-level detection design and no field on the detection arm.
   V_joint <- NULL
-  if (identical(model$model_type, "single") &&
+  if (!gibbs_chain && identical(model$model_type, "single") &&
       is.null(spatial_det) && is.null(re_block) &&
       is.null(model$X_det_visit) &&
       !is.list(em_result$pooled) &&
@@ -766,7 +778,14 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     if (is.null(sub_name)) sub_name <- names(p_per_submodel)[min(k, length(p_per_submodel))]
     prec_k <- NULL
 
-    if (is.list(em_result$pooled) && !is.null(em_result$pooled[[sub_name]])) {
+    if (gibbs_chain && length(gibbs_block_cols(sub_name)) >= pi$p) {
+      ii <- gibbs_block_cols(sub_name)[seq_len(pi$p)]
+      chain_cols <- c(chain_cols, ii)
+      d_k <- em_result$draws[, ii, drop = FALSE]
+      means <- c(means, colMeans(d_k))
+      sds_k <- apply(d_k, 2L, stats::sd)
+      cov_k <- stats::cov(d_k)
+    } else if (is.list(em_result$pooled) && !is.null(em_result$pooled[[sub_name]])) {
       # MI/Gibbs correction pool from rubins_pool().
       cr <- em_result$pooled[[sub_name]]
       means <- c(means, cr$mean)
@@ -855,7 +874,12 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     visit_idx <- (p_det + 1L):p_det_total
     visit_nms <- paste0("p_visit_", model$det_visit_names)
 
-    if (is.list(em_result$pooled) && !is.null(em_result$pooled[["det"]])) {
+    if (gibbs_chain && length(gibbs_block_cols("det")) >= p_det_total) {
+      ii <- gibbs_block_cols("det")[visit_idx]
+      chain_cols <- c(chain_cols, ii)
+      visit_means <- colMeans(em_result$draws[, ii, drop = FALSE])
+      visit_sds   <- apply(em_result$draws[, ii, drop = FALSE], 2L, stats::sd)
+    } else if (is.list(em_result$pooled) && !is.null(em_result$pooled[["det"]])) {
       cr <- em_result$pooled[["det"]]
       visit_means <- cr$mean[visit_idx]
       visit_sds   <- cr$se[visit_idx]
@@ -897,15 +921,26 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # covariance exists, so a quantity combining the arms (psi * p, an expected
   # detection count) carries their correlation. Coordinates with an unavailable
   # SE (NA) draw as a near-constant point mass.
-  n_pseudo <- 1000L
-  V_draw <- .assemble_block_diag(cov_blocks, n_params)
-  if (!is.null(V_joint)) {
-    jj <- c(joint_idx$occ, joint_idx$det)
-    V_draw[jj, jj] <- V_joint
+  if (gibbs_chain && length(chain_cols) == n_params) {
+    # The chain itself: its joint covariance replaces the per-arm blocks, so the
+    # cross-arm correlation the sampler explored is kept.
+    draws <- em_result$draws[, chain_cols, drop = FALSE]
+    colnames(draws) <- nms
+    n_pseudo <- nrow(draws)
+    V_draw <- stats::cov(draws)
+    dimnames(V_draw) <- list(nms, nms)
+  } else {
+    gibbs_chain <- FALSE
+    n_pseudo <- 1000L
+    V_draw <- .assemble_block_diag(cov_blocks, n_params)
+    if (!is.null(V_joint)) {
+      jj <- c(joint_idx$occ, joint_idx$det)
+      V_draw[jj, jj] <- V_joint
+    }
+    dimnames(V_draw) <- list(nms, nms)
+    draws <- .tobs_gaussian_draws(n_pseudo, means, V_draw)
+    colnames(draws) <- nms
   }
-  dimnames(V_draw) <- list(nms, nms)
-  draws <- .tobs_gaussian_draws(n_pseudo, means, V_draw)
-  colnames(draws) <- nms
 
   # Simplified-Laplace skewness correction
   # Computes gamma_j at the original observation likelihood (NOT the M-step
@@ -1003,14 +1038,16 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
   # Carlo mean/SD/quantiles. A simplified-Laplace fit
   # replaced `draws` with a skew-normal marginal (`.sla_replace_draws()`), so
   # it keeps reporting off the draws, where the skew quantiles are the point.
-  reported_posterior <- if (identical(sla_status, "simplified_laplace")) NULL
+  # A Gibbs fit reports its chain, so it reads off the draws as well.
+  reported_posterior <- if (identical(sla_status, "simplified_laplace") ||
+                            gibbs_chain) NULL
                         else "gaussian"
   # Restricted to the fixed-effect block: a random-effect variance component
   # with an unavailable SE (NA) lives in `V_draw`'s trailing block, and tulpa's
   # reader rejects the whole `cov` matrix on any NA, fixed block included.
   fixed_idx <- seq_len(n_params - n_re_block)
   cov_fixed <- V_draw[fixed_idx, fixed_idx, drop = FALSE]
-  structure(c(list(
+  fit <- structure(c(list(
     draws = draws, means = means, sds = sds, cov = cov_fixed,
     reported_posterior = reported_posterior,
     skew = sla_gamma, sla_status = sla_status,
@@ -1034,4 +1071,17 @@ build_laplace_fit <- function(em_result, model, spatial, p_per_submodel,
     convergence = em_result$convergence,
     correction = em_result$correction
   )), class = c("tobs_fit", "tulpa_fit"))
+
+  if (gibbs_chain) {
+    fit$draws_kind     <- "chain"
+    fit$cov            <- NULL
+    fit$latent_draws   <- em_result$latent_draws
+    fit$inference_tier <- em_result$inference_tier
+    fit$target         <- em_result$target
+    fit$mean_accept    <- em_result$mean_accept
+    fit$gibbs_control  <- c(list(n_gibbs = em_result$n_gibbs),
+                            em_result$correction_control)
+    fit <- .tobs_nuts_attach_convergence(fit, draws, par_names = nms)
+  }
+  fit
 }

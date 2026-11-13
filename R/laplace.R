@@ -23,11 +23,16 @@
 #' @param sigma_beta Reserved for future use (NUTS-side beta prior); ignored
 #'   by the EM-Laplace path.
 #' @param max_iter,tol,damping EM controls.
-#' @param correction Post-EM correction (`"none"`, `"mi"`, `"gibbs"`). MI /
-#'   Gibbs run tulpa's post-EM Rubin-pooled correction; the fixed-effect prior
-#'   (when active) threads into the correction refits, so the corrected fit is
-#'   penalised the same way as the EM point estimate.
+#' @param correction Post-EM correction (`"none"`, `"mi"`, `"gibbs"`). MI runs
+#'   tulpa's Rubin-pooled complete-data refits; Gibbs runs tulpa's exact
+#'   MH-within-Gibbs chain over the joint posterior of the coefficients and the
+#'   latent states, and the fit reports that chain. The fixed-effect prior
+#'   (when active) enters both.
 #' @param n_imputations Number of MI draws when `correction = "mi"`.
+#' @param n_gibbs Total Gibbs sweeps, warmup included, when
+#'   `correction = "gibbs"`.
+#' @param gibbs_control Engine chain settings (`warmup`, `thin`, `mh_steps`,
+#'   `scale`); `NULL` entries take the engine defaults.
 #' @param verbose Print per-iteration progress.
 #' @keywords internal
 .tobs_laplace <- function(model, spatial = NULL, re = NULL,
@@ -35,7 +40,8 @@
                           sigma_beta = 10,
                           max_iter = 50L, tol = 1e-4, damping = 0.3,
                           correction = c("auto", "mi", "gibbs", "none"),
-                          n_imputations = 20L, n_gibbs = 10L, seed = NULL,
+                          n_imputations = 20L, n_gibbs = 2000L,
+                          gibbs_control = list(), seed = NULL,
                           approx = c("gaussian_laplace", "simplified_laplace"),
                           re_aghq = TRUE, n_quad = 9L, lkj_eta = 1.5,
                           latent_prior = NULL, heldout_state = NULL,
@@ -72,6 +78,15 @@
   }
 
   .validate_spatial_laplace(spatial, model$model_type)
+
+  # The exact Gibbs chain proposes each block's coefficients from its
+  # complete-data Laplace fit, which a spatial block does not supply.
+  if (identical(correction, "gibbs") && !is.null(spatial)) {
+    stop("method = \"laplace_gibbs\" samples non-spatial models only; a ",
+         "spatial term needs a field proposal the Gibbs chain does not have. ",
+         "Use method = \"laplace_mi\", \"nested_laplace\" or \"nuts\".",
+         call. = FALSE)
+  }
 
   # Formula random effects on the deterministic path. Supported forms (iid
   # intercept, uncorrelated slopes, and correlated slopes on the occupancy
@@ -160,6 +175,8 @@
     correction    = correction,
     n_imputations = n_imputations,
     n_gibbs       = n_gibbs,
+    correction_control = if (identical(correction, "gibbs"))
+                           Filter(Negate(is.null), gibbs_control) else list(),
     verbose       = verbose
   )
 

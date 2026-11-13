@@ -250,6 +250,11 @@
         fit$draws[, idx] <- .unscale_draws_mat(
           fit$draws[, idx, drop = FALSE], sc
         )
+        # A fit that reports its chain reads its SDs off that chain; the
+        # intercept's natural-scale SD needs the draws' slope covariance.
+        if (identical(fit$draws_kind, "chain") && !is.null(fit$sds)) {
+          fit$sds[idx] <- apply(fit$draws[, idx, drop = FALSE], 2L, stats::sd)
+        }
       }
     }
     off <- off + p_k

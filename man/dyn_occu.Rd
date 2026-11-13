@@ -27,8 +27,10 @@ calibrates the coefficients); they are gated under \code{"nuts"} with a pointer.
 the default and the route every season-varying path runs on.
 \item \code{method = "laplace_sla"} -- the Laplace fit with simplified-Laplace
 skew-corrected marginals.
-\item \code{method = "laplace_gibbs"} / \code{method = "laplace_mi"} -- the Laplace fit
-with a post-EM Gibbs / multiple-imputation variance correction.
+\item \code{method = "laplace_gibbs"} -- an exact Gibbs chain over the joint
+posterior of the coefficients and latent states, started at the EM fit.
+\item \code{method = "laplace_mi"} -- the Laplace fit with a multiple-imputation
+correction (Rubin-pooled refits).
 \item \code{method = "nested_laplace"} -- an areal field on the occupancy arm through
 the nested-Laplace EM, its hyperparameters integrated on an outer grid.
 \item \code{method = "nuts"} -- the unified C++ NUTS sampler over the HMM marginal;

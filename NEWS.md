@@ -12,6 +12,16 @@
   (`epsilon_init`) as `nullptr`, which keeps the engine's own step-size
   initialisation (#460).
 
+* `method = "laplace_gibbs"` reports tulpa's exact MH-within-Gibbs chain over
+  the joint posterior of the coefficients and latent states (tulpa#1175):
+  `$draws` is the chain, with `Rhat` / `ESS` in `$convergence`, and the fit
+  carries `$latent_draws`, `$inference_tier`, `$target` and `$mean_accept`.
+  It read the Rubin-pooled summary the engine no longer returns and so
+  reported the EM fit. `n.gibbs` now counts total sweeps (default 2000, was
+  10), and `gibbs.warmup`, `gibbs.thin`, `gibbs.mh.steps` and `gibbs.scale`
+  set the chain. A spatial term under `laplace_gibbs` now errors with a
+  pointer to `laplace_mi`, `nested_laplace` or `nuts` (#463).
+
 * `svc(sigma2.prior.U, sigma2.prior.alpha)` set the PC prior on each surface's
   marginal SD, `P(sigma > U) = alpha` (default `P(sigma > 1) = 0.01`), on the
   NUTS and the Laplace routes alike. This replaces `sigma2.prior.scale`, the

@@ -149,15 +149,19 @@
 #'     Every family except [t_occu()].
 #'   * `"laplace_sla"` -- Laplace with skew-corrected (simplified-Laplace)
 #'     marginals. [occu()], [dyn_occu()], [int_occu()], [cover()].
-#'   * `"laplace_gibbs"` / `"laplace_mi"` -- Laplace with a post-EM Gibbs /
-#'     multiple-imputation correction. The fixed-effect prior threads into the
-#'     correction refits, so these use the same
-#'     weakly-informative default prior as `"laplace"`; pass `priors = FALSE`
-#'     for the unpenalised correction. [occu()], [dyn_occu()], [int_occu()].
+#'   * `"laplace_gibbs"` -- an exact MH-within-Gibbs chain over the joint
+#'     posterior of the coefficients and the latent states, started at the EM
+#'     fit; `$draws` is that chain (with `Rhat` / `ESS`), `$latent_draws` the
+#'     paired latent states. Non-spatial models only.
+#'   * `"laplace_mi"` -- Laplace with a multiple-imputation correction:
+#'     Rubin-pooled complete-data refits.
+#'   Both use the same weakly-informative default prior as `"laplace"`; pass
+#'   `priors = FALSE` to drop it. [occu()], [dyn_occu()], [int_occu()].
 #'   * `"pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact occupancy
 #'     posterior (the spOccupancy `PGOcc` engines). A real MCMC chain
-#'     (with `Rhat` / `ESS` diagnostics), distinct from `"laplace_gibbs"` (a
-#'     stochastic-EM variance correction). Sampler controls (`n.iter`,
+#'     (with `Rhat` / `ESS` diagnostics) that augments with Polya-Gamma
+#'     variables, where `"laplace_gibbs"` proposes coefficients from
+#'     complete-data Laplace fits. Sampler controls (`n.iter`,
 #'     `n.warmup`, `n.chains`, `n.thin`, `seed`, `sigma.beta`). [occu()]
 #'     (site-level detection; an `icar()` field on occupancy), [ms_occu()],
 #'     [ms_dyn_occu()], [ms_int_occu()], [jsdm()], [ms_count()], and
@@ -391,8 +395,11 @@
 #'     from the grid-weighted node covariance, the regime to watch as the grid
 #'     concentrates.
 #'   Stochastic-correction controls (`"laplace_gibbs"` / `"laplace_mi"`):
-#'   `n.gibbs` / `n.imputations` (Rubin-pooled draw count) and `seed` (stored
-#'   on `$seed`).
+#'   `n.gibbs` (total Gibbs sweeps, warmup included; default 2000),
+#'   `gibbs.warmup` (default `n.gibbs %/% 2`), `gibbs.thin` (default 1),
+#'   `gibbs.mh.steps` (MH steps per sweep, default 1), `gibbs.scale` (proposal
+#'   scale, default 1), `n.imputations` (MI draw count) and `seed` (stored on
+#'   `$seed`).
 #'
 #'   Progress controls (every method): `progress` toggles the console
 #'   iteration / grid bar (default `TRUE` in an interactive session, `FALSE`

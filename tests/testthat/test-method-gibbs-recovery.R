@@ -1,10 +1,9 @@
 # Parameter-recovery + reproducibility tests for the stochastic Laplace
-# correction routes (method = "laplace_gibbs" / "laplace_mi"). These run a
-# post-EM Rubin-pooled correction on top of tulpa's EM+Laplace. Since, the
-# weakly-informative fixed-effect prior threads into the correction refits,
-# so these routes apply the same default prior as method = "laplace" (pass
-# priors = FALSE to recover the unpenalised correction). tobs() seeds the
-# R-side hard-z draws so the pooled estimate reproduces.
+# correction routes. method = "laplace_gibbs" runs tulpa's exact
+# MH-within-Gibbs chain over p(theta, Z | y) from the EM fit and reports that
+# chain; method = "laplace_mi" runs Rubin-pooled complete-data refits. Both
+# carry the same weakly-informative fixed-effect prior as method = "laplace".
+# tobs() seeds the R-side latent draws so both reproduce.
 
 sim_occu_fixed <- function(seed = 41, N = 400L, J = 5L,
                            beta_occ = c(0.4, -0.8), beta_det = c(0.0, 0.4)) {
@@ -71,45 +70,51 @@ test_that("priors = FALSE recovers the unpenalised Gibbs correction", {
   expect_lt(abs(cf_psi[["occ_cov1"]] - s$truth$beta_occ[2]), 0.35)
 })
 
-test_that("the prior threads into the Gibbs correction at the small-J ridge", {
-  # At small N, J the psi-p ridge biases the detection slope toward zero unless
-  # the prior breaks it. The penalised Gibbs correction should track the truth
-  # better than the unpenalised one -- evidence the prior actually flows into
-  # the correction refits, not just the EM point estimate.
-  skip_on_cran()
+test_that("method = 'laplace_gibbs' reports the exact chain, not a Gaussian", {
   skip_if_fast()
+  s <- sim_occu_fixed(seed = 41)
+  fit <- tobs(~ occ_cov1, data = s$data, y = s$y, detection = ~ det_cov1,
+              family = occu(), method = "laplace_gibbs",
+              control = list(seed = 3, n.gibbs = 400L, verbose = FALSE))
 
-  n_seeds <- 12L
-  truth_slope <- 0.8
-  N <- 200L; J <- 4L
-  est_pen <- numeric(0); est_unp <- numeric(0)
+  # 400 sweeps, half warmup: 200 kept rows, each paired with its latent draw.
+  expect_identical(nrow(fit$draws), 200L)
+  expect_identical(fit$draws_kind, "chain")
+  expect_identical(fit$inference_tier, 1L)
+  expect_length(fit$latent_draws, 200L)
+  expect_identical(fit$gibbs_control$warmup, 200L)
 
-  for (s in seq_len(n_seeds)) {
-    set.seed(5000L + s)
-    x_occ <- rnorm(N); x_det <- rnorm(N)
-    psi   <- plogis(0.5 + 0.5 * x_occ)
-    p_tru <- plogis(0.0 + truth_slope * x_det)
-    z     <- rbinom(N, 1L, psi)
-    y     <- matrix(0L, N, J)
-    for (i in seq_len(N)) if (z[i] == 1L) y[i, ] <- rbinom(J, 1L, p_tru[i])
-    dat <- data.frame(x_occ = x_occ, x_det = x_det)
+  # The reported moments are the chain's own, and the chain is diagnosed.
+  expect_equal(unname(fit$means), unname(colMeans(fit$draws)))
+  expect_equal(unname(fit$sds), unname(apply(fit$draws, 2L, stats::sd)))
+  expect_true(all(is.finite(fit$convergence$rhat)))
+  expect_setequal(fit$convergence$parameter, names(fit$means))
+  expect_gt(fit$mean_accept, 0.2)
+})
 
-    fp <- tryCatch(tobs(~ x_occ, data = dat, family = occu(), detection = ~ x_det,
-                        y = y, method = "laplace_gibbs",
-                        control = list(seed = 11, verbose = FALSE)),
-                   error = function(e) NULL)
-    fu <- tryCatch(tobs(~ x_occ, data = dat, family = occu(), detection = ~ x_det,
-                        y = y, method = "laplace_gibbs", priors = FALSE,
-                        control = list(seed = 11, verbose = FALSE)),
-                   error = function(e) NULL)
-    if (!is.null(fp)) est_pen <- c(est_pen, unname(fp$means[["p_x_det"]]))
-    if (!is.null(fu)) est_unp <- c(est_unp, unname(fu$means[["p_x_det"]]))
-  }
+test_that("the fixed-effect prior enters the Gibbs chain's target", {
+  # A prior pinned at 0 with SD 0.02 on the detection slope (data SE ~0.065)
+  # must hold the chain near 0: the precision-weighted mean is ~0.03. Under
+  # the default prior the slope sits near its truth 0.4.
+  skip_if_fast()
+  s <- sim_occu_fixed(seed = 41)
+  f <- function(pr) tobs(~ occ_cov1, data = s$data, y = s$y,
+                         detection = ~ det_cov1, family = occu(),
+                         method = "laplace_gibbs", priors = pr,
+                         control = list(seed = 5, verbose = FALSE))
+  pinned <- f(occu_priors(p.slope = list(mean = 0, sd = 0.02)))
+  free   <- f(NULL)
+  expect_lt(abs(pinned$means[["p_det_cov1"]]), 0.06)
+  expect_gt(free$means[["p_det_cov1"]], 0.2)
+})
 
-  expect_true(length(est_pen) >= floor(0.8 * n_seeds))
-  expect_true(length(est_unp) >= floor(0.8 * n_seeds))
-  # Penalised correction bias must be materially smaller than unpenalised.
-  expect_lt(abs(mean(est_pen) - truth_slope), abs(mean(est_unp) - truth_slope))
+test_that("method = 'laplace_gibbs' refuses a spatial term", {
+  sim <- simulate_occu(N = 40L, J = 3L, seed = 1L)
+  sim$data$x <- stats::runif(40L); sim$data$yc <- stats::runif(40L)
+  expect_error(
+    tobs(~ spde(x, yc), data = sim$data, family = occu(), detection = ~ 1,
+         y = sim$y, method = "laplace_gibbs", control = list(verbose = FALSE)),
+    "non-spatial models only")
 })
 
 # The corrections hand the M-step a hard latent draw. That draw is complete data,

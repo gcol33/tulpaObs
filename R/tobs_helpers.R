@@ -81,13 +81,12 @@
 # `tobs()` tail and read by tulpa's chain-vs-iid diagnostic gate. A sampler route
 # keeps an autocorrelated chain, so Rhat / ESS describe it. Every Laplace route
 # reports i.i.d. draws from its Gaussian (or grid-mixture) approximation, the
-# MI / Gibbs corrections included: their draws come from the Rubin-pooled normal,
-# not from the correction's own z-chain, so Rhat is ~1 and ESS ~ n_draws by
-# construction and a convergence pass on them carries no information.
+# MI correction included (its draws come from the Rubin-pooled normal). The
+# Gibbs correction reports tulpa's exact MH-within-Gibbs chain itself.
 .tobs_method_table <- list(
   laplace            = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "none",  draws = "iid"),
   laplace_sla        = list(engine = "laplace",        approx = "simplified_laplace", correction = "none",  draws = "iid"),
-  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs", draws = "iid"),
+  laplace_gibbs      = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "gibbs", draws = "chain"),
   laplace_mi         = list(engine = "laplace",        approx = "gaussian_laplace",   correction = "mi",    draws = "iid"),
   pg_gibbs           = list(engine = "pg_gibbs",       approx = "gaussian_laplace",   correction = "none",  draws = "chain"),
   nested_laplace     = list(engine = "nested_laplace", approx = "gaussian_laplace",   correction = "none",  draws = "iid"),
@@ -521,7 +520,8 @@
                            # without this the two routes cannot be compared
                            # like for like.
                            "hyperprior"),
-  correction = c("n.gibbs", "n.imputations", "seed", "n.seeds"),
+  correction = c("n.gibbs", "gibbs.warmup", "gibbs.thin", "gibbs.mh.steps",
+                 "gibbs.scale", "n.imputations", "seed", "n.seeds"),
   # Chain-length and prior knobs read by every sampler, NUTS and Polya-Gamma
   # Gibbs alike. `n.seeds` is consumed by tobs() itself (the seed ensemble).
   sampler    = c("n.iter", "n.warmup", "n.thin", "n.chains", "seed",

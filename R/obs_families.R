@@ -106,9 +106,10 @@ obs_family <- function(name,
 #'   default.
 #' * `method = "laplace_sla"` -- the Laplace fit with simplified-Laplace
 #'   skew-corrected marginals.
-#' * `method = "laplace_gibbs"` / `method = "laplace_mi"` -- the Laplace fit
-#'   with a post-EM Gibbs / multiple-imputation variance correction
-#'   (Rubin-pooled refits, not an MCMC chain).
+#' * `method = "laplace_gibbs"` -- an exact Gibbs chain over the joint
+#'   posterior of the coefficients and latent states, started at the EM fit.
+#' * `method = "laplace_mi"` -- the Laplace fit with a multiple-imputation
+#'   correction (Rubin-pooled refits).
 #' * `method = "pg_gibbs"` -- a Polya-Gamma Gibbs sampler over the exact
 #'   posterior (the spOccupancy `PGOcc` engine): site-level detection, an areal
 #'   `icar()` field is accepted; a `temporal()` / `re()` / `latent()` / `svc()`
@@ -157,8 +158,10 @@ occu <- function() {
 #'   the default and the route every season-varying path runs on.
 #' * `method = "laplace_sla"` -- the Laplace fit with simplified-Laplace
 #'   skew-corrected marginals.
-#' * `method = "laplace_gibbs"` / `method = "laplace_mi"` -- the Laplace fit
-#'   with a post-EM Gibbs / multiple-imputation variance correction.
+#' * `method = "laplace_gibbs"` -- an exact Gibbs chain over the joint
+#'   posterior of the coefficients and latent states, started at the EM fit.
+#' * `method = "laplace_mi"` -- the Laplace fit with a multiple-imputation
+#'   correction (Rubin-pooled refits).
 #' * `method = "nested_laplace"` -- an areal field on the occupancy arm through
 #'   the nested-Laplace EM, its hyperparameters integrated on an outer grid.
 #' * `method = "nuts"` -- the unified C++ NUTS sampler over the HMM marginal;
@@ -198,8 +201,10 @@ dyn_occu <- function() {
 #'   marginal, the default.
 #' * `method = "laplace_sla"` -- the Laplace fit with simplified-Laplace
 #'   skew-corrected marginals.
-#' * `method = "laplace_gibbs"` / `method = "laplace_mi"` -- the Laplace fit
-#'   with a post-EM Gibbs / multiple-imputation variance correction.
+#' * `method = "laplace_gibbs"` -- an exact Gibbs chain over the joint
+#'   posterior of the coefficients and latent states, started at the EM fit.
+#' * `method = "laplace_mi"` -- the Laplace fit with a multiple-imputation
+#'   correction (Rubin-pooled refits).
 #' * `method = "nested_laplace"` -- an areal field on the state arm through the
 #'   nested-Laplace EM, its hyperparameters integrated on an outer grid.
 #' * `method = "nuts"` -- the unified C++ NUTS sampler over the same marginal.
