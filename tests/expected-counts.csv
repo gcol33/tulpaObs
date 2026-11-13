@@ -372,7 +372,7 @@
 "test-occu-svc-joint-recovery.R","full",13,0,9.2
 "test-occu-svc-joint-recovery.R","smoke",0,2,0.1
 "test-occu-svc-laplace-recovery.R","smoke",2,5,0.1
-"test-occu-svc-nngp-recovery.R","full",19,0,1121.5
+"test-occu-svc-nngp-recovery.R","full",18,0,576
 "test-occu-svc-nngp-recovery.R","smoke",0,3,0.1
 "test-occu-ttd.R","full",23,0,0.9
 "test-occu-ttd.R","smoke",18,1,0.3
