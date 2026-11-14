@@ -103,7 +103,6 @@ inline void populate_spatial(tulpa::ModelData& data, Rcpp::List sp, int n_units)
 
         data.gp_data.nu = Rcpp::as<double>(sp["nu"]);
         data.gp_data.shared = true;
-        data.gp_data.solver_config.n_obs = n_obs;
 
         data.gp_sigma2_prior_U = Rcpp::as<double>(sp["sigma2_prior_U"]);
         data.gp_sigma2_prior_alpha = Rcpp::as<double>(sp["sigma2_prior_alpha"]);
